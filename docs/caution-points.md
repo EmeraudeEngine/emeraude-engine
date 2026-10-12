@@ -14,6 +14,7 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 - [Platform-Specific](#platform-specific)
 - [Vulkan Validation](#vulkan-validation)
 - [Console / MCP](#console--mcp)
+- [Concurrency / ThreadSanitizer](#concurrency--threadsanitizer)
 
 ---
 
@@ -7891,6 +7892,28 @@ its deadline as `origin + N × 1/60 s`. ⚠️ Never add a truncated step, never
 derive. A grep for `CycleDurationMS< uint32_t >` / `< int32_t >` / `CycleDurationUS< uint64_t >` used as a step must
 find nothing outside a definition.
 
+### A mesh pipeline renders at most maxMeshMultiviewViewCount views: a cubemap shadow takes the vertex path (Oct 2026)
+
+`VkPhysicalDeviceMeshShaderPropertiesEXT::maxMeshMultiviewViewCount` is separate from `maxMultiviewViewCount` and is 4 on
+NVIDIA (RTX 3060 / 3070 Ti / 3500 Ada). `citadel`'s fire point lights render a 6-view cubemap shadow, and the landscape
+detail window (a mesh-shading surface) compiled a MESH shadow pipeline for it: `VUID-VkGraphicsPipelineCreateInfo-renderPass-12325`,
+then every frame "Unable to get ready for shadow casting" (2 515 error lines in a sweep run). Owner decision 2026-10-12:
+`Saphir::Generator::Abstract::generateShaderProgram()` latches the mesh path OFF when the target renders more views
+than that limit (`Vulkan::RenderPass::viewCount()`), before the cache key: the surface draws its flat grid there, like
+on a device without mesh shaders; one Info line says so. Measured: `citadel` 2 VUID + 2 515 errors → 0 / 0, the
+displaced cobblestones still drawn in the scene pass; `terrain` 0 VUID.
+
+### Every RT storage binding is written, a stand-in when the scene has no buffer for it (Oct 2026)
+
+The ray-query programs (RTGI, RTR, the probes' compute) statically use bindings 1-4 of the RT set. A scene whose light
+set is DISABLED has no RT light buffer (`LightSet::initialize()` returns early), and the renderer only wrote binding 3
+when `RTLightBuffer()` was not null: `doom-loader` (full-bright) gave 18 918 `VUID-vkCmdDraw/Dispatch-None-08114`
+("never been updated"), harmless on NVIDIA because nothing was read (light count 0), but a driver may fault on it.
+Owner decision 2026-10-12: `Renderer::m_RTStandInSSBO`, 64 zero bytes created with the RT set, is written into any of
+bindings 1-4 the scene does not provide. Every RT storage block is a runtime-sized `vec4` array, so the stand-in reads
+as an empty array (`lights.length() / 4` = 0 lights). Measured: `doom-loader` 18 918 → 0 VUID; `sponza` and
+`global-illumination` (real buffers) 0 VUID. A new RT binding gets the same treatment.
+
 ### Sample counts are masks: intersect them, never take their minimum (Oct 2026)
 
 `PhysicalDevice::getMaxAvailableSampleCount()` took `std::min(framebufferColorSampleCounts, framebufferDepthSampleCounts)`:
@@ -8152,3 +8175,54 @@ calls `PlatformSpecific::disableWindowStateRestoration()` (`AppKitDefaults.mac.m
 `ApplePersistenceIgnoreState = YES` in the REGISTRATION domain of the user defaults (volatile, nothing written; a user or
 argument value still wins). Proof on the M6: two crashes in a row, then an unattended launch loads its scene in 2 s, AppKit
 logs "ApplePersistenceIgnoreState: Existing state will not be touched", `defaults read` finds nothing persisted.
+
+---
+
+## Concurrency / ThreadSanitizer
+
+### ⚠️ An observer runs on the NOTIFYING thread — what it touches must be locked (2026-10-12)
+
+`ObservableTrait::notify()` calls every observer synchronously, on the thread that notified. The track mixer notifies
+from its event thread (the next track) and from any caller; `Core::onNotification()` then calls `notifyUser()` →
+`Notifier::push()`, which appended to its list WITHOUT the lock the rest of the class used, while the notifier's timer
+thread erased from it unlocked too. Under the TrackMixer TSan stress the list was corrupted: a `std::vector` growth of
+2^63 bytes, then a crash. `push()` and the timer now take `m_notificationAccess` (`Base::Mutex`, `EMEN_GUARDED_BY`); the
+timer draws after releasing it (`renderNotifications()` takes it again, behind the surface's buffer lock: never the
+other order). Rule: an observer reached by a service with its own threads (`Audio::TrackMixer`, the resource loaders,
+the network) locks what it shares, or defers to its own thread.
+
+### ⚠️ Overlay lock order: m_physicalRepresentationUpdateMutex THEN m_screensAccess (2026-10-12)
+
+`Overlay::Manager::onWindowResized()` (the window's thread) and `updateVideoMemory()` take the representation lock,
+then the screens lock (`snapshotScreens()`); `render()` (the render thread) took the screens lock first and the
+representation lock further down — a resize during a frame could deadlock (TSan lock-order-inversion). `render()` now
+takes both in one `std::scoped_lock`. ⚠️ `onWindowResized()` still notifies its observers with the representation lock
+held (todo `overlay-resize-notifies-under-lock`).
+
+### ⚠️ Overlay::Surface visibility is atomic (2026-10-12)
+
+`show()` / `hide()` are called from any thread (the notifier's timer, a web view), `isVisible()` by the render thread:
+`m_isVisible` is a `std::atomic_bool` (it was a plain `bool`, a race reported by TSan). The other `Surface` flags are
+written under the surface's own protocol; a new cross-thread flag must be atomic or locked too.
+
+### ⚠️ A resource's data is published by isLoaded() — read it only then (2026-10-12)
+
+`MusicResource::duration()` read the samples a loading thread was still filling (a MIDI rendering): `duration()`,
+`title()` and `artist()` answer their defaults until `isLoaded()` (an atomic status, written after the data). Any
+accessor of a resource's loaded data that another thread may call follows the same rule.
+
+### ⚠️ The ThreadSanitizer build of the engine: what it needs (2026-10-12)
+
+`EMERAUDE_ENABLE_TSAN` (base option, the whole cascade instrumented; the engine's own option of the same name adds its
+target flags and copies `resources/tsan_suppressions.txt`) and the stress executables (`tools/stress/`, built with it).
+Measured on Linux (GCC 14, NVIDIA 3070 Ti):
+- **The NVIDIA driver crashes under TSan** (a SEGV at device creation): run on lavapipe,
+  `VK_DRIVER_FILES=/usr/share/vulkan/icd.d/lvp_icd.json` (Mesa's software Vulkan; the mixer needs no real GPU).
+- **The bundled Vulkan loader was opened with `RTLD_DEEPBIND`**, which the ASan / TSan runtimes refuse: a sanitized build
+  loads it without (`Vulkan/Loader.cpp`, `__SANITIZE_THREAD__` / `__SANITIZE_ADDRESS__`).
+- **Uninstrumented code reads as races**: OpenAL Soft (a prebuilt static library inside libEmeraude: `Voice::mix`,
+  `Voice::prepare`), glib / gio, Mesa / LLVM, and libgomp (run with `OMP_NUM_THREADS=1`). They are in
+  `resources/tsan_suppressions.txt`; never suppress a frame of the cascade.
+- `ALSOFT_DRIVERS=null` keeps OpenAL silent; `--window-less` needs no display.
+- The legacy suppression file listed `deadly_signal:` entries, which GCC's TSan refuses ("failed to parse
+  suppressions", exit 66 before `main()`): fixed.

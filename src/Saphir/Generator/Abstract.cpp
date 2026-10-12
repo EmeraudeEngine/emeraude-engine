@@ -310,7 +310,33 @@ namespace EmEn::Saphir::Generator
 		 * BEFORE the cache key, which isMeshShadingSurfaceEnabled() enters. */
 		m_meshShadingAvailable = renderer.device()->meshShadersEnabled();
 
-		if ( !m_meshShadingAvailable )
+		/* NOTE: A mesh pipeline cannot render more views than maxMeshMultiviewViewCount (VUID-…-renderPass-12325): a
+		 * cubemap shadow map (6 views) on a device that allows 4 takes the vertex path for that target (owner decision
+		 * 2026-10-12: the flat grid, like a device without mesh shaders), where the pipeline creation failed before
+		 * and every frame retried it. */
+		if ( m_meshShadingAvailable && m_renderTarget != nullptr && m_renderTarget->framebuffer() != nullptr )
+		{
+			const auto viewCount = m_renderTarget->framebuffer()->renderPass()->viewCount();
+			const auto maxMeshViews = renderer.device()->physicalDevice()->meshShaderProperties().maxMeshMultiviewViewCount;
+
+			if ( viewCount > 1 && viewCount > maxMeshViews )
+			{
+				m_meshShadingAvailable = false;
+
+				const auto * geometry = this->getGeometryInterface();
+
+				if ( geometry != nullptr && geometry->meshShadingSurfaceEnabled() )
+				{
+					static std::once_flag multiviewFallbackTraced;
+
+					std::call_once(multiviewFallbackTraced, [viewCount, maxMeshViews] {
+						TraceInfo{TracerTag} << "A mesh-shading surface renders a " << viewCount << "-view target through its flat grid: this device allows " << maxMeshViews << " views to a mesh pipeline.";
+					});
+				}
+			}
+		}
+
+		if ( !renderer.device()->meshShadersEnabled() )
 		{
 			const auto * geometry = this->getGeometryInterface();
 

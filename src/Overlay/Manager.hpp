@@ -513,6 +513,7 @@ namespace EmEn::Overlay
 			std::shared_ptr< Vulkan::DescriptorPool > m_ImGUIDescriptorPool;
 			std::unordered_map< std::string, std::shared_ptr< ImGUIScreen > > m_ImGUIScreens;
 #endif
+			/* NOTE: Lock order: m_physicalRepresentationUpdateMutex THEN m_screensAccess (or both at once). */
 			mutable std::mutex m_physicalRepresentationUpdateMutex;
 			mutable std::mutex m_screensAccess;
 			bool m_enabled{false};

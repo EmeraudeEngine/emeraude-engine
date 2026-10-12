@@ -97,6 +97,7 @@ namespace EmEn
 		class Instance;
 		class Queue;
 		class Sampler;
+		class ShaderStorageBufferObject;
 		class SwapChain;
 	}
 
@@ -1917,6 +1918,10 @@ namespace EmEn::Graphics
 			std::unique_ptr< IrradianceProbeVolume > m_irradianceProbeVolume;
 			/* RT descriptor set for ray query shaders (TLAS + SSBOs). */
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_rtDescriptorSetLayout;
+			/** @brief A tiny zero-filled SSBO written into an RT storage binding the scene does not provide (a disabled light
+			 * set has no light buffer): every binding the ray-query programs statically use stays valid. Declared before
+			 * the descriptor sets that reference it. */
+			std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_RTStandInSSBO;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_rtDescriptorSets;
 			uint32_t m_RTLightCount{0};
 			/** @brief MDI batch builder for GPU-driven opaque rendering. */

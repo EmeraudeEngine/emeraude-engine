@@ -57,6 +57,11 @@ ended it. So a dead Wayland display also takes the main loop with it — the cle
 Next to (1)-(3) below: (4) make the window service detect a dead display connection (`wl_display_get_error()` through
 GLFW, or a GLFW error callback) and stop cleanly instead of entering libdecor's loop.
 
+**Frequency, 2026-10-12 (Linux, the 37-demo validation sweep, Release, validation layer ON):** 2 of 37 demos lost the
+surface with the same `wp_linux_drm_syncobj_surface_v1#100: error 3` (`paths` 2 s after its load, `world-lobby` during
+its load); the same build passed both demos 2 / 2 right after, and the previous sweep (lot 2) passed all 37. Neither
+process answered the console afterwards (the call timed out) and both had to be killed: the hang above, again.
+
 
 - [ ] **(1) Capture the protocol trace on the owner's session** (only a real compositor will do —
   X11/Xvfb has no libdecor and no explicit sync):

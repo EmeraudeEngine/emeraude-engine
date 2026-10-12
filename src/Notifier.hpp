@@ -32,11 +32,15 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "PixelFactory/TextProcessor.hpp"
 #include "Time/EventTrait.hpp"
 #include "Overlay/Manager.hpp"
@@ -112,6 +116,10 @@ namespace EmEn
 					return;
 				}
 
+				/* NOTE: Any thread may notify (an observer runs on the notifying thread: the track mixer's event thread,
+				 * a loading thread): the list is shared with the lifetime timer and the renderer. */
+				const Base::MutexLock lock{m_notificationAccess};
+
 				m_notifications.emplace_back(message, static_cast< int32_t >(duration));
 			}
 
@@ -127,6 +135,8 @@ namespace EmEn
 				{
 					return;
 				}
+
+				const Base::MutexLock lock{m_notificationAccess};
 
 				m_notifications.emplace_back(message.get(), static_cast< int32_t >(duration));
 			}
@@ -166,7 +176,9 @@ namespace EmEn
 			Base::PixelFactory::TextProcessor< uint8_t > m_processor;
 			Base::PixelFactory::Color< float > m_clearColor{Base::PixelFactory::TranslucentDarkGrey};
 			Base::Time::TimerID m_timerID{0};
-			std::vector< std::pair< std::string, int32_t > > m_notifications;
-			mutable std::mutex m_notificationAccess;
+			/* NOTE: The lock of the notification list, Clang-checked (decision D12). Taken after the surface's buffer
+			 * lock in renderNotifications(), never before it. */
+			mutable Base::Mutex m_notificationAccess;
+			std::vector< std::pair< std::string, int32_t > > m_notifications EMEN_GUARDED_BY(m_notificationAccess);
 	};
 }

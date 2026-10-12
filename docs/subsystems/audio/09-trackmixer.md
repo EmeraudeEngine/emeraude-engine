@@ -19,11 +19,43 @@ See `TrackMixer.hpp:UserState`
 - `Playing` - Active playback
 - `Paused` - Paused (source retained)
 
+### Thread safety — one lock, Clang-checked (2026-10-12)
+
+Every public method may be called from any thread. Four threads use the mixer: the caller's (main, logic, console),
+its own event thread (the next track when one ends, the cross-fade), OpenAL Soft's event thread (`eventCallback()`)
+and a resource loading thread (`onNotification()` when a MIDI track finishes rendering).
+
+- **One mutex, `m_stateAccess` (`Base::Mutex`), guards every piece of state**: the playlist, the indices, the modes,
+  the gain, the flags and the two OpenAL sources (`EMEN_PT_GUARDED_BY`: the cross-fade on the event thread and `play()`
+  on the caller's used to race on the gains). Clang's `-Wthread-safety` proves it (decision D12, base
+  `docs/subsystems/source-tree/26-thread-safety-annotations.md`): removing one lock gives six compile errors.
+- **The observers are notified AFTER the lock is released**, on the calling thread (`pause()`, `resume()`, `stop()`
+  notified under the lock: an observer calling the mixer back deadlocked). An observer may run on the event thread
+  (the next track) or a loading thread: it must not assume the main thread (`Notifier::push()` is locked for that).
+- **Accessors return copies**: `playlist()` (a vector copy), `loadedPlaylist()` (a `shared_ptr` copy), and
+  `status()` — one consistent snapshot under one lock, used by the console and projet-alpha's UI push.
+- **A track still loading is claimed once**: `play()` records it in `m_loadingTrack` and observes it; the
+  `LoadFinished` notification and `play()`'s own re-check after `observe()` (a load finished in between used to be
+  lost) both go through `playPendingTrack()`, which takes the claim under the lock. `stop()` drops the claim: a
+  stopped mixer no longer starts a track that finishes loading afterwards.
+- **The OpenAL event callback is unregistered** by `onTerminate()` and the destructor (`disableSourceEvents()`, never
+  under `m_stateAccess`: the callback takes it). It held a raw `this` for the whole process before.
+- A source stopped while no track plays (`stop()`, the old source of a switch) no longer counts as "the current track
+  ended" (the callback used to compare it with track B by default).
+- A failed start leaves the state as it is (the old track when it was fading out, nothing otherwise).
+- **Proof**: the TSan stress `tools/stress/TrackMixerStress.cpp` (four threads calling every public method for 30 s,
+  ~28 000 calls, plus the logic thread reading `status()`): 0 report on three runs. Procedure: projet-alpha
+  `docs/unit-testing.md` § "ThreadSanitizer". On its way it found four other races, fixed with it: `Notifier::push()`,
+  `Overlay::Surface` visibility, the overlay lock order, `MusicResource::duration()` during a load
+  (`docs/caution-points.md`).
+
 ### Shuffle Implementation
-- Uses `std::shuffle` with `std::mt19937` for randomization
+- `Base::PortableRandom::shuffle()` with an `std::mt19937` seeded once (the cascade never uses `std::shuffle`)
 - Maintains `m_shuffleOrder` vector of indices
-- `generateShuffleOrder()` regenerates on enable or playlist change
-- `next()`/`previous()` respect shuffle order when enabled
+- `playlistChanged()` regenerates it on every change of the playlist or of the shuffle mode (a stale order indexed past
+  a shorter playlist after a swap); an order of the wrong size is never used
+- `next()`/`previous()` respect shuffle order when enabled; a track played outside the playlist (index `SIZE_MAX`)
+  continues from the first entry
 
 ### Observable Notifications
 TrackMixer notifies observers on state changes:
@@ -92,7 +124,8 @@ The playlist name is derived from the filename stem (`Kyrandia2.json` → `Kyran
 1. Captures persistent intent: `wasPlaying = (userState() == UserState::Playing)`. This is deliberately NOT `isPlaying()` — MIDI rendering is async, so a source may not yet be emitting when the swap is requested. `userState()` captures "the user wants music", which is the correct trigger for auto-resume.
 2. Resolves every track name against the `MusicResource` container BEFORE mutating state. Unknown entries are skipped with a warning.
 3. If resolution yields zero tracks (manifest empty or all entries invalid), the call returns `false` and the previous playlist is left intact.
-4. Otherwise: `stop()` → `clearPlaylist()` → repopulate → if `wasPlaying`, `playIndex(0)` on the new playlist.
+4. Otherwise: `stop()` → the tracks and the manifest replace the old ones in ONE locked step (no reader sees the new
+   tracks under the old manifest) → `PlaylistSwapped` → if `wasPlaying`, `playIndex(0)` on the new playlist.
 5. MIDI tracks may take a few seconds to render; `nowPlaying` will read "No track playing" until the async render completes and the `onNotification` callback triggers actual playback. This is expected behavior, not a bug.
 
 **Console commands**:
@@ -125,7 +158,9 @@ If both steps fail, the command returns a descriptive error. Rationale for two s
 `MusicResource::title()` returns the resource name (filename-derived, e.g. `Kyrandia2/Ferry`) when no ID3/metadata title has been set. Applies to formats without tag support — notably **MIDI** (TagLib cannot read MIDI metadata) and any audio file whose title tag is empty or missing.
 
 - Sentinel: `MusicResource::DefaultInfo` = `"Unknown"` (private constant).
-- Check order: `m_title.empty()` → `name()`; `m_title == DefaultInfo` → `name()`; else `m_title`.
-- Artist behavior is **unchanged** — returns `"Unknown"` when tag absent.
+- Check order: not loaded yet → `name()`; `m_title.empty()` → `name()`; `m_title == DefaultInfo` → `name()`; else `m_title`.
+- Artist: `"Unknown"` when the tag is absent, or while the resource is not loaded.
+- `duration()` is 0 until the resource is loaded. The three accessors are thread-safe: the loading thread writes the
+  samples and the metadata, `isLoaded()` publishes them (2026-10-12: a `duration()` during a MIDI rendering raced).
 - Code reference: `MusicResource.hpp:title()`.
 - Downstream impact: `TrackMixer.cpp:play()` notifications (`MusicPlaying`, `MusicSwitching`) now show meaningful names for MIDI tracks instead of `"Unknown"`.

@@ -111,8 +111,10 @@ namespace EmEn::Vulkan
 			}
 #else
 			/* NOTE: An explicit path with RTLD_LOCAL never shares CEF's copy (a different file); on Linux RTLD_DEEPBIND
-			 * also keeps the loader's own symbols bound to itself if another loader exported the same names globally. */
-	#if IS_LINUX
+			 * also keeps the loader's own symbols bound to itself if another loader exported the same names globally.
+			 * The ASan / TSan runtimes refuse RTLD_DEEPBIND (they interpose malloc and pthread): a sanitized build loads
+			 * without it (2026-10-12, the TrackMixer TSan stress). */
+	#if IS_LINUX && !defined(__SANITIZE_ADDRESS__) && !defined(__SANITIZE_THREAD__)
 			constexpr int Flags{RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND};
 	#else
 			constexpr int Flags{RTLD_NOW | RTLD_LOCAL};

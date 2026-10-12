@@ -30,6 +30,7 @@
 #include <optional>
 #include <sstream>
 #include <string>
+#include <utility>
 
 /* Local inclusions. */
 #include "String.hpp"
@@ -75,20 +76,24 @@ namespace EmEn::Audio
 				/* No argument: resume current track or start playlist. */
 				if ( !query.has_value() )
 				{
-					if ( m_userState == UserState::Paused )
+					const auto current = this->status();
+
+					if ( current.userState == UserState::Paused )
 					{
 						this->resume();
 
 						return Console::CommandResult::success("Resumed.");
 					}
 
-					/* Nothing playing: start the playlist if available. */
-					if ( !m_playlist.empty() )
+					/* Nothing playing: start the playlist if available (from its start after a track played outside it). */
+					if ( !current.playlist.empty() )
 					{
-						if ( this->playIndex(m_musicIndex) )
+						const auto index = current.trackIndex < current.playlist.size() ? current.trackIndex : 0;
+
+						if ( this->playIndex(index) )
 						{
 							std::stringstream message;
-							message << "Playing track " << (m_musicIndex + 1) << "/" << m_playlist.size() << ".";
+							message << "Playing track " << (index + 1) << "/" << current.playlist.size() << ".";
 
 							return Console::CommandResult::success(message.str());
 						}
@@ -133,7 +138,7 @@ namespace EmEn::Audio
 				return refuse("The track mixer is unavailable !");
 			}
 
-			if ( m_playingTrack == PlayingTrack::None )
+			if ( !this->isPlaying() )
 			{
 				return refuse("There is no track playing !");
 			}
@@ -149,7 +154,7 @@ namespace EmEn::Audio
 				return refuse("The track mixer is unavailable !");
 			}
 
-			if ( m_playingTrack == PlayingTrack::None )
+			if ( !this->isPlaying() )
 			{
 				return refuse("There is no track playing !");
 			}
@@ -172,7 +177,7 @@ namespace EmEn::Audio
 				if ( !newVolume.has_value() )
 				{
 					std::stringstream message;
-					message << "Current volume: " << (m_gain * 100.0F) << "%";
+					message << "Current volume: " << (this->volume() * 100.0F) << "%";
 
 					return Console::CommandResult::info(message.str());
 				}
@@ -196,7 +201,7 @@ namespace EmEn::Audio
 				return refuse("The track mixer is unavailable !");
 			}
 
-			if ( m_playlist.empty() )
+			if ( this->playlistSize() == 0 )
 			{
 				return refuse("Playlist is empty !");
 			}
@@ -206,8 +211,10 @@ namespace EmEn::Audio
 				return Console::CommandResult::error("Unable to play next track !");
 			}
 
+			const auto current = this->status();
+
 			std::stringstream message;
-			message << "Playing next track (" << (m_musicIndex + 1) << "/" << m_playlist.size() << ")";
+			message << "Playing next track (" << (current.trackIndex + 1) << "/" << current.playlist.size() << ")";
 
 			return Console::CommandResult::success(message.str());
 		});
@@ -218,7 +225,7 @@ namespace EmEn::Audio
 				return refuse("The track mixer is unavailable !");
 			}
 
-			if ( m_playlist.empty() )
+			if ( this->playlistSize() == 0 )
 			{
 				return refuse("Playlist is empty !");
 			}
@@ -228,8 +235,10 @@ namespace EmEn::Audio
 				return Console::CommandResult::error("Unable to play previous track !");
 			}
 
+			const auto current = this->status();
+
 			std::stringstream message;
-			message << "Playing previous track (" << (m_musicIndex + 1) << "/" << m_playlist.size() << ")";
+			message << "Playing previous track (" << (current.trackIndex + 1) << "/" << current.playlist.size() << ")";
 
 			return Console::CommandResult::success(message.str());
 		});
@@ -246,7 +255,7 @@ namespace EmEn::Audio
 
 				if ( !state.has_value() )
 				{
-					return Console::CommandResult::info(std::string{"Shuffle mode: "} + (m_shuffleEnabled ? "ON" : "OFF"));
+					return Console::CommandResult::info(std::string{"Shuffle mode: "} + (this->isShuffleEnabled() ? "ON" : "OFF"));
 				}
 
 				const auto enabled = parseSwitch(*state);
@@ -273,7 +282,7 @@ namespace EmEn::Audio
 
 				if ( !state.has_value() )
 				{
-					return Console::CommandResult::info(std::string{"Loop mode: "} + (m_playMode == PlayMode::Loop ? "ON" : "OFF"));
+					return Console::CommandResult::info(std::string{"Loop mode: "} + (this->playMode() == PlayMode::Loop ? "ON" : "OFF"));
 				}
 
 				const auto enabled = parseSwitch(*state);
@@ -300,7 +309,7 @@ namespace EmEn::Audio
 
 				if ( !state.has_value() )
 				{
-					return Console::CommandResult::info(std::string{"Crossfade: "} + (m_crossFaderEnabled ? "ON" : "OFF"));
+					return Console::CommandResult::info(std::string{"Crossfade: "} + (this->isCrossFaderEnabled() ? "ON" : "OFF"));
 				}
 
 				const auto enabled = parseSwitch(*state);
@@ -325,7 +334,7 @@ namespace EmEn::Audio
 					return refuse("The track mixer is unavailable !");
 				}
 
-				if ( m_playingTrack == PlayingTrack::None )
+				if ( !this->isPlaying() )
 				{
 					return refuse("No track is currently playing !");
 				}
@@ -362,11 +371,13 @@ namespace EmEn::Audio
 				return refuse("The track mixer is unavailable !");
 			}
 
+			const auto current = this->status();
+
 			std::stringstream status;
 			status << "=== Track Mixer Status ===" "\n";
 
 			/* User state. */
-			switch ( m_userState )
+			switch ( current.userState )
 			{
 				case UserState::Stopped :
 					status << "State: Stopped" "\n";
@@ -382,23 +393,23 @@ namespace EmEn::Audio
 			}
 
 			/* Volume. */
-			status << "Volume: " << (m_gain * 100.0F) << "%" "\n";
+			status << "Volume: " << (current.gain * 100.0F) << "%" "\n";
 
 			/* Modes. */
-			status << "Loop: " << (m_playMode == PlayMode::Loop ? "ON" : "OFF") << "\n";
-			status << "Shuffle: " << (m_shuffleEnabled ? "ON" : "OFF") << "\n";
-			status << "Crossfade: " << (m_crossFaderEnabled ? "ON" : "OFF") << "\n";
+			status << "Loop: " << (current.playMode == PlayMode::Loop ? "ON" : "OFF") << "\n";
+			status << "Shuffle: " << (current.shuffleEnabled ? "ON" : "OFF") << "\n";
+			status << "Crossfade: " << (current.crossFaderEnabled ? "ON" : "OFF") << "\n";
 
 			/* Playlist info. */
-			status << "Playlist: " << m_playlist.size() << " track(s)" "\n";
+			status << "Playlist: " << current.playlist.size() << " track(s)" "\n";
 
-			if ( !m_playlist.empty() )
+			if ( current.trackIndex < current.playlist.size() )
 			{
-				status << "Current track: " << (m_musicIndex + 1) << "/" << m_playlist.size() << "\n";
+				status << "Current track: " << (current.trackIndex + 1) << "/" << current.playlist.size() << "\n";
 			}
 
 			/* Current playback info. */
-			if ( m_playingTrack != PlayingTrack::None )
+			if ( current.hasTrack )
 			{
 				status << "Position: " << this->currentPosition() << "s / " << this->currentDuration() << "s" "\n";
 			}
@@ -412,17 +423,19 @@ namespace EmEn::Audio
 				return refuse("The track mixer is unavailable !");
 			}
 
-			if ( m_playingTrack == PlayingTrack::None )
+			const auto current = this->status();
+
+			if ( !current.hasTrack )
 			{
 				return Console::CommandResult::info("No track is currently playing.");
 			}
 
-			if ( m_playlist.empty() || m_musicIndex >= m_playlist.size() )
+			if ( current.trackIndex >= current.playlist.size() )
 			{
 				return refuse("Playing state is inconsistent (no playlist entry at current index) !");
 			}
 
-			const auto & track = m_playlist[m_musicIndex];
+			const auto & track = current.currentTrack;
 
 			if ( track == nullptr )
 			{
@@ -434,23 +447,23 @@ namespace EmEn::Audio
 			info << "Title: " << track->title() << "\n";
 			info << "Artist: " << track->artist() << "\n";
 			info << "Position: " << this->currentPosition() << "s / " << this->currentDuration() << "s" "\n";
-			info << "Index: " << (m_musicIndex + 1) << "/" << m_playlist.size();
+			info << "Index: " << (current.trackIndex + 1) << "/" << current.playlist.size();
 
 			return Console::CommandResult::info(info.str());
 		}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("currentPlaylist,cpl", "Show the manifest name currently backing the playlist. Returns 'no manifest' if the playlist was modified ad-hoc via addToPlaylist.", [this] () {
-			const auto & manifest = this->loadedPlaylist();
+			const auto current = this->status();
 
 			std::stringstream message;
 
-			if ( manifest == nullptr )
+			if ( current.loadedPlaylist == nullptr )
 			{
-				message << "No playlist manifest loaded (ad-hoc or empty playlist). Tracks: " << m_playlist.size() << ".";
+				message << "No playlist manifest loaded (ad-hoc or empty playlist). Tracks: " << current.playlist.size() << ".";
 			}
 			else
 			{
-				message << "Current playlist: '" << manifest->name() << "' (" << m_playlist.size() << " tracks).";
+				message << "Current playlist: '" << current.loadedPlaylist->name() << "' (" << current.playlist.size() << " tracks).";
 			}
 
 			return Console::CommandResult::info(message.str());
@@ -534,19 +547,21 @@ namespace EmEn::Audio
 				return refuse("The track mixer is unavailable !");
 			}
 
-			if ( m_playlist.empty() )
+			const auto current = this->status();
+
+			if ( current.playlist.empty() )
 			{
 				return Console::CommandResult::info("Playlist is empty.");
 			}
 
 			std::stringstream list;
-			list << "=== Playlist (" << m_playlist.size() << " track(s)) ===" "\n";
+			list << "=== Playlist (" << current.playlist.size() << " track(s)) ===" "\n";
 
 			size_t index = 0;
 
-			for ( const auto & track : m_playlist )
+			for ( const auto & track : current.playlist )
 			{
-				const auto * const marker = (index == m_musicIndex) ? " > " : "   ";
+				const auto * const marker = (index == current.trackIndex) ? " > " : "   ";
 
 				list << marker << (index + 1) << ". " << track->name() << "\n";
 
@@ -577,7 +592,16 @@ namespace EmEn::Audio
 					return refuse("The track mixer is unavailable !");
 				}
 
-				const auto track = m_resourceManager.container< MusicResource >()->getResource(trackName);
+				auto * musics = m_resourceManager.container< MusicResource >();
+
+				/* NOTE: getResource() answers the "Default" resource for an unknown name, never nullptr: the existence is
+				 * checked first (the refusal below was unreachable). */
+				if ( !musics->isResourceExists(trackName) )
+				{
+					return Console::CommandResult::error("Track '" + trackName + "' not found !");
+				}
+
+				const auto track = musics->getResource(trackName);
 
 				if ( track == nullptr )
 				{
@@ -599,9 +623,11 @@ namespace EmEn::Audio
 					return refuse("The track mixer is unavailable !");
 				}
 
-				if ( index < 1 || static_cast< size_t >(index) > m_playlist.size() )
+				const auto count = this->playlistSize();
+
+				if ( index < 1 || std::cmp_greater(index, count) )
 				{
-					return Console::CommandResult::error("Invalid index. Must be between 1 and " + std::to_string(m_playlist.size()) + ".");
+					return Console::CommandResult::error("Invalid index. Must be between 1 and " + std::to_string(count) + ".");
 				}
 
 				if ( !this->playIndex(static_cast< size_t >(index) - 1) )

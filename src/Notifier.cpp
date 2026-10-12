@@ -84,30 +84,42 @@ namespace EmEn
 		}
 
 		/* NOTE: Create a timer to update the notification lifetime. */
-		m_timerID = this->createTimer([&] (Time::TimerID /*timerID*/)
+		/* NOTE: The timer is owned by this object (EventTrait): its thread never outlives it. */
+		m_timerID = this->createTimer([this] (Time::TimerID /*timerID*/)
 		{
-			if ( m_notifications.empty() )
+			bool empty = false;
+
+			/* NOTE: The list is updated under its lock (push() runs on any thread, 2026-10-12: a concurrent push()
+			 * corrupted it under the TrackMixer TSan stress); the surface is drawn after, renderNotifications() takes
+			 * the lock again behind the surface's own. */
 			{
-				return false;
+				const MutexLock lock{m_notificationAccess};
+
+				if ( m_notifications.empty() )
+				{
+					return false;
+				}
+
+				auto notificationIt = m_notifications.begin();
+
+				while ( notificationIt != m_notifications.end() )
+				{
+					if ( notificationIt->second <= 0 )
+					{
+						notificationIt = m_notifications.erase(notificationIt);
+					}
+					else
+					{
+						notificationIt->second -= 500;
+
+						++notificationIt;
+					}
+				}
+
+				empty = m_notifications.empty();
 			}
 
-			auto notificationIt = m_notifications.begin();
-
-			while ( notificationIt != m_notifications.end() )
-			{
-				if ( notificationIt->second <= 0 )
-				{
-					notificationIt = m_notifications.erase(notificationIt);
-				}
-				else
-				{
-					notificationIt->second -= 500;
-
-					++notificationIt;
-				}
-			}
-
-			if ( m_notifications.empty() )
+			if ( empty )
 			{
 				m_surface->hide();
 			}
@@ -170,7 +182,7 @@ namespace EmEn
 			bool hasNotifications = false;
 
 			{
-				const std::scoped_lock lockNotifications{m_notificationAccess};
+				const MutexLock lockNotifications{m_notificationAccess};
 
 				for ( const auto & [message, delay] : std::ranges::reverse_view(m_notifications) )
 				{
@@ -206,7 +218,7 @@ namespace EmEn
 	{
 		/* NOTE: Removes all notifications. */
 		{
-			const std::scoped_lock lock{m_notificationAccess};
+			const MutexLock lock{m_notificationAccess};
 
 			m_notifications.clear();
 		}

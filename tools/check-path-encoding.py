@@ -15,7 +15,9 @@ Two layers:
      - narrow-in: a std::filesystem::path constructed from std::string / std::string_view / char * / char[];
        a string literal and a constexpr constant are exempt (author-controlled compile-time text, see layer 2);
      - narrow-out: path::string() / generic_string() / u8string() / generic_u8string(), and std's
-       operator<< (ostream, path).
+       operator<< (ostream, path);
+     a POSIX-only file (`*.linux.*`, `*.mac.*`, a `linux/` or `mac/` directory) is skipped: its native narrow string
+     IS UTF-8.
   2. A grep gate (fast, no build needed): `.string()`-family calls and `std::filesystem::path{...}` / `(...)` on a
      non-literal in the source files no database compiles (another OS: POSIX-only files are skipped, their native
      string IS UTF-8), and a NON-ASCII narrow string literal on a path line in every file (layer 1 exempts literals).
@@ -207,7 +209,9 @@ def run_clang_query(clang_query: str, units, roots, jobs: int, verbose: bool):
                 failed.append((unit, error.strip().splitlines()[-1:] if error.strip() else ["no output"]))
 
             for file, line, kind in hits:
-                if any(file.startswith(root) for root in roots):
+                # NOTE: A POSIX-only file is compiled by a Linux / macOS database only: its native narrow string IS
+                # UTF-8, the same exemption as the grep gate's.
+                if any(file.startswith(root) for root in roots) and not POSIX_ONLY.search(file):
                     findings[(file, line, kind)] = None
 
     if verbose:

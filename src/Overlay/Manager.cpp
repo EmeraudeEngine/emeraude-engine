@@ -699,7 +699,11 @@ namespace EmEn::Overlay
 	void
 	Manager::render (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const CommandBuffer & commandBuffer) const noexcept
 	{
-		const std::scoped_lock lock{m_screensAccess};
+		/* NOTE: The lock order of the overlay is m_physicalRepresentationUpdateMutex THEN m_screensAccess (onWindowResized()
+		 * and updateVideoMemory() take them so). This took the screens first and the representation lock further down:
+		 * a resize on the window's thread during a frame could deadlock (lock-order inversion found by ThreadSanitizer,
+		 * 2026-10-12). std::scoped_lock takes both without an order of its own. */
+		const std::scoped_lock lock{m_physicalRepresentationUpdateMutex, m_screensAccess};
 
 		/* Check if the overlay is enabled and there is something to render.
 		 * NOTE: ImGUI screens live in a separate container, so an ImGUI-only
@@ -724,9 +728,6 @@ namespace EmEn::Overlay
 				return;
 			}
 		}
-
-		/* Lock for overlay resizing ! */
-		const std::scoped_lock overlayLock{m_physicalRepresentationUpdateMutex};
 
 		for ( const auto & screen : m_screens | std::views::values )
 		{

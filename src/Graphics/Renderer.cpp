@@ -27,6 +27,7 @@
 #include "Renderer.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <bit>
 #include <cstring>
 #include <algorithm>
@@ -73,6 +74,7 @@
 #include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/RenderPass.hpp"
+#include "Vulkan/ShaderStorageBufferObject.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Sync/Semaphore.hpp"
 #include "Window.hpp"
@@ -1001,6 +1003,7 @@ namespace EmEn::Graphics
 		m_accelerationStructureBuilder.reset();
 		m_rtDescriptorSets.clear();
 		m_rtDescriptorSetLayout.reset();
+		m_RTStandInSSBO.reset();
 		m_descriptorPool = nullptr;
 
 		this->destroyRenderingSystem();
@@ -3299,6 +3302,25 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* NOTE: The stand-in of a storage binding the scene does not provide (doom-loader: a disabled light set has no RT
+		 * light buffer, and 18 918 VUID-…-08114 "never been updated" followed). Every RT storage block is a runtime-sized
+		 * vec4 array, so four zero vec4 read as an empty array (lights.length() / 4 = 0 lights). */
+		{
+			constexpr std::array< float, 16 > Zeros{};
+
+			m_RTStandInSSBO = std::make_unique< ShaderStorageBufferObject >(m_device, sizeof(Zeros));
+
+			if ( !m_RTStandInSSBO->createOnHardware() || !m_RTStandInSSBO->writeData({Zeros.data(), sizeof(Zeros)}) )
+			{
+				TraceError{ClassId} << "Unable to create the RT stand-in storage buffer !";
+
+				m_RTStandInSSBO.reset();
+				m_rtDescriptorSetLayout.reset();
+
+				return false;
+			}
+		}
+
 		const auto frameCount = this->framesInFlight();
 
 		m_rtDescriptorSets.resize(frameCount);
@@ -3313,6 +3335,7 @@ namespace EmEn::Graphics
 
 				m_rtDescriptorSets.clear();
 				m_rtDescriptorSetLayout.reset();
+				m_RTStandInSSBO.reset();
 
 				return false;
 			}
@@ -3348,53 +3371,29 @@ namespace EmEn::Graphics
 		/* Binding 0: TLAS. */
 		static_cast< void >(descriptorSet->writeAccelerationStructure(0, TLAS->handle()));
 
-		/* Binding 1: Mesh metadata SSBO (per-frame to avoid CPU/GPU race). */
-		if ( const auto * meshSSBO = sceneMetaData.meshMetaDataSSBO(m_currentFrameIndex); meshSSBO != nullptr )
-		{
-			const VkDescriptorBufferInfo meshInfo{
-				.buffer = meshSSBO->handle(),
+		/* Bindings 1-4: the scene's storage buffers (per frame where they are: no CPU/GPU race). A buffer the scene does
+		 * not provide gets the stand-in: the programs statically use every binding, so none may stay unwritten. */
+		const auto writeStorage = [this, &descriptorSet] (uint32_t binding, const ShaderStorageBufferObject * buffer) noexcept {
+			const auto * bound = buffer != nullptr ? buffer : m_RTStandInSSBO.get();
+
+			if ( bound == nullptr )
+			{
+				return;
+			}
+
+			const VkDescriptorBufferInfo info{
+				.buffer = bound->handle(),
 				.offset = 0,
-				.range = meshSSBO->bytes()
+				.range = bound->bytes()
 			};
 
-			static_cast< void >(descriptorSet->writeStorageBuffer(1, meshInfo));
-		}
+			static_cast< void >(descriptorSet->writeStorageBuffer(binding, info));
+		};
 
-		/* Binding 2: Material data SSBO (per-frame to avoid CPU/GPU race). */
-		if ( const auto * materialSSBO = sceneMetaData.materialDataSSBO(m_currentFrameIndex); materialSSBO != nullptr )
-		{
-			const VkDescriptorBufferInfo materialInfo{
-				.buffer = materialSSBO->handle(),
-				.offset = 0,
-				.range = materialSSBO->bytes()
-			};
-
-			static_cast< void >(descriptorSet->writeStorageBuffer(2, materialInfo));
-		}
-
-		/* Binding 3: Light array SSBO. */
-		if ( const auto * lightSSBO = lightSet.RTLightBuffer(); lightSSBO != nullptr )
-		{
-			const VkDescriptorBufferInfo lightInfo{
-				.buffer = lightSSBO->handle(),
-				.offset = 0,
-				.range = lightSSBO->bytes()
-			};
-
-			static_cast< void >(descriptorSet->writeStorageBuffer(3, lightInfo));
-		}
-
-		/* Binding 4: Sub-geometry table SSBO (per-frame to avoid CPU/GPU race). */
-		if ( const auto * subGeometrySSBO = sceneMetaData.subGeometryDataSSBO(m_currentFrameIndex); subGeometrySSBO != nullptr )
-		{
-			const VkDescriptorBufferInfo subGeometryInfo{
-				.buffer = subGeometrySSBO->handle(),
-				.offset = 0,
-				.range = subGeometrySSBO->bytes()
-			};
-
-			static_cast< void >(descriptorSet->writeStorageBuffer(4, subGeometryInfo));
-		}
+		writeStorage(1, sceneMetaData.meshMetaDataSSBO(m_currentFrameIndex));
+		writeStorage(2, sceneMetaData.materialDataSSBO(m_currentFrameIndex));
+		writeStorage(3, lightSet.RTLightBuffer());
+		writeStorage(4, sceneMetaData.subGeometryDataSSBO(m_currentFrameIndex));
 
 		m_RTLightCount = lightSet.RTLightCount();
 	}

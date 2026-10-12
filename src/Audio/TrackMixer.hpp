@@ -31,11 +31,11 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <atomic>
 #include <condition_variable>
 #include <memory>
-#include <mutex>
-#include <thread>
+#include <random>
+#include <string>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
@@ -43,6 +43,7 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "Thread.hpp"
 #include "MusicResource.hpp"
 #include "PlaylistResource.hpp"
@@ -74,6 +75,11 @@ namespace EmEn::Audio
 	 * @extends EmEn::Console::ControllableTrait The console can control the track mixer.
 	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 * @extends EmEn::Base::ObserverTrait This service can observe resource loading.
+	 * @note [Thread-safe] Every public method may be called from any thread. Four threads use the mixer: the caller's
+	 * (main, logic, console), its own event thread (the next track, the cross-fade), OpenAL's event thread
+	 * (eventCallback()) and a resource loading thread (onNotification()). One mutex, m_stateAccess, guards every piece of
+	 * state, Clang-checked (EMEN_GUARDED_BY, decision D12). The observers are notified AFTER the lock is released, on the
+	 * calling thread: an observer may call the mixer back.
 	 */
 	class EMEN_API TrackMixer final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait, public Base::ObserverTrait
 	{
@@ -105,6 +111,31 @@ namespace EmEn::Audio
 				PlaylistSwapped, /**< @brief Notifies that the playlist has been fully replaced via loadPlaylist(). Observers may refresh their UI. */
 				/* Enumeration boundary. */
 				MaxEnum
+			};
+
+			/** @brief A consistent copy of the mixer state, taken under one lock (status()). */
+			struct Status final
+			{
+				/** @brief The playlist. */
+				std::vector< std::shared_ptr< MusicResource > > playlist;
+				/** @brief The playlist entry at the current index, nullptr when the index is outside the playlist. */
+				std::shared_ptr< MusicResource > currentTrack;
+				/** @brief The manifest backing the playlist, nullptr for an ad-hoc playlist. */
+				std::shared_ptr< PlaylistResource > loadedPlaylist;
+				/** @brief The current index in the playlist (SIZE_MAX for a track played outside of it). */
+				size_t trackIndex{0};
+				/** @brief The music gain. */
+				float gain{0.0F};
+				/** @brief The user state. */
+				UserState userState{UserState::Stopped};
+				/** @brief The play mode. */
+				PlayMode playMode{PlayMode::Loop};
+				/** @brief Whether a source holds a track (playing or paused). */
+				bool hasTrack{false};
+				/** @brief Whether the cross-fader is enabled. */
+				bool crossFaderEnabled{false};
+				/** @brief Whether shuffle is enabled. */
+				bool shuffleEnabled{false};
 			};
 
 			/**
@@ -182,6 +213,8 @@ namespace EmEn::Audio
 			float
 			volume () const noexcept
 			{
+				const Base::MutexLock lock{m_stateAccess};
+
 				return m_gain;
 			}
 
@@ -200,6 +233,8 @@ namespace EmEn::Audio
 			bool
 			isCrossFaderEnabled () const noexcept
 			{
+				const Base::MutexLock lock{m_stateAccess};
+
 				return m_crossFaderEnabled;
 			}
 
@@ -218,6 +253,8 @@ namespace EmEn::Audio
 			PlayMode
 			playMode () const noexcept
 			{
+				const Base::MutexLock lock{m_stateAccess};
+
 				return m_playMode;
 			}
 
@@ -228,12 +265,7 @@ namespace EmEn::Audio
 			 *	   rebuild a playlist that is still backed by a named manifest.
 			 * @param track A reference to a music resource.
 			 */
-			void
-			addToPlaylist (const std::shared_ptr< MusicResource > & track) noexcept
-			{
-				m_playlist.push_back(track);
-				m_loadedPlaylist.reset();
-			}
+			void addToPlaylist (const std::shared_ptr< MusicResource > & track) noexcept;
 
 			/**
 			 * @brief Replaces the current playlist with the content of a PlaylistResource manifest.
@@ -253,12 +285,7 @@ namespace EmEn::Audio
 			 * @brief Removes all soundtracks from the playlist.
 			 * @note Also drops the loaded playlist manifest reference — there is no manifest backing an empty playlist.
 			 */
-			void
-			clearPlaylist ()
-			{
-				m_playlist.clear();
-				m_loadedPlaylist.reset();
-			}
+			void clearPlaylist () noexcept;
 
 			/**
 			 * @brief Returns the sorted, deduplicated list of all PlaylistResource names the application can reach.
@@ -275,23 +302,28 @@ namespace EmEn::Audio
 			 * @note Returns nullptr when: no manifest was ever loaded, the playlist was cleared, or the current
 			 *	   content was built ad-hoc via addToPlaylist() (any manual mutation severs the manifest link).
 			 *	   Callers can query loadedPlaylist()->name() / trackCount() for display purposes.
-			 * @return const std::shared_ptr< PlaylistResource > &
+			 * @return std::shared_ptr< PlaylistResource > A copy: the mixer may swap its playlist meanwhile.
 			 */
 			[[nodiscard]]
-			const std::shared_ptr< PlaylistResource > &
+			std::shared_ptr< PlaylistResource >
 			loadedPlaylist () const noexcept
 			{
+				const Base::MutexLock lock{m_stateAccess};
+
 				return m_loadedPlaylist;
 			}
 
 			/**
-			 * @brief Returns a const reference to the playlist.
-			 * @return const std::vector< std::shared_ptr< MusicResource > > &
+			 * @brief Returns a copy of the playlist.
+			 * @note A copy, never a reference: another thread may change the playlist while the caller reads it.
+			 * @return std::vector< std::shared_ptr< MusicResource > >
 			 */
 			[[nodiscard]]
-			const std::vector< std::shared_ptr< MusicResource > > &
+			std::vector< std::shared_ptr< MusicResource > >
 			playlist () const noexcept
 			{
+				const Base::MutexLock lock{m_stateAccess};
+
 				return m_playlist;
 			}
 
@@ -303,6 +335,8 @@ namespace EmEn::Audio
 			size_t
 			playlistSize () const noexcept
 			{
+				const Base::MutexLock lock{m_stateAccess};
+
 				return m_playlist.size();
 			}
 
@@ -314,8 +348,17 @@ namespace EmEn::Audio
 			size_t
 			currentTrackIndex () const noexcept
 			{
+				const Base::MutexLock lock{m_stateAccess};
+
 				return m_musicIndex;
 			}
+
+			/**
+			 * @brief Returns a consistent copy of the whole mixer state (one lock).
+			 * @return Status
+			 */
+			[[nodiscard]]
+			Status status () const noexcept;
 
 			/**
 			 * @brief Finds the first playlist entry whose resource name contains the given substring (case-insensitive).
@@ -336,6 +379,8 @@ namespace EmEn::Audio
 			UserState
 			userState () const noexcept
 			{
+				const Base::MutexLock lock{m_stateAccess};
+
 				return m_userState;
 			}
 
@@ -412,6 +457,8 @@ namespace EmEn::Audio
 			bool
 			isShuffleEnabled () const noexcept
 			{
+				const Base::MutexLock lock{m_stateAccess};
+
 				return m_shuffleEnabled;
 			}
 
@@ -426,7 +473,7 @@ namespace EmEn::Audio
 			void resume () noexcept;
 
 			/**
-			 * @brief Stops the music.
+			 * @brief Stops the music. A track still loading will not start when it is loaded.
 			 */
 			void stop () noexcept;
 
@@ -454,15 +501,22 @@ namespace EmEn::Audio
 			void onRegisterToConsole () noexcept override;
 
 			/**
-			 * @brief Enables OpenAL soft for source events.
+			 * @brief Registers eventCallback() with OpenAL Soft for the source state changes.
 			 * @return bool
 			 */
 			bool enableSourceEvents () noexcept;
 
 			/**
-			 * @brief Process for fading.
+			 * @brief Unregisters eventCallback() from OpenAL Soft. Idempotent.
+			 * @note OpenAL Soft runs the callback under its own lock, which the unregistration takes: once this returns,
+			 * no callback runs or will run. Never called with m_stateAccess held (the callback takes it: a deadlock).
 			 */
-			void eventLoop ();
+			void disableSourceEvents () noexcept EMEN_EXCLUDES(m_stateAccess);
+
+			/**
+			 * @brief The event thread: plays the next track when one ends, runs the cross-fade.
+			 */
+			void eventLoop () noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
 			 * @brief Fades in a track.
@@ -470,7 +524,7 @@ namespace EmEn::Audio
 			 * @param step The step of raising or lowering the volume.
 			 * @return bool
 			 */
-			bool fadeIn (Source * track, float step) const noexcept;
+			bool fadeIn (Source * track, float step) const noexcept EMEN_REQUIRES(m_stateAccess);
 
 			/**
 			 * @brief Fades out a track.
@@ -480,12 +534,46 @@ namespace EmEn::Audio
 			static void fadeOut (Source * track, float step) noexcept;
 
 			/**
-			 * @brief Check the music resource loading.
-			 * @param track A reference to a music resource smart pointer.
+			 * @brief Starts a loaded track on the free source (or the only one), with the cross-fade if enabled.
+			 * @param track A reference to a loaded music resource.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool checkTrackLoading (const std::shared_ptr< MusicResource > & track) noexcept;
+			bool startTrack (const std::shared_ptr< MusicResource > & track) noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief Notifies MusicSwitching or MusicPlaying for a track that started.
+			 * @param track A reference to the track.
+			 * @param switching Whether the cross-fader was enabled (a fade to it).
+			 */
+			void notifyTrackStarted (const MusicResource & track, bool switching) noexcept EMEN_EXCLUDES(m_stateAccess);
+
+			/**
+			 * @brief Plays the track the mixer waited for, if it is this one. The claim on m_loadingTrack is taken under
+			 * the lock: the loading notification and play()'s own re-check never both start it.
+			 * @param loaded The resource that finished loading.
+			 */
+			void playPendingTrack (const ObservableTrait * loaded) noexcept EMEN_EXCLUDES(m_stateAccess);
+
+			/**
+			 * @brief Keeps the shuffle order in step with the playlist (regenerated when shuffle is on, emptied when off).
+			 * @note Every change of the playlist calls it: a stale order indexed past a shorter playlist.
+			 */
+			void playlistChanged () noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief Moves the current index to the next or the previous entry (shuffle order or playlist order).
+			 * @pre The playlist is not empty.
+			 * @param forward True for the next entry.
+			 */
+			void stepIndex (bool forward) noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief Plays the next or the previous entry (or only moves the index when stopped), then notifies.
+			 * @param forward True for the next entry.
+			 * @return bool
+			 */
+			bool stepTrack (bool forward) noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
 			 * @brief OpenAL source event callback.
@@ -499,45 +587,50 @@ namespace EmEn::Audio
 			static void eventCallback (ALenum eventType, ALuint object, ALuint param, ALsizei length, const ALchar * message, void * userParam) noexcept;
 
 			/**
-			 * @brief Generates a shuffled order for the playlist.
+			 * @brief Generates a shuffled order for the playlist (Base::PortableRandom::shuffle()).
 			 */
-			void generateShuffleOrder () noexcept;
+			void generateShuffleOrder () noexcept EMEN_REQUIRES(m_stateAccess);
 
 			/**
 			 * @brief Requests the event thread to stop and joins it. Idempotent.
 			 * @note The stop flag is raised UNDER m_stateAccess, so the waiter cannot miss the notification between its
 			 * predicate check and its wait.
 			 */
-			void stopEventThread () noexcept;
+			void stopEventThread () noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
 			 * @brief Advances the cross-fade by one step.
-			 * @pre m_stateAccess is held by the caller.
 			 */
-			void fadeStep () noexcept;
+			void fadeStep () noexcept EMEN_REQUIRES(m_stateAccess);
 
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
 			Manager & m_audioManager;
-			std::unique_ptr< Source > m_trackA;
-			std::unique_ptr< Source > m_trackB;
-			float m_gain{0.0F};
-			UserState m_userState{UserState::Stopped};
-			PlayMode m_playMode{PlayMode::Loop};
-			PlayingTrack m_playingTrack{PlayingTrack::None};
-			size_t m_musicIndex{0};
-			std::vector< std::shared_ptr< MusicResource > > m_playlist;
-			std::shared_ptr< PlaylistResource > m_loadedPlaylist;
-			std::shared_ptr< MusicResource > m_loadingTrack;
-			mutable std::mutex m_stateAccess;
-			std::condition_variable m_fadeCv;
-			std::atomic_bool m_stopThread{false};
-			bool m_crossFaderEnabled{false};
-			bool m_isFading{false};
-			std::atomic_bool m_requestNextTrack{false};
-			bool m_shuffleEnabled{false};
-			std::vector< size_t > m_shuffleOrder;
-			size_t m_shuffleIndex{0};
+			/* NOTE: The lock of every member below but the event thread (decision D12: Clang checks the protocol). */
+			mutable Base::Mutex m_stateAccess;
+			std::condition_variable_any m_fadeCv;
+			/* NOTE: The pointers are set once by onInitialize() before any other thread exists; the SOURCES are used under
+			 * the lock only (the cross-fade on the event thread and play() on the caller's used to race on the gains). */
+			std::unique_ptr< Source > m_trackA EMEN_PT_GUARDED_BY(m_stateAccess);
+			std::unique_ptr< Source > m_trackB EMEN_PT_GUARDED_BY(m_stateAccess);
+			std::vector< std::shared_ptr< MusicResource > > m_playlist EMEN_GUARDED_BY(m_stateAccess);
+			std::shared_ptr< PlaylistResource > m_loadedPlaylist EMEN_GUARDED_BY(m_stateAccess);
+			std::shared_ptr< MusicResource > m_loadingTrack EMEN_GUARDED_BY(m_stateAccess);
+			std::vector< size_t > m_shuffleOrder EMEN_GUARDED_BY(m_stateAccess);
+			std::mt19937 m_shuffleGenerator EMEN_GUARDED_BY(m_stateAccess){std::random_device{}()};
+			size_t m_musicIndex EMEN_GUARDED_BY(m_stateAccess){0};
+			size_t m_shuffleIndex EMEN_GUARDED_BY(m_stateAccess){0};
+			float m_gain EMEN_GUARDED_BY(m_stateAccess){0.0F};
+			UserState m_userState EMEN_GUARDED_BY(m_stateAccess){UserState::Stopped};
+			PlayMode m_playMode EMEN_GUARDED_BY(m_stateAccess){PlayMode::Loop};
+			PlayingTrack m_playingTrack EMEN_GUARDED_BY(m_stateAccess){PlayingTrack::None};
+			bool m_stopThread EMEN_GUARDED_BY(m_stateAccess){false};
+			bool m_requestNextTrack EMEN_GUARDED_BY(m_stateAccess){false};
+			bool m_crossFaderEnabled EMEN_GUARDED_BY(m_stateAccess){false};
+			bool m_isFading EMEN_GUARDED_BY(m_stateAccess){false};
+			bool m_shuffleEnabled EMEN_GUARDED_BY(m_stateAccess){false};
+			/* NOTE: Main thread only (onInitialize(), onTerminate(), the destructor). */
+			bool m_sourceEventsEnabled{false};
 			/* NOTE: LAST on purpose (Ave Robustus II, member order): the event thread uses every member above, so it is
 			 * destroyed — joined — first. The destructor also stops it explicitly before any member goes. */
 			Base::Thread m_eventThread;

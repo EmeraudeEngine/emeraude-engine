@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <bit>
 #include <memory>
 
 /* Local inclusions for inheritances. */
@@ -195,6 +196,18 @@ namespace EmEn::Vulkan
 			isMultiviewEnabled () const noexcept
 			{
 				return m_multiviewEnabled;
+			}
+
+			/**
+			 * @brief Returns how many views a draw in this render pass renders: the bits of the view mask with multiview,
+			 * else 1.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			viewCount () const noexcept
+			{
+				return m_multiviewEnabled ? static_cast< uint32_t >(std::popcount(m_viewMask)) : 1U;
 			}
 
 			/**

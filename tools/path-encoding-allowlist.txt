@@ -4,3 +4,9 @@ emeraude-base/src/io/io.hpp | return {UTF8String}; | IO::u8path's POSIX branch (
 emeraude-base/src/io/io.hpp | return path.string(); | IO::toU8String's POSIX branch (native = UTF-8); parsed on Windows as a discarded if-constexpr branch
 emeraude-base/src/io/io.hpp | return path.generic_string(); | IO::toGenericU8String's POSIX branch (native = UTF-8); parsed on Windows as a discarded if-constexpr branch
 emeraude-engine/src/scenes/component/lightconsoleadapters.cpp | cone set to | a console message ("°" in a sentence holding " / "), not a path
+emeraude-base/src/network/truststore.cpp | is_regular_file(candidate, fileError) | the Linux branch (native = UTF-8) walking ASCII constexpr C strings; a POSIX branch of a cross-platform file
+emeraude-base/src/network/truststore.cpp | return applyCABundleFile(context, candidate); | the Linux branch (native = UTF-8) walking ASCII constexpr C strings; a POSIX branch of a cross-platform file
+emeraude-base/src/testing/test_blobtrait.cpp | std::filesystem::path{std::wstring{ | a wide string (the Windows lone-surrogate case); the grep gate cannot see the type
+emeraude-engine/src/platformspecific/desktop/dialog/openfile.windows.cpp | std::filesystem::path{m_defaultDirectory} | a copy of a path (make_preferred() mutates); the grep gate cannot see the type
+emeraude-engine/src/platformspecific/desktop/dialog/savefile.windows.cpp | std::filesystem::path{m_defaultDirectory} | a copy of a path (make_preferred() mutates); the grep gate cannot see the type
+emeraude-engine/src/platformspecific/systeminfo.windows.cpp | std::filesystem::path{realPath} | a std::wstring (GetModuleFileNameW); the grep gate cannot see the type

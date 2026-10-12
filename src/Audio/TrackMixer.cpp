@@ -28,15 +28,17 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <limits>
 #include <numeric>
-#include <random>
 #include <set>
+#include <sstream>
 
 /* Local inclusions. */
 #include "String.hpp"
 #include "Manager.hpp"
 #include "OpenALExtensions.hpp"
+#include "PortableRandom.hpp"
 #include "Resources/Manager.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
@@ -45,6 +47,14 @@
 namespace EmEn::Audio
 {
 	using namespace Base;
+
+	namespace
+	{
+		/* The OpenAL Soft events the mixer listens to. */
+		constexpr std::array< ALCenum, 1 > SourceEvents{
+			AL_EVENT_TYPE_SOURCE_STATE_CHANGED_SOFT
+		};
+	}
 
 	bool
 	TrackMixer::enableSourceEvents () noexcept
@@ -57,16 +67,27 @@ namespace EmEn::Audio
 		}
 
 		OpenAL::alEventCallbackSOFT(eventCallback, this);
+		OpenAL::alEventControlSOFT(static_cast< ALsizei >(SourceEvents.size()), SourceEvents.data(), AL_TRUE);
 
-		constexpr std::array< ALCenum, 1 > events{
-			//AL_EVENT_TYPE_BUFFER_COMPLETED_SOFT,
-			AL_EVENT_TYPE_SOURCE_STATE_CHANGED_SOFT,
-			//AL_EVENT_TYPE_DISCONNECTED_SOFT
-		};
-
-		OpenAL::alEventControlSOFT(static_cast< ALsizei >(events.size()), events.data(), AL_TRUE);
+		m_sourceEventsEnabled = true;
 
 		return true;
+	}
+
+	void
+	TrackMixer::disableSourceEvents () noexcept
+	{
+		if ( !m_sourceEventsEnabled )
+		{
+			return;
+		}
+
+		/* NOTE: The registration held a raw this: it must not outlive the mixer (Ave Robustus II, a registration is
+		 * released by its owner). It was never removed before 2026-10-12. */
+		OpenAL::alEventControlSOFT(static_cast< ALsizei >(SourceEvents.size()), SourceEvents.data(), AL_FALSE);
+		OpenAL::alEventCallbackSOFT(nullptr, nullptr);
+
+		m_sourceEventsEnabled = false;
 	}
 
 	void
@@ -79,30 +100,58 @@ namespace EmEn::Audio
 
 		auto * trackMixer = static_cast< TrackMixer * >(userParam);
 
-		const std::scoped_lock lock{trackMixer->m_stateAccess};
-
-		const PlayingTrack currentTrack = trackMixer->m_playingTrack;
-		const ALuint currentSourceId = currentTrack == PlayingTrack::TrackA
-			? trackMixer->m_trackA->identifier()
-			: trackMixer->m_trackB->identifier();
-
-		if ( object != currentSourceId )
 		{
-			return;
+			const MutexLock lock{trackMixer->m_stateAccess};
+
+			/* NOTE: A source stopped while no track plays (stop(), the old source of a switch) is not the end of the
+			 * current track. The playing source used to default to track B here. */
+			if ( trackMixer->m_playingTrack == PlayingTrack::None )
+			{
+				return;
+			}
+
+			const ALuint currentSourceId = trackMixer->m_playingTrack == PlayingTrack::TrackA ?
+				trackMixer->m_trackA->identifier() :
+				trackMixer->m_trackB->identifier();
+
+			if ( object != currentSourceId )
+			{
+				return;
+			}
+
+			trackMixer->m_requestNextTrack = true;
 		}
 
-		TraceDebug{ClassId} << message;
-
-		trackMixer->m_requestNextTrack = true;
 		trackMixer->m_fadeCv.notify_one();
+
+		TraceDebug{ClassId} << message;
 	}
 
 	bool
 	TrackMixer::onInitialize () noexcept
 	{
+		{
+			const MutexLock lock{m_stateAccess};
+
+			/* NOTE: The sources exist BEFORE the OpenAL events are registered: the callback reads them. */
+			m_trackA = std::make_unique< Source >();
+			m_trackA->setRelativeState(true);
+			m_trackA->setRolloffFactor(0.0F);
+			m_trackA->setGain(0.0F);
+
+			m_trackB = std::make_unique< Source >();
+			m_trackB->setRelativeState(true);
+			m_trackB->setRolloffFactor(0.0F);
+			m_trackB->setGain(0.0F);
+
+			m_stopThread = false;
+		}
+
 		if ( this->enableSourceEvents() )
 		{
 			TraceSuccess{ClassId} << "Events for source are enabled !";
+
+			const MutexLock lock{m_stateAccess};
 
 			m_playMode = PlayMode::Once;
 		}
@@ -113,25 +162,12 @@ namespace EmEn::Audio
 		/* NOTE: SoundFont for MIDI rendering is now managed per-resource via the dependency system.
 		 * Each MusicResource queries settings and loads the soundfont as a dependency when needed. */
 
-		/* NOTE: Allocating track sources (to volume 0) */
-		m_trackA = std::make_unique< Source >();
-		m_trackA->setRelativeState(true);
-		m_trackA->setRolloffFactor(0.0F);
-		m_trackA->setGain(0.0F);
-
-		m_trackB = std::make_unique< Source >();
-		m_trackB->setRelativeState(true);
-		m_trackB->setRolloffFactor(0.0F);
-		m_trackB->setGain(0.0F);
-
 		/* NOTE: Console registration is handled by AudioManager via registerToObject(). */
-
-		m_stopThread = false;
 
 		if ( !m_eventThread.start([this] { this->eventLoop(); }) )
 		{
 			/* The system refused the thread (Base::Thread traced why): the track mixer is refused (owner policy,
-			 * 2026-10-07). onTerminate() releases the tracks allocated above. */
+			 * 2026-10-07). onTerminate() releases what was set up above. */
 			Tracer::error(ClassId, "Unable to start the track mixer event thread: the track mixer is disabled !");
 
 			static_cast< void >(this->onTerminate());
@@ -144,6 +180,7 @@ namespace EmEn::Audio
 
 	TrackMixer::~TrackMixer ()
 	{
+		this->disableSourceEvents();
 		this->stopEventThread();
 	}
 
@@ -151,7 +188,7 @@ namespace EmEn::Audio
 	TrackMixer::stopEventThread () noexcept
 	{
 		{
-			const std::scoped_lock lock{m_stateAccess};
+			const MutexLock lock{m_stateAccess};
 
 			m_stopThread = true;
 		}
@@ -167,7 +204,11 @@ namespace EmEn::Audio
 	bool
 	TrackMixer::onTerminate () noexcept
 	{
+		/* NOTE: The OpenAL callback first (it wakes the event thread), then the event thread, then the sources. */
+		this->disableSourceEvents();
 		this->stopEventThread();
+
+		const MutexLock lock{m_stateAccess};
 
 		if ( m_trackA != nullptr )
 		{
@@ -179,13 +220,17 @@ namespace EmEn::Audio
 			m_trackB->stop();
 		}
 
+		m_playingTrack = PlayingTrack::None;
+		m_isFading = false;
+		m_loadingTrack.reset();
+
 		return true;
 	}
 
 	void
 	TrackMixer::setVolume (float volume) noexcept
 	{
-		const std::scoped_lock lock{m_stateAccess};
+		const MutexLock lock{m_stateAccess};
 
 		m_gain = Math::clampToUnit(volume);
 
@@ -210,88 +255,119 @@ namespace EmEn::Audio
 	void
 	TrackMixer::enableCrossFader (bool state) noexcept
 	{
+		const MutexLock lock{m_stateAccess};
+
 		m_crossFaderEnabled = state;
 
 		/* NOTE: If disabling cross-fader while fading or with two tracks playing,
 		 * stop the non-current track and set the current one to full volume. */
-		if ( !state && this->usable() )
+		if ( state || !this->usable() )
 		{
-			const std::scoped_lock lock{m_stateAccess};
+			return;
+		}
 
-			/* Stop any ongoing fade. */
-			m_isFading = false;
+		/* Stop any ongoing fade. */
+		m_isFading = false;
 
-			switch ( m_playingTrack )
-			{
-				case PlayingTrack::TrackA :
-					/* Stop track B if it's playing. */
-					if ( !m_trackB->isMuted() )
-					{
-						m_trackB->stop();
-						m_trackB->removeSound();
-					}
-					/* Ensure track A is at full volume. */
-					m_trackA->setGain(m_gain);
-					break;
+		switch ( m_playingTrack )
+		{
+			case PlayingTrack::TrackA :
+				/* Stop track B if it's playing. */
+				if ( !m_trackB->isMuted() )
+				{
+					m_trackB->stop();
+					m_trackB->removeSound();
+				}
+				/* Ensure track A is at full volume. */
+				m_trackA->setGain(m_gain);
+				break;
 
-				case PlayingTrack::TrackB :
-					/* Stop track A if it's playing. */
-					if ( !m_trackA->isMuted() )
-					{
-						m_trackA->stop();
-						m_trackA->removeSound();
-					}
-					/* Ensure track B is at full volume. */
-					m_trackB->setGain(m_gain);
-					break;
+			case PlayingTrack::TrackB :
+				/* Stop track A if it's playing. */
+				if ( !m_trackA->isMuted() )
+				{
+					m_trackA->stop();
+					m_trackA->removeSound();
+				}
+				/* Ensure track B is at full volume. */
+				m_trackB->setGain(m_gain);
+				break;
 
-				case PlayingTrack::None:
-					break;
-			}
+			case PlayingTrack::None:
+				break;
 		}
 	}
 
 	void
 	TrackMixer::setPlayMode (PlayMode mode) noexcept
 	{
+		const MutexLock lock{m_stateAccess};
+
 		m_playMode = mode;
 
 		/* NOTE: Also update the currently playing source if any. */
-		if ( this->usable() )
+		if ( !this->usable() )
 		{
-			const std::scoped_lock lock{m_stateAccess};
+			return;
+		}
 
-			const bool looping = (mode == PlayMode::Loop);
+		const bool looping = (mode == PlayMode::Loop);
 
-			switch ( m_playingTrack )
-			{
-				case PlayingTrack::TrackA :
-					m_trackA->setLooping(looping);
-					break;
+		switch ( m_playingTrack )
+		{
+			case PlayingTrack::TrackA :
+				m_trackA->setLooping(looping);
+				break;
 
-				case PlayingTrack::TrackB :
-					m_trackB->setLooping(looping);
-					break;
+			case PlayingTrack::TrackB :
+				m_trackB->setLooping(looping);
+				break;
 
-				case PlayingTrack::None:
-					break;
-			}
+			case PlayingTrack::None:
+				break;
 		}
 	}
 
-	bool
-	TrackMixer::checkTrackLoading (const std::shared_ptr< MusicResource > & track) noexcept
+	void
+	TrackMixer::addToPlaylist (const std::shared_ptr< MusicResource > & track) noexcept
 	{
-		if ( track->isLoaded() )
-		{
-			return true;
-		}
+		const MutexLock lock{m_stateAccess};
 
-		m_loadingTrack = track;
+		m_playlist.push_back(track);
+		m_loadedPlaylist.reset();
 
-		this->observe(track.get());
+		this->playlistChanged();
+	}
 
-		return false;
+	void
+	TrackMixer::clearPlaylist () noexcept
+	{
+		const MutexLock lock{m_stateAccess};
+
+		m_playlist.clear();
+		m_loadedPlaylist.reset();
+
+		this->playlistChanged();
+	}
+
+	TrackMixer::Status
+	TrackMixer::status () const noexcept
+	{
+		const MutexLock lock{m_stateAccess};
+
+		Status status;
+		status.playlist = m_playlist;
+		status.currentTrack = m_musicIndex < m_playlist.size() ? m_playlist[m_musicIndex] : nullptr;
+		status.loadedPlaylist = m_loadedPlaylist;
+		status.trackIndex = m_musicIndex;
+		status.gain = m_gain;
+		status.userState = m_userState;
+		status.playMode = m_playMode;
+		status.hasTrack = m_playingTrack != PlayingTrack::None;
+		status.crossFaderEnabled = m_crossFaderEnabled;
+		status.shuffleEnabled = m_shuffleEnabled;
+
+		return status;
 	}
 
 	bool
@@ -303,21 +379,32 @@ namespace EmEn::Audio
 			return true;
 		}
 
-		if ( m_playlist.empty() )
+		std::shared_ptr< MusicResource > track;
+
+		{
+			const MutexLock lock{m_stateAccess};
+
+			if ( !m_playlist.empty() )
+			{
+				/* NOTE: Check if the current music index is correct. */
+				if ( m_musicIndex >= m_playlist.size() )
+				{
+					m_musicIndex = 0;
+				}
+
+				track = m_playlist[m_musicIndex];
+			}
+		}
+
+		if ( track == nullptr )
 		{
 			Tracer::warning(ClassId, "The playlist is empty !");
 
 			return false;
 		}
 
-		/* NOTE: Check if the current music index is correct. */
-		if ( m_musicIndex >= m_playlist.size() )
-		{
-			m_musicIndex = 0;
-		}
-
 		/* NOTE: We play the music at the index. */
-		return this->play(m_playlist[m_musicIndex]);
+		return this->play(track);
 	}
 
 	bool
@@ -337,8 +424,12 @@ namespace EmEn::Audio
 			return false;
 		}
 
+		bool waitForLoading = false;
+		bool success = false;
+		bool switching = false;
+
 		{
-			const std::scoped_lock lock{m_stateAccess};
+			const MutexLock lock{m_stateAccess};
 
 			m_userState = UserState::Playing;
 
@@ -346,247 +437,292 @@ namespace EmEn::Audio
 			 * Without this, direct play(track) calls (e.g. from the console) leave
 			 * m_musicIndex stale, so nowPlaying/status/currentPosition/currentDuration
 			 * all report the previous track. SIZE_MAX signals "out of playlist". */
-			m_musicIndex = std::numeric_limits< size_t >::max();
+			const auto entry = std::ranges::find(m_playlist, track);
 
-			for ( size_t index = 0; index < m_playlist.size(); ++index )
+			m_musicIndex = entry != m_playlist.end() ? static_cast< size_t >(entry - m_playlist.begin()) : std::numeric_limits< size_t >::max();
+
+			if ( track->isLoaded() )
 			{
-				if ( m_playlist[index] == track )
-				{
-					m_musicIndex = index;
+				/* NOTE: A newer request supersedes a track still loading. */
+				m_loadingTrack.reset();
 
-					break;
-				}
+				switching = m_crossFaderEnabled;
+				success = this->startTrack(track);
+			}
+			else
+			{
+				m_loadingTrack = track;
+				waitForLoading = true;
 			}
 		}
 
 		/* Check if we need to wait the track to be loaded in memory. */
-		if ( !this->checkTrackLoading(track) )
+		if ( waitForLoading )
 		{
 			Tracer::debug(ClassId, "Waits for the track to be fully loaded into memory for playback ...");
+
+			this->observe(track.get());
+
+			/* NOTE: The track may have finished loading between isLoaded() and observe(): its notification is then
+			 * gone. playPendingTrack() claims the pending track under the lock, so the notification and this re-check
+			 * never both start it. */
+			if ( track->isLoaded() )
+			{
+				this->playPendingTrack(track.get());
+			}
 
 			return true;
 		}
 
-		if ( m_crossFaderEnabled )
+		if ( success )
 		{
-			this->notify(MusicSwitching, (std::stringstream{} << "Fading to '" << track->title() << "' track from '" << track->artist() << "'.").str());
-		}
-		else
-		{
-			this->notify(MusicPlaying, (std::stringstream{} << "Now playing '" << track->title() << "' track from '" << track->artist() << "'.").str());
-		}
-
-		/* NOTE: Check which track was playing. */
-		PlayingTrack trackToPlayNow = PlayingTrack::None;
-		bool wasPlaying = true;
-
-		{
-			const std::scoped_lock lock{m_stateAccess};
-
-			switch ( m_playingTrack )
-			{
-				case PlayingTrack::None:
-					m_playingTrack = PlayingTrack::TrackA;
-
-					wasPlaying = false;
-					break;
-
-				case PlayingTrack::TrackA:
-					m_playingTrack = PlayingTrack::TrackB;
-
-					if ( m_crossFaderEnabled )
-					{
-						m_isFading = true;
-					}
-					else
-					{
-						/* NOTE: Stop the old track immediately when cross-fader is disabled. */
-						m_trackA->stop();
-						m_trackA->removeSound();
-					}
-					break;
-
-				case PlayingTrack::TrackB:
-					m_playingTrack = PlayingTrack::TrackA;
-
-					if ( m_crossFaderEnabled )
-					{
-						m_isFading = true;
-					}
-					else
-					{
-						/* NOTE: Stop the old track immediately when cross-fader is disabled. */
-						m_trackB->stop();
-						m_trackB->removeSound();
-					}
-					break;
-			}
-
-			trackToPlayNow = m_playingTrack;
-		}
-	
-		bool success = false;
-		const float initialGain = m_crossFaderEnabled && wasPlaying ? 0.0F : m_gain;
-
-		if ( trackToPlayNow == PlayingTrack::TrackA )
-		{
-			m_trackA->setGain(initialGain);
-
-			success = m_trackA->play(track, m_playMode);
-		}
-		else
-		{
-			m_trackB->setGain(initialGain);
-
-			success = m_trackB->play(track, m_playMode);
-		}
-
-		if ( m_isFading && success )
-		{
-			m_fadeCv.notify_one();
+			this->notifyTrackStarted(*track, switching);
 		}
 
 		return success;
 	}
 
+	void
+	TrackMixer::notifyTrackStarted (const MusicResource & track, bool switching) noexcept
+	{
+		/* NOTE: Notified after the lock: an observer may call the mixer back. */
+		if ( switching )
+		{
+			this->notify(MusicSwitching, (std::stringstream{} << "Fading to '" << track.title() << "' track from '" << track.artist() << "'.").str());
+		}
+		else
+		{
+			this->notify(MusicPlaying, (std::stringstream{} << "Now playing '" << track.title() << "' track from '" << track.artist() << "'.").str());
+		}
+	}
+
+	bool
+	TrackMixer::startTrack (const std::shared_ptr< MusicResource > & track) noexcept
+	{
+		/* NOTE: Check which track was playing. */
+		const auto previousTrack = m_playingTrack;
+		bool wasPlaying = true;
+
+		switch ( m_playingTrack )
+		{
+			case PlayingTrack::None:
+				m_playingTrack = PlayingTrack::TrackA;
+
+				wasPlaying = false;
+				break;
+
+			case PlayingTrack::TrackA:
+				m_playingTrack = PlayingTrack::TrackB;
+
+				if ( m_crossFaderEnabled )
+				{
+					m_isFading = true;
+				}
+				else
+				{
+					/* NOTE: Stop the old track immediately when cross-fader is disabled. */
+					m_trackA->stop();
+					m_trackA->removeSound();
+				}
+				break;
+
+			case PlayingTrack::TrackB:
+				m_playingTrack = PlayingTrack::TrackA;
+
+				if ( m_crossFaderEnabled )
+				{
+					m_isFading = true;
+				}
+				else
+				{
+					/* NOTE: Stop the old track immediately when cross-fader is disabled. */
+					m_trackB->stop();
+					m_trackB->removeSound();
+				}
+				break;
+		}
+
+		const float initialGain = m_crossFaderEnabled && wasPlaying ? 0.0F : m_gain;
+		auto & source = m_playingTrack == PlayingTrack::TrackA ? *m_trackA : *m_trackB;
+
+		source.setGain(initialGain);
+
+		if ( !source.play(track, m_playMode) )
+		{
+			/* NOTE: A failed start leaves the state as it really is: the old track still plays when it was fading out,
+			 * nothing plays when it was stopped above. */
+			m_isFading = false;
+			m_playingTrack = m_crossFaderEnabled ? previousTrack : PlayingTrack::None;
+
+			return false;
+		}
+
+		if ( m_isFading )
+		{
+			m_fadeCv.notify_one();
+		}
+
+		return true;
+	}
+
+	void
+	TrackMixer::playPendingTrack (const ObservableTrait * loaded) noexcept
+	{
+		std::shared_ptr< MusicResource > pending;
+		bool success = false;
+		bool switching = false;
+
+		{
+			const MutexLock lock{m_stateAccess};
+
+			if ( m_loadingTrack == nullptr || static_cast< const ObservableTrait * >(m_loadingTrack.get()) != loaded )
+			{
+				return;
+			}
+
+			pending = std::move(m_loadingTrack);
+			m_loadingTrack.reset();
+
+			/* NOTE: The user state and the index were set by play() when it asked for this track; a stop() since then
+			 * dropped the claim above. Started here, never through play(): no recursion. */
+			switching = m_crossFaderEnabled;
+			success = this->startTrack(pending);
+		}
+
+		if ( success )
+		{
+			this->notifyTrackStarted(*pending, switching);
+		}
+	}
+
 	bool
 	TrackMixer::playIndex (size_t index) noexcept
 	{
-		if ( m_playlist.empty() )
+		std::shared_ptr< MusicResource > track;
+		bool empty = false;
+
+		{
+			const MutexLock lock{m_stateAccess};
+
+			empty = m_playlist.empty();
+
+			if ( index < m_playlist.size() )
+			{
+				m_musicIndex = index;
+				track = m_playlist[index];
+			}
+		}
+
+		if ( empty )
 		{
 			Tracer::warning(ClassId, "The playlist is empty !");
 
 			return false;
 		}
 
-		if ( index >= m_playlist.size() )
+		if ( track == nullptr )
 		{
 			Tracer::warning(ClassId, "Invalid playlist index !");
 
 			return false;
 		}
 
-		m_musicIndex = index;
+		return this->play(track);
+	}
 
-		return this->play(m_playlist[m_musicIndex]);
+	void
+	TrackMixer::stepIndex (bool forward) noexcept
+	{
+		/* NOTE: Handle shuffle mode. playlistChanged() keeps the order the size of the playlist. */
+		if ( m_shuffleEnabled && m_shuffleOrder.size() == m_playlist.size() )
+		{
+			if ( forward )
+			{
+				m_shuffleIndex = m_shuffleIndex + 1 < m_shuffleOrder.size() ? m_shuffleIndex + 1 : 0;
+			}
+			else
+			{
+				m_shuffleIndex = m_shuffleIndex == 0 || m_shuffleIndex > m_shuffleOrder.size() ? m_shuffleOrder.size() - 1 : m_shuffleIndex - 1;
+			}
+
+			m_musicIndex = m_shuffleOrder[m_shuffleIndex];
+
+			return;
+		}
+
+		/* NOTE: A track played outside the playlist leaves the index at SIZE_MAX: the next one is the first. */
+		if ( forward )
+		{
+			m_musicIndex = m_musicIndex + 1 < m_playlist.size() ? m_musicIndex + 1 : 0;
+		}
+		else
+		{
+			m_musicIndex = m_musicIndex == 0 || m_musicIndex >= m_playlist.size() ? m_playlist.size() - 1 : m_musicIndex - 1;
+		}
+	}
+
+	bool
+	TrackMixer::stepTrack (bool forward) noexcept
+	{
+		std::shared_ptr< MusicResource > track;
+		size_t index = 0;
+		bool stopped = false;
+
+		{
+			const MutexLock lock{m_stateAccess};
+
+			/* NOTE: If the player is paused, we don't change anything. */
+			if ( m_userState == UserState::Paused )
+			{
+				return false;
+			}
+
+			if ( !m_playlist.empty() )
+			{
+				this->stepIndex(forward);
+
+				index = m_musicIndex;
+				stopped = m_userState == UserState::Stopped;
+				track = m_playlist[index];
+			}
+		}
+
+		if ( track == nullptr )
+		{
+			Tracer::warning(ClassId, "The playlist is empty !");
+
+			return false;
+		}
+
+		/* NOTE: If the player is stopped, we just change the track index and notify. */
+		if ( stopped )
+		{
+			this->notify(TrackChanged, index);
+
+			return true;
+		}
+
+		const bool success = this->play(track);
+
+		/* NOTE: Notify that the track index has changed (for UI update). */
+		if ( success )
+		{
+			this->notify(TrackChanged, index);
+		}
+
+		return success;
 	}
 
 	bool
 	TrackMixer::next () noexcept
 	{
-		/* NOTE: If the player is paused, we don't change anything. */
-		if ( m_userState == UserState::Paused )
-		{
-			return false;
-		}
-
-		if ( m_playlist.empty() )
-		{
-			Tracer::warning(ClassId, "The playlist is empty !");
-
-			return false;
-		}
-
-		/* NOTE: Handle shuffle mode. */
-		if ( m_shuffleEnabled && !m_shuffleOrder.empty() )
-		{
-			m_shuffleIndex++;
-
-			if ( m_shuffleIndex >= m_shuffleOrder.size() )
-			{
-				m_shuffleIndex = 0;
-			}
-
-			m_musicIndex = m_shuffleOrder[m_shuffleIndex];
-		}
-		else
-		{
-			m_musicIndex++;
-
-			if ( m_musicIndex >= m_playlist.size() )
-			{
-				m_musicIndex = 0;
-			}
-		}
-
-		/* NOTE: If the player is stopped, we just change the track index and notify. */
-		if ( m_userState == UserState::Stopped )
-		{
-			this->notify(TrackChanged, m_musicIndex);
-
-			return true;
-		}
-
-		const bool success = this->play(m_playlist[m_musicIndex]);
-
-		/* NOTE: Notify that the track index has changed (for UI update). */
-		if ( success )
-		{
-			this->notify(TrackChanged, m_musicIndex);
-		}
-
-		return success;
+		return this->stepTrack(true);
 	}
 
 	bool
 	TrackMixer::previous () noexcept
 	{
-		/* NOTE: If the player is paused, we don't change anything. */
-		if ( m_userState == UserState::Paused )
-		{
-			return false;
-		}
-
-		if ( m_playlist.empty() )
-		{
-			Tracer::warning(ClassId, "The playlist is empty !");
-
-			return false;
-		}
-
-		/* NOTE: Handle shuffle mode. */
-		if ( m_shuffleEnabled && !m_shuffleOrder.empty() )
-		{
-			if ( m_shuffleIndex == 0 )
-			{
-				m_shuffleIndex = m_shuffleOrder.size() - 1;
-			}
-			else
-			{
-				m_shuffleIndex--;
-			}
-
-			m_musicIndex = m_shuffleOrder[m_shuffleIndex];
-		}
-		else
-		{
-			if ( m_musicIndex == 0 )
-			{
-				m_musicIndex = m_playlist.size() - 1;
-			}
-			else
-			{
-				m_musicIndex--;
-			}
-		}
-
-		/* NOTE: If the player is stopped, we just change the track index and notify. */
-		if ( m_userState == UserState::Stopped )
-		{
-			this->notify(TrackChanged, m_musicIndex);
-
-			return true;
-		}
-
-		const bool success = this->play(m_playlist[m_musicIndex]);
-
-		/* NOTE: Notify that the track index has changed (for UI update). */
-		if ( success )
-		{
-			this->notify(TrackChanged, m_musicIndex);
-		}
-
-		return success;
+		return this->stepTrack(false);
 	}
 
 	float
@@ -597,7 +733,7 @@ namespace EmEn::Audio
 			return 0.0F;
 		}
 
-		const std::scoped_lock lock{m_stateAccess};
+		const MutexLock lock{m_stateAccess};
 
 		switch ( m_playingTrack )
 		{
@@ -617,12 +753,20 @@ namespace EmEn::Audio
 	float
 	TrackMixer::currentDuration () const noexcept
 	{
-		if ( m_playlist.empty() || m_musicIndex >= m_playlist.size() )
+		std::shared_ptr< MusicResource > track;
+
 		{
-			return 0.0F;
+			const MutexLock lock{m_stateAccess};
+
+			if ( m_musicIndex >= m_playlist.size() )
+			{
+				return 0.0F;
+			}
+
+			track = m_playlist[m_musicIndex];
 		}
 
-		return m_playlist[m_musicIndex]->duration();
+		return track != nullptr ? track->duration() : 0.0F;
 	}
 
 	std::vector< std::string >
@@ -701,20 +845,23 @@ namespace EmEn::Audio
 		 * in the "loading/rendering" window, which would read isPlaying()==false. userState() captures the
 		 * persistent intent ("user wants music"), which is the correct trigger for auto-resume after a swap. */
 		const bool wasPlaying = this->userState() == UserState::Playing;
+		const auto trackCount = resolved.size();
 
 		this->stop();
-		this->clearPlaylist();
 
-		for ( const auto & track : resolved )
 		{
-			this->addToPlaylist(track);
+			const MutexLock lock{m_stateAccess};
+
+			/* NOTE: The manifest is recorded with the tracks in one step: "any ad-hoc mutation severs the manifest
+			 * link" (addToPlaylist()) holds, and no reader sees the new tracks under the old manifest. */
+			m_playlist = std::move(resolved);
+			m_loadedPlaylist = playlist;
+			m_musicIndex = 0;
+
+			this->playlistChanged();
 		}
 
-		/* Record the backing manifest AFTER the addToPlaylist loop — each addToPlaylist() resets
-		 * m_loadedPlaylist to preserve the invariant "any ad-hoc mutation severs the manifest link". */
-		m_loadedPlaylist = playlist;
-
-		TraceSuccess{ClassId} << "Loaded playlist '" << playlist->name() << "' with " << resolved.size() << " track(s).";
+		TraceSuccess{ClassId} << "Loaded playlist '" << playlist->name() << "' with " << trackCount << " track(s).";
 
 		/* Notify observers (UI layer, AI tooling, etc.) that the playlist changed. Carries the new manifest name. */
 		this->notify(PlaylistSwapped, playlist->name());
@@ -730,12 +877,14 @@ namespace EmEn::Audio
 	std::shared_ptr< MusicResource >
 	TrackMixer::findPlaylistTrack (const std::string & partialName) const noexcept
 	{
-		if ( partialName.empty() || m_playlist.empty() )
+		if ( partialName.empty() )
 		{
 			return nullptr;
 		}
 
 		const auto needle = String::toLower(partialName);
+
+		const MutexLock lock{m_stateAccess};
 
 		for ( const auto & track : m_playlist )
 		{
@@ -761,7 +910,7 @@ namespace EmEn::Audio
 			return;
 		}
 
-		const std::scoped_lock lock{m_stateAccess};
+		const MutexLock lock{m_stateAccess};
 
 		switch ( m_playingTrack )
 		{
@@ -781,21 +930,30 @@ namespace EmEn::Audio
 	void
 	TrackMixer::enableShuffle (bool state) noexcept
 	{
+		const MutexLock lock{m_stateAccess};
+
 		m_shuffleEnabled = state;
 
-		if ( state && !m_playlist.empty() )
-		{
-			this->generateShuffleOrder();
+		this->playlistChanged();
+	}
 
-			/* Find current track in shuffle order to continue from there. */
-			for ( size_t i = 0; i < m_shuffleOrder.size(); i++ )
-			{
-				if ( m_shuffleOrder[i] == m_musicIndex )
-				{
-					m_shuffleIndex = i;
-					break;
-				}
-			}
+	void
+	TrackMixer::playlistChanged () noexcept
+	{
+		if ( !m_shuffleEnabled || m_playlist.empty() )
+		{
+			m_shuffleOrder.clear();
+			m_shuffleIndex = 0;
+
+			return;
+		}
+
+		this->generateShuffleOrder();
+
+		/* Find current track in shuffle order to continue from there. */
+		if ( const auto entry = std::ranges::find(m_shuffleOrder, m_musicIndex); entry != m_shuffleOrder.end() )
+		{
+			m_shuffleIndex = static_cast< size_t >(entry - m_shuffleOrder.begin());
 		}
 	}
 
@@ -803,11 +961,11 @@ namespace EmEn::Audio
 	TrackMixer::generateShuffleOrder () noexcept
 	{
 		m_shuffleOrder.resize(m_playlist.size());
-		std::iota(m_shuffleOrder.begin(), m_shuffleOrder.end(), 0);
+		std::iota(m_shuffleOrder.begin(), m_shuffleOrder.end(), size_t{0});
 
-		std::random_device rd;
-		std::mt19937 gen{rd()};
-		std::ranges::shuffle(m_shuffleOrder, gen);
+		/* NOTE: Not a seeded result (the generator is seeded once from std::random_device), but the cascade's shuffle
+		 * all the same (coding style: never std::shuffle). */
+		PortableRandom::shuffle(m_shuffleOrder, m_shuffleGenerator);
 
 		m_shuffleIndex = 0;
 	}
@@ -815,22 +973,14 @@ namespace EmEn::Audio
 	bool
 	TrackMixer::isPlaying () const noexcept
 	{
-		if ( this->usable() )
+		if ( !this->usable() )
 		{
-			const std::scoped_lock lock{m_stateAccess};
-
-			switch ( m_playingTrack )
-			{
-				case PlayingTrack::TrackA :
-				case PlayingTrack::TrackB :
-					return true;
-
-				default :
-					break;
-			}
+			return false;
 		}
 
-		return false;
+		const MutexLock lock{m_stateAccess};
+
+		return m_playingTrack != PlayingTrack::None;
 	}
 
 	void
@@ -841,31 +991,28 @@ namespace EmEn::Audio
 			return;
 		}
 
-		const std::scoped_lock lock{m_stateAccess};
-
-		switch ( m_playingTrack )
 		{
-			case PlayingTrack::None:
-				break;
+			const MutexLock lock{m_stateAccess};
 
-			case PlayingTrack::TrackA :
-				m_userState = UserState::Paused;
+			switch ( m_playingTrack )
+			{
+				case PlayingTrack::None:
+					return;
 
-				m_trackA->pause();
+				case PlayingTrack::TrackA :
+					m_trackA->pause();
+					break;
 
-				this->notify(MusicPaused);
+				case PlayingTrack::TrackB :
+					m_trackB->pause();
+					break;
+			}
 
-				break;
-
-			case PlayingTrack::TrackB :
-				m_userState = UserState::Paused;
-
-				m_trackB->pause();
-
-				this->notify(MusicPaused);
-
-				break;
+			m_userState = UserState::Paused;
 		}
+
+		/* NOTE: Notified after the lock: an observer may call the mixer back (it used to deadlock). */
+		this->notify(MusicPaused);
 	}
 
 	void
@@ -876,31 +1023,28 @@ namespace EmEn::Audio
 			return;
 		}
 
-		const std::scoped_lock lock{m_stateAccess};
-
-		switch ( m_playingTrack )
 		{
-			case PlayingTrack::None:
-				break;
+			const MutexLock lock{m_stateAccess};
 
-			case PlayingTrack::TrackA :
-				m_userState = UserState::Playing;
+			switch ( m_playingTrack )
+			{
+				case PlayingTrack::None:
+					return;
 
-				m_trackA->resume();
+				case PlayingTrack::TrackA :
+					m_trackA->resume();
+					break;
 
-				this->notify(MusicResumed);
+				case PlayingTrack::TrackB :
+					m_trackB->resume();
+					break;
+			}
 
-				break;
-
-			case PlayingTrack::TrackB :
-				m_userState = UserState::Playing;
-
-				m_trackB->resume();
-
-				this->notify(MusicResumed);
-
-				break;
+			m_userState = UserState::Playing;
 		}
+
+		/* NOTE: Notified after the lock: an observer may call the mixer back (it used to deadlock). */
+		this->notify(MusicResumed);
 	}
 
 	void
@@ -911,29 +1055,34 @@ namespace EmEn::Audio
 			return;
 		}
 
-		const std::scoped_lock lock{m_stateAccess};
-
-		m_userState = UserState::Stopped;
-
-		switch ( m_playingTrack )
 		{
-			case PlayingTrack::None:
-				break;
+			const MutexLock lock{m_stateAccess};
 
-			case PlayingTrack::TrackA :
-				m_trackA->stop();
-				m_playingTrack = PlayingTrack::None;
+			m_userState = UserState::Stopped;
 
-				this->notify(MusicStopped);
-				break;
+			/* NOTE: A track still loading must not start once loaded: the user stopped the music. */
+			m_loadingTrack.reset();
 
-			case PlayingTrack::TrackB :
-				m_trackB->stop();
-				m_playingTrack = PlayingTrack::None;
+			switch ( m_playingTrack )
+			{
+				case PlayingTrack::None:
+					return;
 
-				this->notify(MusicStopped);
-				break;
+				case PlayingTrack::TrackA :
+					m_trackA->stop();
+					break;
+
+				case PlayingTrack::TrackB :
+					m_trackB->stop();
+					break;
+			}
+
+			m_playingTrack = PlayingTrack::None;
+			m_isFading = false;
 		}
+
+		/* NOTE: Notified after the lock: an observer may call the mixer back (it used to deadlock). */
+		this->notify(MusicStopped);
 	}
 
 	bool
@@ -941,36 +1090,42 @@ namespace EmEn::Audio
 	{
 		if ( observable->is(MusicResource::getClassUID()) )
 		{
-			if ( m_loadingTrack != nullptr )
+			/* NOTE: A resource loading thread may send this: everything goes through the lock. */
+			switch ( notificationCode )
 			{
-				switch ( notificationCode )
+				/* The track loaded successfully, we can now play it (if it is still the one waited for). */
+				case Resources::ResourceTrait::LoadFinished :
+					this->playPendingTrack(observable);
+					break;
+
+				case Resources::ResourceTrait::LoadFailed :
 				{
-					/* The track loaded successfully, we can now play it. */
-					case Resources::ResourceTrait::LoadFinished :
+					bool waited = false;
+
 					{
-						const auto loadedTrack = m_loadingTrack;
+						const MutexLock lock{m_stateAccess};
 
-						m_loadingTrack.reset();
-
-						this->play(loadedTrack);
-					}
-						break;
-
-					case Resources::ResourceTrait::LoadFailed :
-						Tracer::warning(ClassId, "The track has failed to load ! Cancelling the playback...");
-						break;
-
-					default:
-						if constexpr ( ObserverDebugEnabled )
+						if ( m_loadingTrack != nullptr && static_cast< const ObservableTrait * >(m_loadingTrack.get()) == observable )
 						{
-							TraceDebug{ClassId} << "Event #" << notificationCode << " from a music resource ignored.";
+							m_loadingTrack.reset();
+
+							waited = true;
 						}
-						break;
+					}
+
+					if ( waited )
+					{
+						Tracer::warning(ClassId, "The track has failed to load ! Cancelling the playback...");
+					}
 				}
-			}
-			else
-			{
-				Tracer::info(ClassId, "No music track was waited here !");
+					break;
+
+				default:
+					if constexpr ( ObserverDebugEnabled )
+					{
+						TraceDebug{ClassId} << "Event #" << notificationCode << " from a music resource ignored.";
+					}
+					break;
 			}
 
 			/* NOTE: We don't keep any observable here. */
@@ -1064,21 +1219,20 @@ namespace EmEn::Audio
 	}
 
 	void
-	TrackMixer::eventLoop ()
+	TrackMixer::eventLoop () noexcept
 	{
 		using namespace std::chrono_literals;
 
 		/* NOTE: Every read and write of the shared state (the flags, the user state, the playing track) happens under
-		 * m_stateAccess; only the 16 ms sleep between two fade steps is outside it. The loop used to read m_isFading,
-		 * m_userState and m_playingTrack without the lock while the main thread wrote them under it (a data race). */
+		 * m_stateAccess; only the 16 ms sleep between two fade steps is outside it. */
 		while ( true )
 		{
 			bool playNext = false;
 
 			{
-				std::unique_lock< std::mutex > lock{m_stateAccess};
+				MutexLock lock{m_stateAccess};
 
-				m_fadeCv.wait(lock, [this] {
+				m_fadeCv.wait(lock, [this] () EMEN_REQUIRES(m_stateAccess) {
 					return m_isFading || m_requestNextTrack || m_stopThread;
 				});
 
@@ -1094,7 +1248,7 @@ namespace EmEn::Audio
 				}
 			}
 
-			/* NOTE: next() takes m_stateAccess itself. */
+			/* NOTE: next() takes m_stateAccess itself, and notifies the observers from this thread. */
 			if ( playNext )
 			{
 				this->next();
@@ -1103,7 +1257,7 @@ namespace EmEn::Audio
 			while ( true )
 			{
 				{
-					const std::scoped_lock lock{m_stateAccess};
+					const MutexLock lock{m_stateAccess};
 
 					if ( !m_isFading || m_stopThread )
 					{

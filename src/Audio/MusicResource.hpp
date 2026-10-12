@@ -181,13 +181,15 @@ namespace EmEn::Audio
 			 * @brief Returns the title of the music.
 			 * @note Falls back to the resource name (filename-derived) when no ID3/metadata title is available.
 			 *	   Useful for formats without tag support (e.g. MIDI) where m_title remains at its default.
+			 * @note [Thread-safe] The resource name until the resource is loaded: the loading thread writes the metadata,
+			 * isLoaded() publishes it (any thread may ask: the track mixer, the console).
 			 * @return const std::string &
 			 */
 			[[nodiscard]]
 			const std::string &
 			title () const noexcept
 			{
-				if ( m_title.empty() || m_title == DefaultInfo )
+				if ( !this->isLoaded() || m_title.empty() || m_title == DefaultInfo )
 				{
 					return this->name();
 				}
@@ -197,24 +199,29 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Returns the artist of the music.
+			 * @note [Thread-safe] "Unknown" until the resource is loaded (see title()).
 			 * @return const std::string &
 			 */
 			[[nodiscard]]
 			const std::string &
 			artist () const noexcept
 			{
-				return m_artist;
+				static const std::string Unknown{DefaultInfo};
+
+				return this->isLoaded() ? m_artist : Unknown;
 			}
 
 			/**
 			 * @brief Returns the duration of the music in seconds.
+			 * @note [Thread-safe] Zero until the resource is loaded: the loading thread fills the samples, isLoaded()
+			 * publishes them (a read during a MIDI rendering raced, found by the TrackMixer TSan stress, 2026-10-12).
 			 * @return float
 			 */
 			[[nodiscard]]
 			float
 			duration () const noexcept
 			{
-				return m_localData.seconds();
+				return this->isLoaded() ? m_localData.seconds() : 0.0F;
 			}
 
 		private:

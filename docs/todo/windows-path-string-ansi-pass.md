@@ -49,7 +49,13 @@ UTF-8 active code page (engine `docs/caution-points.md` § "On MSVC, `std::files
   § "Paths and Text Encoding".
 - [x] The guard: `tools/check-path-encoding.py` (owner decision 2026-10-12: clang-query authority, grep quick net,
   allowlist with reasons, a documented pre-push step).
-- [ ] Linux and macOS build the pass (GCC, clang, Apple clang) and run the guard on their own databases.
+- [x] Linux (2026-10-12): GCC builds the cascade, `clang -fsyntax-only` passes the 60 touched translation units, the
+  base suite passes in Release and under ASan/UBSan (2508 tests, the 12 new ones included), a 37-demo sweep with the
+  validation layer gives 0 VUID. The guard on the Linux Release + Debug databases (625 translation units) first gave 27
+  findings that the Windows databases could not see: 21 in POSIX-only files (the clang layer now skips them, like the
+  grep gate) and 6 legitimate sites (a POSIX branch of `TrustStore.cpp`, wide strings and path copies in Windows files
+  the grep gate cannot type), now in the allowlist with their reasons: 0 finding, 10 allowlisted.
+- [ ] macOS builds the pass (Apple clang) and runs the guard on its own database.
 - [ ] Offer the fastgltf patch upstream (the owner's act; the patch and the issue text exist).
 - [ ] Re-test on Windows from a non-ASCII install directory (as the triad 14 peer test did): the menu loads, every
   console JSON is valid UTF-8, the logs read correctly.

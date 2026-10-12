@@ -33,6 +33,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -1554,7 +1555,9 @@ namespace EmEn::Overlay
 			bool m_transitionBufferEnabled{false};
 			bool m_disablePixmapCopyInTransitionBuffer{false};
 			bool m_memoryMappingEnabled{false};
-			bool m_isVisible{false};
+			/* NOTE: Atomic: any thread shows or hides a surface (the notifier's timer, a web view), the render thread reads it
+			 * (a data race found by the TrackMixer TSan stress, 2026-10-12). */
+			std::atomic_bool m_isVisible{false};
 			bool m_isListeningKeyboard{false};
 			bool m_isListeningPointer{false};
 			bool m_isFocused{false};
