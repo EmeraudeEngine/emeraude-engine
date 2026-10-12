@@ -39,6 +39,7 @@
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
+#include "IO/IO.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "Resources/Manager.hpp"
 
@@ -976,7 +977,7 @@ namespace EmEn::Graphics
 			case Resources::SourceType::LocalData :
 				if ( const auto filepath = source.dataString(); filepath.has_value() )
 				{
-					loaded = temporary->load(std::filesystem::path{*filepath});
+					loaded = temporary->load(IO::u8path(*filepath));
 				}
 				break;
 

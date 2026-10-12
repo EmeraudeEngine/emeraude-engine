@@ -663,7 +663,7 @@ namespace EmEn::Resources
 	std::string
 	ResourceTrait::getResourceNameFromFilepath (const std::filesystem::path & filepath, const std::string & storeName) noexcept
 	{
-		const auto filename = String::right(filepath.string(), storeName + IO::Separator);
+		const auto filename = String::right(IO::toU8String(filepath), storeName + IO::Separator);
 
 		if constexpr ( IsWindows )
 		{

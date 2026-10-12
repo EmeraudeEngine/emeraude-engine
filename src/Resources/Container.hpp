@@ -55,6 +55,7 @@
 #include "BaseInformation.hpp"
 #include "BaseUtility.hpp"
 #include "Hash/Hash.hpp"
+#include "IO/IO.hpp"
 #include "LoadingRequest.hpp"
 #include "ObserverTrait.hpp"
 #include "Tracer.hpp"
@@ -938,7 +939,7 @@ namespace EmEn::Resources
 					return std::nullopt;
 				}
 
-				return std::filesystem::path{*filepath};
+				return Base::IO::u8path(*filepath);
 			}
 
 			/**
@@ -1930,7 +1931,7 @@ namespace EmEn::Resources
 
 						if ( const auto filepath = infos.dataString(); filepath.has_value() )
 						{
-							success = request.resource()->load(std::filesystem::path{*filepath});
+							success = request.resource()->load(Base::IO::u8path(*filepath));
 						}
 						else
 						{

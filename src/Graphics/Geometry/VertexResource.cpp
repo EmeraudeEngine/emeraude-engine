@@ -33,6 +33,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "IO/IO.hpp"
 #include "VertexFactory/FileIO.hpp"
 #include "VertexFactory/ShapeGenerator.hpp"
 #include "Vulkan/TransferManager.hpp"
@@ -282,7 +283,7 @@ namespace EmEn::Graphics::Geometry
 
 		const auto filepath = source.dataString();
 
-		if ( !filepath.has_value() || !this->readLocalData(std::filesystem::path{*filepath}) )
+		if ( !filepath.has_value() || !this->readLocalData(IO::u8path(*filepath)) )
 		{
 			return false;
 		}

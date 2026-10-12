@@ -184,7 +184,7 @@ namespace EmEn::Graphics
 
 		const auto filepath = source.dataString();
 
-		return filepath.has_value() && this->readLocalData(std::filesystem::path{*filepath});
+		return filepath.has_value() && this->readLocalData(IO::u8path(*filepath));
 	}
 
 	bool

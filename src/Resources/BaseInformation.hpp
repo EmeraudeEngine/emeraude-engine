@@ -193,6 +193,8 @@ namespace EmEn::Resources
 			 * @brief Returns the resource data as a string: the file path of a LocalData resource, the URL of an
 			 * ExternalData one.
 			 * @note Checked (jsoncpp's asString() aborts on a non-string): empty when the data is not a string.
+			 * @note UTF-8 (JSON). A LocalData file path is turned back into a path with IO::u8path(), never with the
+			 * narrow std::filesystem::path constructor (the ANSI code page on Windows).
 			 * @return std::optional< std::string >
 			 */
 			[[nodiscard]]

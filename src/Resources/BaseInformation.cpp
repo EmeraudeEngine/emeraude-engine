@@ -146,7 +146,10 @@ namespace EmEn::Resources
 						return false;
 					}
 
-					m_data = filepath.string();
+					/* NOTE: UTF-8 (IO::toU8String), never path::string(): on Windows that is the ANSI code page, which
+					 * THROWS on a character outside it (an abort at boot under a non-ASCII install directory). Every
+					 * dataString() consumer reads it back through IO::u8path(). */
+					m_data = IO::toU8String(filepath);
 				}
 				else [[unlikely]]
 				{
@@ -207,7 +210,7 @@ namespace EmEn::Resources
 	BaseInformation::updateFromDownload (const std::filesystem::path & filepath) noexcept
 	{
 		m_source = SourceType::LocalData;
-		m_data = Json::Value(filepath.string());
+		m_data = Json::Value(IO::toU8String(filepath));
 	}
 
 	bool

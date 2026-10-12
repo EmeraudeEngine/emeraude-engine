@@ -1,7 +1,7 @@
 ---
 id: windows-path-string-ansi-pass
 title: path::string() is ANSI on Windows, and throws outside the code page (about 120 sites)
-status: open
+status: in-progress
 priority: high
 scope: the whole engine (log lines, console / MCP outputs, paths handed to APIs); projet-alpha
 opened: 2026-10-01
@@ -33,10 +33,19 @@ sites and the other startup-critical ones:
 
 ## What remains
 
-- [ ] Replace every `path.string()` whose result leaves the process (a log line, a console / MCP output, JSON, a URL,
-  a C API taking UTF-8) with `Base::IO::toU8String()` (or `toGenericU8String()`). Where a Windows API is called, use the
-  wide API with `path.c_str()` instead. Also check the `<<` of a path (it streams `string()` quoted).
-- [ ] Same in projet-alpha (`/usr/bin/grep -rn '\.string()' src`).
+The owner chose **rule C** (2026-10-12): the code is correct without any manifest, AND the applications declare the
+UTF-8 active code page (engine `docs/caution-points.md` § "On MSVC, `std::filesystem::path::string()` is ANSI").
+
+- [x] Step 1, the hard aborts (Windows peer, 2026-10-12): `BaseInformation.cpp` and its `dataString()` consumers,
+  `Vulkan/Loader.cpp`, `ResourceTrait::getResourceNameFromFilepath()`, `FileSystem`'s `operator<<`; projet-alpha
+  `UI/WebView.cpp` and `Boot/windows/main.cpp`.
+- [ ] Step 2, the manifest: `<activeCodePage>UTF-8</activeCodePage>` in projet-alpha.exe, a manifest for
+  projet-alpha-helper.exe (which has none), and an engine startup warning when `GetACP() != CP_UTF8`.
+- [ ] Step 3, the per-site pass, verified with an executable WITHOUT the manifest, in groups: inbound paths at trust
+  boundaries (`loadGLTF`, glTF / FBX URIs); data keys and C APIs; logs and console (including the `<<` of a path, which
+  streams `string()` quoted); extension compares. Every `path.string()` whose result leaves the process goes through
+  `Base::IO::toU8String()` (or `toGenericU8String()`); a Windows API takes the wide string. Same in projet-alpha
+  (`/usr/bin/grep -rn '\.string()' src`). Then a guard tool, proposed to the owner before it is written.
 - [ ] Re-test on Windows from a non-ASCII install directory (as the triad 14 peer test did): the menu loads, every
   console JSON is valid UTF-8, the logs read correctly.
 
@@ -45,6 +54,11 @@ sites and the other startup-critical ones:
 - `IO::u8path()` / `toU8String()` no longer throw on Windows since triad 15: they go through the base's strict
   `String::utf8ToUTF16()` / `utf16ToUTF8()`, and an invalid sequence becomes U+FFFD.
 - `/usr/bin/grep` sees the engine; the default `grep` (ugrep) does not.
+- Fixing an abort uncovers the next one on the same path: under a non-ASCII install directory, `BaseInformation.cpp`,
+  then `Vulkan/Loader.cpp`, then `ResourceTrait.cpp` aborted in turn. Re-run each repro until it exits 0, from the
+  from-start debugger on a Debug copy (the stack names the site).
+- The shipped Vulkan loader lists no layer under a non-ASCII install directory: a repro from such a directory runs
+  without the validation layer unless the UTF-8 code page is active (check the `Insert instance layer` line).
 
 ## References
 

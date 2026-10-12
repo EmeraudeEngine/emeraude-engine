@@ -5711,6 +5711,31 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 > `String::utf8ToUTF16()` / `utf16ToUTF8()` (RFC 3629, U+FFFD for each invalid subpart or lone surrogate). The former
 > `char8_t` route threw `std::system_error` (an abort) on invalid UTF-8, for example the CESU bytes jsoncpp produces
 > from a lone `\udc00` in a JSON path, or on a filename with a lone surrogate (NTFS allows one).
+>
+> **Owner rule C (2026-10-12): both layers.** The code is correct WITHOUT any manifest (every site converts explicitly:
+> `toU8String()` out, `u8path()` in, the wide / native string to a Windows or CEF API), AND the applications declare
+> `<activeCodePage>UTF-8</activeCodePage>` as a second line of defence. Never rely on the manifest alone: a DLL cannot
+> impose it, and an application that ships without it gets the ANSI code page back.
+>
+> Step 1 of the pass (Windows peer, 2026-10-12) removed the hard aborts, each measured with a Release copy and its stack
+> from a Debug copy: `BaseInformation.cpp` (the LocalData path of every resource, at boot under a
+> non-ASCII install directory; the stored path is now UTF-8 and its six `dataString()` consumers read it back through
+> `IO::u8path()`), `Vulkan/Loader.cpp` (the loader path logs, at boot), `ResourceTrait::getResourceNameFromFilepath()`
+> (the first cubemap load), `FileSystem`'s `operator<<` (`FileSystemService.print()`, under a non-ASCII cache or
+> install directory), and projet-alpha's `WebView.cpp` (the CEF request-context `cache_path`, now `path::native()`) and
+> Windows `main.cpp` (the `CefInitialize()` failure message). After it, a launch from `…\Ωmega-日本\Release`, with
+> `--cache-directory=…\Ω-cache` or with `--cef-cache-directory=…\Ω-cef` exits 0, and every `print()` / `getJson()`
+> reply is valid UTF-8.
+>
+> An ANSI `print()` reply was never dropped by the engine: jsoncpp (`emitUTF8`) writes the CP-1252 bytes raw, and the
+> client `tools/emeraude_console.py` refuses the line as "not a response line" (a `UnicodeDecodeError` underneath) on
+> stderr only.
+>
+> ⚠️ The Vulkan loader shipped with the application (LunarG 1.4.363) finds NO layer manifest in
+> `<binary>\vulkan\explicit_layer.d` when that path leaves ASCII (`Jérôme` included): `VK_LOADER_DEBUG=layer` lists the
+> right directory, then "Found no files", and `VK_LAYER_KHRONOS_validation` is "unavailable". The path reaches it
+> intact; the loader most likely opens the directory with an ANSI API. Without the UTF-8 code page, a validation run
+> from a non-ASCII install directory runs without its layer: check the `Insert instance layer` line.
 
 ### ⚠️ A narrow `main()` gets an ANSI argv on Windows — `Arguments` reads the wide command line (2026-10-01, triad 15)
 

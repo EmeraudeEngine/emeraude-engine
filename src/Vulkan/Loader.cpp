@@ -93,7 +93,7 @@ namespace EmEn::Vulkan
 
 			if ( module == nullptr )
 			{
-				TraceError{ClassId} << "Unable to load the Vulkan loader '" << candidate.string() << "' (error " << GetLastError() << ") !";
+				TraceError{ClassId} << "Unable to load the Vulkan loader '" << IO::toU8String(candidate) << "' (error " << GetLastError() << ") !";
 
 				return false;
 			}
@@ -123,7 +123,7 @@ namespace EmEn::Vulkan
 			{
 				const char * reason = dlerror();
 
-				TraceError{ClassId} << "Unable to load the Vulkan loader '" << candidate.string() << "' : " << ( reason != nullptr ? reason : "unknown reason" ) << " !";
+				TraceError{ClassId} << "Unable to load the Vulkan loader '" << IO::toU8String(candidate) << "' : " << ( reason != nullptr ? reason : "unknown reason" ) << " !";
 
 				return false;
 			}
@@ -143,7 +143,7 @@ namespace EmEn::Vulkan
 
 			if ( entry == nullptr )
 			{
-				TraceError{ClassId} << "The Vulkan loader '" << candidate.string() << "' exports no vkGetInstanceProcAddr !";
+				TraceError{ClassId} << "The Vulkan loader '" << IO::toU8String(candidate) << "' exports no vkGetInstanceProcAddr !";
 
 				return false;
 			}
@@ -159,13 +159,13 @@ namespace EmEn::Vulkan
 			volkInitializeCustom(m_getInstanceProcAddr);
 			m_volkBound = true;
 
-			TraceInfo{ClassId} << "Vulkan loader '" << m_path.string() << "' opened (instance version " <<
+			TraceInfo{ClassId} << "Vulkan loader '" << IO::toU8String(m_path) << "' opened (instance version " <<
 				VK_API_VERSION_MAJOR(volkGetInstanceVersion()) << '.' << VK_API_VERSION_MINOR(volkGetInstanceVersion()) << '.' << VK_API_VERSION_PATCH(volkGetInstanceVersion()) << ").";
 
 			return true;
 		}
 
-		TraceFatal{ClassId} << "No Vulkan loader shipped with the application (looked for '" << loaderCandidates(binaryDirectory)[0].string() << "') : the build did not copy the external dependencies' vulkan-sdk loader.";
+		TraceFatal{ClassId} << "No Vulkan loader shipped with the application (looked for '" << IO::toU8String(loaderCandidates(binaryDirectory)[0]) << "') : the build did not copy the external dependencies' vulkan-sdk loader.";
 
 		return false;
 	}

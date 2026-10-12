@@ -363,19 +363,22 @@ namespace EmEn
 	std::ostream &
 	operator<< (std::ostream & out, const FileSystem & obj)
 	{
+		/* NOTE: UTF-8 (IO::toU8String), never path::string(): on Windows that is the ANSI code page, which THROWS on a
+		 * character outside it (an abort, no exceptions) and writes invalid UTF-8 for the others. This text reaches the
+		 * console and the MCP server (print()), whose JSON lines must be UTF-8. */
 		out <<
 			"File system information :" "\n" <<
 			" - Binary name : " << obj.m_binaryName << "\n"
-			" - Binary directory : " << obj.m_binaryDirectory.string() << "\n"
-			" - User home directory : " << obj.m_userDirectory.string() << "\n"
-			" - Config directory : " << obj.m_configDirectory.string() << "\n"
-			" - Data (Writable) directory : " << obj.m_userDataDirectory.string() << "\n"
-			" - Cache directory : " << obj.m_cacheDirectory.string() << "\n"
+			" - Binary directory : " << Base::IO::toU8String(obj.m_binaryDirectory) << "\n"
+			" - User home directory : " << Base::IO::toU8String(obj.m_userDirectory) << "\n"
+			" - Config directory : " << Base::IO::toU8String(obj.m_configDirectory) << "\n"
+			" - Data (Writable) directory : " << Base::IO::toU8String(obj.m_userDataDirectory) << "\n"
+			" - Cache directory : " << Base::IO::toU8String(obj.m_cacheDirectory) << "\n"
 			" - Data (Read-only) directories :" "\n";
 
 		for ( const auto & directory : obj.m_dataDirectories )
 		{
-			out << '\t' << directory.string() << '\n';
+			out << '\t' << Base::IO::toU8String(directory) << '\n';
 		}
 
 		return out;
