@@ -44,7 +44,8 @@ and a resource loading thread (`onNotification()` when a MIDI track finishes ren
   ended" (the callback used to compare it with track B by default).
 - A failed start leaves the state as it is (the old track when it was fading out, nothing otherwise).
 - **Proof**: the TSan stress `tools/stress/TrackMixerStress.cpp` (four threads calling every public method for 30 s,
-  ~28 000 calls, plus the logic thread reading `status()`): 0 report on three runs. Procedure: projet-alpha
+  ~28 000 calls, plus the logic thread reading `status()`): 0 report on six Linux runs (lavapipe) and on macOS
+  (MoltenVK, 20 310 calls). Procedure: projet-alpha
   `docs/unit-testing.md` § "ThreadSanitizer". On its way it found four other races, fixed with it: `Notifier::push()`,
   `Overlay::Surface` visibility, the overlay lock order, `MusicResource::duration()` during a load
   (`docs/caution-points.md`).

@@ -55,10 +55,18 @@ UTF-8 active code page (engine `docs/caution-points.md` § "On MSVC, `std::files
   findings that the Windows databases could not see: 21 in POSIX-only files (the clang layer now skips them, like the
   grep gate) and 6 legitimate sites (a POSIX branch of `TrustStore.cpp`, wide strings and path copies in Windows files
   the grep gate cannot type), now in the allowlist with their reasons: 0 finding, 10 allowlisted.
-- [ ] macOS builds the pass (Apple clang) and runs the guard on its own database.
+- [x] macOS (2026-10-12, Mac mini M6): Apple clang builds the pass with 0 warning; the guard (Homebrew llvm's
+  clang-query) on the Release + Debug databases gives 0 finding, 7 allowlisted (the 2 `TrustStore.cpp` POSIX-branch
+  entries are Linux-only, and macOS compiles `test_BlobTrait.cpp`, so its clang layer sees the wide string).
 - [ ] Offer the fastgltf patch upstream (the owner's act; the patch and the issue text exist).
-- [ ] Re-test on Windows from a non-ASCII install directory (as the triad 14 peer test did): the menu loads, every
-  console JSON is valid UTF-8, the logs read correctly.
+- [x] Re-test on Windows from a non-ASCII install directory (lot 3 binaries, 2026-10-12, `activeCodePage` stripped from
+  both executables, `Ωmega-日本` and `Jérôme` installs): exit 0 with 0 error; the Ω glTF and BoxAccents load, the
+  hostile glTFs are refused (2 errors); the TCP and MCP replies are valid UTF-8 (U+FFFD plus a warning naming the
+  command). The CEF main menu (after `Stage.openMenu()`) is pixel-identical to an ASCII-install control run, in the
+  engine screenshot and in the window grab (0 pixel differs). The logs, written under non-ASCII file names, decode as
+  strict UTF-8 (0 U+FFFD) and print the install path literally; the CEF URL carries it percent-encoded as UTF-8. The
+  guard on the MSVC Release + Debug databases gives 0 finding, 4 allowlisted. Known: the validation layer does not load
+  from a non-ASCII install without the code page (the shipped loader, see Traps).
 
 ## ⚠️ Traps
 

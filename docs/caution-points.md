@@ -8224,5 +8224,10 @@ Measured on Linux (GCC 14, NVIDIA 3070 Ti):
   `Voice::prepare`), glib / gio, Mesa / LLVM, and libgomp (run with `OMP_NUM_THREADS=1`). They are in
   `resources/tsan_suppressions.txt`; never suppress a frame of the cascade.
 - `ALSOFT_DRIVERS=null` keeps OpenAL silent; `--window-less` needs no display.
+- **macOS (M6, Apple clang)**: MoltenVK runs under TSan without crashing, so no software device is needed. But the stress
+  executable is not an app bundle: stage `libvulkan.1.dylib` and `libMoltenVK.dylib` in `<build>/Frameworks` and set
+  `VK_DRIVER_FILES` to the app's `MoltenVK_icd.json`. Configure with `-DCMAKE_OSX_ARCHITECTURES=arm64`.
+  Measured 2026-10-12: base suite 0 report, TrackMixer stress 20 310 calls with 0 report. The shutdown took ~7 min while
+  the loader finished decoding the playlist under TSan.
 - The legacy suppression file listed `deadly_signal:` entries, which GCC's TSan refuses ("failed to parse
   suppressions", exit 66 before `main()`): fixed.
