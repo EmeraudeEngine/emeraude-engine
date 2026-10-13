@@ -39,7 +39,9 @@ and the bare menu rendered unpaced (~4 800 FPS before 6bdef322 — re-measure on
 
 ## What remains
 
-- Re-measure on 6bdef322 + (the no-scene pacing may change the odds, not the cause).
+- Re-measured at b70090cb (bare menu paced, ~64 FPS on Intel then): **0 hang in 75 bursts, 5 launches** (Windows peer,
+  2026-10-14) — most likely MASKED by the lower present rate, not fixed: a scene, another refresh rate or another load
+  can bring the rate back. Keep the item open; reproduce with a scene loaded (unpaced) before concluding.
 - Confirm the vkFreeMemory link: e.g. keep VMA's empty blocks (no `VmaDeviceMemoryBlock::Destroy` right after a
   recreation) for one run — if the hang vanishes, the trigger is proven.
 - Options for the owner, after the proof: VMA keeps empty blocks / a deferred block release outside the resize window;

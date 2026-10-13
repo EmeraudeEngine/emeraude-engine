@@ -5896,6 +5896,36 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 > `EnableTripleBuffering = false`, or `FrameRateLimit` paces them). OnDemand mode is unaffected (it sleeps at rest).
 > Proof (Linux, 60 Hz monitors, VSync off on a settings copy — Wayland has no IMMEDIATE, so MAILBOX): the bare menu
 > 1 739 frames in ~31 s including start-up and shutdown (~60 FPS), against ~142 FPS before.
+>
+> ⚠️ **Two regressions of that first version, fixed 2026-10-14 (Windows peer, 165 Hz panel)**:
+> 1. **A late frame restarted the deadline at `now + period`.** With a BLOCKING present (FIFO: Intel offers nothing
+>    else) every frame ends a hair after its deadline, so a whole period of sleep was added ON TOP of the vertical-sync
+>    wait: Intel 64.5 FPS on the bare menu instead of 147-165. Now a late frame does not sleep — the deadline restarts
+>    from `now`.
+> 2. **`FrameRateLimit` was applied twice.** It is the RENDERER's software limiter (`Renderer::applyFrameRateLimit()`,
+>    every frame, scene or not); pacing on top of it halved the rate (30 set: NVIDIA 15 FPS, Intel 11). Now the loop's
+>    own pace stands down (period 0) while `Renderer::isSoftwareFrameLimiterEnabled()`.
+> Proof (Linux, 60 Hz, settings copies, validation on, 0 VUID): MAILBOX 60 FPS, `FrameRateLimit` 30 → 30 FPS, FIFO
+> (`EnableTripleBuffering = false`) 60-61 FPS.
+
+### Fixed: a resize burst left the swap-chain at an intermediate size for good on Wayland — a lost update of its status (2026-10-14)
+
+> [!CAUTION]
+> `SwapChain::recreate()` (render thread) reads the published framebuffer size, rebuilds, then stored `Ready`
+> UNCONDITIONALLY. A resize notified meanwhile (main thread: `setDegraded()`) was overwritten: the swap-chain kept the
+> size of the previous step of the burst. On Windows / X11 the next present reports `VK_ERROR_OUT_OF_DATE_KHR` and heals
+> it; on **Wayland** the surface takes the swap-chain's extent and never reports out-of-date, so it stayed wrong until
+> the next resize. Measured (Linux, menu open, bursts of 20 `Core.WindowService.resize` ending at 1280x720): **6 of 70
+> bursts** ended with the window at 1280x720 and every frame rendered at 1366x768, for 12 s and more.
+> Owner decision 2026-10-14, (A) + (B):
+> - (A) `SwapChain::publishReady()`: the end of every (re)creation is a compare-exchange `UnderConstruction → Ready`; a
+>   `Degraded` set during it survives, and the next frame recreates at the new size.
+> - (B) `SwapChain::degradeIfExtentIsStale()`, at the top of `Renderer::beginFrame()`: a READY swap-chain whose extent
+>   differs from `chooseSwapExtent()` on the capabilities of its last recreation is degraded — the safety net Wayland
+>   does not give. Same formula as the creation, so a size the surface cannot take never loops; a 0-px window and a
+>   headless swap-chain keep their own paths.
+> Proof (same bursts, validation on): **0 of 60** after; the race closed by (A) 42 times in that run (its trace "resized
+> during the swap-chain (re)creation"), 0 `VUID-`.
 
 ### Fixed: a minimise killed the swap-chain for good on the Intel iGPU — the surface reaches 0x0 before the published size (2026-10-13)
 
