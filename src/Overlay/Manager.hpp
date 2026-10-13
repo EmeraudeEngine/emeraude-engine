@@ -367,6 +367,8 @@ namespace EmEn::Overlay
 			void
 			disableInputExclusiveScreen () noexcept
 			{
+				const std::scoped_lock lock{m_screensAccess};
+
 				m_inputExclusiveScreen.reset();
 			}
 
@@ -378,6 +380,8 @@ namespace EmEn::Overlay
 			bool
 			isInputExclusiveScreenEnabled () const noexcept
 			{
+				const std::scoped_lock lock{m_screensAccess};
+
 				return m_inputExclusiveScreen != nullptr;
 			}
 
@@ -390,6 +394,8 @@ namespace EmEn::Overlay
 			std::shared_ptr< UIScreen >
 			inputExclusiveScreen () const noexcept
 			{
+				const std::scoped_lock lock{m_screensAccess};
+
 				return m_inputExclusiveScreen;
 			}
 
@@ -526,6 +532,30 @@ namespace EmEn::Overlay
 				}
 			}
 
+			/** @brief What an input dispatch walks: a copy taken under m_screensAccess. */
+			struct InputTargets
+			{
+				std::vector< std::shared_ptr< UIScreen > > screens;
+				std::shared_ptr< UIScreen > exclusiveScreen;
+			};
+
+			/**
+			 * @brief Copies the screens and the input exclusive screen under m_screensAccess.
+			 * @details The input listeners walk this copy, never m_screens: the list changes from any thread
+			 * (createScreen(), destroyScreen()), and a screen's input handler may call back into the manager.
+			 * @return InputTargets
+			 */
+			[[nodiscard]]
+			InputTargets inputTargets () const noexcept;
+
+			/**
+			 * @brief Finds a screen by name under m_screensAccess; the caller acts on it with the lock released.
+			 * @param name A reference to the screen name.
+			 * @return std::shared_ptr< UIScreen > nullptr when no screen has that name.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< UIScreen > findScreen (const std::string & name) const noexcept;
+
 			/**
 			 * @brief Removes a named screen from the list, only if it is still this very screen.
 			 * @param name A reference to the screen name.
@@ -595,6 +625,9 @@ namespace EmEn::Overlay
 			/* NOTE: Lock order: m_physicalRepresentationUpdateMutex THEN m_screensAccess (or both at once). */
 			mutable std::mutex m_physicalRepresentationUpdateMutex;
 			mutable std::mutex m_screensAccess;
+			/* The overlay's main thread (the service is constructed there): the only one allowed to create, destroy and
+			 * clear the screens, and their surfaces (UIScreen::isOwnerThread()). */
+			std::thread::id m_ownerThread{std::this_thread::get_id()};
 			/* The thread running a representation pass (none outside one), and a redraw requested during it. */
 			std::atomic< std::thread::id > m_representationPassThread;
 			std::atomic_bool m_redrawDeferred{false};

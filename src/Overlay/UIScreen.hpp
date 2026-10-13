@@ -37,6 +37,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -77,11 +78,14 @@ namespace EmEn::Overlay
 			 * @param graphicsRenderer A reference to the graphics renderer.
 			 * @param enableKeyboardListener Enables the keyboard listener at creation.
 			 * @param enablePointerListener Enables the pointer listener at creation.
+			 * @param ownerThread The thread allowed to create, destroy and reorder the surfaces: the overlay's main
+			 * thread, the one that applies the window resizes (Overlay::Manager passes its own).
 			 */
-			UIScreen (std::string name, const FramebufferProperties & framebufferProperties, Graphics::Renderer & graphicsRenderer, bool enableKeyboardListener, bool enablePointerListener) noexcept
+			UIScreen (std::string name, const FramebufferProperties & framebufferProperties, Graphics::Renderer & graphicsRenderer, bool enableKeyboardListener, bool enablePointerListener, std::thread::id ownerThread) noexcept
 				: NameableTrait{std::move(name)},
 				m_graphicsRenderer{graphicsRenderer},
 				m_framebufferProperties{framebufferProperties},
+				m_ownerThread{ownerThread},
 				m_isListeningKeyboard{enableKeyboardListener},
 				m_isListeningPointer{enablePointerListener}
 			{
@@ -240,6 +244,11 @@ namespace EmEn::Overlay
 			std::shared_ptr< surface_t >
 			createSurface (const std::string & name, ctor_args... args) noexcept requires (std::is_base_of_v< Surface, surface_t >)
 			{
+				if ( !this->isOwnerThread("createSurface") )
+				{
+					return nullptr;
+				}
+
 				/* NOTE: Declared before the lock: the surface's arrival requests its redraw once the lock is released. */
 				DeferredRedraw redraw{*this};
 
@@ -444,6 +453,8 @@ namespace EmEn::Overlay
 			void
 			disableInputExclusiveSurface () noexcept
 			{
+				const std::scoped_lock lock{m_surfacesMutex};
+
 				m_inputExclusiveSurface.reset();
 			}
 
@@ -455,6 +466,8 @@ namespace EmEn::Overlay
 			bool
 			isInputExclusiveSurfaceEnabled () const noexcept
 			{
+				const std::scoped_lock lock{m_surfacesMutex};
+
 				return !m_inputExclusiveSurface.expired();
 			}
 
@@ -467,6 +480,8 @@ namespace EmEn::Overlay
 			std::shared_ptr< Surface >
 			inputExclusiveSurface () const noexcept
 			{
+				const std::scoped_lock lock{m_surfacesMutex};
+
 				return m_inputExclusiveSurface.lock();
 			}
 
@@ -495,6 +510,8 @@ namespace EmEn::Overlay
 			void
 			disablePointerMoveTapSurface () noexcept
 			{
+				const std::scoped_lock lock{m_surfacesMutex};
+
 				m_pointerMoveTapSurface.reset();
 			}
 
@@ -506,6 +523,8 @@ namespace EmEn::Overlay
 			bool
 			isPointerMoveTapSurfaceEnabled () const noexcept
 			{
+				const std::scoped_lock lock{m_surfacesMutex};
+
 				return !m_pointerMoveTapSurface.expired();
 			}
 
@@ -518,6 +537,8 @@ namespace EmEn::Overlay
 			std::shared_ptr< Surface >
 			pointerMoveTapSurface () const noexcept
 			{
+				const std::scoped_lock lock{m_surfacesMutex};
+
 				return m_pointerMoveTapSurface.lock();
 			}
 
@@ -599,6 +620,38 @@ namespace EmEn::Overlay
 			void recomputeDepths () const noexcept;
 
 			/**
+			 * @brief Returns whether the caller runs on the owner thread; traces an error otherwise.
+			 * @details The surface stack is created, destroyed and reordered on the overlay's main thread only (owner
+			 * decision 2026-10-13): a surface reads the shared FramebufferProperties, which that thread rewrites on every
+			 * window resize (a data race found by the overlay stress when a surface was created from the logic thread).
+			 * Checked in every build: an off-thread call is refused, never undefined. The geometry setters stay usable
+			 * from any thread.
+			 * @param operation The refused operation, for the trace.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isOwnerThread (const char * operation) const noexcept;
+
+			/** @brief What an input dispatch walks: a copy taken under m_surfacesMutex. */
+			struct InputTargets
+			{
+				std::vector< std::shared_ptr< Surface > > surfaces;
+				std::shared_ptr< Surface > exclusiveSurface;
+				std::shared_ptr< Surface > pointerMoveTapSurface;
+			};
+
+			/**
+			 * @brief Copies the surface stack and the application-set input targets under m_surfacesMutex.
+			 * @details The input dispatchers walk this copy, never m_surfaces: the stack is mutated from any thread
+			 * (creation, destruction, reordering), and a surface's input handler may call back into this screen (the
+			 * mutex is not recursive). A small allocation per input event, the price of a short lock. The pointer
+			 * capture and the press observers stay input-thread state.
+			 * @return InputTargets
+			 */
+			[[nodiscard]]
+			InputTargets inputTargets () const noexcept;
+
+			/**
 			 * @brief Requests a redraw once the scope ends, AFTER the m_surfacesMutex guard declared after it is released.
 			 * @details A redraw request reaches the Overlay::Manager's observers, which may call back into the overlay (a
 			 * representation pass takes m_surfacesMutex in processSurfaceUpdates()): never emitted under the lock
@@ -661,6 +714,7 @@ namespace EmEn::Overlay
 			
 			Graphics::Renderer & m_graphicsRenderer;
 			const FramebufferProperties & m_framebufferProperties;
+			std::thread::id m_ownerThread;
 			std::vector< std::shared_ptr< Surface > > m_surfaces;
 			std::function< void () > m_redrawRequester; ///< Propagated from the Overlay::Manager to request a redraw on any visual mutation (on-demand rendering). @see setRedrawRequester()
 			std::weak_ptr< Surface > m_inputExclusiveSurface;

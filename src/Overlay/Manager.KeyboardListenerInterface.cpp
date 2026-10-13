@@ -42,24 +42,25 @@ namespace EmEn::Overlay
 			Tracer::debug(ClassId, "Received a dispatchable keyboard key press event!");
 		}
 
-		if ( m_screens.empty() )
+		/* NOTE: A copy taken under m_screensAccess (inputTargets()): the list changes from any thread. */
+		const auto targets = this->inputTargets();
+
+		if ( targets.screens.empty() )
 		{
 			return false;
 		}
 
-		if ( m_inputExclusiveScreen )
+		if ( const auto & exclusiveScreen = targets.exclusiveScreen )
 		{
-			if ( m_inputExclusiveScreen->empty() || !m_inputExclusiveScreen->isVisible() || !m_inputExclusiveScreen->isListeningKeyboard() )
+			if ( exclusiveScreen->empty() || !exclusiveScreen->isVisible() || !exclusiveScreen->isListeningKeyboard() )
 			{
 				return false;
 			}
 
-			return m_inputExclusiveScreen->onKeyPress(key, scancode, modifiers, repeat);
+			return exclusiveScreen->onKeyPress(key, scancode, modifiers, repeat);
 		}
 
-		return std::ranges::any_of(m_screens, [key, scancode, modifiers, repeat] (const auto & pair) {
-			const auto & screen = pair.second;
-
+		return std::ranges::any_of(targets.screens, [key, scancode, modifiers, repeat] (const auto & screen) {
 			if ( screen->empty() || !screen->isVisible() || !screen->isListeningKeyboard() )
 			{
 				return false;
@@ -77,24 +78,25 @@ namespace EmEn::Overlay
 			Tracer::debug(ClassId, "Received a dispatchable keyboard key release event!");
 		}
 
-		if ( m_screens.empty() )
+		/* NOTE: A copy taken under m_screensAccess (inputTargets()): the list changes from any thread. */
+		const auto targets = this->inputTargets();
+
+		if ( targets.screens.empty() )
 		{
 			return false;
 		}
 
-		if ( m_inputExclusiveScreen )
+		if ( const auto & exclusiveScreen = targets.exclusiveScreen )
 		{
-			if ( m_inputExclusiveScreen->empty() || !m_inputExclusiveScreen->isVisible() || !m_inputExclusiveScreen->isListeningKeyboard() )
+			if ( exclusiveScreen->empty() || !exclusiveScreen->isVisible() || !exclusiveScreen->isListeningKeyboard() )
 			{
 				return false;
 			}
 
-			return m_inputExclusiveScreen->onKeyRelease(key, scancode, modifiers);
+			return exclusiveScreen->onKeyRelease(key, scancode, modifiers);
 		}
 
-		return std::ranges::any_of(m_screens, [key, scancode, modifiers] (const auto & pair) {
-			const auto & screen = pair.second;
-
+		return std::ranges::any_of(targets.screens, [key, scancode, modifiers] (const auto & screen) {
 			if ( screen->empty() || !screen->isVisible() || !screen->isListeningKeyboard() )
 			{
 				return false;
@@ -112,24 +114,25 @@ namespace EmEn::Overlay
 			Tracer::debug(ClassId, "Received a dispatchable keyboard character type event!");
 		}
 
-		if ( m_screens.empty() )
+		/* NOTE: A copy taken under m_screensAccess (inputTargets()): the list changes from any thread. */
+		const auto targets = this->inputTargets();
+
+		if ( targets.screens.empty() )
 		{
 			return false;
 		}
 
-		if ( m_inputExclusiveScreen )
+		if ( const auto & exclusiveScreen = targets.exclusiveScreen )
 		{
-			if ( m_inputExclusiveScreen->empty() || !m_inputExclusiveScreen->isVisible() || !m_inputExclusiveScreen->isListeningKeyboard() )
+			if ( exclusiveScreen->empty() || !exclusiveScreen->isVisible() || !exclusiveScreen->isListeningKeyboard() )
 			{
 				return false;
 			}
 
-			return m_inputExclusiveScreen->onCharacterType(unicode);
+			return exclusiveScreen->onCharacterType(unicode);
 		}
 
-		return std::ranges::any_of(m_screens, [unicode] (const auto & pair) {
-			const auto & screen = pair.second;
-
+		return std::ranges::any_of(targets.screens, [unicode] (const auto & screen) {
 			if ( screen->empty() || !screen->isVisible() || !screen->isListeningKeyboard() )
 			{
 				return false;

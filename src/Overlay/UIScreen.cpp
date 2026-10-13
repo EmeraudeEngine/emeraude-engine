@@ -130,17 +130,18 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::destroySurface (const std::string & name) noexcept
 	{
+		if ( !this->isOwnerThread("destroySurface") )
+		{
+			return false;
+		}
+
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
+		/* NOTE: No device wait: a destroyed surface RETIRES its GPU buffers through the renderer's deferred destructor
+		 * (~Surface()), which covers the frames recorded or in flight that still sample them — a waitIdle() covered only
+		 * the submitted ones, and stalled the device under this lock. */
 		const std::scoped_lock lock{m_surfacesMutex};
-
-		/* NOTE: Wait for the GPU to finish all pending work before destroying the surface.
-		 * The rendering thread records Vulkan commands (bind descriptor set, draw) that reference
-		 * the surface's texture. vkQueueSubmit returns immediately while the GPU executes
-		 * asynchronously. Without this wait, erasing the surface frees the Vulkan texture
-		 * while the GPU is still reading it, causing VK_ERROR_DEVICE_LOST. */
-		m_graphicsRenderer.device()->waitIdle("UIScreen::destroySurface()");
 
 		const auto surfaceIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -168,13 +169,16 @@ namespace EmEn::Overlay
 	void
 	UIScreen::clearSurfaces () noexcept
 	{
+		if ( !this->isOwnerThread("clearSurfaces") )
+		{
+			return;
+		}
+
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
+		/* NOTE: No device wait, see destroySurface(). */
 		const std::scoped_lock lock{m_surfacesMutex};
-
-		/* NOTE: Same GPU sync rationale as destroySurface(). */
-		m_graphicsRenderer.device()->waitIdle("UIScreen::clearSurfaces()");
 
 		m_surfaces.clear();
 
@@ -185,6 +189,8 @@ namespace EmEn::Overlay
 	std::shared_ptr< const Surface >
 	UIScreen::getSurface (const std::string & name) const noexcept
 	{
+		const std::scoped_lock lock{m_surfacesMutex};
+
 		const auto surfaceIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
 		});
@@ -202,6 +208,8 @@ namespace EmEn::Overlay
 	std::shared_ptr< Surface >
 	UIScreen::getSurface (const std::string & name) noexcept
 	{
+		const std::scoped_lock lock{m_surfacesMutex};
+
 		const auto surfaceIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
 		});
@@ -226,6 +234,8 @@ namespace EmEn::Overlay
 			return false;
 		}
 
+		const std::scoped_lock lock{m_surfacesMutex};
+
 		m_inputExclusiveSurface = surface;
 
 		return true;
@@ -241,6 +251,8 @@ namespace EmEn::Overlay
 			return false;
 		}
 
+		const std::scoped_lock lock{m_surfacesMutex};
+
 		m_pointerMoveTapSurface = surface;
 
 		return true;
@@ -254,6 +266,9 @@ namespace EmEn::Overlay
 			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable keyboard key press event!";
 		}
 
+		/* NOTE: The stack and the input targets are walked as a copy (inputTargets()). */
+		const auto targets = this->inputTargets();
+
 		const auto dispatchEvent = [key, scancode, modifiers, repeat] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( !surface->isVisible() || !surface->isListeningKeyboard() || !surface->isFocused() )
 			{
@@ -263,12 +278,12 @@ namespace EmEn::Overlay
 			return surface->onKeyPress(key, scancode, modifiers, repeat);
 		};
 
-		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
+		if ( const auto & exclusiveSurface = targets.exclusiveSurface )
 		{
 			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(targets.surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
 	}
@@ -281,6 +296,9 @@ namespace EmEn::Overlay
 			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable keyboard key release event!";
 		}
 
+		/* NOTE: The stack and the input targets are walked as a copy (inputTargets()). */
+		const auto targets = this->inputTargets();
+
 		const auto dispatchEvent = [key, scancode, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( !surface->isVisible() || !surface->isListeningKeyboard() || !surface->isFocused() )
 			{
@@ -290,12 +308,12 @@ namespace EmEn::Overlay
 			return surface->onKeyRelease(key, scancode, modifiers);
 		};
 
-		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
+		if ( const auto & exclusiveSurface = targets.exclusiveSurface )
 		{
 			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(targets.surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
 	}
@@ -308,6 +326,9 @@ namespace EmEn::Overlay
 			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable keyboard character type event!";
 		}
 
+		/* NOTE: The stack and the input targets are walked as a copy (inputTargets()). */
+		const auto targets = this->inputTargets();
+
 		const auto dispatchEvent = [unicode] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( !surface->isVisible() || !surface->isListeningKeyboard() || !surface->isFocused() )
 			{
@@ -317,12 +338,12 @@ namespace EmEn::Overlay
 			return surface->onCharacterType(unicode);
 		};
 
-		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
+		if ( const auto & exclusiveSurface = targets.exclusiveSurface )
 		{
 			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(targets.surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
 	}
@@ -334,6 +355,9 @@ namespace EmEn::Overlay
 		{
 			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable pointer move event!";
 		}
+
+		/* NOTE: The stack and the input targets are walked as a copy (inputTargets()). */
+		const auto targets = this->inputTargets();
 
 		const auto dispatchEvent = [positionX, positionY] (const std::shared_ptr< Surface > & surface) -> bool {
 			/* NOTE: Always check if the pointer is over the surface. */
@@ -376,7 +400,7 @@ namespace EmEn::Overlay
 		 * enter/leave bookkeeping) and skipped when it is the very surface already handling the move,
 		 * so the tap never gets a duplicate. The tap does NOT consume the event: the normal routing
 		 * result below is what propagates. Scoping (set/clear around a gesture) is the application's job. */
-		const auto tapSurface = m_pointerMoveTapSurface.lock();
+		const auto & tapSurface = targets.pointerMoveTapSurface;
 
 		const auto deliverTap = [&tapSurface, positionX, positionY] (const Surface * handledSurface) noexcept -> void {
 			if ( tapSurface != nullptr && tapSurface.get() != handledSurface && tapSurface->isVisible() && tapSurface->isListeningPointer() )
@@ -397,7 +421,7 @@ namespace EmEn::Overlay
 			}
 		}
 
-		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
+		if ( const auto & exclusiveSurface = targets.exclusiveSurface )
 		{
 			deliverTap(exclusiveSurface.get());
 
@@ -409,7 +433,7 @@ namespace EmEn::Overlay
 		 * surface handled it, so the tap is not delivered twice when it happens to be that surface. */
 		std::shared_ptr< Surface > handledSurface;
 
-		for ( const auto & surface : std::views::reverse(m_surfaces) )
+		for ( const auto & surface : std::views::reverse(targets.surfaces) )
 		{
 			if ( dispatchEvent(surface) )
 			{
@@ -431,6 +455,9 @@ namespace EmEn::Overlay
 		{
 			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable pointer button press event!";
 		}
+
+		/* NOTE: The stack and the input targets are walked as a copy (inputTargets()). */
+		const auto targets = this->inputTargets();
 
 		const auto buttonBit = static_cast< uint8_t >(1U << (buttonNumber & 7));
 
@@ -456,7 +483,7 @@ namespace EmEn::Overlay
 			return capturedSurface->onButtonPress(positionX, positionY, buttonNumber, modifiers);
 		}
 
-		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
+		if ( const auto & exclusiveSurface = targets.exclusiveSurface )
 		{
 			return dispatchEvent(exclusiveSurface);
 		}
@@ -472,7 +499,7 @@ namespace EmEn::Overlay
 		m_pressObserverSurfaces.clear();
 		m_pressObserverButtons = 0;
 
-		for ( const auto & surface : std::views::reverse(m_surfaces) )
+		for ( const auto & surface : std::views::reverse(targets.surfaces) )
 		{
 			if ( !surface->isVisible() || !surface->isListeningPointer() || !surface->isBelowPoint(positionX, positionY) )
 			{
@@ -509,6 +536,9 @@ namespace EmEn::Overlay
 		{
 			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable pointer button release event!";
 		}
+
+		/* NOTE: The stack and the input targets are walked as a copy (inputTargets()). */
+		const auto targets = this->inputTargets();
 
 		const auto buttonBit = static_cast< uint8_t >(1U << (buttonNumber & 7));
 
@@ -560,12 +590,12 @@ namespace EmEn::Overlay
 			return blocked;
 		}
 
-		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
+		if ( const auto & exclusiveSurface = targets.exclusiveSurface )
 		{
 			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(targets.surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
 	}
@@ -577,6 +607,9 @@ namespace EmEn::Overlay
 		{
 			TraceDebug{ClassId} << "The screen '" << this->name() << "' received a dispatchable mouse wheel event!";
 		}
+
+		/* NOTE: The stack and the input targets are walked as a copy (inputTargets()). */
+		const auto targets = this->inputTargets();
 
 		const auto dispatchEvent = [positionX, positionY, xOffset, yOffset, modifiers] (const std::shared_ptr< Surface > & surface) -> bool {
 			if ( surface->isVisible() && surface->isListeningPointer() && surface->isBelowPoint(positionX, positionY) )
@@ -593,14 +626,39 @@ namespace EmEn::Overlay
 			return capturedSurface->onMouseWheel(positionX, positionY, xOffset, yOffset, modifiers);
 		}
 
-		if ( const auto exclusiveSurface = m_inputExclusiveSurface.lock() )
+		if ( const auto & exclusiveSurface = targets.exclusiveSurface )
 		{
 			return dispatchEvent(exclusiveSurface);
 		}
 
-		return std::ranges::any_of(std::views::reverse(m_surfaces), [dispatchEvent] (const auto & surface) -> bool {
+		return std::ranges::any_of(std::views::reverse(targets.surfaces), [dispatchEvent] (const auto & surface) -> bool {
 			return dispatchEvent(surface);
 		});
+	}
+
+	bool
+	UIScreen::isOwnerThread (const char * operation) const noexcept
+	{
+		if ( std::this_thread::get_id() == m_ownerThread )
+		{
+			return true;
+		}
+
+		TraceError{ClassId} << "UIScreen::" << operation << "() refused on the screen '" << this->name() << "': the surface stack is created, destroyed and reordered on the overlay's main thread only.";
+
+		return false;
+	}
+
+	UIScreen::InputTargets
+	UIScreen::inputTargets () const noexcept
+	{
+		const std::scoped_lock lock{m_surfacesMutex};
+
+		return InputTargets{
+			.surfaces = m_surfaces,
+			.exclusiveSurface = m_inputExclusiveSurface.lock(),
+			.pointerMoveTapSurface = m_pointerMoveTapSurface.lock()
+		};
 	}
 
 	void
@@ -618,6 +676,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::bringToFront (const std::string & name) noexcept
 	{
+		if ( !this->isOwnerThread("bringToFront") )
+		{
+			return false;
+		}
+
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
@@ -654,6 +717,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::sendToBack (const std::string & name) noexcept
 	{
+		if ( !this->isOwnerThread("sendToBack") )
+		{
+			return false;
+		}
+
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
@@ -690,6 +758,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::bringForward (const std::string & name) noexcept
 	{
+		if ( !this->isOwnerThread("bringForward") )
+		{
+			return false;
+		}
+
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
@@ -724,6 +797,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::sendBackward (const std::string & name) noexcept
 	{
+		if ( !this->isOwnerThread("sendBackward") )
+		{
+			return false;
+		}
+
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
@@ -758,6 +836,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::moveAbove (const std::string & name, const std::string & reference) noexcept
 	{
+		if ( !this->isOwnerThread("moveAbove") )
+		{
+			return false;
+		}
+
 		if ( name == reference )
 		{
 			TraceWarning{ClassId} << "moveAbove: a surface cannot be moved relative to itself ('" << name << "').";
@@ -813,6 +896,11 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::moveBelow (const std::string & name, const std::string & reference) noexcept
 	{
+		if ( !this->isOwnerThread("moveBelow") )
+		{
+			return false;
+		}
+
 		if ( name == reference )
 		{
 			TraceWarning{ClassId} << "moveBelow: a surface cannot be moved relative to itself ('" << name << "').";

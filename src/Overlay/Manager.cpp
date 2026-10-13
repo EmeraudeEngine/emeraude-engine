@@ -249,6 +249,13 @@ namespace EmEn::Overlay
 	std::shared_ptr< UIScreen >
 	Manager::createScreen (const std::string & name, bool enableKeyboardListener, bool enablePointerListener) noexcept
 	{
+		if ( std::this_thread::get_id() != m_ownerThread )
+		{
+			TraceError{ClassId} << "Manager::createScreen() refused: the screens are created and destroyed on the overlay's main thread only.";
+
+			return nullptr;
+		}
+
 		std::shared_ptr< UIScreen > screen;
 
 		{
@@ -276,7 +283,8 @@ namespace EmEn::Overlay
 				m_framebufferProperties,
 				m_resourceManager.graphicsRenderer(),
 				enableKeyboardListener,
-				enablePointerListener
+				enablePointerListener,
+				m_ownerThread
 			);
 
 			/* NOTE: Propagate the redraw requester so this screen and every surface it creates can
@@ -322,6 +330,13 @@ namespace EmEn::Overlay
 	bool
 	Manager::destroyScreen (const std::string & name) noexcept
 	{
+		if ( std::this_thread::get_id() != m_ownerThread )
+		{
+			TraceError{ClassId} << "Manager::destroyScreen() refused: the screens are created and destroyed on the overlay's main thread only.";
+
+			return false;
+		}
+
 		/* NOTE: The notifications are emitted with m_screensAccess released (see createScreen()); UIScreenDestroying still
 		 * comes BEFORE the screen leaves the list, UIScreenDestroyed after. */
 		std::shared_ptr< UIScreen > screen;
@@ -358,6 +373,34 @@ namespace EmEn::Overlay
 		return true;
 	}
 
+	Manager::InputTargets
+	Manager::inputTargets () const noexcept
+	{
+		const std::scoped_lock lock{m_screensAccess};
+
+		InputTargets targets;
+		targets.screens.reserve(m_screens.size());
+
+		for ( const auto & screen : m_screens | std::views::values )
+		{
+			targets.screens.push_back(screen);
+		}
+
+		targets.exclusiveScreen = m_inputExclusiveScreen;
+
+		return targets;
+	}
+
+	std::shared_ptr< UIScreen >
+	Manager::findScreen (const std::string & name) const noexcept
+	{
+		const std::scoped_lock lock{m_screensAccess};
+
+		const auto screenIt = m_screens.find(name);
+
+		return screenIt == m_screens.cend() ? nullptr : screenIt->second;
+	}
+
 	bool
 	Manager::eraseScreen (const std::string & name, const std::shared_ptr< UIScreen > & screen) noexcept
 	{
@@ -380,6 +423,13 @@ namespace EmEn::Overlay
 	void
 	Manager::clearScreens () noexcept
 	{
+		if ( std::this_thread::get_id() != m_ownerThread )
+		{
+			TraceError{ClassId} << "Manager::clearScreens() refused: the screens are created and destroyed on the overlay's main thread only.";
+
+			return;
+		}
+
 		/* NOTE: A copy of the list, then one screen at a time with m_screensAccess released around the notifications (see
 		 * createScreen() and destroyScreen()). A cold path: the copy allocates once. */
 		std::vector< std::pair< std::string, std::shared_ptr< UIScreen > > > screens;
@@ -407,16 +457,17 @@ namespace EmEn::Overlay
 	bool
 	Manager::enableScreen (const std::string & name) noexcept
 	{
-		const auto screenIt = m_screens.find(name);
+		/* NOTE: Found under m_screensAccess, acted on with it released: the visibility change requests a redraw. */
+		const auto screen = this->findScreen(name);
 
-		if ( screenIt == m_screens.cend() )
+		if ( screen == nullptr )
 		{
 			TraceWarning{ClassId} << "Unable to find the UI screen '" << name << "' to activate it !";
 
 			return false;
 		}
 
-		screenIt->second->setVisibility(true);
+		screen->setVisibility(true);
 
 		return true;
 	}
@@ -424,16 +475,17 @@ namespace EmEn::Overlay
 	bool
 	Manager::toggleScreen (const std::string & name) noexcept
 	{
-		const auto screenIt = m_screens.find(name);
+		/* NOTE: Found under m_screensAccess, acted on with it released: the visibility change requests a redraw. */
+		const auto screen = this->findScreen(name);
 
-		if ( screenIt == m_screens.cend() )
+		if ( screen == nullptr )
 		{
 			TraceWarning{ClassId} << "Unable to find the UI screen '" << name << "' to toggle it !";
 
 			return false;
 		}
 
-		screenIt->second->setVisibility(!screenIt->second->isVisible());
+		screen->setVisibility(!screen->isVisible());
 
 		return true;
 	}
@@ -441,16 +493,17 @@ namespace EmEn::Overlay
 	bool
 	Manager::disableScreen (const std::string & name) noexcept
 	{
-		const auto screenIt = m_screens.find(name);
+		/* NOTE: Found under m_screensAccess, acted on with it released: the visibility change requests a redraw. */
+		const auto screen = this->findScreen(name);
 
-		if ( screenIt == m_screens.cend() )
+		if ( screen == nullptr )
 		{
 			TraceWarning{ClassId} << "Unable to find the UI screen '" << name << "' to disable it !";
 
 			return false;
 		}
 
-		screenIt->second->setVisibility(false);
+		screen->setVisibility(false);
 
 		return true;
 	}
@@ -458,7 +511,8 @@ namespace EmEn::Overlay
 	void
 	Manager::disableAllScreens () noexcept
 	{
-		for ( const auto & screen : m_screens | std::views::values )
+		/* NOTE: A copy, acted on with m_screensAccess released (each change requests a redraw). */
+		for ( const auto & screen : this->inputTargets().screens )
 		{
 			screen->setVisibility(false);
 		}
@@ -467,7 +521,7 @@ namespace EmEn::Overlay
 	bool
 	Manager::bringScreenOnTop (const std::string & screenName) noexcept
 	{
-		if ( const auto screenIt = m_screens.find(screenName); screenIt == m_screens.cend() )
+		if ( this->findScreen(screenName) == nullptr )
 		{
 			TraceWarning{ClassId} << "Unable to find the UI screen '" << screenName << "' to bring it on top !";
 
@@ -482,6 +536,8 @@ namespace EmEn::Overlay
 	std::vector< std::string >
 	Manager::screensNameList () const noexcept
 	{
+		const std::scoped_lock lock{m_screensAccess};
+
 		std::vector< std::string > screenNames;
 		screenNames.reserve(m_screens.size());
 
@@ -495,6 +551,8 @@ namespace EmEn::Overlay
 	std::vector< std::string >
 	Manager::activeScreensNameList () const noexcept
 	{
+		const std::scoped_lock lock{m_screensAccess};
+
 		std::vector< std::string > screenNames;
 		screenNames.reserve(m_screens.size());
 
@@ -512,31 +570,27 @@ namespace EmEn::Overlay
 	std::shared_ptr< const UIScreen >
 	Manager::screen (const std::string & screenName) const noexcept
 	{
-		const auto screenIt = m_screens.find(screenName);
+		auto screen = this->findScreen(screenName);
 
-		if ( screenIt == m_screens.cend() )
+		if ( screen == nullptr )
 		{
 			TraceWarning{ClassId} << "There is no screen named '" << screenName << "' !";
-
-			return nullptr;
 		}
 
-		return screenIt->second;
+		return screen;
 	}
 
 	std::shared_ptr< UIScreen >
 	Manager::screen (const std::string & screenName) noexcept
 	{
-		const auto screenIt = m_screens.find(screenName);
+		auto screen = this->findScreen(screenName);
 
-		if ( screenIt == m_screens.cend() )
+		if ( screen == nullptr )
 		{
 			TraceWarning{ClassId} << "There is no screen named '" << screenName << "' !";
-
-			return nullptr;
 		}
 
-		return screenIt->second;
+		return screen;
 	}
 
 	void
@@ -959,6 +1013,8 @@ namespace EmEn::Overlay
 		{
 			return false;
 		}
+
+		const std::scoped_lock lock{m_screensAccess};
 
 		m_inputExclusiveScreen = screen;
 

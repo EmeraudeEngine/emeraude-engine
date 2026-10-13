@@ -42,24 +42,25 @@ namespace EmEn::Overlay
 			Tracer::debug(ClassId, "Received a dispatchable pointer move event!");
 		}
 
-		if ( m_screens.empty() )
+		/* NOTE: A copy taken under m_screensAccess (inputTargets()): the list changes from any thread. */
+		const auto targets = this->inputTargets();
+
+		if ( targets.screens.empty() )
 		{
 			return false;
 		}
 
-		if ( m_inputExclusiveScreen )
+		if ( const auto & exclusiveScreen = targets.exclusiveScreen )
 		{
-			if ( m_inputExclusiveScreen->empty() || !m_inputExclusiveScreen->isVisible() || !m_inputExclusiveScreen->isListeningPointer() )
+			if ( exclusiveScreen->empty() || !exclusiveScreen->isVisible() || !exclusiveScreen->isListeningPointer() )
 			{
 				return false;
 			}
 
-			return m_inputExclusiveScreen->onPointerMove(positionX, positionY);
+			return exclusiveScreen->onPointerMove(positionX, positionY);
 		}
 
-		return std::ranges::any_of(m_screens, [&] (const auto & pair) {
-			const auto & screen = pair.second;
-
+		return std::ranges::any_of(targets.screens, [&] (const auto & screen) {
 			if ( screen->empty() || !screen->isVisible() || !screen->isListeningPointer() )
 			{
 				return false;
@@ -86,24 +87,25 @@ namespace EmEn::Overlay
 		}
 #endif
 
-		if ( m_screens.empty() )
+		/* NOTE: A copy taken under m_screensAccess (inputTargets()): the list changes from any thread. */
+		const auto targets = this->inputTargets();
+
+		if ( targets.screens.empty() )
 		{
 			return false;
 		}
 
-		if ( m_inputExclusiveScreen )
+		if ( const auto & exclusiveScreen = targets.exclusiveScreen )
 		{
-			if ( m_inputExclusiveScreen->empty() || !m_inputExclusiveScreen->isVisible() || !m_inputExclusiveScreen->isListeningPointer() )
+			if ( exclusiveScreen->empty() || !exclusiveScreen->isVisible() || !exclusiveScreen->isListeningPointer() )
 			{
 				return false;
 			}
 
-			return m_inputExclusiveScreen->onButtonPress(positionX, positionY, buttonNumber, modifiers);
+			return exclusiveScreen->onButtonPress(positionX, positionY, buttonNumber, modifiers);
 		}
 
-		return std::ranges::any_of(m_screens, [&] (const auto & pair) {
-			const auto & screen = pair.second;
-
+		return std::ranges::any_of(targets.screens, [&] (const auto & screen) {
 			if ( screen->empty() || !screen->isVisible() || !screen->isListeningPointer() )
 			{
 				return false;
@@ -121,24 +123,25 @@ namespace EmEn::Overlay
 			Tracer::debug(ClassId, "Received a dispatchable pointer button release event!");
 		}
 
-		if ( m_screens.empty() )
+		/* NOTE: A copy taken under m_screensAccess (inputTargets()): the list changes from any thread. */
+		const auto targets = this->inputTargets();
+
+		if ( targets.screens.empty() )
 		{
 			return false;
 		}
 
-		if ( m_inputExclusiveScreen )
+		if ( const auto & exclusiveScreen = targets.exclusiveScreen )
 		{
-			if ( m_inputExclusiveScreen->empty() || !m_inputExclusiveScreen->isVisible() || !m_inputExclusiveScreen->isListeningPointer() )
+			if ( exclusiveScreen->empty() || !exclusiveScreen->isVisible() || !exclusiveScreen->isListeningPointer() )
 			{
 				return false;
 			}
 
-			return m_inputExclusiveScreen->onButtonRelease(positionX, positionY, buttonNumber, modifiers);
+			return exclusiveScreen->onButtonRelease(positionX, positionY, buttonNumber, modifiers);
 		}
 
-		return std::ranges::any_of(m_screens, [&] (const auto & pair) {
-			const auto & screen = pair.second;
-
+		return std::ranges::any_of(targets.screens, [&] (const auto & screen) {
 			if ( screen->empty() || !screen->isVisible() || !screen->isListeningPointer() )
 			{
 				return false;
@@ -165,24 +168,25 @@ namespace EmEn::Overlay
 		}
 #endif
 
-		if ( m_screens.empty() )
+		/* NOTE: A copy taken under m_screensAccess (inputTargets()): the list changes from any thread. */
+		const auto targets = this->inputTargets();
+
+		if ( targets.screens.empty() )
 		{
 			return false;
 		}
 
-		if ( m_inputExclusiveScreen )
+		if ( const auto & exclusiveScreen = targets.exclusiveScreen )
 		{
-			if ( m_inputExclusiveScreen->empty() || !m_inputExclusiveScreen->isVisible() || !m_inputExclusiveScreen->isListeningPointer() )
+			if ( exclusiveScreen->empty() || !exclusiveScreen->isVisible() || !exclusiveScreen->isListeningPointer() )
 			{
 				return false;
 			}
 
-			return m_inputExclusiveScreen->onMouseWheel(positionX, positionY, xOffset, yOffset, modifiers);
+			return exclusiveScreen->onMouseWheel(positionX, positionY, xOffset, yOffset, modifiers);
 		}
 
-		return std::ranges::any_of(m_screens, [&] (const auto & pair) {
-			const auto & screen = pair.second;
-
+		return std::ranges::any_of(targets.screens, [&] (const auto & screen) {
 			if ( screen->empty() || !screen->isVisible() || !screen->isListeningPointer() )
 			{
 				return false;

@@ -8293,7 +8293,26 @@ lost update. Since 2026-10-13 (owner decision, option (b)):
   is never lost, the next pass rebuilds again;
 - `processUpdates()` takes the buffer lock through `std::unique_lock{…, std::try_to_lock}` (no manual pair).
 Also found by the stress the same day: `UIScreen::empty()` read the surface list unlocked from the render thread (now
-locked); the other unlocked readers are todo `uiscreen-surface-list-read-unlocked`.
+locked).
+
+**The surface and screen lists (2026-10-13, owner decisions; former item `uiscreen-surface-list-read-unlocked`):**
+- The surface STACK and the SCREENS are created, destroyed and reordered on the overlay's MAIN thread only — the thread
+  that constructs `Overlay::Manager` and applies the window resizes. Checked in every build: an off-thread
+  `createScreen()` / `destroyScreen()` / `clearScreens()` / `createSurface()` / `destroySurface()` / `clearSurfaces()` /
+  `bringToFront()` / `sendToBack()` / `bringForward()` / `sendBackward()` / `moveAbove()` / `moveBelow()` is refused with a
+  traced error (`UIScreen::isOwnerThread()`). Why: a new surface reads the shared `FramebufferProperties`, which that
+  thread rewrites on every resize (a data race found when the stress created a surface from the logic thread; every
+  real consumer creates on the main thread). The geometry setters stay usable from any thread.
+- Readers: the input dispatchers of `UIScreen` and `Overlay::Manager` walk a COPY taken under the list's lock
+  (`inputTargets()`: the stack, the input-exclusive surface or screen, the pointer-move tap) — a handler may call back
+  into the screen, the mutex is not recursive; `getSurface()` / `screen()` / `findScreen()` search under the lock; the
+  enable / disable / toggle calls act with the lock released (a visibility change requests a redraw). The pointer
+  capture and the press observers stay input-thread state.
+- `UIScreen::destroySurface()` / `clearSurfaces()` no longer `waitIdle()` under the lock: the surface retires its own GPU
+  buffers (see the next entry).
+Proof (Linux, lavapipe): the stress with the main thread creating / reordering / destroying a second surface and
+dispatching pointer moves (~340 churns, ~1 370 moves per run) while the logic thread moves the first one: 0 TSan report
+over 6 runs, 0 `VUID-` with validation, the off-thread creation refused.
 Proof (2026-10-13, Linux, lavapipe, `tools/stress/OverlayResizeStress.cpp` with a surface moved / resized by the logic
 thread every cycle and an observer calling back on `RedrawRequested`): the ORIGINAL overlay code gives 19-24 TSan data
 races per run (`Matrix::reset` in `updateModelMatrix()` against the draw, the `AARectangle` setters, the surface vector);

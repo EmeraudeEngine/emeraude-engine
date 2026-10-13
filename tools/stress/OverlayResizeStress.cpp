@@ -54,6 +54,9 @@
  * logic thread also moves and resizes a surface of its own every cycle while the render thread reads its geometry,
  * and the observer calls back into the manager from its RedrawRequested handler too — the resize pass invalidates
  * every surface, which requests a redraw from INSIDE the pass.
+ * 2026-10-13, later (the surface and screen lists read under their lock): the main thread, owner of the surface stack,
+ * also creates, reorders and destroys a second surface and dispatches pointer moves to the screen
+ * (UIScreen::onPointerMove(), which walks a copy of the stack taken under the lock), while the render thread draws it.
  * The verdict is TSan's: run it with TSAN_OPTIONS=halt_on_error=1 (procedure: projet-alpha docs/unit-testing.md).
  */
 namespace
@@ -70,6 +73,7 @@ namespace
 	/* The stress surface's screen and name. */
 	constexpr auto StressScreenName{"OverlayResizeStress"};
 	constexpr auto StressSurfaceName{"MovingSurface"};
+	constexpr auto ChurnSurfaceName{"ChurnSurface"};
 
 	/** @brief An observer of the overlay manager that calls back into it on every resize and every redraw request. */
 	class ReentrantObserver final : public Base::ObserverTrait
@@ -240,6 +244,7 @@ namespace
 					const std::scoped_lock lock{m_surfaceAccess};
 
 					m_surface = std::move(surface);
+					m_screen = screen;
 				}
 
 				m_start = std::chrono::steady_clock::now();
@@ -283,6 +288,50 @@ namespace
 
 				/* NOTE: The main loop may sleep on the system events: wake it for the next resize. */
 				this->scheduleMainLoopCycle(ResizePeriod.count());
+
+				/* NOTE: A pointer move dispatched to the screen from the main thread (the input thread), while the logic
+				 * thread mutates its stack (onCoreProcessLogics()). */
+				std::shared_ptr< Overlay::UIScreen > screen;
+
+				{
+					const std::scoped_lock lock{m_surfaceAccess};
+
+					screen = m_screen;
+				}
+
+				if ( screen != nullptr )
+				{
+					const auto phase = static_cast< float >(m_pointerMoves % 64U);
+
+					static_cast< void >(screen->onPointerMove(10.0F * phase, 6.0F * phase));
+
+					/* NOTE: The stack churn on the main thread, the owner of the surface stack (UIScreen::isOwnerThread()):
+					 * a second surface created, reordered and destroyed while the render thread draws the stack and the
+					 * logic thread moves the first surface. */
+					switch ( m_pointerMoves % 4U )
+					{
+						case 0U :
+							static_cast< void >(screen->createSurface< Overlay::Surface >(ChurnSurfaceName, Base::Math::Space2D::AARectangle< float >{0.5F, 0.5F, 0.2F, 0.2F}, true));
+							break;
+
+						case 1U :
+							static_cast< void >(screen->sendToBack(ChurnSurfaceName));
+							break;
+
+						case 2U :
+							static_cast< void >(screen->bringToFront(ChurnSurfaceName));
+							break;
+
+						default :
+							if ( screen->destroySurface(ChurnSurfaceName) )
+							{
+								m_stackChurns.fetch_add(1U);
+							}
+							break;
+					}
+
+					++m_pointerMoves;
+				}
 			}
 
 			void
@@ -296,11 +345,19 @@ namespace
 				/* NOTE: A copy taken under the lock, used outside it: onBeforeCoreStop() releases the surface on the main
 				 * thread while this thread still runs. */
 				std::shared_ptr< Overlay::Surface > surface;
+				std::shared_ptr< Overlay::UIScreen > screen;
 
 				{
 					const std::scoped_lock lock{m_surfaceAccess};
 
 					surface = m_surface;
+					screen = m_screen;
+				}
+
+				/* NOTE: The owner-thread contract, once: a surface created from the logic thread must be refused. */
+				if ( screen != nullptr && !m_offThreadCreationTried.exchange(true) )
+				{
+					m_offThreadCreationRefused = screen->createSurface< Overlay::Surface >("OffThreadSurface", Base::Math::Space2D::AARectangle< float >{0.0F, 0.0F, 0.1F, 0.1F}, true) == nullptr;
 				}
 
 				if ( surface == nullptr )
@@ -331,6 +388,7 @@ namespace
 				}
 
 				m_geometryChanges.fetch_add(1U);
+
 			}
 
 			bool
@@ -342,19 +400,25 @@ namespace
 					const std::scoped_lock lock{m_surfaceAccess};
 
 					m_surface.reset();
+					m_screen.reset();
 				}
 
 				static_cast< void >(this->overlayManager().destroyScreen(StressScreenName));
 
-				std::cout << "[OverlayResizeStress] " << m_resizeRequests << " resize requests, " << m_observer.resizes() << " OverlayResized, " << m_observer.scaleChanges() << " OverlayScaleChanged, " << m_observer.redrawRequests() << " RedrawRequested, " << m_geometryChanges.load() << " geometry changes." "\n";
+				std::cout << "[OverlayResizeStress] " << m_resizeRequests << " resize requests, " << m_observer.resizes() << " OverlayResized, " << m_observer.scaleChanges() << " OverlayScaleChanged, " << m_observer.redrawRequests() << " RedrawRequested, " << m_geometryChanges.load() << " geometry changes, " << m_stackChurns.load() << " surface churns, " << m_pointerMoves << " pointer moves, off-thread creation " << ( m_offThreadCreationRefused.load() ? "refused" : "NOT refused" ) << "." "\n";
 
 				return true;
 			}
 
 			ReentrantObserver m_observer;
 			std::shared_ptr< Overlay::Surface > m_surface;
+			std::shared_ptr< Overlay::UIScreen > m_screen;
 			std::mutex m_surfaceAccess;
 			std::atomic< uint64_t > m_geometryChanges{0};
+			std::atomic< uint64_t > m_stackChurns{0};
+			std::atomic_bool m_offThreadCreationTried{false};
+			std::atomic_bool m_offThreadCreationRefused{false};
+			uint64_t m_pointerMoves{0};
 			std::chrono::steady_clock::time_point m_start;
 			std::chrono::steady_clock::time_point m_nextResize;
 			uint64_t m_resizeRequests{0};
