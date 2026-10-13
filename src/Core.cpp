@@ -420,17 +420,27 @@ namespace EmEn
 			frames++;
 
 			/* NOTE: Without an active scene, a Continuous loop draws the overlay only and nothing paces it (a mailbox
-			 * present never blocks): an absolute deadline per period (updateNoScenePacing()), resynchronised after a
-			 * late frame — never an accumulated sleep. */
+			 * present never blocks): an absolute deadline per period (updateNoScenePacing()), never an accumulated
+			 * sleep. A frame that ended past its deadline does not sleep: the deadline restarts from now. ⚠️ With a
+			 * blocking present (FIFO) every frame ends a hair late, and the former restart at now + period slept a
+			 * whole period ON TOP of the vertical-sync wait (Intel, FIFO only, 165 Hz: 64.5 FPS; Windows peer
+			 * 2026-10-14). */
 			if ( m_renderingMode == RenderingMode::Continuous && !m_sceneManager.hasActiveScene() )
 			{
 				if ( const std::chrono::nanoseconds period{m_noScenePeriodNS.load()}; period.count() > 0 )
 				{
 					const auto now = std::chrono::steady_clock::now();
 
-					nextNoSceneFrame = ( nextNoSceneFrame + period < now ) ? now + period : nextNoSceneFrame + period;
+					nextNoSceneFrame += period;
 
-					std::this_thread::sleep_until(nextNoSceneFrame);
+					if ( nextNoSceneFrame <= now )
+					{
+						nextNoSceneFrame = now;
+					}
+					else
+					{
+						std::this_thread::sleep_until(nextNoSceneFrame);
+					}
 				}
 			}
 			else
@@ -453,9 +463,22 @@ namespace EmEn
 	void
 	Core::updateNoScenePacing () noexcept
 	{
-		int64_t rateHz = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFrameRateLimitKey, DefaultVideoFrameRateLimit);
+		/* NOTE: Core/Video/FrameRateLimit is the renderer's software limiter, which caps every frame, scene or not.
+		 * Pacing on top of it applied the limit twice (30 set: 15 FPS on NVIDIA, 11 on Intel; Windows peer
+		 * 2026-10-14): the loop's own pace stands down. */
+		if ( m_graphicsRenderer.isSoftwareFrameLimiterEnabled() )
+		{
+			if ( m_noScenePeriodNS.exchange(0) != 0 )
+			{
+				TraceInfo{ClassId} << "Without an active scene, the Continuous rendering loop is paced by the frame rate limiter.";
+			}
 
-		if ( rateHz <= 0 && !m_window.isWindowLessMode() )
+			return;
+		}
+
+		int64_t rateHz = 0;
+
+		if ( !m_window.isWindowLessMode() )
 		{
 			/* NOTE: The monitor holding the window's centre, the primary one otherwise. */
 			const auto & state = m_window.state();
@@ -491,7 +514,7 @@ namespace EmEn
 
 		if ( m_noScenePeriodNS.exchange(periodNS) != periodNS )
 		{
-			TraceInfo{ClassId} << "Without an active scene, the rendering loop is paced at " << rateHz << " Hz.";
+			TraceInfo{ClassId} << "Without an active scene, the Continuous rendering loop is paced at " << rateHz << " Hz.";
 		}
 	}
 

@@ -1398,8 +1398,9 @@ namespace EmEn
 			 * @brief Computes the frame period of the rendering loop while no scene is active, in Continuous mode.
 			 * @details Without a scene the loop draws the overlay only, and nothing paces it: a mailbox present never
 			 * blocks (Windows: ~4800 FPS on the bare menu; docs/caution-points.md § "without a scene, the Continuous
-			 * loop rendered uncapped"). Owner decision 2026-10-13: capped at Core/Video/FrameRateLimit when set, else at
-			 * the refresh rate of the monitor holding the window's centre (the primary one otherwise, 60 Hz without any).
+			 * loop rendered uncapped"). Owner decision 2026-10-13: capped at Core/Video/FrameRateLimit when set — by the
+			 * renderer's software limiter alone, the period is then 0 —, else at the refresh rate of the monitor holding
+			 * the window's centre (the primary one otherwise, 60 Hz without any).
 			 * @note Main thread (the monitor list is GLFW's); called before the loops start and on every window change.
 			 */
 			void updateNoScenePacing () noexcept;
