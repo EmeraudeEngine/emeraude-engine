@@ -1503,7 +1503,9 @@ namespace EmEn::Overlay
 			 * from processUpdates()). It performs GPU resource destruction/creation and a waitIdle().
 			 * It deliberately does NOT call onTransitionBufferReady(): the provider is already
 			 * painting at this size, so notifying it again (which triggers a CEF WasResized()) could
-			 * restart the convergence loop.
+			 * restart the convergence loop. It calls onTransitionBufferMatchedToProvider() instead: the frame that
+			 * requested the size was NOT committed (it matched no buffer), and a static page paints no other one —
+			 * without a repaint request the surface stayed on that uncommitted state for good (2026-10-14).
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool True on success (including the no-op case), false on GPU failure.
 			 */
@@ -1546,6 +1548,24 @@ namespace EmEn::Overlay
 			virtual
 			void
 			onTransitionBufferReady (Framebuffer & framebuffer) noexcept
+			{
+				static_cast< void >(framebuffer);
+			}
+
+			/**
+			 * @brief Called when the transition buffer was recreated at the size the content provider painted
+			 * (requestTransitionBufferResize()).
+			 * @details The frame that requested that size matched no buffer and was not committed. Override it to ask the
+			 * provider for a new frame at its CURRENT size (a CEF web view invalidates its view), without a resize
+			 * notification: the provider already paints at this size. Without it, a provider that paints only on change
+			 * (a static page) never sends the frame that commits, and the surface stays on its stale buffer (a resize
+			 * burst, 2026-10-14).
+			 * @warning Same context and contract as onActiveBufferReady() (render thread, under m_framebufferAccess).
+			 * @param framebuffer A reference to the transition framebuffer.
+			 */
+			virtual
+			void
+			onTransitionBufferMatchedToProvider (Framebuffer & framebuffer) noexcept
 			{
 				static_cast< void >(framebuffer);
 			}

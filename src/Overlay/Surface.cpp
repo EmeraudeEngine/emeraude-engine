@@ -857,11 +857,13 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		/* NOTE: The transition buffer now matches the provider's painted size. The next incoming
-		 * frame at this size will be accepted and committed. We deliberately DO NOT call
-		 * onTransitionBufferReady() here: the provider is already painting at this size, and
-		 * notifying it (which triggers WasResized() on the CEF side) could restart the loop. */
+		/* NOTE: The transition buffer now matches the provider's painted size. We deliberately DO NOT call
+		 * onTransitionBufferReady() here: the provider is already painting at this size, and notifying it (which
+		 * triggers WasResized() on the CEF side) could restart the loop. But the frame that requested this size was
+		 * not committed, and a provider that paints only on change sends no other one: ask it for a frame. */
 		m_transitionBufferStatus = TransitionBufferStatus::WaitingForContent;
+
+		this->onTransitionBufferMatchedToProvider(m_transitionBuffer);
 
 		return true;
 	}

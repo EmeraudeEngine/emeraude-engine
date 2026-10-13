@@ -83,7 +83,16 @@ For asynchronous content providers (e.g., CEF browsers), Surface supports a tran
 > `recreateTransitionBufferToRequestedSize()` recreates the transition buffer at that exact painted
 > size (dedicated path — it does **not** recompute via the surface-size formula, and deliberately
 > does **not** fire `onTransitionBufferReady()`, which would re-trigger a CEF `WasResized()` and risk
-> looping). The next identical frame then matches and commits. Converges within one render iteration.
+> looping). It fires **`onTransitionBufferMatchedToProvider()`** instead (2026-10-14): the frame that requested the
+> size was NOT committed, and a provider that paints only on change (a static page) sends no other one — the surface
+> stayed on its uncommitted state for good. The provider answers with a repaint at its current size (a CEF web view:
+> `Invalidate(PET_VIEW)`, no `WasResized()`), and that frame matches and commits.
+>
+> ⚠️ **The painted size is authoritative only for the CURRENT size.** During a resize burst the provider still
+> delivers frames painted for a superseded size; honouring one recreated the transition buffer at the OLD size and
+> COMMITTED it (a downstream menu kept a rescaled, clipped frame whose uncleared border showed garbage; Linux 2/60
+> bursts, Windows 5/30). A provider must drop a frame further from its latched size than the scale rounding allows
+> (projet-alpha `WebView::isPaintForCurrentSize()`: 1 px + ⌈scale⌉) — measured 179 divergences → 0, 2/60 → 0/60.
 
 **Code references:**
 - `Surface.hpp:Framebuffer` struct definition
