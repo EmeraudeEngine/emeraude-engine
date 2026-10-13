@@ -36,6 +36,7 @@
 /* Local inclusions. */
 #include "Core.hpp"
 #include "Overlay/Manager.hpp"
+#include "PlatformManager.hpp"
 
 /*
  * The ThreadSanitizer proof of Overlay::Manager::onWindowResized() (item overlay-resize-notifies-under-lock, Ave
@@ -247,6 +248,9 @@ namespace
 int
 main (int argc, char * * argv)
 {
+	/* NOTE: Before any thread, as every consumer's main() (PlatformManager::prepareVulkanLoaderEnvironment()). */
+	static_cast< void >(EmEn::PlatformManager::prepareVulkanLoaderEnvironment());
+
 	OverlayResizeStress stress{argc, argv};
 
 	const auto exitCode = stress.run();

@@ -39,6 +39,7 @@
 /* Local inclusions. */
 #include "Audio/TrackMixer.hpp"
 #include "Core.hpp"
+#include "PlatformManager.hpp"
 #include "Thread.hpp"
 
 /*
@@ -259,6 +260,9 @@ namespace
 int
 main (int argc, char * * argv)
 {
+	/* NOTE: Before any thread, as every consumer's main() (PlatformManager::prepareVulkanLoaderEnvironment()). */
+	static_cast< void >(EmEn::PlatformManager::prepareVulkanLoaderEnvironment());
+
 	TrackMixerStress stress{argc, argv};
 
 	const auto exitCode = stress.run();
