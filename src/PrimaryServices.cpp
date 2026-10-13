@@ -292,6 +292,12 @@ namespace EmEn
 
 			TraceSuccess{ClassId} << m_settings.name() << " primary service up! [" << m_processName << "]";
 		}
+		else if ( m_settings.isNamedFileMissing() )
+		{
+			TraceFatal{ClassId} << m_settings.name() << " primary service failed to execute! [" << m_processName << "]";
+
+			return false;
+		}
 		else
 		{
 			TraceError{ClassId} <<

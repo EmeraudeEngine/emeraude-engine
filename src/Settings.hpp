@@ -481,6 +481,18 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Returns whether the initialization failed because the settings file named on the command line
+			 * (--settings-filepath, --settings-filename) does not exist: a fatal error, the engine stops.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isNamedFileMissing () const noexcept
+			{
+				return m_namedFileMissing;
+			}
+
+			/**
 			 * @brief Returns @c true when this instance was constructed as a child-process proxy.
 			 *
 			 * Child-process instances never write the settings file on termination and
@@ -1533,6 +1545,7 @@ namespace EmEn
 			bool m_childProcess{false};
 			bool m_showInformation{false};
 			bool m_saveAtExit{false};
+			bool m_namedFileMissing{false};
 	};
 
 	/**

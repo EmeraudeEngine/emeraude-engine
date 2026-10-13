@@ -132,6 +132,19 @@ gate — the shutdown of the test instance went through TCP 7777. The first laun
 switch on an existing installation **does reset the user's file** (only the declared entries
 survive): say so before flipping the flag on a project.
 
+**Settings file creation policy (owner decision 2026-10-14).** The ONLY settings file the engine ever creates by
+itself is the default `settings.json` in the user's configuration directory (plus the backups of the reset paths).
+- A file named on the command line — `--settings-filepath=PATH` or `--settings-filename=NAME` — must EXIST: when it does
+  not, `Settings::onInitialize()` refuses (`isNamedFileMissing()`), `PrimaryServices` treats it as fatal and the engine
+  stops (exit code 1, nothing written). A mistyped or shell-mangled path used to run on defaults and write a stray file
+  wherever it pointed (Windows peer and Linux, 2026-10-14).
+- `--disable-settings-autosave` holds on every path, the missing default file included: that run uses the defaults
+  and writes NOTHING (the branch used to return before the switch was read and saved at exit).
+- ⚠️ The user directory comes from `getpwuid_r()` (`UserInfo.linux.cpp`), not from `HOME` / `XDG_*`: an overridden
+  `HOME` does NOT isolate a test run from the user's own settings file — only the switch or an existing copy does.
+Proof (Linux, 2026-10-14): a missing `--settings-filepath` and a missing `--settings-filename` both stop at
+initialization (exit 1, no file); an existing copy with the switch keeps its bytes and its date.
+
 ### Core - External Main-Loop Cycle Scheduling
 
 `onCoreMainLoopCycle()` runs at the loop's own cadence (100 Hz ceiling when active, **only on OS

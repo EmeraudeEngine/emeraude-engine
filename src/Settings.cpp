@@ -54,6 +54,19 @@ namespace EmEn
 			m_showInformation = m_arguments.isSwitchPresent("--verbose");
 		}
 
+		/* NOTE: The switch holds on EVERY path below. The missing-file branch used to return before it was read, and a
+		 * run with --disable-settings-autosave on a fresh profile (or a --settings-filepath that does not resolve) wrote
+		 * a full settings file at exit (Windows peer and Linux, 2026-10-14). */
+		const bool autosaveDisabled = m_arguments.isSwitchPresent("--disable-settings-autosave");
+
+		if ( autosaveDisabled )
+		{
+			this->saveAtExit(false);
+		}
+
+		/* NOTE: A file named on the command line (path or name) must exist: owner decision 2026-10-14. */
+		bool namedOnCommandLine = true;
+
 		if ( const auto filepath = m_arguments.get("--settings-filepath") )
 		{
 			/* NOTE: IO::u8path(): the argument is UTF-8, and a path assigned from a std::string goes through the ANSI
@@ -67,6 +80,8 @@ namespace EmEn
 		else
 		{
 			m_filepath = m_fileSystem.configDirectory(Filename);
+
+			namedOnCommandLine = false;
 		}
 
 		if ( m_filepath.empty() )
@@ -84,7 +99,27 @@ namespace EmEn
 		/* Checks the file presence, if not, it will be created and uses the default engine values. */
 		if ( !IO::fileExists(m_filepath) )
 		{
-			if ( !m_childProcess )
+			/* NOTE: A settings file named on the command line that does not exist is a mistake (a mistyped or mangled
+			 * path), never a request for a new file: the engine stops instead of running on defaults and writing a
+			 * stray file (owner decision 2026-10-14). */
+			if ( namedOnCommandLine )
+			{
+				TraceFatal{ClassId} << "The settings file " << m_filepath << " named on the command line doesn't exist: the engine stops.";
+
+				m_namedFileMissing = true;
+
+				this->saveAtExit(false);
+
+				return false;
+			}
+
+			if ( autosaveDisabled )
+			{
+				TraceWarning{ClassId} <<
+					"Settings file " << m_filepath << " doesn't exist." "\n"
+					"The default values are used, and the file will NOT be written (--disable-settings-autosave).";
+			}
+			else if ( !m_childProcess )
 			{
 				TraceWarning{ClassId} <<
 					"Settings file " << m_filepath << " doesn't exist." "\n"
@@ -108,11 +143,6 @@ namespace EmEn
 
 				return false;
 			}
-		}
-
-		if ( m_arguments.isSwitchPresent("--disable-settings-autosave") )
-		{
-			this->saveAtExit(false);
 		}
 
 		if ( m_showInformation )
