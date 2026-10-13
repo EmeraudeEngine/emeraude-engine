@@ -15,9 +15,10 @@ tags: [vegetation, lighting, material, gltf, ray-tracing]
 
 The owner asked for it on 2026-09-25: a leaf lit from behind must glow (yellow-green), in `forest` and `terrain`,
 in both lighting lanes. Today a back-lit leaf receives nothing from the sun. The shading normal is flipped toward
-the viewer (`LightGenerator.PBR.cpp` ~577/587), so the sun behind the card gives `N·L ≤ 0`. The only back-lit term
-in the engine is the **Subsurface** component (`StandardResource.hpp` ~926-944, `LightGenerator.PBR.cpp` ~938-962),
-a skin model with defects (listed below). The Toolkit foliage material does not declare it.
+the viewer (`src/Saphir/LightGenerator.PBR.cpp:714`, `:724`), so the sun behind the card gives `N·L ≤ 0`. The only
+back-lit term in the engine is the **Subsurface** component (`StandardResource.hpp:934-952`; light pass
+`LightGenerator.PBR.cpp:1033-1080` wrap diffuse, `:1124-1148` back-lit transmittance), a skin model with defects
+(item `subsurface-component-defects`). The Toolkit foliage material does not declare it.
 
 Measured leaf optics (Majasalmi & Bright 2019, band averages): R ≈ 0.08-0.11, T ≈ 0.04-0.06 in the visible band,
 so T/R ≈ 0.5-0.75. Leaf transmission is practically Lambertian (Habel et al. 2007; Baranoski & Rokne 2001). The
@@ -108,17 +109,8 @@ owner-chosen proxy; D deferred.**
    - (c) The RTContactShadows back-lit self-hit. ⚠️ A light-side ray origin does NOT fix it under wind: the BLAS
      holds rest-pose triangles (owner decision 2026-09-21), so the ray hits the rest-pose copy of its own card.
      Only a facing gate like SSContactShadows' (~148-152), or rejecting the pixel's own instance, survives.
-   - (d) The Subsurface defects, whatever the choice:
-     - no 1/π;
-     - the wrap reaches `N·L = -w`;
-     - specular without `N·L`;
-     - an undefined smoothstep at intensity 0 or 1;
-     - a NaN at radius 0 with a thickness map;
-     - a unitless ambient constant that is NOT multiplied by `IBLDiffuseWeight` (active under both lanes);
-     - with a TEXTURE the UBO intensity is dead (the texel .r alone);
-     - stale docs: `Saphir/AGENTS.md` ~482 (a 0.99 clamp that does not exist, and stale line numbers), and
-       `Graphics/AGENTS.md` ~5029-5031 ("needs a thickness": false, a no-thickness branch exists).
-     Porcelain and the Liminal gems change look when it is repaired.
+   - (d) The Subsurface defects, whatever the choice (listed in `subsurface-component-defects`). Porcelain and the
+     Liminal gems change look when it is repaired.
 3. Tooling first:
    - a console command to freeze the vegetation wind AT ZERO DISPLACEMENT (flutter included; none exists);
    - a runtime A/B weight for the term that also reaches the RT hit shaders and the imposters;

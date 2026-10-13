@@ -24,7 +24,17 @@ connection*), and it still leaves the compositor's `xdg_wm_base.ping` unanswered
 - Load the act on a worker while the main loop runs (a loading state the stage shows), then enable the scene;
   or pump the window events between the loader's steps — the second is simpler but runs input callbacks in the
   middle of a load (re-entrancy to check).
-- Owner decision needed between the two.
+- Owner decision needed between the two. Still synchronous on 2026-10-13; the decision also says which repository
+  carries the change (the downstream loader, or an engine loading contract it calls).
+
+## References
+
+- Downstream call chain (projet-alpha): `src/Application.cpp:385` (`onCoreStarted()`, `--load-demo`) and
+  `:1011`, `:1053` (the UI's act-load notifications) → `src/Stage.cpp:311-331` (`Stage::loadBuiltInScene()`, the
+  synchronous `m_loader.load()` at `:323`).
+- Engine: `src/Core.cpp:350-351` (the render thread drains the display connection,
+  `Window::drainDisplayConnection()`); `docs/caution-points.md` § *Fixed: GNOME dropped the Wayland connection during
+  a long load*.
 
 ## Evidence 2026-10-01 (Windows peer, RTX 3060 Laptop)
 

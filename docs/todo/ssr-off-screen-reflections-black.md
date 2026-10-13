@@ -1,18 +1,24 @@
 ---
 id: ssr-off-screen-reflections-black
-title: The screen-space lane reflects off-screen content as black (post-processor-effect-debug panels)
+title: "SSR: an off-screen reflection has no screen sample and falls back to black indoors — what should a screen-space miss show?"
 status: open
 priority: high
-scope: Graphics/PostProcess (SSREffect ray-miss fallback), environment cubemap binding
+scope: Graphics/PostProcess (SSREffect ray-miss fallback), environment lighting of closed scenes
 opened: 2026-10-11
-tags: [rendering, ssr, defect]
+tags: [rendering, ssr, design-question]
 ---
 
-# The screen-space lane reflects off-screen content as black (post-processor-effect-debug panels)
+# SSR: an off-screen reflection has no screen sample and falls back to black indoors — what should a screen-space miss show?
 
 ## Why
 
-`post-processor-effect-debug`, six reflective panels facing the camera (they mirror the room BEHIND it):
+**Owner reading (2026-10-13):** the black comes from the lack of screen samples — a ray that leaves the screen has
+nothing to read. The code agrees, and explains why the result is black rather than the environment.
+
+### What is measured
+
+`post-processor-effect-debug`, `Reflections` bench: six reflective panels facing the camera, mirroring the room
+BEHIND it (off-screen by construction).
 
 | Run (2026-10-10/11) | Lane / reflection occupant | Frame luma | Panels |
 |---|---|---|---|
@@ -20,14 +26,58 @@ tags: [rendering, ssr, defect]
 | Linux RTX 3070 Ti, `LightingLane = ScreenSpace` | ScreenSpace / SSREffect | 74.7 | black |
 | Windows Intel UHD (no RT) | ScreenSpace / SSREffect | 74.8 (panels 6.1) | black |
 
-Every SSR ray misses (the reflected room is off-screen), and the ray-miss environment fallback (caution-points:
-"SSR's ray-miss environment fallback (lot 4) reads the bindless prefiltered slot") yields black, although the log
-says the scene uses `+DefaultTextureCubemap` and the bindless environment slot is initialised. Every machine
-without ray tracing (the Apple GPUs, an Intel iGPU) and every run on the low settings profile (lane `ScreenSpace`)
-renders this. Possibly the same cause: `labyrinth`'s ceiling is black on Intel (RTGI absent).
+### What is read in the code (re-verified 2026-10-13)
+
+- Every SSR ray of that bench misses (the reflected room is behind the camera) and takes the miss branch:
+  `envColor = textureLod(prefiltered, R, roughness × PrefilteredMaxLod) × skyLuminance`
+  (`src/Graphics/Effects/Lighting/SSR.cpp:740`), weighted by `envFallbackIntensity` (0.3, `SSR.hpp:91`) × fresnel
+  × roughness fade.
+- `skyLuminance` is `FrameContext::skyLuminance` (`SSR.cpp:1684-1686`, passed at `PostProcessor.cpp:1459`), the scene
+  background's luminance — **0 when the scene has no background** (`Renderer.cpp:97-107`, `sceneSkyLuminance()`).
+  The bindless environment slot always holds something (the engine default cubemap, `+DefaultTextureCubemap` in the
+  log), but it is multiplied by 0.
+- The `Reflections` bench enables no background (only the `LensFlare` bench does: projet-alpha
+  `src/Builtin/PostProcessorEffectDebug.cpp:59-71`) and is a room closed on every side (floor, ceiling, walls:
+  `PostProcessorEffectDebug.cpp:175-192`). SSR's miss fallback is therefore 0 there by construction. RTR shows the
+  panels because its rays HIT the room's walls.
+- The scale by the sky luminance is deliberate (the comment at `SSR.cpp:737-739`: a normalized cubemap injected
+  into a chain that lives in nits was a constant, invisible under a bright sky); it mirrors the RTR miss path.
+
+So the slot is not broken: an off-screen reflection has no screen sample, and the only fallback is the sky, which
+does not exist indoors.
+
+### Not measured yet
+
+- The miss branch was not isolated at runtime (e.g. a forced `skyLuminance` or a debug output of the miss
+  confidence): the reading above is code only.
+- `labyrinth`'s black ceiling on the Intel iGPU (no RT, so no RTGI) may be the same mechanism; unchecked.
 
 ## What remains
 
-- Find why the miss path returns black: the prefiltered slot content for `+DefaultTextureCubemap`, the roughness LOD,
-  or a weight that zeroes the fallback.
-- Re-measure the three rows: the ScreenSpace panels must show the environment, not black.
+1. **Owner decision — what should a screen-space miss show?** Options:
+	- **A local probe / reflection probe** feeding the SSR miss (the engine already has the dynamic cubemap probe,
+	  `docs/reflection-pipeline.md` § 2.3, but per material and suspended while SSR/RTR is active): physically the
+	  right answer indoors; costs probe placement and renders, and a binding path into SSR.
+	- **The RT fallback where available** (RTR on the miss rays only): exact, but absent precisely on the machines
+	  that run the screen-space lane (Apple GPUs, Intel iGPU, low profile) — it does not solve the reported case.
+	- **A fallback that does not depend on the sky** (e.g. the ambient term, or the prefiltered environment scaled by
+	  something other than `skyLuminance`): cheap and never black, but not physical; risks the "plain constant" the
+	  current scaling was introduced to remove.
+	- **Accept black as the contract of a closed scene without a probe**, and document it (a scene author adds a probe
+	  or a background): zero cost, but every no-RT machine keeps black reflections of off-screen content indoors.
+2. Once decided: implement, then re-measure the three rows above (pinned exposure, per-pixel panel values).
+3. Check `labyrinth` on the Intel iGPU against the same reading (background? `skyLuminance`? which lane?), whatever
+   the decision.
+
+## ⚠️ Traps
+
+- The frame mean luminance barely moves with the panels (74.7 vs 131.4 includes the whole room): measure the panel
+  pixels, not the frame.
+- `+DefaultTextureCubemap` in the log does not mean the fallback contributes: it is scaled by `skyLuminance`.
+
+## References
+
+- `src/Graphics/Effects/Lighting/SSR.cpp:727-748` (miss branch), `SSR.hpp:91`, `SSR.cpp:1684-1686`
+- `src/Graphics/PostProcessor.cpp:1459`, `src/Graphics/Renderer.cpp:97-107`
+- `docs/reflection-pipeline.md` (the reflection paths, the cubemap probe and its suspension rule)
+- projet-alpha `src/Builtin/PostProcessorEffectDebug.cpp` (the bench)

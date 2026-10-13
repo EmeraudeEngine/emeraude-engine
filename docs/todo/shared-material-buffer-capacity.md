@@ -35,5 +35,7 @@ assets, quietly loses geometry.
 
 ## References
 
-- `src/Graphics/SharedUniformBuffer.hpp` (`MaxBankCount`), `.cpp` (the "cannot grow any further" error).
-- projet-alpha `docs/plans/triad-engine-pass-report.md` (per-section record) § 12 (the corpus run).
+- `src/Graphics/SharedUniformBuffer.hpp:278` (`MaxBankCount{64}`), `src/Graphics/SharedUniformBuffer.cpp:192` (the
+  bank-count check) and `:240` (the "cannot grow any further" error).
+- Engine commit `050081a3` (2026-10-01), which opened this item with the corpus-run measurement above; the triad
+  report holds no record of that run (its § 12 is `src/Animations`).

@@ -14,8 +14,9 @@ tags: [vulkan, renderdoc, validation, swapchain, measured]
 
 A GPU capture and the validation layers cannot be used in the same run. That is a real loss: the
 one moment we most want validation is while investigating what a capture shows. Today the
-workaround is documented (`docs/caution-points.md` § Platform-Specific: force X11, turn
-`Core/Video/VulkanInstance/EnableDebug` off for the capture run) but **nobody knows which side is
+workaround is documented (`docs/caution-points.md` § Build / Compiler, *A RenderDoc capture NEEDS the validation layers OFF (and X11)*: force X11, run the capture without
+the validation layer — today with `--set-vk-layers=` (an empty value runs without any layer, for this run only, settings
+untouched: `src/Core.cpp:865`, `docs/subsystems/vulkan/20-validation-layers-for-one-run.md`)) but **nobody knows which side is
 wrong**, and the wrong reading is cheap to reach: the VUIDs name our own draw call, so they read
 like an engine layout bug.
 
@@ -55,7 +56,7 @@ Term isolation, same binary, same X11 platform, one term changed at a time:
      and let something else move it back to `PRESENT_SRC_KHR` before the draw, the code is wrong
      and merely happens to work when no layer perturbs the timing. That is a real defect and must
      be fixed here.
-3. Whichever it is, update `docs/caution-points.md` § Platform-Specific and the
+3. Whichever it is, update that caution-points section and the
    `/renderdoc-capture` recipe in projet-alpha, and delete this file.
 
 ## ⚠️ Traps
@@ -69,11 +70,13 @@ Term isolation, same binary, same X11 platform, one term changed at a time:
   KHR_display"*), so any experiment must force `Core/Video/Window/GLFW/UsePlatform` = `"X11"`
   first — otherwise the app dies on `VK_ERROR_EXTENSION_NOT_PRESENT` before frame one and tells
   you nothing about this defect.
-- ⚠️ Restore the owner's `settings.json` after every experiment (`UsePlatform`, `EnableDebug`).
+- ⚠️ Restore the owner's `settings.json` after every experiment (`UsePlatform`). Never toggle `EnableDebug` for it:
+  `--set-vk-layers=` / `--set-vk-layers=VK_LAYER_KHRONOS_validation` choose the layers for one run.
 
 ## References
 
-- `docs/caution-points.md` § Platform-Specific — the workaround and the full measurement.
+- `docs/caution-points.md` § Build / Compiler, *A RenderDoc capture NEEDS the validation layers OFF (and X11)* — the workaround and the full measurement.
+- `docs/subsystems/vulkan/20-validation-layers-for-one-run.md` — `--set-vk-layers=`.
 - `README.md` § GPU debugging with RenderDoc — the two mandatory conditions.
 - projet-alpha `.claude/commands/renderdoc-capture.md` — the working capture procedure.
 - `src/Graphics/RenderDocCapture.cpp` — the in-application API wrapper.

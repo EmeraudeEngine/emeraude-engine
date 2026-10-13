@@ -1,0 +1,92 @@
+# target-commit: 705564d4d54500ae88befb0db9e361e447923655
+
+diff --git a/src/fastgltf.cpp b/src/fastgltf.cpp
+index 7e22331..6e249f8 100644
+--- a/src/fastgltf.cpp
++++ b/src/fastgltf.cpp
+@@ -516,10 +516,19 @@ std::string_view fg::URIView::path() const noexcept { return _path; }
+ std::string_view fg::URIView::query() const noexcept { return _query; }
+ std::string_view fg::URIView::fragment() const noexcept { return _fragment; }
+ 
++namespace fastgltf::detail {
++	// Strict UTF-8 check (RFC 3629), defined in io.cpp.
++	bool isValidUtf8(std::string_view text) noexcept;
++} // namespace fastgltf::detail
++
+ fs::path fg::URIView::fspath() const {
+ 	if (!isLocalPath())
+ 		return {};
+ 
++	// The char8_t path conversion throws std::system_error on invalid UTF-8 with MSVC (std::terminate without exceptions).
++	if (!detail::isValidUtf8(path()))
++		return {};
++
+ #if FASTGLTF_CPP_20 && __cpp_char8_t >= 201811L
+ 	const std::string_view charPath = path();
+ 	return { std::u8string_view { reinterpret_cast<const char8_t*>(charPath.data()), charPath.size() } };
+diff --git a/src/io.cpp b/src/io.cpp
+index 40a7eb1..6aa4aad 100644
+--- a/src/io.cpp
++++ b/src/io.cpp
+@@ -41,6 +41,50 @@
+ namespace fs = std::filesystem;
+ namespace fg = fastgltf;
+ 
++namespace fastgltf::detail {
++	/**
++	 * Strict UTF-8 check (RFC 3629): no overlong form, no encoded surrogate, nothing past U+10FFFF.
++	 * A percent-decoded URI may hold any byte, and the path conversion below throws std::system_error on
++	 * invalid UTF-8 with MSVC (std::terminate in a build without exceptions).
++	 */
++	bool isValidUtf8(std::string_view text) noexcept {
++		std::size_t i = 0;
++		while (i < text.size()) {
++			const auto lead = static_cast<unsigned char>(text[i]);
++			std::size_t length = 0;
++			unsigned char low = 0x80, high = 0xBF;
++			if (lead <= 0x7F) {
++				++i;
++				continue;
++			} else if (lead >= 0xC2 && lead <= 0xDF) {
++				length = 2;
++			} else if (lead >= 0xE0 && lead <= 0xEF) {
++				length = 3;
++				low = lead == 0xE0 ? 0xA0 : 0x80;
++				high = lead == 0xED ? 0x9F : 0xBF;
++			} else if (lead >= 0xF0 && lead <= 0xF4) {
++				length = 4;
++				low = lead == 0xF0 ? 0x90 : 0x80;
++				high = lead == 0xF4 ? 0x8F : 0xBF;
++			} else {
++				return false;
++			}
++			if (text.size() - i < length)
++				return false;
++			const auto second = static_cast<unsigned char>(text[i + 1]);
++			if (second < low || second > high)
++				return false;
++			for (std::size_t k = 2; k < length; ++k) {
++				const auto next = static_cast<unsigned char>(text[i + k]);
++				if (next < 0x80 || next > 0xBF)
++					return false;
++			}
++			i += length;
++		}
++		return true;
++	}
++} // namespace fastgltf::detail
++
+ #pragma region glTF file loading
+ fg::GltfDataBuffer::GltfDataBuffer(const fs::path& path) noexcept {
+ 	std::error_code ec;
+@@ -406,6 +450,10 @@ fg::Expected<fg::DataSource> fg::Parser::loadFileFromApk(const fs::path& path) c
+ 
+ fg::Expected<fg::DataSource> fg::Parser::loadFileFromUri(URIView& uri) const noexcept {
+ 	URI decodedUri(uri.path()); // Re-allocate so we can decode potential characters.
++	// A percent-escape can decode to bytes that are not UTF-8: refuse them before u8path, which throws on them with MSVC.
++	if (!detail::isValidUtf8(decodedUri.path())) {
++		return Error::InvalidURI;
++	}
+ 	// JSON strings are always in UTF-8, so we can safely always use u8path here.
+ 	// Since u8path is deprecated with C++20 and newer, u8path is deprecated.
+ 	// As there is no other proper solution that doesn't do something illegal,

@@ -31,6 +31,10 @@ descriptor copy, neutral fix-its) do not touch the skin path — building the en
   nodes with DIFFERENT `skin` indices; several skins listing joints of one skeleton).
 - Check `GLTFLoader` keys a skinned mesh resource on (mesh, skin), not on the mesh alone — a mesh shared by two skins
   keyed on the mesh index would hand the FIRST skin's binding to every user (the same lesson as `buildResourceKey()`).
+- A lead (unverified against this sample): `skinnedMeshNode()` (`src/Scenes/Loaders/GLTFLoader.cpp:1458-1471`)
+  returns the FIRST node that uses a skin with a mesh, and the skeleton layout derives its common ancestor from that
+  node's chain alone (`:1499`). A skin bound by several mesh nodes, or a skeleton shared by several skins, gets the
+  ancestor of whichever node comes first.
 - Add the sample to the conformance bench's checked set once fixed.
 
 ## References

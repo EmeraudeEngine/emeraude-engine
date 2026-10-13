@@ -50,64 +50,68 @@ Classified by WHERE the blend happens. O1, O2 and O4 need no engine work at all.
 ### O1 — the overlaid layer IS reachable today
 
 `MultiLayerMeshResource::load(geometry, materialList, rasterizationOptions)` takes ONE geometry and
-a LIST of materials (`src/Graphics/Renderable/MultiLayerMeshResource.hpp:276`). On a geometry with
+a LIST of materials (`src/Graphics/Renderable/MultiLayerMeshResource.hpp:281`). On a geometry with
 no sub-geometries — a terrain grid exactly — `subGeometryRange()` ignores the index and returns the
-full range (`src/Graphics/Geometry/VertexGridResource.hpp:183`, same fallback in
-`src/Graphics/Geometry/IndexedVertexResource.hpp:186`). So N layers are N full re-draws of the same
+full range (`src/Graphics/Geometry/VertexGridResource.hpp:186`, same fallback in
+`src/Graphics/Geometry/IndexedVertexResource.hpp:182`). So N layers are N full re-draws of the same
 triangles, each with its own material and its own `RasterizationOptions` (depth bias included), each
-dispatched independently into the opaque/translucent lists (`src/Scenes/Scene.rendering.cpp:1428`).
+dispatched independently into the opaque/translucent lists (`Scene::insertIntoRenderLists()`,
+`src/Scenes/Scene.rendering.cpp:2175`).
 
 ⚠️ **But a BLENDED overlay destroys the G-buffer.** In the ambient pass a translucent material gets
 the MRT attachments in REPLACE (`blendEnable = FALSE`, ONE/ZERO) through `independentBlend`, on
 purpose, so water writes its own normal instead of the bottom's
-(`src/Saphir/Generator/SceneRendering.cpp:809-838`). A dirt layer covering the whole grid would
+(`src/Saphir/Generator/SceneRendering.cpp:1143-1177`). A dirt layer covering the whole grid would
 therefore stamp its normals/albedo/material-properties at 100 % over the ENTIRE terrain, including
 where its alpha is 0 — RTGI, RTR, SSR, SSAO and TAA would read uniform dirt under a picture of
 grass. Only the CUTOUT variant (`AlphaTestEnabled`, the documented binary-coverage contract) is
 sound, and it buys a binary edge: `alphaToCoverageEnable` is hardcoded to `VK_FALSE`
-(`src/Vulkan/GraphicsPipeline.cpp:450`), so alpha-to-coverage cannot soften it either.
+(`src/Vulkan/GraphicsPipeline.cpp:452`, `:478`), so alpha-to-coverage cannot soften it either.
 
 ### O3 — why the in-material splat fits the architecture
 
 `setupLightGenerator()` hands the light generator **names of GLSL variables**, never values
-(`src/Graphics/Material/StandardResource.cpp:2117`). Declaring one folded variable per surface
+(`src/Graphics/Material/StandardResource.cpp:2543`). Declaring one folded variable per surface
 parameter makes the BRDF, the MRT, RTGI, SSR and TAA correct **by construction, with no change
 downstream**. The precedent exists: vertex colours are already folded into a single
-`SurfaceAlbedoFinal` for exactly that reason (`src/Graphics/Material/StandardResource.cpp:3478`).
+`SurfaceAlbedoFinal` for exactly that reason (`src/Graphics/Material/StandardResource.cpp:4159`).
 
 ## What remains
 
-- [ ] Decide where the per-layer parameters live. The material UBO is a flat 104-float block
-      dimensioning EVERY material element (`src/Graphics/Material/StandardResource.cpp:2551`, layout
-      in `src/Graphics/AGENTS.md` § Material Property Layout). With the narrowed scope, a **second,
+- [ ] Decide where the per-layer parameters live. The material UBO is a flat 140-float block
+      dimensioning EVERY material element (`MaterialPropertiesSize`,
+      `src/Graphics/Material/StandardResource.hpp:1922`, layout in
+      `docs/subsystems/graphics/05-5-material-ubo-system.md` § Material Property Layout). With the narrowed scope, a **second,
       conditional descriptor** (UBO or SSBO, present only when the multi-layer flag is armed) is the
       candidate; a longer common block would tax every simple material.
 - [ ] Decide the ray-tracing answer (see the trap below): dominant layer, a new bindless
       `sampler2DArray[]` table, or reuse the per-layer 2D views `AnimatedTexture2D` already builds.
-- [ ] Decide the mask's UV source: wake the second UV set, or divide the primary set by the grid's
-      UV multiplier (which the material cannot currently read).
+- [ ] Decide the mask's UV source: the second UV set (selectable per map since `669353ae`, see the
+      traps), or divide the primary set by the grid's UV multiplier (which the material cannot
+      currently read).
 - [ ] Add a non-animated `Texture2DArray` resource + its JSON (list of images, on the
       `CubemapResource` model). Reusing `AnimatedTexture2D` is a contract fault: its `frameCount()`
       / `duration()` drive `Material::isAnimated()`, which drives the render Z-sort
-      (`src/Graphics/Material/Interface.hpp:198`).
+      (`src/Graphics/Material/Interface.hpp:228`).
 - [ ] Add the 4 component types (`LayerAlbedoArray`, `LayerNormalArray`, `LayerORMArray`,
       `LayerMask`) — four samplers whatever N, which is the whole point of the array choice, since
       `m_components` holds ONE component per type
-      (`src/Graphics/Material/StandardResource.hpp:1700`).
+      (`src/Graphics/Material/StandardResource.hpp:1976`).
 - [ ] Make the layer index come from the material, not from a vertex attribute. Today the `.z` of 3D
       UVs is baked into a vertex attribute (sprites).
-- [ ] Index-address the per-layer tiling: `transformedTexCoords()` is a `switch (ComponentType)`
-      with one UBO key per component (`src/Graphics/Material/StandardResource.cpp:2824`) and does
-      not scale to N.
-- [ ] Take flag bit **19** (the only free one) for `MultiLayerEnabled` and make sure it reaches
-      `ProgramCacheKey::materialFlags`.
+- [ ] Index-address the per-layer tiling: `transformedTexCoords()` now reads a UBO index table
+      with ONE slot per `ComponentType` (`src/Graphics/Material/StandardResource.cpp:3465`), so the N
+      layers of one component type still share a single transform: it does not scale to N.
+- [ ] Take the next free flag bit (**23** on 2026-10-13: 19 is now `AlphaHashedEnabled`, 20-22 are
+      taken, `src/Graphics/Material/Interface.hpp:152-170`) for `MultiLayerEnabled` and make sure it
+      reaches `ProgramCacheKey::materialFlags`.
 
 ## ⚠️ Traps
 
 - **The RT lane does not follow.** `GPURTMaterialData` carries ONE texture index per role
   (`src/Graphics/Material/GPURTMaterialData.hpp:101`) and the `BindlessTextureManager` has no
-  `sampler2DArray[]` table — its bindings are 1D/2D/3D/Cube/CubeArray (`src/Graphics/AGENTS.md`
-  § Bindless Textures Manager). A splatted ground would be splatted in raster and uniform under
+  `sampler2DArray[]` table — its bindings are 1D/2D/3D/Cube/CubeArray
+  (`docs/subsystems/graphics/06-6-bindless-textures-manager.md`). A splatted ground would be splatted in raster and uniform under
   RTR/RTGI/RTAO. RTGI demodulates by albedo, so this produces a disagreement between the indirect
   diffuse of primary surfaces and of reflected ones — the family of error that the pinned-exposure
   probes-vs-RTGI reading already cost a session.
@@ -121,18 +125,22 @@ downstream**. The precedent exists: vertex colours are already folded into a sin
 - **The material fragment code runs once per LIGHT PASS** in forward multi-pass. 4 layers × 3 arrays
   = 12 fetches × (1 + light count) per pixel, on a `ScenePass` that already costs 8.63 ms / 13.7 %
   of the frame (`docs/post-processing-pipeline.md`). `mrt-single-pass-deferred` is the real
-  performance prerequisite of a rich splat.
-- **`UVWChannel()` is dead.** `Component::Texture` stores it
-  (`src/Graphics/Material/Component/Texture.hpp:277`) but `textCoords()` always returns
-  `Primary2DTextureCoordinates` (`src/Graphics/Material/StandardResource.cpp:2807`). The second UV
-  set is plumbed all the way to the vertex shader and no component ever selects it.
+  performance prerequisite of a rich splat. Partly relieved since 2026-10-04: an eligible material's
+  unshadowed point / spot lights are resolved from the G-buffer
+  (`docs/subsystems/graphics/38-deferred-punctual-lights.md`); the sun, line and shadowed lights
+  still re-run the fragment code.
+- **The second UV set is per map, through the UBO** (`669353ae`): `Component::Texture::UVWChannel()`
+  (`src/Graphics/Material/Component/Texture.hpp:266`) set to 1 marks the map's entry in the UV index
+  table (`src/Graphics/Material/StandardResource.cpp:1533-1538`); a set above 1 falls back to set 0
+  with a warning. `textCoords()` (`StandardResource.cpp:3449`) still answers the primary set — the switch
+  happens in `transformedTexCoords()`.
 - **The grid's UV multiplier is BAKED into the vertex UVs** at generation time (default **500**,
   `src/Graphics/Geometry/VertexGridResource.hpp:73`, applied by emeraude-base's
   `VertexFactory/Grid::setUVMultiplier()`). The mask cannot reuse UV0 as is.
 - **Array layers must share format, extent and mip count.** A 2048² grass and a 1024² dirt need
   resampling at import — the price of the array choice, and an argument for an assembly tool.
 - **Vertex colours are already taken.** `TerrainResource` can load a vertex-colour map but the
-  wiring is commented out (`src/Graphics/Renderable/TerrainResource.cpp:323`), and glTF `COLOR_0`
+  wiring is commented out (`src/Graphics/Renderable/TerrainResource.cpp:426-427`), and glTF `COLOR_0`
   reserves them for albedo modulation. Diverting them to splat weights is a contract conflict.
 
 ## Not retained this round
@@ -146,5 +154,6 @@ from a Photoshop fade. Worth reopening once the base splat lands.
 
 - Related item: `mrt-single-pass-deferred` (P1) — the deferred move that both reduces the splat's
   cost to once per pixel and unlocks option O5 (projected decals).
-- `src/Graphics/AGENTS.md` § Material UBO System, § Material Component System, § Bindless Textures.
+- `docs/subsystems/graphics/05-5-material-ubo-system.md`, `08-8-material-component-system.md`,
+  `06-6-bindless-textures-manager.md` (under `docs/subsystems/graphics/`).
 - `docs/material-json-format.md` — the JSON contract a layer set would extend.

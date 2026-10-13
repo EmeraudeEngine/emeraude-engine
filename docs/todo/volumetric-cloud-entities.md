@@ -87,7 +87,10 @@ Described in `src/Graphics/AGENTS.md` § *The clouds' shadow on the world*, `src
    pass publishes its view transmittance, `src/Graphics/AGENTS.md` § *The light shafts and the lens
    flare see the clouds*).
 2. **Placing from a JSON scene and from the console** (only C++ `Toolkit::generateCloud()` and the
-   editor gizmo exist): a JSON component key and a `SceneManagerService` command.
+   editor gizmo exist): a JSON component key and a `SceneManagerService` command. Partly done: since 7181503f
+   an EXISTING cloud is driven from the console / MCP — `Core.SceneManagerService.CloudVolume.getState` /
+   `setLook` (`src/Scenes/Component/EnvironmentConsoleAdapters.cpp:139` `stateOf()`, `:336` the adapter). Still
+   missing: the JSON component key and a command that CREATES a cloud.
 3. **Cost**: the pass is full resolution. Half resolution + a depth-aware upsample + a temporal
    accumulation is the known lever (the Horizon Zero Dawn reprojection) — measure the need first
    (5.3 ms inside a cloud is the worst case measured).
@@ -104,8 +107,8 @@ Described in `src/Graphics/AGENTS.md` § *The clouds' shadow on the world*, `src
 6. **The ray-traced lanes do not see the clouds** (not in the TLAS): RTR reflections and RTGI rays go
    through them. The known path is AABB procedural geometry with an intersection shader.
 7. **Owner questions, open**: pin `forest`'s exposure at sunny-16 (its auto exposure washes the sky
-   and the clouds out); fold `WorleyNoise` and `VoronoiNoise` into one cellular noise (emeraude-base
-   `src/AGENTS.md`). (`forest`'s sun IS the painted one since 2026-09-24: the manifest was re-measured
+   and the clouds out); fold emeraude-base's `WorleyNoise` and `VoronoiNoise` into one cellular noise (if
+   wanted, that fold is an emeraude-base item). (`forest`'s sun IS the painted one since 2026-09-24: the manifest was re-measured
    and the demo's own sun removed.)
 
 ## ⚠️ Traps

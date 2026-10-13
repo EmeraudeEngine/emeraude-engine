@@ -28,6 +28,10 @@ is ~1 nit, black at dusk): no smoke on `citadel` until this is fixed.
 ## What remains
 
 - [ ] Find which per-instance attributes the lit program expects at 9/10 (the instanced sprite path
-  vs the lighting generator) and what the particles VBO carries.
+  vs the lighting generator) and what the particles VBO carries. Lead (2026-10-13, by reading):
+  locations 9 and 10 are `ModelMatrixR0` / `ModelMatrixR1` of the vertex attribute enum
+  (`src/Graphics/Types.hpp:734-735`) — the per-instance model matrix rows, which the particle VBO does
+  not carry.
 - [ ] Make the lit path valid for particles, or refuse it explicitly.
-- [ ] Then the store's `smoke_001` manifest can be declared lit.
+- [ ] Then the store's `smoke_001` manifest can be declared lit, and `citadel` gets its smoke back (projet-alpha
+  `src/Builtin/Citadel.cpp:1200-1203` documents the omission).

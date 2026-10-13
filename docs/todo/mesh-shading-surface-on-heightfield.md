@@ -5,7 +5,6 @@ status: in-progress
 priority: medium
 scope: Graphics/Geometry (CDLODTerrainResource, MeshShadingSurface), Saphir/Generator (HeightfieldSurfaceHelper, MeshShadingSurfaceHelper)
 opened: 2026-09-27
-blocked-by: [mesh-shader-displaced-surface]
 tags: [mesh-shaders, relief, terrain, cdlod, heightfield]
 ---
 
@@ -43,9 +42,10 @@ Owner decision (2026-09-27, AskUserQuestion): deliver `water-world` with POM fir
    `GroundLevelInterface` (optional, null without `VK_EXT_mesh_shader`); the scene registers it as a fourth scene
    visual beside the ground. The `Renderable` contract, `RenderableInstance` and the program cache are untouched.
 
-⚠️ Data trap found while sizing: `Grounds/Mud001` (the `terrain` ground) has `Height.Scale = 1.0` — a relief one whole
-texture repeat deep (8 m at `terrain`'s tiling). Harmless while `POMIterations = 0` skips its POM; a mesh-shading
-window would displace it by metres. Fix the data before `terrain` gets the window.
+Data check for `terrain` (re-verified 2026-10-13): `Grounds/Mud001` (the `terrain` ground) now has `Height.Scale = 0.01`
+and `Normal.Scale = 1.0` (projet-alpha.data `data-stores/Materials/Grounds/Mud001.json:37` / `:24`, since data commit
+`98204085`). The 2026-09-28 sizing found `Height.Scale = 1.0` there (a relief one whole texture repeat deep, metres
+under a mesh-shading window): that trap is gone; re-check the value before `terrain` gets the window.
 
 ## What remains — the plan (2026-09-28)
 
@@ -74,11 +74,15 @@ no thread has to publish anything.
 
 ## Progress (2026-09-28)
 
-Steps 1-4 are implemented and run on `water-world` (RTX 3070 Ti, validation ON, 0 VUID, no shader error): the hole
+Steps 1-4 are implemented (engine `96361e1a`, the window geometry `src/Graphics/Geometry/HeightfieldDetailSurfaceResource.*`;
+the proxy diagonal `d67caa09`) and run on `water-world` (RTX 3070 Ti, validation ON, 0 VUID, no shader error): the hole
 follows the camera, the companion window fills it, the aerial view is identical to the pure CDLOD on the terrain
 (shadows included), the spawn frame differs from CDLOD + POM on 1.18 % of the pixels. Skirts are hung only toward a
 COARSER neighbour: on every edge they drew bright one-pixel lines along the convex folds (1.40 % → 1.18 %).
-`Sand001` deepened ×5 (`Height.Scale` 0.017, `Normal.Scale` 5): the ripples read in both modes.
+`Sand001` deepened ×5 (`Height.Scale` 0.017, `Normal.Scale` 5; still so in projet-alpha.data, 2026-10-13): the
+ripples read in both modes. The shadow program already takes the heightfield base (`96361e1a`). Still to do: the
+rest of step 5 (the CSM passes: the mesh task stage does not cull against a cascade), step 6 (the measured
+judgement against the POM), and the OPEN finding below.
 
 OPEN: at a close pose with the deepened sand, the window shows darker, straight-edged blocks inside the ray-traced
 cast shadow, absent in POM mode and gone with shadow mapping disabled. A shadow bias of 0.05 (10×) lightens them without
@@ -98,7 +102,8 @@ neighbouring displaced geometry, quantised by the texels, is as likely. Captures
 
 - POM on the CDLOD path has never been judged before 2026-09-27 (`water-world` is the first heightfield with a
   height map): check it against a flat `DisplacedGridResource` with the same material before blaming the mesh path.
-- The height map must be a HEIGHT (`src/Graphics/AGENTS.md` § Parallax Occlusion Mapping). `Sand001`'s normal
+- The height map must be a HEIGHT (`docs/subsystems/graphics/05-5-material-ubo-system.md` § Parallax Occlusion
+  Mapping (POM)). `Sand001`'s normal
   map is its height map's exact derivative (Frankot-Chellappa integral, correlation 0.99998, Khronos
   convention), and describes a relief of 7 texels of 2048: `Scale` 0.0034 UV.
 - MoltenVK has no `VK_EXT_mesh_shader`: the fallback must stay the vertex CDLOD path with POM.

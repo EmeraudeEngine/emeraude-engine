@@ -2,7 +2,11 @@
 
 Shows the selected entity: a thin line of constant PIXEL width around it, FULL where it is visible, DIMMED where
 other geometry hides it. Owner decisions (2026-09-28): screen-space, hidden parts dimmed, thin pixel line;
-architecture = Unreal's CustomDepth. Open work: engine `docs/todo/segment-rendering-beams-curves-outlines.md` § B.
+architecture = Unreal's CustomDepth. Rejected: a stencil bit in the scene pass (no hidden parts), a render-to-texture
+of the subject (a second fully shaded render + a camera rig). The GEOMETRIC silhouette (`VertexFactory::Silhouette`,
+B.1) stays for debug / wireframe tools: engine `docs/todo/geometric-silhouette-outlines.md`. References: Ben Golus,
+"The Quest for Very Wide Outlines" (2020); Rong & Tan, "Jump Flooding in GPU with Applications to Voronoi Diagram and
+Distance Transform", I3D 2006.
 
 ### Using it
 

@@ -10,6 +10,8 @@ tags: [mdi, bindless, measured]
 
 # MDI — opaque meshes sample the wrong texture after the first frame
 
+Priority: medium by owner decision (2026-10-13), although a defect.
+
 ## Why
 
 MDI-rendered opaque meshes (palm trunks in `basic-scenery`) sample the WRONG texture after the
@@ -26,8 +28,9 @@ the bindless-texture integration for MDI objects is incomplete — MDI bypasses 
 
 - [ ] **Re-test on the ORIGINAL scene first.** The 2026-10-10/11 three-OS campaign ran MDI on sponza and citadel
   (Linux and the M6) and did NOT reproduce the defect: 0 VUID, correct textures. Those are not the scene of the report.
-  Run `basic-scenery` (the palm trunks) with MDI on and validation on. If it is clean, delete this item and record the
-  non-reproduction in `docs/subsystems/graphics/` (MDI).
+  Run `basic-scenery` (the palm trunks) with MDI on and validation on (still pending, 2026-10-13). If it is clean,
+  delete this item and record the non-reproduction in
+  `docs/subsystems/graphics/26-17-multi-draw-indirect-gpu-driven-rendering.md`.
 - [ ] If it reproduces: RenderDoc or targeted instrumentation to pinpoint it. ⚠️ Code speculation already produced
   one wrong hypothesis here.
 

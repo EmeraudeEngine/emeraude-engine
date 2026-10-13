@@ -8,7 +8,7 @@ opened: 2026-09-13
 tags: [rendering, lighting, screen-space, ibl, specular]
 ---
 
-# Specular occlusion from the bent normal
+# Specular occlusion from the bent normal and V, on the raster's specular IBL leg
 
 ## Why
 
@@ -28,10 +28,16 @@ term is in Lagarde & de Rousiers, "Moving Frostbite to PBR" (2014), § specular 
    with everything that implies at a disocclusion), or the specular IBL leg moves out of the material
    shader and into the composite — a contract change, not a tweak.
 2. Decide which, with the owner, before writing anything.
-3. The visibility is currently consumed inside the SSGI trace and never leaves it; exposing it means
-   the lane protocol of `docs/todo/ssao-consumes-the-sky-visibility-lane.md`.
+3. The visibility is currently consumed inside the SSGI trace and never leaves it (the `SSGI_SkyVisibility`
+   pass, `Graphics/Effects/Lighting/SSGI.cpp:823-825`); exposing it means the lane protocol of
+   `docs/todo/ssao-consumes-the-sky-visibility-lane.md`.
+4. Prior art on the RT lane: RTR already traces a specular occlusion (a cone of shadow rays around the mirror
+   direction, `Graphics/Effects/Lighting/RTR.cpp:417-467`, since `30a66b88`); the raster's IBL leg has none.
 
 ## References
 
-- `src/Graphics/AGENTS.md` § "Indirect-diffuse OWNERSHIP" (why the weight scales the diffuse leg only).
+- `docs/subsystems/graphics/13-12-post-processing-effects/17-indirect-diffuse-ownership-who-computes-the-sky-the-raster-o.md`
+  (why the weight scales the diffuse leg only).
+- Sibling items: `specular-horizon-occlusion.md` (the other specular-occlusion term) and
+  `ssao-consumes-the-sky-visibility-lane.md` (the lane that would carry V out of SSGI).
 - `src/Saphir/LightGenerator.cpp` (the split-sum specular branch).

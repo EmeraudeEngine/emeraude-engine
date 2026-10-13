@@ -20,13 +20,16 @@ verdicts already acquired are in the sky photometric contract work.
 
 - **2026-09-25: every body is where its picture paints it.** The 13 Y-down directions were MEASURED
   (`tools/sky-manifest.py --locate`), `IndustrialSunsetPureSky` got its missing sun (920 lx, anchored on
-  its sky) and `JeGray` its measured photometry (owner decisions): `docs/caution-points.md` § *The sky
+  its sky) and `JeGray` its measured photometry (owner decisions): `docs/caution-points.md` § *Fixed: the sky
   manifests put their bodies where the pictures do not*. The review now judges photometry and taste only
   — a sky can no longer look wrong because its sun lights the scene from below.
 
 ## What remains
 
-- [ ] Run the review of the 28 sky manifests with the owner.
+- [ ] Run the review of the 28 sky manifests with the owner. ⚠️ The count is stale: the store
+      (`projet-alpha.data/data-stores/Backgrounds/`) holds **30** Background manifests on 2026-10-13, three of them
+      added after this item opened (2026-08-11/12): `AxisDebug` (a debug sky), `Backrooms` and `LiminalSpace`
+      (interior scenes). Fix the in-scope list with the owner before the review.
 - [ ] Points to show explicitly:
   - the `geometry-loader` boat is a **WHITE** material (its "red" came from the 3000 K sun alone);
     under a 17 klx dome it reads very light — the dome/star balance of the manifests is what the

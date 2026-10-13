@@ -1,7 +1,7 @@
 ---
 id: scene-colour-pre-exposure
 title: Pre-expose the fp16 scene colour so no target stores absolute nits past 65 504
-status: in-progress
+status: open
 priority: high
 scope: Graphics (Renderer, PostProcessor, ToneMapping, Effects/Lighting, Effects/Atmosphere, Effects/Camera, GIDenoiser, IrradianceProbeVolume), Saphir (Generator/SceneRendering, LightGenerator)
 opened: 2026-09-25
@@ -15,10 +15,15 @@ tags: [hdr, fp16, exposure, photometry, overflow, owner-decision, design]
 > item holds the decisions to take (§ What remains, A), then the build order (§ B). Citations are
 > against engine `223880f4` and projet-alpha `f997201`.
 >
-> **State (2026-09-26):** package D1-D10 decided. **B1a DONE** (`2b4e0c04`, `7b03c1df`): the missing
+> **State (2026-09-26, re-checked 2026-10-13):** package D1-D10 decided. **B1a DONE** (`2b4e0c04`,
+> `7b03c1df`, macOS/Windows record `12699366`): the missing
 > TRANSFER→HOST readback barriers of the tone mapper and of the depth of field (C0) and the **overflow
 > census** (C1) are validated at runtime on Linux, macOS and Windows (NVIDIA and AMD), and their
-> baselines are recorded (§ B.1). B1b (the pre-exposure override) and B2 onward are not started.
+> baselines are recorded (§ B.1). B1b (the pre-exposure override) and B2 onward are not started (no
+> `PreExposure` symbol in `src/` on 2026-10-13). The macOS (Apple M2) and Windows (RTX 3060 Laptop, AMD iGPU)
+> machines of § B.1 are retired: the peers now run an M6 and an RTX 3500 Ada + Intel iGPU, so any re-take is
+> on those. The former `Graphics/AGENTS.md` / `Saphir/AGENTS.md` line citations point at their
+> `docs/subsystems/` files since the router split (2026-09-27).
 
 ## Why
 
@@ -46,7 +51,7 @@ and anything above it is stored as +Inf.
 - A bounce off that ground carries ρ_hit·3.5e5 into `RTGI_Trace`
   (`Effects/Lighting/RTGI.cpp:677`, averaged at `:686`, RGBA16F `:749`). The probe atlas gets the
   same load (`IrradianceProbeVolume.cpp:701`), and that atlas has **no finite guard** in its
-  hysteresis blend (`:413`). One Inf texel there never leaves.
+  hysteresis blends (`:435`, `:495` on 2026-10-13). One Inf texel there never leaves.
 
 **The engine already documents this overflow class:**
 - `Effects/Lighting/SSR.cpp:686-692`: a mirror metal under a 100 klx sun writes +Inf into the scene
@@ -76,7 +81,7 @@ and anything above it is stored as +Inf.
 2. A clamp throws away the energy that matters. Every source above the ceiling becomes the same
    value. VeilingGlare's threshold-proportional firefly ceiling exists precisely to keep sources
    apart (`Effects/Camera/VeilingGlare.cpp:630-634`), and so does the "full relative punch" of an
-   HDR sun (`Graphics/AGENTS.md:3646`).
+   HDR sun (`docs/subsystems/graphics/13-12-post-processing-effects/23-background-photometric-contract-the-sky-is-a-light-source-au.md`).
 3. The clamp would have to sit in **the same writers** as pre-exposure: scene programs, RT traces,
    probe volume, denoiser moments. It costs the same plumbing and fixes less.
 4. It does nothing for the bottom of the range. A moonlit albedo-0.2 surface
@@ -151,7 +156,8 @@ decision.
     (`AbstractLightEmitter.cpp:101-122`, `:162-197`), so every light would be re-uploaded every
     frame;
   - the RT light SSBO is a single buffer rewritten every frame (`Scenes/LightSet.cpp:251`);
-  - the view UBO is single-buffered (`Graphics/AGENTS.md:5340`, Rule 4);
+  - the view UBO is single-buffered (Rule 4 of
+    `docs/subsystems/graphics/25-16-frame-synchronization-double-buffering-and-the-logic-trip.md`);
   - static material emission, sky, IBL and fog would each need their own path, and any missed
     emitter shows as a wrong brightness.
 - (b) **At every writer's output** (the Frostbite [F] / UE [U] / HDRP [H] epilogue). Writers:
@@ -168,11 +174,11 @@ decision.
 **D2 — How E_pre reaches the scene programs.** It is a per-frame **and** per-target scalar. The
 view UBO (Rule 4), the material UBOs (static) and the light UBOs are all excluded.
 - (a) **A per-draw push constant**, following the jitter precedent
-  (`Saphir/AGENTS.md:1420-1464`). It is per-frame and per-target by construction, and costs 4 B
+  (`docs/subsystems/saphir/22-cubemap-rendering-mode.md` § TAA Sub-Pixel Jitter). It is per-frame and per-target by construction, and costs 4 B
   on a 76 B block, but it needs the FRAGMENT stage added. It has **three holes**: MDI and
   cubemap/CSM push nothing today, and the 132 B advanced fallback has no room left under the
   128 B min-spec. A missing member is either a glslang error or a **silent** read of garbage.
-- (b) **A new frame-indexed frame uniform** (Rule 1 pattern, `Graphics/AGENTS.md:5298-5307`), one
+- (b) **A new frame-indexed frame uniform** (Rule 1 pattern, `docs/subsystems/graphics/25-16-frame-synchronization-…`), one
   copy per frame in flight, with a dynamic offset per render target. There is one site to write
   and room for future per-frame data. The cost is a new set in every scene pipeline layout, which
   touches the program cache keys (see `program-cache-key-codegen-inputs-audit`).
@@ -216,7 +222,7 @@ not from the lag.
 → discuss (a).
 
 **D5 — History policy.** In every case r = E_N / E_{N-1} is taken over **rendered** frames (the
-frame-history contract, `Graphics/AGENTS.md:5316-5338`), never over the logic slots. The histories
+frame-history contract, `docs/subsystems/graphics/25-16-frame-synchronization-…`), never over the logic slots. The histories
 concerned:
 - TAA: `rgb × r` right after the sample (`Effects/Resolve/TAA.cpp:368`); the depth alpha is left
   alone.
@@ -252,16 +258,17 @@ Options:
 
 **D7 — World caches.**
 
-*Probe volume* (RGBA16F atlas, hysteresis 0.97, `IrradianceProbeVolume.cpp:413`):
+*Probe volume* (RGBA16F atlas, hysteresis 0.97; blends at `IrradianceProbeVolume.cpp:435` irradiance and
+`:495` distance moments, current lines 2026-10-13):
 - (a) Absolute. The overflow stays, and so does the immortal Inf.
 - (b) A **fixed cache scale S = 2^-k**, with a reset when it changes (UE
   `r.EyeAdaptation.CachedLightingPreExposure`, default 4 EV [U]). In E/π units, k = 4 stores
   [9.8e-4, 1.05e6] and k = 8 stores [1.6e-2, 1.7e7]. The cache stays view-independent.
-- (c) Follow E_pre, with `previous × r` at `:413`. This ties a world cache to the view: every
+- (c) Follow E_pre, with `previous × r` at `:435` / `:495`. This ties a world cache to the view: every
   camera cut rescales the whole atlas.
 
 Under (b) or (c), every reader converts to its own scale: `RTGI.cpp:307-316`, `RTR.cpp:839-868` and the
-volume's own feedback `IrradianceProbeVolume.cpp:326`. **Add a finite guard at `:413` whatever is chosen.**
+volume's own feedback `IrradianceProbeVolume.cpp:326`. **Add a finite guard at `:435` / `:495` whatever is chosen.**
 
 *Render-to-texture probes* (`Renderer.cpp:2469-2600`; continuous, "once", or suspended under
 SSR/RTR, `Scenes/Scene.rendering.cpp:349-354`):
@@ -322,8 +329,9 @@ Plumbing:
 
 1. **Instruments (D10) first.** Record a baseline for T1-T4 (B8) in this item.
    - **B1a, the overflow census — DONE (2026-09-26, Linux, RTX 3070 Ti, 2880×1620).**
-     `Graphics::OverflowCensus` (mechanism, traps, cost: `src/Graphics/AGENTS.md` § "The overflow
-     census"; commands: `docs/ai-runtime-control.md` § 6). Channels `SceneColour` (added: the SSR/TAA
+     `Graphics::OverflowCensus` (mechanism, traps, cost:
+     `docs/subsystems/graphics/13-12-post-processing-effects/37-the-overflow-census-counting-what-fp16-does-to-the-scene-rad.md`;
+     commands: `docs/ai-runtime-control.md` § 6). Channels `SceneColour` (added: the SSR/TAA
      guards scrub the tone-map input, owner-confirmed P10), `ToneMapInput`, `RTGI_Trace`, `RTR_Trace`,
      `ProbeIrradiance`; an integer-only classification of the IEEE bits (not a float range test) into
      NaN / Inf / ceiling (≥ 65 504) / peak. Created in every session, **disarmed by default**
@@ -375,7 +383,7 @@ Plumbing:
 4. **Scene programs**: the transport chosen in D2, the multiply from D1, the exemptions and
    compensations from D6, and the RTT scale from D7.
 5. **RT lanes, the probe volume and its scale (D7), and the finite guard at
-   `IrradianceProbeVolume.cpp:413`.**
+   `IrradianceProbeVolume.cpp:435` / `:495`.**
 6. **Post effects and the `FrameContext` fields (D8).**
 7. **Histories (D5).**
 8. **Tests.** Validation layers ON, on all three platforms (the peers). Each one is measurable:
@@ -388,7 +396,7 @@ Plumbing:
      so compare the max over a 10 s window.
    - **T2**, `light-and-shadow-debug --demo-options 0,1` mirror floor (the documented SSR +Inf).
      No DebugNonFinite square after. The reflected/direct ratio (RTR 0.82, SSR 0.40, projet-alpha
-     `.claude/rules/build-and-run.md`) stays unchanged.
+     `docs/agents/rules/build-and-run.md:17`) stays unchanged.
    - **T3**, a scene that never overflowed (`sponza`), exposure pinned with `Camera.setExposure`.
      PNG A/B within 1/255 on ≥ 99.9 % of pixels; in auto mode, the metered luminance is identical
      to within fp16 rounding.
@@ -398,8 +406,9 @@ Plumbing:
    - `Types.hpp:357-362` (the unit contract; the case against a Screen blend mode still holds);
    - `docs/caution-points.md` § *A half-float target silently turns a physical luminance into NaN* (already corrected
      on 2026-09-25: rewrite it once pre-exposure lands);
-   - `Graphics/AGENTS.md` (a scene-colour unit and cache-scale section, plus the TAA Karis note at
-     `:1793-1797` and LensFlare at `:4044-4050`);
+   - `docs/subsystems/graphics/` (a scene-colour unit and cache-scale section, plus the TAA Karis note in
+     `13-12-post-processing-effects/06-the-taa-resolve-the-history-is-rejected-by-depth-never-by-co.md` and
+     LensFlare in `13-12-post-processing-effects/25-lensflare-the-source-is-probed-in-the-depth-buffer.md`);
    - `docs/ai-runtime-control.md` (override key, census);
    - unblock projet-alpha `basic-scenery-palm-belt-lost-bulb-flood` (refit the flood without the fp16 cap).
 

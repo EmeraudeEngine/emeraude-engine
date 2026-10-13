@@ -5,7 +5,6 @@ status: in-progress
 priority: high
 scope: Graphics/TextureCompressor, Graphics/TextureResource, Vulkan/ImageTransferOperation
 opened: 2026-09-15
-blocked-by: []
 tags: [texture, foliage, measured]
 ---
 
@@ -15,7 +14,8 @@ tags: [texture, foliage, measured]
 
 A box filter preserves the alpha MEAN. An alpha test reads the alpha COVERAGE. The two diverge
 without bound as a binary mask is minified, and the engine's mip chain is a plain box filter
-(`vkCmdBlitImage` with `VK_FILTER_LINEAR`, or `Processor::resize` on the BC7 path).
+(`vkCmdBlitImage` with `VK_FILTER_LINEAR`, or an area-weighted box filter, `Processor::downsample()`, on the BC7
+path — it was a bilinear `Processor::resize` until `TextureCache::Version` 3).
 
 Measured on Sponza's cypress mask (4096², 93.59 % of texels at alpha ~0 and 6.27 % at ~1, i.e.
 **99.86 % binary** — it is a CUTOUT declared `alphaMode = BLEND`):
@@ -64,7 +64,8 @@ near-black border.
   mask: coverage held at 6.25–6.35 % from mip 1 to mip 10, where the box filter reads 0 %.
 - **`Graphics/AlphaCoverage.hpp`** — `coverage()`, `isBinaryMask()`, `rescaleToCoverage()`.
 - **`TextureResource::Abstract::isBinaryAlphaMask()`** — a virtual defaulting to `false`, overridden
-  by `Texture2D`.
+  by `Texture2D`, which delegates to `ImageResource::isBinaryAlphaMask()` (answered after the upload
+  drops the CPU copy, engine `939b3fc2e`).
 - **`Material::Interface::onBeforeCreation()`** — a new hook, the only window where a material may
   still change its FLAGS (creation bakes them into the descriptor set layout and the program-cache
   key, and the loaders have long returned). `StandardResource::promoteBinaryCoverageToCutout()`
@@ -73,7 +74,8 @@ near-black border.
 - The `0.01` blend floor in `SceneRendering.cpp` now gates on the `BlendingEnabled` FLAG, so a
   promoted cutout leaves that branch.
 - `TextureCache::Version` bumped to 2 — the key hashes the SOURCE pixels, so an older blob would
-  stay a valid hit forever otherwise.
+  stay a valid hit forever otherwise. It is 3 today (`TextureCache.hpp:165`: every level an exact
+  area-weighted box filter).
 
 ## What remains
 
@@ -82,13 +84,15 @@ near-black border.
    UASTC transcoded block-to-block and never becomes pixels, so neither the measurement nor the
    correction can touch it. It is verified by construction and **unverified end to end at runtime** —
    nothing in that scene exercises it. Decide whether a block-compressed alpha source should be
-   decoded once at load so it can be measured.
+   decoded once at load so it can be measured. Still so on 2026-10-13 (the log line is
+   `src/Scenes/Loaders/GLTFLoader.cpp:2493`).
 2. **Alpha dilation (edge padding)**: propagate the opaque RGB under the transparent texels before
    building the chain, so filtering never pulls toward black. Belongs in the same place as the
-   coverage preservation. It cannot recover the author's already-darkened edge texels, but it stops
+   coverage preservation (`src/Graphics/TextureCompressor.cpp:212-240`, nothing dilates yet). It cannot recover the author's already-darkened edge texels, but it stops
    the mips from darkening further.
-3. The **GPU blit fallback** (`ImageTransferOperation::finalizeForGPU`, used when the device has no
-   `textureCompressionBC`) is still a plain box filter and gets neither correction.
+3. The **GPU blit fallback** (`ImageTransferOperation::finalizeForGPU`, `src/Vulkan/ImageTransferOperation.cpp:231`,
+   used when the device has no `textureCompressionBC`) is still a plain `vkCmdBlitImage` with `VK_FILTER_LINEAR`
+   and gets neither correction.
 
 ## ⚠️ Traps
 

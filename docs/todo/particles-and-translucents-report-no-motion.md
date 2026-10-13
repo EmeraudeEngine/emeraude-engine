@@ -16,10 +16,10 @@ Found while analysing the TAA trails (2026-09-26); no owner report of it yet. Ev
 the RTGI/SSGI denoisers, the motion blur, a future upscaler) reprojects with the velocity G-buffer. Two
 kinds of content write a wrong one:
 
-- **Particles report zero object motion**: `ParticlesEmitter.hpp:86`, and sprites are excluded from the motion
+- **Particles report zero object motion**: `ParticlesEmitter.hpp:87` (its `RenderableInstance::Multiple` is built with flags `None`), and sprites are excluded from the motion
   history (`RenderableInstance/Multiple.cpp:74`). A moving particle is reprojected as if it stood still.
 - **Translucent surfaces overwrite the velocity and depth of what is behind them** (G-buffer blending off,
-  `Saphir/Generator/SceneRendering.cpp:1104-1113`). The opaque surface seen through them loses its own motion
+  `Saphir/Generator/SceneRendering.cpp:1156-1177`). The opaque surface seen through them loses its own motion
   and depth.
 
 ## What remains
@@ -32,7 +32,7 @@ kinds of content write a wrong one:
      lowers the history weight where they are drawn (FSR 2's reactive mask);
    - ⚠️ BOTH MECHANISMS EXIST SINCE 2026-09-28 (the beams needed them): `Material::Interface::writesGeometryBuffer()`
      (false = the G-buffer, velocity included, is masked — the surface behind keeps its own) and the REACTIVE MASK
-     (`Material::Interface::reactiveMaskExpression()`, `R8_UNORM` attachment, read by the TAA; graphics doc 33). What
+     (`Material::Interface::reactiveMaskExpression()`, `R8_UNORM` attachment, read by the TAA; `docs/subsystems/graphics/33-beams-lasers-and-electric-arcs.md`). What
      is left for this item is to decide WHICH particles / translucents use them (StandardResource has neither yet),
      and to measure;
    - translucents: do not write velocity/depth at all (keep the opaque surface's), plus the same reactive

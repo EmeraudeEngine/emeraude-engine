@@ -44,4 +44,5 @@ Measured, kept as the history of the diagnosis:
 ## References
 
 - `docs/scene-loaders-usd.md`, `geometry-content-dedup.md`, `renderer-fail-fast-on-device-loss.md`.
-- Same temporal signature: `compressed-gltf-sigill-at-idle.md`, `wayland-surface-lost-protocol-error.md`.
+- Same temporal signature: `wayland-surface-lost-protocol-error.md`; the projet-alpha item `cef-memoryinfra-check-sigill`
+  (which absorbed `compressed-gltf-sigill-at-idle`, 2026-10-13).

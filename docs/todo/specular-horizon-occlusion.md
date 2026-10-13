@@ -59,3 +59,5 @@ Then measure: the glTF bench pair (before / after) on `NormalTangentTest`, `Norm
 - docs/caution-points.md § Two-sided normals (the 2026-09-28 fix and its bench measurements).
 - Bench captures of 2026-09-28: before/after crops of `NormalTangentTest_top-down`, `BoomBox_front`,
   `ClearCoatTest_front`.
+- Sibling item `specular-occlusion-from-the-bent-normal.md` (the other specular-occlusion term, from the screen-space
+  bent normal and visibility).

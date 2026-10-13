@@ -10,6 +10,8 @@ tags: [shadow-map, robustness, measured]
 
 # A CSM directional light with shadowMapResolution 0 stops lighting entirely
 
+Priority: medium by owner decision (2026-10-13), although a defect.
+
 ## Why
 
 `Toolkit::generateDirectionalLight` has two shadowed overloads and they behave differently at
@@ -26,9 +28,9 @@ the sun's resolution went to 0 under the CSM overload. Not "shadows dropped" —
 leaving roughly the ambient term alone. Zero VUID, no warning, no log line: silent.
 
 ⚠️ Found because `LightAndShadowDebug` was switched to a CSM sun and its option 0 (the scene's
-"no shadow maps" switch) became fatal. projet-alpha now keeps the CLASSIC overload for that option
-so the scene cannot build the configuration — that is a workaround in the consumer, and the
-engine-side gap is this item.
+"no shadow maps" switch) became fatal. That consumer no longer has the switch (2026-10-13: its sun is always a
+2048-px CSM, option 0 now toggles a colour projection, projet-alpha `src/Builtin/LightAndShadowDebug.cpp:108`), so
+no demo exercises the configuration today — the engine-side gap is unchanged.
 
 **A second route to the same silence (measured 2026-09-25, `terrain`, frozen noon sun, pinned exposure):**
 with `Core/Graphics/ShadowMapping/Enabled = false`, the CSM sun lights NOTHING at all. The sand in direct light
@@ -54,3 +56,9 @@ That second route is tracked on its own, with its pinned-exposure captures, in
   [`../shadow-mapping.md`](../shadow-mapping.md).
 - ⚠️ Do not use "resolution 0" as an isolation instrument for a shadow measurement on a CSM light —
   it changes the lighting, not just the shadowing, so any A/B built on it is confounded.
+
+## References
+
+- `src/Scenes/Toolkit.hpp:672` (the CSM `generateDirectionalLight` overload), `src/Scenes/Component/DirectionalLight.hpp:94-100`
+  (the CSM constructor, no resolution check), `src/Scenes/Component/DirectionalLight.cpp:258` (the shadow map is
+  created only when the resolution is above 0).

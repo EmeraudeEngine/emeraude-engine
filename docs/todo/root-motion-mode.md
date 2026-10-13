@@ -21,6 +21,13 @@ actual displacement (foot planting, no foot sliding, animation-driven speed).
 - [ ] Companion mode to `LoaderOptions::stripRootMotion` (which kills horizontal root translation
   at load): the new mode KEEPS it and routes it through `MovableTrait`.
 
+## State (2026-10-13)
+
+- `stripRootMotion` acts only in `FBXLoader::loadAnimationClipsOnly()` (`src/Scenes/Loaders/FBXLoader.cpp:1683-1692`,
+  the root joints' translation zeroed). The glTF loader ignores it and warns
+  (`src/Scenes/Loaders/GLTFLoader.cpp:1981-1987`): a glTF clip always keeps its root motion today, so the new mode must
+  cover glTF clips too.
+
 ## Origin
 
 Inherited from the historical root `TODO.md`.

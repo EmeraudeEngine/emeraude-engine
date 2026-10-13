@@ -14,8 +14,10 @@ tags: [build, windows, exports, tooling]
 
 The engine is a shared library; on Windows only the annotated symbols are exported (export-all hit the PE limit of
 65535 exports, 2026-08-05). `EMERAUDE_USE_FULL_EXPORTS` exports `EMEN_API` + `EMEN_LEAN_API`, `EMERAUDE_USE_LEAN_EXPORTS`
-only `EMEN_LEAN_API`. On Linux and macOS both options are off: the macros expand to nothing and every symbol is
-visible, so a missing annotation only shows on the Windows peer, one repository further (2026-10-11: a new free
+only `EMEN_LEAN_API`. On Linux both options are off and the macros expand to nothing; on macOS they always give
+default visibility since `2e2685549` (one typeinfo across the two images, `src/emeraude_export.hpp:38-67`). Either
+way the engine itself is not built with hidden visibility, so every symbol stays visible and a missing annotation only
+shows on the Windows peer, one repository further (2026-10-11: a new free
 function `Vulkan::probePhysicalDevices()` annotated `EMEN_API` was unresolved at a lean-exports downstream link).
 
 ## What remains
@@ -26,3 +28,10 @@ function `Vulkan::probePhysicalDevices()` annotated `EMEN_API` was unresolved at
   documented recipe.
 - Check what else hidden visibility changes (RTTI / `dynamic_cast` across the boundary, typeinfo of exceptions-free
   code, template instantiations) before making it a default.
+
+## References
+
+- `rtti-key-function-audit` (the `-Wweak-vtables` follow-up of the macOS typeinfo fix): the RTTI-across-the-boundary
+  half of the check above.
+- `docs/caution-points.md` § *macOS: typeid, std::any and dynamic_cast across the engine boundary — EMEN_API is
+  default visibility on macOS (2026-10-12)*.

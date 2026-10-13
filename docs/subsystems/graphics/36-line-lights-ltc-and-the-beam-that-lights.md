@@ -81,7 +81,8 @@ beams on, (3, 3, 3) with both hidden — the blue-white of the arcs; 0 validatio
 
 ### ⚠️ Limits and traps
 
-- **No shadow**, raster or traced: the tube lights through walls. The next pass (owner decision pending).
+- **No shadow**, raster or traced: the tube lights through walls. The next pass (owner decision pending): engine
+  `docs/todo/line-light-shadows.md`.
 - **The light follows the CURVE, not the arc's wander**: the arc is displaced on the GPU (graphics doc 33); the light
   sees the undisplaced tessellated curve. For an arc of amplitude A the lit pattern is off by ≤ A near the arc.
 - **9 points** (`LineLightMaxPoints`, the UBO array): a longer polyline is resampled by arc length — a tight coil

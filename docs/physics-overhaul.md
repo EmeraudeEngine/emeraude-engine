@@ -421,7 +421,7 @@ Each phase is measured on projet-alpha's `collision-debug` stations (P0), then v
 |---|---|---|
 | P0 bench | projet-alpha | `physics-collision-debug-bench` — CLOSED 2026-10-11 (the peers' baselines and per-cycle runs are recorded in § 6) |
 | P1 foundation | emeraude-base | `contact-manifold-generation`, `shape-casts-with-hit-normal`, `collision-pair-test-defects`, `rigid-body-math-helpers` |
-| P2 solver | engine | `physics-unified-contact-pipeline` — CLOSED 2026-10-02, accepted on the three OS (absorbed `physics-solver-restitution-and-position-correction`, closed 2026-10-01; closed `physics-run-to-run-determinism` on 2026-10-02; expected to close `physics-no-rest-on-generated-terrain`, probably `physics-nan-linear-velocities`) |
+| P2 solver | engine | `physics-unified-contact-pipeline` — CLOSED 2026-10-02, accepted on the three OS (absorbed `physics-solver-restitution-and-position-correction`, closed 2026-10-01; closed `physics-run-to-run-determinism` on 2026-10-02; expected to close `physics-no-rest-on-generated-terrain`; `physics-nan-linear-velocities` closed 2026-10-13 on the evidence, § 5b) |
 | P3 rotation | engine | `physics-oriented-box-collision-model`, `rotational-physics` — both CLOSED 2026-10-02 (§ 1b) |
 | P4 walking | engine, then projet-alpha | `kinematic-character-controller` — CLOSED 2026-10-11, engine side done 2026-10-02 (superseded `physics-step-up-pass`, closed 2026-10-02: citadel's stairs climbed), projet-alpha `actors-kinematic-character-migration` |
 | P5 | engine (+ base for the mesh and GJK) | `physics-continuous-collision`, `physics-triangle-mesh-static-shapes`, `physics-simulation-islands` — all CLOSED 2026-10-02 (§ 1b) |
@@ -435,6 +435,27 @@ Each phase is measured on projet-alpha's `collision-debug` stations (P0), then v
 - The octree broad phase and its pairing contract (`src/Scenes/AGENTS.md` § Octree storage and traversal) stay.
 - The actor-facing API (`addForce`, `setLinearVelocity`, `isGrounded()`, `NodeCollision` with the impact force,
   `setStepHeight()`, free fly) is migrated, not broken silently: every removal is listed in the item that removes it.
+
+## 5b. NaN linear velocities — closed on the evidence (owner, 2026-10-13)
+
+The item `physics-nan-linear-velocities` (opened 2026-08-25, a separate subject from the Y-up migration by owner
+decision) measured, on `balls-of-steel`, **3 of 41 sampled bodies with `linearVelocity = [-nan, -nan, -nan]`** while
+their position was still finite and `grounded: false`. It was never attributed (no pre-triad-11 run on the same
+machine reproduced it); the owner closed it on the current evidence:
+
+- **Triad 11 (engine `a777ddf7`, 2026-10-01) removed two producers that fit the symptom**: the contact normal
+  `mtv / depth`, NaN for a depth at or below epsilon (a 1-ulp overlap) — the sphere / capsule / AABB collision models
+  then normalized the MTV only above `FLT_MIN` (that code has since been replaced by the P2/P3 narrow phase); and the
+  explicit quadratic drag, which diverged to NaN for a light, fast body — now integrated exactly
+  (`Physics::getDragVelocityFactor()`, `MovableTrait` and `Particle`). After it: `balls-of-steel`, every root node read with
+  `Core.SceneManagerService.getNodePhysics(<node>)` 45 s after the load, 2 runs: **0 of 1001** nodes with a NaN or an
+  infinity.
+- The solver it ran on was then replaced (P2-P5, § 1b), and every acceptance run since reports 0 NaN (P2 Linux,
+  P3 Windows, P4 demos — § 1b; the § 6 baselines).
+- ⚠️ **Trap for a new occurrence: a finite position with a NaN velocity means the NaN has NOT propagated yet** —
+  something either skips the integration of those bodies or resets their position. Check the VELOCITIES
+  (`getNodePhysics()`), not only the positions: chasing the position finds nothing. Attribute it first (which build,
+  which step), then find the producer, not the symptom.
 
 ## 6. Bench (P0) and the Linux baseline
 

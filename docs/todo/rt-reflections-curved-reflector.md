@@ -12,10 +12,10 @@ tags: [ray-tracing, reflections, measurement]
 
 ## Why
 
-The v3 cone width (`tan θ · hitT · f_px / (dCam + hitT)`, see `src/Graphics/AGENTS.md` § "RTR glossy
-cone") assumes a FLAT reflector. A convex one compresses its reflected environment into the
-silhouette: the same GGX lobe covers far fewer screen texels there, and the flat-plane width
-over-blurs it (the v1 comment already noted "a sphere over-blurred by an order of magnitude").
+The v3 cone width (`tan θ · hitT · f_px / (dCam + hitT)`, see
+`docs/subsystems/graphics/13-12-post-processing-effects/24-rtr-glossy-cone-per-pixel-hit-distance-and-a-disk-gather-ove.md`)
+assumes a FLAT reflector. A convex one compresses its reflected environment into the silhouette: the same GGX lobe
+covers far fewer screen texels there, and the flat-plane width over-blurs it (the v1 comment already noted "a sphere over-blurred by an order of magnitude").
 
 ## What remains
 

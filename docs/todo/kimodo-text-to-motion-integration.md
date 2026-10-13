@@ -62,13 +62,12 @@ retargeting there is nothing to play the motion on. The cost split is roughly **
 
 - [ ] Optional CMake dependency on kimodo.cpp, defaulted **off**.
 - [ ] **A CEF dev-mode authoring tool in projet-alpha** (owner request, 2026-08-31): prompt →
-      motion → the character, driven from the web UI rather than a console command. ⚠️ Prerequisite
-      on this workstation: `chrome-sandbox` is **not SUID**, so CEF has never run here — every
-      session so far used `--disable-cef`. Fix with
-      `sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox` in the build's
-      `Release/` directory. The UI contract lives in projet-alpha, `docs/cef-integration.md` and
-      `docs/ui-web-template.md` — named rather than linked, because this repository is clonable on
-      its own and a cross-repository relative path would dangle.
+      motion → the character, driven from the web UI rather than a console command. CEF runs on
+      the workstation today (the 2026-08-31 `chrome-sandbox` blocker is gone: projet-alpha builds
+      with `USE_SANDBOX` off, so `no_sandbox` is set unless `CEF_USE_SANDBOX` is defined). The
+      runtime notes and the UI contract live in projet-alpha — `docs/runtime-session.md` § CEF,
+      `docs/cef-integration.md` and `docs/ui-web-template.md` — named rather than linked, because
+      this repository is clonable on its own and a cross-repository relative path would dangle.
 - [ ] **Judge quality against step count** — generate one prompt at 100 / 50 / 20 steps and compare.
       Time is measured, quality is not, and it decides whether the cheap end of the dial is usable.
 - [ ] Work around the dead `kimodo_runtime_options` (§ 6.3): device selection currently goes

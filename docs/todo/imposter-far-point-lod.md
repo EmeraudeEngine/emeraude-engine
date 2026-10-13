@@ -26,3 +26,8 @@ nothing, instead of ending at a line.
   lowest atlas mip) and the switch distance (projected size ~2-3 px).
 - Measure first: on `terrain` the frame is GPU-bound at 26-29 ms after the octree culling, SSGI (9.3 ms) and the
   scene pass (~10-13 ms) lead; the imposters' share of the scene pass is not measured yet.
+
+## References
+
+- Item `forest-canopy-far-field-proxy` (parked): the other answer to the same bare horizon (one baked canopy shell
+  per wooded tile); decide the two together.

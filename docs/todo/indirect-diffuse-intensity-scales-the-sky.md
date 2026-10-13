@@ -38,10 +38,14 @@ whole point of the concept-level knobs (owner decision, 2026-09-12).
 1. Owner decision above.
 2. If the sky is exempted: split the term in both combines and re-run the roof measurement — the
    ratio must come back to 1.0 ± the bounce.
-3. Re-check the Sponza gallery numbers of `src/Graphics/AGENTS.md` § "The screen-space sky
-   visibility" afterwards, since every figure there was taken at 0.8.
+3. Re-check the Sponza gallery numbers of
+   `docs/subsystems/graphics/13-12-post-processing-effects/18-the-screen-space-sky-visibility-the-gtao-horizon-search-that.md`
+   afterwards, since every figure there was taken at 0.8.
 
 ## References
 
-- `src/Graphics/Effects/Lighting/SSGI.cpp` / `RTGI.cpp` (`combineContribution`).
-- `src/Graphics/AGENTS.md` § "Indirect-diffuse OWNERSHIP", § "The screen-space sky visibility".
+- The combines: `src/Graphics/Effects/Lighting/SSGI.cpp:1033-1040`, `src/Graphics/Effects/Lighting/RTGI.cpp:1065`
+  (`combineContribution`, the add at `:1095`); the knob read at `RTGI.cpp:752`; the key and its 0.8 default at
+  `src/SettingKeys.hpp:873-874`.
+- `docs/subsystems/graphics/13-12-post-processing-effects/17-indirect-diffuse-ownership-who-computes-the-sky-the-raster-o.md`
+  and `.../18-the-screen-space-sky-visibility-the-gtao-horizon-search-that.md`.

@@ -19,8 +19,16 @@ differently from the Vulkan version macro).
 
 Since 2026-10-05 `PhysicalDevice::DriverVersionString()` decodes the vendor packing (NVIDIA 10.8.8.6 bits, Intel on
 Windows 18.14 — measured: NVIDIA Linux 615.71.09, Windows 616.92); a downstream application's crash-report token uses it. The startup
-log line is still missing.
+log line is still missing by default.
+
+Current state (2026-10-13): `PhysicalDevice::getPhysicalDeviceInformation()` (`src/Vulkan/PhysicalDevice.cpp:722-732`)
+already prints the API driver and the decoded driver version, but `Instance.cpp:846` traces it only when
+`m_showInformation` is set (`Core/Video/ShowInformation`, `--show-video-infos` / `--show-all-infos`; default `false`
+unless `EMERAUDE_INFOS_DEFAULTS`, `src/SettingKeys.hpp:310-315`, read at `src/Vulkan/Instance.cpp:72-75`). The three
+"Graphics capable physical device selected" lines (`src/Vulkan/Instance.cpp:1011`, `:1015`, `:1021`) print the name
+only. `VkPhysicalDeviceDriverProperties` is never queried.
 
 ## What remains
 
-- [ ] One line at device selection: name, type, driver name + info, API version.
+- [ ] One unconditional line at device selection: name, type, driver name + info, API version, driver version.
+- [ ] Query `VkPhysicalDeviceDriverProperties` (driverName, driverInfo) for it.

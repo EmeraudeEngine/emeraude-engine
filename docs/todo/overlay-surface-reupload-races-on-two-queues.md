@@ -35,10 +35,22 @@ two-queue race can exist there; Windows (RTX 3060 Laptop, SDK 1.4.357) reported 
 What the message says:
 - The **same transfer command buffer** recorded two uploads into the **same image**, and the two submissions
   went to **two different queues**. `ImageTransferOperation::transferToGPU()` (step 1/2) takes its queue from
-  `getGraphicsTransferQueue()`, which round-robins over the family (`docs/caution-points.md` § the
-  round-robined transfer queues).
+  `Device::getPrimaryTransferQueue()` (`src/Vulkan/Device.hpp:797-799`, since engine `4ee503a2`), which still
+  forwards to `getGraphicsTransferQueue()` on a graphics device and round-robins over the family
+  (`docs/caution-points.md` § the round-robined transfer queues).
 - The second upload's first barrier (`UNDEFINED → TRANSFER_DST`, source `TOP_OF_PIPE` / `NONE`) is a layout
   transition, hence a write, and nothing the layer can see orders it after the first upload's copy.
+
+## State (2026-10-13)
+
+- Since engine `b15b1346`, a PARTIAL update (`ImageTransferOperation::transferRegion()`, `Image::writeDataRegion()`,
+  the dirty-rectangle bands of the staging overlay upload) runs entirely on the primary (graphics) family in one
+  command buffer (`docs/caution-points.md` § A partial image update ran on the transfer-only family). The scope left
+  is the FULL upload: `Image::writeData()` (`src/Overlay/Surface.cpp:335`) → `transferToGPU()` +
+  `finalizeForGPU()`.
+- `transferToGPU()` is `src/Vulkan/ImageTransferOperation.cpp:123-228` (submit l.209), `finalizeForGPU()` l.231-379
+  (submit l.360). Both record `Image::recordPendingSubmission()`, but the pending submissions are consumed only at
+  destruction (`Image::destroyAfterPendingSubmissions()`, `src/Vulkan/Image.cpp:543`), never before a re-upload.
 
 ## What remains
 
@@ -61,6 +73,6 @@ What the message says:
 
 ## References
 
-- `src/Vulkan/ImageTransferOperation.cpp` (`transferToGPU()`, steps 1/2 and 2/2, about lines 120-360).
+- `src/Vulkan/ImageTransferOperation.cpp` (`transferToGPU()` l.123-228, `finalizeForGPU()` l.231-379).
 - `docs/caution-points.md` § *The Synchronization Validation layer is NOT enabled* (how to enable it) and
   the round-robined transfer queues fix (`Device::waitTransferQueuesIdle()`).

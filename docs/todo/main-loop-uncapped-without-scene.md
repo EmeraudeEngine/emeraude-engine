@@ -20,4 +20,9 @@ show. Owner decision (2026-10-11): a defect.
 
 - Find why neither VSync (DefaultVideoEnableVSync is true) nor Core/Video/FrameRateLimit applies in the no-scene state
   (the overlay-only frame path, the swap-chain present mode, or a loop that skips the present), and cap it.
+  Lead (2026-10-13, by reading): the software limiter `Renderer::applyFrameRateLimit()`
+  (`src/Graphics/Renderer.cpp:1578`) runs at the end of `renderFrame()` (`:2190`, after the present), but only when
+  `m_frameDuration > 0` (`isSoftwareFrameLimiterEnabled()`, `src/Graphics/Renderer.hpp:1605-1608`), i.e. when
+  `Core/Video/FrameRateLimit` is set — its default is 0 (`src/SettingKeys.hpp:305`). Without a limit, only the
+  present mode can pace the loop; the early returns of `renderFrame()` skip both the present and the limiter.
 - Measure: the bare menu on Linux / Windows / macOS — FPS at the display rate (or the limit), not thousands.

@@ -12,18 +12,21 @@ tags: [performance, deferred, gpu]
 
 ## Why
 
-P1 of the Graphics optimization roadmap (`src/Graphics/AGENTS.md` § Optimization Roadmap): the
+P1 of the Graphics optimization roadmap (`docs/subsystems/graphics/15-14-pipeline-efficiency-objectives.md`
+§ Optimization Roadmap): the
 G-buffer is filled through multiple subpasses, **4 draws per object**, where a single-pass MRT
 G-buffer needs **1**. Expected impact: −75 % geometry draws. UE5 does it in one pass.
 
 ## Verified state (2026-09-08)
 
-- **The MRT attachments already exist.** `Renderer.cpp:1143-1176` creates normals, material
-  properties, albedo and velocity, and the shader generator detects the layout from
-  `colorAttachmentCount` against a **FIXED** MRT layout. The groundwork is not missing.
+- **The MRT attachments already exist.** `src/Graphics/Renderer.cpp:1313-1361` creates normals, material
+  properties, albedo, velocity and (since) the reactive mask (`:1143-1176` are their accessors), and the shader
+  generator detects the layout from `colorAttachmentCount` against a **FIXED** MRT layout. The groundwork is not
+  missing.
 - **What is still multi-pass is the LIGHTING, and that is where the draws go.** `RenderPassType`
-  (`src/Graphics/Types.hpp:90-111`) enumerates 16 values — `AmbientPass` plus one family per light
-  type and shadow/colour-map combination — and an object is re-rasterised **once per pass**. So
+  (`src/Graphics/Types.hpp:94-117`) enumerates 17 values plus `None` — `SimplePass`, `AmbientPass`, one family
+  per light type and shadow/colour-map combination, and `LineLightPass` — and an object is re-rasterised **once
+  per pass**. So
   "4 draws per object" is ambient + 3 lights, not four G-buffer subpasses. Going to 1 means
   resolving the lighting in screen space from the G-buffer, not merely merging attachment writes.
 
@@ -113,6 +116,10 @@ for shadowed / projected lights and for translucent lists.
 Sponza (RTX 3070 Ti, 2880×1620): `ScenePass` 45.5 → 13.8 ms (resolve 0.64 ms), frame 111 → 80 ms,
 0 VUID; night fidelity and its decomposition in the reference doc. A/B: `setDeferredPunctualLights`.
 
+The eligibility gate is `Scenes::LightSet::isDeferredPunctualLight()` (`src/Scenes/LightSet.hpp:517`): enabled,
+no colour projection, no active shadow; the resolve applies it to point and spot lights only
+(`src/Graphics/DeferredLightResolve.cpp:941`, `:951`).
+
 What remains, in order:
 
 - [ ] Line lights (LTC) in the resolve (the LTC tables as one more binding).
@@ -123,7 +130,7 @@ What remains, in order:
 - Tiled light culling: DONE 2026-10-06 (`labyrinth`'s 548 lamps needed it; `MaxLights` 1024, one bit per light per
   tile, bit-identical to the per-pixel loop) — reference doc § Tiled culling.
 
-## ⚠️ Measurement protocol (mandatory, `src/Graphics/AGENTS.md`)
+## ⚠️ Measurement protocol (mandatory, `docs/subsystems/graphics/15-14-pipeline-efficiency-objectives.md`)
 
 1. Before: `/renderdoc-capture` on the test scene, record metrics.
 2. Implement.

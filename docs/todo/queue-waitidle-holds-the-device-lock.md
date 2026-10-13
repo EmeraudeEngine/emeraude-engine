@@ -12,20 +12,21 @@ tags: [vulkan, threading, stall, video]
 
 ## Why
 
-`Queue::submit()`, `Queue::present()` and `Queue::waitIdle()` (`src/Vulkan/Queue.cpp`) all take
-`std::lock_guard< Device >`, i.e. `Device::m_logicalDeviceAccess`, ONE `std::mutex` for the whole device.
-`waitIdle()` keeps it for the whole `vkQueueWaitIdle()`: while any thread waits for its queue to drain, no
+`Queue::submit()`, `Queue::present()` and `Queue::waitIdle()` (`src/Vulkan/Queue.cpp`: submits l.59, 146, 216,
+present l.243, wait l.298) all take `m_device.lockAccess()` (a guard since engine `09615d88`, which replaced the
+former `std::lock_guard< Device >`), i.e. `Device::m_logicalDeviceAccess`, ONE `std::mutex` for the whole device.
+`waitIdle()` keeps it for the whole `vkQueueWaitIdle()` (l.306): while any thread waits for its queue to drain, no
 other thread can submit or present on ANY queue — the rendering thread included.
 
 Vulkan only requires the host to synchronise access to the SAME `VkQueue`: `vkQueueWaitIdle()` on queue A
 does not have to exclude a `vkQueueSubmit()` on queue B.
 
-Runtime callers that wait this way (read by grep on 2026-09-25, not measured):
+Runtime callers that wait this way (read by grep, lines checked 2026-10-13, not measured):
 
-- `VideoFrameConverter` (lines ~587 and ~662): every RushMaker frame, on the encoding thread;
-- `VideoEncoderH265` (~658 the plane copies, ~945/988 the video queue): every RushMaker frame;
-- `IBLBaker` (~618, ~941, ~1045): every bake;
-- `XRayAnalyzer` (~827, ~963).
+- `VideoFrameConverter` (`src/Graphics/VideoFrameConverter.cpp:590`, `:665`): every RushMaker frame, on the encoding thread;
+- `VideoEncoderH265` (`src/Vulkan/VideoEncoderH265.cpp:661` the plane copies, `:948` / `:991` the video queue): every RushMaker frame;
+- `IBLBaker` (`src/Graphics/Compute/IBLBaker.cpp:593`, `:916`, `:1020`): every bake;
+- `XRayAnalyzer` (`src/Graphics/Compute/XRayAnalyzer.cpp:830`, `:966`).
 
 `Device::getGraphicsQueue()` ROTATES over the family's queues (16 on NVIDIA,
 `DeviceQueueConfiguration::queue()`), so such a caller also lands on the renderer's own queue from time to
@@ -37,7 +38,7 @@ time and then waits for a whole in-flight frame, lock held.
   (hardware path) and during an IBL bake. The owner saw no stutter on screen during a recording on
   2026-09-25, so the cost may be small — or hidden by the frame pacing.
 - If it is real: lock per `VkQueue` (a mutex in `Queue`) for submit/present/waitIdle, and keep the device
-  lock only for what truly needs the device-wide exclusion. Check every `std::lock_guard< Device >` user
+  lock only for what truly needs the device-wide exclusion. Check every `Device::lockAccess()` user
   first — some may rely on the device-wide exclusion for something else.
 - Or remove the waits from the per-frame paths (the converter and the encoder could wait on their own
   fence instead of the whole queue).

@@ -19,8 +19,8 @@ lighting were never compared side by side with the mesh they replace.
 
 - At the switch distance, same pose, pinned exposure, frozen wind (`Scene::setVegetationWind(dir, 0, 0)`): mesh and
   imposter captures, compared per pixel (mean luminance and per-channel distribution of the tree's pixels), for each of
-  the 4 species, sun high and low.
-- State the normal frame of the atlas (view space of the baking direction) in the doc if it is not already.
+  the 4 species, sun high and low. The atlas normal frame (the view space of the cell's own camera) is already
+  stated in graphics § 15e (the atlas formats, and its traps).
 
 ## References
 

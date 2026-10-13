@@ -13,15 +13,14 @@ tags: [antialiasing, specular, normal-map, taa]
 ## Why
 
 Owner decision 2026-09-23 (TAA scope question): the TAA fix first, the SOURCE-side antialiasing as its own item.
-The `relief` far ground shimmered because the TAA rejected its history (fixed: `src/Graphics/AGENTS.md` § The TAA
-resolve); what the TAA then accumulates is still a normal-mapped surface whose sub-pixel normal variation aliases
+The `relief` far ground shimmered because the TAA rejected its history (fixed: `docs/subsystems/graphics/13-12-post-processing-effects/06-the-taa-resolve-the-history-is-rejected-by-depth-never-by-co.md`); what the TAA then accumulates is still a normal-mapped surface whose sub-pixel normal variation aliases
 the specular lobe. Without TAA (the jitter off) that aliasing is spatial and stable; with TAA it is the input the
 accumulation has to average. Filtering it at the source lowers what the TAA must hide, and helps every path
 without TAA (FXAA, window-less captures, reflections).
 
 ## Already in the engine (found by the board audit, 2026-10-11)
 
-Tokuyoshi & Kaplanyan's geometric specular AA (σ² 0.25, κ 0.18) has been in `SceneRendering.cpp` (~804-840) since
+Tokuyoshi & Kaplanyan's geometric specular AA (σ² 0.25, κ 0.18) has been in `Saphir/Generator/SceneRendering.cpp:804-838` since
 `30a66b88f` (2026-09-14). It applies only to the roughness WRITTEN TO THE G-BUFFER, which RTR and SSR read. The
 lighting code (`LightGenerator`: forward direct specular and IBL) still uses the unfiltered roughness. So the first
 candidate below exists, but not where this item needs it. Reuse that code: do not write a second copy.

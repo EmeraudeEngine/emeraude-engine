@@ -8,7 +8,7 @@ opened: 2026-08-26
 tags: [shaders, shadow-map, participating-medium]
 ---
 
-# Volumetric light — replace the screen-space god rays with a real single-scattering pass
+# Volumetric light — migrate the demos to the single-scattering march and retire the screen-space god rays
 
 > [!IMPORTANT]
 > **Owner decision: the target is a WORLD-SPACE single-scattering march sharing the scene's
@@ -36,13 +36,13 @@ not-sky and nothing about what occludes the volume. That is the test below.
 
 - **Runtime override keys** (`7dc859af`): `Core/Graphics/PostProcessing/VolumetricLight/{Density,Decay,Exposure,
   SampleCount,TemporalAlpha}`, read with `settings.get(key, m_parameters.x)` — an override that is
-  ABSENT by default, deliberately breaking the TAA/MotionBlur contract because five demos pass
-  hand-tuned values an engine-wide default would silently double.
+  ABSENT by default, deliberately breaking the TAA/MotionBlur contract because the demos pass
+  hand-tuned values an engine-wide default would silently double (five then; `water-world` still does).
 - **The medium has a scene-level owner** (`0d4b0e12`, `a24c8ecb`, alpha `08c37df`):
   `Scenes::ParticipatingMedium` beside `EnvironmentPhysicalProperties`, reaching effects through
   `FrameContext::medium` the way `skyLuminance` already does. It had to move first: an effect's
-  `Parameters` are private to one instance, and `AtmosphericFog` is used by ONE demo while
-  `VolumetricLight` is used by EIGHT.
+  `Parameters` are private to one instance, and `AtmosphericFog` was used by ONE demo while
+  `VolumetricLight` was used by eight (three on 2026-10-13, see "What remains").
 - **Shadow access needs NO work.** Everything is already public:
   `context.lightSet->mainDirectionalLight()` returns the CONCRETE `DirectionalLight`
   (AtmosphericFog already calls it), `shadowMap()` / `cascadeCount()` are public,
@@ -145,9 +145,13 @@ dither, and it selects the cascade per step with a per-frame UBO. What the title
 
 - [ ] **Owner decision: the double count.** A demo that takes the march either drops the legacy god rays, or the two
       slots get a mechanical exclusion (see the trap above).
-- [ ] **Migrate the eight demos** one at a time. Seven declare no medium and render nothing until they do; the
-      exposure calibration of each is redone with the march.
-- [ ] **Retire the screen-space `VolumetricLight`** once no demo uses it (the "replace" of the title).
+- [ ] **Migrate the demos** one at a time. On 2026-10-13 only three projet-alpha demos still add `VolumetricLight`:
+      `forest` (`Forest.cpp:198`), `water-world` (`WaterWorld.cpp:185`, exposure 0.08) and `light-and-shadow-debug`
+      (`LightAndShadowDebug.cpp:277`, beside the march: the A/B bench, keep it). So TWO to migrate; neither declares
+      a medium, so each renders nothing until it does, and its exposure calibration is redone with the march.
+- [ ] **Retire the screen-space `VolumetricLight`** once no demo uses it (the "replace" of the title). projet-alpha's
+      `src/Builtin/Liminal.AGENTS.md:170` and `docs/subsystems/builtin/18-16-worldlobby-scene-usdz-archive.md:160`
+      still list it for demos that no longer add it: fix them then.
 - [ ] Half-res + bilateral upsample, if the cost on the migrated demos demands it.
 - [ ] Lot 2 (froxels) stays deferred (below).
 
@@ -166,9 +170,9 @@ SAME binary, and the known sun-facing pose `setPosition(0, 2, 8)` / `lookAt(63, 
 - **The combine changes shape.** Today a pure add (`em_Color.rgb += ...`); single scattering needs
   `em_Color.rgb = em_Color.rgb * T + inscatter`, a MULTIPLY inside a shader GENERATED and SHARED
   with the other overlay effects — the ordering of contributions becomes semantically load-bearing.
-- **The eight demos lose their calibration.** A physical integral yields nits directly, so
-  `exposure` becomes meaningless. Seven of the eight declare no medium and would render nothing
-  until they do.
+- **The migrated demos lose their calibration.** A physical integral yields nits directly, so
+  `exposure` becomes meaningless. The two left (`forest`, `water-world`) declare no medium and would
+  render nothing until they do.
 - **The off-screen gate disappears.** `lightOnScreen` kills the current effect when the sun is
   behind the camera; a world-space march has no such restriction, so shafts will appear in poses
   where the owner has never seen any. Expect visual changes that are not regressions.

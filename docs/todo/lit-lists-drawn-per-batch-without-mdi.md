@@ -8,7 +8,7 @@ opened: 2026-09-25
 tags: [performance, mdi, vegetation, measured]
 ---
 
-# The LIT render lists are drawn batch by batch, outside multi-draw-indirect
+# The LIT render lists are drawn batch by batch, outside multi-draw-indirect — lighting a forest costs ~45 ms
 
 ## Why
 
@@ -53,7 +53,8 @@ What is left of the forest's cost is the sun's CSM pass. That is `mrt-single-pas
 resolve" step, plus `csm-light-pass-pcf-beyond-cascades`. Left here:
 
 1. Re-measure the table with the deduplicated gathers and the deferred resolve. If the lit lists are no longer the
-   cost, close this item into those two.
+   cost, close this item into those two. Still pending on 2026-10-13 (the loop is unchanged:
+   `Scene::renderLightedSelection()`, `src/Scenes/Scene.rendering.cpp:2211`, ambient pass per batch at `:2244`).
 2. Profile what remains: draw count against fragment cost (the PCF loop), imposter batches against mesh batches.
 3. Only then consider indirect draws for the lit lists. That first needs MDI to support instanced batches and LODs
    at all (`mdi-draws-instanced-batches-wrong`).

@@ -3,7 +3,7 @@
 Every typed command is also a Model Context Protocol tool, served over Streamable HTTP by
 `MCP::Server` (owned by `Controller`, started in `onInitialize()` when `Core/MCP/Enabled`). Operator
 view (settings, connecting Claude Code, security): [`docs/ai-runtime-control.md`](../../ai-runtime-control.md)
-§ The MCP server. Plan and owner decisions: [`docs/todo/native-mcp-server.md`](../../todo/native-mcp-server.md).
+§ The MCP server. Open work: [`docs/todo/mcp-server-extensible-by-the-application.md`](../../todo/mcp-server-extensible-by-the-application.md).
 
 | File | Role |
 |---|---|
@@ -42,3 +42,18 @@ view (settings, connecting Claude Code, security): [`docs/ai-runtime-control.md`
 - **Verification**: `tools/mcp-conformance.py` (both eras, headers, security, malformed JSON, every
   tool's validation, screenshot, keep-alive/pipelining/concurrency, streams; `--trigger-list-change`).
   The official TypeScript SDK clients v1 (1.30.1) and v2 (2.1.0) were run against it on 2026-09-27.
+
+**Owner decisions (2026-09-27) that shaped it**: a pure PROJECTION of the console registry (a command added in
+`onRegisterToConsole()` is a tool, no second declaration — an external stdio bridge was rejected); one tool per typed
+command; TCP 7777 coexists on the same registry; loopback and closed by default, a bearer token mandatory off
+loopback; both protocol eras (2026-07-28 and the handshake era, which Claude Code's v1 client runtime still speaks); in
+the engine (LGPLv3), a capability of the free runtime.
+
+**Set aside (owner, 2026-10-13, after the first real Claude Code session)**: progress notifications for long calls (an
+SSE response and a progress hook in the command contract), resources (read-only state without a tool call), a minted
+`Mcp-Session-Id` for legacy clients that insist on one, a per-command `outputSchema`. None is implemented; reopen one
+only for a client that needs it.
+
+⚠️ **A broken SSE stream loses the in-flight request** (no resumability in 2026-07-28): a long command must stay safe
+to re-issue. ⚠️ **No C++ MCP SDK is vendored**: those found (gopher-mcp, fastmcpp) throw or pull heavy dependencies —
+read them as references only (`-fno-exceptions`, LGPLv3).

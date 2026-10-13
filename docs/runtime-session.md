@@ -124,7 +124,7 @@ Core
 | `Core.SceneManagerService.targetActiveScene()` | Cibler la scène active pour inspection |
 | `Core.SceneManagerService.targetScene(name)` | Cibler une scène nommée |
 | `Core.SceneManagerService.targetNode(name)` | Cibler un node |
-| `Core.SceneManagerService.moveNodeTo(x, y, z)` | Déplacer le node ciblé |
+| *(moving the targeted node)* | Removed on 2026-09-27: `setNodePosition(name, x, y, z)` moves a node and names it explicitly |
 | *(entrée JSON)* | Envoyer `{...}` pour créer une scène depuis une définition JSON |
 
 ### Audio

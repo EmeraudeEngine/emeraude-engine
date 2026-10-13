@@ -18,8 +18,8 @@ The defaults live in `SettingKeys.hpp` (`DefaultSourceCodeDumpEnabled`,
 
 `Core/Graphics/Shader/EnableSourceCodeDump` writes every generated GLSL to
 `~/.cache/<app>/generated-shaders/`. **Nothing ever reads it back**:
-`AbstractShader::loadSourceCode()` — the only function able to re-inject a file into a shader —
-has zero callers in the whole cascade. It structurally cannot be a cache either: its key is
+no function re-injects a file into a shader (`AbstractShader::loadSourceCode()`, which could, had no caller in the
+whole cascade and was removed on 2026-10-13). It structurally cannot be a cache either: its key is
 `std::hash` of the source it stores, so you must have generated the source already to know which
 file to read. That is why it was renamed away from "cache" — the old name described something
 this facility never was.

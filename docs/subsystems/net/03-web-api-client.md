@@ -93,6 +93,19 @@ API response is the business of whoever asked for it. Consumers observe `Net::AP
 ### ⚠️ Cross-platform status
 
 `APIClient` itself is pure C++ over `HTTPSClient` — no syscall, no platform leg. What it rides on
-(`HTTPSClient`, `TLSConnection`, `TrustStore`) cleared steps 1-3 of the handover on Linux, macOS
-**and** Windows (2026-08-28). **The service itself has only ever run on Linux**, exactly like
-`Net::Manager` — see the handover item, it is the same gap.
+(`HTTPSClient`, `TLSConnection`, `TrustStore`) is verified on Linux, macOS **and** Windows, the `Net::Manager`
+`ExternalData` chain included (emeraude-base `docs/plans/network-tls/cross-platform-validation.md`, closed
+2026-10-07).
+
+**The service has run on the three OS since 2026-10-07, but only part of it** (corrected 2026-10-13: this
+paragraph said "only ever run on Linux", the board item said "never executed"; both were stale):
+- a downstream application uploads through it on Linux, macOS and Windows: a JSON `POST` then a `PUT` of an
+  archive, both answered 2xx, plus rejected calls on Linux against a test server. That path exercises `request()`,
+  the polled `requestStatus()` / `responseStatusCode()` / `responseBody()` / `responseJSON()` (the worker-side
+  parse) / `requestFailure()`, and `release()`;
+- the console on Linux (2026-10-07, [`07-critical-points.md`](07-critical-points.md) § the redacted URL): `get()`
+  answered `HTTP 503` and `list()` showed the ticket.
+
+Still never run anywhere: the observer notifications on the main thread, the retention ceiling, `cancel()` on a call
+in flight, a body that declares JSON and is not, and most of the console surface — engine item
+`apiclient-runtime-verification`.

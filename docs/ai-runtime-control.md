@@ -1315,7 +1315,7 @@ python3 tools/remote-console.py "Core.RendererService.lsfunc()"  # List service 
 | | `enableScene(name)` | Enable a scene |
 | | `deleteScene(name)` | Delete a scene |
 | | `getActiveSceneName()` | Get active scene name |
-| | `moveNodeTo(x, y, z)` | Move targeted node |
+| | *(moving the targeted node)* | Removed on 2026-09-27: `setNodePosition(name, x, y, z)` moves a node and names it explicitly |
 | | *(JSON input)* | Send `{...}` to create scene from JSON |
 | **RendererService** | `screenshot()` | Capture framebuffer to PNG |
 | | `getStatus()` | FPS, frame time, resolution |

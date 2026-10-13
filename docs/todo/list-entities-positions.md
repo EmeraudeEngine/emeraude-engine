@@ -20,7 +20,9 @@ closed 2026-09-27); worth doing when a use needs it.
 ## What remains
 
 1. Add the world position of each node and static entity to `listEntities()` (full precision, `null`
-   for a non-finite value — `Console/JSONNumber.hpp`, `writeJSONVector()`).
+   for a non-finite value — `src/Console/JSONNumber.hpp`: `writeJSONVector()` at `:87` streams each component
+   through `JSONNumber`, 9 significant digits and `null` when not finite; a "nan" once made the whole answer invalid
+   JSON and the MCP server dropped its `structuredContent`).
 2. Mind the size: `forest` lists ~150 entities, `terrain` far more — consider an optional filter
    (component type, name prefix) before adding fields to every entry.
 

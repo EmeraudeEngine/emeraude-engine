@@ -3,7 +3,7 @@ id: usdz-baked-lighting-double-count
 title: USDZ WorldLobby — suspected double counting of baked lighting
 status: open
 priority: medium
-scope: Scenes/SceneLoaders/USD
+scope: Scenes/Loaders/USDLoader
 opened: 2026-08-10
 tags: [usd, photometry, measured]
 ---
@@ -27,10 +27,15 @@ triplet; what would collapse is the clipping figure.
 
 ⚠️ **2026-10-04: the measurements above were taken WITHOUT the baked textures** — the 85
 `Materials/Bake/baked_textures_*` were "not in the archive" (the materials wore flat colours) and a third of the
-layers (furniture, plants, lamps) were not composed (engine `docs/scene-loaders-usd.md` § 11.8, fixed). The
-suspicion is now testable for real: re-measure the floor / wall luminances WITH the baked base colours before
-deciding anything.
+layers (furniture, plants, lamps) were not composed (`docs/scene-loaders-usd.md` § 11.8, fixed). The
+suspicion is now testable for real. Confirmed, it is a defect (a wrong image): high by default.
 
-
+- [ ] **Re-measure WITH the baked textures**, at a PINNED exposure: floor / right wall / hall luminances (cd/m²),
+  the share of the frame ≥ 0.9 sRGB and the clipping share; compare with the August figures above.
 - [ ] **Verification without launching anything**: sample the base colour of those materials and
   look for shading gradients baked into the texels.
+
+## References
+
+- `docs/scene-loaders-usd.md` § 11.5 "Still open on this asset", item 1 (the August measurement), § 11.8 (the
+  half-loaded scene, fixed 2026-10-04).

@@ -42,8 +42,8 @@ and any command dispatched to it executed on freed memory (live segfault on
 A command is registered with a **typed** `bindCommand()`: its parameters are **deduced from the
 lambda's C++ signature**, only their names, descriptions and defaults are written by hand, and the
 lambda returns a `Console::CommandResult`. The declaration can no longer drift from the code that
-runs, the help line and its "Usage: …" are generated, and the same signature is what the future
-MCP server turns into a tool schema (`docs/todo/native-mcp-server.md`). Full pattern in § 7.
+runs, the help line and its "Usage: …" are generated, and the same signature is what the
+MCP server turns into a tool schema (§ 7b The MCP Server). Full pattern in § 7.
 
 - **Parameter types**: `bool`, `int32_t`, `float`, `std::string`, `Console::Argument` (any scalar —
   `SettingsService.set(key, value)`), by value or const reference; `std::optional< T >` for an

@@ -43,5 +43,5 @@ gives up on such a timeout, the log should say what the GPU was busy with.
 
 ## References
 
-- `src/Graphics/Renderer.cpp` (`beginFrame()`, ~1676-1688), `src/Vulkan/Queue.cpp`, `src/Vulkan/Device.cpp`.
+- `src/Graphics/Renderer.cpp` (`beginFrame()` l.1662, fence wait l.1688, timeout branch l.1713-1725), `src/Vulkan/Queue.cpp`, `src/Vulkan/Device.cpp`.
 - `jungle-ruins-fence-timeout-abort.md`: the workload that hit the 60 s timeout.

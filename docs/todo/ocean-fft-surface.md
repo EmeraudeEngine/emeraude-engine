@@ -31,6 +31,11 @@ transmission, IOR 1.33, depth-based opacity). No physics reads the sea level yet
    a projected grid): ONE path for every device, MoltenVK included. Waves are smooth at the vertex scale — the ripples
    come from the per-pixel normals — so mesh shaders bring no visible gain here. The sea reaches the horizon: the
    finite plane's hard edge goes away.
+3. **A new `Renderable::OceanResource`** implementing `Scenes::SeaLevelInterface` (owner decision 2026-09-28, chosen
+   over a mode of `BasicSeaResource`): `BasicSeaResource` stays the lake, with the animated normal map the owner likes
+   there; each demo picks one in `onSetupSeaLevel()`.
+4. **Start with step 1** (owner, 2026-09-28): the spectrum and the FFT alone, validated by dumping the displacement and
+   comparing it with a CPU reference FFT, before any geometry.
 
 ## The plan (proposed, to confirm)
 
@@ -50,12 +55,6 @@ vertex stage, its frame rebuilt per pixel by the fragment stage, its textures up
 5. **projet-alpha**: `water-world` and `terrain` take the ocean; measure the GPU cost (the FFT is ~2-3 × 256² × log₂ 256
    butterflies per frame), judge the image.
 6. **Later, not now**: `getLevelAt()` answering the waves for buoyancy (a CPU copy of the displacement one frame late).
-
-3. **A new `Renderable::OceanResource`** implementing `Scenes::SeaLevelInterface` (owner decision 2026-09-28, chosen
-   over a mode of `BasicSeaResource`): `BasicSeaResource` stays the lake, with the animated normal map the owner likes
-   there; each demo picks one in `onSetupSeaLevel()`.
-4. **Start with step 1** (owner, 2026-09-28): the spectrum and the FFT alone, validated by dumping the displacement and
-   comparing it with a CPU reference FFT, before any geometry.
 
 ## Progress (2026-09-28)
 
@@ -117,9 +116,20 @@ binding 4 of the ocean layout) and the vertex stage builds the previous position
 (`OceanSurface::PreviousPositionVariable`); the whitecaps no longer smear under TAA — docs/caution-points.md § Whitecaps,
 item 4. The camera-driven geomorph slide stays out of the velocity, as the terrain's.
 
-Still to do: the GPU cost (the profiler was off), mipmaps of the cascades (the
-far pixels fade the small cascades instead), the shore (depth-based opacity with waves), MoltenVK on the macOS peer,
-the CPU level for buoyancy (step 6), the docs.
+**State since (2026-10-13)**:
+- MoltenVK: `water-world` passed on the macOS M2 peer during the triad (engine `0709e6e3`; projet-alpha
+  `docs/plans/triad-engine-pass-report.md` § 6d); the image and the cost were not judged on macOS.
+- The teardown VUIDs after a scene delete/create (the inactive scene's FFT ocean still updated) are fixed by engine
+  `f3c5284f` (only drawn surfaces update; retirement through `Renderer::deferredDestructor()`), validated on 3 OS
+  (same report, § 6c).
+- Users: `water-world`, and `citadel` as a lake (projet-alpha `src/Builtin/Citadel.cpp:292`). `terrain` still uses
+  `BasicSeaResource` (`src/Builtin/Terrain.cpp:173`): plan step 5 is not done there.
+
+Still to do: the GPU cost (the profiler was off), mipmaps of the cascades (every copy region of
+`src/Graphics/OceanWaves.cpp` is `mipLevel = 0`; the far pixels fade the small cascades instead), the shore
+(depth-based opacity with waves), the image and cost on macOS, `terrain` taking the ocean (step 5), the CPU level for
+buoyancy (step 6: `OceanResource::getLevelAt()` still answers the flat level,
+`src/Graphics/Renderable/OceanResource.hpp:226-234`), the docs.
 
 ## ⚠️ Traps
 

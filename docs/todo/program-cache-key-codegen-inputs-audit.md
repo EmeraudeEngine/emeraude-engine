@@ -12,9 +12,11 @@ tags: [shaders, cache, silent-failure]
 
 ## Why
 
-`SceneRendering::computeProgramCacheKey()` (`src/Saphir/Generator/SceneRendering.cpp`) combines
-eight components: render pass handle, cubemap-ness, renderable name, layer index, render pass type,
-generator flags, material descriptor-set layout hash, material codegen flags. Any generator input that
+`SceneRendering::computeProgramCacheKey()` (`src/Saphir/Generator/SceneRendering.cpp:1262-1331`) combines
+fourteen inputs (2026-10-13): render pass handle, cubemap-ness, renderable name, vegetation wind, foliage layer
+(l.1289-1290), heightfield / ocean / mesh-shading surface (l.1295-1297), layer index, render pass type, generator
+flags, the `debugMaterialPropertiesLane()` (l.1315, step 6b), material descriptor-set layout hash, material codegen
+flags. Any generator input that
 changes the emitted GLSL and is not one of them makes two different shaders share one key — and both
 shader caches are on by default, the SPIR-V one on disk, so the failure is silent and survives launches.
 
@@ -29,7 +31,11 @@ the half it did not cover.
 
 - [ ] List every value a generator reads that reaches the GLSL text (settings read in
       `SceneRendering`'s constructor, `LightGenerator` state, debug lanes such as
-      `DebugMaterialPropertiesLane`), and check each against the eight key components.
+      `DebugMaterialPropertiesLane` — already keyed), and check each against the key inputs.
+- [ ] Material-provided GLSL: `Material::Interface::reactiveMaskExpression()` (emitted at
+      `SceneRendering.cpp:743`) is text, not a flag; it is covered only if every material that returns one also
+      differs by a material flag bit or layout. Same check for `writesGeometryBuffer()` (it changes the pipeline's
+      G-buffer write mask, l.1164, and the reactive attachment, l.1250).
 - [ ] Put the missing ones in the key, or move them to a UBO value when they are per-material.
 
 ## ⚠️ Traps

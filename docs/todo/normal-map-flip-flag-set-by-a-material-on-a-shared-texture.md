@@ -21,6 +21,10 @@ the store by name (`Texture.cpp` ~119-123). Texture resources are shared by name
 - a flag set after the texture was already uploaded (another material loaded it first) changes nothing on the GPU,
   silently.
 
+The same per-material write on the shared resource exists for the colour space: `m_textureResource->enableSRGB()`
+(`Texture.cpp:116`, sRGB when the material variable name ends with `Color`). One texture used as a `…Color` variable by
+one material and as a data variable by another gets the last parser's format — the fix chosen here should cover both.
+
 projet-alpha's `normal-map-debug` is not affected: it builds one texture resource per flip state
 (`…/flippedGreen/texture`).
 

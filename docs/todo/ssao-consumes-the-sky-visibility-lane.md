@@ -8,13 +8,13 @@ opened: 2026-09-13
 tags: [rendering, lighting, screen-space, ambient-occlusion, performance]
 ---
 
-# SSAO could consume SSGI's horizon visibility
+# SSAO could consume SSGI's horizon visibility instead of running its own hemisphere kernel
 
 ## Why
 
 Since Sep 2026 `SSGI` computes a GTAO horizon search (bent normal + cosine-weighted visibility V,
-half-res RGBA16F) to give the screen-space lane its sky term — see `src/Graphics/AGENTS.md`
-§ "The screen-space sky visibility". `SSAO` still runs its own hemisphere kernel next to it
+half-res RGBA16F) to give the screen-space lane its sky term — see
+`docs/subsystems/graphics/13-12-post-processing-effects/18-the-screen-space-sky-visibility-the-gtao-horizon-search-that.md`. `SSAO` still runs its own hemisphere kernel next to it
 (0.40 ms measured on Sponza, 2880×1620): the same frame therefore integrates the same visibility
 twice, with two different estimators, and the AO multiply is the cruder of the two.
 
@@ -42,7 +42,9 @@ screen-space scene did not change in the same batch.
 
 ## References
 
-- `src/Graphics/IndirectPostProcessEffect.hpp` § "Ambient-occlusion LANE protocol".
+- `src/Graphics/IndirectPostProcessEffect.hpp:584` § "Ambient-occlusion LANE protocol" (today only RTGI provides,
+  `Effects/Lighting/RTGI.hpp:245`, and only RTAO consumes, `Effects/Lighting/RTAO.hpp:176`).
+- Sibling item `specular-occlusion-from-the-bent-normal.md`: the other consumer that needs V out of SSGI.
 - `src/Graphics/Effects/Lighting/SSGI.cpp` (`SSGIHorizonFragmentShader`).
 - Jimenez, Wu, Pesce, Jarabo, "Practical Realtime Strategies for Accurate Indirect Occlusion"
   (SIGGRAPH 2016 courses); Intel XeGTAO (MIT).

@@ -108,8 +108,10 @@ back into world units. The extension is declared on the parser purely so the fil
 `BufferView::meshoptCompression` carries the metadata; running the meshoptimizer codec is the
 loader's job. `MeshoptBufferCache` does it **lazily, and caches**: a compressed asset interleaves
 several attributes into one view, so a dozen accessors read the same block and decoding per
-accessor would redo the same work over and over. All ten `iterateAccessor` call sites take the
-`MeshoptBufferAdapter` as their fourth argument.
+accessor would redo the same work over and over. Every accessor read takes the
+`MeshoptBufferAdapter` as its fourth argument: six `fastgltf::iterateAccessor` calls — two inside
+`readDracoAwareAttribute()` / `readDracoAwareIndices()`, which carry the ten vertex/index read sites of
+`loadMeshes()`, one in `loadSkins()`, three in `loadAnimations()` (2026-10-13).
 
 > [!WARNING]
 > **A missed call site does not error — it reads the encoded bytes as if they were vertices.**
@@ -119,6 +121,16 @@ accessor would redo the same work over and over. All ten `iterateAccessor` call 
 > [!NOTE]
 > The cache is the load's memory high-water mark (~300 MiB decoded on Sponza, from ~99 MiB
 > encoded). `load()` releases it right after the geometry is built and logs how much it dropped.
+
+> [!CAUTION]
+> **The adapter holds a RAW pointer to the cache: every accessor read must run BEFORE `load()` calls
+> `m_bufferCache.reset()`.** Verified 2026-10-13: all the reads live in `loadMeshes()`, `loadSkins()` and
+> `loadAnimations()` (and `loadImages()` reads image views through the cache), all before the reset;
+> `loadLights()`, `loadCameras()` and `buildNodeDescriptors()` run after it and read no accessor. An accessor
+> read added to one of those three, or anywhere after the reset, is a use-after-free through
+> `MeshoptBufferAdapter::cache`. (First checked for an unattributed 2026-08-11 SIGILL at idle on the compressed
+> Sponza: nothing tied it to the loader; it most likely was the CEF `MemoryInfra` trap that projet-alpha's board
+> tracks, `cef-memoryinfra-check-sigill`.)
 
 **KTX2 stays block-compressed from disk to VkImage.** `KTX2Decoder` transcodes UASTC/ETC1S to
 **BC7** and the mip chain is uploaded verbatim — no decode to pixels, no `TextureCompressor` pass,

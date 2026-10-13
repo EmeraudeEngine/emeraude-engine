@@ -5,7 +5,6 @@ status: open
 priority: low
 scope: src/Scenes/Loaders/USDLoader, Graphics/Renderable/TerrainResource
 opened: 2026-10-04
-blocked-by: [geometry-content-dedup]
 tags: [terrain, usd, cdlod]
 ---
 
@@ -16,6 +15,9 @@ tags: [terrain, usd, cdlod]
 Owner, 2026-10-04: the scene must use the engine's own techniques too, the ground first. The ground is a raw USD mesh
 (`elements/Terrain/Terrain_Extended.usd`, 512 MB on disk; very probably the single 792 MB vertex buffer of the
 2026-10-04 GPU memory report). Owner choice: the CDLOD terrain over a height clipmap.
+
+Its former prerequisite, the USD geometry dedup of `geometry-content-dedup`, landed (7327a4b0: JungleRuins
+28.7 GB → 5.57 GB); that item stays open only for the other loaders.
 
 ## What remains
 

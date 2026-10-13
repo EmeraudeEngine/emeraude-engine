@@ -27,8 +27,18 @@ velocity 0).
 
 ## What remains
 
+- [ ] Re-measure on the current solver: ONE tracked ball on `balls-of-steel` for ≥ 50 s (position and `|v|`).
 - [ ] Decide whether a permanent roll is CORRECT on that terrain (slope everywhere, no flat cell)
   or whether friction is too low. That question is open and must be answered before any fix.
+- [ ] If the ball rests: delete this item and record the measurement in `docs/physics-overhaul.md`.
+
+## State (2026-10-13)
+
+- The suspected producer is gone: `Scene::accumulateGroundCorrection()` no longer exists in `src/` (P2 made the ground an
+  ordinary contact with friction).
+- The P5 energy check on `balls-of-steel` (`docs/physics-overhaul.md` § P5, the sum of ½v² + g·y over 1000 balls) only
+  decreases and plateaus (−421 k → −422 k J/kg at 50 / 65 s, kinetic term 32 J/kg at 65 s, in the P5 bench; a plateau
+  ≈ −408 k J/kg at the three-OS acceptance) — a strong hint that the balls settle, but no SINGLE ball was tracked.
 
 ## Hypothesis (2026-10-01, read from the code, not measured)
 

@@ -22,9 +22,9 @@ update ships in the same session as the code — this one is late.
 **last** open piece of the material merge and enlarges its surface: the docs now describe a class
 that no longer exists in any form.
 
-### Measured stale surface (re-counted 2026-10-11)
+### Measured stale surface (re-counted 2026-10-13)
 
-**About 48 `BasicResource` mentions.** The `AGENTS.md` files are routers since 2026-09-27, so the content has moved to
+**48 `BasicResource` mentions.** The `AGENTS.md` files are routers since 2026-09-27, so the content has moved to
 `docs/subsystems/`. Ranked, so the pass can be ordered:
 
 | File | Mentions |
@@ -35,26 +35,27 @@ that no longer exists in any form.
 | `docs/subsystems/saphir/12-legacy-specular-energy-normalisation.md` (history, kept on purpose) | 3 |
 | `docs/saphir-v2-proposal.md` | 3 |
 | `docs/subsystems/vulkan/04-critical-layoutmanager-thread-safety.md`, `docs/subsystems/graphics/05-5-material-ubo-system.md`, `docs/ai-runtime-control.md` | 2 each |
-| `docs/windows-export-api.md`, `docs/shadow-mapping.md`, `docs/reflection-pipeline.md`, `docs/pipeline-caching-system.md`, `docs/subsystems/saphir/10-ibl-ambient-pass.md`, `docs/subsystems/saphir/11-…`, `docs/subsystems/graphics/13-12-…/23-…` | 1 each |
+| `docs/windows-export-api.md`, `docs/shadow-mapping.md`, `docs/reflection-pipeline.md`, `docs/pipeline-caching-system.md`, `docs/subsystems/saphir/10-ibl-ambient-pass.md`, `docs/subsystems/saphir/11-…`, `docs/subsystems/graphics/13-12-…/23-…`, `docs/graphics-system.md`, `docs/agents/rules-digest-from-projet-alpha.md`, `docs/agents/02-1a-foundation-emeraude-base.md` | 1 each |
 
 ⚠️ **Not every mention is a deletion.** Three kinds, and they must be told apart:
 
 - **Obsolete** — describes Basic as a live tier ⇒ rewrite or drop.
 - **Historical and load-bearing** — explains *why* a contract has its present shape (the whole
-  `## Legacy (Blinn-Phong) Specular` section of `src/Saphir/AGENTS.md` documents a path whose three
-  generator files no longer exist, yet the `(n+2)/(8π)` reasoning is why the surviving specular is
-  normalised) ⇒ keep, mark clearly as history.
+  legacy (Blinn-Phong) specular topic, `docs/subsystems/saphir/12-legacy-specular-energy-normalisation.md`,
+  documents a path whose three generator files no longer exist, yet the `(n+2)/(8π)` reasoning is why the
+  surviving specular is normalised) ⇒ keep, mark clearly as history.
 - **Still true of the on-disk format** — `"MaterialBasicResource"` remains an accepted JSON class-id
-  synonym on purpose (`MultiLayerMeshResource.cpp:262`, deliberate, commented in place) ⇒ keep, and
-  say it is a format synonym rather than a class.
+  synonym on purpose (`src/Graphics/Renderable/MultiLayerMeshResource.cpp:283-286`, deliberate, commented in
+  place) ⇒ keep, and say it is a format synonym rather than a class.
 
 ## What remains
 
 - [ ] The `docs/subsystems/` files listed above (Graphics, Scenes loaders, Saphir, Vulkan) and `docs/caution-points.md`,
-  told apart by the three kinds above. The Console's named-material resolution (formerly `Console/AGENTS.md:204`,
-  now in `docs/subsystems/console/`) finally becomes exact: it describes what used to be Standard-then-PBR.
-- [ ] Material JSON schema documentation: a single lit ClassId; `"Standard"` and `"PBR"` are synonyms in
-  `DefinitionResource`.
+  told apart by the three kinds above. The Console's named-material resolution
+  (`docs/subsystems/console/05-5-ai-scene-creation.md:33`, `groundMaterial`) finally becomes exact: it still describes
+  "the Standard container first, then PBR".
+- [ ] Material JSON schema documentation (`docs/material-json-format.md`, which does not mention them yet): a single
+  lit ClassId; `"Basic"`, `"Standard"` and `"PBR"` are synonyms in `src/Scenes/DefinitionResource.cpp:353-355`.
 - [ ] Optional: regenerate the 3,918 dual-schema material JSONs to single-schema. Nothing requires the dual layout
   after the merge.
 
@@ -67,10 +68,11 @@ Two durable contracts were lifted out of the lot 7 item before it was deleted (2
 
 - **A surface variable handed to `LightGenerator` must be a NAME, never an expression** — the
   generator concatenates `.rgb` / `.a` onto it, so `a * b` becomes `a * b.rgb`, which compiles and
-  silently swizzles the wrong operand. Now in `src/Saphir/AGENTS.md`.
+  silently swizzles the wrong operand. Now in
+  `docs/subsystems/saphir/11-a-surface-variable-handed-to-lightgenerator-must-be-a-name-n.md`.
 - **`DynamicColorEnabled` was deliberately not ported**: the gate existed only because Basic's
   default diffuse was Grey; with `DefaultAlbedoColor{White}` the unconditional multiply IS the
-  contract. Now in `src/Graphics/AGENTS.md`.
+  contract. Now in `docs/subsystems/graphics/08-8-material-component-system.md`.
 
 ## References
 

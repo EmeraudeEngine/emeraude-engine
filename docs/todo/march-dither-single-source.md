@@ -8,21 +8,22 @@ opened: 2026-09-08
 tags: [shaders, reuse, post-processing]
 ---
 
-# Four effects open-code the march-origin dither
+# Four effects open-code the march-origin dither — migrate them onto the shared rule
 
 ## Why
 
 `EMEN_MARCH_DITHER_GLSL`
 ([`../../src/Graphics/Effects/Shared/MarchDitherGLSL.hpp`](../../src/Graphics/Effects/Shared/MarchDitherGLSL.hpp))
-now holds the engine's one march-origin dither, and `VolumetricScattering` consumes it. Four older
-effects still carry their own copy of the same expression:
+now holds the engine's one march-origin dither. Three effects consume it (2026-10-13):
+`Atmosphere/VolumetricScattering.cpp:98`, `Atmosphere/VolumetricClouds.cpp:130`, `Lighting/SSContactShadows.cpp:74`
+(under `src/Graphics/Effects/`). Four older effects still carry their own copy of the same expression:
 
-| Site | Shape |
+| Site (under `src/Graphics/Effects/`) | Shape |
 |---|---|
-| `MotionBlur.cpp:283` | already a named `interleavedGradientNoise(vec2)` function |
-| `VolumetricLight.cpp:175` | inline, on `gl_FragCoord.xy` |
-| `RTR.cpp:2095` | inline, wrapped in `6.2831853 * …` for an angle |
-| `SSR.cpp:264` | already a named function, on a `pixel` parameter |
+| `Camera/MotionBlur.cpp:283` | already a named `interleavedGradientNoise(vec2)` function |
+| `Atmosphere/VolumetricLight.cpp:175` | inline, on `gl_FragCoord.xy` |
+| `Lighting/RTR.cpp:2095` | inline, wrapped in `6.2831853 * …` for an angle |
+| `Lighting/SSR.cpp:264` | already a named function, on a `pixel` parameter |
 
 All four are **bit-identical** to the shared helper: same constants (`52.9829189`, `0.06711056`,
 `0.00583715`), same `fract(a * fract(dot(p, b)))` shape. So the migration is a behaviour-preserving

@@ -3,12 +3,12 @@ id: lod-simplifier-stalls-on-disconnected-cards
 title: Automatic LOD stalls on disconnected cards (Sponza's ivy keeps 2.1 M triangles at every level) and logs the target ratio
 status: open
 priority: high
-scope: Graphics/Renderable (MeshResource, MultiLayerMeshResource), base VertexFactory/ShapeSimplifier
+scope: Graphics/Renderable (MeshResource, MultiLayerMeshResource), base VertexFactory/ShapeDecimator
 opened: 2026-10-04
 tags: [lod, geometry, performance]
 ---
 
-# Automatic LOD stalls on disconnected cards
+# Automatic LOD stalls on disconnected cards (Sponza's ivy keeps 2.1 M triangles at every level) and logs the target ratio
 
 ## Why
 
@@ -20,15 +20,22 @@ of that, the geometry itself stays).
 
 Two defects:
 
-1. The simplification does not reduce disconnected cards: base `ShapeSimplifier` falls back to
-   `meshopt_simplifySloppy` only with `allowSloppy` and only when `meshopt_simplify` stalls above twice the target —
-   either the option is off for these meshes or the sloppy pass does not reach the target either. To measure.
+1. The decimation does not reduce disconnected cards. The automatic LOD runs base `ShapeDecimator` (QEM,
+   Garland & Heckbert) at `src/Graphics/Renderable/MeshResource.cpp:481` and
+   `src/Graphics/Renderable/MultiLayerMeshResource.cpp:767` — NOT `ShapeSimplifier` (meshoptimizer, with its
+   `allowSloppy` fallback), which only the USD loader uses (`src/Scenes/Loaders/USDLoader.cpp:1712-1726`). The
+   decimator multiplies the cost of every boundary / UV-seam edge by `boundaryPenaltyWeight` (default 1000,
+   base `src/VertexFactory/ShapeDecimator.hpp:73-77`, applied in `applyBoundaryAndSeamPenalties()`): every edge of
+   a disconnected leaf card is a boundary edge, which most likely explains the identical counts (to confirm).
 2. The "LOD n ready for '…' (N triangles, P %)" success log prints the TARGET ratio, not the achieved one: three
-   identical counts were logged as 33 %, 10 % and 3 %.
+   identical counts were logged as 33 %, 10 % and 3 % (`MeshResource.cpp:534`, `MultiLayerMeshResource.cpp:821`
+   print `ratio * 100`).
 
 ## What remains
 
-- Measure which of the two branches runs for the ivy, and what `simplifySloppy` (or a card-aware decimation:
-  dropping whole cards by area, the way foliage LODs are usually built) achieves.
+- Confirm the boundary penalty is what stalls the ivy, then choose (owner decision): route the automatic LOD of
+  such meshes through `ShapeSimplifier` (meshopt, `allowSloppy`), or a card-aware decimation (dropping whole cards
+  by area, the way foliage LODs are usually built). The decimator change, if chosen, gets its own item in
+  emeraude-base's `docs/todo/` at decision time.
 - Log the ACHIEVED ratio (and warn when a level is not smaller than the previous one: it is useless memory).
 - ⚠️ Owner settings note: the owner's own `settings.json` has the generation OFF.

@@ -27,6 +27,9 @@ resolve costs 0.77-1.3 ms, and the culling on/off frames are bit-identical. The 
 
 ## What remains
 
+- First re-measure on the current `develop`: `c33426d9` (2026-10-07, "onDependenciesLoaded() runs once; automatic
+  LOD skips a mesh carrying its own levels") landed after this measurement and touches the LOD path. Only if the gap
+  survives it:
 - Bisect between engine `8c461d12` (2026-10-04, the baseline) and `develop` at the same pose and settings; compare
   `getRenderStatistics()` (a coarsest LOD holding 12.8 M triangles looks wrong: memory notes the ivy's L1 = L2 = L3 =
   2 134 434 triangles — the LOD simplifier stalls on disconnected cards, item `lod-simplifier-stalls-on-disconnected-cards`).

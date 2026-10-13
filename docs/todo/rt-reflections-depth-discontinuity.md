@@ -30,5 +30,5 @@ roughness 0.2, +14 % at 0.3, +8 % at 0.4 against the flush-wall reference (v2 wa
 
 ## References
 
-- `src/Graphics/AGENTS.md` § "RTR glossy cone".
+- `docs/subsystems/graphics/13-12-post-processing-effects/24-rtr-glossy-cone-per-pixel-hit-distance-and-a-disk-gather-ove.md`.
 - projet-alpha `src/Builtin/PostProcessorEffectDebug.AGENTS.md` § results v3.

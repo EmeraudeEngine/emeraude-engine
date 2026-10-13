@@ -350,30 +350,6 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	AbstractShader::loadSourceCode (const std::filesystem::path & filepath) noexcept
-	{
-		const auto * extension = getShaderFileExtension(this->type());
-
-		if ( IO::getFileExtension(filepath) != extension )
-		{
-			TraceError{TracerTag} << "The shader source file extension must be '" << extension << "' !";
-
-			return false;
-		}
-
-		if ( !IO::fileGetContents(filepath, m_sourceCode) )
-		{
-			TraceError{TracerTag} << "Unable to read the shader source code from file '" << filepath << "' !";
-
-			return false;
-		}
-
-		this->generateHash();
-
-		return true;
-	}
-
-	bool
 	AbstractShader::writeSourceCode (const std::filesystem::path & filepath) const noexcept
 	{
 		if ( !IO::filePutContents(filepath, m_sourceCode) )

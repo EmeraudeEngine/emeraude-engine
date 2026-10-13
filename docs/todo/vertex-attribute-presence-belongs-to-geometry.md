@@ -8,7 +8,7 @@ opened: 2026-08-28
 tags: [architecture, material, program-cache, gltf]
 ---
 
-# A vertex attribute's presence is decided by the material, not by the geometry that owns it
+# A vertex attribute's presence is a property of the GEOMETRY, but the shader decides it from the MATERIAL
 
 ## Why
 
@@ -74,8 +74,10 @@ the refactor above would retire both.
 
 ## References
 
-- `Graphics/Material/StandardResource.cpp` (`usingVertexColors()` call sites),
-  `Saphir/AbstractVertexStage.cpp::synthesizeVertexColor()`,
-  `Graphics/RenderableInstance/Abstract.cpp::buildProgramCacheKey()`,
-  `Scenes/Loaders/GLTFLoader.cpp` (the `…-vc` variant).
-- [`src/Scenes/Loaders/AGENTS.md`](../../src/Scenes/Loaders/AGENTS.md) § *Known gaps (glTF 2.0)*.
+- `src/Graphics/Material/StandardResource.cpp:2215`, `:3203`, `:4152` (`usingVertexColors()` call sites),
+  `src/Saphir/AbstractVertexStage.cpp:1124` `synthesizeVertexColor()`,
+  `src/Graphics/RenderableInstance/Abstract.cpp:688` `buildProgramCacheKey()`,
+  `src/Graphics/Renderable/ProgramCacheKey.hpp:68-99` (the key: `materialFlags`, no geometry flag),
+  `src/Scenes/Loaders/GLTFLoader.cpp:3439` (the `…-vc` variant), `:3460` (the `…-uv0` variant).
+- [`docs/subsystems/scenes-loaders/03-implemented-loaders/01-gltfloader.md`](../subsystems/scenes-loaders/03-implemented-loaders/01-gltfloader.md)
+  § *Known gaps (glTF 2.0)*.

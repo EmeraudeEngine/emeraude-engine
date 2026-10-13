@@ -8,7 +8,7 @@ opened: 2026-09-22
 tags: [terrain, cdlod, clipmap, saphir, ray-tracing]
 ---
 
-# CDLOD terrain over a height clipmap
+# CDLOD terrain over a height clipmap — owner review in motion, re-centre cost, cones, R16 quantum (delivered 2026-09-22)
 
 ## Why
 
@@ -48,12 +48,18 @@ the dark streaks on distant ridges. Owner, 2026-09-22: "Go option B".
   `TerrainBLASMaxTriangles`, through a new `rtVertexBufferObject()` symmetric to
   `rtIndexBufferObject()`.
 - Physics keeps answering from the CPU `Grid< float >`.
+- The ray-tracing proxy splits every cell along the DRAWN patch's diagonal, (x, z)–(x + 1, z + 1)
+  (d67caa09, 2026-09-27; trap in `docs/caution-points.md` § CDLOD terrain).
+- Near ground through mesh shaders (96361e1a, 2026-09-28): `CDLODTerrainResource::detailWindowFor(camera)`
+  cuts a hole of the 2 × 2 level-0 quarters nearest to the camera, filled by the companion
+  `Geometry::HeightfieldDetailSurfaceResource` (only with `VK_EXT_mesh_shader`); skirts hang only toward a
+  coarser neighbour. Detail in `docs/subsystems/saphir/21-the-mesh-shading-surface.md` § "Over a terrain".
 
 ## What remains
 
 Delivered 2026-09-22 in 512e6d1b1 (base `Grid::halvedTent()`, engine `CDLODTerrainResource` + Saphir heightfield
 surface, `AdaptiveVertexGridResource` deleted; knowledge in `docs/subsystems/graphics/` § "Adaptive
-geometries", `docs/subsystems/saphir/` § "Heightfield surface" (the `AGENTS.md` files are routers now), `docs/caution-points.md` § CDLOD terrain).
+geometries" (`17-15b-postprocessstack-race-condition.md`), `docs/subsystems/saphir/19-heightfield-surface-a-vertex-stage-that-builds-the-surface.md`, `docs/caution-points.md` § CDLOD terrain).
 Measured at the pushed adaptive grid's pose: ScenePass 3.27 ms (SS lane) / 2.32 ms (RT lane) against
 2-3.4 ms, process VRAM 1821 MiB against 2791 MiB, 0 VUID. Left open:
 
@@ -62,8 +68,16 @@ Measured at the pushed adaptive grid's pose: ScenePass 3.27 ms (SS lane) / 2.32 
   number yet, only the first full upload (40 MiB, 113 ms at boot).
 - [ ] Small isolated bright/dark cones are visible on the relief seen from 1.2 km: decide whether they
   are the diamond-square's own spikes (they are on the CPU grid too?) or a clipmap/normal artefact —
-  measure on the source grid before touching the shader.
-- [ ] Decide the R16 quantum (6 cm over 4000 m) once lit gentle slopes have been looked at closely.
+  measure on the source grid before touching the shader. Since base 56b47c8 the diamond-square no longer
+  makes cone tips (4-point cubic subdivision, base `docs/caution-points.md` § Diamond-square, test
+  `AlgorithmsDiamondSquare.TheCoarsePointsAreNoConeTips`): re-look at the procedural relief (projet-alpha
+  `terrain` relief option, index 3, = 1) and close this step if no cone is left.
+- [ ] Decide the R16 quantum once lit gentle slopes have been looked at closely. The default `terrain`
+  relief is now the `land003` heightmap, 1200 m (projet-alpha `src/Builtin/Terrain.cpp:77`): ≈ 1.8 cm per
+  step; the 6 cm over 4000 m case is only the procedural relief (relief option = 1).
+
+The storage side (heights as `Grid< float >`, 56-byte vertices) is the separate item
+`terrain-pack-vertex-and-height-data`.
 
 ## ⚠️ Traps
 

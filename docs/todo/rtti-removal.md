@@ -20,16 +20,16 @@ C++ feature to remove, in the engine and in projet-alpha. The knob is emeraude-b
 Beyond the owner's discipline argument, the measurable benefits are binary size (typeinfo and
 mangled type-name strings) and the removal of **cross-casts to mixin traits on hot paths**: an
 Itanium-ABI `dynamic_cast` to a non-primary base walks the hierarchy comparing `type_info`, and
-`Graphics/RenderableInstance/Abstract.cpp:503/607/629` do it per renderable instance.
+`Graphics/RenderableInstance/Abstract.cpp:725/829/851` do it per renderable instance.
 
-Inventory (2026-09-08, excluding comments):
+Inventory (2026-09-08, re-counted 2026-10-13, excluding comments):
 
 | Construct | Sites | Where |
 |---|---|---|
-| `dynamic_cast` / `dynamic_pointer_cast` | 31 in 17 files | see the groups below |
-| `typeid` | 34 registrations + 2 lookups | `Resources/Manager.cpp:535-568`, `Resources/ResourceTrait.hpp:215,247` |
-| `typeid` exact-type comparisons | ~25 | `Scenes/AbstractEntity.cpp:313-395` (link/unlink dispatch) |
-| `std::type_index` | 1 map key + 2 virtuals | `Resources/Manager.hpp:520`, `ResourceTrait.hpp:315,336` |
+| `dynamic_cast` / `dynamic_pointer_cast` | 38 in 23 files | see the groups below |
+| `typeid` | 37 registrations + 2 lookups | `Resources/Manager.cpp:741-779`, `Resources/ResourceTrait.hpp:219,251` |
+| `typeid` exact-type comparisons | 22 | `Scenes/AbstractEntity.cpp:445-543` (link/unlink dispatch) |
+| `std::type_index` | 1 map key + 2 virtuals | `Resources/Manager.hpp:610`, `ResourceTrait.hpp:355,376` |
 | ~~`std::any` / `any_cast`~~ | 0 since 2026-10-07 | Observer payload migrated to base `Base::Any` (group E done) |
 
 Not affected: `std::function` (only `target()` needs RTTI), `std::variant`, `shared_ptr` other
@@ -45,46 +45,53 @@ classes.
 
 - [ ] `Renderable::Abstract::skeletalData()` (and const) overridden by `MeshResource` and
       `MultiLayerMeshResource` (`class … final : public Abstract, public SkeletalDataTrait`).
-      Sites: `RenderableInstance/Abstract.cpp:503,607,629`, `Saphir/Generator/Abstract.hpp:652`,
-      `Scenes/Component/Visual.cpp:73`, `Graphics/Renderable/MeshResource.cpp:141`,
-      `MultiLayerMeshResource.cpp:199`, `Scenes/Loaders/GLTFLoader.cpp:569`,
-      `FBXLoader.cpp:358`, `Scenes/Viewers/ModelViewer.cpp:180`, plus `Loaders/AGENTS.md:906`
-      (documented pattern to rewrite) and 6 projet-alpha sites that follow automatically.
+      Sites: `RenderableInstance/Abstract.cpp:725,829,851`, `Saphir/Generator/Abstract.hpp:734`,
+      `Scenes/Component/Visual.cpp:73`, `Graphics/Renderable/MeshResource.cpp:165`,
+      `MultiLayerMeshResource.cpp:223`, `Scenes/Loaders/GLTFLoader.cpp:2190`,
+      `FBXLoader.cpp:359`, `Scenes/Viewers/ModelViewer.cpp:180`, plus
+      `docs/subsystems/scenes-loaders/03-implemented-loaders/03-fbxloader.md:121` (documented pattern to
+      rewrite) and 6 projet-alpha sites that follow automatically.
 - [ ] `Vulkan::TextureInterface::asResource()` → `Resources::ResourceTrait *`. Sites:
-      `Scenes/Component/AbstractLightEmitter.cpp:309,393`, `PointLight.cpp:219`,
-      `SpotLight.cpp:202`, `DirectionalLight.cpp:212`.
+      `Scenes/Component/AbstractLightEmitter.cpp:433,517`, `PointLight.cpp:229`,
+      `SpotLight.cpp:202`, `DirectionalLight.cpp:242`.
 - [ ] `RenderTarget::Abstract::asTexture()` → `Vulkan::TextureInterface *`. Sites:
-      `Scenes/Scene.rendering.cpp:1055`, `Scenes/Manager.console.cpp:1232`.
+      `Scenes/Scene.rendering.cpp:1766`, `Scenes/Manager.console.cpp:1663`.
 - [ ] `AVConsole::AbstractVirtualDevice::asRenderTarget()` → `RenderTarget::Abstract *`. Site:
-      `Scenes/Scene.rendering.cpp:1920` (the `shared_ptr` is then rebuilt with the aliasing
+      `Scenes/Scene.rendering.cpp:2722` (the `shared_ptr` is then rebuilt with the aliasing
       constructor, never a second ownership).
 - [ ] Ground/sea level interfaces expose `asRenderable()` → `Renderable::Abstract`. Sites:
-      `Scenes/Scene.cpp:55,57`, `Scenes/Scene.hpp:1322,1415`.
+      `Scenes/Scene.cpp:58,60`, `Scenes/Scene.hpp:1434,1527`.
 
 ### Group B — down-casts to a concrete class → `ClassId` check + `static_cast`, wrapped as `as< T >()`
 
 - [ ] `Component::Abstract::as< T >()` on top of `isComponent(T::ClassId)`
-      (`Scenes/Component/Abstract.hpp:385`). Sites: `Scenes/Viewers/ModelViewer.cpp:472,495`
-      (Visual, NodeAnimation), `Material/StandardResource.cpp:2644,2797` (`Component::Texture`,
-      a material component — same idea, its own base).
-- [ ] `Resources::ResourceTrait::as< T >()` for `Graphics/BindlessTextureManager.cpp:424`
-      (AnimatedTexture2D) and `MeshResource.cpp:354` / `MultiLayerMeshResource.cpp:555`
+      (`Scenes/Component/Abstract.hpp:389`). Sites: `Scenes/Viewers/ModelViewer.cpp:514,537`
+      (Visual, NodeAnimation), `Scenes/AbstractEntity.cpp:162,168` (CharacterController, Vehicle —
+      already behind an `isComponent()` test), `Scenes/Component/BeamConsoleAdapter.cpp:319` (Beam),
+      `Scenes/Component/ConsoleAdapter.hpp:190` (the `component_t` template of every console adapter),
+      `Material/StandardResource.cpp:3187,3364` (`Component::Texture`, a material component — same
+      idea, its own base).
+- [ ] `Resources::ResourceTrait::as< T >()` for `Graphics/BindlessTextureManager.cpp:570`
+      (AnimatedTexture2D) and `MeshResource.cpp:409` / `MultiLayerMeshResource.cpp:695`
       (`IndexedVertexResource`).
+- [ ] Entity down-casts `AbstractEntity` → `Node` / `StaticEntity` in the scene editor
+      (`Scenes/Editor/Manager.cpp:82,87,105`): an entity-level type witness (or `as< T >()` on
+      `AbstractEntity`) is needed — no `ClassId` check exists at that level yet.
 - [ ] `AbstractEntity::getComponent< T >()` / `getComponents< T >()`
-      (`Scenes/AbstractEntity.hpp:498,527`) rewritten on `as< T >()`; **owner decision 2**
+      (`Scenes/AbstractEntity.hpp:553,582`) rewritten on `as< T >()`; **owner decision 2**
       fixes whether they keep the is-a semantics of `dynamic_pointer_cast`.
 
 ### Group C — `typeid` exact-type dispatch
 
-- [ ] `Scenes/AbstractEntity.cpp:313-395` (`linkComponent` / `unlinkComponent` specific
+- [ ] `Scenes/AbstractEntity.cpp:445-543` (`linkComponent` / `unlinkComponent` specific
       notifications): replace the `typeid(*pointer) == typeid(X)` chain with `isComponent(X::ClassId)`
       (or a per-leaf `classUID()` compare, decision 3). The `.cpp` placement was forced by `std::any`'s
       typeinfo identity across the DLL boundary; `Base::Any` (type-name hash) no longer needs it.
 
 ### Group D — `Resources::Manager` type key
 
-- [ ] Key `m_containers` (`Resources/Manager.hpp:520`) on `Base::Hash::FNV1a(resource_t::ClassId)`
-      (all 34 registered resource classes carry `static constexpr auto ClassId`), computed at
+- [ ] Key `m_containers` (`Resources/Manager.hpp:610`) on `Base::Hash::FNV1a(resource_t::ClassId)`
+      (all 37 registered resource classes carry `static constexpr auto ClassId`), computed at
       compile time in `ResourceTrait::container< T >()`; `getContainerInternal()` takes a `size_t`.
 - [ ] **Assert uniqueness at registration** (`emplace` result checked): two identical `ClassId`
       strings would alias two containers in silence — the same failure shape as the glTF bench
@@ -105,21 +112,21 @@ a `const Base::Any &`; the reads already went through `Base::anyValue< T >()` (n
 - [ ] Measure before/after: binary size of `libemeraude-engine` and `projet-alpha`, count of
       `_ZTS*`/`_ZTI*` symbols (`nm`), and a frame-time A/B on a skeletal scene (Group A hot path).
 - [ ] Docs before deletion: `docs/cpp-conventions.md` (forbidden constructs and their
-      replacements), `src/Scenes/AGENTS.md`, `src/Scenes/Loaders/AGENTS.md:906`,
-      `src/Resources/AGENTS.md`, `src/Graphics/AGENTS.md`; projet-alpha's
+      replacements), the `docs/subsystems/` topic files of scenes, scenes-loaders
+      (`03-implemented-loaders/03-fbxloader.md:121`), resources and graphics; projet-alpha's
       `.claude/rules/coding-style.md` and `docs/cef-integration.md` § Two compile policies
       (the `list(REMOVE_ITEM CEF_COMPILER_FLAGS /GR-)` stays: the base remains the single
       authority, it merely agrees with CEF from now on).
 
-## Owner decisions pending
+## Owner decisions
 
-1. Payload type (A/B) — recorded in `rtti-free-observer-payload`.
+1. ~~Payload type (A/B)~~ — **decided: A (base `Base::Any`), 2026-10-07**; implemented (group E).
 2. **Is-a semantics of `as< T >()` / `getComponent< T >()`.** `dynamic_pointer_cast` accepts
    derived classes (asking for `AbstractLightEmitter` returns any light). Recommendation:
    `isComponent()` implemented as `own ClassId || Parent::isComponent(id)` so the hierarchy is
    preserved. Exact-match only is cheaper but changes behaviour.
 3. **One type mechanism per component.** `Component::Abstract::classUID()` returns the hash of
-   `"Component"` for every component (`Scenes/Component/Abstract.hpp:143`), i.e. not per leaf,
+   `"Component"` for every component (`Scenes/Component/Abstract.hpp:148-166`), i.e. not per leaf,
    while `isComponent()` does a `strcmp` on `ClassId`. Recommendation: make `classUID()` per
    leaf and implement `isComponent` on it (one integer compare), retiring the `strcmp`.
 
@@ -141,8 +148,10 @@ a `const Base::Any &`; the reads already went through `Base::anyValue< T >()` (n
   group E here, is done since 2026-10-07). The dependency now runs the other way: the base flips `EMERAUDE_DISABLE_RTTI`
   to `On` only after this item and projet-alpha's `actor-trait-queries-without-rtti` are closed.
 - projet-alpha item: `projet-alpha/docs/todo/actor-trait-queries-without-rtti.md`.
+- Sibling item `rtti-key-function-audit.md` (key-function / `-Wweak-vtables` hygiene; the macOS cross-image
+  RTTI defect it came from).
 - Existing type-identity contracts: `Base::ObservableTrait::classUID()/is()`
   (`emeraude-base/src/ObservableTrait.hpp:117,126`), `Component::Abstract::getComponentType()/
-  isComponent()` (`src/Scenes/Component/Abstract.hpp:377,385`), `Base::Hash::FNV1a` (constexpr).
-- Compile policy: `emeraude-base/CMakeLists.txt:223,258,296` (the three `EMERAUDE_DISABLE_RTTI`
+  isComponent()` (`src/Scenes/Component/Abstract.hpp:381,389`), `Base::Hash::FNV1a` (constexpr).
+- Compile policy: `emeraude-base/CMakeLists.txt:345,376,410` (the three `EMERAUDE_DISABLE_RTTI`
   generator expressions).

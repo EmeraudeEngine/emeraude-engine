@@ -39,4 +39,5 @@ metal has no ambient diffuse for an occlusion to darken (`docs/caution-points.md
 
 ## References
 
-- Graphics: `docs/reflection-pipeline.md`; memory note "RT reflection traps".
+- Graphics: `docs/reflection-pipeline.md`; `docs/caution-points.md` § "Fixed: RTR Self-Reflection Rejection Too
+  Aggressive (May 2026)" (the self-rejection threshold).

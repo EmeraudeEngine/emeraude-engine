@@ -12,11 +12,11 @@ tags: [shaders, readiness, silent-failure, measured]
 
 ## Why
 
-`RenderableInstance::Abstract::isReadyToRender()` (`src/Graphics/RenderableInstance/Abstract.cpp`, ~l. 683-718)
+`RenderableInstance::Abstract::isReadyToRender()` (`src/Graphics/RenderableInstance/Abstract.cpp:784-819`, returns l.814-818)
 returns `Renderable::hasAnyCachedProgramsForRenderPass(renderTarget, handle)`
-(`src/Graphics/Renderable/Abstract.cpp`, ~l. 97-118). That is true as soon as ANY program cached on the
+(`src/Graphics/Renderable/Abstract.cpp:102-119`). That is true as soon as ANY program cached on the
 RENDERABLE matches the render-pass handle. `Scene::getRenderableInstanceReadyForRendering()`
-(`src/Scenes/Scene.rendering.cpp`, ~l. 2284) returns early on it.
+(`src/Scenes/Scene.rendering.cpp:2638`) returns early on it (l.2653).
 
 So a second instance of the same renderable that needs DIFFERENT programs — lit next to unlit, instanced
 next to unique — is declared ready and is never given its own. Measured 2026-09-25 by the foliage diagnosis

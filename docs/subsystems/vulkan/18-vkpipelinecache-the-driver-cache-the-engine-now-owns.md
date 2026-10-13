@@ -19,7 +19,8 @@ and `vkCreate*Pipelines` accepts that as "no cache" — which is why `GraphicsPi
 
 ### The asynchronous restore — two caches, one published handle (Oct 2026)
 
-Owner decision 2026-10-12 (P2 of engine `docs/todo/logic-stalls-on-runtime-pipeline-compile.md`). A driver
+Owner decision 2026-10-12 (P2 step 1 of the M6 diagnosis, engine `docs/todo/logic-stalls-on-runtime-pipeline-compile.md`;
+step 2, pruning the cache, is `docs/todo/renderer-cache-pruning.md`). A driver
 may compile the WHOLE blob inside `vkCreatePipelineCache`: MoltenVK on a cold Metal shader cache (after a
 macOS / driver update, or a purge of `$(getconf DARWIN_USER_CACHE_DIR)<bundle id>`) compiled every Metal
 library of the 40.7 MB blob there, on the MAIN thread, before any window content: a 113.6–114 s freeze

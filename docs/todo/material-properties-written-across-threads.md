@@ -21,9 +21,17 @@ material at every intensity change of a flickering light (55 lamps in `labyrinth
 
 ## What remains
 
-Options for the owner: a per-material mutex around the setter writes and the copy (cheap, the copy is 64 floats); a
+Options for the owner: a per-material mutex around the setter writes and the copy (cheap, `StandardResource`'s copy
+is 140 floats, `MaterialPropertiesSize`); a
 published copy per render state slot, like the lights (`AbstractLightEmitter::publishStateForRendering()`); or a
 frame-partitioned material UBO (the caution-points entry names it as the day a property must be exact per frame).
+
+## ⚠️ Traps
+
+- The comment above the UBO write in `StandardResource::updateVideoMemory()`
+  (`src/Graphics/Material/StandardResource.cpp:1892-1893`: "a material UBO is not frame-partitioned; its content does
+  not change while the GPU reads it") is FALSE since the dynamic setters became a routine path: the single region 0
+  is rewritten while a frame in flight may still read it. Correct it with the fix.
 
 ## References
 

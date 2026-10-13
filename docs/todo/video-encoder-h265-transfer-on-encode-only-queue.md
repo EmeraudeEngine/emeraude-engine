@@ -8,7 +8,7 @@ opened: 2026-10-01
 tags: [vulkan, video, amd, rushmaker, validation]
 ---
 
-# The H.265 hardware encoder records copies and transfer barriers on an encode-only queue
+# The H.265 hardware encoder records copies and transfer barriers on an encode-only queue (AMD: 55 VUIDs per rush)
 
 ## Why
 
@@ -28,8 +28,9 @@ capped at 10 by the layer's duplicate limit, so the errors are probably raised o
 - `VUID-vkCmdEncodeVideoKHR-pEncodeInfo-10811`: the source picture is in TRANSFER_DST_OPTIMAL, not
   VIDEO_ENCODE_SRC_KHR.
 
-`VideoEncoderH265.cpp` (~ lines 678-720) uploads the NV12 planes "ON THE VIDEO QUEUE": a `vkCmdCopyBufferToImage` and
-TRANSFER/COPY barriers recorded in a command buffer from `m_videoCommandPool`. NVIDIA's encode family (#4)
+`src/Vulkan/VideoEncoderH265.cpp:670-710` uploads the NV12 planes "ON THE VIDEO QUEUE" (comment `:681`): a
+`vkCmdPipelineBarrier` (`:695`), two `vkCmdCopyBufferToImage` (`:704`, `:710`) recorded in a command buffer from
+`m_videoCommandPool` (created on the encode family, `:151`; the command buffer at `:670`). NVIDIA's encode family (#4)
 apparently also exposes TRANSFER, which is why it passes there (181 pictures, 0 VUID). AMD's family #3 does not.
 
 ## What remains
@@ -40,7 +41,9 @@ apparently also exposes TRANSFER, which is why it passes there (181 pictures, 0 
   - or check the encode family's flags at creation, keep the current path when it has TRANSFER, and use the other
     path otherwise.
 - [ ] Copy the padded coded extent (1280x768 here) or respect the granularity, not the record extent.
-- [ ] Re-validate on the AMD iGPU (Windows peer, forced) and on NVIDIA: 0 VUID, the file decodes.
+- [ ] Re-validate on an encode family WITHOUT TRANSFER and on NVIDIA: 0 VUID, the file decodes. No AMD machine is
+  left (the Windows peer is now an RTX 3500 Ada + an Intel iGPU): first check whether the Intel iGPU's encode family
+  exposes TRANSFER — if it does not, it reproduces the AMD case.
 
 ## ⚠️ Traps
 

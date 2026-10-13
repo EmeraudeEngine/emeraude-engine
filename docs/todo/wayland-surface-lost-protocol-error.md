@@ -54,8 +54,8 @@ default), `wp_linux_drm_syncobj_surface_v1#94: error 3: Release or Acquire point
 `system_clock::now()` under libwayland-client, the remote console accepted the connection but never executed
 `Core.shutdown()`, SIGTERM was ignored (the termination catcher's flag is read by the stuck main loop): only SIGKILL
 ended it. So a dead Wayland display also takes the main loop with it — the clean stop on a lost surface does not run.
-Next to (1)-(3) below: (4) make the window service detect a dead display connection (`wl_display_get_error()` through
-GLFW, or a GLFW error callback) and stop cleanly instead of entering libdecor's loop.
+That clean stop is step (4) below; it is owned HERE and shared with `igpu-presentation-under-nvidia-wayland` (same
+unanswered stop after a dead display, different cause).
 
 **Frequency, 2026-10-12 (Linux, the 37-demo validation sweep, Release, validation layer ON):** 2 of 37 demos lost the
 surface with the same `wp_linux_drm_syncobj_surface_v1#100: error 3` (`paths` 2 s after its load, `world-lobby` during
@@ -87,3 +87,7 @@ process answered the console afterwards (the call timed out) and both had to be 
   extra buffer-less commit, not a wrong size — but it does mean **every measurement above was taken
   on a different GLFW**, and the 1-in-8 frequency has to be re-established on the new pin before it
   is compared to anything. Step (1) is still the next action.
+- [ ] **(4) Stop cleanly on a dead display connection** (independent of (1)-(3)): make the window service detect it
+  (`wl_display_get_error()` through GLFW, or a GLFW error callback) and stop the application instead of entering
+  libdecor's loop; then `Core.shutdown()` and SIGTERM must work after a lost surface. Also closes the second defect of
+  `igpu-presentation-under-nvidia-wayland` (re-check it there once done).

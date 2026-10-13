@@ -8,7 +8,7 @@ opened: 2026-10-04
 tags: [memory, diagnostics]
 ---
 
-# Host RAM — most of a scene's private memory is outside the resource census
+# Host RAM — most of a scene's private memory is outside the resource census (terrain 8.1 GB for 0.5 GB)
 
 ## Why
 
@@ -24,6 +24,9 @@ citadel 4.75 GB private bytes for a 467 MiB census, **terrain 8.1 GB for 497 MiB
    (`make_shared` geometries), imposter atlases, the physics' triangle meshes and octrees, loading intermediates kept
    at the allocator's high-water mark (the tree generator's).
 2. Then decide per contributor (owner): release, stream, shrink, or accept.
+
+Known contributors with their own items (counted INSIDE the census, so not the gap itself, but the same RAM budget):
+`decoded-music-stays-resident`, `movie-frames-stay-resident`.
 
 ## References
 

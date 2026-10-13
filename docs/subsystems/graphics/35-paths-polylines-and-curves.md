@@ -1,12 +1,14 @@
 ## Paths — polylines and curves drawn by vertex pulling (Sep 2026)
 
 `Scenes::Component::Path`: a route, a trail, a zone border, an AI path — a polyline or a curve drawn as a
-CAMERA-FACING RIBBON. Owner decisions 2026-09-29 (engine `docs/todo/segment-rendering-beams-curves-outlines.md`
-§ C): points reach the GPU through an SSBO read by VERTEX PULLING; one packed path SSBO per scene and frame in flight;
-{current, previous} per point; opaque unlit solid colour at a luminance in nits; miter joins falling back to bevel,
-round as an option; width in metres or pixels; a DEBUG mode after the tone mapping. References: Rougier,
-"Shader-Based Antialiased, Dashed, Stroked Polylines", JCGT 2013; three.js `LineSegments2`/`LineMaterial`
-(`worldUnits`); A. Klein, "Rendering thick lines with dashes".
+CAMERA-FACING RIBBON. Owner decisions 2026-09-29: points reach the GPU through an SSBO read by VERTEX PULLING; one
+packed path SSBO per scene and frame in flight; {current, previous} per point; opaque unlit solid colour at a luminance
+in nits; miter joins falling back to bevel, round as an option; width in metres or pixels; a DEBUG mode after the tone
+mapping; a point-count change = velocity 0 + the reactive tag that frame (the tag is NOT set yet: engine
+`docs/todo/path-reactive-tag-on-point-count-change.md`). Open extras (dashes, arrows, per-vertex colour, a Bézier path
+from the console): `docs/todo/beam-and-path-extras.md`. References: Rougier, "Shader-Based Antialiased, Dashed,
+Stroked Polylines", JCGT 2013; three.js `LineSegments2`/`LineMaterial` (`worldUnits`); A. Klein, "Rendering thick
+lines with dashes".
 
 ### Using it
 

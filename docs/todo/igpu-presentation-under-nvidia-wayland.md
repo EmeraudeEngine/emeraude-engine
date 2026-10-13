@@ -35,4 +35,11 @@ A device that cannot present to the surface is set aside and the next one by sco
 fails (`VK_ERROR_SURFACE_LOST_KHR` → "Unable to refresh the swap-chain!" Fatal) while the scene still loads, and the
 instance ignores `Core.shutdown()` (the console accepts the connection, nothing happens) and SIGTERM; it needed SIGKILL.
 The main thread was in `wl_display_dispatch_queue_pending()` (gdb, Release). Same root as this item; the unanswered
-shutdown is a second defect to check once the fallback exists.
+shutdown is a second defect, NOT fixed here: the clean stop on a dead Wayland display is step (4) of
+`wayland-surface-lost-protocol-error`. Re-check this case once that step and the fallback above both exist.
+
+## References
+
+- Item `wayland-surface-lost-protocol-error`: a DIFFERENT cause (a buffer-less commit, not an unpresentable device),
+  but the same unanswered stop after a dead Wayland display — its point (4) (detect the dead display connection and
+  stop cleanly) is the shared remedy for the second defect above.

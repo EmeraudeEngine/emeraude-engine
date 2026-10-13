@@ -544,8 +544,9 @@ whole probe) they made whole-frame FLASHES — mean luminance 57.4 → 65-74 on 
 
 Every `TerrainResource` floor is `Geometry::CDLODTerrainResource` since 2026-09-22: one shared patch
 displaced by a height clipmap, Strugar's selection and geomorph, per-pixel normals, a dedicated
-ray-tracing proxy (`src/Graphics/AGENTS.md` § "Adaptive geometries"). It replaced
-`AdaptiveVertexGridResource` (deleted). What that grid's day of fixes taught still holds:
+ray-tracing proxy ([`subsystems/graphics/17-15b-postprocessstack-race-condition.md`](subsystems/graphics/17-15b-postprocessstack-race-condition.md)
+§ "Adaptive geometries"). It replaced `AdaptiveVertexGridResource` (deleted). What that grid's day of fixes taught
+still holds:
 
 - ⚠️⚠️ **A terrain's rendering buffers are not traceable.** The adaptive grid's IBO stacked every LOD
   of every sector (converting it put the terrain in the BLAS eight times over), and it did not even
@@ -4472,6 +4473,16 @@ records. A lower sample count on such a scope is normal: it exists only in the f
 
 ## Shader/GLSL Pitfalls
 
+### The ambient-pass chain has ONE lighting model — three legacy legs were deleted as dead (2026-10-08)
+
+GCC `-Wduplicated-cond` (paranoid warning set) found three unreachable branches in the ambient-pass `if / else if` chain
+of `src/Saphir/LightGenerator.cpp`: a reflection + refraction glass blend and the reflective / refractive IBL legs that
+followed. They were the NON-PBR legs ("Non-PBR Glass - legacy behavior", "IBL (non-PBR reflective, e.g. Standard)"),
+shadowed since `1c1d94ba2` (2026-08-12) removed `m_usePBRMode &&` from the PBR branches, and obsolete since the
+non-PBR material (`BasicResource`) is gone. They were deleted in `03608b66` (rendering byte-identical: they never ran).
+⚠️ Do not resurrect them: the chain is ordered by quality tier only (high-quality legs first, then the low-quality
+fallbacks), never by material model. The low-quality leg's own gap is item `low-quality-pbr-glass-loses-refraction`.
+
 ### Read the GENERATED GLSL — a variable computed and never used is two subsystems never connected (Aug 2026)
 
 The engine writes its shaders. When a rendering feature looks half-present, the fastest instrument
@@ -4977,7 +4988,7 @@ so there is no first-launch penalty to weigh against it. 0 residual `.tmp` files
 > rejects itself rather than mixing generations.
 
 **The source code dump is NOT a cache — which is why it was renamed in Aug 2026.** Nothing ever
-reads it back: `AbstractShader::loadSourceCode()` has **zero callers**, and the key it stores under
+reads it back (the never-called `AbstractShader::loadSourceCode()` was removed on 2026-10-13), and the key it stores under
 is a hash of the source itself, so it structurally cannot be one. It writes
 `~/.cache/<app>/generated-shaders/`, one lazily-created subdirectory per generator
 (`SceneRendering/`, `ShadowCasting/`, `PostProcessing/`, `OverlayRendering/`, `GizmoRendering/`,
@@ -5748,7 +5759,9 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 >
 > Measured by the Windows peer (2026-10-01) from a Release copied under a folder named `Jérôme`: the CEF menu did not
 > load (U+FFFD in its `file://` URL) and `FileSystem.getJson()` sent CP-1252 bytes the console client refused. Both
-> fixed in triad 15; about 120 sites remain, item `docs/todo/windows-path-string-ansi-pass.md`.
+> fixed in triad 15. The remaining ~120 sites were removed by the rule C pass below (steps 1-3, 2026-10-12, verified on
+> the three OS; the pass item closed 2026-10-13): no `path::string()` / narrow path conversion is left outside the
+> allowlist of `tools/check-path-encoding.py`.
 >
 > Since triad 15, `IO::u8path()` / `toU8String()` / `toGenericU8String()` convert on Windows through the base's strict
 > `String::utf8ToUTF16()` / `utf16ToUTF8()` (RFC 3629, U+FFFD for each invalid subpart or lone surrogate). The former
@@ -5800,6 +5813,18 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 > - ⚠️ base `TrustStore::applyCABundleFile()` ABORTED on a bundle under a non-ASCII directory (`path::string()` handed to
 >   `load_verify_file()`): it reads the file through `IO::` and calls `add_certificate_authority()`;
 > - the console and MCP replies are always valid UTF-8 (`docs/ai-runtime-control.md`).
+>
+> Step 3 verified on the three OS (2026-10-12): Linux — GCC builds the cascade, the base suite passes in Release and
+> under ASan/UBSan, a 37-demo sweep with the validation layer gives 0 VUID, the guard on the Release + Debug databases
+> gives 0 finding (10 allowlisted, with their reasons); macOS (M6) — 0 warning, the guard 0 finding (7 allowlisted);
+> Windows — from `Ωmega-日本` and `Jérôme` installs with `activeCodePage` stripped from both executables: exit 0, the Ω
+> glTF and BoxAccents load, the hostile glTFs are refused, the TCP / MCP replies are valid UTF-8, the CEF main menu is
+> pixel-identical to an ASCII-install control run, the logs under non-ASCII file names decode as strict UTF-8, the guard
+> on the MSVC databases gives 0 finding (4 allowlisted). Offering the fastgltf fix upstream is the one step left: item
+> `docs/todo/fastgltf-invalid-utf8-uri-upstream.md`, files in `docs/upstream/fastgltf-invalid-utf8-uri/`.
+> ⚠️ Fixing an abort uncovers the next one on the same path (under a non-ASCII install `BaseInformation.cpp`, then
+> `Vulkan/Loader.cpp`, then `ResourceTrait.cpp` aborted in turn): re-run each repro until it exits 0, the stack from a
+> Debug copy started under the debugger names the site.
 >
 > **clang-query traps (`tools/check-path-encoding.py`, clang-query 23):**
 > - `anyOf()` INSIDE `hasCanonicalType()` silently drops the pointer / array branches: `Car.cpp`'s `path{ModelPath}`

@@ -32,7 +32,14 @@ instance is drawn before the scene's lights / environment give it its per-light 
 - [ ] Find which side is late (the renderable instance's per-light resources, or the light set's) and make the draw
   wait for it, or make the set available before the first draw. Decide with the owner if the fix changes a contract.
 
+## ⚠️ Traps
+
+- The message is printed ONCE per renderable instance (`m_missingDescriptorSetReported`, since 4d938f29): it counts
+  the instances that skipped a draw, not the skipped draws. Count the skipped draws another way (a debug counter)
+  before calling the race "once".
+
 ## References
 
 - The Windows report in `docs/physics-overhaul.md` § 1b (P3 accepted on Windows).
-- `src/Graphics/RenderableInstance/Abstract.cpp:1239` (the "Descriptor set contract violation" message).
+- `src/Graphics/RenderableInstance/Abstract.cpp:1289` (`traceMissingDescriptorSet()`, the "Descriptor set contract
+  violation" message; the PerLight call site at `:1557`).

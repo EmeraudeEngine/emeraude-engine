@@ -25,7 +25,9 @@ that fixed, screenshots complete from the first poll. The compile cost itself is
 - Measure the split: program generation vs GPU work in those frames (GPU profiler, timestamps around
   `prepareRender`).
 - If compile-bound: warm the rig's programs off the render thread (the thread pool), or share the tree's own lit
-  programs with the rig (same material, same layers), before its first render.
+  programs with the rig (same material, same layers), before its first render. The general cure of runtime compiles
+  on the render thread (a parallel pipeline warm-up at load, P1) is tracked in
+  `logic-stalls-on-runtime-pipeline-compile`, which would cover this rig too.
 - Cheaper still (hang diagnosis, verified by reading): record ONLY the AmbientPass in a bake target. The light passes
   write nothing the atlas copies (the atlas takes colour/normal/albedo from the ambient pass), so the rig's CSM pass,
   its cloud-shadow reads and most of its program variants are pure cost there.

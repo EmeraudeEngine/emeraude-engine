@@ -2,8 +2,9 @@
 
 Half-Life's `env_beam` / `env_laser`, made photometric: a ribbon along a curve — straight between two points by
 default, or any curve of the Path's kinds (2026-09-30) —, steady (a laser) or wandering and re-striking (an electric
-arc). Owner decisions and the open work: engine
-`docs/todo/segment-rendering-beams-curves-outlines.md`. Bench: projet-alpha demo `beams`.
+arc). Owner decisions below; open work: engine `docs/todo/beam-and-path-extras.md` (texture scroll, life, strike-again
+time, JSON declaration) and `docs/todo/line-light-shadows.md` (the light a beam drives, graphics doc 36). Bench:
+projet-alpha demo `beams`.
 
 ### Using it
 
@@ -88,6 +89,8 @@ away stays a continuous one-pixel line instead of breaking into sub-pixel triang
 
 ### The reactive mask (owner decision 2026-09-28)
 
+Rejected (owner, 2026-09-28): the velocity widened to RGBA16F, a post-TAA pass, the beam's own velocity.
+
 Measured on `beams` before it: the TAA averaged 12 re-strikes a second into the MEAN arc — a near-straight white
 line between the two fixed ends, saturated blobs at the ends, ghosts, the real arc dimmed. TAA off: one clean arc.
 
@@ -111,6 +114,10 @@ ScreenSpace lane; the 2026-09-28 measurement above looked at the arc only and co
    the beam in its 3x3 neighbourhood, the variance box spans it, and the old light survived the clip.
 Validated: 10 captures over a full turn of the laser (ScreenSpace lane, TAA on), no streak, no trail, 0 validation
 message.
+⚠️ **Known limit, not measured further**: the tag lasts ONE frame, so a beam that STAYS still over a depth edge keeps
+rejecting its own history there (by design: it is reactive), and a sparse speckle remained around the arc in the
+`beams` captures (the bilinear gather mixes tagged and untagged texels). To be measured on a scene with detail
+behind a beam before calling it a defect.
 - `SceneRenderTarget::clearValues(palette)` builds the clear values of the target's own attachments; the two
   hand-written ladders of `Renderer.cpp` (one branch per attachment combination, twice) are gone.
 
@@ -134,3 +141,16 @@ message.
   instance is SKIPPED for a cubemap target (`Scene::checkRenderableInstanceForRendering()`); without that skip the
   vertex stage refused the program, the instance was marked broken, and EVERY beam and path of the scene was
   removed as soon as a reflection probe existed (reproduced on `beams` with a temporary probe, 2026-09-30).
+- **Segments are GEOMETRY, never `lineWidth`**: hardware wide lines are optional (`Vulkan/Instance.cpp` only warns
+  without `wideLines`) and Metal has none (`Saphir/Generator/GizmoRendering.cpp` draws at 1 px).
+- **A beam is emissive translucent geometry: out of the TLAS** (item `rt-blended-materials-in-tlas`).
+- **Pre-exposure**: a beam's luminance sits in the scene-colour range (item `scene-colour-pre-exposure`).
+
+### References
+
+- Half-Life (GoldSrc) FGD, `env_beam` / `env_laser` (start / end entity, amplitude noise, brightness, width, texture
+  scroll rate, life, strike again time).
+- Matt DesLauriers, "Drawing Lines is Hard" (2015) — screen-space polyline expansion, joins and caps.
+- Emil Persson, "Phone-wire AA", GPU Pro 5 (2014).
+- AMD FidelityFX Super Resolution 2, "Reactive mask" (GPUOpen documentation); Unreal Engine "Responsive AA".
+- Unity `LineRenderer` / `TrailRenderer`, Unreal Niagara ribbon / beam emitter.

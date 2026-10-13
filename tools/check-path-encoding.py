@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Emeraude Engine - path encoding guard (rule C, engine docs/todo/windows-path-string-ansi-pass.md).
+Emeraude Engine - path encoding guard (rule C, engine docs/cpp-conventions.md § Paths and Text Encoding).
 
 On Windows a std::filesystem::path is UTF-16 and its NARROW conversions go through the ANSI code page: path::string()
 THROWS on a character outside it (an abort, exceptions are off) and writes invalid UTF-8 for the others; a path BUILT

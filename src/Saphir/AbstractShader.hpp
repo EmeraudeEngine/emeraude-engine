@@ -268,27 +268,6 @@ namespace EmEn::Saphir
 			bool generateSourceCode (Generator::Abstract & generator) noexcept;
 
 			/**
-			 * @brief Sets the source code for this shader.
-			 * @note Alternative to generateSourceCode(): assigns raw GLSL directly (e.g. hand-written or externally produced), bypassing the declaration/generator pipeline entirely, and refreshes hash().
-			 * @param sourceCode The source code.
-			 */
-			void
-			setSourceCode (const std::string & sourceCode) noexcept
-			{
-				m_sourceCode = sourceCode;
-
-				this->generateHash();
-			}
-
-			/**
-			 * @brief Loads source code from a file.
-			 * @note The file extension must match this shader's stage (see getShaderFileExtension(type())), otherwise this fails without reading the file. On success refreshes hash().
-			 * @param filepath A reference to a filesystem path.
-			 * @return bool false if the extension does not match or the file could not be read.
-			 */
-			bool loadSourceCode (const std::filesystem::path & filepath) noexcept;
-
-			/**
 			 * @brief Writes the source code to a file.
 			 * @param filepath A reference to a filesystem path.
 			 * @return bool
@@ -309,7 +288,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Returns the hash of the source code.
-			 * @note Kept in sync with sourceCode() by generateSourceCode(), setSourceCode() and loadSourceCode(); reads as 0 when no source code has been generated or loaded yet.
+			 * @note Kept in sync with sourceCode() by generateSourceCode(); reads as 0 when no source code has been generated yet.
 			 * @return size_t
 			 */
 			[[nodiscard]]
@@ -339,7 +318,7 @@ namespace EmEn::Saphir
 
 			/**
 			 * @brief Display with the tracer a successful shader generation.
-			 * @note Does not check isGenerated(): calling this before generateSourceCode()/setSourceCode()/loadSourceCode() traces an empty GLSL body. Dumps the full generated GLSL source (via SourceCodeParser) followed by getDeclarationStats(), at Info level; intended to be called right after a successful generateSourceCode().
+			 * @note Does not check isGenerated(): calling this before generateSourceCode() traces an empty GLSL body. Dumps the full generated GLSL source (via SourceCodeParser) followed by getDeclarationStats(), at Info level; intended to be called right after a successful generateSourceCode().
 			 */
 			void traceSuccessfulGeneration () const noexcept;
 

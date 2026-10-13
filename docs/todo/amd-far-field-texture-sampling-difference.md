@@ -1,7 +1,7 @@
 ---
 id: amd-far-field-texture-sampling-difference
 title: The far field of a tiled ground samples differently on AMD, with repeat lines toward the horizon
-status: open
+status: parked
 priority: high
 scope: Graphics/TextureResource samplers (anisotropy, LOD), Vulkan/Sampler
 opened: 2026-09-22
@@ -9,6 +9,11 @@ tags: [amd, sampling, cross-platform-bench]
 ---
 
 # The far field of a tiled ground samples differently on AMD, with repeat lines toward the horizon
+
+## Parked
+
+No AMD machine available (owner, 2026-10-13); it must be tested on one when available. The part visible on every
+device (dark dashes under the horizon) is `far-field-dark-dashes`, workable now.
 
 ## Why
 
@@ -21,16 +26,17 @@ So it is NOT the relief technique. AMD shows a visible grid of texture-repeat li
 horizon, in both modes. Near and mid, |Δ| is ~12 with 25 % of the pixels above 16: a real per-pixel
 difference.
 
-## ⚠️ Not AMD-only: dark dashes under the horizon on EVERY device (2026-09-23)
+The dark dashes seen on EVERY device (2026-09-23) may be one symptom of the same cause, or a separate one: settle
+`far-field-dark-dashes` first, then compare AMD against it.
 
-The macOS (Apple M2, MoltenVK), Windows (RTX 3060) and Linux (RTX 3070 Ti) sessions all see, in `relief` modes 0,
-1 and 2 alike, a band of dark horizontal dashes over the far ground just under the horizon line. On a 2560×1440
-frame of the new spawn (mode 1), it starts right under the horizon (row ≈ 333) and fades over about 80 rows, with a
-dark fan converging on the vanishing point. The AMD difference above may be one symptom of it, or a separate
-one: separate the two before fixing either (a flat checkerboard ground on each device).
+## What remains (on an AMD machine)
 
-## What remains
+- Re-take the 2026-09-22 comparison on the current engine (`TextureCache::Version` 3, exact box-filtered mips, since
+  2026-09-23).
+- Compare the sampler state both drivers get (anisotropy `Core/Graphics/Texture/AnisotropyLevels` 8, mip LOD bias, the
+  mip chain of the 1024² Pavement006 maps).
+- Decide which one is right with a controlled ground (a checkerboard at a known frequency).
 
-- [ ] Compare the sampler state both drivers get (anisotropy `Core/Graphics/Texture/AnisotropyLevels` 8,
-      mip LOD bias, the mip chain of the 1024² Pavement006 maps).
-- [ ] Decide which one is right with a controlled ground (a checkerboard at a known frequency).
+## References
+
+- `far-field-dark-dashes`.

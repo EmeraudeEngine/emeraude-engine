@@ -409,7 +409,7 @@ The trace pass is the interesting one:
   full-res texel (`texelFetch`) but unprojected the half-res pixel's own centre — half a full-res
   pixel away — so the ray origin sat off the surface by that offset times the depth slope, a bias
   along the view ray on a floor seen at a grazing angle. The NDC now comes from the fetched texel.
-  ⚠️ `RTAO.cpp` (two sites) and `SSR.cpp` carry the same pattern — engine `docs/todo/`
+  ⚠️ `RTAO.cpp` (one site) and `SSR.cpp` carry the same pattern — engine `docs/todo/`
   `half-res-unprojection-texel-centre-rtao-ssr`.
 - **⚠️⚠️ Temporal stability — the trace has NO accumulation of its own, and it shows under TAA.**
   The trace is deterministic (one mirror ray per texel, per-pixel gather rotation, no frame term),

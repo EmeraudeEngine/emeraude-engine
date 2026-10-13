@@ -33,7 +33,7 @@ write the report itself at the end of its load (`device()->memoryDetailedStatist
 
 ## Staging buffers — released after the upload (2026-10-12)
 
-Item `staging-buffers-retained-after-load`. Every upload goes through a `Vulkan::TransferManager` transfer operation:
+Former item `staging-buffers-retained-after-load` (engine `68413b05`, closed 2026-10-13). Every upload goes through a `Vulkan::TransferManager` transfer operation:
 a host-visible staging buffer (`BUFFER TRANSFER_SRC` for buffers, `BUFFER TRANSFER_SRC|TRANSFER_DST` for images in
 the report), a command buffer and a fence. An operation is reusable once its fence has signalled. Uploads are
 asynchronous, so a load with many uploads in flight creates many operations, and an operation is enlarged to the

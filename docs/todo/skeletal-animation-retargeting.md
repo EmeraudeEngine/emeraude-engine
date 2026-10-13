@@ -18,8 +18,9 @@ library, every AI motion source, and any reuse of one animation set across chara
 proportions.
 
 Nothing in the cascade does this — `rg "retarget"` over `emeraude-engine/src` and
-`emeraude-base/src` returns zero. It is not even in the `Animations/AGENTS.md` "Remaining Work"
-list, which mentions blending, a state machine and a timeline.
+`emeraude-base/src` finds no skeletal code (only two unrelated render-pass comments in `SSGI.cpp` / `RTGI.cpp`).
+It is listed under "Remaining Work" in `docs/subsystems/animations/02-animations-specific-rules.md:294-302`,
+with the `LeftLeg` thigh/shin naming trap.
 
 **Owner decision (2026-08-30): a chantier of its own, generic and measured first**, not a
 by-product of any particular motion source. It pays for itself independently of what feeds it.

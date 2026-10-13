@@ -1,122 +1,80 @@
 ---
 id: logic-stalls-on-runtime-pipeline-compile
-title: Compile pipelines off the render-list walk (the render thread still stalls on a runtime compile)
+title: The render thread stalls on every pipeline compiled at first use (P1, warm the scene's pipelines in parallel at load)
 status: open
 priority: medium
-scope: Vulkan (GraphicsPipeline, ComputePipeline, the pipeline cache), Graphics (program generation), Core (logic / render threads)
+scope: Graphics (program generation, Scene render-list walk), Vulkan (GraphicsPipeline, the pipeline cache), Core (render thread, scene loading)
 opened: 2026-10-03
 tags: [macos, moltenvk, pipeline-cache, stall, threads]
 ---
 
-# Compile pipelines off the render-list walk (the render thread still stalls on a runtime compile)
+# The render thread stalls on every pipeline compiled at first use (P1, warm the scene's pipelines in parallel at load)
 
 ## Why
 
-Seen by the macOS peer (M2, validation layers on), citadel, engine `cdcf68e7` and `669353ae`.
-`logicsTask` cycles of 530 / 1988 ms in one launch, and 3324 / 2872 / 5257 / 2200 / 2010 / 2104 ms in another.
-Some came after a teleport of the player, some after `PostProcess` commands or a screenshot; one capture timed
-out. Never on Linux (today's citadel runs peak at 243 ms, the start-up load).
+A pipeline is created when an instance is first prepared for rendering, inside the render thread's walk:
+`Scene::populateRenderLists()` → `checkRenderableInstanceForRendering()` → `getReadyForRender()` →
+`generateShaderProgram()` → `vkCreateGraphicsPipelines`. A slow compile there costs one missed frame per pipeline.
+On NVIDIA (Linux) every creation takes under 1 ms (its own disk shader cache); on MoltenVK each one is SPIR-V → MSL,
+then a Metal library: 50–500 ms when the MSL is new to the machine's Metal shader cache
+(`$(getconf DARWIN_USER_CACHE_DIR)org.ln-isle.projet-alpha/{com.apple.metal, com.apple.metalfe, com.apple.gpuarchiver}`).
 
-What the macOS hunt established (20 more launches, none reproduced):
-- Both stalled launches are the ONLY ones whose Vulkan pipeline cache GREW: 23.97 → 24.72 MB and 30.16 →
-  33.74 MB. Fewer shaders came from the binary cache there (603, 517 against 636–666). Every clean launch
-  saved exactly what it restored.
-- So the stalls are the FIRST launch after an engine change that alters shaders: runtime pipeline compiles.
-  On MoltenVK each is SPIR-V → MSL, then a Metal library: hundreds of ms. The stall size follows the miss
-  size: +0.75 MB gave 2.5 s of stalls, +3.58 MB gave 17.8 s.
-- A fully COLD cache (`--cache-directory` empty) did not reproduce the mid-session stalls (one 1008 ms stall
-  during the start-up load, BC7 recompression). The trigger may need a partially stale cache.
-- Unexplained: why the LOGIC thread waits. During the sampled steps the logic thread was 6–7 % busy and the
-  render thread 100 % (validation-slowed `vkQueueSubmit` encoding). A compile on the render thread, or a lock
-  shared with the logic thread across it, would explain it. Not proven.
+Measured on the Mac mini M6 (MoltenVK 1.4.2, 2026-10-12, validation off; one fully cold run with it gave the same
+numbers, 0 `VUID-`), fully cold (Metal cache and engine pipeline cache removed): the render thread takes every compile,
+one missed frame each (50–311 ms) — sponza 132 misses / 14.1 s, citadel 264 / 37.1 s (mostly the forward light-pass
+permutations, one set per material, 17 materials there). The same happens during a cold pipeline-cache restore: a
+scene loaded while it runs compiles on render (owner D2; M6: sponza 128 cold compiles on render, 14.77 s, max 196 ms).
+`MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION` changes nothing: the compiles run one at a time on the calling
+thread.
 
-## What was done (2026-10-03)
+## History (what P1 builds on)
 
-Pipeline creations are now timed and asked whether the cache served them (`VkPipelineCreationFeedbackCreateInfo`,
-Vulkan 1.3; `Vulkan/Utility.hpp`, `pipelineCreationFeedbackAvailable()`, `reportPipelineCreation()`). One taking
-50 ms or more logs `Slow pipeline creation: '<pipeline>' took N ms on this thread (a pipeline cache HIT / MISS)`.
-The Tracer's thread ID (always in the file log, in the console with `enableThreadInfos`) names the thread.
-Linux proof: with the threshold at 0, 548 creations on a cold cache reported, all MISS with valid feedback,
-0 `VUID-`. All took under 1 ms (NVIDIA's own disk shader cache); at 50 ms, a cold cache logs nothing.
+- **2026-10-03, macOS M2 (citadel)**: `logicsTask` cycles of 2.1–11.3 s on the first launch with MSL new to the Metal
+  cache. Cause: `AbstractEntity::forEachComponent()` held the entity's components lock across the whole walk, and the
+  render thread compiled inside it; the logic thread waited on the same lock in `processLogics()`. **Fixed** (owner:
+  prepare outside the lock): the raster, RT and shadow-caster walks and `forEachRenderableInstance()` copy the
+  instances (`shared_ptr`) under the locks and prepare them with none held. Accepted on the M2 (engine `e743b244`):
+  446 slow creations (82.5 s, all MISS), 0 `logicsTask` over 500 ms against 15, max 278 ms against 11 324 ms, 0 `VUID-`.
+  Rule and story: `docs/caution-points.md` § "Fixed: the render thread held an entity's components lock across a
+  pipeline compile". The M6 run of 2026-10-12 confirms it holds (logic max 258 ms, 0 cycle over 500 ms).
+- **The measuring tool** (2026-10-03): every pipeline creation is timed and asks the cache whether it served it
+  (`VkPipelineCreationFeedbackCreateInfo`, Vulkan 1.3; `Vulkan/Utility.hpp`, `pipelineCreationFeedbackAvailable()`,
+  `reportPipelineCreation()`). One taking 50 ms or more logs `Slow pipeline creation: '<label>' took N ms on thread
+  <native id> (a pipeline cache HIT / MISS)`. The label is the generator's pass (e.g.
+  `RenderableInstanceSpotLightPassFull`). Linux proof: threshold 0, 548 creations on a cold cache, all MISS with valid
+  feedback, all under 1 ms. On the M2 the thread IDs matched `sample`'s: 422 creations on render, 22 on main at
+  start-up, 2 on the logic thread (item `ibl-compute-pipelines-created-on-the-logic-thread`).
+- **P2 step 1 done** (engine `d58de797`, 2026-10-12): the pipeline cache is restored on a worker, the main thread no
+  longer freezes 114 s in `vkCreatePipelineCache` on a cold Metal cache — `docs/subsystems/vulkan/18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md`
+  § "The asynchronous restore".
 
-## The cause, caught (macOS, 2026-10-03)
-
-The trigger is MSL NEW TO THE MACHINE: macOS keeps a per-app Metal shader cache
-(`$(getconf DARWIN_USER_CACHE_DIR)org.ln-isle.projet-alpha/{com.apple.metal, com.apple.metalfe, com.apple.gpuarchiver}`,
-284 MB there). An engine-cache miss whose MSL that cache already holds compiles in under 50 ms. With those
-directories moved aside for one launch, 15 logic stalls of 2.1–11.3 s and 446 slow creations (all MISS,
-50–501 ms, 83.8 s in all).
-
-The stacks (`sample`):
-- LOGIC, 77 % blocked: `AbstractEntity::processLogics()` → `std::recursive_mutex::lock()` on `m_componentsMutex`.
-- RENDER, 100 %: `Scene::populateRenderLists()` → `entity.forEachComponent(…)` → `checkRenderableInstanceForRendering()`
-  → `getReadyForRender()` → `generateShaderProgram()` → `vkCreateGraphicsPipelines` → the Metal compile.
-
-`forEachComponent()` holds the entity's components lock for the whole callback, so the render thread held it across
-every compile. The logic thread waited entity after entity.
-
-**Fixed (owner: prepare outside the lock).** `populateRenderLists()` (raster and RT walks), the shadow-caster walk
-and `forEachRenderableInstance()` (it held the scene-wide node and static-entity locks across
-`initializeRenderTarget()`'s preparations) now COPY the renderable instances (`shared_ptr`) under the locks and
-prepare them with none held. Linux proof, a PROOF-TEMP 150 ms delay in every graphics pipeline creation, cold cache:
-532 slow creations (≈ 80 s of compile on the render thread), logic max 45 ms, 0 cycles over 500 ms, 0 `VUID-`.
-
-The report was completed the same day. It names the pipeline by a label kept in Release (the generator's pass, e.g.
-`RenderableInstanceSpotLightPassFull`; an effect's own pipeline is "unlabelled"), and the thread by its native ID
-(`Tracer::currentThreadID()`; macOS printed `-1` before). The caller's location is passed through.
-
-A second finding: with the Metal cache cold, MoltenVK's `vkCreatePipelineCache` eagerly compiles every shader
-library of the restored engine cache, synchronously, on the MAIN thread at init (`Renderer::loadPipelineCache` →
-`MVKPipelineCache::readData` → `MVKMetalCompiler::compile`). A 153 s start there. A bigger engine pipeline cache means
-a slower cold start on macOS: relevant to the cache's size and trim policy.
-
-**Accepted on macOS M2** (engine `e743b244`, the catch scenario: a cold Metal cache, the engine pipeline cache and
-shader binaries removed, validation on). The miss workload was the same as the catch: 446 slow creations, all MISS,
-82.5 s against 83.8 s. `logicsTask` over 500 ms: 0 against 15; the max is 278 ms against 11 324 ms. 0 `VUID-`. The
-"on thread" IDs match `sample`'s exactly: 422 creations on the render thread, 22 on the main thread at start-up,
-and 2 on the LOGIC thread (below).
-
-## The M6 diagnosis (2026-10-12)
-
-Mac mini M6, MoltenVK 1.4.2, engine after the lock fix, timings without validation (one fully cold run with it:
-the same numbers, 0 `VUID-`). 11 runs over the cache states:
-- The LOGIC thread stays clean: max 258 ms, 0 cycle over 500 ms. The lock fix holds.
-- Fully cold (Metal cache and engine pipeline cache removed): the RENDER thread takes the compiles, one missed frame
-  each (50–311 ms): sponza 132 misses / 14.1 s, citadel 264 / 37.1 s (mostly the forward light-pass permutations,
-  one set per material, 17 materials there).
-- Metal cache cold, engine pipeline cache warm: a 113.6–114 s MAIN-thread freeze inside `vkCreatePipelineCache`
-  (MoltenVK compiles every Metal library of the 40.7 MB blob, which holds EVERY demo's pipelines: sponza pays for
-  citadel's).
-- Engine cache cold alone is harmless: with a warm Metal cache no compile reaches 50 ms.
-- `MVK_CONFIG_SHOULD_MAXIMIZE_CONCURRENT_COMPILATION` changes nothing: the compiles run one at a time on the
-  calling thread.
-- Two compute pipelines (the IBL baker's, most likely) compile on the LOGIC thread: 88–97 ms on a cold miss.
-
-Proposals: P1 a parallel pipeline warm-up at load (an asynchronous build at first use as the fallback); P2 restore
-the pipeline cache on a worker, then prune it; P3 create the IBL compute pipelines at renderer init or on a worker;
-P4 label the effect and compute pipelines. **The owner chose P2 first.**
-
-## P2 step 1 — the asynchronous restore (done, 2026-10-12)
-
-Design and measurements: engine `docs/subsystems/vulkan/18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md`
-§ "The asynchronous restore". Owner decisions: D1 two caches (live, restored) and one published handle; D2 a scene
-loaded during the restore compiles cold on render, no coupling; D3 a shutdown during the restore waits for it,
-traced; D4 the load marker spans the worker's call. On the M6, Metal cache cold and engine cache warm: the scene
-is loaded at 4.0 s instead of after the 114 s freeze; the restore takes 105.6 s on the worker; MoltenVK's merge at
-save costs 4–8 ms (no recompilation).
+The M6 diagnosis proposed four cures (P1-P4); the owner chose P2 first. They are one item each now:
+P1 here; P2 step 2 (pruning the pipeline cache) in `renderer-cache-pruning`; P3
+`ibl-compute-pipelines-created-on-the-logic-thread`; P4 `label-effect-and-compute-pipelines`.
 
 ## What remains
 
-- **P2 step 2, pruning** — back to the owner with the step-1 numbers. The blob is opaque: one `VkPipelineCache`
-  cannot be trimmed by entry, so pruning needs several caches keyed by what the engine knows: (a) a size / age cap
-  at save; (b) one cache per scene, restored behind its loading screen (shared pipelines duplicated) — the macOS
-  peer's leaning; (c) one blob per pipeline keyed by the engine's hash, LRU (on MoltenVK a per-pipeline restore on a
-  cold Metal cache costs about a cold compile anyway). Data point: sponza alone saves a 4.8 MB cache, the all-demo
-  cache is 40.7 MB.
-- The RENDER thread still stalls on a runtime compile (P1): a missed frame per slow pipeline, seconds in all on a
-  cold Metal cache, and during a cold restore (D2). Cure, with the owner: warm the scene's pipelines in parallel at
-  load, with an asynchronous build at first use as the fallback (the instance skipped until ready).
-- Two COMPUTE pipelines are created on the LOGIC thread itself (P3; M2: 124 and 144 ms, M6: 88–97 ms, unlabelled,
-  right after "Scene will use environment cubemap …": most likely the IBL baker's). Move that creation off the logic
-  thread, or pre-create the baker's pipelines at start-up.
-- Label the effects' and compute pipelines too (P4; 46 "an unlabelled pipeline" lines on macOS).
+- **Design with the owner** (not started): warm the scene's pipelines IN PARALLEL at load, behind the loading screen
+  (the thread pool), so the render thread finds them ready; as the fallback, an instance whose pipeline is missing at
+  first use gets it built ASYNCHRONOUSLY and is skipped until ready, never compiled inline on the render thread.
+- What the warm-up must enumerate: every program an instance of the scene will request (each render pass type and
+  light-pass permutation per material and layer), the same keys `generateShaderProgram()` builds — no second list.
+- Proof: the M6 cold runs above (sponza, citadel) with 0 missed frame over 50 ms from compiles on the render thread,
+  and the same on a cold restore; Linux and Windows unchanged; 0 `VUID-`.
+- It would cure `imposter-bake-lit-rig-compiles-on-render-thread` too (the lit bake rig's synchronous compiles).
+
+## ⚠️ Traps
+
+- Linux hides the problem: NVIDIA compiles in under 1 ms. Reproduce on macOS with the Metal cache moved aside (the
+  directories above), or on Linux with a temporary delay in every pipeline creation (the 2026-10-03 proof used 150 ms).
+- An engine-cache MISS is harmless when the Metal cache already holds the MSL (under 50 ms on the M6): a cold Metal cache
+  is the condition, not a cold engine cache.
+- Never hold a lock the logic thread takes across a preparation that may generate a program or create a pipeline
+  (the 2026-10-03 rule).
+
+## References
+
+- engine `docs/caution-points.md` § "Fixed: the render thread held an entity's components lock across a pipeline compile".
+- engine `docs/subsystems/vulkan/18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md`.
+- Items `renderer-cache-pruning` (P2 step 2), `ibl-compute-pipelines-created-on-the-logic-thread` (P3),
+  `label-effect-and-compute-pipelines` (P4), `imposter-bake-lit-rig-compiles-on-render-thread`.

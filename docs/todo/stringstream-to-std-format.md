@@ -14,6 +14,8 @@ tags: [cpp, c++20]
 
 - [ ] Replace `std::stringstream` with `std::format` (C++20) where it only builds a simple key,
   name or identifier.
+- Scale (2026-10-13): `std::stringstream` / `std::ostringstream` / `std::istringstream` appear on 378 lines of the
+  engine's `src/` and 102 of emeraude-base's `src/`; only the simple key / name builders are in scope.
 
 ## ⚠️ Traps
 

@@ -54,5 +54,7 @@ the land is bare beyond.
 
 ## References
 
+- Item `imposter-far-point-lod`: the other answer to the same bare horizon (a coloured point per tree beyond the
+  imposters); decide the two together.
 - projet-alpha `src/Builtin/Terrain.cpp` (`plantForest`, `TreeDrawDistance`, `ImposterDistance`),
   `src/Builtin/AGENTS.md` § 6d.

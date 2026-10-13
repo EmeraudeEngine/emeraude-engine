@@ -45,6 +45,10 @@ cd .claude-build-release/Release && for i in $(seq 1 8); do timeout 40 \
   grep -c DEVICE_LOST /tmp/gl_$i.log; done
 ```
 
+⚠️ Before the runs, check that `Core/Graphics/PostProcessing/LightingLane` is `"Auto"` or `"RayTracing"` (and that
+`Auto` resolves to ray tracing on that GPU): on any other lane no acceleration structure is built, and clean runs prove
+nothing. The lane is a launch decision (read at startup).
+
 ## ⚠️ Traps when reading those logs
 
 - `device_fault` also matches the startup line `VK_EXT_device_fault detected and enabled` — grep

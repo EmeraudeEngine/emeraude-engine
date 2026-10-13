@@ -28,6 +28,7 @@ that was never once executed.
 `ForbidIncluder` is also the safer behaviour: an `#include` appearing by accident now FAILS
 instead of being silently resolved against an empty search stack.
 
-⚠️ **The day hand-written GLSL sources become a thing** (see [`docs/todo/manual-glsl-sources.md`](../../todo/manual-glsl-sources.md), "Prepare a way to use
-manual GLSL sources"), a real includer plugs in exactly there — written against an actual
+⚠️ **The day hand-written GLSL sources become a thing** for scene programs (an inherited wish, dropped from the board
+on 2026-10-13 with the never-called `setSourceCode()` / `loadSourceCode()`; the effects already compile raw GLSL through
+`ShaderManager::getShaderModuleFromSourceCode()`), a real includer plugs in exactly there — written against an actual
 specification (which directories, which search policy, what caching), not copied from a sample.

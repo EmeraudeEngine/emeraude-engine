@@ -13,7 +13,8 @@ tags: [ave-robustus-ii, raii, defect, fault-injection]
 ## Why
 The defect in this item's id is fixed. `Core.cpp` used to `return EXIT_FAILURE` when `initializeCoreLevel()` failed,
 without `terminate()`: VkInstance, OpenAL and GLFW leaked, and the audio threads could hang at exit. Since c6c237755
-("Ave Robustus II P0: every lifetime ends in its owner, failure paths included", `Core.cpp:478`) it terminates.
+("Ave Robustus II P0: every lifetime ends in its owner, failure paths included"; today `src/Core.cpp:509-516`) it
+terminates.
 Ave Robustus II requires every failure path to be PROVEN clean, and only one step is so far.
 
 ## Done (2026-10-08, P0, c6c237755)
@@ -27,7 +28,9 @@ Ave Robustus II requires every failure path to be PROVEN clean, and only one ste
 ## What remains
 - **Fault injection** (Ave Robustus II § 1.1, phase P3): a test build that forces EACH `initialize*()` step to fail in
   turn (window, input, renderer, physics, audio, notification, overlay) — each exits cleanly, LSan 0 leak, no hang,
-  0 VUID. Only the Vulkan-instance step is proven so far.
+  0 VUID. Only the Vulkan-instance step is proven so far, plus one failure below it: a Vulkan DEVICE whose creation
+  fails (the physics-acceleration device) is released and the process exits 0 — proved by fault injection in
+  `a3d82895` (the `Device` ↔ `Queue` cycle that kept it alive is broken).
 
 ## References
 - projet-alpha `docs/plans/ave-robustus-ii.md` § 3.1 H1, P0 + P3.

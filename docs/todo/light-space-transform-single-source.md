@@ -8,7 +8,7 @@ opened: 2026-09-08
 tags: [shadow-map, architecture, contract]
 ---
 
-# One source of truth for the light-space transform
+# One source of truth for the light-space transform — it is open-coded at four sites
 
 > This is what remains of the CSM rework after the 2026-09-08 verification. **Everything else that
 > item listed is done and pushed** — see [`../shadow-mapping.md`](../shadow-mapping.md) § *Cascaded
@@ -58,5 +58,7 @@ The four sites:
 ## References
 
 - [`../shadow-mapping.md`](../shadow-mapping.md) § Cascaded Shadow Maps — the full verified record.
+- [`directional-light-direction-accessor.md`](directional-light-direction-accessor.md) — the same light's
+  `direction()` reads the GPU-staged lane; the one recipe should share `resolveDirection()` with it.
 - [`volumetric-light-single-scattering.md`](volumetric-light-single-scattering.md) — first external
   consumer of the shadow maps; the "outside the map = lit" convention must live in ONE place.

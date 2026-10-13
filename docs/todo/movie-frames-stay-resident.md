@@ -41,6 +41,11 @@ What stays open here is the residency itself: every frame decoded, for the movie
 1. Find who reads the frames after the animated texture's upload (the frame count and durations are read every frame
    by `BindlessTextureManager::syncTextureSet` / `frameIndexAt`: they must survive as metadata) and whether the GPU
    holds every frame already (an array texture), which would make the CPU frames a pure duplicate.
+   Half answered (2026-10-13, by reading): the GPU DOES hold every frame — `AnimatedTexture2D` creates one array
+   layer per frame (`src/Graphics/TextureResource/AnimatedTexture2D.cpp:111`) behind a `VK_IMAGE_VIEW_TYPE_2D_ARRAY`
+   view (`:127`, `layerCount` `:133`); its `frameCount()` / `duration()` (`:271-289`) only read metadata.
+   `AnimatedTextureCubemap` to check the same way. Still to check before choosing: every path that RE-UPLOADS from the
+   CPU frames (device loss, the CPU-copy release / reload of `docs/subsystems/resources/11-cpu-copy-release.md`).
 2. State of the art first: block-compressed frames (BCn / KTX2 array), or streamed decode into a small ring.
 3. Owner decision on the approach.
 
