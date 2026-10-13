@@ -5882,6 +5882,25 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 > connection (VUID-VkXcbSurfaceCreateInfoKHR-connection-01310), and the macOS one returned false without a trace. The key
 > stays orphaned in an existing `settings.json` (projet-alpha never resets its settings), and nothing reads it.
 
+### Fixed: a minimise killed the swap-chain for good on the Intel iGPU — the surface reaches 0x0 before the published size (2026-10-13)
+
+> [!CAUTION]
+> The guard above is not enough on its own. On Windows (Intel UHD / RaptorLake-S, driver 101.7088) a minimise makes the
+> present report `VK_ERROR_OUT_OF_DATE_KHR` while `publishedFramebufferSize()` still holds the old size, but the surface
+> already reports a 0x0 `maxImageExtent` (the Vulkan spec allows it on Win32). `chooseSwapExtent()` clamped the published
+> size into that range: `vkCreateSwapchainKHR` with a 0x0 extent (VUID-VkSwapchainCreateInfoKHR-imageExtent-01689).
+> `createBaseSwapChain()` then destroyed the old swap-chain (retired by the call anyway) but left `m_handle` holding it:
+> every later recreation passed it as `oldSwapchain` and destroyed it again (VUID-VkSwapchainCreateInfoKHR-oldSwapchain-parameter,
+> VUID-vkDestroySwapchainKHR-swapchain-parameter), and the window never drew again (no notifier, no menu re-commit).
+> NVIDIA (596.58) never recreates while minimised, so it never showed. Fixed: `Renderer::recreateRenderingSubSystem()` also
+> skips while the updated surface reports a 0x0 maximum extent (same ruling: frame skipped, swap-chain degraded, retried
+> next frame), and `createBaseSwapChain()` creates into a local handle, so `m_handle` is the new handle or `VK_NULL_HANDLE`,
+> never a destroyed one. Proof (Windows peer, validation on, main menu, minimise/restore through `WM_SYSCOMMAND`): Intel
+> 16 VUID over 3 cycles before, 0 over 5 after; NVIDIA 0 before and after; the full resize / burst / minimise sequence
+> (menu then labyrinth) 0 VUID on both, the menu re-committed at every size.
+> ⚠️ Still open (owner): a FAILED `recreate()` leaves the status `UnderConstruction`, which `isSwapChainDegraded()` does not
+> retry: the display freezes until the next window event re-triggers a recreation.
+
 ### Fixed: every settings file kept the version and the date of its FIRST write (2026-10-01, triad 15)
 
 > Reading a settings file puts its header keys (`WrittenByEngineVersion`, `WrittenByApplicationVersion`, `WrittenAtDate`)
@@ -8273,9 +8292,22 @@ thread every cycle and an observer calling back on `RedrawRequested`): the ORIGI
 races per run (`Matrix::reset` in `updateModelMatrix()` against the draw, the `AARectangle` setters, the surface vector);
 with the redraw deferral disabled the main thread self-deadlocks at the first resize (`onWindowResized()` →
 `invalidate()` → `RedrawRequested` → the observer's `updateVideoMemory()`); the fixed code: 0 report, 3 complete runs
-(~280 resizes, ~2 470 `RedrawRequested`, 1 800 geometry changes each). ⚠️ The same stress also kills lavapipe
-intermittently (a SEGV in its queue thread, 1 run in 4 on the ORIGINAL code too): a surface rebuilt off the render thread
-frees an image a recorded, unsubmitted frame still uses — todo `overlay-surface-rebuilt-while-a-frame-is-recorded`.
+(~280 resizes, ~2 470 `RedrawRequested`, 1 800 geometry changes each); `UIScreen::m_isVisible` (written by
+`setVisibility()` on the application's thread, read by the render thread) became atomic the same day.
+
+### ⚠️ An overlay surface's GPU buffers are RETIRED, never destroyed in place (2026-10-13)
+
+A surface's image, view and descriptor set go to `Renderer::deferredDestructor()` (`Framebuffer::retire()`) when the
+surface is rebuilt (`updatePhysicalRepresentation()`, `recreateTransitionBufferToRequestedSize()`) and when it is
+destroyed (`~Surface()`). Owner decision 2026-10-13 (option (a) of the former item
+`overlay-surface-rebuilt-while-a-frame-is-recorded`). Why: a screen or a surface is destroyed, and a resize rebuilds it,
+on the main thread while the render thread may hold a frame it RECORDED (under the representation lock) but has not
+SUBMITTED yet — `waitIdle()` covers only submitted work, and `~Surface()` had not even that. Found by the overlay stress:
+lavapipe died in its queue thread (a SEGV, 4 runs of 6, and 1 of 4 on the code before the lot) as the stress destroyed
+its screen at stop; with the validation layer the same moment gave `VUID-vkDestroyImageView-imageView-01026` and
+`VUID-vkFreeDescriptorSets-pDescriptorSets-00309`. After the change: 0 `VUID-` with validation (shutdown included),
+**0 report and 0 SEGV over 6 TSan runs**. The `waitIdle()` per rebuild is gone with it.
+⚠️ `Framebuffer::destroy()` stays immediate: only for resources no recorded or submitted frame can reference.
 
 ### ⚠️ A resource's data is published by isLoaded() — read it only then (2026-10-12)
 

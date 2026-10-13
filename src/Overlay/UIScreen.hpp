@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <atomic>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -686,10 +687,12 @@ namespace EmEn::Overlay
 			 * drag on an overlay view while a 3D view below keeps receiving the moves). */
 			std::weak_ptr< Surface > m_pointerMoveTapSurface;
 			mutable std::mutex m_surfacesMutex;
+			/* NOTE: Atomic: setVisibility() runs on the application's thread, the render thread reads it in
+			 * Overlay::Manager::render() (a data race found by the overlay stress, 2026-10-13). */
+			std::atomic_bool m_isVisible{false};
 			/* The surfaces being processed by processSurfaceUpdates() (render thread), copied under m_surfacesMutex and
 			 * reused: no allocation per frame, no lock held while a surface notifies its observers. */
 			std::vector< std::shared_ptr< Surface > > m_surfaceSnapshot;
-			bool m_isVisible{false};
 			bool m_isListeningKeyboard{false};
 			bool m_isListeningPointer{false};
 			bool m_premultipliedAlpha{false};

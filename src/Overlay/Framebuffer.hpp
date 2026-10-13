@@ -42,6 +42,7 @@
 namespace EmEn::Vulkan
 {
 	class ImageView;
+	class DeferredDestructor;
 }
 
 namespace EmEn::Overlay
@@ -100,8 +101,19 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Destroys all GPU resources.
+			 * @warning Immediate: only for resources no recorded or submitted frame can reference (a buffer that was
+			 * never drawn, or the device idle). Otherwise retire().
 			 */
 			void destroy () noexcept;
+
+			/**
+			 * @brief Hands the GPU resources (descriptor set, view, image) to the renderer's deferred destructor.
+			 * @details They are destroyed once every frame that may reference them has completed — including a frame
+			 * the render thread recorded but has not submitted yet, which no waitIdle() covers (owner decision 2026-10-13;
+			 * docs/caution-points.md § "An overlay surface's GPU buffers are RETIRED"). The pixmap stays.
+			 * @param deferredDestructor A reference to the renderer's deferred destructor (Renderer::deferredDestructor()).
+			 */
+			void retire (Vulkan::DeferredDestructor & deferredDestructor) noexcept;
 
 			/**
 			 * @brief Writes to the GPU image using memory mapping with RAII safety.

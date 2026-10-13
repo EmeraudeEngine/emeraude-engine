@@ -194,8 +194,13 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Destructs the surface.
+			 * @details Its GPU buffers are RETIRED through the renderer's deferred destructor, not destroyed in place: a
+			 * screen or a surface may be destroyed from any thread (the application's main thread) while the render thread
+			 * holds a recorded or submitted frame that samples them (docs/caution-points.md § "An overlay surface's GPU
+			 * buffers are RETIRED"; found by the overlay stress, 2026-10-13: a lavapipe SEGV and
+			 * VUID-vkDestroyImageView-imageView-01026).
 			 */
-			~Surface () noexcept override = default;
+			~Surface () noexcept override;
 
 			/**
 			 * @brief Enables double buffering mode for asynchronous content providers.

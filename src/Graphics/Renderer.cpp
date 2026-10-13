@@ -3056,6 +3056,16 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* NOTE: The published framebuffer size can lag the surface: on Windows a minimise makes the present report
+		 * VK_ERROR_OUT_OF_DATE_KHR before GLFW publishes the 0x0 size, while the surface already reports a 0x0
+		 * maximum extent (Intel UHD, 2026-10-13; the Vulkan spec allows it on Win32). No swap-chain can be made then
+		 * (VUID-VkSwapchainCreateInfoKHR-imageExtent-01689): same ruling as above, the frame is skipped, the
+		 * swap-chain stays degraded and this is retried on the next frame. */
+		if ( const auto & capabilities = m_window.surface()->capabilities(); capabilities.maxImageExtent.width == 0 || capabilities.maxImageExtent.height == 0 )
+		{
+			return true;
+		}
+
 		/* NOTE: Recreate the swap-chain. */
 		if ( withSurface )
 		{

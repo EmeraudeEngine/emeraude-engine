@@ -78,8 +78,7 @@ namespace
 
 			explicit
 			ReentrantObserver (Overlay::Manager & overlayManager) noexcept
-				: m_overlayManager{overlayManager},
-				m_mainThread{std::this_thread::get_id()}
+				: m_overlayManager{overlayManager}
 			{
 
 			}
@@ -130,12 +129,13 @@ namespace
 					case Overlay::Manager::RedrawRequested :
 						m_redrawRequests.fetch_add(1U);
 
-						/* NOTE: The call back into the manager of the redraw item, on the MAIN thread only (where the resize
-						 * pass requests redraws from inside the pass), once at a time: the pass it runs may request a
-						 * redraw again (a rebuilt surface), which must not recurse without bound. Not from the logic
-						 * thread: a pass there rebuilds a surface while the render thread holds a recorded, unsubmitted
-						 * frame (see the engine item overlay-surface-rebuilt-while-a-frame-is-recorded). */
-						if ( std::this_thread::get_id() == m_mainThread && m_callbackThread.load() != std::this_thread::get_id() )
+						/* NOTE: The call back into the manager, from whichever thread emits (the main thread inside the
+						 * resize pass, the logic thread through the geometry setters), once at a time per thread: the pass it
+						 * runs may request a redraw again (a rebuilt surface), which must not recurse without bound. A pass
+						 * off the render thread rebuilds a surface while the render thread may hold a recorded, unsubmitted
+						 * frame: the old buffer is retired through the deferred destructor (destroyed in place, it killed
+						 * lavapipe, 2026-10-13). */
+						if ( m_callbackThread.load() != std::this_thread::get_id() )
 						{
 							m_callbackThread.store(std::this_thread::get_id());
 
@@ -153,7 +153,6 @@ namespace
 			}
 
 			Overlay::Manager & m_overlayManager;
-			std::thread::id m_mainThread;
 			std::atomic< std::thread::id > m_callbackThread;
 			std::atomic< uint64_t > m_resizes{0};
 			std::atomic< uint64_t > m_scaleChanges{0};

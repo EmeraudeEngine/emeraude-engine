@@ -67,6 +67,19 @@ namespace EmEn::Overlay
 	static_assert(Surface::fitPopupOrigin(2147483647, 2147483647, 4294967295U, 4294967295U, 4294967295U, 4294967295U) == std::array< uint32_t, 2 >{0, 0}, "Extremes: no overflow.");
 	static_assert(Surface::fitPopupOrigin(5, 5, 0, 0, 0, 0) == std::array< uint32_t, 2 >{0, 0}, "Empty surface: at 0.");
 
+	Surface::~Surface () noexcept
+	{
+		/* NOTE: m_renderer is set by createOnHardware(); a surface never created on the hardware owns no GPU buffer. The
+		 * renderer outlives every overlay surface and flushes its queue at its termination. */
+		if ( m_renderer != nullptr )
+		{
+			auto & deferredDestructor = m_renderer->deferredDestructor();
+
+			m_transitionBuffer.retire(deferredDestructor);
+			m_activeBuffer.retire(deferredDestructor);
+		}
+	}
+
 	bool
 	Surface::isBelowPoint (float positionX, float positionY) const noexcept
 	{
@@ -832,9 +845,9 @@ namespace EmEn::Overlay
 			}
 		}
 
-		renderer.device()->waitIdle("Surface::recreateTransitionBufferToRequestedSize()");
-
-		m_transitionBuffer.destroy();
+		/* NOTE: Retired, not destroyed: after a commit the transition buffer is the former ACTIVE one, which a frame the
+		 * render thread recorded but has not submitted yet may still sample (no waitIdle() covers it). */
+		m_transitionBuffer.retire(renderer.deferredDestructor());
 
 		/* NOTE: No clear — never sampled, and this runs on every window-drag event. */
 		if ( !this->createFramebufferResources(m_transitionBuffer, renderer, requestedWidth, requestedHeight, false) )
@@ -946,10 +959,9 @@ namespace EmEn::Overlay
 				}
 			}
 
-			/* NOTE: Wait for GPU to finish using the old transition resources before destroying them. */
-			renderer.device()->waitIdle("Surface::updatePhysicalRepresentation() - transition buffer");
-
-			m_transitionBuffer.destroy();
+			/* NOTE: Retired, not destroyed: after a commit the transition buffer is the former ACTIVE one, which a recorded,
+			 * unsubmitted frame may still sample — and this pass may run on the main thread (a window resize). */
+			m_transitionBuffer.retire(renderer.deferredDestructor());
 
 			/* NOTE: No clear — never sampled, and this runs on every window-drag event. */
 			if ( !this->createFramebufferResources(m_transitionBuffer, renderer, textureWidth, textureHeight, false) )
@@ -989,9 +1001,9 @@ namespace EmEn::Overlay
 			}
 		}
 
-		renderer.device()->waitIdle("Surface::updatePhysicalRepresentation() - active buffer");
-
-		m_activeBuffer.destroy();
+		/* NOTE: Retired, not destroyed: a frame the render thread recorded but has not submitted yet may still sample it,
+		 * and this pass may run on the main thread (a window resize); waitIdle() covered only the submitted frames. */
+		m_activeBuffer.retire(renderer.deferredDestructor());
 
 		if ( !this->createFramebufferResources(m_activeBuffer, renderer, textureWidth, textureHeight, true) )
 		{

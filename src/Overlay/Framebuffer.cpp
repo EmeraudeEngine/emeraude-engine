@@ -26,7 +26,12 @@
 
 #include "Framebuffer.hpp"
 
+/* STL inclusions. */
+#include <memory>
+#include <utility>
+
 /* Local inclusions. */
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/ImageView.hpp"
 
 namespace EmEn::Overlay
@@ -81,5 +86,15 @@ namespace EmEn::Overlay
 			image->destroyFromHardware();
 			image.reset();
 		}
+	}
+
+	void
+	Framebuffer::retire (Vulkan::DeferredDestructor & deferredDestructor) noexcept
+	{
+		/* NOTE: In dependency order (the set references the view, the view the image): the queue destroys its entries in
+		 * retirement order. A null member is ignored by retireObject(); the moved-from members are null afterwards. */
+		deferredDestructor.retireObject(std::move(descriptorSet));
+		deferredDestructor.retireObject(std::shared_ptr< void >{std::move(imageView)});
+		deferredDestructor.retireObject(std::shared_ptr< void >{std::move(image)});
 	}
 }

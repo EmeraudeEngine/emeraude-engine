@@ -138,13 +138,23 @@ namespace EmEn::Vulkan
 		m_createInfo.clipped = VK_TRUE;
 		m_createInfo.oldSwapchain = oldSwapChain;
 
-		const VkResult result = vkCreateSwapchainKHR(this->device()->handle(), &m_createInfo, nullptr, &m_handle);
+		VkSwapchainKHR newHandle{VK_NULL_HANDLE};
 
-		/* NOTE: Destroy the previous swap chain if exists. */
+		const VkResult result = vkCreateSwapchainKHR(this->device()->handle(), &m_createInfo, nullptr, &newHandle);
+
+		/* NOTE: Destroy the previous swap chain if exists. It is retired by the call even when the creation fails
+		 * (Vulkan spec, vkCreateSwapchainKHR), so it goes either way. m_handle may hold that very handle (recreate()
+		 * passes it): it takes the new handle, or VK_NULL_HANDLE on a failure, never the destroyed one — a failed
+		 * creation used to leave it dangling, and every later recreation passed it as oldSwapchain and destroyed it
+		 * again (VUID-VkSwapchainCreateInfoKHR-oldSwapchain-parameter, VUID-vkDestroySwapchainKHR-swapchain-parameter). */
 		if ( m_createInfo.oldSwapchain != VK_NULL_HANDLE )
 		{
 			vkDestroySwapchainKHR(this->device()->handle(), m_createInfo.oldSwapchain, nullptr);
+
+			m_createInfo.oldSwapchain = VK_NULL_HANDLE;
 		}
+
+		m_handle = newHandle;
 
 		if ( result != VK_SUCCESS )
 		{

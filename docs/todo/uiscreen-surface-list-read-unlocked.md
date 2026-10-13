@@ -28,8 +28,9 @@ public and called from other threads (the stress's logic thread, a downstream ap
 - Decide the protocol per reader: a snapshot under the lock (the pattern of `processSurfaceUpdates()` and
   `snapshotScreens()`), or the lock held for the search only (`getSurface()` returns a `shared_ptr`). The input
   dispatchers call into surfaces, which may call back into the screen: a snapshot, never the lock held across the calls.
-- `UIScreen::destroySurface()` and `clearSurfaces()` call `device()->waitIdle()` while holding `m_surfacesMutex`: move it
-  out of the lock (or retire through the deferred destructor, see `overlay-surface-rebuilt-while-a-frame-is-recorded`).
+- `UIScreen::destroySurface()` and `clearSurfaces()` call `device()->waitIdle()` while holding `m_surfacesMutex`: since
+  2026-10-13 a surface retires its GPU buffers in its destructor (engine `docs/caution-points.md` § "An overlay surface's
+  GPU buffers are RETIRED"), so that wait is redundant — remove it (it stalls the device under the lock).
 - Proof: extend `tools/stress/OverlayResizeStress.cpp` with a thread that creates / destroys / reorders surfaces and
   injects pointer events; 0 TSan report over 6 runs.
 
