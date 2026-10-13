@@ -8240,8 +8240,15 @@ locked the mutex its own thread held — reproduced by `EmeraudeOverlayResizeStr
 `updateVideoMemory()` under `onWindowResized()`, the process deaf to SIGTERM). The payloads are copies taken under the
 lock. `OverlayScaleChanged` now compares the OVERLAY scale before and after (with `OverlayForceScaleKey` the window
 content scale differs from it, and the old comparison fired the signal on every resize); its payload is that scale.
-⚠️ Still under the lock: `RedrawRequested` (a surface's redraw requester, from `invalidate()` / `processUpdates()`) and
-the surface hooks run by `processUpdates()` — todo `overlay-redraw-requested-under-lock`.
+Since 2026-10-13 `RedrawRequested` is never emitted under a lock of the overlay either (owner decision, option (a)): a
+request made on the thread running a representation pass (`updateVideoMemory()`, `onWindowResized()`, marked by
+`Manager::RepresentationPass`) is recorded and emitted ONCE after the lock (`flushDeferredRedraw()`); the screen
+notifications (`UIScreenCreated` / `Destroying` / `Destroyed`) leave `m_screensAccess` first (`Destroying` still before
+the erase); a screen's redraw requests leave its `m_surfacesMutex` first (`UIScreen::DeferredRedraw`, declared before
+the lock guard). The overlay stress found the two last ones as self-deadlocks once its observer called back on
+`RedrawRequested`. The surface hooks (`onActiveBufferReady()`, `onTransitionBufferReady()`) still run inside the pass,
+by design: an override must not call into the manager or take the surface's buffer lock — the CEF web views only post to
+CEF (audited).
 
 ### ⚠️ Overlay::Surface visibility is atomic (2026-10-12)
 
@@ -8250,8 +8257,25 @@ the surface hooks run by `processUpdates()` — todo `overlay-redraw-requested-u
 and `m_videoMemoryUpToDate` (2026-10-12, the overlay resize stress: `invalidate()` on the main thread under the
 representation lock, `isVideoMemorySizeValid()` read by the notifier's timer under the surface's buffer lock — two
 different locks). A new cross-thread flag must be atomic or locked too. ⚠️ Atomics remove the data race, not the
-lost update: `setGeometry()` / `setSize()` write `m_rectangle` and invalidate without any lock while the render thread
-recreates the buffer from it — todo `overlay-surface-geometry-setters-unsynchronized`.
+lost update. Since 2026-10-13 (owner decision, option (b)):
+- the geometry state — `m_rectangle`, `m_depth`, `m_modelMatrix`, `m_latchedProperties` — lives under the LEAF lock
+  `m_geometryAccess` (never held while taking another lock or calling out). The setters update the rectangle AND the
+  model matrix under it, from any thread; `geometry()`, `modelMatrix()` and `latchedProperties()` return COPIES (they
+  returned references — a source-compatible change for `const auto &` and temporaries, not for a non-const reference);
+- the size validity is a generation pair (`m_sizeGeneration` bumped by `invalidate()`, `m_validSizeGeneration` stored
+  by the rebuild with the generation it read BEFORE reading the geometry): an invalidation that lands during a rebuild
+  is never lost, the next pass rebuilds again;
+- `processUpdates()` takes the buffer lock through `std::unique_lock{…, std::try_to_lock}` (no manual pair).
+Also found by the stress the same day: `UIScreen::empty()` read the surface list unlocked from the render thread (now
+locked); the other unlocked readers are todo `uiscreen-surface-list-read-unlocked`.
+Proof (2026-10-13, Linux, lavapipe, `tools/stress/OverlayResizeStress.cpp` with a surface moved / resized by the logic
+thread every cycle and an observer calling back on `RedrawRequested`): the ORIGINAL overlay code gives 19-24 TSan data
+races per run (`Matrix::reset` in `updateModelMatrix()` against the draw, the `AARectangle` setters, the surface vector);
+with the redraw deferral disabled the main thread self-deadlocks at the first resize (`onWindowResized()` →
+`invalidate()` → `RedrawRequested` → the observer's `updateVideoMemory()`); the fixed code: 0 report, 3 complete runs
+(~280 resizes, ~2 470 `RedrawRequested`, 1 800 geometry changes each). ⚠️ The same stress also kills lavapipe
+intermittently (a SEGV in its queue thread, 1 run in 4 on the ORIGINAL code too): a surface rebuilt off the render thread
+frees an image a recorded, unsubmitted frame still uses — todo `overlay-surface-rebuilt-while-a-frame-is-recorded`.
 
 ### ⚠️ A resource's data is published by isLoaded() — read it only then (2026-10-12)
 

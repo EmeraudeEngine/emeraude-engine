@@ -130,6 +130,9 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::destroySurface (const std::string & name) noexcept
 	{
+		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
+		DeferredRedraw redraw{*this};
+
 		const std::scoped_lock lock{m_surfacesMutex};
 
 		/* NOTE: Wait for the GPU to finish all pending work before destroying the surface.
@@ -156,13 +159,8 @@ namespace EmEn::Overlay
 		 * their internal depth back to match the new positions. */
 		this->recomputeDepths();
 
-		/* NOTE: Removing a surface changes the composited image. recomputeDepths() already
-		 * re-notifies remaining surfaces, but not when the screen just became empty, so
-		 * request a redraw explicitly here (on-demand rendering). */
-		if ( m_redrawRequester )
-		{
-			m_redrawRequester();
-		}
+		/* NOTE: Removing a surface changes the composited image (on-demand rendering). */
+		redraw.arm();
 
 		return true;
 	}
@@ -170,6 +168,9 @@ namespace EmEn::Overlay
 	void
 	UIScreen::clearSurfaces () noexcept
 	{
+		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
+		DeferredRedraw redraw{*this};
+
 		const std::scoped_lock lock{m_surfacesMutex};
 
 		/* NOTE: Same GPU sync rationale as destroySurface(). */
@@ -178,10 +179,7 @@ namespace EmEn::Overlay
 		m_surfaces.clear();
 
 		/* NOTE: The screen is now empty: request a redraw (on-demand rendering). */
-		if ( m_redrawRequester )
-		{
-			m_redrawRequester();
-		}
+		redraw.arm();
 	}
 
 	std::shared_ptr< const Surface >
@@ -620,6 +618,9 @@ namespace EmEn::Overlay
 	bool
 	UIScreen::bringToFront (const std::string & name) noexcept
 	{
+		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
+		DeferredRedraw redraw{*this};
+
 		const std::scoped_lock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
@@ -645,12 +646,17 @@ namespace EmEn::Overlay
 
 		this->recomputeDepths();
 
+		redraw.arm();
+
 		return true;
 	}
 
 	bool
 	UIScreen::sendToBack (const std::string & name) noexcept
 	{
+		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
+		DeferredRedraw redraw{*this};
+
 		const std::scoped_lock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
@@ -676,12 +682,17 @@ namespace EmEn::Overlay
 
 		this->recomputeDepths();
 
+		redraw.arm();
+
 		return true;
 	}
 
 	bool
 	UIScreen::bringForward (const std::string & name) noexcept
 	{
+		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
+		DeferredRedraw redraw{*this};
+
 		const std::scoped_lock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
@@ -705,12 +716,17 @@ namespace EmEn::Overlay
 
 		this->recomputeDepths();
 
+		redraw.arm();
+
 		return true;
 	}
 
 	bool
 	UIScreen::sendBackward (const std::string & name) noexcept
 	{
+		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
+		DeferredRedraw redraw{*this};
+
 		const std::scoped_lock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
@@ -734,6 +750,8 @@ namespace EmEn::Overlay
 
 		this->recomputeDepths();
 
+		redraw.arm();
+
 		return true;
 	}
 
@@ -746,6 +764,9 @@ namespace EmEn::Overlay
 
 			return false;
 		}
+
+		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
+		DeferredRedraw redraw{*this};
 
 		const std::scoped_lock lock{m_surfacesMutex};
 
@@ -784,6 +805,8 @@ namespace EmEn::Overlay
 
 		this->recomputeDepths();
 
+		redraw.arm();
+
 		return true;
 	}
 
@@ -796,6 +819,9 @@ namespace EmEn::Overlay
 
 			return false;
 		}
+
+		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
+		DeferredRedraw redraw{*this};
 
 		const std::scoped_lock lock{m_surfacesMutex};
 
@@ -831,6 +857,8 @@ namespace EmEn::Overlay
 		m_surfaces.insert(refItAfterErase, std::move(surface));
 
 		this->recomputeDepths();
+
+		redraw.arm();
 
 		return true;
 	}

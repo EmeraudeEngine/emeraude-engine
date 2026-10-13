@@ -70,16 +70,18 @@ namespace EmEn::Overlay
 	bool
 	Surface::isBelowPoint (float positionX, float positionY) const noexcept
 	{
+		const auto rectangle = this->geometry();
+
 		/* NOTE: Check on X axis */
 		{
 			const auto screenWidth = static_cast< float >(m_framebufferProperties.width());
 
-			if ( const auto positionXa = screenWidth * m_rectangle.left(); positionX < positionXa )
+			if ( const auto positionXa = screenWidth * rectangle.left(); positionX < positionXa )
 			{
 				return false;
 			}
 
-			if ( const auto positionXb = screenWidth * m_rectangle.right(); positionX > positionXb )
+			if ( const auto positionXb = screenWidth * rectangle.right(); positionX > positionXb )
 			{
 				return false;
 			}
@@ -89,12 +91,12 @@ namespace EmEn::Overlay
 		{
 			const auto screenHeight = static_cast< float >(m_framebufferProperties.height());
 
-			if ( const auto positionYa = screenHeight * m_rectangle.top(); positionY < positionYa )
+			if ( const auto positionYa = screenHeight * rectangle.top(); positionY < positionYa )
 			{
 				return false;
 			}
 
-			if ( const auto positionYb = screenHeight * m_rectangle.bottom(); positionY > positionYb )
+			if ( const auto positionYb = screenHeight * rectangle.bottom(); positionY > positionYb )
 			{
 				return false;
 			}
@@ -119,8 +121,9 @@ namespace EmEn::Overlay
 		}
 
 		/* Get the pixel coordinates on the surface. */
-		const auto surfaceX = static_cast< uint32_t >(screenX - (static_cast< float >(m_framebufferProperties.width()) * m_rectangle.left()));
-		const auto surfaceY = static_cast< uint32_t >(screenY - (static_cast< float >(m_framebufferProperties.height()) * m_rectangle.top()));
+		const auto rectangle = this->geometry();
+		const auto surfaceX = static_cast< uint32_t >(screenX - (static_cast< float >(m_framebufferProperties.width()) * rectangle.left()));
+		const auto surfaceY = static_cast< uint32_t >(screenY - (static_cast< float >(m_framebufferProperties.height()) * rectangle.top()));
 
 		/* Get that pixel color from the pixmap. */
 		const auto pixelColor = m_activeBuffer.pixmap.safePixel(surfaceX, surfaceY);
@@ -207,8 +210,11 @@ namespace EmEn::Overlay
 				"linearSampled=" << ( linearSampled ? "yes" : "no" ) << "].";
 		}
 
+		/* NOTE: The size generation is read BEFORE the geometry: an invalidate() after this read moves it, and the
+		 * buffer built here is then not marked valid for it. */
+		const auto sizeGeneration = m_sizeGeneration.load();
 		const auto & framebuffer = this->framebufferProperties();
-		const auto & geometry = this->geometry();
+		const auto geometry = this->geometry();
 
 		const auto textureWidth = framebuffer.getSurfaceWidth(geometry.width());
 		const auto textureHeight = framebuffer.getSurfaceHeight(geometry.height());
@@ -241,7 +247,7 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		m_videoMemorySizeValid = true;
+		m_validSizeGeneration.store(sizeGeneration);
 		m_videoMemoryUpToDate = true;
 
 		this->onActiveBufferReady(m_activeBuffer);
@@ -404,34 +410,35 @@ namespace EmEn::Overlay
 	bool
 	Surface::processUpdates (Renderer & renderer) noexcept
 	{
-		if ( !m_framebufferAccess.try_lock() )
+		/* NOTE: A content writer holds the buffer: skip this pass, the next one catches up (CP.20: a guard, never a manual
+		 * lock / unlock pair). */
+		const std::unique_lock lock{m_framebufferAccess, std::try_to_lock};
+
+		if ( !lock.owns_lock() )
 		{
 			return true;
 		}
 
 		/* Step 1: Handle size changes.
-		 * This is triggered by invalidate() from window resize or manual setSize()/setGeometry(). */
-		if ( !this->isVideoMemorySizeValid() )
+		 * This is triggered by invalidate() from window resize or manual setSize()/setGeometry(). The size generation is
+		 * read BEFORE updatePhysicalRepresentation() reads the geometry: an invalidate() landing during the rebuild moves
+		 * the generation past the one stored below, so the next pass rebuilds again instead of losing it. The model
+		 * matrix is already current (the setters recompute it). */
+		if ( const auto sizeGeneration = m_sizeGeneration.load(); sizeGeneration != m_validSizeGeneration.load() )
 		{
-			this->updateModelMatrix();
-
 			if ( !this->updatePhysicalRepresentation(renderer) )
 			{
 				TraceError{ClassId} << "Unable to update the physical representation of surface '" << this->name() << "' !";
 
-				m_framebufferAccess.unlock();
-
 				return false;
 			}
 
-			m_videoMemorySizeValid = true;
+			m_validSizeGeneration.store(sizeGeneration);
 			m_videoMemoryUpToDate = false;
 
 			/* NOTE: After buffer recreation, defer the GPU upload to the next processUpdates() call.
 			 * This avoids a wasted upload when observers (e.g., Notifier via OverlayResized)
 			 * rewrite the pixmap content before the render thread's next updateVideoMemory() pass. */
-			m_framebufferAccess.unlock();
-
 			return true;
 		}
 
@@ -445,8 +452,6 @@ namespace EmEn::Overlay
 		if ( m_transitionBufferEnabled && !this->recreateTransitionBufferToRequestedSize(renderer) )
 		{
 			TraceError{ClassId} << "Unable to honor the requested transition buffer resize for surface '" << this->name() << "' !";
-
-			m_framebufferAccess.unlock();
 
 			return false;
 		}
@@ -471,8 +476,6 @@ namespace EmEn::Overlay
 			{
 				TraceError{ClassId} << "Unable to update the content of surface '" << this->name() << "' !";
 
-				m_framebufferAccess.unlock();
-
 				return false;
 			}
 
@@ -488,8 +491,6 @@ namespace EmEn::Overlay
 
 			//TraceDebug{ClassId} << "Surface '" << this->name() << "' pixmap uploaded to GPU (" << m_activeBuffer.width() << "x" << m_activeBuffer.height() << "px, framebuffer:" << m_framebufferProperties.width() << "x" << m_framebufferProperties.height() << "px, scale:" << m_framebufferProperties.maxScreenScale() << ").";
 		}
-
-		m_framebufferAccess.unlock();
 
 		return true;
 	}
@@ -871,7 +872,7 @@ namespace EmEn::Overlay
 	Surface::updatePhysicalRepresentation (Renderer & renderer) noexcept
 	{
 		const auto & framebuffer = this->framebufferProperties();
-		const auto & geometry = this->geometry();
+		const auto geometry = this->geometry();
 
 		const auto textureWidth = framebuffer.getSurfaceWidth(geometry.width());
 		const auto textureHeight = framebuffer.getSurfaceHeight(geometry.height());
@@ -1683,7 +1684,15 @@ namespace EmEn::Overlay
 	std::ostream &
 	operator<< (std::ostream & out, const Surface & obj)
 	{
-		return out << "Surface '" << obj.name() << "' [stack-depth:" << obj.m_depth << "] " << obj.geometry() << "Model matrix : " << obj.modelMatrix();
+		float depth = 0.0F;
+
+		{
+			const std::scoped_lock lock{obj.m_geometryAccess};
+
+			depth = obj.m_depth;
+		}
+
+		return out << "Surface '" << obj.name() << "' [stack-depth:" << depth << "] " << obj.geometry() << "Model matrix : " << obj.modelMatrix();
 	}
 
 	std::string

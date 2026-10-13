@@ -41,6 +41,7 @@
 #include <concepts>
 #include <functional>
 #include <chrono>
+#include <mutex>
 
 /* Local inclusions for usages. */
 #include "Math/Matrix.hpp"
@@ -414,34 +415,44 @@ namespace EmEn::Overlay
 			 * syncPropertiesLatch(). A provider whose content is produced off the render thread / in another
 			 * process (e.g. an OSR web-view) reads THIS so it always observes a coherent (scale, size) tuple,
 			 * never a half-applied transition. Seeded to the live properties at construction.
-			 * @return const FramebufferProperties &
+			 * @note Thread-safe: a copy taken under m_geometryAccess (the provider reads it on its own thread while
+			 * syncPropertiesLatch() runs on the render thread).
+			 * @return FramebufferProperties
 			 */
 			[[nodiscard]]
-			const FramebufferProperties &
+			FramebufferProperties
 			latchedProperties () const noexcept
 			{
+				const std::scoped_lock lock{m_geometryAccess};
+
 				return m_latchedProperties;
 			}
 
 			/**
 			 * @brief Returns the surface geometry.
-			 * @return const Base::Math::Space2D::AARectangle< float > &
+			 * @note Thread-safe: a copy taken under m_geometryAccess (the setters run on any thread).
+			 * @return Base::Math::Space2D::AARectangle< float >
 			 */
 			[[nodiscard]]
-			const Base::Math::Space2D::AARectangle< float > &
+			Base::Math::Space2D::AARectangle< float >
 			geometry () const noexcept
 			{
+				const std::scoped_lock lock{m_geometryAccess};
+
 				return m_rectangle;
 			}
 
 			/**
 			 * @brief Returns the model matrix to place the surface on screen.
-			 * @return const Base::Math::Matrix< 4, float > &
+			 * @note Thread-safe: a copy taken under m_geometryAccess, recomputed by every geometry or stack mutation.
+			 * @return Base::Math::Matrix< 4, float >
 			 */
 			[[nodiscard]]
-			const Base::Math::Matrix< 4, float > &
+			Base::Math::Matrix< 4, float >
 			modelMatrix () const noexcept
 			{
+				const std::scoped_lock lock{m_geometryAccess};
+
 				return m_modelMatrix;
 			}
 
@@ -483,12 +494,21 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Redefines the surface position and size in the screen.
+			 * @note Thread-safe (any thread): the rectangle and the model matrix change under m_geometryAccess, then the
+			 * size generation moves (invalidate()), so a render pass that rebuilt from the previous rectangle cannot mark
+			 * the buffer valid for the new one.
 			 * @param rectangle A reference to a rectangle.
 			 */
 			void
 			setGeometry (const Base::Math::Space2D::AARectangle< float > & rectangle) noexcept
 			{
-				m_rectangle = rectangle;
+				{
+					const std::scoped_lock lock{m_geometryAccess};
+
+					m_rectangle = rectangle;
+
+					this->updateModelMatrix();
+				}
 
 				/* NOTE: The texture must be resized. */
 				this->invalidate();
@@ -496,30 +516,42 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Sets the surface position in the screen.
+			 * @note Thread-safe (any thread), see setGeometry().
 			 * @param xPosition The absolute X position.
 			 * @param yPosition The absolute Y position.
 			 */
 			void
 			setPosition (float xPosition, float yPosition) noexcept
 			{
-				m_rectangle.setLeft(xPosition);
-				m_rectangle.setTop(yPosition);
+				{
+					const std::scoped_lock lock{m_geometryAccess};
 
-				this->updateModelMatrix();
+					m_rectangle.setLeft(xPosition);
+					m_rectangle.setTop(yPosition);
+
+					this->updateModelMatrix();
+				}
 
 				this->notifyRedrawRequired();
 			}
 
 			/**
 			 * @brief Sets the surface size in the screen.
+			 * @note Thread-safe (any thread), see setGeometry().
 			 * @param width A scalar value.
 			 * @param height A scalar value.
 			 */
 			void
 			setSize (float width, float height) noexcept
 			{
-				m_rectangle.setWidth(width);
-				m_rectangle.setHeight(height);
+				{
+					const std::scoped_lock lock{m_geometryAccess};
+
+					m_rectangle.setWidth(width);
+					m_rectangle.setHeight(height);
+
+					this->updateModelMatrix();
+				}
 
 				/* NOTE: The texture must be resized. */
 				this->invalidate();
@@ -527,15 +559,20 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Moves the surface from a distance in the screen.
+			 * @note Thread-safe (any thread), see setGeometry().
 			 * @param deltaX The distance to move in X axis.
 			 * @param deltaY The distance to move in Y axis.
 			 */
 			void
 			move (float deltaX, float deltaY) noexcept
 			{
-				m_rectangle.move(deltaX, deltaY);
+				{
+					const std::scoped_lock lock{m_geometryAccess};
 
-				this->updateModelMatrix();
+					m_rectangle.move(deltaX, deltaY);
+
+					this->updateModelMatrix();
+				}
 
 				this->notifyRedrawRequired();
 			}
@@ -575,13 +612,15 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Returns whether the surface is valid on GPU to draw in it.
+			 * @note True when the buffer was (re)built for the latest size generation: an invalidate() that lands while a
+			 * render pass rebuilds the buffer leaves it invalid, the next pass rebuilds again (no lost invalidation).
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isVideoMemorySizeValid () const noexcept
 			{
-				return m_videoMemorySizeValid;
+				return m_validSizeGeneration.load() == m_sizeGeneration.load();
 			}
 
 			/**
@@ -601,7 +640,9 @@ namespace EmEn::Overlay
 			void
 			invalidate () noexcept
 			{
-				m_videoMemorySizeValid = false;
+				/* NOTE: A new size generation: the render thread rebuilds, and marks the buffer valid only for the
+				 * generation it read BEFORE reading the geometry. */
+				m_sizeGeneration.fetch_add(1);
 				m_videoMemoryUpToDate = false;
 
 				this->notifyRedrawRequired();
@@ -1320,6 +1361,8 @@ namespace EmEn::Overlay
 			void
 			syncPropertiesLatch () noexcept
 			{
+				const std::scoped_lock lock{m_geometryAccess};
+
 				m_latchedProperties = m_framebufferProperties;
 			}
 
@@ -1376,6 +1419,8 @@ namespace EmEn::Overlay
 			 * move above/below, destruction of a peer). The depth is computed as
 			 * `index * StackDepthStep` and fed to the model matrix Z translation, keeping
 			 * the GPU pipeline consistent without exposing depth as a public concept.
+			 * @note No redraw request here: the UIScreen calls it under its m_surfacesMutex and requests ONE redraw after
+			 * releasing it (UIScreen::DeferredRedraw).
 			 * @param stackIndex The 0-based index of this surface in the UIScreen stack
 			 * (0 = bottom, N-1 = top).
 			 */
@@ -1384,11 +1429,11 @@ namespace EmEn::Overlay
 			{
 				constexpr auto StackDepthStep = 0.001F;
 
+				const std::scoped_lock lock{m_geometryAccess};
+
 				m_depth = static_cast< float >(stackIndex) * StackDepthStep;
 
 				this->updateModelMatrix();
-
-				this->notifyRedrawRequired();
 			}
 
 			/**
@@ -1418,6 +1463,7 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Updates the model matrix to place the surface on screen.
+			 * @pre The caller holds m_geometryAccess (it reads m_rectangle and m_depth, writes m_modelMatrix).
 			 */
 			void updateModelMatrix () noexcept;
 
@@ -1465,6 +1511,11 @@ namespace EmEn::Overlay
 			 * created or recreated. This is called:
 			 * - After initial creation in createOnHardware()
 			 * - After resize in single buffer mode (m_useTransitionBuffer = false)
+			 * @warning Runs inside a representation pass: under the Overlay::Manager's representation lock and this
+			 * surface's m_framebufferAccess, on the render thread (or the main thread during a window resize). An override
+			 * must not call back into the Overlay::Manager or take this surface's buffer lock (activeBufferMutex()); it
+			 * posts its work instead (the CEF web views call the browser host, which posts to CEF — audited 2026-10-13).
+			 * The geometry accessors and syncPropertiesLatch() are safe (a leaf lock).
 			 * @param framebuffer A reference to the active framebuffer.
 			 */
 			virtual
@@ -1484,6 +1535,7 @@ namespace EmEn::Overlay
 			 * - Check isTransitionBufferReady() and call commitTransitionBuffer() when ready
 			 *
 			 * @note canDraw() returns true when this callback is invoked.
+			 * @warning Same context and contract as onActiveBufferReady().
 			 * @param framebuffer A reference to the transition framebuffer.
 			 */
 			virtual
@@ -1521,6 +1573,10 @@ namespace EmEn::Overlay
 			 * reach the renderer from their own thread. The renderer outlives every overlay surface. */
 			Graphics::Renderer * m_renderer{nullptr};
 			const FramebufferProperties & m_framebufferProperties;
+			/* NOTE: The geometry state, under m_geometryAccess: written by the setters from any thread (the application,
+			 * a web view), read by the render thread, the input thread and a content provider's thread. A LEAF lock: never
+			 * held while taking another lock or calling out (owner decision 2026-10-13; docs/caution-points.md
+			 * § "Overlay::Surface visibility is atomic"). */
 			FramebufferProperties m_latchedProperties; ///< Provider-facing latched snapshot — see latchedProperties()/syncPropertiesLatch().
 			Base::Math::Space2D::AARectangle< float > m_rectangle{0.0F, 0.0F, 1.0F, 1.0F};
 			Base::Math::Matrix< 4, float > m_modelMatrix;
@@ -1540,20 +1596,23 @@ namespace EmEn::Overlay
 			int32_t m_acceleratedPopupY{0};
 			bool m_acceleratedPopupVisible{false};
 			mutable std::mutex m_framebufferAccess;
+			mutable std::mutex m_geometryAccess;
 			mutable std::mutex m_requestedTransitionSizeMutex;
 			uint32_t m_requestedTransitionWidth{0};
 			uint32_t m_requestedTransitionHeight{0};
-			float m_depth{0.0F};
+			float m_depth{0.0F}; ///< Under m_geometryAccess.
 			float m_alphaThreshold{0.1F};
 			TransitionBufferStatus m_transitionBufferStatus{TransitionBufferStatus::Ready};
 			MemoryMappingMode m_memoryMappingMode{MemoryMappingMode::Staging};
 			std::function< void () > m_redrawRequester; ///< Invoked on any visual mutation to request a redraw (on-demand rendering). Empty in continuous rendering. @see setRedrawRequester()
 			bool m_transitionResizeRequested{false};
 			bool m_acceleratedSourceEnabled{false};
-			/* NOTE: Atomic: the main thread invalidates (a resize, setSize(), setGeometry()), the render thread validates after
-			 * an upload, a content thread (the notifier's timer, a web view) reads them (a data race found by the overlay resize
-			 * TSan stress, 2026-10-12). */
-			std::atomic_bool m_videoMemorySizeValid{false};
+			/* NOTE: Atomic: any thread invalidates (a resize, setSize(), setGeometry()), the render thread validates after
+			 * a rebuild or an upload, a content thread (the notifier's timer, a web view) reads them (a data race found by the
+			 * overlay resize TSan stress, 2026-10-12). The size validity is a GENERATION pair, not a flag: a flag stored
+			 * 'true' after a rebuild erased an invalidation that landed during the rebuild (2026-10-13). */
+			std::atomic< uint64_t > m_sizeGeneration{1};
+			std::atomic< uint64_t > m_validSizeGeneration{0};
 			std::atomic_bool m_videoMemoryUpToDate{false};
 			bool m_transitionBufferEnabled{false};
 			bool m_disablePixmapCopyInTransitionBuffer{false};

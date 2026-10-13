@@ -33,6 +33,7 @@
 #include <algorithm>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -94,6 +95,10 @@ namespace EmEn::Overlay
 			bool
 			empty () const noexcept
 			{
+				/* NOTE: Read by the render thread (Overlay::Manager::render()) while the main thread adds surfaces (a data
+				 * race found by the overlay stress, 2026-10-13). */
+				const std::scoped_lock lock{m_surfacesMutex};
+
 				return m_surfaces.empty();
 			}
 
@@ -234,6 +239,9 @@ namespace EmEn::Overlay
 			std::shared_ptr< surface_t >
 			createSurface (const std::string & name, ctor_args... args) noexcept requires (std::is_base_of_v< Surface, surface_t >)
 			{
+				/* NOTE: Declared before the lock: the surface's arrival requests its redraw once the lock is released. */
+				DeferredRedraw redraw{*this};
+
 				const std::scoped_lock lock{m_surfacesMutex};
 
 				if ( !m_framebufferProperties.isValid() )
@@ -266,8 +274,7 @@ namespace EmEn::Overlay
 				}
 
 				/* NOTE: Propagate the redraw requester so any later visual mutation of this surface
-				 * (content, geometry, visibility, stack order) wakes the on-demand rendering thread.
-				 * Installed before setStackIndex() below, so the surface's arrival itself triggers a redraw. */
+				 * (content, geometry, visibility) wakes the on-demand rendering thread. */
 				surface->setRedrawRequester(m_redrawRequester);
 
 				/* NOTE: New surfaces always join the top of the stack. The application can
@@ -275,6 +282,8 @@ namespace EmEn::Overlay
 				 * the surface elsewhere in the pile. */
 				m_surfaces.emplace_back(surface);
 				surface->setStackIndex(m_surfaces.size() - 1);
+
+				redraw.arm();
 
 				return surface;
 			}
@@ -587,6 +596,59 @@ namespace EmEn::Overlay
 			 * @note The caller MUST hold m_surfacesMutex when invoking this method.
 			 */
 			void recomputeDepths () const noexcept;
+
+			/**
+			 * @brief Requests a redraw once the scope ends, AFTER the m_surfacesMutex guard declared after it is released.
+			 * @details A redraw request reaches the Overlay::Manager's observers, which may call back into the overlay (a
+			 * representation pass takes m_surfacesMutex in processSurfaceUpdates()): never emitted under the lock
+			 * (Ave Robustus II, CP.31/32; found by the overlay stress, 2026-10-13). Declare it BEFORE the lock guard, arm()
+			 * it where the stack actually changed. Non-owning: the screen outlives the scope.
+			 */
+			class DeferredRedraw final
+			{
+				public:
+
+					/**
+					 * @brief Binds the request to a screen.
+					 * @param screen A reference to the screen.
+					 */
+					explicit
+					DeferredRedraw (const UIScreen & screen) noexcept
+						: m_screen{&screen}
+					{
+
+					}
+
+					DeferredRedraw (const DeferredRedraw & copy) noexcept = delete;
+					DeferredRedraw (DeferredRedraw && copy) noexcept = delete;
+					DeferredRedraw & operator= (const DeferredRedraw & copy) noexcept = delete;
+					DeferredRedraw & operator= (DeferredRedraw && copy) noexcept = delete;
+
+					/**
+					 * @brief Requests the redraw if armed.
+					 */
+					~DeferredRedraw ()
+					{
+						if ( m_armed && m_screen->m_redrawRequester )
+						{
+							m_screen->m_redrawRequester();
+						}
+					}
+
+					/**
+					 * @brief Arms the request.
+					 */
+					void
+					arm () noexcept
+					{
+						m_armed = true;
+					}
+
+				private:
+
+					const UIScreen * m_screen;
+					bool m_armed{false};
+			};
 
 			/**
 			 * @brief STL streams printable object.

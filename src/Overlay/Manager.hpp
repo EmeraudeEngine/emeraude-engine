@@ -37,7 +37,9 @@
 #include <chrono>
 #include <array>
 #include <memory>
+#include <mutex>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -207,10 +209,22 @@ namespace EmEn::Overlay
 			 * to screens and surfaces) and screen lifecycle/visibility. Harmless in continuous
 			 * rendering (observers simply ignore it). May also be called by application code that
 			 * changes the overlay in a way not covered by the built-in triggers.
+			 * @note Never emitted under m_physicalRepresentationUpdateMutex (Ave Robustus II, CP.31/32; owner decision
+			 * 2026-10-13; docs/caution-points.md § "Overlay lock order"): a request made on the thread running
+			 * a representation pass (updateVideoMemory(), onWindowResized() — the surfaces' requester fires there) is
+			 * recorded, and the pass emits ONE RedrawRequested after releasing the lock. A request from any other thread is
+			 * emitted at once.
 			 */
 			void
 			requestRedraw () noexcept
 			{
+				if ( m_representationPassThread.load() == std::this_thread::get_id() )
+				{
+					m_redrawDeferred = true;
+
+					return;
+				}
+
 				this->notify(RedrawRequested);
 			}
 
@@ -244,6 +258,7 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Deletes all screens.
+			 * @note The screen notifications are emitted with no lock of the manager held.
 			 */
 			void clearScreens () noexcept;
 
@@ -460,6 +475,67 @@ namespace EmEn::Overlay
 			void updateFramebufferProperties () noexcept;
 
 			/**
+			 * @brief Marks the calling thread as the one running a representation pass, for its scope.
+			 * @details Declared right AFTER the m_physicalRepresentationUpdateMutex guard, so it ends before the lock is
+			 * released. requestRedraw() on that thread defers instead of emitting; flushDeferredRedraw() emits after the
+			 * lock. Non-owning: the manager outlives every pass it runs.
+			 */
+			class RepresentationPass final
+			{
+				public:
+
+					/**
+					 * @brief Marks the calling thread.
+					 * @param passThread A reference to the manager's pass-thread slot.
+					 */
+					explicit
+					RepresentationPass (std::atomic< std::thread::id > & passThread) noexcept
+						: m_passThread{&passThread}
+					{
+						m_passThread->store(std::this_thread::get_id());
+					}
+
+					RepresentationPass (const RepresentationPass & copy) noexcept = delete;
+					RepresentationPass (RepresentationPass && copy) noexcept = delete;
+					RepresentationPass & operator= (const RepresentationPass & copy) noexcept = delete;
+					RepresentationPass & operator= (RepresentationPass && copy) noexcept = delete;
+
+					/**
+					 * @brief Clears the mark.
+					 */
+					~RepresentationPass ()
+					{
+						m_passThread->store(std::thread::id{});
+					}
+
+				private:
+
+					std::atomic< std::thread::id > * m_passThread;
+			};
+
+			/**
+			 * @brief Emits the RedrawRequested deferred by a representation pass, once.
+			 * @pre m_physicalRepresentationUpdateMutex is NOT held by the caller.
+			 */
+			void
+			flushDeferredRedraw () noexcept
+			{
+				if ( m_redrawDeferred.exchange(false) )
+				{
+					this->notify(RedrawRequested);
+				}
+			}
+
+			/**
+			 * @brief Removes a named screen from the list, only if it is still this very screen.
+			 * @param name A reference to the screen name.
+			 * @param screen A reference to the screen expected under that name.
+			 * @return bool False when another caller removed or replaced it meanwhile.
+			 */
+			[[nodiscard]]
+			bool eraseScreen (const std::string & name, const std::shared_ptr< UIScreen > & screen) noexcept;
+
+			/**
 			 * @brief Copies the screen pointers into m_screenSnapshot under m_screensAccess.
 			 * @note The render-thread passes (updateVideoMemory(), onWindowResized(), dumpUploadStatistics()) iterate this
 			 * copy: iterating m_screens itself raced with createScreen() / destroyScreen() on the main thread (a rehash or
@@ -519,6 +595,9 @@ namespace EmEn::Overlay
 			/* NOTE: Lock order: m_physicalRepresentationUpdateMutex THEN m_screensAccess (or both at once). */
 			mutable std::mutex m_physicalRepresentationUpdateMutex;
 			mutable std::mutex m_screensAccess;
+			/* The thread running a representation pass (none outside one), and a redraw requested during it. */
+			std::atomic< std::thread::id > m_representationPassThread;
+			std::atomic_bool m_redrawDeferred{false};
 			bool m_enabled{false};
 #ifdef IMGUI_ENABLED
 			/** @brief False in a window-less run: ImGUI's platform backend needs a GLFW window. */

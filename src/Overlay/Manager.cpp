@@ -36,6 +36,9 @@
 #include <iterator>
 #include <mutex>
 #include <ranges>
+#include <string>
+#include <utility>
+#include <vector>
 
 /* Third-party inclusions. */
 #ifdef IMGUI_ENABLED
@@ -246,39 +249,46 @@ namespace EmEn::Overlay
 	std::shared_ptr< UIScreen >
 	Manager::createScreen (const std::string & name, bool enableKeyboardListener, bool enablePointerListener) noexcept
 	{
-		const std::scoped_lock lock{m_screensAccess};
+		std::shared_ptr< UIScreen > screen;
 
-		if constexpr ( IsDebug )
 		{
-			if ( !m_framebufferProperties.isValid() )
+			const std::scoped_lock lock{m_screensAccess};
+
+			if constexpr ( IsDebug )
 			{
-				TraceError{ClassId} << "The screen size are not initialized !";
+				if ( !m_framebufferProperties.isValid() )
+				{
+					TraceError{ClassId} << "The screen size are not initialized !";
+
+					return nullptr;
+				}
+			}
+
+			if ( m_screens.contains(name) )
+			{
+				TraceError{ClassId} << "An UI screen named '" << name << "' already exists !";
 
 				return nullptr;
 			}
+
+			screen = std::make_shared< UIScreen >(
+				name,
+				m_framebufferProperties,
+				m_resourceManager.graphicsRenderer(),
+				enableKeyboardListener,
+				enablePointerListener
+			);
+
+			/* NOTE: Propagate the redraw requester so this screen and every surface it creates can
+			 * wake the on-demand rendering thread on any visual mutation. No-op in continuous rendering. */
+			screen->setRedrawRequester([this] { this->requestRedraw(); });
+
+			m_screens[name] = screen;
 		}
 
-		if ( m_screens.contains(name) )
-		{
-			TraceError{ClassId} << "An UI screen named '" << name << "' already exists !";
-
-			return nullptr;
-		}
-
-		auto screen = std::make_shared< UIScreen >(
-			name,
-			m_framebufferProperties,
-			m_resourceManager.graphicsRenderer(),
-			enableKeyboardListener,
-			enablePointerListener
-		);
-
-		m_screens[name] = screen;
-
-		/* NOTE: Propagate the redraw requester so this screen and every surface it creates can
-		 * wake the on-demand rendering thread on any visual mutation. No-op in continuous rendering. */
-		screen->setRedrawRequester([this] { this->requestRedraw(); });
-
+		/* NOTE: Notified with m_screensAccess released (Ave Robustus II, CP.31/32): an observer that calls back into the
+		 * manager (a representation pass takes the lock in snapshotScreens()) self-deadlocked here — found by the overlay
+		 * stress, 2026-10-13. */
 		this->notify(UIScreenCreated, screen);
 
 		/* NOTE: A new screen changes the composited image. */
@@ -312,20 +322,33 @@ namespace EmEn::Overlay
 	bool
 	Manager::destroyScreen (const std::string & name) noexcept
 	{
-		const std::scoped_lock lock{m_screensAccess};
+		/* NOTE: The notifications are emitted with m_screensAccess released (see createScreen()); UIScreenDestroying still
+		 * comes BEFORE the screen leaves the list, UIScreenDestroyed after. */
+		std::shared_ptr< UIScreen > screen;
 
-		const auto screenIt = m_screens.find(name);
-
-		if ( screenIt == m_screens.end() )
 		{
-			TraceError{ClassId} << "Unable to find '" << name << "' UI screen to erase it !";
+			const std::scoped_lock lock{m_screensAccess};
+
+			const auto screenIt = m_screens.find(name);
+
+			if ( screenIt == m_screens.end() )
+			{
+				TraceError{ClassId} << "Unable to find '" << name << "' UI screen to erase it !";
+
+				return false;
+			}
+
+			screen = screenIt->second;
+		}
+
+		this->notify(UIScreenDestroying, screen);
+
+		if ( !this->eraseScreen(name, screen) )
+		{
+			TraceWarning{ClassId} << "The UI screen '" << name << "' was destroyed by another caller meanwhile.";
 
 			return false;
 		}
-
-		this->notify(UIScreenDestroying, screenIt->second);
-
-		m_screens.erase(screenIt);
 
 		this->notify(UIScreenDestroyed, name);
 
@@ -335,24 +358,46 @@ namespace EmEn::Overlay
 		return true;
 	}
 
-	void
-	Manager::clearScreens () noexcept
+	bool
+	Manager::eraseScreen (const std::string & name, const std::shared_ptr< UIScreen > & screen) noexcept
 	{
 		const std::scoped_lock lock{m_screensAccess};
 
-		/* [ERASE IN LOOP] */
-		auto screenIt = m_screens.begin();
+		const auto screenIt = m_screens.find(name);
 
-		while ( screenIt != m_screens.end() )
+		/* NOTE: Only this very screen: another caller may have destroyed it, or replaced it under the same name, while the
+		 * lock was released. */
+		if ( screenIt == m_screens.end() || screenIt->second != screen )
 		{
-			/* Get a copy */
-			const auto name = screenIt->first;
+			return false;
+		}
 
-			this->notify(UIScreenDestroying, screenIt->second);
+		m_screens.erase(screenIt);
 
-			screenIt = m_screens.erase(screenIt);
+		return true;
+	}
 
-			this->notify(UIScreenDestroyed, name);
+	void
+	Manager::clearScreens () noexcept
+	{
+		/* NOTE: A copy of the list, then one screen at a time with m_screensAccess released around the notifications (see
+		 * createScreen() and destroyScreen()). A cold path: the copy allocates once. */
+		std::vector< std::pair< std::string, std::shared_ptr< UIScreen > > > screens;
+
+		{
+			const std::scoped_lock lock{m_screensAccess};
+
+			screens.assign(m_screens.begin(), m_screens.end());
+		}
+
+		for ( const auto & [name, screen] : screens )
+		{
+			this->notify(UIScreenDestroying, screen);
+
+			if ( this->eraseScreen(name, screen) )
+			{
+				this->notify(UIScreenDestroyed, name);
+			}
 		}
 
 		/* NOTE: The overlay screen set changed: request a redraw (on-demand rendering). */
@@ -522,35 +567,39 @@ namespace EmEn::Overlay
 	void
 	Manager::updateVideoMemory () noexcept
 	{
-		/* NOTE: This can collide with the window resize event from Manager::onWindowResized() in another thread. */
-		const std::scoped_lock lock{m_physicalRepresentationUpdateMutex};
-
-		if ( !this->isEnabled() )
 		{
-			return;
+			/* NOTE: This can collide with the window resize event from Manager::onWindowResized() in another thread. */
+			const std::scoped_lock lock{m_physicalRepresentationUpdateMutex};
+			const RepresentationPass pass{m_representationPassThread};
+
+			if ( this->isEnabled() )
+			{
+				this->snapshotScreens();
+
+				/* NOTE: Only process VISIBLE screens for performance.
+				 * Hidden screens will be processed when they become visible again. */
+				for ( const auto & screen : m_screenSnapshot )
+				{
+					if ( screen->empty() || !screen->isVisible() )
+					{
+						continue;
+					}
+
+					if ( !screen->processSurfaceUpdates(false) )
+					{
+						TraceError{ClassId} << "Failed to process screen '" << screen->name() << "' updates!";
+					}
+				}
+
+				this->dumpUploadStatistics();
+
+				/* NOTE: Released now, so a screen destroyed meanwhile does not outlive this pass. */
+				m_screenSnapshot.clear();
+			}
 		}
 
-		this->snapshotScreens();
-
-		/* NOTE: Only process VISIBLE screens for performance.
-		 * Hidden screens will be processed when they become visible again. */
-		for ( const auto & screen : m_screenSnapshot )
-		{
-			if ( screen->empty() || !screen->isVisible() )
-			{
-				continue;
-			}
-
-			if ( !screen->processSurfaceUpdates(false) )
-			{
-				TraceError{ClassId} << "Failed to process screen '" << screen->name() << "' updates!";
-			}
-		}
-
-		this->dumpUploadStatistics();
-
-		/* NOTE: Released now, so a screen destroyed meanwhile does not outlive this pass. */
-		m_screenSnapshot.clear();
+		/* NOTE: The redraw requests of the surfaces processed above, emitted once, the lock released. */
+		this->flushDeferredRedraw();
 	}
 
 	void
@@ -640,6 +689,7 @@ namespace EmEn::Overlay
 		{
 			/* NOTE: This can collide with the successive call to Manager::processFrameUpdates() in the rendering loop. */
 			const std::scoped_lock lock{m_physicalRepresentationUpdateMutex};
+			const RepresentationPass pass{m_representationPassThread};
 
 			/* Step 1: Update shared framebuffer properties with new window dimensions.
 			 * Capture the previous content scale first so we can emit OverlayScaleChanged only on a real
@@ -685,7 +735,9 @@ namespace EmEn::Overlay
 			scaleChanged = std::abs(contentScale[0] - previousScaleX) > 0.001F || std::abs(contentScale[1] - previousScaleY) > 0.001F;
 		}
 
-		/* Step 4: Notify observers of the resize completion, the lock released. */
+		/* Step 4: Notify observers of the resize completion, the lock released (the surfaces' redraw requests first). */
+		this->flushDeferredRedraw();
+
 		this->notify(OverlayResized, framebufferSize);
 
 		/* Step 5: On a real HiDPI content-scale transition, emit OverlayScaleChanged in addition to
