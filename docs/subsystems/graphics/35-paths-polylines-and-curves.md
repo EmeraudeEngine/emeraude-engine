@@ -171,9 +171,12 @@ zigzag (it was 2 565 for ~30 frames); the cleared rectangle, dumped once, matche
 ⚠️ Measuring it: the demo's Catmull-Rom loop ROTATES and fills an A/C difference mask on its own — restrict the count
 to the zigzag's box (x 419-909, y 672-733 at 3840x1990 from the default pose). `temporalCapture` blocks the main
 thread: send `setPoints` FIRST, then start the capture.
-⚠️ **Not covered — the ray-traced histories**: a band of ~650 pixels just under the old zigzag survives, identical
-before and after the fix. It is the ribbon's reflection / shadow kept by the RT effects' own temporal histories
-(reflections, GI), which do not read the reactive mask. Open item: `docs/todo/path-ghost-in-ray-traced-histories.md`.
+Verified on the macOS peer (M6, ScreenSpace lane, 2026-10-14): 0 ghost pixel on the old zigzag from frame 0 with the
+TAA alone, 0 `VUID-`.
+⚠️ **Not covered — the indirect-diffuse history**: the ribbon's bounce light stays on the ground in the old shape's
+footprint for 30+ frames (Linux RT lane: ~650 px under the zigzag; M6 ScreenSpace lane: 2 709 ground px at frame 0,
+260 with IndirectDiffuse off, 0 with TAA alone). The GI effect's temporal history never reads the reactive mask, on
+either lane. Open item: `docs/todo/path-ghost-in-indirect-diffuse-history.md`.
 
 ### ⚠️ Traps and limits
 
