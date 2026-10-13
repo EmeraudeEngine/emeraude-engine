@@ -249,6 +249,12 @@ namespace EmEn::Graphics
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RendererService"};
 
+			/** @brief Consecutive failed swap-chain recreations before the renderer gives up (owner decision 2026-10-13:
+			 * degraded with a retry limit, then a stop). With RetryInterval, about 3 s of attempts. */
+			static constexpr uint32_t MaxSwapChainRecreationFailures{30};
+			/** @brief The minimum interval between two attempts after a failed swap-chain recreation. */
+			static constexpr std::chrono::milliseconds SwapChainRecreationRetryInterval{100};
+
 			/** @brief Observable notification codes. */
 			enum NotificationCode : std::uint8_t
 			{
@@ -1566,6 +1572,19 @@ namespace EmEn::Graphics
 			bool isSwapChainDegraded () const noexcept;
 
 			/**
+			 * @brief Returns whether the renderer gave up recreating the swap-chain (MaxSwapChainRecreationFailures
+			 * consecutive failures): nothing can be presented any more, and Core stops the engine (Core::stopOnDeviceLoss()).
+			 * @note Thread-safe.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isSwapChainGivenUp () const noexcept
+			{
+				return m_swapChainGivenUp.load();
+			}
+
+			/**
 			 * @brief Returns whether the graphics device was lost (Vulkan::Device::isLost()): no frame is rendered any more,
 			 * and Core stops the engine (Core::stopOnDeviceLoss()).
 			 * @note Thread-safe.
@@ -1798,6 +1817,16 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			bool recreateRenderingSubSystem (bool withSurface) noexcept;
 
+			/**
+			 * @brief Retries the recreation of a degraded swap-chain, at most every SwapChainRecreationRetryInterval after
+			 * a failure, and gives up after MaxSwapChainRecreationFailures consecutive failures (isSwapChainGivenUp()).
+			 * @details A failed recreation used to leave the status UnderConstruction, which nothing retried: the display
+			 * froze until the next window event. Now it goes back to Degraded (retried) with a rate-limited log; a
+			 * recreation SKIPPED for a 0-px window (minimised) is neither a failure nor a success.
+			 * @note Render thread only.
+			 */
+			void retryDegradedSwapChain () noexcept;
+
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourcesManager;
 			Vulkan::Instance & m_vulkanInstance;
@@ -1951,6 +1980,11 @@ namespace EmEn::Graphics
 			bool m_cutFrameAroundTranslucency{true};
 			/** @brief Settings: resolve the unshadowed punctual lights deferred (DeferredLightResolve). An A/B switch, default true. */
 			std::atomic< bool > m_deferredPunctualLightsEnabled{true};
+			/* The swap-chain recreation retries (retryDegradedSwapChain()): render thread only, except the given-up flag
+			 * read by the main loop. */
+			std::chrono::steady_clock::time_point m_lastSwapChainRecreationFailure;
+			uint32_t m_swapChainRecreationFailures{0};
+			std::atomic_bool m_swapChainGivenUp{false};
 			/** @brief Settings: may the ACTIVE CAMERA materialize its depth of field / motion blur?
 			 * @note A user-level refusal of two expensive, intrusive photographic effects. It
 			 * OVERRIDES the camera, which only ever requests them. */

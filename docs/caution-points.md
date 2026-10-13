@@ -5898,8 +5898,15 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 > never a destroyed one. Proof (Windows peer, validation on, main menu, minimise/restore through `WM_SYSCOMMAND`): Intel
 > 16 VUID over 3 cycles before, 0 over 5 after; NVIDIA 0 before and after; the full resize / burst / minimise sequence
 > (menu then labyrinth) 0 VUID on both, the menu re-committed at every size.
-> ⚠️ Still open (owner): a FAILED `recreate()` leaves the status `UnderConstruction`, which `isSwapChainDegraded()` does not
-> retry: the display freezes until the next window event re-triggers a recreation.
+> A FAILED `recreate()` used to leave the status `UnderConstruction`, which nothing retried: the display froze until the
+> next window event. Owner decision 2026-10-13: degraded, with a retry limit, then a stop. `Renderer::retryDegradedSwapChain()`
+> puts it back to `Degraded`, retries at most every `SwapChainRecreationRetryInterval` (100 ms), logs the first failure
+> then every tenth, and after `MaxSwapChainRecreationFailures` (30, about 3 s) consecutive failures sets
+> `isSwapChainGivenUp()`: the main loop then stops the engine like a lost device (`Core::stopOnDeviceLoss()`, exit code
+> 98, the application may save its data). A recreation SKIPPED for a 0-px window is neither a failure nor a success.
+> Proof (Linux, fault injection — every recreation forced to fail): attempts 1, 10, 20 logged, the 30th gives up, the
+> engine stops in order in 6 s, no TSan report; without the fault, the overlay stress recreates the swap-chain ~283 times
+> with no failure.
 
 ### Fixed: every settings file kept the version and the date of its FIRST write (2026-10-01, triad 15)
 

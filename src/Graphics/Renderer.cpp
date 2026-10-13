@@ -1820,10 +1820,11 @@ namespace EmEn::Graphics
 		/* Without an image, the frame drops: beginFrame() found the swap-chain degraded, or its acquisition timed out. */
 		if ( !m_acquiredImageIndex.has_value() )
 		{
-			/* NOTE: Let's try to recreate every new frame and Core decide what to do with the renderer. */
-			if ( this->isSwapChainDegraded() && !this->recreateRenderingSubSystem(false) )
+			/* NOTE: A degraded swap-chain is recreated here, retried after a failure, given up after a limit (Core then
+			 * stops the engine). */
+			if ( this->isSwapChainDegraded() )
 			{
-				Tracer::fatal(ClassId, "Unable to refresh the swap-chain!");
+				this->retryDegradedSwapChain();
 			}
 
 			return;
@@ -3026,6 +3027,54 @@ namespace EmEn::Graphics
 	{
 		m_rendererFrameScope.clear();
 		m_presentSemaphores.clear();
+	}
+
+	void
+	Renderer::retryDegradedSwapChain () noexcept
+	{
+		const auto now = std::chrono::steady_clock::now();
+
+		if ( m_swapChainRecreationFailures > 0 && now - m_lastSwapChainRecreationFailure < SwapChainRecreationRetryInterval )
+		{
+			return;
+		}
+
+		if ( this->recreateRenderingSubSystem(false) )
+		{
+			/* NOTE: A recreation skipped for a 0-px window keeps the swap-chain degraded: neither a failure nor a success. */
+			if ( m_swapChain->status() == SwapChainStatus::Ready )
+			{
+				if ( m_swapChainRecreationFailures > 0 )
+				{
+					TraceInfo{ClassId} << "The swap-chain was recreated after " << m_swapChainRecreationFailures << " failed attempt(s).";
+				}
+
+				m_swapChainRecreationFailures = 0;
+			}
+
+			return;
+		}
+
+		++m_swapChainRecreationFailures;
+		m_lastSwapChainRecreationFailure = now;
+
+		if ( m_swapChainRecreationFailures >= MaxSwapChainRecreationFailures )
+		{
+			TraceFatal{ClassId} << "Unable to refresh the swap-chain after " << m_swapChainRecreationFailures << " consecutive attempts: the renderer gives up, the engine stops.";
+
+			m_swapChainGivenUp = true;
+
+			return;
+		}
+
+		/* NOTE: Rate-limited: the first failure, then every tenth. */
+		if ( m_swapChainRecreationFailures == 1 || m_swapChainRecreationFailures % 10 == 0 )
+		{
+			TraceError{ClassId} << "Unable to refresh the swap-chain (attempt " << m_swapChainRecreationFailures << '/' << MaxSwapChainRecreationFailures << "), retrying every " << SwapChainRecreationRetryInterval.count() << " ms.";
+		}
+
+		/* NOTE: A failed recreate() leaves the status UnderConstruction, which nothing retries. */
+		m_swapChain->setDegraded();
 	}
 
 	bool

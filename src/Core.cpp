@@ -576,8 +576,9 @@ namespace EmEn
 			 * NOTE: The regular timeout is bounded by a pending scheduleMainLoopCycle() deadline. */
 			m_inputManager.waitSystemEvents(this->mainLoopWaitTimeout(m_mainLoopEventTimeoutSeconds));
 
-			/* NOTE: Check if the graphics render do not have a problem. */
-			if ( m_graphicsRenderer.usable() && !m_graphicsRenderer.isDeviceLost() )
+			/* NOTE: Check if the graphics render do not have a problem (a lost device, or a swap-chain the renderer gave up
+			 * recreating). */
+			if ( m_graphicsRenderer.usable() && !m_graphicsRenderer.isDeviceLost() && !m_graphicsRenderer.isSwapChainGivenUp() )
 			{
 				/* NOTE: Must be done on the main thread. */
 				if ( m_windowChanged.exchange(false) )
