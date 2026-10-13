@@ -367,8 +367,10 @@ namespace EmEn::Scenes::Component
 
 		static const std::vector< Vector< 4, float > > Nothing{};
 
-		/* A beam has no debug overlay. */
-		m_pathPoints->publish(slot, m_enabled ? m_stations : Nothing, RenderableInstance::PathPoints::DebugLook{});
+		/* A beam has no debug overlay. Its footprint: its half width, in metres. */
+		const RenderableInstance::PathPoints::Footprint footprint{.halfWidth = m_material != nullptr ? m_material->halfWidth() : 0.0F, .inPixels = false};
+
+		m_pathPoints->publish(slot, m_enabled ? m_stations : Nothing, RenderableInstance::PathPoints::DebugLook{}, footprint);
 		m_publishedVersions[slot] = m_version;
 	}
 

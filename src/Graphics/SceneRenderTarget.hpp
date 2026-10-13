@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
+#include <optional>
 
 /* Local inclusions for inheritances. */
 #include "Graphics/RenderTarget/Abstract.hpp"
@@ -109,6 +110,14 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			Base::StaticVector< VkClearValue, 7 > clearValues (const ClearPalette & palette) const noexcept;
+
+			/**
+			 * @brief Returns the colour attachment index of the reactive mask in the scene pass, if the target has one.
+			 * @note The order of clearValues(): colour, normals, material properties, albedo, velocity, reactive.
+			 * @return std::optional< uint32_t >
+			 */
+			[[nodiscard]]
+			std::optional< uint32_t > reactiveColorAttachmentIndex () const noexcept;
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::setViewDistance() */
 			void setViewDistance (float meters) noexcept override;

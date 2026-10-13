@@ -147,3 +147,9 @@ ScreenSpace lane; the 2026-09-28 measurement above looked at the arc only and co
    the beam in its 3x3 neighbourhood, the variance box spans it, and the old light survived the clip.
 Validated: 10 captures over a full turn of the laser (ScreenSpace lane, TAA on), no streak, no trail, 0 validation
 message.
+
+**A region, not only a material, can set the mask (2026-10-13)**: `SceneInstanceTransforms::invalidateTemporalHistory()`
+declares a world box whose history is invalid this frame; `Renderer::markInvalidTemporalHistory()` clears its screen
+footprint to 1 in the reactive attachment at the end of the scene pass. The case: a path whose point count changed —
+its OLD shape sat inside the ±1 % depth acceptance (a ribbon a few centimetres above the ground) and stayed as a
+ghost for ~30 frames (2 565 pixels; 0 after). Graphics doc 35 § The point-count change.

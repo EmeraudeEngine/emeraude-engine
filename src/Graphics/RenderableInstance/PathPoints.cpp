@@ -27,6 +27,9 @@
 #include "PathPoints.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <cstddef>
+#include <iterator>
 #include <span>
 
 /* Local inclusions. */
@@ -64,7 +67,31 @@ namespace EmEn::Graphics::RenderableInstance
 		/* Only the primary view advances the history (once per rendered frame), like the model matrix. */
 		if ( advanceHistory )
 		{
+			/* NOTE: A count change leaves the OLD ribbon's pixels to whatever is behind it, and the TAA kept them: the
+			 * depth of a ribbon a few centimetres above a surface is inside its ±1 % acceptance, so the old shape stayed
+			 * as a ghost for ~30 frames (measured 2026-10-13). Its world box goes to the frame's history invalidations:
+			 * the renderer marks that screen region reactive, the TAA replaces the history there for one frame (owner
+			 * decision 2026-10-13, option (D)). */
+			if ( !m_history.empty() && m_history.size() != current.size() )
+			{
+				Vector< 3, float > minimum{m_history.front()[X], m_history.front()[Y], m_history.front()[Z]};
+				Vector< 3, float > maximum = minimum;
+
+				for ( const auto & point : m_history )
+				{
+					for ( size_t axis = 0; axis < 3; ++axis )
+					{
+						minimum[axis] = std::min(minimum[axis], point[axis]);
+						maximum[axis] = std::max(maximum[axis], point[axis]);
+					}
+				}
+
+				instanceTransforms.invalidateTemporalHistory(m_historyModelMatrix, minimum, maximum, m_historyFootprint.halfWidth, m_historyFootprint.inPixels);
+			}
+
 			m_history = current;
+			m_historyFootprint = *std::next(m_footprints.cbegin(), static_cast< std::ptrdiff_t >(slot));
+			m_historyModelMatrix = modelMatrix;
 		}
 	}
 }

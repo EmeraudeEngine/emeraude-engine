@@ -29,9 +29,11 @@
 /* STL inclusions. */
 #include <array>
 #include <bit>
+#include <cmath>
 #include <cstring>
 #include <algorithm>
 #include <filesystem>
+#include <limits>
 #include <ranges>
 #include <thread>
 
@@ -2463,6 +2465,9 @@ namespace EmEn::Graphics
 			{
 				scenePtr->renderTBNSpace(m_sceneTarget, *commandBuffer);
 			}
+
+			/* NOTE: Last in the scene pass: the regions whose history is invalid this frame become reactive (TAA). */
+			this->markInvalidTemporalHistory(*scenePtr, *commandBuffer);
 		}
 
 		commandBuffer->endRenderPass();
@@ -3027,6 +3032,131 @@ namespace EmEn::Graphics
 	{
 		m_rendererFrameScope.clear();
 		m_presentSemaphores.clear();
+	}
+
+	void
+	Renderer::markInvalidTemporalHistory (const Scenes::Scene & scene, const CommandBuffer & commandBuffer) const noexcept
+	{
+		const auto regions = scene.instanceTransforms().temporalHistoryInvalidations();
+
+		if ( regions.empty() )
+		{
+			return;
+		}
+
+		const auto reactiveIndex = m_sceneTarget->reactiveColorAttachmentIndex();
+
+		if ( !reactiveIndex.has_value() )
+		{
+			return;
+		}
+
+		const auto & extent = m_sceneTarget->renderArea().extent;
+		const auto width = static_cast< float >(extent.width);
+		const auto height = static_cast< float >(extent.height);
+
+		if ( extent.width == 0 || extent.height == 0 )
+		{
+			return;
+		}
+
+		/* NOTE: The current, unjittered view-projection: the old shape's pixels are where it projects NOW (the history
+		 * is reprojected by the velocity of what is behind it). */
+		const auto & viewMatrices = m_sceneTarget->viewMatrices();
+		const auto viewProjection = viewMatrices.projectionMatrix() * viewMatrices.viewMatrix(false, 0);
+
+		/* NOTE: A one-pixel guard band: the TAA reads the reactive mask over its 3x3 reconstruction footprint already. */
+		constexpr auto GuardPixels{2.0F};
+
+		StaticVector< VkClearRect, Scenes::SceneInstanceTransforms::MaxTemporalHistoryInvalidations > rects;
+
+		for ( const auto & region : regions )
+		{
+			float minX = std::numeric_limits< float >::max();
+			float minY = std::numeric_limits< float >::max();
+			float maxX = std::numeric_limits< float >::lowest();
+			float maxY = std::numeric_limits< float >::lowest();
+			bool behindCamera = false;
+
+			for ( uint32_t corner = 0; corner < 8; ++corner )
+			{
+				const Vector< 4, float > world{
+					(corner & 1U) != 0 ? region.maximum[X] + region.worldMargin : region.minimum[X] - region.worldMargin,
+					(corner & 2U) != 0 ? region.maximum[Y] + region.worldMargin : region.minimum[Y] - region.worldMargin,
+					(corner & 4U) != 0 ? region.maximum[Z] + region.worldMargin : region.minimum[Z] - region.worldMargin,
+					1.0F
+				};
+				const auto clip = viewProjection * world;
+
+				/* NOTE: A corner behind the eye has no screen position: the whole target, conservatively. */
+				if ( clip[W] <= 1.0e-5F )
+				{
+					behindCamera = true;
+
+					break;
+				}
+
+				const auto pixelX = (clip[X] / clip[W] * 0.5F + 0.5F) * width;
+				const auto pixelY = (clip[Y] / clip[W] * 0.5F + 0.5F) * height;
+
+				minX = std::min(minX, pixelX);
+				minY = std::min(minY, pixelY);
+				maxX = std::max(maxX, pixelX);
+				maxY = std::max(maxY, pixelY);
+			}
+
+			if ( behindCamera )
+			{
+				minX = 0.0F;
+				minY = 0.0F;
+				maxX = width;
+				maxY = height;
+			}
+			else
+			{
+				const auto pad = region.pixelMargin + GuardPixels;
+
+				minX = std::clamp(minX - pad, 0.0F, width);
+				minY = std::clamp(minY - pad, 0.0F, height);
+				maxX = std::clamp(maxX + pad, 0.0F, width);
+				maxY = std::clamp(maxY + pad, 0.0F, height);
+			}
+
+			/* NOTE: Written as a negation so a non-finite corner (NaN survives the clamp) is skipped, never converted. */
+			if ( !(maxX - minX >= 1.0F) || !(maxY - minY >= 1.0F) )
+			{
+				continue;
+			}
+
+			const auto x0 = static_cast< int32_t >(std::floor(minX));
+			const auto y0 = static_cast< int32_t >(std::floor(minY));
+
+			rects.emplace_back(VkClearRect{
+				.rect = {
+					.offset = {x0, y0},
+					.extent = {
+						static_cast< uint32_t >(std::ceil(maxX)) - static_cast< uint32_t >(x0),
+						static_cast< uint32_t >(std::ceil(maxY)) - static_cast< uint32_t >(y0)
+					}
+				},
+				.baseArrayLayer = 0,
+				.layerCount = 1
+			});
+		}
+
+		if ( rects.empty() )
+		{
+			return;
+		}
+
+		/* NOTE: 1 = ignore the history (the reactive mask's convention). */
+		const VkClearAttachment reactive{
+			.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+			.colorAttachment = reactiveIndex.value(),
+			.clearValue = {.color = {.float32 = {1.0F, 0.0F, 0.0F, 0.0F}}}
+		};
+
+		vkCmdClearAttachments(commandBuffer.handle(), 1, &reactive, static_cast< uint32_t >(rects.size()), rects.data());
 	}
 
 	void

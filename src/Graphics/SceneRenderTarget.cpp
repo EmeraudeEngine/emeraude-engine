@@ -99,6 +99,27 @@ namespace EmEn::Graphics
 		return values;
 	}
 
+	std::optional< uint32_t >
+	SceneRenderTarget::reactiveColorAttachmentIndex () const noexcept
+	{
+		if ( m_reactiveFormat == VK_FORMAT_UNDEFINED )
+		{
+			return std::nullopt;
+		}
+
+		uint32_t index = 1;
+
+		for ( const auto format : {m_normalsFormat, m_materialPropertiesFormat, m_albedoFormat, m_velocityFormat} )
+		{
+			if ( format != VK_FORMAT_UNDEFINED )
+			{
+				++index;
+			}
+		}
+
+		return index;
+	}
+
 	void
 	SceneRenderTarget::setViewDistance (float meters) noexcept
 	{

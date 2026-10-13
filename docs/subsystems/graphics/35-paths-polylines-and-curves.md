@@ -4,8 +4,8 @@
 CAMERA-FACING RIBBON. Owner decisions 2026-09-29: points reach the GPU through an SSBO read by VERTEX PULLING; one
 packed path SSBO per scene and frame in flight; {current, previous} per point; opaque unlit solid colour at a luminance
 in nits; miter joins falling back to bevel, round as an option; width in metres or pixels; a DEBUG mode after the tone
-mapping; a point-count change = velocity 0 + the reactive tag that frame (the tag is NOT set yet: engine
-`docs/todo/path-reactive-tag-on-point-count-change.md`). Open extras (dashes, arrows, per-vertex colour, a Bézier path
+mapping; a point-count change = velocity 0 + the reactive tag that frame (since 2026-10-13: the OLD shape's screen
+region, § The point-count change). Open extras (dashes, arrows, per-vertex colour, a Bézier path
 from the console): `docs/todo/beam-and-path-extras.md`. References: Rougier, "Shader-Based Antialiased, Dashed,
 Stroked Polylines", JCGT 2013; three.js `LineSegments2`/`LineMaterial` (`worldUnits`); A. Klein, "Rendering thick
 lines with dashes".
@@ -140,6 +140,40 @@ shadow-casting program, which builds the SAME ribbon.
 - A 1-2 px "step" in the rim at the pixel mast's elbow (macOS peer, 2026-09-30) is the RIBBON's own staircase: the arm,
   2 px thick and slightly sloped in perspective, rises one pixel row a few pixels past the corner, and the rim follows
   the ribbon's pixels exactly (pixel dump, TAA off and on). A join defect would show in the ribbon, not in the rim.
+
+### The point-count change — the old shape's region is reactive (2026-10-13)
+
+Two point lists of different counts are unrelated: `PathPoints::stage()` pairs no previous point (velocity 0). That
+alone left a GHOST: the old ribbon's pixels now show what is behind it, and the TAA kept the old ribbon there — the
+depth of a ribbon a few centimetres above the ground is inside the resolve's ±1 % depth acceptance (graphics doc 13-12
+§ 06). Measured on `paths` (zigzag → straight line, TAA on, 30 frames by `temporalCapture`): **2 565 ghost pixels on
+the old zigzag for ~30 frames**. The reactive mask is per MATERIAL (a GLSL expression fixed at program generation), so
+it could not say "this path, this frame"; and the ghost is where the path WAS, not where it is drawn.
+
+Owner decision 2026-10-13, option (D) — **a region invalidation, not a per-path tag**:
+- `PathPoints::Footprint` (`halfWidth`, `inPixels`) is published with the points (`publish(slot, points, debug,
+  footprint)`; `Path` gives its material's half width and unit, `Beam` its half width in metres).
+- On a count change (primary view only, like the history itself), `PathPoints::stage()` declares the OLD points'
+  box, with the OLD footprint and the OLD model matrix, to
+  `SceneInstanceTransforms::invalidateTemporalHistory(modelMatrix, min, max, margin, inPixels)`: a world box + a
+  world margin (the model's largest scale applied) or a pixel margin. At most `MaxTemporalHistoryInvalidations` (32)
+  a frame; beyond, the last one grows into the union. Cleared by `beginFrame()`.
+- `Renderer::markInvalidTemporalHistory()`, last in the scene pass (before `endRenderPass`): every box's 8 corners
+  projected by the CURRENT unjittered view-projection, the pixel margin + 2 guard pixels added, clamped to the render
+  area; a corner behind the eye takes the whole target; then ONE `vkCmdClearAttachments` writes 1 into the reactive
+  attachment (`SceneRenderTarget::reactiveColorAttachmentIndex()`; absent = no velocity = no TAA, nothing to do). The
+  TAA's reactive rules then apply unchanged (graphics doc 33 § The reactive mask): the history is replaced there for
+  one frame.
+
+Proof (2026-10-13, Linux, validation layer loaded): the same sequence — **0 ghost pixel from frame 0** on the old
+zigzag (it was 2 565 for ~30 frames); the cleared rectangle, dumped once, matched the zigzag's screen footprint;
+0 `VUID-`. A static path never declares anything (no count change): its TAA is untouched.
+⚠️ Measuring it: the demo's Catmull-Rom loop ROTATES and fills an A/C difference mask on its own — restrict the count
+to the zigzag's box (x 419-909, y 672-733 at 3840x1990 from the default pose). `temporalCapture` blocks the main
+thread: send `setPoints` FIRST, then start the capture.
+⚠️ **Not covered — the ray-traced histories**: a band of ~650 pixels just under the old zigzag survives, identical
+before and after the fix. It is the ribbon's reflection / shadow kept by the RT effects' own temporal histories
+(reflections, GI), which do not read the reactive mask. Open item: `docs/todo/path-ghost-in-ray-traced-histories.md`.
 
 ### ⚠️ Traps and limits
 

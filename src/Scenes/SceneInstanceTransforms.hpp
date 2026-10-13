@@ -162,6 +162,20 @@ namespace EmEn::Scenes
 			 * @brief A path the DEBUG overlay draws this frame (Graphics::PathDebugOverlay): its range in debugPathPoints()
 			 * and its look. CPU side only: the overlay uploads it into its own buffer.
 			 */
+			/** @brief A region whose temporal history is invalid this frame: a world-space box and its margin. */
+			struct TemporalHistoryInvalidation
+			{
+				Base::Math::Vector< 3, float > minimum;
+				Base::Math::Vector< 3, float > maximum;
+				/** @brief The extent around the box, in world units (the model matrix's largest scale applied). */
+				float worldMargin{0.0F};
+				/** @brief The extent around its screen footprint, in pixels. */
+				float pixelMargin{0.0F};
+			};
+
+			/** @brief The regions a frame keeps apart; beyond, the last one grows into the union of the rest. */
+			static constexpr size_t MaxTemporalHistoryInvalidations{32};
+
 			struct DebugPath
 			{
 				uint32_t firstPoint{0};
@@ -248,6 +262,7 @@ namespace EmEn::Scenes
 				m_stagedPathPoints.clear();
 				m_stagedDebugPaths.clear();
 				m_stagedDebugPoints.clear();
+				m_temporalHistoryInvalidations.clear();
 			}
 
 			/**
@@ -325,6 +340,30 @@ namespace EmEn::Scenes
 			 * current: no velocity). Otherwise as many as `current`.
 			 */
 			void stagePath (uint32_t slot, std::span< const Base::Math::Vector< 4, float > > current, std::span< const Base::Math::Vector< 4, float > > previous) noexcept;
+
+			/**
+			 * @brief Declares a region whose temporal history is invalid this frame (render thread, the primary view).
+			 * @details The renderer marks its screen footprint reactive in the scene pass, so the temporal effects replace
+			 * their history there for one frame. A path whose point count changed declares its OLD shape (the pixels it
+			 * left keep a ghost otherwise). Beyond MaxTemporalHistoryInvalidations a frame keeps one union box.
+			 * @param modelMatrix The entity's model matrix.
+			 * @param minimum The box minimum, in the entity's space.
+			 * @param maximum The box maximum, in the entity's space.
+			 * @param margin The extent around the box: entity units, or pixels.
+			 * @param marginInPixels Whether the margin is in pixels.
+			 */
+			void invalidateTemporalHistory (const Base::Math::Matrix< 4, float > & modelMatrix, const Base::Math::Vector< 3, float > & minimum, const Base::Math::Vector< 3, float > & maximum, float margin, bool marginInPixels) noexcept;
+
+			/**
+			 * @brief Returns the regions whose temporal history is invalid this frame.
+			 * @return std::span< const TemporalHistoryInvalidation >
+			 */
+			[[nodiscard]]
+			std::span< const TemporalHistoryInvalidation >
+			temporalHistoryInvalidations () const noexcept
+			{
+				return m_temporalHistoryInvalidations;
+			}
 
 			/**
 			 * @brief Stages a path for the DEBUG overlay, in world space.
@@ -456,6 +495,8 @@ namespace EmEn::Scenes
 			/** @brief The debug overlay's paths of the current frame (CPU side only). */
 			std::vector< DebugPath > m_stagedDebugPaths;
 			std::vector< Base::Math::Vector< 4, float > > m_stagedDebugPoints;
+			/** @brief The regions whose temporal history is invalid this frame (persistent capacity, cleared by beginFrame()). */
+			std::vector< TemporalHistoryInvalidation > m_temporalHistoryInvalidations;
 			/** @brief Staged header for the current frame (primary view target matrices). */
 			Header m_stagedHeader{};
 			/** @brief Serial number of the frame being staged, incremented by beginFrame(). */

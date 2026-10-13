@@ -25,6 +25,7 @@ those whose file is inside the module (the header filter also reports every incl
 
 | Module | Date | Findings by check | Notes |
 |---|---|---|---|
+| `src/Graphics/RenderableInstance/PathPoints.*` (`Footprint`, the old shape's box), `src/Scenes/SceneInstanceTransforms.*` (`invalidateTemporalHistory()`), `src/Graphics/Renderer.*` (`markInvalidTemporalHistory()`), `SceneRenderTarget.*` (`reactiveColorAttachmentIndex()`), `src/Scenes/Component/Path.cpp`, `Beam.cpp` | 2026-10-13 | clang-tidy 21.1.6 on the changed lines: 4 fixed (2 pro-bounds-constant-array-index: the footprint slot through `std::next`; 2 modernize-use-designated-initializers: `Footprint`). 0 left; `clang -fsyntax-only` clean on the 6 TUs. | path-reactive-tag-on-point-count-change |
 | `src/Graphics/Renderable/MeshResource.cpp`, `MultiLayerMeshResource.cpp` (the decimator gets the cancellation flag), `src/Resources/ResourceTrait.hpp` (`backgroundWorkCancellation()`) | 2026-10-08 | clang-tidy 21.1.6: 0 on the changed lines. | lod-job shutdown follow-up |
 | `src/Core.cpp` (`cancelBackgroundWork()`, second pool drain), `src/Resources/ResourceTrait.hpp` (the flag), `src/Graphics/Renderable/MeshResource.cpp`, `MultiLayerMeshResource.cpp` (weak job capture, the check) | 2026-10-08 | clang-tidy 21.1.6: 0 on the changed lines. | lod-job-outlives-its-mesh |
 | `src/Graphics/Renderable/MeshResource.*`, `MultiLayerMeshResource.*` (lock-free level reads, `publishLevel()`) | 2026-10-07 | clang-tidy 21.1.6: 0 on the changed lines. | engine geometry() lock (profile) |

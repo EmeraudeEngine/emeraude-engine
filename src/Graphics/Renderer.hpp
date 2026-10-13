@@ -1827,6 +1827,17 @@ namespace EmEn::Graphics
 			 */
 			void retryDegradedSwapChain () noexcept;
 
+			/**
+			 * @brief Marks the frame's temporal-history invalidations reactive in the scene pass (Scenes::
+			 * SceneInstanceTransforms::invalidateTemporalHistory()): each world box, projected with the current view, its
+			 * screen rectangle cleared to 1 in the reactive mask, so the TAA replaces its history there for one frame.
+			 * @note Render thread, inside the scene render pass, after the last draw. A box partly behind the eye marks the
+			 * whole target.
+			 * @param scene A reference to the scene.
+			 * @param commandBuffer A reference to the command buffer recording the scene pass.
+			 */
+			void markInvalidTemporalHistory (const Scenes::Scene & scene, const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourcesManager;
 			Vulkan::Instance & m_vulkanInstance;

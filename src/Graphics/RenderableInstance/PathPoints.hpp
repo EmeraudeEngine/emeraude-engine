@@ -31,7 +31,9 @@
 
 /* STL inclusions. */
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <vector>
 
 /* Local inclusions for usages. */
@@ -79,18 +81,30 @@ namespace EmEn::Graphics::RenderableInstance
 			};
 
 			/**
+			 * @brief The ribbon's extent around its points, for the temporal-history invalidation of a point-count change.
+			 * @note The owner's material width: a Path's half width (entity units, or pixels), a Beam's half width.
+			 */
+			struct Footprint
+			{
+				float halfWidth{0.0F};
+				bool inPixels{false};
+			};
+
+			/**
 			 * @brief Publishes the points of a logic tick into a render state slot.
 			 * @note Logic thread, from the owner's publishStateForRendering(): the slot is never the one the render
 			 * thread reads (the scene's triple buffer).
 			 * @param writeStateIndex The slot to write.
 			 * @param points The points in the entity's space, w = the arc length from the first point.
 			 * @param debug The debug look: enabled, the path leaves the scene pass for the debug overlay.
+			 * @param footprint The ribbon's extent around the points (the material's half width).
 			 */
 			void
-			publish (uint32_t writeStateIndex, const std::vector< Base::Math::Vector< 4, float > > & points, const DebugLook & debug) noexcept
+			publish (uint32_t writeStateIndex, const std::vector< Base::Math::Vector< 4, float > > & points, const DebugLook & debug, const Footprint & footprint) noexcept
 			{
 				m_published[writeStateIndex % RenderStateSlotCount] = points;
 				m_debug[writeStateIndex % RenderStateSlotCount] = debug;
+				*std::next(m_footprints.begin(), static_cast< std::ptrdiff_t >(writeStateIndex % RenderStateSlotCount)) = footprint;
 			}
 
 			/**
@@ -136,7 +150,11 @@ namespace EmEn::Graphics::RenderableInstance
 
 			std::array< std::vector< Base::Math::Vector< 4, float > >, RenderStateSlotCount > m_published{};
 			std::array< DebugLook, RenderStateSlotCount > m_debug{};
+			std::array< Footprint, RenderStateSlotCount > m_footprints{};
 			/** @brief The points staged by the primary view at the previous rendered frame (render thread only). */
 			std::vector< Base::Math::Vector< 4, float > > m_history;
+			/** @brief Their footprint and their model matrix (render thread only). */
+			Footprint m_historyFootprint{};
+			Base::Math::Matrix< 4, float > m_historyModelMatrix;
 	};
 }

@@ -118,6 +118,10 @@ message.
 rejecting its own history there (by design: it is reactive), and a sparse speckle remained around the arc in the
 `beams` captures (the bilinear gather mixes tagged and untagged texels). To be measured on a scene with detail
 behind a beam before calling it a defect.
+- **A screen REGION can be made reactive for one frame without a material** (2026-10-13): a box declared through
+  `SceneInstanceTransforms::invalidateTemporalHistory()` is cleared to 1 in the reactive attachment at the end of
+  the scene pass (`Renderer::markInvalidTemporalHistory()`). Used by a path or a beam whose point count changed —
+  its OLD shape (graphics doc 35 § The point-count change).
 - `SceneRenderTarget::clearValues(palette)` builds the clear values of the target's own attachments; the two
   hand-written ladders of `Renderer.cpp` (one branch per attachment combination, twice) are gone.
 

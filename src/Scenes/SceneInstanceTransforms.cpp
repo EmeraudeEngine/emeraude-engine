@@ -27,6 +27,8 @@
 #include "SceneInstanceTransforms.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 
 /* Local inclusions. */
@@ -209,6 +211,79 @@ namespace EmEn::Scenes
 		{
 			m_stagedPathPoints.push_back({current[index], paired ? previous[index] : current[index]});
 		}
+	}
+
+	void
+	SceneInstanceTransforms::invalidateTemporalHistory (const Base::Math::Matrix< 4, float > & modelMatrix, const Base::Math::Vector< 3, float > & minimum, const Base::Math::Vector< 3, float > & maximum, float margin, bool marginInPixels) noexcept
+	{
+		using namespace Base::Math;
+
+		if ( !std::isfinite(margin) || margin < 0.0F )
+		{
+			margin = 0.0F;
+		}
+
+		/* NOTE: The box's 8 corners to world space: its world AABB. */
+		TemporalHistoryInvalidation region;
+
+		for ( uint32_t corner = 0; corner < 8; ++corner )
+		{
+			const Vector< 4, float > local{
+				(corner & 1U) != 0 ? maximum[X] : minimum[X],
+				(corner & 2U) != 0 ? maximum[Y] : minimum[Y],
+				(corner & 4U) != 0 ? maximum[Z] : minimum[Z],
+				1.0F
+			};
+			const auto world = modelMatrix * local;
+			const Vector< 3, float > point{world[X], world[Y], world[Z]};
+
+			if ( corner == 0 )
+			{
+				region.minimum = point;
+				region.maximum = point;
+
+				continue;
+			}
+
+			for ( size_t axis = 0; axis < 3; ++axis )
+			{
+				region.minimum[axis] = std::min(region.minimum[axis], point[axis]);
+				region.maximum[axis] = std::max(region.maximum[axis], point[axis]);
+			}
+		}
+
+		if ( marginInPixels )
+		{
+			region.pixelMargin = margin;
+		}
+		else
+		{
+			/* NOTE: An entity-unit margin scaled by the largest axis scale of the model matrix. */
+			const auto scaleX = Vector< 3, float >{modelMatrix[0], modelMatrix[1], modelMatrix[2]}.length();
+			const auto scaleY = Vector< 3, float >{modelMatrix[4], modelMatrix[5], modelMatrix[6]}.length();
+			const auto scaleZ = Vector< 3, float >{modelMatrix[8], modelMatrix[9], modelMatrix[10]}.length();
+
+			region.worldMargin = margin * std::max({scaleX, scaleY, scaleZ});
+		}
+
+		if ( m_temporalHistoryInvalidations.size() < MaxTemporalHistoryInvalidations )
+		{
+			m_temporalHistoryInvalidations.emplace_back(region);
+
+			return;
+		}
+
+		/* NOTE: Full: the last region becomes the union (a larger region loses one frame of history, never a ghost). */
+		auto & last = m_temporalHistoryInvalidations.back();
+
+		for ( size_t axis = 0; axis < 3; ++axis )
+		{
+			last.minimum[axis] = std::min(last.minimum[axis], region.minimum[axis]);
+			last.maximum[axis] = std::max(last.maximum[axis], region.maximum[axis]);
+		}
+
+		last.worldMargin = std::max(last.worldMargin, region.worldMargin);
+		last.pixelMargin = std::max(last.pixelMargin, region.pixelMargin);
 	}
 
 	void

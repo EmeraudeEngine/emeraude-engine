@@ -266,7 +266,14 @@ namespace EmEn::Scenes::Component
 			debug.style = {m_material->halfWidth(), m_material->isWidthInPixels() ? 1.0F : 0.0F, m_material->areJoinsRound() ? 1.0F : 0.0F, m_material->miterLimit()};
 		}
 
-		m_pathPoints->publish(slot, m_enabled ? m_polyline : Nothing, debug);
+		RenderableInstance::PathPoints::Footprint footprint;
+
+		if ( m_material != nullptr )
+		{
+			footprint = {.halfWidth = m_material->halfWidth(), .inPixels = m_material->isWidthInPixels()};
+		}
+
+		m_pathPoints->publish(slot, m_enabled ? m_polyline : Nothing, debug, footprint);
 		m_publishedVersions[slot] = m_version;
 	}
 
