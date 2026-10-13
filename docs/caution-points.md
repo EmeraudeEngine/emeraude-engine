@@ -5882,6 +5882,21 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 > connection (VUID-VkXcbSurfaceCreateInfoKHR-connection-01310), and the macOS one returned false without a trace. The key
 > stays orphaned in an existing `settings.json` (projet-alpha never resets its settings), and nothing reads it.
 
+### Fixed: without a scene, the Continuous loop rendered uncapped — a MAILBOX present never blocks (2026-10-13)
+
+> [!CAUTION]
+> `EnableVSync = true` with `EnableTripleBuffering = true` (both defaults) selects `VK_PRESENT_MODE_MAILBOX_KHR`: no
+> tearing, but a present NEVER blocks — the loop runs as fast as the frame costs and the driver replaces the queued
+> image. With a scene the frame cost bounds it; on the bare menu (Continuous mode, overlay only) Windows rendered
+> ~4800 FPS (791 526 frames in 165 s), Linux/Wayland ~142 FPS on a 60 Hz desktop (the compositor throttles a little).
+> Owner decision 2026-10-13: without an active scene the rendering loop is paced at `Core/Video/FrameRateLimit` when set,
+> else at the refresh rate of the monitor holding the window's centre (the primary one otherwise, 60 Hz without any) —
+> `Core::updateNoScenePacing()` (main thread, at start and on every window change; GLFW's monitor list is main-thread
+> only), an absolute deadline per period in `Core::renderingTask()`. Scenes are NOT capped by it (FIFO, i.e.
+> `EnableTripleBuffering = false`, or `FrameRateLimit` paces them). OnDemand mode is unaffected (it sleeps at rest).
+> Proof (Linux, 60 Hz monitors, VSync off on a settings copy — Wayland has no IMMEDIATE, so MAILBOX): the bare menu
+> 1 739 frames in ~31 s including start-up and shutdown (~60 FPS), against ~142 FPS before.
+
 ### Fixed: a minimise killed the swap-chain for good on the Intel iGPU — the surface reaches 0x0 before the published size (2026-10-13)
 
 > [!CAUTION]

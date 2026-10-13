@@ -282,6 +282,9 @@ namespace EmEn
 
 		uint64_t frames = 0;
 
+		/* NOTE: The next frame deadline while no scene is active (Continuous mode). */
+		std::chrono::steady_clock::time_point nextNoSceneFrame{};
+
 		/* NOTE: On-demand safety re-check period (one 60 FPS frame). On timeout the thread merely
 		 * re-evaluates the predicate; it does not force a frame, so the GPU stays idle at rest. */
 		constexpr std::chrono::duration< double > onDemandTimeout{1.0 / OnDemandRenderingSafetyRefreshHz< double >};
@@ -415,6 +418,25 @@ namespace EmEn
 			}
 
 			frames++;
+
+			/* NOTE: Without an active scene, a Continuous loop draws the overlay only and nothing paces it (a mailbox
+			 * present never blocks): an absolute deadline per period (updateNoScenePacing()), resynchronised after a
+			 * late frame — never an accumulated sleep. */
+			if ( m_renderingMode == RenderingMode::Continuous && !m_sceneManager.hasActiveScene() )
+			{
+				if ( const std::chrono::nanoseconds period{m_noScenePeriodNS.load()}; period.count() > 0 )
+				{
+					const auto now = std::chrono::steady_clock::now();
+
+					nextNoSceneFrame = ( nextNoSceneFrame + period < now ) ? now + period : nextNoSceneFrame + period;
+
+					std::this_thread::sleep_until(nextNoSceneFrame);
+				}
+			}
+			else
+			{
+				nextNoSceneFrame = {};
+			}
 		}
 
 		/* NOTE: Wait until the device has finished all his pending work. */
@@ -429,8 +451,56 @@ namespace EmEn
 	}
 
 	void
+	Core::updateNoScenePacing () noexcept
+	{
+		int64_t rateHz = m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFrameRateLimitKey, DefaultVideoFrameRateLimit);
+
+		if ( rateHz <= 0 && !m_window.isWindowLessMode() )
+		{
+			/* NOTE: The monitor holding the window's centre, the primary one otherwise. */
+			const auto & state = m_window.state();
+			const auto centerX = static_cast< int64_t >(state.windowXPosition) + (state.windowWidth / 2);
+			const auto centerY = static_cast< int64_t >(state.windowYPosition) + (state.windowHeight / 2);
+
+			for ( const auto & monitor : m_window.monitorDevices() )
+			{
+				const auto inside =
+					centerX >= monitor.positionX && centerX < static_cast< int64_t >(monitor.positionX) + monitor.currentResolutionX &&
+					centerY >= monitor.positionY && centerY < static_cast< int64_t >(monitor.positionY) + monitor.currentResolutionY;
+
+				if ( inside && monitor.refreshRate > 0 )
+				{
+					rateHz = monitor.refreshRate;
+
+					break;
+				}
+
+				if ( monitor.primary && monitor.refreshRate > 0 )
+				{
+					rateHz = monitor.refreshRate;
+				}
+			}
+		}
+
+		if ( rateHz <= 0 )
+		{
+			rateHz = 60;
+		}
+
+		const auto periodNS = static_cast< int64_t >(1'000'000'000) / rateHz;
+
+		if ( m_noScenePeriodNS.exchange(periodNS) != periodNS )
+		{
+			TraceInfo{ClassId} << "Without an active scene, the rendering loop is paced at " << rateHz << " Hz.";
+		}
+	}
+
+	void
 	Core::onWindowChanged () noexcept
 	{
+		/* NOTE: The window may have moved to a monitor with another refresh rate. */
+		this->updateNoScenePacing();
+
 		if ( !m_overlayManager.onWindowResized() )
 		{
 			Tracer::error(ClassId, "Unable to resize the overlay manager!");
@@ -522,6 +592,9 @@ namespace EmEn
 
 				break;
 		}
+
+		/* NOTE: Before the rendering loop starts: its pace while no scene is active. */
+		this->updateNoScenePacing();
 
 		/* NOTE: Create the logic loop and the rendering loop into threads
 		 * automatically joined at the end of this function. */

@@ -1395,6 +1395,16 @@ namespace EmEn
 			void onWindowChanged () noexcept;
 
 			/**
+			 * @brief Computes the frame period of the rendering loop while no scene is active, in Continuous mode.
+			 * @details Without a scene the loop draws the overlay only, and nothing paces it: a mailbox present never
+			 * blocks (Windows: ~4800 FPS on the bare menu; docs/caution-points.md § "without a scene, the Continuous
+			 * loop rendered uncapped"). Owner decision 2026-10-13: capped at Core/Video/FrameRateLimit when set, else at
+			 * the refresh rate of the monitor holding the window's centre (the primary one otherwise, 60 Hz without any).
+			 * @note Main thread (the monitor list is GLFW's); called before the loops start and on every window change.
+			 */
+			void updateNoScenePacing () noexcept;
+
+			/**
 			 * @brief The tail of a stop, once the application accepted it (or may no longer refuse it): notifies the
 			 * stop, lowers the loop flags and wakes the rendering thread.
 			 * @note Main thread. Called by stop(), requestSystemStop() past its deadline, stopOnDeviceLoss().
@@ -1858,6 +1868,7 @@ namespace EmEn
 			std::condition_variable m_redrawCondition; ///< Wakes the sleeping rendering thread when a redraw is requested.
 			std::atomic< uint32_t > m_pendingFrames{0}; ///< Frames still owed before the rendering thread may idle (multi-buffer refresh budget).
 			RenderingMode m_renderingMode{RenderingMode::Continuous}; ///< Rendering thread pacing mode. @see setRenderingMode()
+			std::atomic< int64_t > m_noScenePeriodNS{0}; ///< Frame period without an active scene (Continuous mode). Written by the main thread (updateNoScenePacing()), read by the rendering thread.
 #ifdef IMGUI_ENABLED
 			/** @brief The physical camera panel, toggled with Shift+F2. */
 			std::shared_ptr< Overlay::ImGUIScreen > m_cameraScreen;
