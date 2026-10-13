@@ -365,6 +365,18 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Declares a ready swap-chain degraded when its extent no longer matches the window's published
+			 * framebuffer size, so the next frame recreates it.
+			 * @details The safety net of a resize that did not lead to a recreation. On Wayland the present never reports
+			 * VK_ERROR_OUT_OF_DATE_KHR for a size mismatch (the surface takes the swap-chain's extent): without it, a
+			 * swap-chain built for an intermediate size of a resize burst stayed at that size until the next resize. The
+			 * expected extent is chooseSwapExtent() on the capabilities of the last recreation, so a size the surface
+			 * cannot take never loops. A minimised window (0 px) and a headless swap-chain are left to their own paths.
+			 * @note Render thread (the surface capabilities are refreshed there).
+			 */
+			void degradeIfExtentIsStale () noexcept;
+
+			/**
 			 * @brief Returns whether the images are engine-owned and never presented (window-less run).
 			 * @return bool
 			 */
@@ -527,6 +539,14 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			VkExtent2D chooseSwapExtent (const VkSurfaceCapabilitiesKHR & capabilities) const noexcept;
+
+			/**
+			 * @brief Publishes the end of a (re)creation: Ready, unless the window degraded the swap-chain meanwhile.
+			 * @note A resize notified while the swap-chain was being rebuilt (main thread, setDegraded()) must survive:
+			 * the extent was read before it, so the swap-chain stays degraded and the next frame recreates it. An
+			 * unconditional store of Ready lost that resize.
+			 */
+			void publishReady () noexcept;
 
 			/**
 			 * @brief Prepares data to complete the swap-chain framebuffer.

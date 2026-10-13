@@ -224,7 +224,7 @@ namespace EmEn::Vulkan
 
 		this->setCreated();
 
-		m_status = SwapChainStatus::Ready;
+		this->publishReady();
 
 		return true;
 	}
@@ -276,7 +276,7 @@ namespace EmEn::Vulkan
 		/* This will rework the view-related matrices. */
 		this->updateViewProperties();
 
-		m_status = SwapChainStatus::Ready;
+		this->publishReady();
 
 		return true;
 	}
@@ -341,7 +341,7 @@ namespace EmEn::Vulkan
 		/* Update view-related matrices. */
 		this->updateViewProperties();
 
-		m_status = SwapChainStatus::Ready;
+		this->publishReady();
 
 		return true;
 	}
@@ -463,6 +463,54 @@ namespace EmEn::Vulkan
 		}
 
 		return capabilities.minImageCount;
+	}
+
+	void
+	SwapChain::publishReady () noexcept
+	{
+		auto expected = SwapChainStatus::UnderConstruction;
+
+		if ( !m_status.compare_exchange_strong(expected, SwapChainStatus::Ready) )
+		{
+			TraceInfo{ClassId} << "The window was resized during the swap-chain (re)creation: it stays degraded and is recreated on the next frame.";
+		}
+	}
+
+	void
+	SwapChain::degradeIfExtentIsStale () noexcept
+	{
+		if ( m_headless || m_status != SwapChainStatus::Ready )
+		{
+			return;
+		}
+
+		const auto framebufferSize = m_renderer.window().publishedFramebufferSize();
+
+		if ( framebufferSize[0] == 0 || framebufferSize[1] == 0 )
+		{
+			return;
+		}
+
+		const auto * surface = m_renderer.window().surface();
+
+		if ( surface == nullptr )
+		{
+			return;
+		}
+
+		const auto extent = this->chooseSwapExtent(surface->capabilities());
+
+		if ( extent.width == m_createInfo.imageExtent.width && extent.height == m_createInfo.imageExtent.height )
+		{
+			return;
+		}
+
+		auto ready = SwapChainStatus::Ready;
+
+		if ( m_status.compare_exchange_strong(ready, SwapChainStatus::Degraded) )
+		{
+			TraceInfo{ClassId} << "The swap-chain extent " << m_createInfo.imageExtent.width << 'x' << m_createInfo.imageExtent.height << " no longer matches the window framebuffer (" << extent.width << 'x' << extent.height << "): recreated on the next frame.";
+		}
 	}
 
 	VkExtent2D

@@ -1678,7 +1678,10 @@ namespace EmEn::Graphics
 		}
 
 		/* 1. A degraded swap-chain drops the frame: renderFrame() recreates it, inside the scene lock (the
-		 * recreation reconfigures the scene target and the post-processor). */
+		 * recreation reconfigures the scene target and the post-processor). A swap-chain whose extent no longer
+		 * matches the window is degraded first (a resize lost on the way: Wayland reports no out-of-date). */
+		m_swapChain->degradeIfExtentIsStale();
+
 		if ( this->isSwapChainDegraded() )
 		{
 			return false;
