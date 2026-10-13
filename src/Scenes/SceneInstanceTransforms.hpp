@@ -158,10 +158,6 @@ namespace EmEn::Scenes
 				Base::Math::Vector< 4, float > previous;
 			};
 
-			/**
-			 * @brief A path the DEBUG overlay draws this frame (Graphics::PathDebugOverlay): its range in debugPathPoints()
-			 * and its look. CPU side only: the overlay uploads it into its own buffer.
-			 */
 			/** @brief A region whose temporal history is invalid this frame: a world-space box and its margin. */
 			struct TemporalHistoryInvalidation
 			{
@@ -176,6 +172,10 @@ namespace EmEn::Scenes
 			/** @brief The regions a frame keeps apart; beyond, the last one grows into the union of the rest. */
 			static constexpr size_t MaxTemporalHistoryInvalidations{32};
 
+			/**
+			 * @brief A path the DEBUG overlay draws this frame (Graphics::PathDebugOverlay): its range in debugPathPoints()
+			 * and its look. CPU side only: the overlay uploads it into its own buffer.
+			 */
 			struct DebugPath
 			{
 				uint32_t firstPoint{0};
