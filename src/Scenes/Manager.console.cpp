@@ -59,6 +59,7 @@
 #include "PixelFactory/FileIO.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
 #include "json/json.h"
 #include "FastJSON.hpp"
 #include "Console/JSONNumber.hpp"
@@ -1175,7 +1176,7 @@ namespace EmEn::Scenes
 				 * procedural assets, so blocking here is the correct trade. */
 				const auto material = m_resourceManager.container< Graphics::Material::StandardResource >()
 					->getOrCreateResourceSync("ConsoleUV-" + imageName, [this, &imageName] (Graphics::Material::StandardResource & newMaterial) {
-						const auto texture = m_resourceManager.container< Graphics::TextureResource::Texture2D >()->getResource(imageName);
+						const auto texture = Graphics::TextureResource::getStoreTexture(*m_resourceManager.container< Graphics::TextureResource::Texture2D >(), imageName, {.sRGB = true});
 
 						if ( texture == nullptr || !newMaterial.setAlbedoComponent(texture) )
 						{

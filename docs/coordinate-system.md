@@ -424,9 +424,11 @@ no channel is negated anywhere.
   it in place made two flagged textures cancel each other and an unflagged one created later read flipped pixels.
   Proof (`normal-map-debug` option 4, one launch: flipped → unflipped → unflipped → flipped): the unflipped quad
   created AFTER the flipped one differs from it (27 193 pixels) and matches the next unflipped one to 0 pixel.
-  ⚠️ The flag is still a property of the shared TEXTURE resource (item
-  `normal-map-flip-flag-set-by-a-material-on-a-shared-texture`). A block-compressed KTX2 cannot be flipped
-  at load: re-encode it. **Never** add a sign to a shader or a loader for one asset.
+  The flip is part of the texture's IDENTITY (2026-10-14): a flipped store texture is its own resource
+  (`Name#flipY`, through `TextureResource::getStoreTexture()`), set before its loading, so a flagged material and an
+  unflagged one on the same image each get their own texture (proof: `normal-map-debug 4,2,0`, both conventions in
+  one scene — `docs/caution-points.md`). The key belongs INSIDE the texture's `Data` (`docs/material-json-format.md`).
+  A block-compressed KTX2 cannot be flipped at load: re-encode it. **Never** add a sign to a shader or a loader for one asset.
 - Verified: the Khronos `NormalTangentMirrorTest` (highlight angles within a few degrees of the
   geometry column, mirrored islands included) and projet-alpha's `normal-map-debug` (the texture on
   a white quad under an omni of KNOWN side — KeyPad0 cycles centre/top/right/bottom/left; option 4

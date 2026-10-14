@@ -105,7 +105,16 @@ namespace EmEn::Scenes::Viewers
 			return imageResource.load(std::move(ownedPixmap));
 		});
 
-		const auto texture = m_resourceManager.container< TextureResource::Texture2D >()->getOrCreateResource("+ImageViewerTexture" + suffix, [image] (TextureResource::Texture2D & textureResource) {
+		/* NOTE: Created SYNCHRONOUSLY (the function only links the source): the colour space is set when this returns,
+		 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
+		 * docs/caution-points.md). */
+		const auto texture = m_resourceManager.container< TextureResource::Texture2D >()->getOrCreateResourceSync("+ImageViewerTexture" + suffix, [image] (TextureResource::Texture2D & textureResource) {
+			/* The image is the albedo, a colour: sRGB, set before load() (the setter requires it). */
+			if ( !textureResource.enableSRGB(true) )
+			{
+				return false;
+			}
+
 			return textureResource.load(image);
 		});
 

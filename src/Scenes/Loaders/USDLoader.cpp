@@ -1442,10 +1442,16 @@ namespace EmEn::Scenes::Loaders
 			return nullptr;
 		}
 
+		/* NOTE: Created SYNCHRONOUSLY (the function only links the source): the colour space is set when this returns,
+		 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
+		 * docs/caution-points.md). */
 		return m_resources.container< TextureResource::Texture2D >()
-			->getOrCreateResource(m_resourcePrefix + "/texture/" + entryName + ( sRGB ? "-srgb" : "-data" ), [image, sRGB] (auto & textureResource) {
+			->getOrCreateResourceSync(m_resourcePrefix + "/texture/" + entryName + ( sRGB ? "-srgb" : "-data" ), [image, sRGB] (auto & textureResource) {
 				/* Set sRGB BEFORE load(): the flag must be in place when the VkImage is created. */
-				textureResource.enableSRGB(sRGB);
+				if ( !textureResource.enableSRGB(sRGB) )
+				{
+					return false;
+				}
 
 				return textureResource.load(image);
 			});
@@ -1575,10 +1581,16 @@ namespace EmEn::Scenes::Loaders
 				return nullptr;
 			}
 
+			/* NOTE: Created SYNCHRONOUSLY (the function only links the source): the colour space is set when this returns,
+			 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
+			 * docs/caution-points.md). */
 			return m_resources.container< TextureResource::Texture2D >()
-				->getOrCreateResource(m_resourcePrefix + "/texture/" + Base::IO::toU8String(fullPath.filename()) + ( sRGB ? "-srgb" : "-data" ), [image, sRGB] (auto & textureResource) {
+				->getOrCreateResourceSync(m_resourcePrefix + "/texture/" + Base::IO::toU8String(fullPath.filename()) + ( sRGB ? "-srgb" : "-data" ), [image, sRGB] (auto & textureResource) {
 					/* Set sRGB BEFORE load(): the flag must be in place when the VkImage is created. */
-					textureResource.enableSRGB(sRGB);
+					if ( !textureResource.enableSRGB(sRGB) )
+					{
+						return false;
+					}
 
 					return textureResource.load(image);
 				});

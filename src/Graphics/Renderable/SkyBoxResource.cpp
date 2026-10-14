@@ -29,6 +29,7 @@
 /* Local inclusions. */
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
 #include "Resources/Container.hpp"
 #include "FastJSON.hpp"
 #include "Types.hpp"
@@ -130,7 +131,8 @@ namespace EmEn::Graphics::Renderable
 		const auto luminance = this->luminance();
 
 		/* Store the cubemap for environment IBL access. */
-		auto cubemapResource = this->serviceProvider().container< TextureResource::TextureCubemap >()->getResource(textureName, this->isDirectLoading());
+		/* NOTE: The sky is a colour: its sRGB variant (the setter below requires it). */
+		auto cubemapResource = TextureResource::getStoreTexture(*this->serviceProvider().container< TextureResource::TextureCubemap >(), textureName, {.sRGB = true}, !this->isDirectLoading());
 
 		/* ⚠️ The luminance is part of the material IDENTITY: two manifests sharing one cubemap at
 		 * different luminances must not share a material, or whichever loaded first would silently

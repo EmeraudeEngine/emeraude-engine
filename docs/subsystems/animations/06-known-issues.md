@@ -1,7 +1,7 @@
 ## Known Issues
 
 - **TBN debug rendering**: TBNSpaceRendering generator does not support skeletal animation — TBN lines may not appear or may appear at bind-pose positions.
-- **MD5 normal map convention**: id Tech normal maps use OpenGL convention (Y+ up). The engine uses DirectX convention (Y+ down). Use `"FlipNormalMapY": true` in the material JSON normal component to flip the green channel at load time. See: `Pixmap::flipNormalMapY()`, `TextureResource::Abstract::enableFlipNormalMapY()`, `Material::Component::Texture` (JSON key `"FlipNormalMapY"`).
+- **MD5 normal map convention**: ⚠️ this note used to say "the engine uses the DirectX convention (Y+ down), flip id Tech maps" — stale since 2026-09-13: the engine reads the **Khronos convention (+Y up)** (`docs/coordinate-system.md`), so a +Y-up map needs NO flip; `"FlipNormalMapY": true` (inside the texture's `Data`) is for a +Y-down map only. The store material `ID/cyberdemon` carries the flag BESIDE `Type`, where it is never read (2026-10-14): do not move it into `Data` before measuring that map's convention (`normal-map-debug`, top omni). See: `Pixmap::flipNormalMapY()`, `TextureResource::getStoreTexture()`, `Material::Component::Texture` (JSON key `"FlipNormalMapY"`).
 
 ### SkeletalAnimator Runtime API
 

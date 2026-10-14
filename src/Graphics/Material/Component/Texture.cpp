@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
 #include "Graphics/TextureResource/Texture1D.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/TextureResource/Texture3D.hpp"
@@ -44,6 +45,36 @@ namespace EmEn::Graphics::Material::Component
 	using namespace Base;
 	using namespace Base::Math;
 	using namespace Saphir;
+
+	bool
+	Texture::hasExpectedColorSpace (const std::string & variableName, const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
+	{
+		if ( texture == nullptr )
+		{
+			TraceError{ClassId} << "No texture resource for the material variable '" << variableName << "' !";
+
+			return false;
+		}
+
+		if ( texture->name() == Resources::Default )
+		{
+			return true;
+		}
+
+		const bool expectsSRGB = variableName.ends_with("Color");
+
+		if ( texture->isSRGB() == expectsSRGB )
+		{
+			return true;
+		}
+
+		TraceError{ClassId} <<
+			"The texture '" << texture->name() << "' is " << ( texture->isSRGB() ? "sRGB" : "linear" ) << ", "
+			"the material variable '" << variableName << "' samples a " << ( expectsSRGB ? "colour (sRGB)" : "data (linear)" ) << " texture ! "
+			"Request it with TextureResource::getStoreTexture(), or create it with that colour space.";
+
+		return false;
+	}
 
 	Texture::Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::AbstractServiceProvider & serviceProvider) noexcept
 		: m_samplerName{samplerName},
@@ -67,27 +98,51 @@ namespace EmEn::Graphics::Material::Component
 
 		const auto & textureResourceName = *resourceName;
 
+		/* NOTE: The colour space and the normal map flip are part of the texture's IDENTITY (owner decision
+		 * 2026-10-14): they are requested here, from the usage, and getStoreTexture() hands out the variant created
+		 * with them — never written on the shared store texture, where a second material would change them for the
+		 * first one, or the write would race the upload on a pool worker.
+		 * Convention: a material variable name ending with "Color" is a perceptual colour (albedo, emissive...)
+		 * encoded in sRGB, decoded to linear by the GPU on sampling. "FlipNormalMapY": true converts a
+		 * Direct3D-style normal map (+Y down) into the Khronos convention. */
+		TextureResource::Usage usage{};
+		usage.sRGB = m_variableName.ends_with("Color");
+
+		if ( data.isMember(JKFlipNormalMapY) )
+		{
+			const auto flip = FastJSON::getValue< bool >(data, JKFlipNormalMapY);
+
+			if ( !flip.has_value() )
+			{
+				TraceError{ClassId} << "The key '" << JKFlipNormalMapY << "' in Json structure must be a boolean !";
+
+				return;
+			}
+
+			usage.flipNormalMapY = *flip;
+		}
+
 		/* Check the texture type. */
 		switch ( fillingType )
 		{
 			case FillingType::Gradient :
-				m_textureResource = serviceProvider.container< TextureResource::Texture1D >()->getResource(textureResourceName);
+				m_textureResource = TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::Texture1D >(), textureResourceName, usage);
 				break;
 
 			case FillingType::Texture :
-				m_textureResource = serviceProvider.container< TextureResource::Texture2D >()->getResource(textureResourceName);
+				m_textureResource = TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::Texture2D >(), textureResourceName, usage);
 				break;
 
 			case FillingType::VolumeTexture :
-				m_textureResource = serviceProvider.container< TextureResource::Texture3D >()->getResource(textureResourceName);
+				m_textureResource = TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::Texture3D >(), textureResourceName, usage);
 				break;
 
 			case FillingType::Cubemap :
-				m_textureResource = serviceProvider.container< TextureResource::TextureCubemap >()->getResource(textureResourceName);
+				m_textureResource = TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::TextureCubemap >(), textureResourceName, usage);
 				break;
 
 			case FillingType::AnimatedTexture :
-				m_textureResource = serviceProvider.container< TextureResource::AnimatedTexture2D >()->getResource(textureResourceName);
+				m_textureResource = TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::AnimatedTexture2D >(), textureResourceName, usage);
 				break;
 
 			case FillingType::Value :
@@ -109,18 +164,6 @@ namespace EmEn::Graphics::Material::Component
 
 		/* NOTE: Make a copy for the texture interface smart-point. */
 		m_texture = m_textureResource;
-
-		/* Convention: material variable names ending with "Color" represent
-		 * perceptual color data (albedo, emissive, etc.) encoded in sRGB.
-		 * The GPU will automatically convert sRGB to linear on sampling. */
-		m_textureResource->enableSRGB(m_variableName.ends_with("Color"));
-
-		/* Normal map Y flip: converts between OpenGL (Y+ up) and DirectX (Y+ down) conventions.
-		 * Enabled per-component in the material JSON via "FlipNormalMapY": true. */
-		if ( const auto flip = FastJSON::getValue< bool >(data, "FlipNormalMapY"); flip.has_value() )
-		{
-			m_textureResource->enableFlipNormalMapY(*flip);
-		}
 
 		/* Check the optional UVW channel. */
 		if ( data.isMember(JKChannel) )

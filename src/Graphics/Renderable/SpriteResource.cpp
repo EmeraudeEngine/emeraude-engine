@@ -41,6 +41,7 @@
 #include "Graphics/Material/Helpers.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
 #include "VertexFactory/ShapeBuilder.hpp"
 #include "Types.hpp"
 
@@ -101,11 +102,11 @@ namespace EmEn::Graphics::Renderable
 
 				if ( fillingType.value() == FillingType::Texture )
 				{
-					texture2D = this->serviceProvider().container< TextureResource::Texture2D >()->getResource(textureName);
+					texture2D = TextureResource::getStoreTexture(*this->serviceProvider().container< TextureResource::Texture2D >(), textureName, {.sRGB = true});
 				}
 				else if ( fillingType.value() == FillingType::AnimatedTexture )
 				{
-					animatedTexture2D = this->serviceProvider().container< TextureResource::AnimatedTexture2D >()->getResource(textureName);
+					animatedTexture2D = TextureResource::getStoreTexture(*this->serviceProvider().container< TextureResource::AnimatedTexture2D >(), textureName, {.sRGB = true});
 				}
 			}
 		}

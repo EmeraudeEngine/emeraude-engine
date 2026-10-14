@@ -36,6 +36,7 @@
 #include "Graphics/ImposterAtlas.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
 #include "Math/OctahedralMapping.hpp"
 #include "Scenes/Component/MultipleVisuals.hpp"
 
@@ -80,7 +81,7 @@ namespace EmEn::Scenes
 		}
 
 		auto * textures = m_resourceManager.container< TextureResource::Texture2D >();
-		const auto albedo = textures->getResource(name + "-albedo", false);
+		const auto albedo = TextureResource::getStoreTexture(*textures, name + "-albedo", {.sRGB = true}, false);
 		const auto normal = hasImage("-normal") ? textures->getResource(name + "-normal", false) : nullptr;
 		const bool foliage = surface == VegetationSurface::Foliage;
 		const auto alphaMask = foliage && hasImage("-alpha") ? textures->getResource(name + "-alpha", false) : nullptr;

@@ -559,9 +559,15 @@ namespace EmEn::Scenes::Loaders
 				std::string texName = buildResourceKey(m_resourcePrefix, "Texture/", {tex->name.data, tex->name.length}, texIdx);
 				texName += sRGB ? "-srgb" : "-data";
 
+				/* NOTE: Created SYNCHRONOUSLY (the function only links the source): the colour space is set when this returns,
+				 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
+				 * docs/caution-points.md). */
 				auto texture = m_resources.container< TextureResource::Texture2D >()
-					->getOrCreateResource(texName, [image = m_images[texIdx], sRGB] (auto & textureResource) {
-						textureResource.enableSRGB(sRGB);
+					->getOrCreateResourceSync(texName, [image = m_images[texIdx], sRGB] (auto & textureResource) {
+						if ( !textureResource.enableSRGB(sRGB) )
+						{
+							return false;
+						}
 
 						return textureResource.load(image);
 					});

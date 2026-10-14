@@ -67,6 +67,8 @@ namespace EmEn::Graphics::Material::Component
 			 * @param UVWChannel The texture channel to use on geometry. Default 0.
 			 * @param UVWScale A reference to a vector to scale the texture coordinates. Default 1.0 in all directions.
 			 * @param enableAlpha Enable the alpha channel for opacity/blending. Request a 4-channel texture. Default false.
+			 * @pre hasExpectedColorSpace(variableName, texture): the component never changes the colour space of the
+			 * resource it receives — that resource is shared, and the property is read once at its upload.
 			 */
 			Texture (const char * samplerName, std::string variableName, const std::shared_ptr< TextureResource::Abstract > & texture, uint32_t UVWChannel = 0, const Base::Math::Vector< 3, float > & UVWScale = {1.0F, 1.0F, 1.0F}, bool enableAlpha = false) noexcept
 				: m_samplerName{samplerName},
@@ -77,14 +79,22 @@ namespace EmEn::Graphics::Material::Component
 				m_UVWChannel{UVWChannel},
 				m_alphaEnabled{enableAlpha}
 			{
-				/* Convention: material variable names ending with "Color" represent
-				 * perceptual color data (albedo, emissive, etc.) encoded in sRGB.
-				 * The GPU will automatically convert sRGB to linear on sampling. */
-				if ( m_textureResource != nullptr )
-				{
-					m_textureResource->enableSRGB(m_variableName.ends_with("Color"));
-				}
+
 			}
+
+			/**
+			 * @brief Checks that a texture resource has the colour space a material variable samples it with.
+			 * @note Convention: a variable name ending with "Color" is a perceptual colour, sampled from an sRGB texture;
+			 * any other is data, sampled from a linear one. The colour space is part of the texture's identity (owner
+			 * decision 2026-10-14): a material setter refuses a mismatch instead of rewriting the shared resource. A
+			 * store texture is requested in the right colour space through TextureResource::getStoreTexture().
+			 * @note The default resource (a missing texture's stand-in) is accepted in either colour space.
+			 * @param variableName The material variable name.
+			 * @param texture A reference to the texture resource smart pointer.
+			 * @return bool False, with an error naming both, on a null texture or a mismatch.
+			 */
+			[[nodiscard]]
+			static bool hasExpectedColorSpace (const std::string & variableName, const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
 
 			/**
 			 * @brief Constructs a texture component from a texture interface (lower-level).
@@ -416,6 +426,7 @@ namespace EmEn::Graphics::Material::Component
 			static constexpr auto JKUVWScale{"UVW"};
 			static constexpr auto JKUVWOffset{"UVWOffset"};
 			static constexpr auto JKEnableAlpha{"EnableAlpha"};
+			static constexpr auto JKFlipNormalMapY{"FlipNormalMapY"};
 
 			const char * m_samplerName;
 			std::string m_variableName;

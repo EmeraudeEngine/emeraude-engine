@@ -2668,12 +2668,18 @@ namespace EmEn::Scenes::Loaders
 				std::string texName = buildResourceKey(m_resourcePrefix, "Texture/", {glTFTexture.name.data(), glTFTexture.name.size()}, textureIndex);
 				texName += sRGB ? "-srgb" : "-data";
 
+				/* NOTE: Created SYNCHRONOUSLY (the function only links the source): the colour space is set when this returns,
+				 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
+				 * docs/caution-points.md). */
 				auto texture = m_resources.container< TextureResource::Texture2D >()
-					->getOrCreateResource(texName, [image, compressedImage, sRGB, wrapU, wrapV] (auto & textureResource) {
+					->getOrCreateResourceSync(texName, [image, compressedImage, sRGB, wrapU, wrapV] (auto & textureResource) {
 						/* Set sRGB BEFORE load() so the flag is in place when
 						 * onDependenciesLoaded() fires and creates the VkImage. The colour space is
 						 * decided here, from the usage, for both kinds of source alike. */
-						textureResource.enableSRGB(sRGB);
+						if ( !textureResource.enableSRGB(sRGB) )
+						{
+							return false;
+						}
 
 						/* Same contract for the addressing: the sampler is built once, during
 						 * creation on hardware, and never revisited. */

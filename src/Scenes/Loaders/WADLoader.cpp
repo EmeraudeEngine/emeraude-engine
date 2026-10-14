@@ -898,11 +898,19 @@ namespace EmEn::Scenes::Loaders
 
 			const auto textureName = Base::String::concatenate("WAD:", wadStem, "/Texture/", name);
 
-			/* NOT sRGB on purpose: unlit materials on the direct swap-chain path keep the
-			 * whole chain in perceptual space, exactly like the original renderer (palette
-			 * texel × sector light). Decoding to linear here would darken everything. */
-			return m_resources.container< TextureResource::Texture2D >()->getOrCreateResource(textureName, [image] (TextureResource::Texture2D & texture) {
-				texture.enableSRGB(false);
+			/* sRGB, like every colour texture (owner decision 2026-10-14): the texture is the albedo,
+			 * whose setter requires it. Until then the loader created it linear on purpose (a perceptual
+			 * chain, texel × sector light) and setAlbedoComponent() rewrote it sRGB on the shared
+			 * resource, racing the upload on a pool worker: the format depended on which task finished
+			 * first. The chain is photometric since (emission × FullBrightLuminance, exposure triad). */
+			/* NOTE: Created SYNCHRONOUSLY (the function only links the source): the colour space is set when this returns,
+			 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
+			 * docs/caution-points.md). */
+			return m_resources.container< TextureResource::Texture2D >()->getOrCreateResourceSync(textureName, [image] (TextureResource::Texture2D & texture) {
+				if ( !texture.enableSRGB(true) )
+				{
+					return false;
+				}
 
 				return texture.load(image);
 			});
@@ -1056,9 +1064,15 @@ namespace EmEn::Scenes::Loaders
 					continue;
 				}
 
-				/* NOT sRGB, same reasoning as the static path: the whole chain stays perceptual. */
-				auto animated = m_resources.container< TextureResource::AnimatedTexture2D >()->getOrCreateResource(Base::String::concatenate("WAD:", wadStem, "/AnimTexture/", resourceSuffix), [movie] (TextureResource::AnimatedTexture2D & texture) {
-					texture.enableSRGB(false);
+				/* sRGB, same reasoning as the static path. */
+				/* NOTE: Created SYNCHRONOUSLY (the function only links the source): the colour space is set when this returns,
+				 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
+				 * docs/caution-points.md). */
+				auto animated = m_resources.container< TextureResource::AnimatedTexture2D >()->getOrCreateResourceSync(Base::String::concatenate("WAD:", wadStem, "/AnimTexture/", resourceSuffix), [movie] (TextureResource::AnimatedTexture2D & texture) {
+					if ( !texture.enableSRGB(true) )
+					{
+						return false;
+					}
 
 					return texture.load(movie);
 				});

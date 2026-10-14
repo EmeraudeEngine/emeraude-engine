@@ -83,6 +83,50 @@ namespace EmEn::Graphics::TextureResource
 		return true;
 	}
 
+	bool
+	Abstract::isIdentityStillOpen (const char * what) const noexcept
+	{
+		/* NOTE: Unloaded (a resource created by hand, not yet loading) or ManualEnqueuing (inside the creation
+		 * function of Container::getOrCreateResource*(), before load() runs): the creator alone holds it. Any
+		 * other state means the upload may already have read the value, on a pool worker. */
+		if ( const auto status = this->status(); status == Resources::Status::Unloaded || status == Resources::Status::ManualEnqueuing )
+		{
+			return true;
+		}
+
+		TraceError{TracerTag} <<
+			"The " << what << " of texture '" << this->name() << "' is part of its identity and its loading has already started ! "
+			"Set it in the creation function, or request the variant through TextureResource::getStoreTexture().";
+
+		return false;
+	}
+
+	bool
+	Abstract::enableSRGB (bool enable) noexcept
+	{
+		if ( !this->isIdentityStillOpen("colour space") )
+		{
+			return false;
+		}
+
+		m_sRGB = enable;
+
+		return true;
+	}
+
+	bool
+	Abstract::enableFlipNormalMapY (bool enable) noexcept
+	{
+		if ( !this->isIdentityStillOpen("normal map Y flip") )
+		{
+			return false;
+		}
+
+		m_flipNormalMapY = enable;
+
+		return true;
+	}
+
 	void
 	Abstract::applyFlipNormalMapY (Pixmap< uint8_t > & pixmap) const noexcept
 	{

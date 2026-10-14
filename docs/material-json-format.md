@@ -39,6 +39,22 @@ Every component block carries a `Type` and, for most types, a `Data`:
 
 ⚠️ `Automatic` is the one type that has **no** `Data`: its parameters sit beside `Type`.
 
+The **texture object** (`Data` of the texture types) names the store texture and how it is sampled: `Name`
+(mandatory), `Channel` (the UV set), `SourceChannel` (0-3, the colour channel a scalar component reads), `UVW` (a
+scale), and `FlipNormalMapY` (a boolean: a Direct3D-style normal map, +Y down, converted to the Khronos convention by
+a pixel flip at upload — `docs/coordinate-system.md`).
+
+⚠️ **`FlipNormalMapY` belongs INSIDE `Data`**, next to `Name`. Beside `Type` it is never read, silently (measured
+2026-10-14 on the store's `ID/cyberdemon` material, whose flag sat next to `Scale`). A non-boolean value refuses the
+component.
+
+⚠️ **The colour space and the flip are part of the texture's IDENTITY** (owner decision 2026-10-14): the component
+requests the store texture through `TextureResource::getStoreTexture()`, which hands out one resource per usage —
+`Name` itself (linear, unflipped), `Name#sRGB`, `Name#flipY`, `Name#sRGB#flipY` — each created with its properties
+set before its loading. Two materials sampling one image differently therefore get two textures, and no material can
+change another's (the former design wrote both properties on the SHARED texture after the request: the last material
+parsed won for all of them, and a write after the upload, or racing it on a pool worker, changed nothing).
+
 ### Surface
 
 | Key | Types | Extra keys |
@@ -148,8 +164,8 @@ JSON path at all**, existing only as C++ setters.
 glTF packs them there and the R channel of that same image is often the factor map. Reading `.r`
 works on a single-purpose texture and produces a silently wrong result on a packed one.
 
-⚠️ **sRGB is decided by the variable name**, not by the key: `Component::Texture` enables it when the
-GLSL surface variable name ends with `Color`. That is why `SpecularColor` is sRGB — glTF declares
+⚠️ **sRGB is decided by the variable name**, not by the key: `Component::Texture` requests the sRGB variant of the
+texture when the GLSL surface variable name ends with `Color`. That is why `SpecularColor` is sRGB — glTF declares
 `specularColorTexture` as such — while the two thickness maps stay linear. Renaming one of those
 variables silently changes its colour space.
 

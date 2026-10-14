@@ -314,10 +314,11 @@ look.
   **number is not measured**. Treat it as unverified, and reword those comments when the file is
   next touched. (`RenderableInstance::Abstract::setLightingState()` describes the same mechanism
   **without** the number — that one is fine.)
-- **Perceptual color chain for unlit retro content**: textures are loaded with
-  `enableSRGB(false)` and sector light stays raw — the direct swap-chain path does not
-  re-encode, so keeping everything perceptual (texel × light) reproduces the original
-  renderer's look. Decoding to linear darkened the whole map.
+- **The textures are sRGB, like every colour texture** (owner decision 2026-10-14). They were created
+  linear on purpose (a perceptual chain, texel × sector light, for the direct swap-chain path), but
+  `setAlbedoComponent()` then rewrote them sRGB on the shared resource while both tasks ran on the pool:
+  the format depended on which finished first (`docs/caution-points.md`, texture identity). The albedo
+  setter now requires an sRGB texture; the sector light stays raw.
 
 **V1 limitations (future work):** no collision (the demo flies through); fine texture alignment
 still approximate on ordinary walls. **Two-sided middle textures are NO LONGER skipped** — they are

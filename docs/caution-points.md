@@ -2477,10 +2477,11 @@ by a full BRDF.
 ### A material component's sRGB decoding is decided by its VARIABLE NAME (Aug 2026)
 
 > [!CAUTION]
-> `Component::Texture`'s constructor does
-> `m_textureResource->enableSRGB(m_variableName.ends_with("Color"))`. The colour space of a
-> material texture is therefore chosen by **string suffix**, not by an argument — so renaming a
-> `Surface*` key, or picking a new one, silently changes how its texture is decoded.
+> The colour space of a material texture is chosen by **string suffix**: a variable name ending with `Color` samples
+> an sRGB texture, any other a linear one — so renaming a `Surface*` key, or picking a new one, silently changes how
+> its texture is decoded. Since 2026-10-14 the JSON component REQUESTS that variant (`getStoreTexture()`) and every
+> `StandardResource` texture setter REFUSES a texture of the other colour space (`Texture::hasExpectedColorSpace()`);
+> see the next caution point.
 
 It lines up correctly for `KHR_materials_specular`, which needs both behaviours from one extension:
 `specularColorTexture` is sRGB-encoded per spec and lands on `SurfaceSpecularColor` (decoded);
@@ -2495,6 +2496,36 @@ a data channel out of a texture's alpha (which `specularTexture` requires) canno
 the material translucent. `alphaEnabled()` is read nowhere outside the component today, and its
 documented promise to "request a 4-channel texture" is **not implemented** — the sampled `.a` is
 whatever the loaded image happens to carry (1.0 when it has no alpha, which is the identity here).
+
+### A texture's colour space and normal map flip are its IDENTITY — never written on a shared resource (Oct 2026)
+
+> [!CAUTION]
+> `TextureResource::Abstract::enableSRGB()` / `enableFlipNormalMapY()` decide the GPU image, read ONCE by the upload,
+> on a pool worker. They are set by the texture's CREATOR, in the creation function of
+> `Container::getOrCreateResource*()`, before `load()` — and refused (an error, `false`) once the loading has started.
+> A store texture in another usage is a distinct resource: `TextureResource::getStoreTexture(container, name,
+> {.sRGB, .flipNormalMapY})` (`Name#sRGB`, `Name#flipY`). A material setter never writes them: it checks the colour
+> space and refuses a mismatch (the default resource, a missing texture's stand-in, is accepted either way).
+> ⚠️ A texture handed to a setter is therefore created with **`getOrCreateResourceSync()`**: the ASYNCHRONOUS
+> `getOrCreateResource()` runs its creation function later, on a worker, so the setter would read the colour space
+> before it is set and refuse at random. The synchronous form costs nothing there: the function only links an
+> already-requested source (`load(image)`), decoded on the pool as before (the FBX / glTF / USD / WAD loaders, the
+> image viewer and `getStoreTexture()` all do so since 2026-10-14).
+
+Until 2026-10-14 the material component and every texture setter WROTE the colour space (and the JSON component the
+flip) on the texture it was handed — a resource shared by name, requested asynchronously a line earlier. Three
+defects followed: the last material parsed imposed its usage on all of them; a write after the upload changed nothing
+(the vegetation albedo of `Scenes::Toolkit` and the flagstones of projet-alpha's `relief`, loaded synchronously, reached the GPU LINEAR every time); and a write
+during the upload was a data race on a plain `bool`. The WAD loader showed it at its worst: it created its textures
+linear on purpose, then `setAlbedoComponent()` rewrote them sRGB while both tasks ran on the pool — the format of a
+Doom map depended on which finished first. Its textures are sRGB now, like every colour (owner decision 2026-10-14).
+
+Proof (`normal-map-debug 4,2,0`, the pair mode: two materials on the store image `Walls/Bricks001-normal`, one
+flipped, in one scene, under the TOP omni): two texture resources, `Walls/Bricks001-normal` and
+`Walls/Bricks001-normal#flipY`; the as-authored quad shows the bright lip BELOW each groove (246-247 vs a 233 face),
+the flipped one ABOVE it (243-247, 225-229 below) — each its own convention; 0 `VUID-`. Then all 38 projet-alpha
+demos under the validation layer: 0 `VUID-`, 0 colour-space refusal (the sweep first caught the `relief` albedo above,
+and a variant asked for a name absent from the store — which now answers as `getResource()` does).
 
 ### Fixed: the bitangent handedness did not exist, so mirrored UVs lit backwards (Aug 2026)
 

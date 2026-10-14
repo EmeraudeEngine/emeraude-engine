@@ -4844,6 +4844,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceAlbedoColor, texture) )
+		{
+			return false;
+		}
+
 		const auto result = m_components.emplace(ComponentType::Albedo, std::make_unique< Texture >(Uniform::AlbedoSampler, SurfaceAlbedoColor, texture));
 
 		if ( !result.second || result.first->second == nullptr )
@@ -4945,6 +4950,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceRoughness, texture) )
+		{
+			return false;
+		}
+
 		auto component = std::make_unique< Texture >(Uniform::RoughnessSampler, SurfaceRoughness, texture);
 		component->setSourceChannel(sourceChannel);
 
@@ -5010,6 +5020,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceMetalness, texture) )
+		{
+			return false;
+		}
+
 		auto component = std::make_unique< Texture >(Uniform::MetalnessSampler, SurfaceMetalness, texture);
 		component->setSourceChannel(sourceChannel);
 
@@ -5047,6 +5062,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceNormalVector, texture) )
+		{
+			return false;
+		}
+
 		const auto result = m_components.emplace(ComponentType::Normal, std::make_unique< Texture >(Uniform::NormalSampler, SurfaceNormalVector, texture));
 
 		if ( !result.second || result.first->second == nullptr )
@@ -5078,6 +5098,11 @@ namespace EmEn::Graphics::Material
 				"The resource '" << this->name() << "' is created ! "
 				"Unable to create or change the height component.";
 
+			return false;
+		}
+
+		if ( !Texture::hasExpectedColorSpace(SurfaceHeightValue, texture) )
+		{
 			return false;
 		}
 
@@ -5168,6 +5193,11 @@ namespace EmEn::Graphics::Material
 				"The resource '" << this->name() << "' is created ! "
 				"Unable to create or change the reflection component.";
 
+			return false;
+		}
+
+		if ( !Texture::hasExpectedColorSpace(SurfaceReflectionColor, texture) )
+		{
 			return false;
 		}
 
@@ -5326,6 +5356,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceRefractionColor, texture) )
+		{
+			return false;
+		}
+
 		const auto result = m_components.emplace(ComponentType::Refraction, std::make_unique< Texture >(Uniform::RefractionSampler, SurfaceRefractionColor, texture));
 
 		if ( !result.second || result.first->second == nullptr )
@@ -5444,6 +5479,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceAutoIlluminationColor, texture) )
+		{
+			return false;
+		}
+
 		const auto result = m_components.emplace(ComponentType::AutoIllumination, std::make_unique< Texture >(Uniform::AutoIlluminationSampler, SurfaceAutoIlluminationColor, texture));
 
 		if ( !result.second || result.first->second == nullptr )
@@ -5500,6 +5540,11 @@ namespace EmEn::Graphics::Material
 				"The resource '" << this->name() << "' is created ! "
 				"Unable to create or change the opacity component.";
 
+			return false;
+		}
+
+		if ( !Texture::hasExpectedColorSpace(SurfaceOpacityAmount, texture) )
+		{
 			return false;
 		}
 
@@ -5614,6 +5659,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceAmbientOcclusion, texture) )
+		{
+			return false;
+		}
+
 		const auto result = m_components.emplace(ComponentType::AmbientOcclusion, std::make_unique< Texture >(Uniform::AmbientOcclusionSampler, SurfaceAmbientOcclusion, texture));
 
 		if ( !result.second || result.first->second == nullptr )
@@ -5645,6 +5695,11 @@ namespace EmEn::Graphics::Material
 				"The resource '" << this->name() << "' is created ! "
 				"Unable to create or change the reflectivity map component.";
 
+			return false;
+		}
+
+		if ( !Texture::hasExpectedColorSpace(SurfaceReflectivityMap, texture) )
+		{
 			return false;
 		}
 
@@ -5707,6 +5762,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceClearCoatFactor, texture) )
+		{
+			return false;
+		}
+
 		auto component = std::make_unique< Texture >(Uniform::ClearCoatSampler, SurfaceClearCoatFactor, texture);
 		component->setSourceChannel(sourceChannel);
 
@@ -5745,6 +5805,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceClearCoatRoughness, texture) )
+		{
+			return false;
+		}
+
 		auto component = std::make_unique< Texture >(Uniform::ClearCoatRoughnessSampler, SurfaceClearCoatRoughness, texture);
 		component->setSourceChannel(sourceChannel);
 
@@ -5780,6 +5845,11 @@ namespace EmEn::Graphics::Material
 				"The resource '" << this->name() << "' is created ! "
 				"Unable to create or change the clear coat normal component.";
 
+			return false;
+		}
+
+		if ( !Texture::hasExpectedColorSpace(SurfaceClearCoatNormal, texture) )
+		{
 			return false;
 		}
 
@@ -5853,6 +5923,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceSubsurfaceThickness, texture) )
+		{
+			return false;
+		}
+
 		const auto result = m_components.emplace(ComponentType::SubsurfaceThickness, std::make_unique< Texture >(Uniform::SubsurfaceThicknessSampler, SurfaceSubsurfaceThickness, texture));
 
 		if ( !result.second || result.first->second == nullptr )
@@ -5912,6 +5987,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceSheenColor, texture) )
+		{
+			return false;
+		}
+
 		const auto result = m_components.emplace(ComponentType::Sheen, std::make_unique< Texture >(Uniform::SheenSampler, SurfaceSheenColor, texture));
 
 		if ( !result.second || result.first->second == nullptr )
@@ -5951,6 +6031,11 @@ namespace EmEn::Graphics::Material
 		 * not share a colour space (the colour is sRGB, this is linear data). When an asset packs
 		 * both into one image, as SheenCloth does, the texture cache hands out its two colour-space
 		 * slots for the same index and each component gets the one it needs. */
+		if ( !Texture::hasExpectedColorSpace(SurfaceSheenRoughness, texture) )
+		{
+			return false;
+		}
+
 		auto component = std::make_unique< Texture >(Uniform::SheenRoughnessSampler, SurfaceSheenRoughness, texture);
 		component->setSourceChannel(sourceChannel);
 
@@ -6013,6 +6098,11 @@ namespace EmEn::Graphics::Material
 				"The resource '" << this->name() << "' is created ! "
 				"Unable to create or change the anisotropy component.";
 
+			return false;
+		}
+
+		if ( !Texture::hasExpectedColorSpace(SurfaceAnisotropy, texture) )
+		{
 			return false;
 		}
 
@@ -6288,6 +6378,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceTransmissionFactor, texture) )
+		{
+			return false;
+		}
+
 		const auto result = m_components.emplace(ComponentType::Transmission, std::make_unique< Texture >(Uniform::TransmissionSampler, SurfaceTransmissionFactor, texture));
 
 		if ( !result.second || result.first->second == nullptr )
@@ -6449,6 +6544,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceIridescenceFactor, texture) )
+		{
+			return false;
+		}
+
 		const auto result = m_components.emplace(ComponentType::Iridescence, std::make_unique< Texture >(Uniform::IridescenceSampler, SurfaceIridescenceFactor, texture));
 
 		if ( !result.second || result.first->second == nullptr )
@@ -6511,6 +6611,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		if ( !Texture::hasExpectedColorSpace(SurfaceVolumeThickness, texture) )
+		{
+			return false;
+		}
+
 		const auto result = m_components.emplace(ComponentType::VolumeThickness, std::make_unique< Texture >(Uniform::VolumeThicknessSampler, SurfaceVolumeThickness, texture));
 
 		if ( !result.second || result.first->second == nullptr )
@@ -6540,6 +6645,11 @@ namespace EmEn::Graphics::Material
 				"The resource '" << this->name() << "' is created ! "
 				"Unable to create or change the iridescence thickness component.";
 
+			return false;
+		}
+
+		if ( !Texture::hasExpectedColorSpace(SurfaceIridescenceThickness, texture) )
+		{
 			return false;
 		}
 
@@ -6665,6 +6775,11 @@ namespace EmEn::Graphics::Material
 		 * this engine. `enableAlpha` is passed so the intent is recorded on the component; it is
 		 * inert plumbing today (nothing reads it, and the material's opacity is decided by the
 		 * blending flag, never by a component), so it cannot make the material translucent. */
+		if ( !Texture::hasExpectedColorSpace(SurfaceSpecularFactor, texture) )
+		{
+			return false;
+		}
+
 		auto component = std::make_unique< Texture >(Uniform::SpecularSampler, SurfaceSpecularFactor, texture, 0, Base::Math::Vector< 3, float >{1.0F, 1.0F, 1.0F}, true);
 		component->setSourceChannel(Base::PixelFactory::Channel::Alpha);
 
@@ -6710,10 +6825,14 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		/* ⚠️ The variable name ends with "Color", which is what makes `Component::Texture` enable
-		 * sRGB on the resource — and that is exactly right here: KHR_materials_specular declares
-		 * `specularColorTexture` as sRGB-encoded. The factor map above must NOT be sRGB, and its
-		 * `SurfaceSpecularFactor` name keeps it linear by the same rule. */
+		/* ⚠️ The variable name ends with "Color", so the texture must be sRGB (checked above) — and that is
+		 * exactly right here: KHR_materials_specular declares `specularColorTexture` as sRGB-encoded. The factor
+		 * map above must NOT be sRGB, and its `SurfaceSpecularFactor` name requires it linear by the same rule. */
+		if ( !Texture::hasExpectedColorSpace(SurfaceSpecularColor, texture) )
+		{
+			return false;
+		}
+
 		auto component = std::make_unique< Texture >(Uniform::SpecularColorSampler, SurfaceSpecularColor, texture);
 
 		const auto result = m_components.emplace(ComponentType::SpecularColor, std::move(component));

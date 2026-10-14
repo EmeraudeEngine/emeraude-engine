@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <cstdint>
 
 /* Local inclusions for inheritances. */
@@ -215,16 +216,19 @@ namespace EmEn::Graphics::TextureResource
 
 			/**
 			 * @brief Enables sRGB format for this texture resource.
-			 * @note Must be called before createTexture(). Color textures (albedo, emissive, etc.)
-			 * should use sRGB so the GPU automatically converts sRGB to linear on sampling.
-			 * Data textures (normal, roughness, metallic, AO) must remain UNORM (linear).
+			 * @note Color textures (albedo, emissive, etc.) use sRGB so the GPU converts sRGB to linear on sampling;
+			 * data textures (normal, roughness, metallic, AO) remain UNORM (linear).
+			 * @note The colour space is part of the texture's IDENTITY: it decides the GPU format, read once when the
+			 * image is created. Only the CREATOR sets it, before load() — in the creation function of
+			 * `Container::getOrCreateResourceSync()` when a material setter will check it (the asynchronous form sets it
+			 * later, on a worker). A store texture needing another colour space is a distinct resource, requested through
+			 * getStoreTexture(). Never set it on a shared resource a consumer received: another
+			 * consumer would get the format, or the write would race the upload (docs/coordinate-system.md).
 			 * @param enable True for sRGB, false for linear (UNORM).
+			 * @return bool False, with an error, when the loading has already started: the value is left unchanged.
 			 */
-			void
-			enableSRGB (bool enable) noexcept
-			{
-				m_sRGB = enable;
-			}
+			[[nodiscard]]
+			bool enableSRGB (bool enable) noexcept;
 
 			/**
 			 * @brief Returns whether this texture uses sRGB format.
@@ -239,14 +243,15 @@ namespace EmEn::Graphics::TextureResource
 
 			/**
 			 * @brief Enables flipping the green (Y) channel of a normal map at load time.
-			 * @note Converts between OpenGL (Y+ up) and DirectX (Y+ down) normal map conventions.
+			 * @note Converts a Direct3D-style map (+Y down) into the Khronos convention (+Y up); the flip is applied to
+			 * a COPY of the pixels at upload.
+			 * @note Part of the texture's IDENTITY, like the colour space: only the creator sets it, before load()
+			 * (see enableSRGB()).
 			 * @param enable True to flip the Y channel before GPU upload.
+			 * @return bool False, with an error, when the loading has already started: the value is left unchanged.
 			 */
-			void
-			enableFlipNormalMapY (bool enable) noexcept
-			{
-				m_flipNormalMapY = enable;
-			}
+			[[nodiscard]]
+			bool enableFlipNormalMapY (bool enable) noexcept;
 
 			/**
 			 * @brief Returns whether the normal map Y channel flip is enabled.
@@ -382,10 +387,19 @@ namespace EmEn::Graphics::TextureResource
 			[[nodiscard]]
 			bool onDependenciesLoaded () noexcept override;
 
+			/**
+			 * @brief Tells whether an identity property (colour space, normal map flip) may still be set.
+			 * @param what A C-string naming the property, for the error message.
+			 * @return bool False, with an error, once the loading has started.
+			 */
+			[[nodiscard]]
+			bool isIdentityStillOpen (const char * what) const noexcept;
+
 			/* NOTE: The asset's own addressing intent, consumed once when the sampler is built. */
 			WrapMode m_wrapU{WrapMode::Repeat};
 			WrapMode m_wrapV{WrapMode::Repeat};
-			bool m_sRGB{false};
-			bool m_flipNormalMapY{false};
+			/* NOTE: Atomic: written by the creator before load(), read by the upload on a pool worker. */
+			std::atomic< bool > m_sRGB{false};
+			std::atomic< bool > m_flipNormalMapY{false};
 	};
 }
