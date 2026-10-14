@@ -93,6 +93,18 @@ For asynchronous content providers (e.g., CEF browsers), Surface supports a tran
 > COMMITTED it (a downstream menu kept a rescaled, clipped frame whose uncleared border showed garbage; Linux 2/60
 > bursts, Windows 5/30). A provider must drop a frame further from its latched size than the scale rounding allows
 > (projet-alpha `WebView::isPaintForCurrentSize()`: 1 px + ⌈scale⌉) — measured 179 divergences → 0, 2/60 → 0/60.
+>
+> ⚠️ **A size change undone before its commit re-syncs the provider** (2026-10-14). `updatePhysicalRepresentation()`
+> returns early when the new size equals the ACTIVE buffer — a resize burst, or a layout animation, ending where it
+> started. The provider had been told about the intermediate size (`onTransitionBufferReady()`) and still painted it:
+> the stale size was then committed, or — with a provider that drops superseded frames — the view FROZE. The surface
+> now tracks `m_providerTransitionPending` (under `m_framebufferAccess`; set on `onTransitionBufferReady()`, cleared by
+> both commits) and on that early return retires the abandoned transition buffer and calls `onActiveBufferReady()`
+> (a CEF web view re-latches and resizes). `recreateTransitionBufferToRequestedSize()` checks `isValid()` before
+> "already at the requested size" (a retired buffer keeps its pixmap size). Info trace "came back to its active size".
+> Measured: projet-alpha 60/60 bursts clean with it taken 143 times; a downstream application with several
+> front-end-sized views, 30/30 clean (outside a centred panel whose text re-rasterises), taken 523 times, its WebGL view
+> still at its 60 Hz `requestAnimationFrame` cadence during the bursts.
 
 **Code references:**
 - `Surface.hpp:Framebuffer` struct definition

@@ -1518,6 +1518,8 @@ namespace EmEn::Overlay
 			 * created or recreated. This is called:
 			 * - After initial creation in createOnHardware()
 			 * - After resize in single buffer mode (m_useTransitionBuffer = false)
+			 * - When a size change comes back to the active size before its transition was committed: the provider
+			 *   was told about the other size and must re-sync to the active one (a CEF web view re-latches and resizes)
 			 * @warning Runs inside a representation pass: under the Overlay::Manager's representation lock and this
 			 * surface's m_framebufferAccess, on the render thread (or the main thread during a window resize). An override
 			 * must not call back into the Overlay::Manager or take this surface's buffer lock (activeBufferMutex()); it
@@ -1631,6 +1633,7 @@ namespace EmEn::Overlay
 			MemoryMappingMode m_memoryMappingMode{MemoryMappingMode::Staging};
 			std::function< void () > m_redrawRequester; ///< Invoked on any visual mutation to request a redraw (on-demand rendering). Empty in continuous rendering. @see setRedrawRequester()
 			bool m_transitionResizeRequested{false};
+			bool m_providerTransitionPending{false}; ///< Under m_framebufferAccess: the provider was told about a transition size (onTransitionBufferReady()) not committed yet.
 			bool m_acceleratedSourceEnabled{false};
 			/* NOTE: Atomic: any thread invalidates (a resize, setSize(), setGeometry()), the render thread validates after
 			 * a rebuild or an upload, a content thread (the notifier's timer, a web view) reads them (a data race found by the

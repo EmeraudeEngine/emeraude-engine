@@ -765,6 +765,7 @@ namespace EmEn::Overlay
 
 		/* NOTE: After commit, the transition buffer status returns to Ready for next resize. */
 		m_transitionBufferStatus = TransitionBufferStatus::Ready;
+		m_providerTransitionPending = false;
 
 		/* NOTE: When memory mapping or the accelerated source is enabled, the content lands
 		 * directly in GPU memory, so the video memory is already up to date. When disabled,
@@ -813,7 +814,7 @@ namespace EmEn::Overlay
 
 		/* NOTE: The content provider's painted size is authoritative. If the transition buffer
 		 * already matches it, there is nothing to do — the next incoming frame will commit. */
-		if ( m_transitionBuffer.matchesSize(requestedWidth, requestedHeight) )
+		if ( m_transitionBuffer.isValid() && m_transitionBuffer.matchesSize(requestedWidth, requestedHeight) )
 		{
 			return true;
 		}
@@ -913,6 +914,26 @@ namespace EmEn::Overlay
 		/* NOTE: Check if resize is actually needed. */
 		if ( m_activeBuffer.matchesSize(textureWidth, textureHeight) )
 		{
+			/* NOTE: Back to the active size while the provider was told about another one (a size change undone before
+			 * its commit: a resize burst, a layout animation ending where it started). The provider still paints that
+			 * other size: re-sync it to the active one, and retire the abandoned transition buffer so a late frame at
+			 * that size can never be committed. Without it the stale size was committed (the view shown at a wrong
+			 * size), or — with a provider that drops frames of a superseded size — the view froze (2026-10-14). */
+			if ( m_providerTransitionPending )
+			{
+				TraceInfo{ClassId} << "Surface '" << this->name() << "' came back to its active size (" << textureWidth << 'x' << textureHeight << "px) before its transition was committed: the content provider is re-synced.";
+
+				m_providerTransitionPending = false;
+
+				if ( m_transitionBufferEnabled )
+				{
+					m_transitionBuffer.retire(renderer.deferredDestructor());
+					m_transitionBufferStatus = TransitionBufferStatus::Ready;
+				}
+
+				this->onActiveBufferReady(m_activeBuffer);
+			}
+
 			return true;
 		}
 
@@ -987,6 +1008,8 @@ namespace EmEn::Overlay
 			}
 
 			/* NOTE: Notify derived classes that the transition buffer is ready for content. */
+			m_providerTransitionPending = true;
+
 			this->onTransitionBufferReady(m_transitionBuffer);
 
 			return true;
@@ -1424,6 +1447,7 @@ namespace EmEn::Overlay
 			std::swap(m_transitionBuffer, m_activeBuffer);
 
 			m_transitionBufferStatus = TransitionBufferStatus::Ready;
+			m_providerTransitionPending = false;
 
 			TraceSuccess{ClassId} << "Surface '" << this->name() << "' transition buffer committed by an accelerated frame (" << m_activeBuffer.width() << "x" << m_activeBuffer.height() << "px).";
 		}
