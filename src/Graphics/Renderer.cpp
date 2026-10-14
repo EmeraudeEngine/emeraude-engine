@@ -1065,6 +1065,19 @@ namespace EmEn::Graphics
 		return m_swapChain->status() == SwapChainStatus::Degraded;
 	}
 
+	bool
+	Renderer::isPresentBlocking () const noexcept
+	{
+		if ( m_swapChain == nullptr || m_swapChain->isHeadless() )
+		{
+			return false;
+		}
+
+		const auto presentMode = m_swapChain->createInfo().presentMode;
+
+		return presentMode == VK_PRESENT_MODE_FIFO_KHR || presentMode == VK_PRESENT_MODE_FIFO_RELAXED_KHR;
+	}
+
 	std::shared_ptr< RenderTarget::Abstract >
 	Renderer::mainRenderTarget () const noexcept
 	{

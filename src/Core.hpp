@@ -1400,7 +1400,9 @@ namespace EmEn
 			 * blocks (Windows: ~4800 FPS on the bare menu; docs/caution-points.md § "without a scene, the Continuous
 			 * loop rendered uncapped"). Owner decision 2026-10-13: capped at Core/Video/FrameRateLimit when set — by the
 			 * renderer's software limiter alone, the period is then 0 —, else at the refresh rate of the monitor holding
-			 * the window's centre (the primary one otherwise, 60 Hz without any).
+			 * the window's centre (the primary one otherwise, 60 Hz without any). The rendering loop applies it only while
+			 * the present does not block (MAILBOX, IMMEDIATE): a FIFO present already paces at the display rate (owner
+			 * decision 2026-10-14, Renderer::isPresentBlocking()).
 			 * @note Main thread (the monitor list is GLFW's); called before the loops start and on every window change.
 			 */
 			void updateNoScenePacing () noexcept;

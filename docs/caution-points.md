@@ -5907,6 +5907,11 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 >    own pace stands down (period 0) while `Renderer::isSoftwareFrameLimiterEnabled()`.
 > Proof (Linux, 60 Hz, settings copies, validation on, 0 VUID): MAILBOX 60 FPS, `FrameRateLimit` 30 → 30 FPS, FIFO
 > (`EnableTripleBuffering = false`) 60-61 FPS.
+> Windows peer after the fix (165 Hz): NVIDIA bare menu 166 FPS, `FrameRateLimit` 30 → 30.0; Intel (FIFO only, ~148 FPS
+> unpaced) **128-130 FPS paced against 146-150 unpaced — a ~13 % residual loss**: a frame that ends early sleeps to its
+> deadline and its blocking present then waits one more vblank. Owner decision 2026-10-14, option (a): the pacing
+> stands down while the present blocks — `Renderer::isPresentBlocking()` (FIFO, FIFO_RELAXED; never for a headless
+> swap-chain), read by `Core::renderingTask()` on the rendering thread. MAILBOX / IMMEDIATE keep it.
 
 ### Fixed: a resize burst left the swap-chain at an intermediate size for good on Wayland — a lost update of its status (2026-10-14)
 
@@ -5926,6 +5931,9 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 >   headless swap-chain keep their own paths.
 > Proof (same bursts, validation on): **0 of 60** after; the race closed by (A) 42 times in that run (its trace "resized
 > during the swap-chain (re)creation"), 0 `VUID-`.
+> Windows peer (2026-10-14, NVIDIA + Intel, 2 × 15 bursts each, before the CEF fix): 0 VUID, no hang, and the STALE
+> CEF MENU it measured for days (5/30 NVIDIA) was gone — on Windows that symptom WAS this lost update (the overlay
+> kept a size the swap-chain never reached). macOS M6: 30/30 bursts at the right size.
 
 ### Fixed: a minimise killed the swap-chain for good on the Intel iGPU — the surface reaches 0x0 before the published size (2026-10-13)
 

@@ -1572,6 +1572,16 @@ namespace EmEn::Graphics
 			bool isSwapChainDegraded () const noexcept;
 
 			/**
+			 * @brief Returns whether a present blocks until a vertical blank (FIFO, FIFO_RELAXED): the present itself
+			 * paces the rendering loop at the display rate.
+			 * @note Rendering thread (the swap-chain is (re)created there). False without a swap-chain or for a headless
+			 * one (nothing is presented).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isPresentBlocking () const noexcept;
+
+			/**
 			 * @brief Returns whether the renderer gave up recreating the swap-chain (MaxSwapChainRecreationFailures
 			 * consecutive failures): nothing can be presented any more, and Core stops the engine (Core::stopOnDeviceLoss()).
 			 * @note Thread-safe.

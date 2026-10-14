@@ -424,8 +424,10 @@ namespace EmEn
 			 * sleep. A frame that ended past its deadline does not sleep: the deadline restarts from now. ⚠️ With a
 			 * blocking present (FIFO) every frame ends a hair late, and the former restart at now + period slept a
 			 * whole period ON TOP of the vertical-sync wait (Intel, FIFO only, 165 Hz: 64.5 FPS; Windows peer
-			 * 2026-10-14). */
-			if ( m_renderingMode == RenderingMode::Continuous && !m_sceneManager.hasActiveScene() )
+			 * 2026-10-14). A BLOCKING present (FIFO) already paces the loop at the display rate: pacing on top of it
+			 * only cost vblanks (Intel, FIFO only, 165 Hz: 128-130 FPS paced against 146-150 unpaced), so it stands
+			 * down there (owner decision 2026-10-14, option (a)). */
+			if ( m_renderingMode == RenderingMode::Continuous && !m_sceneManager.hasActiveScene() && !m_graphicsRenderer.isPresentBlocking() )
 			{
 				if ( const std::chrono::nanoseconds period{m_noScenePeriodNS.load()}; period.count() > 0 )
 				{
@@ -514,7 +516,7 @@ namespace EmEn
 
 		if ( m_noScenePeriodNS.exchange(periodNS) != periodNS )
 		{
-			TraceInfo{ClassId} << "Without an active scene, the Continuous rendering loop is paced at " << rateHz << " Hz.";
+			TraceInfo{ClassId} << "Without an active scene, the Continuous rendering loop is paced at " << rateHz << " Hz (by the present itself when it blocks).";
 		}
 	}
 
