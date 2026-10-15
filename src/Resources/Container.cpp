@@ -61,12 +61,28 @@ namespace EmEn::Resources::ServiceAccess
 		return primaryServices.netManager().downloadStatus(ticket);
 	}
 
-	bool
-	enqueueTask (const PrimaryServices & primaryServices, std::function< void () > task) noexcept
+	DiscardedTaskGuard::~DiscardedTaskGuard ()
 	{
-		/* NOTE: false when the pool is stopping — the caller must then fail the resource instead of
-		 * waiting for a task that will never run. */
-		return primaryServices.threadPool()->enqueue(std::move(task));
+		if ( m_ran || m_resource == nullptr )
+		{
+			return;
+		}
+
+		/* NOTE: A resource whose task never ran: put in the Failed state, so its parents stop waiting. */
+		if ( const auto status = m_resource->status(); status == Status::Unloaded || status == Status::Enqueuing || status == Status::ManualEnqueuing )
+		{
+			static_cast< void >(m_resource->failLoading());
+		}
+	}
+
+	bool
+	submitTask (const PrimaryServices & primaryServices, Base::TaskGroup & group, std::function< void (const std::stop_token &) > task) noexcept
+	{
+		const auto threadPool = primaryServices.threadPool();
+
+		/* NOTE: false when the group or the pool is stopping — the task (and its DiscardedTaskGuard) is destroyed before
+		 * this returns, never run. */
+		return threadPool != nullptr && threadPool->submit(group, std::move(task));
 	}
 
 	int

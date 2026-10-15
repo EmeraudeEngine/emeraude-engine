@@ -41,14 +41,12 @@
 /* Third-party inclusions. */
 #include "volk.h"
 
+/* Local inclusions for usages. */
+#include "ThreadPool.hpp"
+
 /* Forward declarations. */
 namespace EmEn
 {
-	namespace Base
-	{
-		class ThreadPool;
-	}
-
 	namespace Vulkan
 	{
 		class Buffer;
@@ -305,5 +303,8 @@ namespace EmEn::Graphics
 			bool m_resultReady{false};
 			/* The waiter gave up: release the frames once the GPU is done with them, write nothing, publish nothing. */
 			bool m_cancelled{false};
+			/* NOTE: LAST (Ave Robustus II): the file writer reads the members above through `this`; destroyed first, its
+			 * handle waits for it (writing is not interrupted: the files of a capture are written whole). */
+			Base::TaskHandle m_writer;
 	};
 }

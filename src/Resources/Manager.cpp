@@ -40,7 +40,6 @@
 #include <cmath>
 #include <ranges>
 #include <string_view>
-#include <thread>
 
 /* Local inclusions. */
 #include "Animations/AnimationClipResource.hpp"
@@ -239,7 +238,7 @@ namespace EmEn::Resources
 
 		/* NOTE: One pass at a time, on a pool worker: a pass extracts metadata (full scans of large images) and frees
 		 * memory, up to ~165 ms measured on terrain (2026-10-04) — never on the logic loop (owner decision). */
-		if ( m_localDataReleasePassRunning.exchange(true) )
+		if ( !m_localDataReleasePass.finished() )
 		{
 			return;
 		}
@@ -248,23 +247,30 @@ namespace EmEn::Resources
 
 		const auto threadPool = m_primaryServices.threadPool();
 
-		if ( threadPool == nullptr || !threadPool->enqueue([this, now] {
-			this->runLocalDataReleasePass(now);
-
-			m_localDataReleasePassRunning = false;
-		}) )
+		if ( threadPool == nullptr )
 		{
-			m_localDataReleasePassRunning = false;
+			return;
 		}
+
+		/* NOTE: The manager owns the pass (m_localDataReleasePass): `this` is safe, its stop waits for it. Replacing a
+		 * finished handle waits for nothing. */
+		m_localDataReleasePass = threadPool->submit([this, now] (const std::stop_token & stopToken) {
+			this->runLocalDataReleasePass(now, stopToken);
+		});
 	}
 
 	void
-	Manager::runLocalDataReleasePass (std::chrono::steady_clock::time_point now) noexcept
+	Manager::runLocalDataReleasePass (std::chrono::steady_clock::time_point now, const std::stop_token & stopToken) noexcept
 	{
 		size_t released = 0;
 
 		for ( const auto & container : m_containers | std::views::values )
 		{
+			if ( stopToken.stop_requested() )
+			{
+				return;
+			}
+
 			released += container->releaseIdleLocalData(now, m_localDataReleaseDelay);
 		}
 
@@ -285,6 +291,24 @@ namespace EmEn::Resources
 
 			Manager::returnFreedMemoryToSystem();
 		}
+	}
+
+	void
+	Manager::stopBackgroundWork () noexcept
+	{
+		/* No release pass is scheduled any more; a running one stops at its next container. */
+		m_releaseLocalData = false;
+		m_localDataReleasePass.reset();
+
+		/* Every container refuses new loads, discards the queued ones (their resource fails) and waits for the running
+		 * ones. */
+		for ( const auto & container : m_containers | std::views::values )
+		{
+			container->stopBackgroundWork();
+		}
+
+		/* Last: a load that ran above may have started a local-data reload. */
+		this->stopResourceJobs();
 	}
 
 	size_t
@@ -810,13 +834,9 @@ namespace EmEn::Resources
 		m_sharingServer.reset();
 		m_peerStore.reset();
 
-		/* A release pass running on a pool worker uses the containers: wait for it. */
-		m_releaseLocalData = false;
-
-		while ( m_localDataReleasePassRunning )
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds{1});
-		}
+		/* NOTE: Already done by Core once the main loop was left; again here for any other path (idempotent): the jobs
+		 * use the containers cleared below. */
+		this->stopBackgroundWork();
 
 		/* Terminate primary services. */
 		for ( const auto & resourceContainer : m_containers | std::views::values )

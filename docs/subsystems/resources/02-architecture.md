@@ -27,7 +27,7 @@
 >
 > 1. **`ServiceAccess` free functions** (declared in `Container.hpp`, implemented in `Container.cpp`)
 >    wrap every touch of a heavy service: `netManagerObservable()`, `isNetManagerObservable()`,
->    `fileDownloadedNotificationCode()`, `downloadStatus()`, `downloadedFilepath()`, `enqueueTask()`,
+>    `fileDownloadedNotificationCode()`, `downloadStatus()`, `downloadedFilepath()`, `submitTask()`,
 >    `startDownload()`. **Need a new service call? Add a function there** — do not include
 >    the service header.
 > 2. **`LoadingRequest` is deliberately not a template.** It only ever needs the polymorphic

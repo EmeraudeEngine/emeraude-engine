@@ -199,8 +199,12 @@ namespace EmEn::Net
 			m_shuttingDown = true;
 		}
 
-		/* Workers still running hold `this`: the thread pool is drained by PrimaryServices
-		 * before the services terminate, so nothing is in flight here. */
+		/* NOTE: The manager owns its transfers (m_transfers): the running ones finish (a transfer in progress is not
+		 * interrupted), the queued ones are discarded. Their tickets stay non-terminal: nothing waits for them any more,
+		 * the resource containers stopped first (Core::terminate()). Main thread. */
+		m_transfers.requestStop();
+		m_transfers.waitForAll();
+
 		const std::scoped_lock lock{m_itemsAccess};
 
 		if ( m_indexDirty && !this->writeCacheIndex(this->serializeCacheIndex()) )
@@ -692,10 +696,10 @@ namespace EmEn::Net
 			return ticket;
 		}
 
-		/* ⚠️ enqueue() returns false when the pool is stopping, and it is not [[nodiscard]]:
-		 * ignoring it left the ticket Transferring forever and the resource waiting on it never
-		 * reached a terminal state. */
-		if ( !threadPool->enqueue([this, ticket] { this->performDownload(ticket); }) )
+		/* ⚠️ A refusal (the pool or the manager stopping) must fail the ticket: ignoring it left the ticket Transferring
+		 * forever and the resource waiting on it never reached a terminal state. `this` is safe: the manager owns the
+		 * transfer (m_transfers). */
+		if ( !threadPool->submit(m_transfers, [this, ticket] (const std::stop_token &) { this->performDownload(ticket); }) )
 		{
 			TraceError{ClassId} << "The thread pool refused the task, '" << url.redacted() << "' fails.";
 

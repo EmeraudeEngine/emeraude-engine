@@ -8077,8 +8077,8 @@ per attempt: 417 "Unable to generate the TBN space program", 100 VUIDs (5 kinds 
 `UNASSIGNED-Threading-MultipleThreads-Write` at `vkDestroyDevice`. **Fix:** `Device::geometryShaderEnabled()`;
 `Renderer::isTBNSpaceRenderingAvailable()` is THE gate — `enableTBNSpaceRendering(true)` is refused with one warning,
 `RenderableInstance::Abstract` never generates the program, the `enableTBN` console command answers an error. Proof on
-the M6: 0 generation attempt, 0 VUID, 0 UNASSIGNED. The threading report was not a live race: Core drains the pool twice
-and joins the rendering and logic threads before the device is destroyed, the last failing compilation was long before;
+the M6: 0 generation attempt, 0 VUID, 0 UNASSIGNED. The threading report was not a live race: Core (then) drained the pool
+twice and joins the rendering and logic threads before the device is destroyed, the last failing compilation was long before;
 it vanished with the failing `vkCreateShaderModule` calls.
 
 **A geometry without a vertex tangent space is never retried either (2026-10-12).** On a device WITH the geometry stage
@@ -8445,3 +8445,25 @@ Measured on Linux (GCC 14, NVIDIA 3070 Ti):
   the loader finished decoding the playlist under TSan.
 - The legacy suppression file listed `deadly_signal:` entries, which GCC's TSan refuses ("failed to parse
   suppressions", exit 66 before `main()`): fixed.
+
+### ⚠️⚠️ Every pool job is OWNED — Core no longer cancels nor drains (Ave Robustus II P2, 2026-10-15)
+
+The global `AbstractServiceProvider::cancelBackgroundWork()` flag, the decimator's `setCancellationFlag()` and the two
+pool drains of `Core::run()` are GONE. Each job's owner holds it (`Base::TaskHandle` / `Base::TaskGroup`, declared
+LAST) and stops and waits for it when it goes: the meshes their LOD job, the containers their loads, the provider the
+local-data reloads and the CDLOD ray-tracing proxy, the resource manager its release pass, `Net::Manager` /
+`APIClient` their transfers, `FrameCapture` its writer (table: `docs/subsystems/resources/06-async-lambda-capture-safety.md`).
+The ONE ordering left in `Core`: `Core::terminate()` first calls `Resources::Manager::stopBackgroundWork()` — the
+manager is a primary service, terminated after the renderer and the device, so it stops its own jobs before the
+services they touch go.
+- ⚠️ A job stopped before it starts NEVER RUNS (base contract): what its waiters expect is released by a "never ran"
+  guard in its destructor (`ServiceAccess::DiscardedTaskGuard` fails the resource; `ResourceTrait::LocalDataReloadJob`
+  ends the reload), which touches only what it holds.
+- ⚠️ A job that holds its owner's last reference destroys the owner on its own thread, which then waits for itself:
+  aborted (base D2). A mesh's LOD job captures `this`, never the mesh.
+- ⚠️ An application (a `Core` subclass) that still holds GPU resources when `Core::terminate()` runs keeps them
+  "used": they survive the renderer and `~Core()` destroys them after the device (`vmaDestroyBuffer`, a SEGV — found
+  by `EmeraudeResourceJobsStress`'s first run). Drop them in `onBeforeCoreStop()` (or a user service's terminate).
+Proof (Linux, 2026-10-15): `sponza` with automatic LODs quits in 0.60-0.72 s whatever the moment (62.8 s with the drain
+alone, 2.2-9.1 s with the flag), 0 VUID; `EmeraudeResourceJobsStress` under TSan 0 report over 4 runs (projet-alpha
+`docs/unit-testing.md` § ThreadSanitizer, 4).

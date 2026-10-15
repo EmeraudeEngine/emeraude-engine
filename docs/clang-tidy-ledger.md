@@ -25,6 +25,7 @@ those whose file is inside the module (the header filter also reports every incl
 
 | Module | Date | Findings by check | Notes |
 |---|---|---|---|
+| `src/Graphics/Renderable/MeshResource.*`, `MultiLayerMeshResource.*` (`m_LODJob`), `src/Resources/ResourceTrait.*` (`submitResourceJob()`, `LocalDataReloadJob`), `Container.*` (`m_tasks`, `submitTask()`, `DiscardedTaskGuard`, `stopBackgroundWork()`), `Manager.*` (`stopBackgroundWork()`, the release-pass handle), `src/Core.cpp` (no drain, no cancel flag), `src/Net/Manager.*`, `APIClient.*`, `src/Graphics/FrameCapture.*`, `Geometry/CDLODTerrainResource.cpp`, new `tools/stress/ResourceJobsStress.cpp` | 2026-10-15 | clang-tidy 21.1.6, changed lines of the 10 touched TUs + the stress: 8; 6 fixed (performance-unnecessary-value-param: `DiscardedTaskGuard` takes a const reference; pro-type-member-init, math-missing-parentheses, redundant-member-init ×3 in the stress). 2 left, ON PURPOSE: portability-template-virtual-member-function on `Container::stopBackgroundWork()` (the `ContainerInterface` category below, now ×18); misc-const-correctness on the stress's `main()` local (a false positive: `Core::run()` is not `const`; `TrackMixerStress.cpp` has the same). | engine thread-pool-jobs-owned-through-a-task-handle |
 | `src/Graphics/RenderableInstance/PathPoints.*` (`Footprint`, the old shape's box), `src/Scenes/SceneInstanceTransforms.*` (`invalidateTemporalHistory()`), `src/Graphics/Renderer.*` (`markInvalidTemporalHistory()`), `SceneRenderTarget.*` (`reactiveColorAttachmentIndex()`), `src/Scenes/Component/Path.cpp`, `Beam.cpp` | 2026-10-13 | clang-tidy 21.1.6 on the changed lines: 4 fixed (2 pro-bounds-constant-array-index: the footprint slot through `std::next`; 2 modernize-use-designated-initializers: `Footprint`). 0 left; `clang -fsyntax-only` clean on the 6 TUs. | path-reactive-tag-on-point-count-change |
 | `src/Graphics/Renderable/MeshResource.cpp`, `MultiLayerMeshResource.cpp` (the decimator gets the cancellation flag), `src/Resources/ResourceTrait.hpp` (`backgroundWorkCancellation()`) | 2026-10-08 | clang-tidy 21.1.6: 0 on the changed lines. | lod-job shutdown follow-up |
 | `src/Core.cpp` (`cancelBackgroundWork()`, second pool drain), `src/Resources/ResourceTrait.hpp` (the flag), `src/Graphics/Renderable/MeshResource.cpp`, `MultiLayerMeshResource.cpp` (weak job capture, the check) | 2026-10-08 | clang-tidy 21.1.6: 0 on the changed lines. | lod-job-outlives-its-mesh |
@@ -129,8 +130,8 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   since 2026-09-30.)
 - **cppcoreguidelines-avoid-do-while ×1** — `Manager::unloadUnusedResources()`: "one pass, then again while a pass
   frees something" (freeing a resource frees its dependencies on the next pass) — owner decision 2026-09-30.
-- **portability-template-virtual-member-function ×17** (recorded 2026-10-04; 15 pre-existing, + `releaseIdleLocalData()`,
-  `findResource()`)
+- **portability-template-virtual-member-function ×18** (recorded 2026-10-04; 15 pre-existing, + `releaseIdleLocalData()`,
+  `findResource()`; + `stopBackgroundWork()` 2026-10-15)
   — `Container< resource_t >`: the `ContainerInterface` virtuals are implemented by the container TEMPLATE, the
   manager's type-erased access to every container (the design itself). Every specialisation is instantiated by
   `Manager::onInitialize()`, so no compiler leaves one out.

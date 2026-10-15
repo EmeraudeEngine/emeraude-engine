@@ -34,6 +34,7 @@
 #include <chrono>
 #include <cstddef>
 #include <memory>
+#include <stop_token>
 #include <typeindex>
 #include <unordered_map>
 
@@ -316,13 +317,25 @@ namespace EmEn::Resources
 			 */
 			size_t releaseLocalData (bool ignoreGraceDelay) noexcept;
 
+			/**
+			 * @brief Stops every background job of the resources and waits for them (Ave Robustus II): the CPU-copy
+			 * release pass, every container's loading tasks (the queued ones are discarded, their resource put in the
+			 * Failed state) and the local-data reloads. Final: no job starts after it. Idempotent.
+			 * @note Core calls it once the main loop is left and the logic and rendering threads are joined — the
+			 * Resources::Manager is terminated after the renderer and the Vulkan device (a primary service), so its own
+			 * termination would come too late for the jobs that touch them. Main thread.
+			 * @pre No other thread asks for resources any more.
+			 */
+			void stopBackgroundWork () noexcept;
+
 		private:
 
 			/**
 			 * @brief One release pass (releaseIdleLocalData()'s pool worker).
 			 * @param now The time the pass was scheduled.
+			 * @param stopToken The pass's stop token, checked between containers.
 			 */
-			void runLocalDataReleasePass (std::chrono::steady_clock::time_point now) noexcept;
+			void runLocalDataReleasePass (std::chrono::steady_clock::time_point now, const std::stop_token & stopToken) noexcept;
 
 			/**
 			 * @brief Gives the memory freed by a CPU-copy release back to the system where the allocator keeps it
@@ -626,11 +639,14 @@ namespace EmEn::Resources
 			bool m_useDynamicScan{false};
 			/** @brief Flag indicating whether the CPU-copy release pass is on ("Core/Resources/ReleaseLocalData"). */
 			bool m_releaseLocalData{false};
-			/** @brief Whether a release pass runs on a pool worker (one at a time; onTerminate() waits for it). */
-			std::atomic< bool > m_localDataReleasePassRunning{false};
 			/** @brief Flag indicating that the last release pass released copies: the memory is returned when it ends
 			 * (touched by the pass worker only). */
 			bool m_releaseBurstInProgress{false};
+			/** @brief The CPU-copy release pass running on a pool worker (one at a time).
+			 * @note LAST (Ave Robustus II): the pass reads the containers through `this`; destroyed first, the handle
+			 * stops and waits for it. Logic thread (releaseIdleLocalData()), then the main thread once the logic thread is
+			 * joined (stopBackgroundWork()). */
+			Base::TaskHandle m_localDataReleasePass;
 	};
 
 	/**

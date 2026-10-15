@@ -97,25 +97,28 @@ Robustus), not for speed. Validated with automatic LODs on: `citadel` 94 levels 
 during rendering, 0 VUID. ⚠️ `sponza` then crashes at shutdown — a pre-existing use after free of the LOD job, item
 `lod-job-outlives-its-mesh`.
 
-## An automatic LOD job never outlives its mesh, and gives up at shutdown (2026-10-08)
+## The mesh OWNS its automatic LOD job (Ave Robustus II, 2026-10-15)
 
-`sponza` with `Core/Graphics/LOD/EnableAutomaticGeneration = true` segfaulted at EVERY shutdown (5/5, exit 139): gdb
-showed `MeshResource::generateLODLevel()` on a `ThreadPool` worker, reading its mesh after the resource containers
-had unloaded it — the job captured a raw `this`. Three rules now (`MeshResource`, `MultiLayerMeshResource`, `Core`):
+`MeshResource` and `MultiLayerMeshResource` submit their LOD job with `ThreadPool::submit()` and keep the returned
+`Base::TaskHandle` as their LAST member (`m_LODJob`). Destroyed first, the handle stops the job and waits for it; the
+job checks its `std::stop_token` before each level and hands it to the decimator (`ShapeDecimator::setStopToken()`,
+checked in every stage). So the job reads `this` safely, holds NO reference to the mesh, and nothing else cancels or
+drains it.
 
-- **The job holds a weak reference** (`weak_from_this()`), locks it first and returns when the resource is gone; the
-  locked pointer keeps `this` alive for the whole job.
-- **Core drains the pool AGAIN after joining the logics and rendering threads**, before `terminate()` unloads the
-  resources: those threads (and the loads they started) kept queueing jobs after the first drain.
-- **Background work is cancelled at shutdown:** `Core::run()` raises `Resources::AbstractServiceProvider::
-  cancelBackgroundWork()` as soon as the main loop is left; a LOD job checks `isBackgroundWorkCancelled()` before each
-  level. Without it the drain waited for the whole generation.
+- ⚠️ **The job must never hold the mesh** (`shared_from_this()`, a locked weak reference): dropping the last reference
+  on its own thread would destroy the mesh there, waiting for itself — a contract fault, aborted (base D2).
+- A job stopped before it starts never runs (base contract 2026-10-15); a running decimation stops within the base's
+  stop latency (16 ms worst on Linux, 2.5 ms on the M2; ⚠️ up to 69 ms measured on the Windows i7-13850HX, base item
+  `decimator-stop-latency-flat-table-init`); a level already decimated finishes its GPU upload before the wait returns.
+- A refused job (no pool, or the pool stopping) is traced: no automatic LOD.
 
-- **The running decimation is interrupted too:** `generateLODLevel()` hands the flag to the decimator
-  (`ShapeDecimator::setCancellationFlag(&serviceProvider().backgroundWorkCancellation())`, read between its stages and
-  every 4096 collapses); a cancelled decimation returns without a warning.
+History: until 2026-10-07 the job captured a raw `this` (`sponza` segfaulted at every shutdown, 5/5, exit 139); from
+2026-10-07 to 10-15 it locked a weak reference (the job kept the mesh alive) and `Core` compensated: a global
+`AbstractServiceProvider::cancelBackgroundWork()` flag, read by the job and the decimator
+(`setCancellationFlag()`), and a SECOND pool drain after joining the logics and rendering threads (plan Ave Robustus II
+§ 3.4: the deviations). All gone.
 
-Measured on `sponza` (Linux): 5/5 clean exits, 0 VUID, 373 levels published. Shutdown time, quitting 3 s after the load
-(the load itself still running): drain alone 62.8 s → flag 8.8 s → decimator interrupted **8.2–9.1 s** (6.7–6.9 s
-without automatic LODs); at 40 s: 25.7 s → 7.7 s → **2.2 s** (1.05 s without). The rest, ~1.5 s: the decimator stages
-that are not interruptible inside (deduplication, queue build of a large mesh).
+Measured on `sponza` with automatic LODs (Linux, RTX 3070 Ti, validation layer, settings copy, 2026-10-15), the time
+from `Core.shutdown()` to the process exit: **0.60-0.72 s** quitting at 8 / 12 / 16 / 25 s after the launch (at 8 s,
+355 of the 370 levels were published: the jobs in flight stopped), 0 VUID, 0 crash, exit 0. Before: drain alone 62.8 s,
+the flag 8.8 s, the flag + the decimator interrupted 2.2-9.1 s.

@@ -40,6 +40,7 @@
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <stop_token>
 #include <string>
 #include <tuple>
 #include <unordered_map>
@@ -121,12 +122,57 @@ namespace EmEn::Resources
 		EMEN_API Net::DownloadStatus downloadStatus (const PrimaryServices & primaryServices, int ticket) noexcept;
 
 		/**
-		 * @brief Enqueues a task in the engine thread pool.
+		 * @class DiscardedTaskGuard
+		 * @brief Shared by the copies of a container task's callable: when the task NEVER RAN (the container's stop
+		 * discarded it, or the pool refused it), the last copy's destruction puts its resource in the Failed state, so
+		 * its parents stop waiting (owner ruling 2026-10-01). It touches the resource only — never the container.
+		 */
+		class EMEN_LEAN_API DiscardedTaskGuard final
+		{
+			public:
+
+				/**
+				 * @brief Constructs the guard.
+				 * @param resource The resource the task loads or creates.
+				 */
+				explicit
+				DiscardedTaskGuard (const std::shared_ptr< ResourceTrait > & resource) noexcept
+					: m_resource{resource}
+				{
+
+				}
+
+				/** @brief Fails the resource when the task never ran. */
+				~DiscardedTaskGuard ();
+
+				DiscardedTaskGuard (const DiscardedTaskGuard & copy) = delete;
+				DiscardedTaskGuard (DiscardedTaskGuard && other) = delete;
+				DiscardedTaskGuard & operator= (const DiscardedTaskGuard & copy) = delete;
+				DiscardedTaskGuard & operator= (DiscardedTaskGuard && other) = delete;
+
+				/** @brief Records that the task runs (first thing in its body). */
+				void
+				markRan () noexcept
+				{
+					m_ran = true;
+				}
+
+			private:
+
+				std::shared_ptr< ResourceTrait > m_resource;
+				bool m_ran{false};
+		};
+
+		/**
+		 * @brief Submits a task of a container to the engine thread pool, OWNED by the container's group (Ave Robustus
+		 * II): the container's stop (stopBackgroundWork()) and its destruction stop and wait for it.
 		 * @param primaryServices A reference to the primary services.
-		 * @param task The task to execute [std::move].
+		 * @param group The container's task group.
+		 * @param task The task to execute [std::move], invoked with the group's stop token.
+		 * @return bool False when the group is stopping or the pool refuses the task: it never runs.
 		 */
 		[[nodiscard]]
-		EMEN_LEAN_API bool enqueueTask (const PrimaryServices & primaryServices, std::function< void () > task) noexcept;
+		EMEN_LEAN_API bool submitTask (const PrimaryServices & primaryServices, Base::TaskGroup & group, std::function< void (const std::stop_token &) > task) noexcept;
 
 		/**
 		 * @brief Submits the download of an external resource to the network manager.
@@ -290,6 +336,13 @@ namespace EmEn::Resources
 			 * @version 0.8.35
 			 */
 			virtual bool terminate () noexcept = 0;
+
+			/**
+			 * @brief Stops the container's loading tasks: refuses new ones, discards the queued ones (their resource is
+			 * put in the Failed state) and waits for the running ones. Final. Idempotent.
+			 * @note On the main thread, once no other thread asks for resources (Resources::Manager::stopBackgroundWork()).
+			 */
+			virtual void stopBackgroundWork () noexcept = 0;
 
 			/**
 			 * @brief Returns the total memory consumed by all loaded resources.
@@ -601,6 +654,14 @@ namespace EmEn::Resources
 				}
 
 				return true;
+			}
+
+			/** @copydoc EmEn::Resources::ContainerInterface::stopBackgroundWork() noexcept */
+			void
+			stopBackgroundWork () noexcept override
+			{
+				m_tasks.requestStop();
+				m_tasks.waitForAll();
 			}
 
 			/** @copydoc EmEn::Resources::ContainerInterface::setVerbosity(bool) noexcept */
@@ -1413,7 +1474,9 @@ namespace EmEn::Resources
 					return this->getDefaultResourceUnlocked();
 				}
 
-				if ( !ServiceAccess::enqueueTask(m_primaryServices, [createFunction, newResource] {
+				if ( !ServiceAccess::submitTask(m_primaryServices, m_tasks, [createFunction, newResource, guard = std::make_shared< ServiceAccess::DiscardedTaskGuard >(newResource)] (const std::stop_token &) {
+					guard->markRan();
+
 					if ( createFunction(*newResource) ) {
 						switch ( newResource->status() )
 						{
@@ -1443,12 +1506,8 @@ namespace EmEn::Resources
 					}
 				}) )
 				{
-					TraceError{resource_t::ClassId} << "The thread pool refused the manual creation of '" << newResource->name() << "'.";
-
-					if ( !newResource->failLoading() )
-					{
-						TraceError{resource_t::ClassId} << "'" << newResource->name() << "' could not be put in the Failed state.";
-					}
+					/* NOTE: The refused task's guard already put the resource in the Failed state. */
+					TraceError{resource_t::ClassId} << "The thread pool refused the manual creation of '" << newResource->name() << "' (stopping): it failed.";
 				}
 
 				return newResource;
@@ -1563,11 +1622,9 @@ namespace EmEn::Resources
 										}
 
 										/* Enqueue the resource loading in the thread pool. */
-										if ( !ServiceAccess::enqueueTask(m_primaryServices, [this, request] { this->loadingTask(request); }) )
+										if ( !this->submitLoadingTask(request) )
 										{
-											TraceError{resource_t::ClassId} << "The thread pool refused to load '" << request.baseInformation().name() << "'.";
-
-											this->failResource(request);
+											TraceError{resource_t::ClassId} << "The thread pool refused to load '" << request.baseInformation().name() << "' (stopping): it failed.";
 										}
 									}
 								}
@@ -1844,11 +1901,9 @@ namespace EmEn::Resources
 					else
 					{
 						/* Enqueue the resource loading into the thread pool. */
-						if ( !ServiceAccess::enqueueTask(m_primaryServices, [this, request] { this->loadingTask(request); }) )
+						if ( !this->submitLoadingTask(request) )
 						{
-							TraceError{resource_t::ClassId} << "The thread pool refused to load '" << name << "'.";
-
-							this->failResource(request);
+							TraceError{resource_t::ClassId} << "The thread pool refused to load '" << name << "' (stopping): it failed.";
 						}
 					}
 				}
@@ -1887,6 +1942,25 @@ namespace EmEn::Resources
 				}
 
 				this->notify(LoadingProcessFinished);
+			}
+
+			/**
+			 * @brief Submits loadingTask() to the thread pool, owned by the container's group.
+			 * @note A task that never runs (refused, or discarded by the container's stop) fails its resource through its
+			 * DiscardedTaskGuard and notifies nothing (the container may be gone by then).
+			 * @param request The loading request (copied into the task).
+			 * @return bool False when the task was refused (its resource is failed already).
+			 */
+			[[nodiscard]]
+			bool
+			submitLoadingTask (const LoadingRequest & request) noexcept
+			{
+				/* NOTE: `this` is safe: the container owns the task (m_tasks, destroyed first), and its stop waits for it. */
+				return ServiceAccess::submitTask(m_primaryServices, m_tasks, [this, request, guard = std::make_shared< ServiceAccess::DiscardedTaskGuard >(request.resource())] (const std::stop_token &) {
+					guard->markRan();
+
+					this->loadingTask(request);
+				});
 			}
 
 			/**
@@ -1988,5 +2062,8 @@ namespace EmEn::Resources
 			std::unordered_multimap< int, LoadingRequest > m_externalResources;				 ///< Parked download requests (ticket -> request; several resources may share a URL).
 			mutable std::mutex m_resourcesAccess;												 ///< Mutex protecting m_resources and m_externalResources.
 			bool m_verboseEnabled{false};														 ///< Verbose logging flag for detailed trace output.
+			/* NOTE: LAST (Ave Robustus II): the loading tasks and the manual creations read the members above through
+			 * `this`; destroyed first, the group stops them and waits for the running ones. */
+			Base::TaskGroup m_tasks;															 ///< The container's own loading tasks.
 	};
 }

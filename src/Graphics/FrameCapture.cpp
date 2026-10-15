@@ -428,12 +428,18 @@ namespace EmEn::Graphics
 			write = true;
 		}
 
-		/* Outside the lock: the pool may run the task at once. */
-		if ( write && !m_threadPool->enqueue([this] {
-			this->writeFiles();
-		}) )
+		/* Outside the lock: the pool may run the task at once. The capture owns its writer (m_writer): `this` is safe.
+		 * A refused task (the pool stopping) writes here. */
+		if ( write )
 		{
-			this->writeFiles();
+			m_writer = m_threadPool->submit([this] (const std::stop_token &) {
+				this->writeFiles();
+			});
+
+			if ( !m_writer.valid() )
+			{
+				this->writeFiles();
+			}
 		}
 	}
 

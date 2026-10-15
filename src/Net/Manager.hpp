@@ -380,5 +380,8 @@ namespace EmEn::Net
 			bool m_indexDirty{false};
 			bool m_downloadEnabled{false};
 			bool m_shuttingDown{false};
+			/* NOTE: LAST (Ave Robustus II): the transfers read the members above through `this`; onTerminate() stops and
+			 * waits for them, and the group's destruction again for any other path. */
+			Base::TaskGroup m_transfers;
 	};
 }

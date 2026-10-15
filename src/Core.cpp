@@ -762,18 +762,6 @@ namespace EmEn
 		 * then directly to the sub application. */
 		this->notify(ExitingMainLoop);
 
-		/* The background jobs of the resources (automatic LODs) give up now: the drains below would otherwise wait for
-		 * their whole work (Resources::AbstractServiceProvider::cancelBackgroundWork()). */
-		m_resourceManager.cancelBackgroundWork();
-
-		/* NOTE: Be sure all threads from the pool finish their work. */
-		if ( const auto threadPool = m_primaryServices.threadPool(); threadPool != nullptr )
-		{
-			Tracer::info(ClassId, "Waiting for thread pool finished all the work ...");
-
-			threadPool->wait();
-		}
-
 		if ( renderingThread.joinable() )
 		{
 			Tracer::info(ClassId, "Waiting for rendering thread to be joined ...");
@@ -788,14 +776,9 @@ namespace EmEn
 			logicsThread.join();
 		}
 
-		/* ⚠️ Drain the pool AGAIN, now that no thread can enqueue any more: the logics and rendering threads (and the
-		 * loads they started) kept queueing jobs after the wait above — an automatic LOD job then ran while terminate()
-		 * unloaded the resources (sponza segfaulted at every shutdown, 2026-10-07, item lod-job-outlives-its-mesh). */
-		if ( const auto threadPool = m_primaryServices.threadPool(); threadPool != nullptr )
-		{
-			threadPool->wait();
-		}
-
+		/* NOTE: Every thread-pool job that touches an object is OWNED by it (Ave Robustus II, 2026-10-15): its owner stops
+		 * and waits for it when it goes. Core neither cancels nor drains the pool for them any more (the global cancel
+		 * flag and the two drains are gone); terminate() stops the resource manager's jobs first. */
 		return this->terminate();
 	}
 
@@ -1898,6 +1881,12 @@ namespace EmEn
 	Core::terminate () noexcept
 	{
 		uint32_t errors = 0;
+
+		/* NOTE: The one shutdown ordering Core states for the background jobs: the resource manager is terminated after
+		 * the renderer and the Vulkan device (a primary service), so it stops its OWN jobs (loads, reloads, release pass)
+		 * first, before the services they touch go. Every path ends here once no other thread asks for resources: the
+		 * main loop's threads are joined, or never ran. Idempotent. */
+		m_resourceManager.stopBackgroundWork();
 
 		/* Terminate user services. */
 		for ( auto * userService : std::ranges::reverse_view(m_userServiceEnabled) )

@@ -188,8 +188,11 @@ namespace EmEn::Net
 			m_shuttingDown = true;
 		}
 
-		/* Workers still running hold `this`: the thread pool is drained by PrimaryServices before
-		 * the services terminate, so nothing is in flight here. */
+		/* NOTE: The client owns its requests (m_requests): the running ones finish (a request in progress is not
+		 * interrupted), the queued ones are discarded — their items are cleared just below. Main thread. */
+		m_requests.requestStop();
+		m_requests.waitForAll();
+
 		const std::scoped_lock lock{m_itemsAccess};
 
 		m_items.clear();
@@ -372,10 +375,10 @@ namespace EmEn::Net
 			return ticket;
 		}
 
-		/* ⚠️ enqueue() returns false when the pool is stopping, and it is not [[nodiscard]]:
-		 * ignoring it would leave the ticket Pending forever and whatever waits on it would never
-		 * reach a terminal state. */
-		if ( !threadPool->enqueue([this, ticket] { this->performRequest(ticket); }) )
+		/* ⚠️ A refusal (the pool or the client stopping) must fail the ticket: ignoring it would leave the ticket Pending
+		 * forever and whatever waits on it would never reach a terminal state. `this` is safe: the client owns the
+		 * request (m_requests). */
+		if ( !threadPool->submit(m_requests, [this, ticket] (const std::stop_token &) { this->performRequest(ticket); }) )
 		{
 			TraceError{ClassId} << "The thread pool refused the task, '" << url.redacted() << "' fails.";
 

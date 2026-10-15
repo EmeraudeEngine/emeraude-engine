@@ -1,7 +1,7 @@
 ---
 id: thread-pool-jobs-owned-through-a-task-handle
 title: Thread-pool jobs owned through a TaskHandle by the object that starts them (LOD jobs first); remove the ad-hoc cancellation
-status: open
+status: in-progress
 priority: high
 scope: src/Graphics/Renderable/MeshResource.cpp, MultiLayerMeshResource.cpp, src/Resources/ResourceTrait.hpp, src/Core.cpp, src/PrimaryServices.cpp, src/Graphics/FrameCapture.cpp, src/Net/Manager.cpp, src/Net/APIClient.cpp, src/Resources/Manager.cpp, src/Resources/Container.hpp
 opened: 2026-10-13
@@ -48,20 +48,35 @@ hand-made wait — and capture a raw `this` (verified 2026-10-13):
 Not in scope (already self-contained or value-only): `PeerStore` / `SharingServer` (their destructors wait for their
 jobs), `ResourceTrait.cpp:895` and `CDLODTerrainResource.cpp:1658` (`[self]`), `Container.hpp:1416` (values).
 
+## Done (2026-10-15, Linux — uncommitted, awaiting the owner's go)
+
+Owner decisions of 2026-10-15: ONE complete lot (no transitional state); a new base `TaskGroup` for the objects that run
+N tasks; a pool task stopped before it starts never runs (its wait does not depend on the queue); the resource manager
+stops its own jobs through `stopBackgroundWork()`, called first by `Core::terminate()`.
+
+- Every site owns its jobs (table: `docs/subsystems/resources/06-async-lambda-capture-safety.md`): the meshes their LOD
+  job (`m_LODJob`, the stop token handed to `ShapeDecimator::setStopToken()`), the containers their loads and manual
+  creations (`TaskGroup m_tasks`, `ServiceAccess::submitTask()`, a discarded task fails its resource through
+  `DiscardedTaskGuard`), the provider the local-data reloads and the CDLOD ray-tracing proxy
+  (`AbstractServiceProvider::submitResourceJob()`; a discarded reload ends the reload through `LocalDataReloadJob`),
+  the resource manager its release pass (a `TaskHandle`; the spin-wait is gone), `Net::Manager` / `APIClient` their
+  transfers (`TaskGroup`, stopped in `onTerminate()`), `FrameCapture` its writer (`TaskHandle`).
+- REMOVED: `cancelBackgroundWork()`, `isBackgroundWorkCancelled()`, `backgroundWorkCancellation()`, the flag, BOTH
+  pool drains of `Core::run()`, `ServiceAccess::enqueueTask()`, base `ShapeDecimator::setCancellationFlag()` and its
+  tests (replaced by `anUnrequestedStopTokenChangesNothing`).
+- Proof (Linux, RTX 3070 Ti, settings copy, validation layer): `sponza` with automatic LODs quits in 0.60-0.72 s at
+  8 / 12 / 16 / 25 s (at 8 s, 355 of 370 levels: the jobs in flight stopped), 0 VUID, exit 0. `terrain` quit during
+  its load: 1.27 s from the command's execution to the exit — but the command itself waits ~20 s for the main thread,
+  blocked by the act's load (item `act-load-blocks-main-thread`, not this lot). New TSan stress
+  `EmeraudeResourceJobsStress` (projet-alpha `docs/unit-testing.md` § ThreadSanitizer, 4): 0 report over 4 runs.
+  Whole cascade GCC Release 0 warning, clang `-fsyntax-only -Wthread-safety -Wdocumentation` clean on the touched TUs,
+  clang-tidy 21.1.6 (ledger). Base: Release, ASan/UBSan and TSan full suites green (2522), 0 report.
+
 ## What remains
 
-1. **LOD jobs first**: `MeshResource` / `MultiLayerMeshResource` keep their LOD `TaskHandle`(s) from
-   `ThreadPool::submit()` as members; the job receives the `std::stop_token`, checks it between levels and hands it to
-   `ShapeDecimator::setStopToken()`. The mesh's destructor (implicit, the handle's) stops and waits for its job.
-   Remove the `isBackgroundWorkCancelled()` polls and both `setCancellationFlag()` calls.
-2. **The other sites**, each with its own handle(s): `FrameCapture`, `Net::Manager`, `APIClient`, the
-   `Resources::Manager` release pass (its spin-wait goes), the `Container` loading tasks.
-3. **Remove** `cancelBackgroundWork()`, `isBackgroundWorkCancelled()`, `backgroundWorkCancellation()` and
-   `m_backgroundWorkCancelled` (`ResourceTrait.hpp`), their call in `Core.cpp`, and the second drain once no
-   thread-pool job depends on it; then base `ShapeDecimator::setCancellationFlag()` (TRANSITIONAL, `ShapeDecimator.hpp:122`)
-   and its test — base item `task-handle-and-stop-token` points here for it.
-4. **Proof**: `sponza` + automatic LODs and `terrain` shut down during the load, within bound D7 on the three OS, 0 crash,
-   TSan clean; the base tests green.
+1. **Validation on macOS and Windows**: the same `sponza` / `terrain` shutdown measures (0 crash, 0 VUID, the shutdown
+   time), the base suites, the stress on macOS (MoltenVK). Then this item closes (its knowledge is already in the docs
+   above and engine `docs/caution-points.md` § Concurrency).
 
 ## ⚠️ Traps
 

@@ -33,6 +33,7 @@
 #include <memory>
 #include <atomic>
 #include <mutex>
+#include <stop_token>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -41,6 +42,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "ThreadPool.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -362,8 +364,10 @@ namespace EmEn::Graphics::Renderable
 			 * @param sourceGeometry The LOD 0 indexed geometry with local data.
 			 * @param LODLevel The target LOD level (1-3).
 			 * @param ratio The decimation ratio (0.0 = max reduction, 1.0 = no reduction).
+			 * @param stopToken The LOD job's stop token: a stop interrupts the decimation (nothing is published).
+			 * @note Runs on the LOD job (a pool worker).
 			 */
-			void generateLODLevel (const std::shared_ptr< Geometry::IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio) noexcept;
+			void generateLODLevel (const std::shared_ptr< Geometry::IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio, const std::stop_token & stopToken) noexcept;
 
 			/* Flag names. */
 			static constexpr auto IsReadyToSetupGPU{0UL};
@@ -385,6 +389,11 @@ namespace EmEn::Graphics::Renderable
 			std::vector< MeshLayer > m_layers;
 			mutable std::mutex m_geometryMutex;
 			std::atomic< uint32_t > m_publishedLevelCount{0};
+			/* ⚠️ LAST (Ave Robustus II): the automatic LOD job reads every member above through `this`. Destroyed
+			 * first, its handle stops the job and waits for it (the decimation stops within milliseconds; a level
+			 * already decimated finishes its upload): the job never outlives the mesh, and nothing else (Core, the
+			 * resource provider) has to cancel or drain it. */
+			Base::TaskHandle m_LODJob;
 	};
 }
 

@@ -36,9 +36,11 @@
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <type_traits>
 #include <typeindex>
@@ -57,6 +59,7 @@
 
 /* Local inclusions for usages. */
 #include "BaseInformation.hpp"
+#include "ThreadPool.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -272,40 +275,17 @@ namespace EmEn::Resources
 			virtual bool update (const Json::Value & root) noexcept = 0;
 
 			/**
-			 * @brief Asks every background job of the resources to give up (the application is shutting down).
-			 * @note Raised once by Core when the main loop is left. A job queued on the thread pool returns at once, a
-			 * running one at its next check — the automatic LOD jobs check before each level. Without it, the shutdown
-			 * drain (Core::run()) waited for the whole LOD generation: 62.8 s when quitting sponza 3 s after its load
-			 * (2026-10-07, item lod-job-outlives-its-mesh).
-			 */
-			void
-			cancelBackgroundWork () noexcept
-			{
-				m_backgroundWorkCancelled.store(true, std::memory_order_release);
-			}
-
-			/**
-			 * @brief Returns whether the background jobs must give up.
-			 * @return bool
+			 * @brief Submits a background job of a resource (a released CPU copy reloaded on a pool worker), OWNED by the
+			 * provider (Ave Robustus II): the provider stops and waits for it (stopResourceJobs()) before the services it
+			 * may touch (the renderer, for a GPU readback) go away.
+			 * @note A job stopped before it starts never runs (base TaskGroup): it must release in its destructor whatever
+			 * its waiters expect from it.
+			 * @param job The job, invoked with the provider's stop token.
+			 * @return bool False when the provider stopped its background work or there is no thread pool: the job never
+			 * runs (it is destroyed before this returns).
 			 */
 			[[nodiscard]]
-			bool
-			isBackgroundWorkCancelled () const noexcept
-			{
-				return m_backgroundWorkCancelled.load(std::memory_order_acquire);
-			}
-
-			/**
-			 * @brief Returns the cancellation flag itself, for a long computation that reads it while it runs (the LOD
-			 * decimation: VertexFactory::ShapeDecimator::setCancellationFlag()).
-			 * @return const std::atomic_bool &
-			 */
-			[[nodiscard]]
-			const std::atomic_bool &
-			backgroundWorkCancellation () const noexcept
-			{
-				return m_backgroundWorkCancelled;
-			}
+			bool submitResourceJob (std::function< void (const std::stop_token &) > job) noexcept;
 
 		protected:
 
@@ -332,6 +312,13 @@ namespace EmEn::Resources
 			{
 
 			}
+
+			/**
+			 * @brief Stops the resources' background jobs (submitResourceJob()): waits for the running ones, and for the
+			 * queued ones to be discarded. Final: no job is admitted after it. Idempotent.
+			 * @pre Not on a thread-pool worker (base TaskGroup::waitForAll(): aborted).
+			 */
+			void stopResourceJobs () noexcept;
 
 			/**
 			 * @brief Returns the container for a specific resource type (internal implementation).
@@ -380,7 +367,9 @@ namespace EmEn::Resources
 			PrimaryServices & m_primaryServices; ///< Reference to the engine primary services (ThreadPool, FileSystem, Settings, etc.).
 			Graphics::Renderer & m_graphicsRenderer; ///< Reference to the Graphics::Renderer service for GPU resource creation.
 			Audio::Manager & m_audioManager; ///< Reference to the Audio::Manager service for audio resource creation.
-			std::atomic_bool m_backgroundWorkCancelled{false}; ///< Raised by cancelBackgroundWork() at shutdown.
+			/* NOTE: LAST, destroyed first (stops and waits for the jobs); the concrete provider stops it explicitly before
+			 * its own members go (Manager::stopBackgroundWork()). */
+			Base::TaskGroup m_resourceJobs; ///< The resources' background jobs (local-data reloads).
 	};
 
 	/**
@@ -1327,6 +1316,46 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			LocalDataLease completeLocalDataReload () noexcept;
+
+			/**
+			 * @class LocalDataReloadJob
+			 * @brief The state of one background reload (requestLocalData()): it holds the resource while the job runs, and
+			 * ends the reload in its destructor when the job never ran (stopped before it started, or refused) — a waiter
+			 * in acquireLocalData() would otherwise wait forever on m_localDataReloading.
+			 * @note Shared by the copies of the job's callable (std::function copies it): the LAST copy's destruction
+			 * decides, once.
+			 */
+			class LocalDataReloadJob final
+			{
+				public:
+
+					/**
+					 * @brief Constructs the reload state.
+					 * @param resource The resource to reload, its reload already started (m_localDataReloading).
+					 */
+					explicit
+					LocalDataReloadJob (std::shared_ptr< ResourceTrait > resource) noexcept
+						: m_resource{std::move(resource)}
+					{
+
+					}
+
+					/** @brief Ends the reload when the job never ran. */
+					~LocalDataReloadJob ();
+
+					LocalDataReloadJob (const LocalDataReloadJob & copy) = delete;
+					LocalDataReloadJob (LocalDataReloadJob && other) = delete;
+					LocalDataReloadJob & operator= (const LocalDataReloadJob & copy) = delete;
+					LocalDataReloadJob & operator= (LocalDataReloadJob && other) = delete;
+
+					/** @brief Runs the reload (once). On the pool worker. */
+					void run () noexcept;
+
+				private:
+
+					std::shared_ptr< ResourceTrait > m_resource;
+					bool m_ran{false};
+			};
 
 			static constexpr uint32_t DirectLoading = 1U << 31;
 

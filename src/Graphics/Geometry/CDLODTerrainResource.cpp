@@ -1645,17 +1645,20 @@ namespace EmEn::Graphics::Geometry
 			return;
 		}
 
-		const auto threadPool = this->serviceProvider().primaryServices().threadPool();
-
-		if ( threadPool == nullptr )
-		{
-			return;
-		}
-
 		m_rtProxyUpdating.store(true, std::memory_order_release);
 		m_rtProxyCenter = wanted;
 
-		const auto enqueued = threadPool->enqueue([self = std::static_pointer_cast< CDLODTerrainResource >(this->shared_from_this()), wanted] () {
+		/* NOTE: The job holds the terrain (`self`) and hands it to the renderer; the resource provider OWNS it (Ave
+		 * Robustus II): its stop waits for it before the renderer goes (Core::terminate()). A job stopped before it
+		 * starts never runs. */
+		const auto enqueued = this->serviceProvider().submitResourceJob([self = std::static_pointer_cast< CDLODTerrainResource >(this->shared_from_this()), wanted] (const std::stop_token & stopToken) {
+			if ( stopToken.stop_requested() )
+			{
+				self->m_rtProxyUpdating.store(false, std::memory_order_release);
+
+				return;
+			}
+
 			PendingRayTracingProxy proxy;
 
 			if ( !self->generateRayTracingProxy(wanted, proxy) )

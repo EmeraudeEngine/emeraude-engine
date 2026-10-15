@@ -427,5 +427,8 @@ namespace EmEn::Net
 			bool m_enabled{false};
 			bool m_shuttingDown{false};
 			bool m_retentionWarned{false};
+			/* NOTE: LAST (Ave Robustus II): the requests read the members above through `this`; onTerminate() stops and
+			 * waits for them, and the group's destruction again for any other path. */
+			Base::TaskGroup m_requests;
 	};
 }

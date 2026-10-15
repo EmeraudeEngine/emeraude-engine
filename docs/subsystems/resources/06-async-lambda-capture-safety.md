@@ -38,3 +38,30 @@ auto material = container->getOrCreateResource(name, [
 - `Container.hpp:getOrCreateResource()` — Async path (thread pool)
 - `Container.hpp:getOrCreateResourceSync()` — Sync path (blocks calling thread)
 - `Scenes/GLTFLoader.cpp` — Reference implementation of safe async captures
+
+### Every pool job of the resources has an OWNER (Ave Robustus II, 2026-10-15)
+
+No resource job is fire-and-forget any more, and `Core` neither cancels nor drains the pool for them (the global
+`cancelBackgroundWork()` flag and the two `Core::run()` drains are gone). Who owns what:
+
+| Job | Owner (member, declared LAST) | Captures |
+|---|---|---|
+| a container's loading task, a manual creation (`getOrCreateResource()`) | the `Container` (`Base::TaskGroup m_tasks`) | `this` + the request / the resource |
+| a local-data reload (`ResourceTrait::requestLocalData()`), the CDLOD ray-tracing proxy | the provider (`AbstractServiceProvider::submitResourceJob()`, its `TaskGroup`) | the resource (`self`): the job calls the derived class, which a base-class handle could not keep alive |
+| an automatic LOD job | the mesh (`Base::TaskHandle m_LODJob`) | `this` only — never the mesh itself |
+| the CPU-copy release pass | the `Resources::Manager` (`Base::TaskHandle`) | `this` |
+
+**The shutdown order.** The `Resources::Manager` is a primary service: it is terminated AFTER the renderer and the
+Vulkan device. So `Core::terminate()` first calls `Resources::Manager::stopBackgroundWork()` — the manager stops its
+OWN jobs (release pass, every container, the provider's jobs) and waits for them, once the logic and rendering threads
+are joined, before any service they touch goes. Idempotent; `Manager::onTerminate()` calls it again.
+
+**A job that never runs.** A job stopped before it starts never runs (base `TaskGroup` / `TaskHandle` contract,
+2026-10-15). A loading task or a manual creation discarded that way puts its resource in the Failed state through
+`ServiceAccess::DiscardedTaskGuard` (so its parents stop waiting, owner ruling 2026-10-01); a discarded reload ends the
+reload through `ResourceTrait::LocalDataReloadJob` (else `acquireLocalData()` would wait forever). These guards run on
+a worker and touch ONLY what they hold — never the container (it may be gone). `stopBackgroundWork()` uses
+`TaskGroup::waitForAll()`: when it returns, every discarded task's guard has run.
+
+⚠️ Since 2026-10-15 `ResourceTrait.hpp` includes `ThreadPool.hpp` (the provider's `TaskGroup` member): every resource
+header pays for it (compile time, the lowest priority).

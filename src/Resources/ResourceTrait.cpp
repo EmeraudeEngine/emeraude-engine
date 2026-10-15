@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <chrono>
+#include <memory>
 #include <optional>
 #include <mutex>
 #include <unordered_set>
@@ -890,22 +891,69 @@ namespace EmEn::Resources
 			m_localDataReloading = true;
 		}
 
-		const auto threadPool = m_serviceProvider.primaryServices().threadPool();
-
-		if ( threadPool == nullptr || !threadPool->enqueue([self] {
-			static_cast< void >(self->completeLocalDataReload());
+		/* NOTE: The job holds the resource (`self`): it calls the derived class's reload, which a handle held by this base
+		 * class could not keep alive through the derived destructor. The PROVIDER owns the job (submitResourceJob()):
+		 * it stops and waits for it before the renderer goes (a GPU readback). A job that never runs (stopped before it
+		 * started, or refused) still ends the reload in LocalDataReloadJob's destructor: acquireLocalData() waits for it. */
+		if ( !m_serviceProvider.submitResourceJob([reload = std::make_shared< LocalDataReloadJob >(std::move(self))] (const std::stop_token &) {
+			reload->run();
 		}) )
 		{
-			{
-				const std::scoped_lock scopeLock{m_localDataAccess};
-
-				m_localDataReloading = false;
-			}
-
-			m_localDataReloaded.notify_all();
+			TraceWarning{TracerTag} << "The local data of '" << this->name() << "' cannot be reloaded in the background (the resource jobs are stopped) !";
 		}
 
 		return {};
+	}
+
+	ResourceTrait::LocalDataReloadJob::~LocalDataReloadJob ()
+	{
+		if ( m_resource == nullptr || m_ran )
+		{
+			return;
+		}
+
+		{
+			const std::scoped_lock scopeLock{m_resource->m_localDataAccess};
+
+			m_resource->m_localDataReloading = false;
+		}
+
+		m_resource->m_localDataReloaded.notify_all();
+	}
+
+	void
+	ResourceTrait::LocalDataReloadJob::run () noexcept
+	{
+		if ( m_resource == nullptr || m_ran )
+		{
+			return;
+		}
+
+		m_ran = true;
+
+		static_cast< void >(m_resource->completeLocalDataReload());
+	}
+
+	bool
+	AbstractServiceProvider::submitResourceJob (std::function< void (const std::stop_token &) > job) noexcept
+	{
+		const auto threadPool = m_primaryServices.threadPool();
+
+		if ( threadPool == nullptr )
+		{
+			return false;
+		}
+
+		return threadPool->submit(m_resourceJobs, std::move(job));
+	}
+
+	void
+	AbstractServiceProvider::stopResourceJobs () noexcept
+	{
+		/* NOTE: waitForAll(): a discarded reload ends its reload in its destructor (LocalDataReloadJob); it is gone too
+		 * when this returns. Main thread (never a pool worker: aborted). */
+		m_resourceJobs.requestStop();
+		m_resourceJobs.waitForAll();
 	}
 
 	void

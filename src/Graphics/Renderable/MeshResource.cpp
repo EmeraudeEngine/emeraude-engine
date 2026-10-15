@@ -439,34 +439,37 @@ namespace EmEn::Graphics::Renderable
 				{
 					TraceInfo{ClassId} << "Generating " << levelsToGenerate << " LOD level(s) for '" << this->name() << "' (" << triangleCount << " triangles).";
 
-					/* ⚠️ The job may outlive this resource (the scene unloaded, the application shutting down): it holds a
-					 * WEAK reference, locks it first and gives up when the resource is gone; the locked pointer keeps
-					 * `this` alive for the whole job. A raw `this` read a destroyed mesh — sponza with automatic LODs
-					 * segfaulted at every shutdown (2026-10-07, item lod-job-outlives-its-mesh). Core::run() also drains
-					 * the pool once no thread can enqueue any more, before the resources unload. */
-					this->serviceProvider().primaryServices().threadPool()->enqueue([this, weakSelf = this->weak_from_this(), sourceGeometry, sourceLease, levelsToGenerate, reductionRatio] {
-						const auto self = weakSelf.lock();
+					/* NOTE: The mesh OWNS its LOD job (Ave Robustus II): m_LODJob, declared last, is destroyed first — it stops
+					 * the job and waits for it. So the job reads `this` safely and holds NO reference to the mesh: a job
+					 * dropping the mesh's last reference would destroy the mesh on its own thread, waiting for itself (a
+					 * contract fault, aborted: base decision D2). Before 2026-10-15 the job locked a weak reference and
+					 * Core cancelled and drained the pool for it (item lod-job-outlives-its-mesh, 2026-10-07). */
+					const auto threadPool = this->serviceProvider().primaryServices().threadPool();
 
-						if ( self == nullptr )
-						{
-							return;
-						}
+					if ( threadPool != nullptr )
+					{
+						m_LODJob = threadPool->submit([this, sourceGeometry, sourceLease, levelsToGenerate, reductionRatio] (const std::stop_token & stopToken) {
+							float levelRatio = reductionRatio;
 
-						float levelRatio = reductionRatio;
-
-						for ( uint32_t level = 1; level <= levelsToGenerate; level++ )
-						{
-							/* The application is shutting down: the remaining levels are not worth the wait. */
-							if ( this->serviceProvider().isBackgroundWorkCancelled() )
+							for ( uint32_t level = 1; level <= levelsToGenerate; level++ )
 							{
-								return;
+								/* The mesh is going away: the remaining levels are not worth the wait. */
+								if ( stopToken.stop_requested() )
+								{
+									return;
+								}
+
+								this->generateLODLevel(sourceGeometry, level, levelRatio, stopToken);
+
+								levelRatio *= reductionRatio;
 							}
+						});
+					}
 
-							this->generateLODLevel(sourceGeometry, level, levelRatio);
-
-							levelRatio *= reductionRatio;
-						}
-					});
+					if ( !m_LODJob.valid() )
+					{
+						TraceWarning{ClassId} << "The thread pool refused the LOD job of '" << this->name() << "' (no pool, or it is stopping): no automatic LOD.";
+					}
 				}
 			}
 		}
@@ -475,13 +478,14 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	void
-	MeshResource::generateLODLevel (const std::shared_ptr< IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio) noexcept
+	MeshResource::generateLODLevel (const std::shared_ptr< IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio, const std::stop_token & stopToken) noexcept
 	{
 		/* Decimate the source mesh. */
 		VertexFactory::ShapeDecimator decimator{sourceGeometry->localData(), ratio};
 
-		/* A decimation of a large mesh lasts seconds: the shutdown interrupts it (an empty shape comes back). */
-		decimator.setCancellationFlag(&this->serviceProvider().backgroundWorkCancellation());
+		/* A decimation of a large mesh lasts seconds: the job's stop interrupts it within milliseconds (an empty shape
+		 * comes back; base caution-points § the decimator's stop). */
+		decimator.setStopToken(stopToken);
 
 		auto decimatedShape = decimator.decimate();
 
