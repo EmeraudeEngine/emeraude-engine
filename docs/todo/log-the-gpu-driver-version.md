@@ -2,7 +2,7 @@
 id: log-the-gpu-driver-version
 title: The startup log never states the GPU driver version
 status: open
-priority: low
+priority: high
 scope: Vulkan/Instance, Vulkan/PhysicalDevice
 opened: 2026-09-22
 tags: [diagnostics, cross-platform-bench]
