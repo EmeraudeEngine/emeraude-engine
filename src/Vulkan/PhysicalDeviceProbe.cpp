@@ -85,11 +85,12 @@ namespace EmEn::Vulkan
 		{
 			uint32_t count = 0;
 
-			if ( enumerateExtensions(nullptr, &count, nullptr) == VK_SUCCESS && count > 0 )
+			/* NOTE: VK_INCOMPLETE is a success code (valid data): any non-negative answer is accepted. */
+			if ( enumerateExtensions(nullptr, &count, nullptr) >= VK_SUCCESS && count > 0 )
 			{
 				std::vector< VkExtensionProperties > extensions(count);
 
-				if ( enumerateExtensions(nullptr, &count, extensions.data()) == VK_SUCCESS )
+				if ( enumerateExtensions(nullptr, &count, extensions.data()) >= VK_SUCCESS )
 				{
 					portabilityEnumeration = std::ranges::any_of(std::span{extensions}.first(std::min< size_t >(count, extensions.size())), [] (const VkExtensionProperties & extension) {
 						const std::span name{extension.extensionName};
@@ -150,7 +151,8 @@ namespace EmEn::Vulkan
 		{
 			uint32_t count = 0;
 
-			if ( enumeratePhysicalDevices(instance, &count, nullptr) == VK_SUCCESS && count > 0 )
+			/* NOTE: VK_INCOMPLETE is a success code (a hybrid laptop answered it to the count query, 2026-10-15). */
+			if ( enumeratePhysicalDevices(instance, &count, nullptr) >= VK_SUCCESS && count > 0 )
 			{
 				std::vector< VkPhysicalDevice > devices(std::min(count, MaxProbedDevices));
 				count = static_cast< uint32_t >(devices.size());

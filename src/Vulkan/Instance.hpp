@@ -72,6 +72,43 @@ namespace EmEn::Vulkan
 	{
 		public:
 
+			/** @brief The Vulkan API version the instance asks for. */
+			static constexpr uint32_t RequestedAPIVersion{VK_API_VERSION_1_3};
+
+			/**
+			 * @brief The lowest API version a device may report to be used (engine item
+			 * device-below-vulkan-1-3-reaches-vkcreatedevice, 2026-10-15): the shaders target Vulkan 1.3 / SPIR-V 1.6 and
+			 * the device creation chains VkPhysicalDeviceVulkan13Features. macOS compiles its shaders for Vulkan 1.2 /
+			 * SPIR-V 1.5 (MoltenVK): 1.2 there.
+			 */
+			static constexpr uint32_t MinimumDeviceAPIVersion{IsMacOS ? VK_API_VERSION_1_2 : VK_API_VERSION_1_3};
+
+			/**
+			 * @brief Why a physical device was not used (the startup diagnosis, the user-facing message of a refused
+			 * startup: engine item incompatible-gpu-is-never-told-to-the-user).
+			 */
+			struct DeviceRefusal final
+			{
+				/** @brief The cause, in terms a user can act on. */
+				enum class Reason : uint8_t
+				{
+					/** @brief The device reports an API version below MinimumDeviceAPIVersion: an outdated driver. */
+					BelowRequiredAPIVersion,
+					/** @brief The device does not advertise a required feature: the hardware (or its driver) cannot run the engine. */
+					MissingFeatures,
+					/** @brief vkCreateDevice() failed for another reason. */
+					CreationFailed
+				};
+
+				std::string deviceName;
+				std::string driverVersion;
+				/** @brief The reason's detail (the missing features, the versions, the Vulkan result). */
+				std::string detail;
+				uint32_t vendorID{0};
+				uint32_t apiVersion{0};
+				Reason reason{Reason::CreationFailed};
+			};
+
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanInstanceService"};
 
@@ -297,6 +334,18 @@ namespace EmEn::Vulkan
 			std::shared_ptr< Device > getComputeDevice () noexcept;
 
 			/**
+			 * @brief Returns every physical device refused during the selection, and why (main thread, after
+			 * getGraphicsDevice() / getComputeDevice()).
+			 * @return const std::vector< DeviceRefusal > &
+			 */
+			[[nodiscard]]
+			const std::vector< DeviceRefusal > &
+			deviceRefusals () const noexcept
+			{
+				return m_deviceRefusals;
+			}
+
+			/**
 			 * @brief Returns a list of validation layers available from Vulkan.
 			 * @note This method follows the vkEnumerateDeviceLayerProperties() deprecation.
 			 * @return std::vector< VkLayerProperties >
@@ -418,7 +467,34 @@ namespace EmEn::Vulkan
 			 * @return std::vector< ScoredPhysicalDevice >
 			 */
 			[[nodiscard]]
-			std::vector< ScoredPhysicalDevice > getScoredGraphicsDevices (Window * window) const noexcept;
+			std::vector< ScoredPhysicalDevice > getScoredGraphicsDevices (Window * window) noexcept;
+
+			/**
+			 * @brief Creates the logical graphics device on one physical device: the required features checked first (a
+			 * device that lacks one is refused before vkCreateDevice()), then the optional ones and extensions requested.
+			 * @param window A pointer to the current Window. This can be nullptr.
+			 * @param selectedPhysicalDevice The physical device.
+			 * @return std::shared_ptr< Device > nullptr when refused or when vkCreateDevice() fails (the refusal recorded).
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Device > createGraphicsDevice (Window * window, const std::shared_ptr< PhysicalDevice > & selectedPhysicalDevice) noexcept;
+
+			/**
+			 * @brief Refuses a device whose API version is below MinimumDeviceAPIVersion, with the log line a user (or a
+			 * report) can act on: the device, its API and driver versions, "update the graphics driver".
+			 * @param physicalDevice The physical device.
+			 * @return bool True when the device is recent enough.
+			 */
+			[[nodiscard]]
+			bool checkDeviceAPIVersion (const PhysicalDevice & physicalDevice) noexcept;
+
+			/**
+			 * @brief Records why a device was not used (deviceRefusals()).
+			 * @param physicalDevice The physical device.
+			 * @param reason The cause.
+			 * @param detail The detail.
+			 */
+			void recordDeviceRefusal (const PhysicalDevice & physicalDevice, DeviceRefusal::Reason reason, std::string detail) noexcept;
 
 			/**
 			 * @brief Builds the ranking keys of a compatible device.
@@ -561,6 +637,8 @@ namespace EmEn::Vulkan
 			std::vector< const char * > m_requiredInstanceExtensions;
 			std::vector< const char * > m_requiredGraphicsDeviceExtensions;
 			std::optional< DeviceIdentity > m_preferredGraphicsDevice;
+			/* NOTE: Filled during the device selection (main thread), read for the startup diagnosis. */
+			std::vector< DeviceRefusal > m_deviceRefusals;
 			DeviceAutoSelectMode m_autoSelectMode{DeviceAutoSelectMode::Performance};
 			bool m_showInformation{false};
 			bool m_debugMode{false};

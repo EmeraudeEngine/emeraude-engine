@@ -617,6 +617,8 @@ namespace EmEn::Vulkan
 
 		std::vector< VkImage > imageHandles{m_imageCount, VK_NULL_HANDLE};
 
+		/* NOTE: Not enumerate(): the count is the swap-chain's own (createImageArray() sizes every frame by it), so a
+		 * VK_INCOMPLETE here would mean images are missing — a failure for this caller, unlike a device list. */
 		if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, imageHandles.data()); result != VK_SUCCESS )
 		{
 			TraceFatal{ClassId} << "Unable to get images from the swap-chain : " << vkResultToCString(result) << " !";

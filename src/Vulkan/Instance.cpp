@@ -154,12 +154,12 @@ namespace EmEn::Vulkan
 			{
 				/* NOTE: macOS don't support the Vulkan API.
 				 * MoltenVK is used to translate commands to Metal API, some features can be unsupported. */
-				m_applicationInfo.apiVersion = VK_API_VERSION_1_3;
+				m_applicationInfo.apiVersion = RequestedAPIVersion;
 				m_createInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 			}
 			else
 			{
-				m_applicationInfo.apiVersion = VK_API_VERSION_1_3;
+				m_applicationInfo.apiVersion = RequestedAPIVersion;
 				m_createInfo.flags = 0;
 			}
 			m_createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -346,30 +346,26 @@ namespace EmEn::Vulkan
 	{
 		std::vector< VkPhysicalDevice > physicalDevices{};
 
-		uint32_t count = 0;
+		/* NOTE: VK_INCOMPLETE is a SUCCESS code: the device list changed between the count and the fill (a hybrid laptop
+		 * whose discrete GPU appears late). Treating it as a failure stopped the engine on capable Windows AMD laptops
+		 * (engine item physical-device-enumeration-refuses-vk-incomplete, user crash reports 2026-10-15). */
+		const auto outcome = enumerate(physicalDevices, [this] (uint32_t * count, VkPhysicalDevice * data) {
+			return vkEnumeratePhysicalDevices(m_instance, count, data);
+		});
 
-		if ( auto result = vkEnumeratePhysicalDevices(m_instance, &count, nullptr); result == VK_SUCCESS )
+		if ( !outcome.succeeded() )
 		{
-			if ( count > 0 )
-			{
-				physicalDevices.resize(count);
-
-				result = vkEnumeratePhysicalDevices(m_instance, &count, physicalDevices.data());
-
-				if ( result != VK_SUCCESS )
-				{
-					TraceError{ClassId} << "Unable to get physical devices : " << vkResultToCString(result) << " !";
-
-					return false;
-				}
-			}
-		}
-		else
-		{
-			TraceError{ClassId} << "Unable to get physical device count : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to enumerate the physical devices : " << vkResultToCString(outcome.result) << " !";
 
 			return false;
 		}
+
+		if ( outcome.retries > 0 || outcome.result == VK_INCOMPLETE )
+		{
+			TraceWarning{ClassId} << "The physical device list changed during its enumeration (" << outcome.retries << " retr" << ( outcome.retries == 1 ? "y" : "ies" ) << ", last answer " << vkResultToCString(outcome.result) << ") : the last list is used.";
+		}
+
+		TraceInfo{ClassId} << physicalDevices.size() << " physical device(s) found.";
 
 		m_physicalDevices.reserve(physicalDevices.size());
 
@@ -625,25 +621,10 @@ namespace EmEn::Vulkan
 	{
 		std::vector< VkLayerProperties > validationLayers;
 
-		uint32_t count = 0;
-
-		if ( auto result = vkEnumerateInstanceLayerProperties(&count, nullptr); result == VK_SUCCESS )
+		/* NOTE: VK_INCOMPLETE is a success code (the list changed between the two calls): enumerate() handles it. */
+		if ( const auto outcome = enumerate(validationLayers, [&] (uint32_t * count, auto * data) { return vkEnumerateInstanceLayerProperties(count, data); }); !outcome.succeeded() )
 		{
-			if ( count > 0 )
-			{
-				validationLayers.resize(count);
-
-				result = vkEnumerateInstanceLayerProperties(&count, validationLayers.data());
-
-				if ( result != VK_SUCCESS )
-				{
-					TraceError{ClassId} << "Unable to get instance validation layers : " << vkResultToCString(result) << " !";
-				}
-			}
-		}
-		else
-		{
-			TraceError{ClassId} << "Unable to get instance validation layer count : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to get instance validation layers : " << vkResultToCString(outcome.result) << " !";
 		}
 
 		return validationLayers;
@@ -654,25 +635,10 @@ namespace EmEn::Vulkan
 	{
 		std::vector< VkExtensionProperties > extensions{};
 
-		uint32_t count = 0;
-
-		if ( auto result = vkEnumerateInstanceExtensionProperties(pLayerName, &count, nullptr); result == VK_SUCCESS )
+		/* NOTE: VK_INCOMPLETE is a success code (the list changed between the two calls): enumerate() handles it. */
+		if ( const auto outcome = enumerate(extensions, [&] (uint32_t * count, auto * data) { return vkEnumerateInstanceExtensionProperties(pLayerName, count, data); }); !outcome.succeeded() )
 		{
-			if ( count > 0 )
-			{
-				extensions.resize(count);
-
-				result = vkEnumerateInstanceExtensionProperties(pLayerName, &count, extensions.data());
-
-				if ( result != VK_SUCCESS )
-				{
-					TraceError{ClassId} << "Unable to get instance extensions : " << vkResultToCString(result) << " !";
-				}
-			}
-		}
-		else
-		{
-			TraceError{ClassId} << "Unable to get instance extension count : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to get instance extensions : " << vkResultToCString(outcome.result) << " !";
 		}
 
 		return extensions;
@@ -829,7 +795,7 @@ namespace EmEn::Vulkan
 	}
 
 	std::vector< Instance::ScoredPhysicalDevice >
-	Instance::getScoredGraphicsDevices (Window * window) const noexcept
+	Instance::getScoredGraphicsDevices (Window * window) noexcept
 	{
 		const auto hybridConfig = this->detectHybridGPUConfiguration();
 
@@ -848,6 +814,12 @@ namespace EmEn::Vulkan
 
 			/* NOTE: Failsafe mode exclusion. */
 			if ( m_enableFailSafe && this->shouldExcludeForFailsafe(hybridConfig, physicalDevice) )
+			{
+				continue;
+			}
+
+			/* NOTE: A device below the required API version (an outdated driver) is never selected. */
+			if ( !this->checkDeviceAPIVersion(*physicalDevice) )
 			{
 				continue;
 			}
@@ -1021,6 +993,63 @@ namespace EmEn::Vulkan
 			TraceSuccess{ClassId} << "Graphics capable physical device selected: " << selectedPhysicalDevice->propertiesVK10().deviceName << " (" << magic_enum::enum_name(m_autoSelectMode) << " mode)";
 		}
 
+		/* NOTE: The selected device first, then every other compatible device from the best to the worst: a device that
+		 * cannot be created (a required feature missing, vkCreateDevice() failing) no longer ends the startup while a
+		 * next one may work — an iGPU beside an outdated dGPU driver (engine item
+		 * device-below-vulkan-1-3-reaches-vkcreatedevice, 2026-10-15). */
+		std::vector< std::shared_ptr< PhysicalDevice > > candidates;
+		candidates.reserve(scoredDevices.size());
+		candidates.emplace_back(selectedPhysicalDevice);
+
+		for ( const auto & scored : std::ranges::reverse_view(scoredDevices) )
+		{
+			if ( scored.device != selectedPhysicalDevice )
+			{
+				candidates.emplace_back(scored.device);
+			}
+		}
+
+		/* NOTE: An attempt adds the optional extensions its device supports: each one starts from the same list. */
+		const auto baseExtensions = m_requiredGraphicsDeviceExtensions;
+
+		for ( const auto & candidate : candidates )
+		{
+			if ( candidate != selectedPhysicalDevice )
+			{
+				TraceWarning{ClassId} << "Trying the next compatible physical device: '" << candidate->propertiesVK10().deviceName << "' ...";
+			}
+
+			m_requiredGraphicsDeviceExtensions = baseExtensions;
+
+			if ( auto logicalDevice = this->createGraphicsDevice(window, candidate); logicalDevice != nullptr )
+			{
+				/* NOTE: Always logged (engine item log-the-gpu-driver-version): every report states the GPU and its driver. */
+				const auto & properties = candidate->propertiesVK10();
+				const auto & propertiesVK12 = candidate->propertiesVK12();
+
+				TraceInfo{ClassId} <<
+					"Graphics device: '" << properties.deviceName << "' (" << candidate->deviceType() << ", vendor 0x" << std::hex << properties.vendorID << ", device 0x" << properties.deviceID << std::dec << "), "
+					"driver '" << propertiesVK12.driverName << "' (" << propertiesVK12.driverInfo << "), driver version " << candidate->DriverVersionString() << ", "
+					"Vulkan " << VK_API_VERSION_MAJOR(properties.apiVersion) << '.' << VK_API_VERSION_MINOR(properties.apiVersion) << '.' << VK_API_VERSION_PATCH(properties.apiVersion) << ".";
+
+				m_graphicsDevice = logicalDevice;
+
+				return logicalDevice;
+			}
+
+			TraceError{ClassId} << "The physical device '" << candidate->propertiesVK10().deviceName << "' could not be used for graphics.";
+		}
+
+		m_requiredGraphicsDeviceExtensions = baseExtensions;
+
+		Tracer::error(ClassId, "No compatible physical device could be created for graphics.");
+
+		return {};
+	}
+
+	std::shared_ptr< Device >
+	Instance::createGraphicsDevice (Window * window, const std::shared_ptr< PhysicalDevice > & selectedPhysicalDevice) noexcept
+	{
 		auto logicalDevice = std::make_shared< Device >(*this, selectedPhysicalDevice->propertiesVK10().deviceName, selectedPhysicalDevice, m_showInformation);
 		logicalDevice->setIdentifier(ClassId, (std::stringstream{} << selectedPhysicalDevice->propertiesVK10().deviceName << "(Graphics)").str(), "Device");
 
@@ -1098,40 +1127,83 @@ namespace EmEn::Vulkan
 			requirements.featuresVK12().*feature = VK_TRUE;
 		};
 
+		/* NOTE: A REQUIRED feature is requested whatever the device says; one it does not advertise is recorded, so the
+		 * device is refused BEFORE vkCreateDevice() — which answers VK_ERROR_FEATURE_NOT_PRESENT for the whole set and
+		 * names none (engine item device-below-vulkan-1-3-reaches-vkcreatedevice, 2026-10-15). */
+		std::vector< const char * > missingRequiredFeatures;
+
+		const auto & availableFeaturesVK13 = selectedPhysicalDevice->featuresVK13();
+
+		const auto requireVK10 = [&] (VkBool32 VkPhysicalDeviceFeatures::* feature, const char * featureName) {
+			if ( availableFeatures.*feature == VK_FALSE )
+			{
+				missingRequiredFeatures.emplace_back(featureName);
+			}
+
+			requirements.featuresVK10().*feature = VK_TRUE;
+		};
+
+		const auto requireVK11 = [&] (VkBool32 VkPhysicalDeviceVulkan11Features::* feature, const char * featureName) {
+			if ( availableFeaturesVK11.*feature == VK_FALSE )
+			{
+				missingRequiredFeatures.emplace_back(featureName);
+			}
+
+			requirements.featuresVK11().*feature = VK_TRUE;
+		};
+
+		const auto requireVK12 = [&] (VkBool32 VkPhysicalDeviceVulkan12Features::* feature, const char * featureName) {
+			if ( availableFeaturesVK12.*feature == VK_FALSE )
+			{
+				missingRequiredFeatures.emplace_back(featureName);
+			}
+
+			requirements.featuresVK12().*feature = VK_TRUE;
+		};
+
+		const auto requireVK13 = [&] (VkBool32 VkPhysicalDeviceVulkan13Features::* feature, const char * featureName) {
+			if ( availableFeaturesVK13.*feature == VK_FALSE )
+			{
+				missingRequiredFeatures.emplace_back(featureName);
+			}
+
+			requirements.featuresVK13().*feature = VK_TRUE;
+		};
+
 		// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension
 		//requirements.featuresVK10().nonSeamlessCubeMap = VK_TRUE; // Required for cubemap rendering
-		requirements.featuresVK10().fillModeNonSolid = VK_TRUE; // Required for wireframe mode!
+		requireVK10(&VkPhysicalDeviceFeatures::fillModeNonSolid, "fillModeNonSolid"); // Required for wireframe mode!
 		/* NOTE: was `if constexpr ( !IsMacOS )` — Apple M1/M2/M3/M4 iGPUs have no geometry stage,
 		 * and neither does a software device. Asked of the device instead of the platform. */
 		requestOptionalVK10(&VkPhysicalDeviceFeatures::geometryShader, "geometryShader", "TBN space display");
-		requirements.featuresVK10().samplerAnisotropy = VK_TRUE;
-		requirements.featuresVK10().independentBlend = VK_TRUE; // Required for per-attachment MRT blend states (G-buffer full write vs color alpha blending)
-		requirements.featuresVK10().depthBiasClamp = VK_TRUE; // Required for shadow map depth bias clamping
+		requireVK10(&VkPhysicalDeviceFeatures::samplerAnisotropy, "samplerAnisotropy");
+		requireVK10(&VkPhysicalDeviceFeatures::independentBlend, "independentBlend"); // Required for per-attachment MRT blend states (G-buffer full write vs color alpha blending)
+		requireVK10(&VkPhysicalDeviceFeatures::depthBiasClamp, "depthBiasClamp"); // Required for shadow map depth bias clamping
 		/* ⚠️ depthClamp is NOT depthBiasClamp — distinct features, both needed by the shadow cast
 		 * pass. This one lets it set depthClampEnable, which FLATTENS casters sitting in front of
 		 * the light's near plane onto that plane instead of CLIPPING them out of the map. Without
 		 * it a caster closer to the light than the near plane writes nothing, so the map keeps its
 		 * 1.0 clear there and the receiver below reads "lit": a shadow-shaped HOLE. */
-		requirements.featuresVK10().depthClamp = VK_TRUE; // Required for shadow map depth clamping (see ShadowCasting)
+		requireVK10(&VkPhysicalDeviceFeatures::depthClamp, "depthClamp"); // Required for shadow map depth clamping (see ShadowCasting)
 		requestOptionalVK10(&VkPhysicalDeviceFeatures::shaderImageGatherExtended, "shaderImageGatherExtended", "PCF shadow filtering");
-		requirements.featuresVK10().imageCubeArray = VK_TRUE; // Required for animated cubemap textures (VK_IMAGE_VIEW_TYPE_CUBE_ARRAY)
-		requirements.featuresVK11().multiview = VK_TRUE; // Required for cubemap render-to-texture (Vulkan 1.1+)
+		requireVK10(&VkPhysicalDeviceFeatures::imageCubeArray, "imageCubeArray"); // Required for animated cubemap textures (VK_IMAGE_VIEW_TYPE_CUBE_ARRAY)
+		requireVK11(&VkPhysicalDeviceVulkan11Features::multiview, "multiview"); // Required for cubemap render-to-texture (Vulkan 1.1+)
 		{
 			/* Descriptor indexing features (Vulkan 1.2) - Required for bindless textures. */
-			requirements.featuresVK12().descriptorIndexing = VK_TRUE;
-			requirements.featuresVK12().descriptorBindingPartiallyBound = VK_TRUE;
-			requirements.featuresVK12().descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
-			requirements.featuresVK12().runtimeDescriptorArray = VK_TRUE;
-			requirements.featuresVK12().shaderSampledImageArrayNonUniformIndexing = VK_TRUE;
+			requireVK12(&VkPhysicalDeviceVulkan12Features::descriptorIndexing, "descriptorIndexing");
+			requireVK12(&VkPhysicalDeviceVulkan12Features::descriptorBindingPartiallyBound, "descriptorBindingPartiallyBound");
+			requireVK12(&VkPhysicalDeviceVulkan12Features::descriptorBindingSampledImageUpdateAfterBind, "descriptorBindingSampledImageUpdateAfterBind");
+			requireVK12(&VkPhysicalDeviceVulkan12Features::runtimeDescriptorArray, "runtimeDescriptorArray");
+			requireVK12(&VkPhysicalDeviceVulkan12Features::shaderSampledImageArrayNonUniformIndexing, "shaderSampledImageArrayNonUniformIndexing");
 		}
-		requirements.featuresVK12().bufferDeviceAddress = VK_TRUE; // Required for buffer device addresses (VBO/IBO for RT, etc.)
+		requireVK12(&VkPhysicalDeviceVulkan12Features::bufferDeviceAddress, "bufferDeviceAddress"); // Required for buffer device addresses (VBO/IBO for RT, etc.)
 		/* Required (core in Vulkan 1.2, mandatory there): each queue numbers its tracked submissions with a timeline,
 		 * and an object released while an upload writes it is destroyed once that value is reached. */
-		requirements.featuresVK12().timelineSemaphore = VK_TRUE;
+		requireVK12(&VkPhysicalDeviceVulkan12Features::timelineSemaphore, "timelineSemaphore");
 		requestOptionalVK12(&VkPhysicalDeviceVulkan12Features::hostQueryReset, "hostQueryReset", "GPU timing of the shadow maps and render-to-textures");
 		/* Multi-Draw Indirect features - Required for GPU-driven rendering (MDI). */
-		requirements.featuresVK10().multiDrawIndirect = VK_TRUE; // Required for vkCmdDrawIndexedIndirect with drawCount > 1
-		requirements.featuresVK10().drawIndirectFirstInstance = VK_TRUE; // Required for firstInstance in indirect commands
+		requireVK10(&VkPhysicalDeviceFeatures::multiDrawIndirect, "multiDrawIndirect"); // Required for vkCmdDrawIndexedIndirect with drawCount > 1
+		requireVK10(&VkPhysicalDeviceFeatures::drawIndirectFirstInstance, "drawIndirectFirstInstance"); // Required for firstInstance in indirect commands
 		/* ⚠️ Unlike the two above, dropping this one is NOT cosmetic: BDA address reconstruction in
 		 * shaders needs uint64_t. A device without it boots and renders, and any path relying on
 		 * buffer device addresses has to be off. Made conditional so the engine starts and says so,
@@ -1145,7 +1217,7 @@ namespace EmEn::Vulkan
 		 * cone width map (a storage image) next to its colour attachment. Without the feature the SPIR-V
 		 * validation rejects the pipeline (VUID-RuntimeSpirv-NonWritable-06340) and the effect fails to
 		 * create. Universally supported on desktop GPUs; the physical-device probe above warns when absent. */
-		requirements.featuresVK10().fragmentStoresAndAtomics = VK_TRUE;
+		requireVK10(&VkPhysicalDeviceFeatures::fragmentStoresAndAtomics, "fragmentStoresAndAtomics");
 		/* ⚠️ Required for gl_DrawID in vertex shaders, which ONLY the Multi-Draw Indirect path uses —
 		 * and MDI is opt-in and OFF by default (`Core/Graphics/MDI/Enabled`,
 		 * DefaultGraphicsMDIEnabled == false). Requesting it unconditionally made the engine refuse
@@ -1155,7 +1227,26 @@ namespace EmEn::Vulkan
 		 * refuses to build the MDI batch builder when it is missing, so a device without it cannot
 		 * silently render with a wrong per-draw index. */
 		requestOptionalVK11(&VkPhysicalDeviceVulkan11Features::shaderDrawParameters, "shaderDrawParameters", "gl_DrawID, hence the Multi-Draw Indirect path");
-		requirements.featuresVK13().shaderDemoteToHelperInvocation = VK_TRUE;
+		requireVK13(&VkPhysicalDeviceVulkan13Features::shaderDemoteToHelperInvocation, "shaderDemoteToHelperInvocation");
+
+		if ( !missingRequiredFeatures.empty() )
+		{
+			std::string list;
+
+			for ( const auto * featureName : missingRequiredFeatures )
+			{
+				list += list.empty() ? "" : ", ";
+				list += featureName;
+			}
+
+			TraceError{ClassId} <<
+				"The physical device '" << selectedPhysicalDevice->propertiesVK10().deviceName << "' (driver " << selectedPhysicalDevice->DriverVersionString() << ") "
+				"does not advertise " << missingRequiredFeatures.size() << " required feature(s): " << list << ". It is not created.";
+
+			this->recordDeviceRefusal(*selectedPhysicalDevice, DeviceRefusal::Reason::MissingFeatures, list);
+
+			return {};
+		}
 
 		/* NOTE: maintenance4 (Vulkan 1.3 core, optional): glslang writes the workgroup size of a task or
 		 * mesh shader as OpExecutionMode LocalSizeId when it targets SPIR-V 1.6, and that execution mode is
@@ -1372,12 +1463,50 @@ namespace EmEn::Vulkan
 
 		if ( !logicalDevice->create(requirements, m_requiredGraphicsDeviceExtensions, m_useVulkanMemoryAllocator) )
 		{
+			this->recordDeviceRefusal(*selectedPhysicalDevice, DeviceRefusal::Reason::CreationFailed, "vkCreateDevice() failed (see the error above)");
+
 			return {};
 		}
 
-		m_graphicsDevice = logicalDevice;
-
 		return logicalDevice;
+	}
+
+	bool
+	Instance::checkDeviceAPIVersion (const PhysicalDevice & physicalDevice) noexcept
+	{
+		const auto apiVersion = physicalDevice.propertiesVK10().apiVersion;
+
+		/* NOTE: Compared on major.minor (the variant and the patch never decide). */
+		if ( VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(apiVersion), VK_API_VERSION_MINOR(apiVersion), 0) >= VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(MinimumDeviceAPIVersion), VK_API_VERSION_MINOR(MinimumDeviceAPIVersion), 0) )
+		{
+			return true;
+		}
+
+		std::stringstream detail;
+		detail << "Vulkan " << VK_API_VERSION_MAJOR(apiVersion) << '.' << VK_API_VERSION_MINOR(apiVersion) << '.' << VK_API_VERSION_PATCH(apiVersion) << " reported, " << VK_API_VERSION_MAJOR(MinimumDeviceAPIVersion) << '.' << VK_API_VERSION_MINOR(MinimumDeviceAPIVersion) << " required";
+
+		TraceError{ClassId} <<
+			"The physical device '" << physicalDevice.propertiesVK10().deviceName << "' (driver " << physicalDevice.DriverVersionString() << "): " << detail.str() << ". "
+			"Its graphics driver is too old: update the graphics driver. The device is not used.";
+
+		this->recordDeviceRefusal(physicalDevice, DeviceRefusal::Reason::BelowRequiredAPIVersion, detail.str());
+
+		return false;
+	}
+
+	void
+	Instance::recordDeviceRefusal (const PhysicalDevice & physicalDevice, DeviceRefusal::Reason reason, std::string detail) noexcept
+	{
+		const auto & properties = physicalDevice.propertiesVK10();
+
+		m_deviceRefusals.emplace_back(DeviceRefusal{
+			.deviceName = properties.deviceName,
+			.driverVersion = physicalDevice.DriverVersionString(),
+			.detail = std::move(detail),
+			.vendorID = properties.vendorID,
+			.apiVersion = properties.apiVersion,
+			.reason = reason
+		});
 	}
 
 	std::shared_ptr< Device >
@@ -1402,6 +1531,11 @@ namespace EmEn::Vulkan
 		{
 			const auto & physicalDevice = m_physicalDevices[enumerationIndex];
 			size_t score = 1;
+
+			if ( !this->checkDeviceAPIVersion(*physicalDevice) )
+			{
+				continue;
+			}
 
 			if ( !this->checkDeviceCompatibility(physicalDevice, VK_QUEUE_COMPUTE_BIT, score) )
 			{

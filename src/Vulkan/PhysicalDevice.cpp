@@ -154,7 +154,6 @@ namespace EmEn::Vulkan
 		}
 
 		uint32_t count = 0;
-		VkResult result{};
 
 		{
 			vkGetPhysicalDeviceQueueFamilyProperties2(m_physicalDevice, &count, nullptr);
@@ -178,37 +177,23 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		/* NOTE: From extension 'VK_EXT_tooling_info'. */
+		/* NOTE: From extension 'VK_EXT_tooling_info'. Every output structure carries its sType before the query
+		 * (VUID-VkPhysicalDeviceToolProperties-sType-sType). On Windows the validation layer reports itself as a tool, so
+		 * a validation run takes this path. VK_INCOMPLETE is a success code: enumerate() handles it. */
 		{
-			result = vkGetPhysicalDeviceToolProperties(m_physicalDevice, &count, nullptr);
+			constexpr VkPhysicalDeviceToolProperties Prototype{
+				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TOOL_PROPERTIES,
+				.pNext = nullptr,
+				.name{},
+				.version{},
+				.purposes = 0,
+				.description{},
+				.layer{}
+			};
 
-			if ( result == VK_SUCCESS )
+			if ( const auto outcome = enumerate(m_toolProperties, [this] (uint32_t * toolCount, VkPhysicalDeviceToolProperties * data) { return vkGetPhysicalDeviceToolProperties(m_physicalDevice, toolCount, data); }, Prototype); !outcome.succeeded() )
 			{
-				if ( count > 0 )
-				{
-					/* NOTE: Every output structure carries its sType before the query (VUID-VkPhysicalDeviceToolProperties-sType-sType).
-					 * On Windows the validation layer reports itself as a tool, so a validation run takes this branch. */
-					m_toolProperties.resize(count, {
-						.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TOOL_PROPERTIES,
-						.pNext = nullptr,
-						.name{},
-						.version{},
-						.purposes = 0,
-						.description{},
-						.layer{}
-					});
-
-					result = vkGetPhysicalDeviceToolProperties(m_physicalDevice, &count, m_toolProperties.data());
-
-					if ( result != VK_SUCCESS )
-					{
-						TraceError{ClassId} << "Unable to get tool properties : " << vkResultToCString(result) << " !";
-					}
-				}
-			}
-			else
-			{
-				TraceError{ClassId} << "Unable to get tool property count : " << vkResultToCString(result) << " !";
+				TraceError{ClassId} << "Unable to get tool properties : " << vkResultToCString(outcome.result) << " !";
 			}
 		}
 
@@ -556,25 +541,10 @@ namespace EmEn::Vulkan
 	{
 		std::vector< VkSurfaceFormatKHR > surfaceFormats{};
 
-		uint32_t count = 0;
-
-		if ( auto result = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, surface, &count, nullptr); result == VK_SUCCESS )
+		/* NOTE: VK_INCOMPLETE is a success code (the list changed between the two calls): enumerate() handles it. */
+		if ( const auto outcome = enumerate(surfaceFormats, [&] (uint32_t * count, auto * data) { return vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, surface, count, data); }); !outcome.succeeded() )
 		{
-			if ( count > 0 )
-			{
-				surfaceFormats.resize(count);
-
-				result = vkGetPhysicalDeviceSurfaceFormatsKHR(m_physicalDevice, surface, &count, surfaceFormats.data());
-
-				if ( result != VK_SUCCESS )
-				{
-					TraceError{ClassId} << "Unable to get surface formats : " << vkResultToCString(result) << " !";
-				}
-			}
-		}
-		else
-		{
-			TraceError{ClassId} << "Unable to get surface format count : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to get surface formats : " << vkResultToCString(outcome.result) << " !";
 		}
 
 		return surfaceFormats;
@@ -585,25 +555,10 @@ namespace EmEn::Vulkan
 	{
 		std::vector< VkPresentModeKHR > presentModes{};
 
-		uint32_t count = 0;
-
-		if ( auto result = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, surface, &count, nullptr); result == VK_SUCCESS )
+		/* NOTE: VK_INCOMPLETE is a success code (the list changed between the two calls): enumerate() handles it. */
+		if ( const auto outcome = enumerate(presentModes, [&] (uint32_t * count, auto * data) { return vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, surface, count, data); }); !outcome.succeeded() )
 		{
-			if ( count > 0 )
-			{
-				presentModes.resize(count);
-
-				result = vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalDevice, surface, &count, presentModes.data());
-
-				if ( result != VK_SUCCESS )
-				{
-					TraceError{ClassId} << "Unable to get present modes : " << vkResultToCString(result) << " !";
-				}
-			}
-		}
-		else
-		{
-			TraceError{ClassId} << "Unable to get present mode count : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to get present modes : " << vkResultToCString(outcome.result) << " !";
 		}
 
 		return presentModes;
@@ -614,25 +569,10 @@ namespace EmEn::Vulkan
 	{
 		std::vector< VkRect2D > presentRectangles{};
 
-		uint32_t count = 0;
-
-		if ( auto result = vkGetPhysicalDevicePresentRectanglesKHR(m_physicalDevice, surface, &count, nullptr); result == VK_SUCCESS )
+		/* NOTE: VK_INCOMPLETE is a success code (the list changed between the two calls): enumerate() handles it. */
+		if ( const auto outcome = enumerate(presentRectangles, [&] (uint32_t * count, auto * data) { return vkGetPhysicalDevicePresentRectanglesKHR(m_physicalDevice, surface, count, data); }); !outcome.succeeded() )
 		{
-			if ( count > 0 )
-			{
-				presentRectangles.resize(count);
-
-				result = vkGetPhysicalDevicePresentRectanglesKHR(m_physicalDevice, surface, &count, presentRectangles.data());
-
-				if ( result != VK_SUCCESS )
-				{
-					TraceError{ClassId} << "Unable to get present rectangles : " << vkResultToCString(result) << " !";
-				}
-			}
-		}
-		else
-		{
-			TraceError{ClassId} << "Unable to get present rectangle count : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to get present rectangles : " << vkResultToCString(outcome.result) << " !";
 		}
 
 		return presentRectangles;
@@ -663,25 +603,10 @@ namespace EmEn::Vulkan
 	{
 		std::vector< VkLayerProperties > validationLayers{};
 
-		uint32_t count = 0;
-
-		if ( auto result = vkEnumerateDeviceLayerProperties(m_physicalDevice, &count, nullptr); result == VK_SUCCESS )
+		/* NOTE: VK_INCOMPLETE is a success code (the list changed between the two calls): enumerate() handles it. */
+		if ( const auto outcome = enumerate(validationLayers, [&] (uint32_t * count, auto * data) { return vkEnumerateDeviceLayerProperties(m_physicalDevice, count, data); }); !outcome.succeeded() )
 		{
-			if ( count > 0 )
-			{
-				validationLayers.resize(count);
-
-				result = vkEnumerateDeviceLayerProperties(m_physicalDevice, &count, validationLayers.data());
-
-				if ( result != VK_SUCCESS )
-				{
-					TraceError{ClassId} << "Unable to get device validation layers : " << vkResultToCString(result) << " !";
-				}
-			}
-		}
-		else
-		{
-			TraceError{ClassId} << "Unable to get device validation layer count : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to get device validation layers : " << vkResultToCString(outcome.result) << " !";
 		}
 
 		return validationLayers;
@@ -692,27 +617,10 @@ namespace EmEn::Vulkan
 	{
 		std::vector< VkExtensionProperties > extensions{};
 
-		uint32_t count = 0;
-
-		auto result = vkEnumerateDeviceExtensionProperties(m_physicalDevice, pLayerName, &count, nullptr);
-
-		if ( result == VK_SUCCESS )
+		/* NOTE: VK_INCOMPLETE is a success code (the list changed between the two calls): enumerate() handles it. */
+		if ( const auto outcome = enumerate(extensions, [this, pLayerName] (uint32_t * count, VkExtensionProperties * data) { return vkEnumerateDeviceExtensionProperties(m_physicalDevice, pLayerName, count, data); }); !outcome.succeeded() )
 		{
-			if ( count > 0 )
-			{
-				extensions.resize(count);
-
-				result = vkEnumerateDeviceExtensionProperties(m_physicalDevice, pLayerName, &count, extensions.data());
-
-				if ( result != VK_SUCCESS )
-				{
-					TraceError{ClassId} << "Unable to get device extensions : " << vkResultToCString(result) << " !";
-				}
-			}
-		}
-		else
-		{
-			TraceError{ClassId} << "Unable to get device extension count : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to get device extensions : " << vkResultToCString(outcome.result) << " !";
 		}
 
 		return extensions;
