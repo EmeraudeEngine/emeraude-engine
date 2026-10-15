@@ -100,6 +100,7 @@ option(EMERAUDE_DEBUG_POINTER_INPUT "Enable printing of events to the console fr
 option(EMERAUDE_DEBUG_POINTER_HEAVY_INPUT "Enable printing of events to the console from pointer heavy (move/wheel) inputs (Default Off)." Off)
 option(EMERAUDE_DEBUG_WINDOW_EVENTS "Enable printing of events to the console from window events (Default Off)." Off)
 option(EMERAUDE_DEBUG_VULKAN_TRACKING "Enable printing of Vulkan objects lifespan (Default Off)." Off)
+option(EMERAUDE_FAULT_INJECTION "Enable the startup fault injection (--inject-startup-failure=SERVICE) and its test executable: a TEST build only, never a release (Default Off)." Off)
 option(EMERAUDE_ENABLE_RENDERDOC "Enable RenderDoc in-application API for GPU frame capture. The RenderDoc sources (~219 MB) are fetched by cmake/SetupRenderDoc.cmake ONLY when this is On [FETCHED] (Default Off)." Off)
 
 # Create constant variable for dependency inclusions
@@ -476,6 +477,15 @@ if ( EMERAUDE_ENABLE_TSAN )
 	)
 endif ()
 
+if ( EMERAUDE_ENABLE_ASAN OR EMERAUDE_ENABLE_LSAN )
+	message("[EmeraudeEngine] Use env variable : LSAN_OPTIONS=\"suppressions=lsan_suppressions.txt\"")
+
+	file(
+		COPY ${CMAKE_CURRENT_SOURCE_DIR}/resources/lsan_suppressions.txt
+		DESTINATION ${EMERAUDE_COMPILATION_DIR}
+	)
+endif ()
+
 if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
 	# Copy debug file
 	if ( CMAKE_BUILD_TYPE STREQUAL "Debug" )
@@ -533,6 +543,12 @@ if ( NOT "${EMERAUDE_COMPILATION_DIR}" STREQUAL "" )
 	endif ()
 else ()
 	message(STATUS "[EmeraudeEngine] EMERAUDE_COMPILATION_DIR is not set, the compilation directory won't have all files for development ! This is a sub-project warning !")
+endif ()
+
+## Startup fault injection executable (EMERAUDE_FAULT_INJECTION, Ave Robustus II P3)
+if ( EMERAUDE_FAULT_INJECTION )
+	add_executable(EmeraudeStartupFaultInjection ${CMAKE_CURRENT_SOURCE_DIR}/tools/stress/StartupFaultInjection.cpp)
+	target_link_libraries(EmeraudeStartupFaultInjection PRIVATE ${PROJECT_NAME})
 endif ()
 
 ## ThreadSanitizer stress executables (EMERAUDE_ENABLE_TSAN, decision D12)

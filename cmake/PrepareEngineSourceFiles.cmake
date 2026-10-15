@@ -23,6 +23,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Arguments.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Constants.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/emeraude_export.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/FaultInjection.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FileSystem.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Identification.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PrimaryServices.hpp
@@ -52,6 +53,7 @@ set(EMERAUDE_SOURCE_FILES
     # ROOT
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Arguments.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Arguments.console.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/FaultInjection.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FileSystem.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/FileSystem.console.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PrimaryServices.cpp

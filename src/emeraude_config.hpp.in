@@ -57,6 +57,9 @@
 #cmakedefine IMGUI_ENABLED
 #cmakedefine RENDERDOC_ENABLED
 
+/* Test builds only (FaultInjection.hpp). */
+#cmakedefine EMERAUDE_FAULT_INJECTION
+
 /* ===== Modern C++ macro like constants ===== */
 
 #define ON true
@@ -90,6 +93,13 @@ namespace EmEn
 	constexpr bool RenderDocEnabled{true};
 #else
 	constexpr bool RenderDocEnabled{false};
+#endif
+
+	/** @brief Whether this is a startup fault-injection TEST build (EMERAUDE_FAULT_INJECTION): never a release. */
+#ifdef EMERAUDE_FAULT_INJECTION
+	constexpr bool FaultInjectionEnabled{true};
+#else
+	constexpr bool FaultInjectionEnabled{false};
 #endif
 }
 

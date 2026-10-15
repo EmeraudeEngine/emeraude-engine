@@ -1,0 +1,6 @@
+# LeakSanitizer suppressions: third-party system libraries only, never a frame of the cascade (an engine leak is a
+# defect to fix). Their global caches are kept until the process ends, by design (2026-10-16, the startup fault
+# injection reference run: fontconfig's configuration and dbus's connection, reached through GLFW / the desktop
+# portal; 0 byte attributed to the engine).
+leak:libfontconfig.so
+leak:libdbus-1.so

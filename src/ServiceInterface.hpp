@@ -27,6 +27,7 @@
 #pragma once
 
 /* Project configuration. */
+#include "emeraude_config.hpp"
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
@@ -36,6 +37,9 @@
 
 /* Local inclusions for inheritances. */
 #include "NameableTrait.hpp"
+
+/* Local inclusions for usages. */
+#include "FaultInjection.hpp"
 
 namespace EmEn
 {
@@ -102,6 +106,16 @@ namespace EmEn
 						"The method ServiceInterface::usable() must dynamically report if the service has been initialized and usable !" "\n";
 
 					return false;
+				}
+
+				/* NOTE: A startup fault-injection TEST build may make this service fail before it acquires anything: the
+				 * caller's failure path is what is tested (FaultInjection.hpp; compiled out otherwise). */
+				if constexpr ( FaultInjectionEnabled )
+				{
+					if ( FaultInjection::startupFailureInjected(this->name()) )
+					{
+						return false;
+					}
 				}
 
 				if ( !this->onInitialize() )

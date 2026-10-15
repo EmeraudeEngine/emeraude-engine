@@ -243,6 +243,7 @@ namespace EmEn::Vulkan
 			}
 
 			m_creationResult = result;
+			m_creationAttempted = true;
 
 			if ( result != VK_SUCCESS )
 			{
@@ -951,6 +952,9 @@ namespace EmEn::Vulkan
 		{
 			return m_graphicsDevice;
 		}
+
+		/* NOTE: Evidence for the startup diagnosis: a refusal is told as a hardware one only once a selection ran. */
+		m_graphicsSelectionAttempted = true;
 
 		auto & settings = m_primaryServices.settings();
 		const auto forceGPUName = settings.getOrSetDefault< std::string >(VkDeviceForceGPUKey);

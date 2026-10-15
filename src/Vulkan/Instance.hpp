@@ -434,6 +434,30 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether vkCreateInstance() was called (creationResult() is then its answer). Before it, a
+			 * failure is not a driver's (the startup diagnosis does not tell the user to install one).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			creationAttempted () const noexcept
+			{
+				return m_creationAttempted;
+			}
+
+			/**
+			 * @brief Returns whether a graphics device selection ran (getGraphicsDevice()): before it, a missing device is
+			 * not a hardware refusal.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			graphicsSelectionAttempted () const noexcept
+			{
+				return m_graphicsSelectionAttempted;
+			}
+
+			/**
 			 * @brief Returns a list of validation layers available from Vulkan.
 			 * @note This method follows the vkEnumerateDeviceLayerProperties() deprecation.
 			 * @return std::vector< VkLayerProperties >
@@ -747,5 +771,7 @@ namespace EmEn::Vulkan
 			bool m_enableFailSafe{false};
 			bool m_fullscreenExclusiveEnabled{false};
 			bool m_useVulkanMemoryAllocator{false};
+			bool m_creationAttempted{false};
+			bool m_graphicsSelectionAttempted{false};
 	};
 }

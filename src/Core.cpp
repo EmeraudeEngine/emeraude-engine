@@ -1086,7 +1086,13 @@ namespace EmEn
 		}
 		else
 		{
-			TraceError{ClassId} << m_resourceManager.name() << " service failed to execute !";
+			/* NOTE: Fatal: every service after this one asks it for resources (the renderer's default resources
+			 * dereferenced a missing container: a crash found by the startup fault injection, 2026-10-16). */
+			TraceFatal{ClassId} << m_resourceManager.name() << " service failed to execute !";
+
+			m_startupMode = StartupMode::Error;
+
+			return false;
 		}
 
 		/* Initialize user service. */

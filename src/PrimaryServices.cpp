@@ -40,6 +40,7 @@
 #include "IO/IO.hpp"
 #include "ThreadPool.hpp"
 #include "Arguments.hpp"
+#include "FaultInjection.hpp"
 #include "FileSystem.hpp"
 #include "Identification.hpp"
 #include "Net/APIClient.hpp"
@@ -109,6 +110,10 @@ namespace EmEn
 
 		Tracer::getInstance().earlySetup(m_arguments, m_processName, false);
 
+		/* NOTE: A startup fault-injection test build reads its argument here, before any other service starts (main
+		 * process only: a child never injects). Nothing otherwise. */
+		FaultInjection::configure(m_arguments);
+
 		if ( m_arguments.isSwitchPresent("--verbose") )
 		{
 			m_showInformation = true;
@@ -162,6 +167,10 @@ namespace EmEn
 		}
 
 		Tracer::getInstance().earlySetup(m_arguments, m_processName, false);
+
+		/* NOTE: A startup fault-injection test build reads its argument here, before any other service starts (main
+		 * process only: a child never injects). Nothing otherwise. */
+		FaultInjection::configure(m_arguments);
 
 		if ( m_arguments.isSwitchPresent("--verbose") )
 		{

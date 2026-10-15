@@ -133,8 +133,10 @@ namespace EmEn
 		switch ( m_coreLevelFailure )
 		{
 			case CoreLevelFailure::VulkanInstance :
-				/* NOTE: No driver answers the Vulkan loader, or it answers with no device at all. */
-				if ( m_vulkanInstance.creationResult() == VK_ERROR_INCOMPATIBLE_DRIVER || m_vulkanInstance.physicalDevices().empty() )
+				/* NOTE: No driver answers the Vulkan loader, or it answers with no device at all. Only once vkCreateInstance()
+				 * ran: a failure before it is not a driver's (found by the startup fault injection, 2026-10-16, which told
+				 * the user to install a driver). */
+				if ( m_vulkanInstance.creationAttempted() && (m_vulkanInstance.creationResult() == VK_ERROR_INCOMPATIBLE_DRIVER || m_vulkanInstance.physicalDevices().empty()) )
 				{
 					refusal.cause = StartupRefusal::Cause::NoVulkanDriver;
 					refusal.title = "Graphics driver required";
@@ -160,8 +162,9 @@ namespace EmEn
 
 			case CoreLevelFailure::GraphicsRenderer :
 			{
-				/* NOTE: A renderer that failed WITH a graphics device is not a hardware / driver refusal. */
-				if ( m_vulkanInstance.graphicsDevice() != nullptr )
+				/* NOTE: A renderer that failed WITH a graphics device, or before any selection ran, is not a hardware / driver
+				 * refusal (the startup fault injection, 2026-10-16, was told "hardware not compatible"). */
+				if ( m_vulkanInstance.graphicsDevice() != nullptr || !m_vulkanInstance.graphicsSelectionAttempted() )
 				{
 					break;
 				}
