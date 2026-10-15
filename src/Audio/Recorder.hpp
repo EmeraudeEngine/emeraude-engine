@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <stop_token>
 #include <thread>
 
 /* Local inclusions for inheritances. */
@@ -218,12 +219,13 @@ namespace EmEn::Audio
 			 * 3. Queues samples to the streaming source for speaker playback using alSourceQueueBuffers()
 			 *
 			 * Uses a 1024-sample chunk size with 4-buffer double-buffering to ensure smooth playback.
-			 * Runs until m_renderRunning becomes false, then drains and releases all resources.
+			 * Runs until the thread's stop is requested, then drains and releases all resources.
 			 *
 			 * @note This function executes on the render thread, separate from the main thread.
 			 * @post All OpenAL resources are released and thread-local context is unset.
+			 * @param stopToken The thread's stop token (Base::Thread): checked once per chunk.
 			 */
-			void renderThreadFunc () noexcept;
+			void renderThreadFunc (const std::stop_token & stopToken) noexcept;
 
 			/**
 			 * @brief Writes a placeholder or final WAV header to the output stream.
@@ -244,7 +246,6 @@ namespace EmEn::Audio
 			Base::WaveFactory::Frequency m_playbackFrequency{Base::WaveFactory::Frequency::PCM48000Hz}; ///< Playback frequency (typically 48kHz).
 			uint16_t m_channelCount{2}; ///< Number of audio channels (2 = stereo, 6 = 5.1 surround).
 			std::atomic< bool > m_recording{false}; ///< True when actively recording audio to WAV.
-			std::atomic< bool > m_renderRunning{false}; ///< True when render thread should continue running.
 			std::filesystem::path m_outputPath; ///< Output path for the WAV file set in startRecording().
 
 			std::ofstream m_outputFileStream; ///< Output file stream for writing WAV data.

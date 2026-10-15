@@ -126,6 +126,7 @@
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -1439,15 +1440,17 @@ namespace EmEn
 			 * @brief Logic thread entry point.
 			 * @details Runs physics simulation, scene updates, and calls onCoreProcessLogics().
 			 * Executes on a dedicated thread separate from rendering.
+			 * @param stopToken The loops' stop token (m_loopsStop): stop() requests it.
 			 */
-			void logicsTask () noexcept;
+			void logicsTask (const std::stop_token & stopToken) noexcept;
 
 			/**
 			 * @brief Rendering thread entry point.
 			 * @details Handles frame preparation, command buffer recording,
 			 * and GPU submission. Executes on a dedicated thread.
+			 * @param stopToken The loops' stop token (m_loopsStop): stop() requests it, which also wakes the on-demand wait.
 			 */
-			void renderingTask () noexcept;
+			void renderingTask (const std::stop_token & stopToken) noexcept;
 
 			/**
 			 * @brief Recreates the render surface after resize or mode change.
@@ -1966,7 +1969,7 @@ namespace EmEn
 			std::atomic< int64_t > m_scheduledCycleDueTimeMS{MainLoopCycleNotScheduled}; ///< Monotonic deadline (ms, Base::Time::elapsedMilliseconds() clock) of the next main-loop cycle requested via scheduleMainLoopCycle(). Written from any thread, consumed by the main loop.
 			/* On-demand rendering (used only in RenderingMode::OnDemand). @see setRenderingMode(), requestRedraw() */
 			std::mutex m_redrawMutex; ///< Guards the redraw condition variable / pending-frame budget against lost wakeups.
-			std::condition_variable m_redrawCondition; ///< Wakes the sleeping rendering thread when a redraw is requested.
+			std::condition_variable_any m_redrawCondition; ///< Wakes the sleeping rendering thread when a redraw is requested (_any: its wait also takes the loops' stop token).
 			std::atomic< uint32_t > m_pendingFrames{0}; ///< Frames still owed before the rendering thread may idle (multi-buffer refresh budget).
 			RenderingMode m_renderingMode{RenderingMode::Continuous}; ///< Rendering thread pacing mode. @see setRenderingMode()
 			std::atomic< int64_t > m_noScenePeriodNS{0}; ///< Frame period without an active scene (Continuous mode). Written by the main thread (updateNoScenePacing()), read by the rendering thread.
@@ -1984,10 +1987,12 @@ namespace EmEn
 			 * std::shared_mutex the thread already share-owns is undefined behaviour, and
 			 * deadlocks on Windows SRWLOCK as soon as an exclusive waiter is queued. */
 			Scenes::Scene * m_frameScene{nullptr};
+			/* NOTE: The stop of the logic and rendering loops (Ave Robustus II: a std::stop_source, never a hand-made flag).
+			 * A member, not the threads' own tokens: stop() may run before run() starts the threads, which then end at once;
+			 * request_stop() is thread-safe, from any thread. */
+			std::stop_source m_loopsStop;
 			/* Control flags. */
 			std::atomic< bool > m_isMainLoopRunning{true}; ///< Main loop active flag (atomic for thread-safe access).
-			std::atomic< bool > m_isLogicsLoopRunning{true}; ///< Logic thread active flag (atomic for thread-safe access).
-			std::atomic< bool > m_isRenderingLoopRunning{true}; ///< Render thread active flag (atomic for thread-safe access).
 			std::atomic< bool > m_paused{false}; ///< Current pause state (atomic for thread-safe access).
 			std::atomic< bool > m_physicalSimulationEnabled{true}; ///< Whether Scene::processLogics() runs resolveCollisions(). Debug affordance, written from the console thread and read by the logic thread, hence atomic. @see enablePhysicalSimulation()
 			SettingsKeyRestoration m_settingsKeyRestoration; ///< Settings entries read back from the backup on a reset. @see resetSettingsIfOutdated(), executeResetSettings()

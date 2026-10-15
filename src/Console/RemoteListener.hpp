@@ -229,7 +229,6 @@ namespace EmEn::Console
 			 * destroyed first, it holds weak references only; the lingering sockets die with the context's handlers. */
 			Base::Network::GracefulCloser m_gracefulCloser;
 			std::unique_ptr< asio::ip::tcp::acceptor > m_acceptor;
-			Base::Thread m_networkThread;
 			std::mutex m_clientsMutex;
 			std::set< std::shared_ptr< asio::ip::tcp::socket > > m_clients;
 			/** @brief Serializes every write and close on the client sockets: the network thread (transport
@@ -240,6 +239,10 @@ namespace EmEn::Console
 			std::queue< PendingCommand > m_commandsQueue;
 			/** @brief Pending commands per client, guarded by m_queueMutex. */
 			std::map< const asio::ip::tcp::socket *, size_t > m_pendingPerClient;
+			/* NOTE: Whether the listener accepts connections (isRunning()); not the thread's stop (its stop token). */
 			std::atomic< bool > m_running{false};
+			/* NOTE: LAST on purpose (Ave Robustus II, member order): the network thread's handlers use every member above,
+			 * so it is destroyed (stopped and joined) first. */
+			Base::Thread m_networkThread;
 	};
 }

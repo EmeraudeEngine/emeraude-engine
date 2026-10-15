@@ -52,4 +52,4 @@ one to do.
   scene).
 - `src/Resources/Manager.cpp` `stopBackgroundWork()`, `src/Resources/Container.hpp` `stopBackgroundWork()`,
   `src/Resources/ResourceTrait.cpp` `abandonLoading()` / `goOnAfterDependencyFailure()`.
-- Related: `act-load-blocks-main-thread`, `jobs-owned-by-their-starter`.
+- Related: `act-load-blocks-main-thread`; the dedicated threads' stop (`docs/subsystems/source-tree/07-dedicated-threads-stop-tokens.md`).

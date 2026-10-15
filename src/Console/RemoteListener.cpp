@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <istream>
+#include <stop_token>
 #include <string_view>
 
 /* Third-party inclusions. */
@@ -213,8 +214,14 @@ namespace EmEn::Console
 
 		this->accept();
 
-		const auto started = m_networkThread.start([this] () {
+		const auto started = m_networkThread.start([this] (const std::stop_token & stopToken) {
 			TraceInfo{ClassId} << "Starting ASIO AI Remote Console on " << m_address << ':' << m_port << ".";
+
+			/* NOTE: The thread's stop (Base::Thread, the std::jthread model) stops the context; the callback runs on the
+			 * requesting thread, io_context::stop() is thread-safe. */
+			const std::stop_callback stopContext{stopToken, [this] () {
+				m_ioContext.stop();
+			}};
 
 			static_cast< void >(m_ioContext.run());
 
@@ -236,7 +243,10 @@ namespace EmEn::Console
 
 	RemoteListener::~RemoteListener ()
 	{
-		if ( !m_running )
+		/* NOTE: Never started (or refused): nothing runs, nothing to close. NOT m_running: a fatal accept error lowers it
+		 * while the context still runs the clients' handlers — the destructor used to return here without stopping or
+		 * joining the thread, which then ran on destroyed members. */
+		if ( !m_networkThread.joinable() )
 		{
 			return;
 		}
@@ -271,8 +281,8 @@ namespace EmEn::Console
 			m_clients.clear();
 		}
 
-		m_ioContext.stop();
-
+		/* NOTE: The stop callback of the thread stops the context. */
+		m_networkThread.requestStop();
 		m_networkThread.join();
 
 		m_acceptor.reset();

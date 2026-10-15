@@ -139,7 +139,7 @@ namespace EmEn
 	bool
 	TracerLogger::start () noexcept
 	{
-		if ( !m_isUsable || m_isRunning )
+		if ( !m_isUsable || m_thread.joinable() )
 		{
 			if constexpr ( IsDebug )
 			{
@@ -149,16 +149,13 @@ namespace EmEn
 			return false;
 		}
 
-		m_isRunning = true;
-
-		if ( m_thread.start([this] { this->task(); }) )
+		if ( m_thread.start([this] (const std::stop_token & stopToken) { this->task(stopToken); }) )
 		{
 			return true;
 		}
 
 		/* The system refused the writing thread (Base::Thread traced it): the logger writes SYNCHRONOUSLY, on the
 		 * thread of each trace, so nothing is lost (owner policy, 2026-10-07). */
-		m_isRunning = false;
 
 		m_synchronousFile.open(m_filepath, std::ios::out | std::ios::app);
 
@@ -177,9 +174,8 @@ namespace EmEn
 	void
 	TracerLogger::stop () noexcept
 	{
-		m_isRunning = false;
-
-		m_condition.notify_one();
+		/* NOTE: The thread's stop token wakes its wait; it writes what is queued, then ends (Ave Robustus II). */
+		m_thread.requestStop();
 	}
 
 	void
@@ -193,29 +189,30 @@ namespace EmEn
 	}
 
 	void
-	TracerLogger::task () noexcept
+	TracerLogger::task (const std::stop_token & stopToken) noexcept
 	{
 		std::fstream file{m_filepath, std::ios::out | std::ios::app};
 
 		/* NOTE: Write the file start. */
 		this->writeHeader(file);
 
-		while ( m_isRunning )
+		while ( true )
 		{
 			std::queue< TracerEntry > localQueue;
 
 			{
 				std::unique_lock< std::mutex > lock{m_entriesAccess};
 
-				/* NOTE: Wait for the thread to be a wake-up. */
-				m_condition.wait(lock, [&] {
-					return !m_entries.empty() || !m_isRunning;
-				});
-
-				if ( !m_entries.empty() )
+				/* NOTE: False only when the stop is requested AND nothing is queued: every entry pushed before the stop
+				 * is written (the loop used to end right after a pass, losing what came in meanwhile). */
+				if ( !m_condition.wait(lock, stopToken, [this] {
+					return !m_entries.empty();
+				}) )
 				{
-					m_entries.swap(localQueue);
+					break;
 				}
+
+				m_entries.swap(localQueue);
 			}
 
 			while ( !localQueue.empty() )

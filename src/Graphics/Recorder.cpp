@@ -608,14 +608,10 @@ namespace EmEn::Graphics
 		m_recordedSlot = NoSlot;
 		m_stopPending = false;
 		m_extentMismatchTraced = false;
-		m_currentSession->threadRunning = true;
-
-		if ( !m_currentSession->encodingThread.start([session = m_currentSession.get()] { session->encodingThreadFunc(); }) )
+		if ( !m_currentSession->encodingThread.start([session = m_currentSession.get()] (const std::stop_token & stopToken) { session->encodingThreadFunc(stopToken); }) )
 		{
 			/* The system refused the thread (Base::Thread traced why): the recording is refused (owner policy, 2026-10-07). */
 			TraceError{ClassId} << "Unable to start the encoding thread: the recording is refused !";
-
-			m_currentSession->threadRunning = false;
 
 			this->destroyAsyncResources();
 
@@ -697,9 +693,8 @@ namespace EmEn::Graphics
 			 * instead of replaying the ramp-up (machine/resolution have not changed). */
 			m_adaptedCpuUsed = m_currentSession->cpuUsedCurrent.load();
 
-			/* Signal the session's encoding thread to stop (it will drain remaining frames, then finalize). */
-			m_currentSession->threadRunning = false;
-			m_currentSession->queueCV.notify_all();
+			/* Request the stop of the session's encoding thread (it drains the remaining frames, then finalizes). */
+			m_currentSession->encodingThread.requestStop();
 
 			/* Detach the session — encoding continues in background. */
 			TraceSuccess{ClassId} << "Recording stopped (encoding continues in background) -> " << IO::toU8String(m_currentSession->outputPath);
@@ -1127,7 +1122,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Recorder::EncodingSession::encodingThreadFunc () noexcept
+	Recorder::EncodingSession::encodingThreadFunc (const std::stop_token & stopToken) noexcept
 	{
 		FrameSlot localFrame;
 
@@ -1145,11 +1140,11 @@ namespace EmEn::Graphics
 			{
 				std::unique_lock lock{queueMutex};
 
-				queueCV.wait(lock, [this] {
-					return !frameQueue.empty() || !threadRunning;
-				});
-
-				if ( frameQueue.empty() )
+				/* NOTE: False only when the stop is requested AND the queue is empty: the frames queued before the stop are
+				 * still encoded. */
+				if ( !queueCV.wait(lock, stopToken, [this] {
+					return !frameQueue.empty();
+				}) )
 				{
 					break; /* Thread stop requested and queue is drained. */
 				}
@@ -1405,6 +1400,8 @@ namespace EmEn::Graphics
 
 	Recorder::EncodingSession::~EncodingSession () noexcept
 	{
+		/* NOTE: A session destroyed while its thread still waits: the stop request wakes it (it drains, then finalizes). */
+		encodingThread.requestStop();
 		encodingThread.join();
 
 		/* Safety net: clean up if finalize() was not called. */
@@ -1810,14 +1807,10 @@ namespace EmEn::Graphics
 		m_recordedSlot = NoSlot;
 		m_stopPending = false;
 		m_extentMismatchTraced = false;
-		m_hardwareSession->threadRunning = true;
-
-		if ( !m_hardwareSession->encodingThread.start([this] { this->hardwareEncodingLoop(); }) )
+		if ( !m_hardwareSession->encodingThread.start([this] (const std::stop_token & stopToken) { this->hardwareEncodingLoop(stopToken); }) )
 		{
 			/* The system refused the thread (Base::Thread traced why): the recording is refused (owner policy, 2026-10-07). */
 			TraceError{ClassId} << "Unable to start the hardware encoding thread: the recording is refused !";
-
-			m_hardwareSession->threadRunning = false;
 
 			m_hardwareSession.reset();
 
@@ -1833,7 +1826,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Recorder::hardwareEncodingLoop () noexcept
+	Recorder::hardwareEncodingLoop (const std::stop_token & stopToken) noexcept
 	{
 		auto * session = m_hardwareSession.get();
 		std::vector< uint8_t > packet;
@@ -1852,11 +1845,10 @@ namespace EmEn::Graphics
 			{
 				std::unique_lock lock{session->queueMutex};
 
-				session->queueCV.wait(lock, [session] {
-					return !session->readySlots.empty() || !session->threadRunning;
-				});
-
-				if ( session->readySlots.empty() )
+				/* NOTE: False only when the stop is requested AND no slot is ready: the queued slots are still encoded. */
+				if ( !session->queueCV.wait(lock, stopToken, [session] {
+					return !session->readySlots.empty();
+				}) )
 				{
 					break;
 				}
@@ -1943,10 +1935,8 @@ namespace EmEn::Graphics
 	void
 	Recorder::stopHardwareRecording () noexcept
 	{
-		/* Wake and drain the encoder thread (hardware: the drain is quasi-instant). */
-		m_hardwareSession->threadRunning = false;
-		m_hardwareSession->queueCV.notify_all();
-
+		/* Stop and drain the encoder thread (its stop token wakes it; hardware: the drain is quasi-instant). */
+		m_hardwareSession->encodingThread.requestStop();
 		m_hardwareSession->encodingThread.join();
 
 		/* No snapshot copy is on the GPU any more (closeSession() waits for the frames that carried them), and the

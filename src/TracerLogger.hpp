@@ -38,6 +38,7 @@
 #include <mutex>
 #include <queue>
 #include <source_location>
+#include <stop_token>
 #include <string>
 #include <thread>
 #include <utility>
@@ -286,9 +287,11 @@ namespace EmEn
 			 * writing them to the log file. It blocks waiting for new entries and wakes up
 			 * when entries are pushed or when stop() is called.
 			 *
+			 * @param stopToken The thread's stop token (stop()): once requested, every entry pushed before it is written,
+			 * then the footer, then the thread ends.
 			 * @version 0.8.39
 			 */
-			void task () noexcept;
+			void task (const std::stop_token & stopToken) noexcept;
 
 			/**
 			 * @brief Writes the file start of the log format.
@@ -312,13 +315,15 @@ namespace EmEn
 			std::filesystem::path m_filepath;
 			std::queue< TracerEntry > m_entries;
 			LogFormat m_logFormat;
-			Base::Thread m_thread;
 			/** @brief The log file written on each trace's thread when the system refused the writing thread. */
 			std::fstream m_synchronousFile;
 			std::mutex m_entriesAccess;
-			std::condition_variable m_condition;
+			/* NOTE: _any: its wait takes the thread's stop token (a stop request wakes it). */
+			std::condition_variable_any m_condition;
 			std::atomic_bool m_isUsable{false};
-			std::atomic_bool m_isRunning{false};
 			std::atomic_bool m_isSynchronous{false};
+			/* NOTE: LAST on purpose (Ave Robustus II, member order): the writing thread uses the members above, so it is
+			 * destroyed (stopped and joined) first. It stops through its stop token: no flag. */
+			Base::Thread m_thread;
 	};
 }

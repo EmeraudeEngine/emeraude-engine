@@ -19,3 +19,4 @@ Context for the base components at the root of src/ in Emeraude Engine.
 | Critical Points | [`docs/subsystems/source-tree/04-critical-points.md`](../docs/subsystems/source-tree/04-critical-points.md) | 1 KB |
 | Subsystem Integration | [`docs/subsystems/source-tree/05-subsystem-integration.md`](../docs/subsystems/source-tree/05-subsystem-integration.md) | 1 KB |
 | Additional Documentation | [`docs/subsystems/source-tree/06-additional-documentation.md`](../docs/subsystems/source-tree/06-additional-documentation.md) | 1 KB |
+| Dedicated threads stop through a `std::stop_token` (every `Base::Thread` owner, the `Core` loops' `m_loopsStop`, the defects found; Oct 2026) | [`docs/subsystems/source-tree/07-dedicated-threads-stop-tokens.md`](../docs/subsystems/source-tree/07-dedicated-threads-stop-tokens.md) | 5 KB |

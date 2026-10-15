@@ -196,10 +196,8 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		/* Start the render thread for audio passthrough. */
-		m_renderRunning = true;
-
-		if ( !m_renderThread.start([this] { this->renderThreadFunc(); }) )
+		/* Start the render thread for audio passthrough (stopped through its stop token). */
+		if ( !m_renderThread.start([this] (const std::stop_token & stopToken) { this->renderThreadFunc(stopToken); }) )
 		{
 			/* The system refused the thread (Base::Thread traced why): the recorder is refused (owner policy,
 			 * 2026-10-07). onTerminate() releases everything created above and restores the previous context. */
@@ -233,8 +231,8 @@ namespace EmEn::Audio
 			this->stopRecording();
 		}
 
-		/* Stop the render thread. */
-		m_renderRunning = false;
+		/* Stop the render thread (its stop token: Ave Robustus II, the std::jthread model). */
+		m_renderThread.requestStop();
 
 		if ( m_renderThread.joinable() )
 		{
@@ -277,7 +275,7 @@ namespace EmEn::Audio
 	}
 
 	void
-	Recorder::renderThreadFunc () noexcept
+	Recorder::renderThreadFunc (const std::stop_token & stopToken) noexcept
 	{
 		/* Set the playback context on this thread. */
 		OpenAL::alcSetThreadContext(m_playbackContext);
@@ -311,7 +309,7 @@ namespace EmEn::Audio
 
 		alSourcePlay(source);
 
-		while ( m_renderRunning )
+		while ( !stopToken.stop_requested() )
 		{
 			ALint processed = 0;
 			alGetSourcei(source, AL_BUFFERS_PROCESSED, &processed);

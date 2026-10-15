@@ -27,7 +27,9 @@
 #include "ExternalInput.hpp"
 
 /* STL inclusions. */
+#include <chrono>
 #include <ranges>
+#include <thread>
 
 /* Local inclusions. */
 #include "WaveFactory/FileIO.hpp"
@@ -194,6 +196,11 @@ namespace EmEn::Audio
 	{
 		auto & settings = m_primaryServices.settings();
 
+		/* NOTE: A recording still running is ended properly first (its file finalized); then the capture thread, if any,
+		 * is stopped and joined. */
+		this->stop();
+
+		m_process.requestStop();
 		m_process.join();
 
 		/* NOTE: Release the output audio device. */
@@ -274,7 +281,7 @@ namespace EmEn::Audio
 	bool
 	ExternalInput::startRecordingThread () noexcept
 	{
-		if ( m_process.start([this] { this->recordingTask(); }) )
+		if ( m_process.start([this] (const std::stop_token & stopToken) { this->recordingTask(stopToken); }) )
 		{
 			return true;
 		}
@@ -306,7 +313,8 @@ namespace EmEn::Audio
 
 		m_isRecording = false;
 
-		/* Join the recording thread to ensure all data is flushed. */
+		/* Stop and join the capture thread: it drains what the device still holds before it returns. */
+		m_process.requestStop();
 		m_process.join();
 
 		/* Streaming mode: finalize the WAV header and close the file. */
@@ -369,37 +377,52 @@ namespace EmEn::Audio
 	}
 
 	void
-	ExternalInput::recordingTask () noexcept
+	ExternalInput::recordingTask (const std::stop_token & stopToken) noexcept
 	{
-		std::vector< ALshort > buffer;
-
-		while ( m_isRecording )
+		/* NOTE: The capture buffer holds at least 1 KiB of samples (about 21 ms at 48 kHz, MinAudioCaptureBufferSize):
+		 * a 5 ms poll never lets it overflow. The loop used to poll without any pause (a core at 100 % while
+		 * recording). */
+		while ( !stopToken.stop_requested() )
 		{
-			ALCint sampleCount = 0;
+			this->captureAvailableSamples();
 
-			alcGetIntegerv(m_device, ALC_CAPTURE_SAMPLES, 1, &sampleCount);
+			std::this_thread::sleep_for(std::chrono::milliseconds{5});
+		}
 
-			if ( sampleCount > 0 )
-			{
-				if ( m_streamingMode )
-				{
-					buffer.resize(static_cast< size_t >(sampleCount));
+		/* NOTE: stop() stopped the capture before requesting this stop: what the device still holds is the end of the
+		 * recording. */
+		this->captureAvailableSamples();
+	}
 
-					alcCaptureSamples(m_device, buffer.data(), sampleCount);
+	void
+	ExternalInput::captureAvailableSamples () noexcept
+	{
+		ALCint sampleCount = 0;
 
-					const auto bytes = static_cast< size_t >(sampleCount) * sizeof(int16_t);
-					m_outputFileStream.write(reinterpret_cast< const char * >(buffer.data()), static_cast< std::streamsize >(bytes));
-					m_streamByteCount += static_cast< uint32_t >(bytes);
-				}
-				else
-				{
-					const auto offset = m_samples.size();
+		alcGetIntegerv(m_device, ALC_CAPTURE_SAMPLES, 1, &sampleCount);
 
-					m_samples.resize(offset + static_cast< size_t >(sampleCount));
+		if ( sampleCount <= 0 )
+		{
+			return;
+		}
 
-					alcCaptureSamples(m_device, &m_samples[offset], sampleCount);
-				}
-			}
+		if ( m_streamingMode )
+		{
+			m_streamBuffer.resize(static_cast< size_t >(sampleCount));
+
+			alcCaptureSamples(m_device, m_streamBuffer.data(), sampleCount);
+
+			const auto bytes = static_cast< size_t >(sampleCount) * sizeof(int16_t);
+			m_outputFileStream.write(reinterpret_cast< const char * >(m_streamBuffer.data()), static_cast< std::streamsize >(bytes));
+			m_streamByteCount += static_cast< uint32_t >(bytes);
+		}
+		else
+		{
+			const auto offset = m_samples.size();
+
+			m_samples.resize(offset + static_cast< size_t >(sampleCount));
+
+			alcCaptureSamples(m_device, &m_samples[offset], sampleCount);
 		}
 	}
 

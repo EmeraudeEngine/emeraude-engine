@@ -143,8 +143,6 @@ namespace EmEn::Audio
 			m_trackB->setRelativeState(true);
 			m_trackB->setRolloffFactor(0.0F);
 			m_trackB->setGain(0.0F);
-
-			m_stopThread = false;
 		}
 
 		if ( this->enableSourceEvents() )
@@ -164,7 +162,7 @@ namespace EmEn::Audio
 
 		/* NOTE: Console registration is handled by AudioManager via registerToObject(). */
 
-		if ( !m_eventThread.start([this] { this->eventLoop(); }) )
+		if ( !m_eventThread.start([this] (const std::stop_token & stopToken) { this->eventLoop(stopToken); }) )
 		{
 			/* The system refused the thread (Base::Thread traced why): the track mixer is refused (owner policy,
 			 * 2026-10-07). onTerminate() releases what was set up above. */
@@ -187,13 +185,9 @@ namespace EmEn::Audio
 	void
 	TrackMixer::stopEventThread () noexcept
 	{
-		{
-			const MutexLock lock{m_stateAccess};
-
-			m_stopThread = true;
-		}
-
-		m_fadeCv.notify_one();
+		/* NOTE: The thread's stop token wakes its wait (std::condition_variable_any with a stop token): no flag, no
+		 * notification of our own (Ave Robustus II, the std::jthread model). */
+		m_eventThread.requestStop();
 
 		if ( m_eventThread.joinable() )
 		{
@@ -1219,7 +1213,7 @@ namespace EmEn::Audio
 	}
 
 	void
-	TrackMixer::eventLoop () noexcept
+	TrackMixer::eventLoop (const std::stop_token & stopToken) noexcept
 	{
 		using namespace std::chrono_literals;
 
@@ -1232,11 +1226,10 @@ namespace EmEn::Audio
 			{
 				MutexLock lock{m_stateAccess};
 
-				m_fadeCv.wait(lock, [this] () EMEN_REQUIRES(m_stateAccess) {
-					return m_isFading || m_requestNextTrack || m_stopThread;
-				});
-
-				if ( m_stopThread )
+				/* NOTE: Returns false when the stop is requested (the predicate still false). */
+				if ( !m_fadeCv.wait(lock, stopToken, [this] () EMEN_REQUIRES(m_stateAccess) {
+					return m_isFading || m_requestNextTrack;
+				}) )
 				{
 					return;
 				}
@@ -1259,7 +1252,7 @@ namespace EmEn::Audio
 				{
 					const MutexLock lock{m_stateAccess};
 
-					if ( !m_isFading || m_stopThread )
+					if ( !m_isFading || stopToken.stop_requested() )
 					{
 						break;
 					}

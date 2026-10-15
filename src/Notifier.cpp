@@ -134,12 +134,32 @@ namespace EmEn
 			return false;
 		}, 500, false, true);
 
-		return m_overlayManager.enableScreen("NotifierScreen");
+		if ( !m_overlayManager.enableScreen("NotifierScreen") )
+		{
+			return false;
+		}
+
+		{
+			const Base::MutexLock lock{m_notificationAccess};
+
+			m_accepting = true;
+		}
+
+		return true;
 	}
 
 	bool
 	Notifier::onTerminate () noexcept
 	{
+		/* NOTE: First: a thread still notifying (the track mixer's event thread, terminated later) finds the notifier
+		 * closed, under the list's lock — never the base class's flag, which terminate() writes unlocked (a data race
+		 * found by TSan, 2026-10-15, once the loops stopped faster). */
+		{
+			const Base::MutexLock lock{m_notificationAccess};
+
+			m_accepting = false;
+		}
+
 		this->destroyTimer(m_timerID);
 
 		m_font.reset();

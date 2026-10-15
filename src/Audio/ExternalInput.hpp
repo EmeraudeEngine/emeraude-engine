@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <stop_token>
 #include <thread>
 #include <vector>
 
@@ -143,9 +144,17 @@ namespace EmEn::Audio
 			bool selectDevice () noexcept;
 
 			/**
-			 * @brief Process the capture task.
+			 * @brief The capture thread: moves the captured samples into the recording every 5 ms until its stop is
+			 * requested, then drains what the device still holds (stop() stopped the capture first).
+			 * @param stopToken The thread's stop token (Base::Thread).
 			 */
-			void recordingTask () noexcept;
+			void recordingTask (const std::stop_token & stopToken) noexcept;
+
+			/**
+			 * @brief Moves the samples the capture device holds into the recording (the stream or the buffer).
+			 * @note On the capture thread, between start() and the join of stop().
+			 */
+			void captureAvailableSamples () noexcept;
 
 			/**
 			 * @brief Starts the recording thread of a recording just begun; on a refusal, ends that recording.
@@ -172,14 +181,20 @@ namespace EmEn::Audio
 			Base::WaveFactory::Frequency m_frequency{Base::WaveFactory::Frequency::PCM48000Hz};
 			/* Memory mode. */
 			std::vector< ALshort > m_samples;
+			/* NOTE: The capture thread's scratch buffer in streaming mode (kept between polls: no allocation per poll). */
+			std::vector< ALshort > m_streamBuffer;
 			/* Streaming mode. */
 			std::filesystem::path m_outputPath;
 			std::ofstream m_outputFileStream;
 			uint32_t m_streamByteCount{0};
 			/* Common. */
-			Base::Thread m_process;
 			bool m_showInformation{false};
+			/* NOTE: Main thread only (the capture thread stops through its stop token: no shared flag). */
 			bool m_isRecording{false};
+			/* NOTE: Written by the main thread before the capture thread starts and after it is joined only. */
 			bool m_streamingMode{false};
+			/* NOTE: LAST on purpose (Ave Robustus II, member order): the capture thread uses the members above, so it is
+			 * destroyed (stopped and joined) first. */
+			Base::Thread m_process;
 	};
 }

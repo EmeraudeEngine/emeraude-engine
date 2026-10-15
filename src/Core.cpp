@@ -163,7 +163,7 @@ namespace EmEn
 	}
 
 	void
-	Core::logicsTask () noexcept
+	Core::logicsTask (const std::stop_token & stopToken) noexcept
 	{
 		constexpr std::chrono::duration< uint64_t, std::micro > logicsUpdateFrequency{WorldPhysicsUpdateCycleDurationUS< uint64_t >};
 		/* NOTE: The logic may fall behind (a long cycle, a stalled system) and then runs its missed cycles back to back to
@@ -186,7 +186,7 @@ namespace EmEn
 		auto origin = std::chrono::steady_clock::now();
 		uint64_t cyclesSinceOrigin = 0;
 
-		while ( m_isLogicsLoopRunning )
+		while ( !stopToken.stop_requested() )
 		{
 			if ( m_paused )
 			{
@@ -275,7 +275,7 @@ namespace EmEn
 	}
 
 	void
-	Core::renderingTask () noexcept
+	Core::renderingTask (const std::stop_token & stopToken) noexcept
 	{
 		/* NOTE: A released CPU copy is never reloaded by blocking the frame (docs/subsystems/resources/03 § CPU Copies). */
 		Resources::ResourceTrait::forbidBlockingLocalDataReload();
@@ -289,7 +289,7 @@ namespace EmEn
 		 * re-evaluates the predicate; it does not force a frame, so the GPU stays idle at rest. */
 		constexpr std::chrono::duration< double > onDemandTimeout{1.0 / OnDemandRenderingSafetyRefreshHz< double >};
 
-		while ( m_isRenderingLoopRunning )
+		while ( !stopToken.stop_requested() )
 		{
 			/* NOTE: Check the pause flag BEFORE taking the lock.
 			 * This prevents deadlock: the main thread sets m_paused=true, then waits for
@@ -333,9 +333,8 @@ namespace EmEn
 
 				if ( !mustRender() )
 				{
-					m_redrawCondition.wait_for(lock, onDemandTimeout, [this, &mustRender] {
-						return mustRender() || !m_isRenderingLoopRunning;
-					});
+					/* NOTE: The stop token wakes this wait (std::condition_variable_any): the loop then ends. */
+					static_cast< void >(m_redrawCondition.wait_for(lock, stopToken, onDemandTimeout, mustRender));
 				}
 
 				/* NOTE: Woke on the safety timeout with nothing to draw (and still no scene): idle again. */
@@ -635,7 +634,11 @@ namespace EmEn
 		Thread logicsThread;
 		Thread renderingThread;
 
-		const auto loopsStarted = logicsThread.start([this] { this->logicsTask(); }) && renderingThread.start([this] { this->renderingTask(); });
+		/* NOTE: Both loops follow the Core's own stop source (m_loopsStop), so a stop() that came before this point ends them
+		 * at once. */
+		const auto loopsStarted =
+			logicsThread.start([this, stopToken = m_loopsStop.get_token()] { this->logicsTask(stopToken); }) &&
+			renderingThread.start([this, stopToken = m_loopsStop.get_token()] { this->renderingTask(stopToken); });
 
 		if ( !loopsStarted )
 		{
@@ -1826,13 +1829,9 @@ namespace EmEn
 			this->stopAudioVideoRecording();
 		}
 
-		/* Stopping the logics and rendering threads. */
-		m_isRenderingLoopRunning = false;
-		m_isLogicsLoopRunning = false;
-
-		/* NOTE: Wake the rendering thread in case it is idling on the on-demand condition,
-		 * so it observes the stopped flag and exits promptly instead of waiting the timeout. */
-		m_redrawCondition.notify_all();
+		/* Stopping the logics and rendering threads: their stop token (it also wakes the rendering thread idling on the
+		 * on-demand condition, which then exits at once instead of waiting the timeout). */
+		m_loopsStop.request_stop();
 
 		/* Stopping the main loop. */
 		m_isMainLoopRunning = false;

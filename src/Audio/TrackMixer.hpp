@@ -34,6 +34,7 @@
 #include <condition_variable>
 #include <memory>
 #include <random>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -515,8 +516,10 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief The event thread: plays the next track when one ends, runs the cross-fade.
+			 * @param stopToken The thread's stop token (Base::Thread): a stop request wakes its wait and ends it, a fade
+			 * included (one fade step, 16 ms, at most).
 			 */
-			void eventLoop () noexcept EMEN_EXCLUDES(m_stateAccess);
+			void eventLoop (const std::stop_token & stopToken) noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
 			 * @brief Fades in a track.
@@ -624,7 +627,6 @@ namespace EmEn::Audio
 			UserState m_userState EMEN_GUARDED_BY(m_stateAccess){UserState::Stopped};
 			PlayMode m_playMode EMEN_GUARDED_BY(m_stateAccess){PlayMode::Loop};
 			PlayingTrack m_playingTrack EMEN_GUARDED_BY(m_stateAccess){PlayingTrack::None};
-			bool m_stopThread EMEN_GUARDED_BY(m_stateAccess){false};
 			bool m_requestNextTrack EMEN_GUARDED_BY(m_stateAccess){false};
 			bool m_crossFaderEnabled EMEN_GUARDED_BY(m_stateAccess){false};
 			bool m_isFading EMEN_GUARDED_BY(m_stateAccess){false};

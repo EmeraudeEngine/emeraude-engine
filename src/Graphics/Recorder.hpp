@@ -40,6 +40,7 @@
 #include <filesystem>
 #include <memory>
 #include <mutex>
+#include <stop_token>
 #include <thread>
 #include <vector>
 
@@ -443,8 +444,9 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Hardware encoding thread: converts and encodes captured slots at the
 			 * silicon's pace, filling missing CFR slots by re-encoding the previous frame.
+			 * @param stopToken The session thread's stop token: once requested, the queue is drained, then the loop ends.
 			 */
-			void hardwareEncodingLoop () noexcept;
+			void hardwareEncodingLoop (const std::stop_token & stopToken) noexcept;
 
 			/** @brief Stops the hardware session (drains, joins, finalizes the file). */
 			void stopHardwareRecording () noexcept;
@@ -479,13 +481,15 @@ namespace EmEn::Graphics
 				std::filesystem::path outputPath;
 				std::deque< size_t > readySlots;
 				std::mutex queueMutex;
-				std::condition_variable queueCV;
-				Base::Thread encodingThread;
-				std::atomic< bool > threadRunning{false};
+				/* NOTE: _any: its wait takes the thread's stop token (a stop request wakes it). */
+				std::condition_variable_any queueCV;
 				uint64_t frameCount{0};
 				uint64_t duplicatedFrames{0};
 				std::atomic< uint64_t > skippedCaptures{0};
 				int64_t lastCfrSlot{-1};
+				/* NOTE: LAST on purpose (Ave Robustus II, member order): the encoding thread uses the members above, so it
+				 * is destroyed (stopped and joined) first. Stopped through its stop token: no flag. */
+				Base::Thread encodingThread;
 			};
 
 			/**
@@ -539,11 +543,10 @@ namespace EmEn::Graphics
 				std::deque< FrameSlot > frameQueue;
 				std::deque< FrameSlot > freeFrames;
 				std::mutex queueMutex;
-				std::condition_variable queueCV;
+				/* NOTE: _any: its wait takes the thread's stop token (a stop request wakes it). */
+				std::condition_variable_any queueCV;
 
-				/* Thread control. */
-				Base::Thread encodingThread;
-				std::atomic< bool > threadRunning{false};
+				/* Thread control: the thread stops through its stop token (declared last, below). */
 				std::atomic< bool > finished{false};
 
 				/* Encoding parameters (snapshot from Recorder at session creation). */
@@ -564,8 +567,16 @@ namespace EmEn::Graphics
 				/* SIMD dispatch. */
 				BGRAToI420Func bgraToI420{nullptr};
 
-				/** @brief Encoding thread entry point. Drains queue, encodes, then calls finalize(). */
-				void encodingThreadFunc () noexcept;
+				/* NOTE: LAST on purpose (Ave Robustus II, member order): the encoding thread uses every member above, so
+				 * it is destroyed (stopped and joined) first. */
+				Base::Thread encodingThread;
+
+				/**
+				 * @brief Encoding thread entry point. Drains queue, encodes, then calls finalize().
+				 * @param stopToken The thread's stop token: once requested, the queue is drained, then the session is
+				 * finalized.
+				 */
+				void encodingThreadFunc (const std::stop_token & stopToken) noexcept;
 
 				/**
 				 * @brief Encodes the current vpxImage content at the given PTS and writes the packets.

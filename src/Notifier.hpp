@@ -111,14 +111,15 @@ namespace EmEn
 			void
 			push (const std::string & message, uint32_t duration = DefaultDuration) noexcept
 			{
-				if ( !this->usable() )
+				/* NOTE: Any thread may notify (an observer runs on the notifying thread: the track mixer's event thread,
+				 * a loading thread): the list is shared with the lifetime timer and the renderer. Whether the notifier
+				 * accepts is read under the same lock (m_accepting), never through usable(). */
+				const Base::MutexLock lock{m_notificationAccess};
+
+				if ( !m_accepting )
 				{
 					return;
 				}
-
-				/* NOTE: Any thread may notify (an observer runs on the notifying thread: the track mixer's event thread,
-				 * a loading thread): the list is shared with the lifetime timer and the renderer. */
-				const Base::MutexLock lock{m_notificationAccess};
 
 				m_notifications.emplace_back(message, static_cast< int32_t >(duration));
 			}
@@ -131,12 +132,12 @@ namespace EmEn
 			void
 			push (const Base::BlobTrait & message, uint32_t duration = DefaultDuration) noexcept
 			{
-				if ( !this->usable() )
+				const Base::MutexLock lock{m_notificationAccess};
+
+				if ( !m_accepting )
 				{
 					return;
 				}
-
-				const Base::MutexLock lock{m_notificationAccess};
 
 				m_notifications.emplace_back(message.get(), static_cast< int32_t >(duration));
 			}
@@ -180,5 +181,7 @@ namespace EmEn
 			 * lock in renderNotifications(), never before it. */
 			mutable Base::Mutex m_notificationAccess;
 			std::vector< std::pair< std::string, int32_t > > m_notifications EMEN_GUARDED_BY(m_notificationAccess);
+			/* NOTE: True from the end of onInitialize() to the start of onTerminate(): push() accepts only then. */
+			bool m_accepting EMEN_GUARDED_BY(m_notificationAccess){false};
 	};
 }
