@@ -39,6 +39,7 @@
 namespace EmEn::Vulkan
 {
 	class Device;
+	class CommandBuffer;
 	class CommandPool;
 
 	/**
@@ -136,6 +137,14 @@ namespace EmEn::Vulkan
 		private:
 
 			/**
+			 * @brief Records, on the graphics queue, the NV12 plane upload (bounce buffer → source picture) and the RELEASE
+			 * of the picture to the video-encode family (m_uploadOnGraphicsQueue: an encode-only family cannot copy). The
+			 * video queue acquires it in encodeFrame() with the same layouts.
+			 * @param commandBuffer The plane-copy command buffer (graphics family), recording.
+			 */
+			void recordPlaneUploadWithRelease (const CommandBuffer & commandBuffer) const noexcept;
+
+			/**
 			 * @brief Resolves the Vulkan Video entry points through vkGetDeviceProcAddr.
 			 * @return bool True when every function was found.
 			 */
@@ -228,5 +237,8 @@ namespace EmEn::Vulkan
 			uint32_t m_setupSlot{0}; ///< DPB slot receiving the reconstructed picture.
 			bool m_rateControlInitialized{false};
 			bool m_dpbInitialized{false};
+			/* NOTE: The video-encode family cannot copy (AMD: encode-only, no TRANSFER): the plane upload runs on the
+			 * graphics queue and the picture changes family by a release / acquire pair (owner decision 2026-10-15). */
+			bool m_uploadOnGraphicsQueue{false};
 	};
 }

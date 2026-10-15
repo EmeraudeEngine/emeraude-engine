@@ -36,6 +36,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/Queue.hpp"
+#include "Vulkan/Utility.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -139,6 +140,23 @@ namespace EmEn::Vulkan
 		m_profileList.profileCount = 1;
 		m_profileList.pProfiles = &m_profile;
 
+		/* NOTE: Recording a copy or a transfer barrier on an encode-only family is invalid (VUID-vkCmdCopyBufferToImage-
+		 * commandBuffer-cmdpool, -06462, -09675) and RADV crashes on it (SIGSEGV in the driver, 2026-10-15, AMD Radeon
+		 * RENOIR). NVIDIA's encode family exposes TRANSFER and keeps the upload on the video queue (engine item
+		 * video-encoder-h265-transfer-on-encode-only-queue). */
+		{
+			const auto & families = m_device->physicalDevice()->queueFamilyPropertiesVK11();
+			const auto encodeFamily = m_device->getVideoEncodeFamilyIndex();
+			constexpr VkQueueFlags CopyCapable = VK_QUEUE_TRANSFER_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_GRAPHICS_BIT;
+
+			m_uploadOnGraphicsQueue = encodeFamily >= families.size() || (families[encodeFamily].queueFamilyProperties.queueFlags & CopyCapable) == 0;
+
+			if ( m_uploadOnGraphicsQueue )
+			{
+				Tracer::info(ClassId, "The video-encode queue family cannot copy: the NV12 planes are uploaded on the graphics queue and handed over by a queue family ownership transfer.");
+			}
+		}
+
 		if ( !this->createSession() || !this->createSessionParameters() || !this->createPictures() )
 		{
 			this->destroy();
@@ -197,24 +215,17 @@ namespace EmEn::Vulkan
 		}
 
 		/* Bind the session device memory (one allocation per requirement). */
-		uint32_t requirementCount = 0;
+		std::vector< VkVideoSessionMemoryRequirementsKHR > requirements;
 
-		if ( m_fpGetSessionMemoryRequirements(m_device->handle(), m_session, &requirementCount, nullptr) != VK_SUCCESS )
+		/* NOTE: VK_INCOMPLETE is a success code: enumerate() handles it (every element carries its sType first). */
+		if ( const auto outcome = enumerate(requirements, [this] (uint32_t * count, VkVideoSessionMemoryRequirementsKHR * data) { return m_fpGetSessionMemoryRequirements(m_device->handle(), m_session, count, data); }, VkVideoSessionMemoryRequirementsKHR{.sType = VK_STRUCTURE_TYPE_VIDEO_SESSION_MEMORY_REQUIREMENTS_KHR, .pNext = nullptr, .memoryBindIndex = 0, .memoryRequirements{}}); !outcome.succeeded() )
 		{
+			TraceError{ClassId} << "Unable to get the video session memory requirements : " << vkResultToCString(outcome.result) << " !";
+
 			return false;
 		}
 
-		std::vector< VkVideoSessionMemoryRequirementsKHR > requirements(requirementCount);
-
-		for ( auto & requirement : requirements )
-		{
-			requirement.sType = VK_STRUCTURE_TYPE_VIDEO_SESSION_MEMORY_REQUIREMENTS_KHR;
-		}
-
-		if ( m_fpGetSessionMemoryRequirements(m_device->handle(), m_session, &requirementCount, requirements.data()) != VK_SUCCESS )
-		{
-			return false;
-		}
+		const auto requirementCount = static_cast< uint32_t >(requirements.size());
 
 		VkPhysicalDeviceMemoryProperties memoryProperties{};
 		vkGetPhysicalDeviceMemoryProperties(m_device->physicalDevice()->handle(), &memoryProperties);
@@ -427,9 +438,9 @@ namespace EmEn::Vulkan
 		/* Aligned on the picture access granularity, see createSession(). */
 		const VkExtent3D codedExtent{alignUp(m_settings.width, 64), alignUp(m_settings.height, 64), 1};
 
-		/* NV12 source picture — EXCLUSIVE to the video queue family: the plane copies
-		 * run on the video queue itself (it exposes TRANSFER), the bounce buffer is
-		 * the only object crossing queues. */
+		/* NV12 source picture — EXCLUSIVE: when the video queue family can copy (NVIDIA), the plane copies run on the
+		 * video queue itself and the bounce buffer is the only object crossing queues; when it cannot (AMD), the graphics
+		 * queue uploads it and releases it to the video family, which acquires it (m_uploadOnGraphicsQueue). */
 		{
 			VkImageCreateInfo imageInfo{};
 			imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -610,6 +621,66 @@ namespace EmEn::Vulkan
 		return true;
 	}
 
+	void
+	VideoEncoderH265::recordPlaneUploadWithRelease (const CommandBuffer & commandBuffer) const noexcept
+	{
+		const VkDeviceSize lumaBytes = static_cast< VkDeviceSize >(m_settings.width) * m_settings.height;
+
+		/* The bounce buffer was just written by the plane readbacks on this queue. */
+		VkBufferMemoryBarrier bounceReadable{};
+		bounceReadable.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+		bounceReadable.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		bounceReadable.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+		bounceReadable.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		bounceReadable.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		bounceReadable.buffer = m_planeBounceBuffer->handle();
+		bounceReadable.offset = 0;
+		bounceReadable.size = VK_WHOLE_SIZE;
+
+		/* NOTE: The previous picture is discarded (UNDEFINED): no ownership transfer back from the video family is needed
+		 * for content nobody reads (Vulkan specification § Queue Family Ownership Transfer); the previous encode is over
+		 * (its submission was waited for). */
+		VkImageMemoryBarrier toTransfer{};
+		toTransfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		toTransfer.srcAccessMask = 0;
+		toTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		toTransfer.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+		toTransfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		toTransfer.image = m_sourcePicture->handle();
+		toTransfer.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1};
+
+		vkCmdPipelineBarrier(commandBuffer.handle(), VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 1, &bounceReadable, 1, &toTransfer);
+
+		VkBufferImageCopy bufferRegion{};
+		bufferRegion.bufferOffset = 0;
+		bufferRegion.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_PLANE_0_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1};
+		bufferRegion.imageExtent = {.width = m_settings.width, .height = m_settings.height, .depth = 1};
+
+		vkCmdCopyBufferToImage(commandBuffer.handle(), m_planeBounceBuffer->handle(), m_sourcePicture->handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferRegion);
+
+		bufferRegion.bufferOffset = lumaBytes;
+		bufferRegion.imageSubresource.aspectMask = VK_IMAGE_ASPECT_PLANE_1_BIT;
+		bufferRegion.imageExtent = {.width = m_settings.width / 2, .height = m_settings.height / 2, .depth = 1};
+
+		vkCmdCopyBufferToImage(commandBuffer.handle(), m_planeBounceBuffer->handle(), m_sourcePicture->handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bufferRegion);
+
+		/* The RELEASE half: the same layouts as the acquire in encodeFrame() (the transition happens once, between them). */
+		VkImageMemoryBarrier release{};
+		release.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		release.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		release.dstAccessMask = 0;
+		release.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		release.newLayout = VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR;
+		release.srcQueueFamilyIndex = m_device->getGraphicsFamilyIndex();
+		release.dstQueueFamilyIndex = m_device->getVideoEncodeFamilyIndex();
+		release.image = m_sourcePicture->handle();
+		release.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1};
+
+		vkCmdPipelineBarrier(commandBuffer.handle(), VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &release);
+	}
+
 	bool
 	VideoEncoderH265::encodeFrame (const Image & lumaPlane, const Image & chromaPlane, std::vector< uint8_t > & packet, bool & wasIDR) noexcept
 	{
@@ -649,6 +720,11 @@ namespace EmEn::Vulkan
 				vkCmdCopyImageToBuffer(commandBuffer->handle(), chromaPlane.handle(), VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, m_planeBounceBuffer->handle(), 1, &bufferRegion);
 			}
 
+			if ( m_uploadOnGraphicsQueue )
+			{
+				this->recordPlaneUploadWithRelease(*commandBuffer);
+			}
+
 			if ( !commandBuffer->end() )
 			{
 				Tracer::error(ClassId, "Unable to end the plane-copy command buffer !");
@@ -679,7 +755,9 @@ namespace EmEn::Vulkan
 		vkCmdResetQueryPool(commandBuffer->handle(), m_feedbackQueryPool, 0, 1);
 
 		/* Upload the planes into the NV12 picture ON THE VIDEO QUEUE (the picture is
-		 * exclusive to this family — the concurrent-image path corrupted on NVIDIA). */
+		 * exclusive to this family — the concurrent-image path corrupted on NVIDIA). An encode-only family uploaded it
+		 * on the graphics queue already (step 1): it only acquires it below. */
+		if ( !m_uploadOnGraphicsQueue )
 		{
 			VkImageMemoryBarrier toTransfer{};
 			toTransfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -719,14 +797,16 @@ namespace EmEn::Vulkan
 			{
 				VkImageMemoryBarrier2 barrier{};
 				barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2;
-				barrier.srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT;
-				barrier.srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT;
+				/* NOTE: The acquire half of the ownership transfer (an encode-only family): no source stage nor access
+				 * here — the release on the graphics queue made the copies available. Same layouts as the release. */
+				barrier.srcStageMask = m_uploadOnGraphicsQueue ? VK_PIPELINE_STAGE_2_NONE : VK_PIPELINE_STAGE_2_COPY_BIT;
+				barrier.srcAccessMask = m_uploadOnGraphicsQueue ? VK_ACCESS_2_NONE : VK_ACCESS_2_TRANSFER_WRITE_BIT;
 				barrier.dstStageMask = VK_PIPELINE_STAGE_2_VIDEO_ENCODE_BIT_KHR;
 				barrier.dstAccessMask = VK_ACCESS_2_VIDEO_ENCODE_READ_BIT_KHR;
 				barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
 				barrier.newLayout = VK_IMAGE_LAYOUT_VIDEO_ENCODE_SRC_KHR;
-				barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-				barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+				barrier.srcQueueFamilyIndex = m_uploadOnGraphicsQueue ? m_device->getGraphicsFamilyIndex() : VK_QUEUE_FAMILY_IGNORED;
+				barrier.dstQueueFamilyIndex = m_uploadOnGraphicsQueue ? m_device->getVideoEncodeFamilyIndex() : VK_QUEUE_FAMILY_IGNORED;
 				barrier.image = m_sourcePicture->handle();
 				barrier.subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1};
 
