@@ -263,16 +263,9 @@ namespace EmEn::Vulkan
 	bool
 	pipelineCreationFeedbackAvailable (const Device & device) noexcept
 	{
-		const auto physicalDevice = device.physicalDevice();
-
-		if ( physicalDevice == nullptr )
-		{
-			return false;
-		}
-
-		const auto version = physicalDevice->APIDriver();
-
-		return version.major() > 1 || (version.major() == 1 && version.minor() >= 3);
+		/* NOTE: Core 1.3: the device's EFFECTIVE version (the application's target clamped to the device), never what the
+		 * device alone reports. */
+		return device.apiVersion() >= VK_API_VERSION_1_3;
 	}
 
 	void

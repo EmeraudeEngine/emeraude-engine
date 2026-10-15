@@ -42,31 +42,79 @@ namespace EmEn::Vulkan
 {
 	using namespace Base;
 
-	PhysicalDevice::PhysicalDevice (const VkPhysicalDevice & physicalDevice) noexcept
+	PhysicalDevice::PhysicalDevice (const VkPhysicalDevice & physicalDevice, uint32_t instanceAPIVersion) noexcept
 		: m_physicalDevice{physicalDevice}
 	{
+		/* NOTE: The EFFECTIVE version (the lower of the device's and the instance's) decides which queries and query
+		 * structures are valid: one of a version above it, or of an extension the device does not advertise, must not be
+		 * used (engine item core-targets-a-vulkan-api-version). The *2 queries themselves are Vulkan 1.1: a 1.0 device
+		 * is only described by the 1.0 queries (it is refused below the 1.1 floor anyway). */
+		vkGetPhysicalDeviceProperties(m_physicalDevice, &m_properties.properties);
+
+		const auto deviceVersion = std::min(
+			VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(m_properties.properties.apiVersion), VK_API_VERSION_MINOR(m_properties.properties.apiVersion), 0),
+			VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(instanceAPIVersion), VK_API_VERSION_MINOR(instanceAPIVersion), 0)
+		);
+		const bool atLeast12 = deviceVersion >= VK_API_VERSION_1_2;
+		const bool atLeast13 = deviceVersion >= VK_API_VERSION_1_3;
+
+		m_extendedQueries = deviceVersion >= VK_API_VERSION_1_1;
+
+		const auto extensions = this->getExtensions();
+
+		const auto hasExtension = [&extensions] (const char * name) {
+			return std::ranges::any_of(extensions, [name] (const auto & extension) {
+				return std::strcmp(std::data(extension.extensionName), name) == 0;
+			});
+		};
+
+		m_hasTimelineSemaphoreExtension = hasExtension(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+
 		/* NOTE: Get the device features. */
+		if ( m_extendedQueries )
 		{
-			/* NOTE: Ray query features (KHR extension). */
-			m_rayQueryFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR;
-			m_rayQueryFeatures.pNext = nullptr;
-			/* NOTE: Acceleration structure features (KHR extension). */
-			m_accelerationStructureFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
-			m_accelerationStructureFeatures.pNext = &m_rayQueryFeatures;
-			/* NOTE: Device features from Vulkan 1.3 API. */
-			m_featuresVK13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
-			m_featuresVK13.pNext = &m_accelerationStructureFeatures;
-			/* NOTE: Device features from Vulkan 1.2 API. */
-			m_featuresVK12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
-			m_featuresVK12.pNext = &m_featuresVK13;
-			/* NOTE: Device features from Vulkan 1.1 API. */
-			m_featuresVK11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
-			m_featuresVK11.pNext = &m_featuresVK12;
-			/* NOTE: Device features from Vulkan 1.0 API. */
 			m_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-			m_features.pNext = &m_featuresVK11;
+			m_features.pNext = nullptr;
+
+			void ** tail = &m_features.pNext;
+
+			const auto append = [&tail] (auto & structure, VkStructureType type) {
+				structure.sType = type;
+				structure.pNext = nullptr;
+				*tail = &structure;
+				tail = &structure.pNext;
+			};
+
+			if ( atLeast12 )
+			{
+				append(m_featuresVK11, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES);
+				append(m_featuresVK12, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES);
+			}
+			else if ( m_hasTimelineSemaphoreExtension )
+			{
+				append(m_timelineSemaphoreFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES);
+			}
+
+			if ( atLeast13 )
+			{
+				append(m_featuresVK13, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES);
+			}
+
+			if ( hasExtension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME) )
+			{
+				append(m_accelerationStructureFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR);
+			}
+
+			if ( hasExtension(VK_KHR_RAY_QUERY_EXTENSION_NAME) )
+			{
+				append(m_rayQueryFeatures, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR);
+			}
 
 			vkGetPhysicalDeviceFeatures2(m_physicalDevice, &m_features);
+		}
+		else
+		{
+			vkGetPhysicalDeviceFeatures(m_physicalDevice, &m_features.features);
 		}
 
 		/* NOTE: Portability subset (MoltenVK and friends). Queried SEPARATELY and only when the
@@ -75,12 +123,9 @@ namespace EmEn::Vulkan
 		 * members keep their permissive defaults. The reported values are kept, because
 		 * DeviceRequirements must request exactly what the device supports — see
 		 * Instance.cpp, graphics device features configuration. */
+		if ( m_extendedQueries )
 		{
-			const auto extensions = this->getExtensions();
-
-			m_hasPortabilitySubset = std::ranges::any_of(extensions, [] (const auto & extension) {
-				return std::strcmp(extension.extensionName, PortabilitySubset::ExtensionName) == 0;
-			});
+			m_hasPortabilitySubset = hasExtension(PortabilitySubset::ExtensionName);
 
 			if ( m_hasPortabilitySubset )
 			{
@@ -98,12 +143,9 @@ namespace EmEn::Vulkan
 		/* NOTE: Mesh shaders (VK_EXT_mesh_shader), optional. Queried SEPARATELY and only when the
 		 * extension is advertised, for the same reason as the portability subset: a feature or property
 		 * structure of an unsupported extension must not enter the query chain. */
+		if ( m_extendedQueries )
 		{
-			const auto extensions = this->getExtensions();
-
-			m_hasMeshShaderExtension = std::ranges::any_of(extensions, [] (const auto & extension) {
-				return std::strcmp(extension.extensionName, VK_EXT_MESH_SHADER_EXTENSION_NAME) == 0;
-			});
+			m_hasMeshShaderExtension = hasExtension(VK_EXT_MESH_SHADER_EXTENSION_NAME);
 
 			if ( m_hasMeshShaderExtension )
 			{
@@ -127,34 +169,68 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		/* NOTE: Get the device properties. */
+		/* NOTE: Get the device properties (the 1.0 part is read above). */
+		if ( m_extendedQueries )
 		{
-			/* NOTE: Device properties from Vulkan 1.3 API. */
-			m_propertiesVK13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES;
-			m_propertiesVK13.pNext = nullptr;
-			/* NOTE: Device properties from Vulkan 1.2 API. */
-			m_propertiesVK12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES;
-			m_propertiesVK12.pNext = &m_propertiesVK13;
-			/* NOTE: Device properties from Vulkan 1.1 API. */
-			m_propertiesVK11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES;
-			m_propertiesVK11.pNext = &m_propertiesVK12;
-			/* NOTE: Device properties from Vulkan 1.0 API. */
 			m_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-			m_properties.pNext = &m_propertiesVK11;
+			m_properties.pNext = nullptr;
+
+			void ** tail = &m_properties.pNext;
+
+			const auto append = [&tail] (auto & structure, VkStructureType type) {
+				structure.sType = type;
+				structure.pNext = nullptr;
+				*tail = &structure;
+				tail = &structure.pNext;
+			};
+
+			/* NOTE: Below 1.2 the identifiers (the LUID matched against the operating system's adapter list) come from
+			 * the 1.1 core structure and are copied where the 1.2 one keeps them. */
+			VkPhysicalDeviceIDProperties idProperties{};
+
+			if ( atLeast12 )
+			{
+				append(m_propertiesVK11, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES);
+				append(m_propertiesVK12, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES);
+			}
+			else
+			{
+				append(idProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES);
+			}
+
+			if ( atLeast13 )
+			{
+				append(m_propertiesVK13, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES);
+			}
 
 			vkGetPhysicalDeviceProperties2(m_physicalDevice, &m_properties);
+
+			if ( !atLeast12 )
+			{
+				std::ranges::copy(idProperties.deviceUUID, std::begin(m_propertiesVK11.deviceUUID));
+				std::ranges::copy(idProperties.driverUUID, std::begin(m_propertiesVK11.driverUUID));
+				std::ranges::copy(idProperties.deviceLUID, std::begin(m_propertiesVK11.deviceLUID));
+				m_propertiesVK11.deviceNodeMask = idProperties.deviceNodeMask;
+				m_propertiesVK11.deviceLUIDValid = idProperties.deviceLUIDValid;
+			}
 		}
 
 		/* NOTE: Get the device memory properties. */
+		if ( m_extendedQueries )
 		{
 			m_memoryProperties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2;
 			m_memoryProperties.pNext = nullptr;
 
 			vkGetPhysicalDeviceMemoryProperties2(m_physicalDevice, &m_memoryProperties);
 		}
+		else
+		{
+			vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &m_memoryProperties.memoryProperties);
+		}
 
 		uint32_t count = 0;
 
+		if ( m_extendedQueries )
 		{
 			vkGetPhysicalDeviceQueueFamilyProperties2(m_physicalDevice, &count, nullptr);
 
@@ -176,10 +252,35 @@ namespace EmEn::Vulkan
 				vkGetPhysicalDeviceQueueFamilyProperties2(m_physicalDevice, &count, m_queueFamilyProperties.data());
 			}
 		}
+		else
+		{
+			vkGetPhysicalDeviceQueueFamilyProperties(m_physicalDevice, &count, nullptr);
+
+			count = std::min(count, static_cast< uint32_t >(MaxQueueFamilies));
+
+			if ( count > 0 )
+			{
+				Base::StaticVector< VkQueueFamilyProperties, MaxQueueFamilies > families;
+				families.resize(count, VkQueueFamilyProperties{});
+
+				vkGetPhysicalDeviceQueueFamilyProperties(m_physicalDevice, &count, families.data());
+
+				for ( uint32_t index = 0; index < count; ++index )
+				{
+					m_queueFamilyProperties.push_back({
+						.sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2,
+						.pNext = nullptr,
+						.queueFamilyProperties = families[index]
+					});
+				}
+			}
+		}
 
 		/* NOTE: From extension 'VK_EXT_tooling_info'. Every output structure carries its sType before the query
 		 * (VUID-VkPhysicalDeviceToolProperties-sType-sType). On Windows the validation layer reports itself as a tool, so
-		 * a validation run takes this path. VK_INCOMPLETE is a success code: enumerate() handles it. */
+		 * a validation run takes this path. VK_INCOMPLETE is a success code: enumerate() handles it. Core since 1.3 only:
+		 * an older device is not asked. */
+		if ( atLeast13 )
 		{
 			constexpr VkPhysicalDeviceToolProperties Prototype{
 				.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TOOL_PROPERTIES,

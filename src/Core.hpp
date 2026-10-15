@@ -221,7 +221,7 @@ namespace EmEn
 				{
 					/** @brief No driver supporting Vulkan (vkCreateInstance answered VK_ERROR_INCOMPATIBLE_DRIVER, or no device). */
 					NoVulkanDriver,
-					/** @brief A GPU whose driver is too old (below Vulkan::Instance::MinimumDeviceAPIVersion). */
+					/** @brief A GPU whose driver is too old (below Vulkan::Instance::minimumDeviceAPIVersion(), or without timeline semaphores). */
 					OutdatedDriver,
 					/** @brief No GPU that can run the engine, whatever its driver (a required feature missing). */
 					IncompatibleHardware,
@@ -1701,6 +1701,23 @@ namespace EmEn
 			onBeforeCoreSecondaryServicesInitialization () noexcept
 			{
 				return false;
+			}
+
+			/**
+			 * @brief Returns the Vulkan API version the application targets: the engine uses nothing above it, on any
+			 * device, and refuses a device below it (an outdated driver: the user is told to update it).
+			 * @details From Vulkan 1.2 (Vulkan::Instance::SceneRenderingAPIVersion) the whole engine is available; below,
+			 * the overlay only (no scene: enabling one is refused). The lowest target is 1.1
+			 * (Vulkan::Instance::LowestTargetAPIVersion, with VK_KHR_timeline_semaphore), the highest and default 1.3. Read
+			 * once at startup, before the Vulkan instance exists; `--vulkan-api-target=X.Y` may LOWER it for one run.
+			 * @return uint32_t A packed version (VK_API_VERSION_1_1, VK_API_VERSION_1_2 or VK_API_VERSION_1_3).
+			 */
+			[[nodiscard]]
+			virtual
+			uint32_t
+			targetVulkanAPIVersion () const noexcept
+			{
+				return Vulkan::Instance::HighestTargetAPIVersion;
 			}
 
 			/**

@@ -42,6 +42,7 @@
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/Instance.hpp"
 #include "FastJSON.hpp"
 #include "IO/IO.hpp"
 #include "PrimaryServices.hpp"
@@ -107,6 +108,19 @@ namespace EmEn::Scenes
 	std::shared_ptr< Scene >
 	Manager::newScene (const std::string & sceneName, float boundary, const std::shared_ptr< Renderable::AbstractBackground > & background, const std::shared_ptr< GroundLevelInterface > & groundLevel, const std::shared_ptr< SeaLevelInterface > & seaLevel) noexcept
 	{
+		/* NOTE: A scene needs the scene renderer (bindless descriptor indexing, Vulkan 1.2): below that target the
+		 * application draws the overlay only and no scene is ever built — its construction already creates the scene
+		 * renderer's effects (measured 2026-10-15: a crash in the post-process construction at a 1.1 target). Engine item
+		 * core-targets-a-vulkan-api-version, owner decision 2026-10-15. */
+		if ( const auto & instance = m_resourceManager.graphicsRenderer().vulkanInstance(); !instance.sceneRenderingEnabled() )
+		{
+			TraceError{ClassId} <<
+				"The scene '" << sceneName << "' cannot be created: the application targets Vulkan " << VK_API_VERSION_MAJOR(instance.targetAPIVersion()) << '.' << VK_API_VERSION_MINOR(instance.targetAPIVersion()) << ", "
+				"which draws the overlay only (a scene needs Vulkan " << VK_API_VERSION_MAJOR(Vulkan::Instance::SceneRenderingAPIVersion) << '.' << VK_API_VERSION_MINOR(Vulkan::Instance::SceneRenderingAPIVersion) << ").";
+
+			return nullptr;
+		}
+
 		std::shared_ptr< Scene > newScene;
 
 		{

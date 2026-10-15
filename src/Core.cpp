@@ -1151,7 +1151,9 @@ namespace EmEn
 			return false;
 		}
 
-		/* Initialize the vulkan API. */
+		/* Initialize the vulkan API, at the version the application targets. */
+		m_vulkanInstance.setTargetAPIVersion(this->targetVulkanAPIVersion());
+
 		if ( m_vulkanInstance.initialize(m_secondaryServicesEnabled) )
 		{
 			TraceSuccess{ClassId} << m_vulkanInstance.name() << " service up!";

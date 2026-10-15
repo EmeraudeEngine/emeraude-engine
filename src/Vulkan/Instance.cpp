@@ -32,12 +32,15 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cstring>
 #include <limits>
 #include <optional>
 #include <ranges>
 #include <span>
 #include <sstream>
+#include <string_view>
+#include <system_error>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -108,6 +111,41 @@ namespace EmEn::Vulkan
 				settings.getOrSetDefault< bool >(VkInstanceEnableDebugKey, DefaultVkInstanceEnableDebug);
 		}
 
+		/* NOTE: --vulkan-api-target LOWERS the target for this run only (a downstream application's path tested on any
+		 * machine); it never raises the application's target. */
+		if ( const auto targetArgument = arguments.get(VulkanAPITargetArgument) )
+		{
+			const auto & text = targetArgument.value();
+			const auto separator = text.find('.');
+			uint32_t major = 0;
+			uint32_t minor = 0;
+
+			const auto parse = [] (std::string_view part, uint32_t & value) {
+				const auto [end, error] = std::from_chars(part.data(), part.data() + part.size(), value);
+
+				return error == std::errc{} && end == part.data() + part.size() && !part.empty();
+			};
+
+			if ( separator == std::string::npos || !parse(std::string_view{text}.substr(0, separator), major) || !parse(std::string_view{text}.substr(separator + 1), minor) || major != 1 || minor > 3 )
+			{
+				TraceError{ClassId} << VulkanAPITargetArgument << "=" << text << " is not a Vulkan version (1.1, 1.2 or 1.3): ignored.";
+			}
+			else if ( const auto requested = VK_MAKE_API_VERSION(0, major, minor, 0); requested > m_targetAPIVersion )
+			{
+				TraceWarning{ClassId} << VulkanAPITargetArgument << "=" << text << " cannot raise the application's target (Vulkan " << VK_API_VERSION_MAJOR(m_targetAPIVersion) << '.' << VK_API_VERSION_MINOR(m_targetAPIVersion) << "): ignored.";
+			}
+			else
+			{
+				this->setTargetAPIVersion(requested);
+
+				TraceInfo{ClassId} << VulkanAPITargetArgument << " : Vulkan " << VK_API_VERSION_MAJOR(m_targetAPIVersion) << '.' << VK_API_VERSION_MINOR(m_targetAPIVersion) << " targeted for this run.";
+			}
+		}
+		else if ( arguments.isSwitchPresent(VulkanAPITargetArgument) )
+		{
+			TraceError{ClassId} << VulkanAPITargetArgument << " needs a value: " << VulkanAPITargetArgument << "=1.1. Ignored.";
+		}
+
 		/* NOTE: The debug messenger create-info must be ready before vkCreateInstance (instance pNext).
 		 * It is only actually wired when validation layers are requested (see isUsingDebugMessenger()). */
 		if ( this->isDebugModeEnabled() )
@@ -154,12 +192,12 @@ namespace EmEn::Vulkan
 			{
 				/* NOTE: macOS don't support the Vulkan API.
 				 * MoltenVK is used to translate commands to Metal API, some features can be unsupported. */
-				m_applicationInfo.apiVersion = RequestedAPIVersion;
+				m_applicationInfo.apiVersion = m_targetAPIVersion;
 				m_createInfo.flags = VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
 			}
 			else
 			{
-				m_applicationInfo.apiVersion = RequestedAPIVersion;
+				m_applicationInfo.apiVersion = m_targetAPIVersion;
 				m_createInfo.flags = 0;
 			}
 			m_createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -371,8 +409,8 @@ namespace EmEn::Vulkan
 
 		m_physicalDevices.reserve(physicalDevices.size());
 
-		std::ranges::transform(std::as_const(physicalDevices), std::back_inserter(m_physicalDevices), [] (const auto & physicalDevice) {
-			return std::make_shared< PhysicalDevice >(physicalDevice);
+		std::ranges::transform(std::as_const(physicalDevices), std::back_inserter(m_physicalDevices), [this] (const auto & physicalDevice) {
+			return std::make_shared< PhysicalDevice >(physicalDevice, m_targetAPIVersion);
 		});
 
 		return !m_physicalDevices.empty();
@@ -1031,7 +1069,7 @@ namespace EmEn::Vulkan
 
 				TraceInfo{ClassId} <<
 					"Graphics device: '" << properties.deviceName << "' (" << candidate->deviceType() << ", vendor 0x" << std::hex << properties.vendorID << ", device 0x" << properties.deviceID << std::dec << "), "
-					"driver '" << propertiesVK12.driverName << "' (" << propertiesVK12.driverInfo << "), driver version " << candidate->DriverVersionString() << ", "
+					"driver '" << (propertiesVK12.driverName[0] != '\0' ? std::string_view{std::data(propertiesVK12.driverName)} : std::string_view{"n/a"}) << "' (" << propertiesVK12.driverInfo << "), driver version " << candidate->DriverVersionString() << ", "
 					"Vulkan " << VK_API_VERSION_MAJOR(properties.apiVersion) << '.' << VK_API_VERSION_MINOR(properties.apiVersion) << '.' << VK_API_VERSION_PATCH(properties.apiVersion) << ".";
 
 				m_graphicsDevice = logicalDevice;
@@ -1134,8 +1172,6 @@ namespace EmEn::Vulkan
 		 * names none (engine item device-below-vulkan-1-3-reaches-vkcreatedevice, 2026-10-15). */
 		std::vector< const char * > missingRequiredFeatures;
 
-		const auto & availableFeaturesVK13 = selectedPhysicalDevice->featuresVK13();
-
 		const auto requireVK10 = [&] (VkBool32 VkPhysicalDeviceFeatures::* feature, const char * featureName) {
 			if ( availableFeatures.*feature == VK_FALSE )
 			{
@@ -1163,6 +1199,8 @@ namespace EmEn::Vulkan
 			requirements.featuresVK12().*feature = VK_TRUE;
 		};
 
+		const auto & availableFeaturesVK13 = selectedPhysicalDevice->featuresVK13();
+
 		const auto requireVK13 = [&] (VkBool32 VkPhysicalDeviceVulkan13Features::* feature, const char * featureName) {
 			if ( availableFeaturesVK13.*feature == VK_FALSE )
 			{
@@ -1172,64 +1210,82 @@ namespace EmEn::Vulkan
 			requirements.featuresVK13().*feature = VK_TRUE;
 		};
 
-		// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension
-		//requirements.featuresVK10().nonSeamlessCubeMap = VK_TRUE; // Required for cubemap rendering
-		requireVK10(&VkPhysicalDeviceFeatures::fillModeNonSolid, "fillModeNonSolid"); // Required for wireframe mode!
-		/* NOTE: was `if constexpr ( !IsMacOS )` — Apple M1/M2/M3/M4 iGPUs have no geometry stage,
-		 * and neither does a software device. Asked of the device instead of the platform. */
-		requestOptionalVK10(&VkPhysicalDeviceFeatures::geometryShader, "geometryShader", "TBN space display");
-		requireVK10(&VkPhysicalDeviceFeatures::samplerAnisotropy, "samplerAnisotropy");
-		requireVK10(&VkPhysicalDeviceFeatures::independentBlend, "independentBlend"); // Required for per-attachment MRT blend states (G-buffer full write vs color alpha blending)
-		requireVK10(&VkPhysicalDeviceFeatures::depthBiasClamp, "depthBiasClamp"); // Required for shadow map depth bias clamping
-		/* ⚠️ depthClamp is NOT depthBiasClamp — distinct features, both needed by the shadow cast
-		 * pass. This one lets it set depthClampEnable, which FLATTENS casters sitting in front of
-		 * the light's near plane onto that plane instead of CLIPPING them out of the map. Without
-		 * it a caster closer to the light than the near plane writes nothing, so the map keeps its
-		 * 1.0 clear there and the receiver below reads "lit": a shadow-shaped HOLE. */
-		requireVK10(&VkPhysicalDeviceFeatures::depthClamp, "depthClamp"); // Required for shadow map depth clamping (see ShadowCasting)
-		requestOptionalVK10(&VkPhysicalDeviceFeatures::shaderImageGatherExtended, "shaderImageGatherExtended", "PCF shadow filtering");
-		requireVK10(&VkPhysicalDeviceFeatures::imageCubeArray, "imageCubeArray"); // Required for animated cubemap textures (VK_IMAGE_VIEW_TYPE_CUBE_ARRAY)
-		requireVK11(&VkPhysicalDeviceVulkan11Features::multiview, "multiview"); // Required for cubemap render-to-texture (Vulkan 1.1+)
+		const auto effectiveVersion = this->effectiveAPIVersion(*selectedPhysicalDevice);
+
+		/* NOTE: The scene (3D) renderer's features, from its target on (SceneRenderingAPIVersion). Below it the engine draws
+		 * the overlay only and requires nothing beyond Vulkan 1.1 and the timelines (engine item
+		 * core-targets-a-vulkan-api-version). */
+		if ( this->sceneRenderingEnabled() )
 		{
-			/* Descriptor indexing features (Vulkan 1.2) - Required for bindless textures. */
-			requireVK12(&VkPhysicalDeviceVulkan12Features::descriptorIndexing, "descriptorIndexing");
-			requireVK12(&VkPhysicalDeviceVulkan12Features::descriptorBindingPartiallyBound, "descriptorBindingPartiallyBound");
-			requireVK12(&VkPhysicalDeviceVulkan12Features::descriptorBindingSampledImageUpdateAfterBind, "descriptorBindingSampledImageUpdateAfterBind");
-			requireVK12(&VkPhysicalDeviceVulkan12Features::runtimeDescriptorArray, "runtimeDescriptorArray");
-			requireVK12(&VkPhysicalDeviceVulkan12Features::shaderSampledImageArrayNonUniformIndexing, "shaderSampledImageArrayNonUniformIndexing");
+			// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension
+			//requirements.featuresVK10().nonSeamlessCubeMap = VK_TRUE; // Required for cubemap rendering
+			requireVK10(&VkPhysicalDeviceFeatures::fillModeNonSolid, "fillModeNonSolid"); // Required for wireframe mode!
+			/* NOTE: was `if constexpr ( !IsMacOS )` — Apple M1/M2/M3/M4 iGPUs have no geometry stage,
+			 * and neither does a software device. Asked of the device instead of the platform. */
+			requestOptionalVK10(&VkPhysicalDeviceFeatures::geometryShader, "geometryShader", "TBN space display");
+			requireVK10(&VkPhysicalDeviceFeatures::samplerAnisotropy, "samplerAnisotropy");
+			requireVK10(&VkPhysicalDeviceFeatures::independentBlend, "independentBlend"); // Required for per-attachment MRT blend states (G-buffer full write vs color alpha blending)
+			requireVK10(&VkPhysicalDeviceFeatures::depthBiasClamp, "depthBiasClamp"); // Required for shadow map depth bias clamping
+			/* ⚠️ depthClamp is NOT depthBiasClamp — distinct features, both needed by the shadow cast
+			 * pass. This one lets it set depthClampEnable, which FLATTENS casters sitting in front of
+			 * the light's near plane onto that plane instead of CLIPPING them out of the map. Without
+			 * it a caster closer to the light than the near plane writes nothing, so the map keeps its
+			 * 1.0 clear there and the receiver below reads "lit": a shadow-shaped HOLE. */
+			requireVK10(&VkPhysicalDeviceFeatures::depthClamp, "depthClamp"); // Required for shadow map depth clamping (see ShadowCasting)
+			requestOptionalVK10(&VkPhysicalDeviceFeatures::shaderImageGatherExtended, "shaderImageGatherExtended", "PCF shadow filtering");
+			requireVK10(&VkPhysicalDeviceFeatures::imageCubeArray, "imageCubeArray"); // Required for animated cubemap textures (VK_IMAGE_VIEW_TYPE_CUBE_ARRAY)
+			requireVK11(&VkPhysicalDeviceVulkan11Features::multiview, "multiview"); // Required for cubemap render-to-texture (Vulkan 1.1+)
+			{
+				/* Descriptor indexing features (Vulkan 1.2) - Required for bindless textures. */
+				requireVK12(&VkPhysicalDeviceVulkan12Features::descriptorIndexing, "descriptorIndexing");
+				requireVK12(&VkPhysicalDeviceVulkan12Features::descriptorBindingPartiallyBound, "descriptorBindingPartiallyBound");
+				requireVK12(&VkPhysicalDeviceVulkan12Features::descriptorBindingSampledImageUpdateAfterBind, "descriptorBindingSampledImageUpdateAfterBind");
+				requireVK12(&VkPhysicalDeviceVulkan12Features::runtimeDescriptorArray, "runtimeDescriptorArray");
+				requireVK12(&VkPhysicalDeviceVulkan12Features::shaderSampledImageArrayNonUniformIndexing, "shaderSampledImageArrayNonUniformIndexing");
+			}
+			requireVK12(&VkPhysicalDeviceVulkan12Features::bufferDeviceAddress, "bufferDeviceAddress"); // Required for buffer device addresses (VBO/IBO for RT, etc.)
+			requestOptionalVK12(&VkPhysicalDeviceVulkan12Features::hostQueryReset, "hostQueryReset", "GPU timing of the shadow maps and render-to-textures");
+			/* Multi-Draw Indirect features - Required for GPU-driven rendering (MDI). */
+			requireVK10(&VkPhysicalDeviceFeatures::multiDrawIndirect, "multiDrawIndirect"); // Required for vkCmdDrawIndexedIndirect with drawCount > 1
+			requireVK10(&VkPhysicalDeviceFeatures::drawIndirectFirstInstance, "drawIndirectFirstInstance"); // Required for firstInstance in indirect commands
+			/* ⚠️ Unlike the two above, dropping this one is NOT cosmetic: BDA address reconstruction in
+			 * shaders needs uint64_t. A device without it boots and renders, and any path relying on
+			 * buffer device addresses has to be off. Made conditional so the engine starts and says so,
+			 * rather than refusing to create a device and saying nothing. */
+			requestOptionalVK10(&VkPhysicalDeviceFeatures::shaderInt64, "shaderInt64", "uint64_t in shaders (BDA address reconstruction)");
+			/* A compute pass writing a storage image of a two-channel or 16-bit format (R16G16_SFLOAT, ...)
+			 * needs it: the heightfield bakes its normal clipmap that way (Graphics::Geometry::HeightfieldSurface::NormalFormat).
+			 * Universal on desktop GPUs and MoltenVK; a terrain on a device without it has no normals and says so. */
+			requestOptionalVK10(&VkPhysicalDeviceFeatures::shaderStorageImageExtendedFormats, "shaderStorageImageExtendedFormats", "compute writes to two-channel/16-bit storage images (the heightfield normal clipmap)");
+			/* Required for imageStore() from a FRAGMENT shader: the RTR trace writes its per-pixel glossy
+			 * cone width map (a storage image) next to its colour attachment. Without the feature the SPIR-V
+			 * validation rejects the pipeline (VUID-RuntimeSpirv-NonWritable-06340) and the effect fails to
+			 * create. Universally supported on desktop GPUs; the physical-device probe above warns when absent. */
+			requireVK10(&VkPhysicalDeviceFeatures::fragmentStoresAndAtomics, "fragmentStoresAndAtomics");
+			/* ⚠️ Required for gl_DrawID in vertex shaders, which ONLY the Multi-Draw Indirect path uses —
+			 * and MDI is opt-in and OFF by default (`Core/Graphics/MDI/Enabled`,
+			 * DefaultGraphicsMDIEnabled == false). Requesting it unconditionally made the engine refuse
+			 * to create a device, for a path nobody had switched on: measured 2026-09-17 against
+			 * SwiftShader, where this single bit out of the nine non-VK10 features requested here is
+			 * the only one absent (bufferDeviceAddress IS present there). Renderer::onInitialize()
+			 * refuses to build the MDI batch builder when it is missing, so a device without it cannot
+			 * silently render with a wrong per-draw index. */
+			requestOptionalVK11(&VkPhysicalDeviceVulkan11Features::shaderDrawParameters, "shaderDrawParameters", "gl_DrawID, hence the Multi-Draw Indirect path");
 		}
-		requireVK12(&VkPhysicalDeviceVulkan12Features::bufferDeviceAddress, "bufferDeviceAddress"); // Required for buffer device addresses (VBO/IBO for RT, etc.)
-		/* Required (core in Vulkan 1.2, mandatory there): each queue numbers its tracked submissions with a timeline,
-		 * and an object released while an upload writes it is destroyed once that value is reached. */
-		requireVK12(&VkPhysicalDeviceVulkan12Features::timelineSemaphore, "timelineSemaphore");
-		requestOptionalVK12(&VkPhysicalDeviceVulkan12Features::hostQueryReset, "hostQueryReset", "GPU timing of the shadow maps and render-to-textures");
-		/* Multi-Draw Indirect features - Required for GPU-driven rendering (MDI). */
-		requireVK10(&VkPhysicalDeviceFeatures::multiDrawIndirect, "multiDrawIndirect"); // Required for vkCmdDrawIndexedIndirect with drawCount > 1
-		requireVK10(&VkPhysicalDeviceFeatures::drawIndirectFirstInstance, "drawIndirectFirstInstance"); // Required for firstInstance in indirect commands
-		/* ⚠️ Unlike the two above, dropping this one is NOT cosmetic: BDA address reconstruction in
-		 * shaders needs uint64_t. A device without it boots and renders, and any path relying on
-		 * buffer device addresses has to be off. Made conditional so the engine starts and says so,
-		 * rather than refusing to create a device and saying nothing. */
-		requestOptionalVK10(&VkPhysicalDeviceFeatures::shaderInt64, "shaderInt64", "uint64_t in shaders (BDA address reconstruction)");
-		/* A compute pass writing a storage image of a two-channel or 16-bit format (R16G16_SFLOAT, ...)
-		 * needs it: the heightfield bakes its normal clipmap that way (Graphics::Geometry::HeightfieldSurface::NormalFormat).
-		 * Universal on desktop GPUs and MoltenVK; a terrain on a device without it has no normals and says so. */
-		requestOptionalVK10(&VkPhysicalDeviceFeatures::shaderStorageImageExtendedFormats, "shaderStorageImageExtendedFormats", "compute writes to two-channel/16-bit storage images (the heightfield normal clipmap)");
-		/* Required for imageStore() from a FRAGMENT shader: the RTR trace writes its per-pixel glossy
-		 * cone width map (a storage image) next to its colour attachment. Without the feature the SPIR-V
-		 * validation rejects the pipeline (VUID-RuntimeSpirv-NonWritable-06340) and the effect fails to
-		 * create. Universally supported on desktop GPUs; the physical-device probe above warns when absent. */
-		requireVK10(&VkPhysicalDeviceFeatures::fragmentStoresAndAtomics, "fragmentStoresAndAtomics");
-		/* ⚠️ Required for gl_DrawID in vertex shaders, which ONLY the Multi-Draw Indirect path uses —
-		 * and MDI is opt-in and OFF by default (`Core/Graphics/MDI/Enabled`,
-		 * DefaultGraphicsMDIEnabled == false). Requesting it unconditionally made the engine refuse
-		 * to create a device, for a path nobody had switched on: measured 2026-09-17 against
-		 * SwiftShader, where this single bit out of the nine non-VK10 features requested here is
-		 * the only one absent (bufferDeviceAddress IS present there). Renderer::onInitialize()
-		 * refuses to build the MDI batch builder when it is missing, so a device without it cannot
-		 * silently render with a wrong per-draw index. */
-		requestOptionalVK11(&VkPhysicalDeviceVulkan11Features::shaderDrawParameters, "shaderDrawParameters", "gl_DrawID, hence the Multi-Draw Indirect path");
-		requireVK13(&VkPhysicalDeviceVulkan13Features::shaderDemoteToHelperInvocation, "shaderDemoteToHelperInvocation");
+
+		/* NOTE: Required at every target: each queue numbers its tracked submissions with a timeline, and an object
+		 * released while an upload writes it is destroyed once that value is reached. checkDeviceAPIVersion() refused a
+		 * device without (core 1.2, VK_KHR_timeline_semaphore below). */
+		this->requestTimelineSemaphore(*selectedPhysicalDevice, m_requiredGraphicsDeviceExtensions, requirements);
+
+		/* NOTE: Compiling for SPIR-V 1.6 (a Vulkan 1.3 device), glslang declares the DemoteToHelperInvocation capability
+		 * for fragment shaders that discard, with no `demote` in the GLSL (measured 2026-10-15: VUID-VkShaderModuleCreateInfo-
+		 * pCode-08740 on RenderableInstancePointLightPassFragmentShader without the feature). Below 1.3 the shaders target
+		 * SPIR-V 1.5 or 1.3 and glslang writes OpKill. */
+		if ( effectiveVersion >= VK_API_VERSION_1_3 )
+		{
+			requireVK13(&VkPhysicalDeviceVulkan13Features::shaderDemoteToHelperInvocation, "shaderDemoteToHelperInvocation");
+		}
 
 		if ( !missingRequiredFeatures.empty() )
 		{
@@ -1254,7 +1310,11 @@ namespace EmEn::Vulkan
 		 * mesh shader as OpExecutionMode LocalSizeId when it targets SPIR-V 1.6, and that execution mode is
 		 * refused without this feature (VUID-RuntimeSpirv-LocalSizeId-06434 — found by the first compile
 		 * of a mesh shader, 2026-09-22). Requested when the device reports it. */
-		if ( selectedPhysicalDevice->featuresVK13().maintenance4 == VK_TRUE )
+		if ( effectiveVersion < VK_API_VERSION_1_3 )
+		{
+			/* NOTE: The shaders are compiled for this version's SPIR-V (no LocalSizeId below 1.6): nothing to request. */
+		}
+		else if ( selectedPhysicalDevice->featuresVK13().maintenance4 == VK_TRUE )
 		{
 			requirements.featuresVK13().maintenance4 = VK_TRUE;
 		}
@@ -1291,7 +1351,16 @@ namespace EmEn::Vulkan
 			/* NOTE: Ray tracing extensions (VK_KHR_acceleration_structure + VK_KHR_ray_query).
 			 * These enable hardware-accelerated ray queries in fragment/compute shaders.
 			 * VK_KHR_deferred_host_operations is a required dependency of acceleration structures. */
-			if ( physicalDevice->supportsRayTracing()
+			/* NOTE: The memory budget VMA reads (VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT needs the extension enabled). */
+			if ( hasExtension(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME) )
+			{
+				m_requiredGraphicsDeviceExtensions.emplace_back(VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
+			}
+
+			/* NOTE: Ray tracing, mesh shaders and the hardware video encode belong to the scene renderer's targets: the
+			 * acceleration structures need buffer device addresses (1.2), the video encode synchronization2 (1.3). */
+			if ( this->sceneRenderingEnabled()
+				&& physicalDevice->supportsRayTracing()
 				&& hasExtension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
 				&& hasExtension(VK_KHR_RAY_QUERY_EXTENSION_NAME)
 				&& hasExtension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME) )
@@ -1318,7 +1387,7 @@ namespace EmEn::Vulkan
 			 * shading rate variant (needs VK_KHR_fragment_shading_rate) and the pipeline statistics
 			 * queries. MoltenVK does not expose the extension (checked 2026-09-22): never on macOS today.
 			 * Its SPIR-V 1.4 requirement is met by the Vulkan 1.2 core the engine targets. */
-			if ( physicalDevice->supportsMeshShaders() && hasExtension(VK_EXT_MESH_SHADER_EXTENSION_NAME) )
+			if ( this->sceneRenderingEnabled() && physicalDevice->supportsMeshShaders() && hasExtension(VK_EXT_MESH_SHADER_EXTENSION_NAME) )
 			{
 				m_requiredGraphicsDeviceExtensions.emplace_back(VK_EXT_MESH_SHADER_EXTENSION_NAME);
 
@@ -1345,7 +1414,8 @@ namespace EmEn::Vulkan
 			 * VK_KHR_video_queue + VK_KHR_video_encode_queue are the codec-agnostic
 			 * infrastructure, VK_KHR_video_encode_h265 the codec. When absent, the
 			 * recorder falls back to the software VP9 path. */
-			if ( hasExtension(VK_KHR_VIDEO_QUEUE_EXTENSION_NAME)
+			if ( effectiveVersion >= VK_API_VERSION_1_3
+				&& hasExtension(VK_KHR_VIDEO_QUEUE_EXTENSION_NAME)
 				&& hasExtension(VK_KHR_VIDEO_ENCODE_QUEUE_EXTENSION_NAME)
 				&& hasExtension(VK_KHR_VIDEO_ENCODE_H265_EXTENSION_NAME) )
 			{
@@ -1434,7 +1504,7 @@ namespace EmEn::Vulkan
 
 			/* NOTE: External-memory image import (zero-copy CEF accelerated paint).
 			 * VK_KHR_external_memory and VK_KHR_external_memory_capabilities are core since
-			 * Vulkan 1.1 (instance API is 1.3) — only the platform handle extension is needed.
+			 * Vulkan 1.1 (the lowest target) — only the platform handle extension is needed.
 			 * On Windows it allows importing a D3D11 shared texture (DXGI shared HANDLE) as a
 			 * VkImage. The literal name is used because vulkan_win32.h is not included here. */
 			if constexpr ( IsWindows )
@@ -1473,19 +1543,80 @@ namespace EmEn::Vulkan
 		return logicalDevice;
 	}
 
+	void
+	Instance::setTargetAPIVersion (uint32_t apiVersion) noexcept
+	{
+		/* NOTE: Compared on major.minor (the variant and the patch never decide). */
+		auto target = VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(apiVersion), VK_API_VERSION_MINOR(apiVersion), 0);
+
+		if ( VK_API_VERSION_VARIANT(apiVersion) != 0 || target > HighestTargetAPIVersion )
+		{
+			TraceWarning{ClassId} << "The targeted Vulkan API version (0x" << std::hex << apiVersion << std::dec << ") is above the highest the engine knows: Vulkan " << VK_API_VERSION_MAJOR(HighestTargetAPIVersion) << '.' << VK_API_VERSION_MINOR(HighestTargetAPIVersion) << " is targeted.";
+
+			target = HighestTargetAPIVersion;
+		}
+		else if ( target < LowestTargetAPIVersion )
+		{
+			TraceWarning{ClassId} << "The targeted Vulkan API version " << VK_API_VERSION_MAJOR(target) << '.' << VK_API_VERSION_MINOR(target) << " is below the lowest the engine supports: Vulkan " << VK_API_VERSION_MAJOR(LowestTargetAPIVersion) << '.' << VK_API_VERSION_MINOR(LowestTargetAPIVersion) << " is targeted.";
+
+			target = LowestTargetAPIVersion;
+		}
+
+		m_targetAPIVersion = target;
+	}
+
+	uint32_t
+	Instance::effectiveAPIVersion (const PhysicalDevice & physicalDevice) const noexcept
+	{
+		const auto reported = physicalDevice.propertiesVK10().apiVersion;
+
+		return std::min(m_targetAPIVersion, VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(reported), VK_API_VERSION_MINOR(reported), 0));
+	}
+
+	void
+	Instance::requestTimelineSemaphore (const PhysicalDevice & physicalDevice, std::vector< const char * > & extensions, DeviceRequirements & requirements) const noexcept
+	{
+		requirements.featuresVK12().timelineSemaphore = VK_TRUE;
+
+		if ( this->effectiveAPIVersion(physicalDevice) < VK_API_VERSION_1_2 && std::ranges::none_of(extensions, [] (const char * name) { return std::strcmp(name, VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME) == 0; }) )
+		{
+			extensions.emplace_back(VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME);
+		}
+	}
+
 	bool
 	Instance::checkDeviceAPIVersion (const PhysicalDevice & physicalDevice) noexcept
 	{
 		const auto apiVersion = physicalDevice.propertiesVK10().apiVersion;
+		const auto minimum = this->minimumDeviceAPIVersion();
 
 		/* NOTE: Compared on major.minor (the variant and the patch never decide). */
-		if ( VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(apiVersion), VK_API_VERSION_MINOR(apiVersion), 0) >= VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(MinimumDeviceAPIVersion), VK_API_VERSION_MINOR(MinimumDeviceAPIVersion), 0) )
+		if ( VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(apiVersion), VK_API_VERSION_MINOR(apiVersion), 0) >= minimum )
 		{
-			return true;
+			/* NOTE: The timelines carry the GPU-lifetime tracking at every target: core from 1.2, the extension below. A
+			 * driver without them is an outdated one (owner decision 2026-10-15: the user is told to update it). */
+			const bool timelines = this->effectiveAPIVersion(physicalDevice) >= VK_API_VERSION_1_2 ?
+				physicalDevice.supportsTimelineSemaphore() :
+				physicalDevice.hasTimelineSemaphoreExtension() && physicalDevice.supportsTimelineSemaphore();
+
+			if ( timelines )
+			{
+				return true;
+			}
+
+			const std::string detail{"no timeline semaphores (VK_KHR_timeline_semaphore)"};
+
+			TraceError{ClassId} <<
+				"The physical device '" << physicalDevice.propertiesVK10().deviceName << "' (driver " << physicalDevice.DriverVersionString() << "): " << detail << ". "
+				"Its graphics driver is too old: update the graphics driver. The device is not used.";
+
+			this->recordDeviceRefusal(physicalDevice, DeviceRefusal::Reason::BelowRequiredAPIVersion, detail);
+
+			return false;
 		}
 
 		std::stringstream detail;
-		detail << "Vulkan " << VK_API_VERSION_MAJOR(apiVersion) << '.' << VK_API_VERSION_MINOR(apiVersion) << '.' << VK_API_VERSION_PATCH(apiVersion) << " reported, " << VK_API_VERSION_MAJOR(MinimumDeviceAPIVersion) << '.' << VK_API_VERSION_MINOR(MinimumDeviceAPIVersion) << " required";
+		detail << "Vulkan " << VK_API_VERSION_MAJOR(apiVersion) << '.' << VK_API_VERSION_MINOR(apiVersion) << '.' << VK_API_VERSION_PATCH(apiVersion) << " reported, " << VK_API_VERSION_MAJOR(minimum) << '.' << VK_API_VERSION_MINOR(minimum) << " required";
 
 		TraceError{ClassId} <<
 			"The physical device '" << physicalDevice.propertiesVK10().deviceName << "' (driver " << physicalDevice.DriverVersionString() << "): " << detail.str() << ". "
@@ -1621,12 +1752,12 @@ namespace EmEn::Vulkan
 
 		DeviceRequirements requirements{false, nullptr, true};
 
-		/* NOTE: Required, as on the graphics device: each queue numbers its tracked submissions with a timeline.
-		 * Without it, the first queue fails to install and the compute device is refused. */
-		requirements.featuresVK12().timelineSemaphore = VK_TRUE;
-
 		/* NOTE: Mandatory when advertised, as on the graphics device (MoltenVK refused the compute device without it). */
 		auto deviceExtensions = requiredExtensions;
+
+		/* NOTE: Required, as on the graphics device: each queue numbers its tracked submissions with a timeline.
+		 * Without it, the first queue fails to install and the compute device is refused. */
+		this->requestTimelineSemaphore(*selectedPhysicalDevice, deviceExtensions, requirements);
 
 		if ( Instance::requestPortabilitySubset(*selectedPhysicalDevice, deviceExtensions, requirements) )
 		{
@@ -2268,6 +2399,12 @@ namespace EmEn::Vulkan
 			//return false;
 		}
 
+		/* NOTE: Below the scene-rendering target the engine draws the overlay only: no bindless, nothing more to check. */
+		if ( !this->sceneRenderingEnabled() )
+		{
+			return true;
+		}
+
 		/* Vulkan 1.2 features - Descriptor indexing (required for bindless textures). */
 		const auto & featuresVK12 = physicalDevice->featuresVK12();
 
@@ -2313,8 +2450,9 @@ namespace EmEn::Vulkan
 	Instance::checkDevicesFeaturesForCompute (const std::shared_ptr< PhysicalDevice > & physicalDevice, size_t & /*score*/) noexcept
 	{
 		/* NOTE: Every queue of a device numbers its tracked submissions with a timeline semaphore (Queue::createTimeline()),
-		 * the compute device's queues included. Core and mandatory in Vulkan 1.2, checked like any required feature. */
-		if ( physicalDevice->featuresVK12().timelineSemaphore == 0 )
+		 * the compute device's queues included. Core from Vulkan 1.2, VK_KHR_timeline_semaphore below
+		 * (checkDeviceAPIVersion() refused a device without). */
+		if ( !physicalDevice->supportsTimelineSemaphore() )
 		{
 			TraceError{ClassId} << "The physical device '" << physicalDevice->propertiesVK10().deviceName << "' is missing 'timelineSemaphore' feature !";
 

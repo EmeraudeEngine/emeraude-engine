@@ -91,6 +91,22 @@ namespace EmEn::Saphir
 
 	ShaderManager::~ShaderManager () = default;
 
+	void
+	ShaderManager::setTargetAPIVersion (uint32_t apiVersion) noexcept
+	{
+		const auto version = VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(apiVersion), VK_API_VERSION_MINOR(apiVersion), 0);
+
+		if constexpr ( IsMacOS )
+		{
+			/* NOTE: MoltenVK translates SPIR-V up to 1.5 (Vulkan 1.2) reliably: never above it there. */
+			m_targetAPIVersion = std::min(version, VK_API_VERSION_1_2);
+		}
+		else
+		{
+			m_targetAPIVersion = version;
+		}
+	}
+
 	namespace
 	{
 	/**
@@ -402,20 +418,24 @@ namespace EmEn::Saphir
 		 * source is assembled invalidates nothing here, but a change in the compile SETUP does). */
 		[[nodiscard]]
 		uint64_t
-		toolchainIdentity () noexcept
+		toolchainIdentity (uint32_t apiVersion) noexcept
 		{
 			std::string identity{glslang::GetGlslVersionString()};
 			identity += '|';
 			identity += std::to_string(glslang::GetSpirvGeneratorVersion());
 			identity += '|';
 
-			if constexpr ( IsMacOS )
+			if ( apiVersion >= VK_API_VERSION_1_3 )
+			{
+				identity += "vk1.3-spv1.6";
+			}
+			else if ( apiVersion >= VK_API_VERSION_1_2 )
 			{
 				identity += "vk1.2-spv1.5";
 			}
 			else
 			{
-				identity += "vk1.3-spv1.6";
+				identity += "vk1.1-spv1.3";
 			}
 
 			identity += '|';
@@ -450,7 +470,7 @@ namespace EmEn::Saphir
 		header.sourceHash = shader.hash();
 		header.dataSize = blobSize;
 		header.dataHash = hashBytes(binaryCode.data(), blobSize);
-		header.toolchainHash = toolchainIdentity();
+		header.toolchainHash = toolchainIdentity(m_targetAPIVersion);
 		header.shaderType = static_cast< uint32_t >(shader.type());
 		header.reserved = 0;
 
@@ -532,7 +552,7 @@ namespace EmEn::Saphir
 			header.sourceHash != shader.hash() ||
 			header.shaderType != static_cast< uint32_t >(shader.type()) ||
 			header.dataSize != blobSize ||
-			header.toolchainHash != toolchainIdentity() ||
+			header.toolchainHash != toolchainIdentity(m_targetAPIVersion) ||
 			blobSize < sizeof(uint32_t) ||
 			blobSize % sizeof(uint32_t) != 0 ||
 			header.dataHash != hashBytes(blob, blobSize);
@@ -959,18 +979,22 @@ namespace EmEn::Saphir
 		glslang::TShader glslShader{shaderType};
 		glslShader.setStrings(&sourceCodeCString, 1);
 		glslShader.setEnvInput(glslang::EShSourceGlsl, shaderType, glslang::EShClientVulkan, m_glslang->defaultVersion);
-		/* [VULKAN-API-SETUP] GLSL/SPIR-V version for Vulkan. */
-		if constexpr ( IsMacOS )
+		/* [VULKAN-API-SETUP] GLSL/SPIR-V version for Vulkan: the graphics device's effective version
+		 * (setTargetAPIVersion(); macOS at most 1.2, MoltenVK). A device rejects a module above its version. */
+		if ( m_targetAPIVersion >= VK_API_VERSION_1_3 )
 		{
-			/* NOTE: macOS don't support the Vulkan API.
-			 * MoltenVK is used to translate commands to Metal API, some features can be unsupported. */
+			glslShader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_3);
+			glslShader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_6);
+		}
+		else if ( m_targetAPIVersion >= VK_API_VERSION_1_2 )
+		{
 			glslShader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_2);
 			glslShader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_5);
 		}
 		else
 		{
-			glslShader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_3);
-			glslShader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_6);
+			glslShader.setEnvClient(glslang::EShClientVulkan, glslang::EShTargetVulkan_1_1);
+			glslShader.setEnvTarget(glslang::EShTargetSpv, glslang::EShTargetSpv_1_3);
 		}
 
 		/* NOTE: Preprocess the source code. */

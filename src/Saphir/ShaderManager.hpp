@@ -183,6 +183,26 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Sets the Vulkan API version the shaders are compiled for (the graphics device's effective version):
+			 * 1.3 → SPIR-V 1.6, 1.2 → SPIR-V 1.5, 1.1 → SPIR-V 1.3; at most 1.2 on macOS (MoltenVK). It is part of the
+			 * binary cache identity.
+			 * @pre Called before initialize(), before any compilation (main thread); constant afterwards.
+			 * @param apiVersion A packed version.
+			 */
+			void setTargetAPIVersion (uint32_t apiVersion) noexcept;
+
+			/**
+			 * @brief Returns the Vulkan API version the shaders are compiled for.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			targetAPIVersion () const noexcept
+			{
+				return m_targetAPIVersion;
+			}
+
+			/**
 			 * @brief Returns whether the print of shader source code in the console is enabled.
 			 * @return bool
 			 */
@@ -380,6 +400,8 @@ namespace EmEn::Saphir
 			std::filesystem::path m_generatedShadersDirectory;
 			std::filesystem::path m_shadersBinariesDirectory;
 			std::unique_ptr< GLSLangContext > m_glslang;
+			/* NOTE: Written once before initialize() (setTargetAPIVersion()), read-only afterwards from any compiling thread. */
+			uint32_t m_targetAPIVersion{IsMacOS ? VK_API_VERSION_1_2 : VK_API_VERSION_1_3};
 			bool m_showInformation{false};
 			bool m_showSourceCode{false};
 			bool m_sourceCodeDumpEnabled{false};

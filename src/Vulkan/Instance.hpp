@@ -31,6 +31,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -72,16 +73,31 @@ namespace EmEn::Vulkan
 	{
 		public:
 
-			/** @brief The Vulkan API version the instance asks for. */
-			static constexpr uint32_t RequestedAPIVersion{VK_API_VERSION_1_3};
+			/**
+			 * @brief The lowest Vulkan API version an application may target (Core::targetVulkanAPIVersion()), with
+			 * VK_KHR_timeline_semaphore required below 1.2. Owner decision 2026-10-15: a desktop driver stuck at 1.0
+			 * predates the timeline extension, so 1.0 would accept no more machine (engine item
+			 * core-targets-a-vulkan-api-version).
+			 */
+			static constexpr uint32_t LowestTargetAPIVersion{VK_API_VERSION_1_1};
+
+			/** @brief The highest Vulkan API version the engine knows, and the default target. */
+			static constexpr uint32_t HighestTargetAPIVersion{VK_API_VERSION_1_3};
 
 			/**
-			 * @brief The lowest API version a device may report to be used (engine item
-			 * device-below-vulkan-1-3-reaches-vkcreatedevice, 2026-10-15): the shaders target Vulkan 1.3 / SPIR-V 1.6 and
-			 * the device creation chains VkPhysicalDeviceVulkan13Features. macOS compiles its shaders for Vulkan 1.2 /
-			 * SPIR-V 1.5 (MoltenVK): 1.2 there.
+			 * @brief The lowest target with the scene (3D) renderer: it needs bindless descriptor indexing (Vulkan 1.2).
+			 * Below it the engine draws the overlay only, and enabling a scene is refused.
 			 */
-			static constexpr uint32_t MinimumDeviceAPIVersion{IsMacOS ? VK_API_VERSION_1_2 : VK_API_VERSION_1_3};
+			static constexpr uint32_t SceneRenderingAPIVersion{VK_API_VERSION_1_2};
+
+			/** @brief The highest version the shaders are compiled for on macOS (MoltenVK: Vulkan 1.2 / SPIR-V 1.5). */
+			static constexpr uint32_t MacOSHighestShaderAPIVersion{VK_API_VERSION_1_2};
+
+			/**
+			 * @brief Command-line argument LOWERING the target for one run: `--vulkan-api-target=1.1`. Never above the
+			 * application's target (a test of a downstream application's path on any machine).
+			 */
+			static constexpr auto VulkanAPITargetArgument{"--vulkan-api-target"};
 
 			/**
 			 * @brief Why a physical device was not used (the startup diagnosis, the user-facing message of a refused
@@ -92,7 +108,7 @@ namespace EmEn::Vulkan
 				/** @brief The cause, in terms a user can act on. */
 				enum class Reason : uint8_t
 				{
-					/** @brief The device reports an API version below MinimumDeviceAPIVersion: an outdated driver. */
+					/** @brief The device reports an API version below minimumDeviceAPIVersion(), or lacks the timeline semaphores: an outdated driver. */
 					BelowRequiredAPIVersion,
 					/** @brief The device does not advertise a required feature: the hardware (or its driver) cannot run the engine. */
 					MissingFeatures,
@@ -140,8 +156,7 @@ namespace EmEn::Vulkan
 				/* VK_KHR_SWAPCHAIN_EXTENSION_NAME = "VK_KHR_swapchain" */
 				m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
 
-				/* VK_KHR_MULTIVIEW_EXTENSION_NAME = "VK_KHR_multiview" */
-				m_requiredGraphicsDeviceExtensions.emplace_back(VK_KHR_MULTIVIEW_EXTENSION_NAME);
+				/* NOTE: VK_KHR_multiview is core since Vulkan 1.1, the lowest target: never requested as an extension. */
 
 				if constexpr ( IsMacOS )
 				{
@@ -334,6 +349,67 @@ namespace EmEn::Vulkan
 			std::shared_ptr< Device > getComputeDevice () noexcept;
 
 			/**
+			 * @brief Sets the Vulkan API version the application targets (Core does it from targetVulkanAPIVersion(),
+			 * before initialize()). Compared on major.minor: below LowestTargetAPIVersion it is raised, above
+			 * HighestTargetAPIVersion lowered, each with a log line.
+			 * @pre Called before the instance is initialized (main thread).
+			 * @param apiVersion A packed version (VK_API_VERSION_1_x).
+			 */
+			void setTargetAPIVersion (uint32_t apiVersion) noexcept;
+
+			/**
+			 * @brief Returns the Vulkan API version the engine targets (major.minor): the instance asks for it and no
+			 * device uses functionality above it.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			targetAPIVersion () const noexcept
+			{
+				return m_targetAPIVersion;
+			}
+
+			/**
+			 * @brief Returns the lowest API version a device may report to be used: the target, at most 1.2 on macOS
+			 * (MacOSHighestShaderAPIVersion: the shaders never need more there).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			minimumDeviceAPIVersion () const noexcept
+			{
+				if constexpr ( IsMacOS )
+				{
+					return std::min(m_targetAPIVersion, MacOSHighestShaderAPIVersion);
+				}
+				else
+				{
+					return m_targetAPIVersion;
+				}
+			}
+
+			/**
+			 * @brief Returns whether the target allows the scene (3D) renderer (SceneRenderingAPIVersion): below it, the
+			 * overlay only.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			sceneRenderingEnabled () const noexcept
+			{
+				return m_targetAPIVersion >= SceneRenderingAPIVersion;
+			}
+
+			/**
+			 * @brief Returns the API version a device is driven at: the target clamped to what the device reports
+			 * (major.minor).
+			 * @param physicalDevice The physical device.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t effectiveAPIVersion (const PhysicalDevice & physicalDevice) const noexcept;
+
+			/**
 			 * @brief Returns every physical device refused during the selection, and why (main thread, after
 			 * getGraphicsDevice() / getComputeDevice()).
 			 * @return const std::vector< DeviceRefusal > &
@@ -492,13 +568,23 @@ namespace EmEn::Vulkan
 			std::shared_ptr< Device > createGraphicsDevice (Window * window, const std::shared_ptr< PhysicalDevice > & selectedPhysicalDevice) noexcept;
 
 			/**
-			 * @brief Refuses a device whose API version is below MinimumDeviceAPIVersion, with the log line a user (or a
+			 * @brief Refuses a device whose API version is below minimumDeviceAPIVersion(), or which has no timeline
+			 * semaphores at its effective version (VK_KHR_timeline_semaphore below 1.2), with the log line a user (or a
 			 * report) can act on: the device, its API and driver versions, "update the graphics driver".
 			 * @param physicalDevice The physical device.
 			 * @return bool True when the device is recent enough.
 			 */
 			[[nodiscard]]
 			bool checkDeviceAPIVersion (const PhysicalDevice & physicalDevice) noexcept;
+
+			/**
+			 * @brief Enables the timeline semaphores on a device to create: the feature, and VK_KHR_timeline_semaphore
+			 * when the device is driven below 1.2 (checkDeviceAPIVersion() made sure it is there).
+			 * @param physicalDevice The physical device.
+			 * @param extensions The device extensions to enable.
+			 * @param requirements The device requirements.
+			 */
+			void requestTimelineSemaphore (const PhysicalDevice & physicalDevice, std::vector< const char * > & extensions, DeviceRequirements & requirements) const noexcept;
 
 			/**
 			 * @brief Records why a device was not used (deviceRefusals()).
@@ -652,6 +738,7 @@ namespace EmEn::Vulkan
 			/* NOTE: Filled during the device selection (main thread), read for the startup diagnosis. */
 			std::vector< DeviceRefusal > m_deviceRefusals;
 			VkResult m_creationResult{VK_SUCCESS};
+			uint32_t m_targetAPIVersion{HighestTargetAPIVersion};
 			DeviceAutoSelectMode m_autoSelectMode{DeviceAutoSelectMode::Performance};
 			bool m_showInformation{false};
 			bool m_debugMode{false};

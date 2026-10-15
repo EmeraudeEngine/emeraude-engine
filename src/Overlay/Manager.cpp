@@ -1115,7 +1115,8 @@ namespace EmEn::Overlay
 
 			// Setup Platform/Renderer backends
 			ImGui_ImplVulkan_InitInfo info{};
-			info.ApiVersion = VK_API_VERSION_1_3;
+			/* NOTE: The device's effective version (the application's target): ImGui loads no entry point above it. */
+			info.ApiVersion = device->apiVersion();
 			info.Instance = graphicsRenderer.vulkanInstance().handle();
 			info.PhysicalDevice = device->physicalDevice()->handle();
 			info.Device = device->handle();

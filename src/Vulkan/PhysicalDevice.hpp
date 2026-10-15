@@ -69,8 +69,11 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Constructs a physical device.
 			 * @param physicalDevice A reference to the physical device handle.
+			 * @param instanceAPIVersion The instance's apiVersion (the application's target): every query is made at the
+			 * effective version, the lower of it and the device's (the validation layer refuses a 1.3 query on a 1.4
+			 * device of a 1.2 instance: UNASSIGNED-API-Version-Violation, measured 2026-10-15).
 			 */
-			explicit PhysicalDevice (const VkPhysicalDevice & physicalDevice) noexcept;
+			PhysicalDevice (const VkPhysicalDevice & physicalDevice, uint32_t instanceAPIVersion) noexcept;
 
 			/**
 			 * @brief Returns the vulkan handle.
@@ -319,6 +322,41 @@ namespace EmEn::Vulkan
 			rayQueryFeatures () const noexcept
 			{
 				return m_rayQueryFeatures;
+			}
+
+			/**
+			 * @brief Returns whether the device supports timeline semaphores (core 1.2, or VK_KHR_timeline_semaphore below):
+			 * the engine's GPU-lifetime tracking needs them at every target.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			supportsTimelineSemaphore () const noexcept
+			{
+				return m_featuresVK12.timelineSemaphore == VK_TRUE || m_timelineSemaphoreFeatures.timelineSemaphore == VK_TRUE;
+			}
+
+			/**
+			 * @brief Returns whether the device advertises VK_KHR_timeline_semaphore (the timelines of a device below 1.2).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasTimelineSemaphoreExtension () const noexcept
+			{
+				return m_hasTimelineSemaphoreExtension;
+			}
+
+			/**
+			 * @brief Returns whether the device answers the Vulkan 1.1 queries (vkGetPhysicalDevice*2): a 1.0 device is
+			 * described by the 1.0 queries only, its 1.1+ structures stay empty.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasExtendedQueries () const noexcept
+			{
+				return m_extendedQueries;
 			}
 
 			/**
@@ -832,12 +870,16 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceVulkan13Features m_featuresVK13{};
 			VkPhysicalDeviceAccelerationStructureFeaturesKHR m_accelerationStructureFeatures{};
 			VkPhysicalDeviceRayQueryFeaturesKHR m_rayQueryFeatures{};
+			/* NOTE: Queried only on a device below 1.2 advertising VK_KHR_timeline_semaphore (1.2 has it in m_featuresVK12). */
+			VkPhysicalDeviceTimelineSemaphoreFeatures m_timelineSemaphoreFeatures{};
 			/* Resolved in the constructor; only populated when the extension is advertised. */
 			PortabilitySubset::Features m_portabilitySubsetFeatures{};
 			VkPhysicalDeviceMeshShaderFeaturesEXT m_meshShaderFeatures{};
 			VkPhysicalDeviceMeshShaderPropertiesEXT m_meshShaderProperties{};
 			bool m_hasPortabilitySubset{false};
 			bool m_hasMeshShaderExtension{false};
+			bool m_hasTimelineSemaphoreExtension{false};
+			bool m_extendedQueries{false};
 			VkPhysicalDeviceProperties2 m_properties{};
 			VkPhysicalDeviceVulkan11Properties m_propertiesVK11{};
 			VkPhysicalDeviceVulkan12Properties m_propertiesVK12{};

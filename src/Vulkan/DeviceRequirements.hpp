@@ -30,7 +30,9 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <string>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "volk.h"
@@ -65,7 +67,18 @@ namespace EmEn::Vulkan
 			DeviceRequirements (bool enableGraphics, Window * window, bool enableCompute) noexcept;
 
 			/**
-			 * @brief Returns the physical device features.
+			 * @brief Links the feature structures valid for a device into the chain features() heads: the Vulkan 1.1 and
+			 * 1.2 structures from API 1.2, the 1.3 one from 1.3, the timeline extension's structure below 1.2 (carrying
+			 * featuresVK12().timelineSemaphore), and each extension's structure only when that extension is enabled.
+			 * @note Called by Device::create() right before vkCreateDevice(): a structure of a version above the device's
+			 * effective version, or of an extension not enabled, must not enter the chain.
+			 * @param apiVersion The device's effective API version (the target clamped to the device).
+			 * @param extensions The device extensions enabled at creation.
+			 */
+			void linkFeatureChain (uint32_t apiVersion, const std::vector< const char * > & extensions) noexcept;
+
+			/**
+			 * @brief Returns the physical device features (the head of the chain linkFeatureChain() built).
 			 * @return const VkPhysicalDeviceFeatures2 &
 			 */
 			[[nodiscard]]
@@ -316,6 +329,7 @@ namespace EmEn::Vulkan
 			VkPhysicalDeviceVulkan13Features m_featuresVK13{};
 			VkPhysicalDeviceAccelerationStructureFeaturesKHR m_accelerationStructureFeatures{};
 			VkPhysicalDeviceRayQueryFeaturesKHR m_rayQueryFeatures{};
+			VkPhysicalDeviceTimelineSemaphoreFeatures m_timelineSemaphoreFeatures{};
 			VkPhysicalDeviceFaultFeaturesEXT m_faultFeatures{};
 			VkPhysicalDeviceMeshShaderFeaturesEXT m_meshShaderFeatures{};
 			PortabilitySubset::Features m_portabilitySubsetFeatures{};

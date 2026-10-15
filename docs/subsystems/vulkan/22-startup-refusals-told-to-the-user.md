@@ -18,10 +18,12 @@ The swap-chain image query keeps `VK_SUCCESS` only: its count is the swap-chain'
 
 ### Which devices may be used (`Vulkan::Instance`)
 
-- `MinimumDeviceAPIVersion`: Vulkan 1.3 (1.2 on macOS, whose shaders target 1.2 / SPIR-V 1.5). A device below it is
-  refused at the selection (graphics and compute) with one line: device, decoded driver version, the reported and the
-  required versions, "update the graphics driver". Measured: a GTX 1050 Ti on an outdated driver (Vulkan 1.2) used to
-  reach `vkCreateDevice()` and die with `VK_ERROR_FEATURE_NOT_PRESENT`.
+- `minimumDeviceAPIVersion()`: the application's target (`23-the-application-targets-a-vulkan-version.md`; 1.3 by
+  default, at most 1.2 on macOS, whose shaders target 1.2 / SPIR-V 1.5). A device below it, or without timeline
+  semaphores at its effective version (`VK_KHR_timeline_semaphore` below 1.2), is refused at the selection (graphics and
+  compute) with one line: device, decoded driver version, the reported and the required versions (or what is missing),
+  "update the graphics driver". Measured: a GTX 1050 Ti on an outdated driver (Vulkan 1.2) used to reach
+  `vkCreateDevice()` and die with `VK_ERROR_FEATURE_NOT_PRESENT`.
 - The REQUIRED device features (`requireVK10/11/12/13` in `createGraphicsDevice()`) are checked BEFORE
   `vkCreateDevice()`: the missing ones are named and the device is not created (`vkCreateDevice()` names none).
 - `getGraphicsDevice()` = the selection, then `createGraphicsDevice()` on the selected device, then on every other
@@ -48,7 +50,7 @@ graphics renderer WITHOUT a graphics device, `diagnoseStartupRefusal()` classifi
 | Cause | When | Message (English) |
 |---|---|---|
 | `NoVulkanDriver` | `vkCreateInstance()` → `VK_ERROR_INCOMPATIBLE_DRIVER`, or no physical device | "needs a graphics driver supporting Vulkan 1.3, and none was found" + the OS-listed GPUs + one driver page per vendor + "an old integrated graphics chip is not compatible" |
-| `OutdatedDriver` | a device refused below the minimum version | names the GPU, its driver version and Vulkan version, "update the graphics driver" + the vendor's page |
+| `OutdatedDriver` | a device refused below the minimum version, or without timeline semaphores | names the GPU, its driver version and Vulkan version (or what it lacks), "update the graphics driver" + the vendor's page |
 | `IncompatibleHardware` | a device lacking a required feature, or no compatible device | names the GPU and the missing features, "not compatible", "updating an old driver may help" |
 | `Other` | not classified as above | (no dialog: `EXIT_FAILURE` as before) |
 

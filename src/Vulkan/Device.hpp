@@ -137,7 +137,7 @@ namespace EmEn::Vulkan
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool create (const DeviceRequirements & requirements, const std::vector< const char * > & extensions, bool useVMA) noexcept;
+			bool create (DeviceRequirements & requirements, const std::vector< const char * > & extensions, bool useVMA) noexcept;
 
 			/**
 			 * @brief Destroys the device.
@@ -340,6 +340,30 @@ namespace EmEn::Vulkan
 			rayTracingEnabled () const noexcept
 			{
 				return m_rayTracingEnabled;
+			}
+
+			/**
+			 * @brief Returns whether the samplerAnisotropy feature is enabled (the scene renderer's targets; a sampler may
+			 * use anisotropic filtering only then).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			samplerAnisotropyEnabled () const noexcept
+			{
+				return m_samplerAnisotropyEnabled;
+			}
+
+			/**
+			 * @brief Returns the device's effective Vulkan API version: the application's target (the instance's
+			 * apiVersion) clamped to what the device reports, major.minor only. No functionality above it is used.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			apiVersion () const noexcept
+			{
+				return m_apiVersion;
 			}
 
 			/**
@@ -995,6 +1019,8 @@ namespace EmEn::Vulkan
 			std::atomic< VkPipelineCache > m_restoredPipelineCache{VK_NULL_HANDLE};
 			std::atomic< VkPipelineCache > m_pipelineCache{VK_NULL_HANDLE};
 			PFN_vkGetDeviceFaultInfoEXT m_fpGetDeviceFaultInfo{nullptr};
+			/* NOTE: Set by create() before vkCreateDevice(); read only afterwards. */
+			uint32_t m_apiVersion{VK_API_VERSION_1_1};
 			PFN_vkGetQueueCheckpointDataNV m_fpGetQueueCheckpointData{nullptr};
 			PFN_vkCmdSetCheckpointNV m_fpCmdSetCheckpoint{nullptr};
 			PFN_vkCmdDrawMeshTasksEXT m_fpCmdDrawMeshTasks{nullptr};
@@ -1021,5 +1047,8 @@ namespace EmEn::Vulkan
 			bool m_geometryShaderEnabled{false};
 			bool m_externalMemoryWin32Enabled{false};
 			bool m_metalObjectsEnabled{false};
+			bool m_memoryBudgetEnabled{false};
+			bool m_samplerAnisotropyEnabled{false};
+			bool m_bufferDeviceAddressEnabled{false};
 	};
 }

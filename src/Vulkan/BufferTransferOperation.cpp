@@ -191,19 +191,24 @@ namespace EmEn::Vulkan
 
 		/* The acquire half MUST mirror the release: same buffer, same range, same families.
 		 * The destination access mask covers every way the graphics family reads an uploaded
-		 * buffer — vertex/index input, shaders, and acceleration structure builds. */
+		 * buffer — vertex/index input, shaders, and acceleration structure builds. The last only
+		 * on a device with the ray tracing extensions enabled: that stage and access are invalid
+		 * otherwise (VUID-vkCmdPipelineBarrier-dstStageMask-parameter, measured 2026-10-15 at a
+		 * Vulkan 1.1 target; any device without them and with a dedicated transfer family too). */
+		const bool rayTracing = device->rayTracingEnabled();
+
 		ownershipBarrier.srcAccessMask = 0;
 		ownershipBarrier.dstAccessMask =
 			VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT |
 			VK_ACCESS_INDEX_READ_BIT |
 			VK_ACCESS_UNIFORM_READ_BIT |
 			VK_ACCESS_SHADER_READ_BIT |
-			VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+			(rayTracing ? static_cast< VkAccessFlags >(VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR) : 0U);
 
 		vkCmdPipelineBarrier(
 			m_graphicsCommandBuffer->handle(),
 			VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-			VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR,
+			VK_PIPELINE_STAGE_VERTEX_INPUT_BIT | VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT | (rayTracing ? static_cast< VkPipelineStageFlags >(VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR) : 0U),
 			0,
 			0, nullptr,
 			1, &ownershipBarrier,

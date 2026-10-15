@@ -268,7 +268,9 @@ namespace EmEn::Graphics
 	bool
 	Renderer::initializeSubServices () noexcept
 	{
-		/* Initialize the graphics shader manager. */
+		/* Initialize the graphics shader manager, compiling for the device's effective Vulkan version. */
+		m_shaderManager.setTargetAPIVersion(m_device->apiVersion());
+
 		if ( m_shaderManager.initialize(m_subServicesEnabled) )
 		{
 			TraceSuccess{ClassId} << m_shaderManager.name() << " service up!";
@@ -324,10 +326,15 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Initialize the bindless textures manager. */
-		m_bindlessTextureManager.setDevice(m_device);
-
-		if ( m_bindlessTextureManager.initialize(m_subServicesEnabled) )
+		/* Initialize the bindless textures manager (the scene renderer's: descriptor indexing, Vulkan 1.2). Below the
+		 * scene-rendering target the engine draws the overlay only and never starts it (usable() stays false). */
+		if ( !m_vulkanInstance.sceneRenderingEnabled() )
+		{
+			/* NOTE: Not even given the device: only its terminate() releases it, and a service never started is never
+			 * terminated (the device would outlive the renderer). */
+			TraceInfo{ClassId} << m_bindlessTextureManager.name() << " not started: the targeted Vulkan version draws the overlay only.";
+		}
+		else if ( m_bindlessTextureManager.setDevice(m_device); m_bindlessTextureManager.initialize(m_subServicesEnabled) )
 		{
 			TraceSuccess{ClassId} << m_bindlessTextureManager.name() << " service up!";
 		}
@@ -426,6 +433,14 @@ namespace EmEn::Graphics
 			{
 				TraceSuccess{ClassId} << "Bindless environment cubemap slot initialized with default cubemap.";
 			}
+		}
+
+		/* NOTE: What follows serves the scene renderer only (image-based lighting, the scene's dummy shadow and projection
+		 * textures, the LTC tables; every consumer is a scene and checks for null): below its target (overlay only) none
+		 * of it exists. */
+		if ( !m_vulkanInstance.sceneRenderingEnabled() )
+		{
+			return;
 		}
 
 		/* The IBL baker is persistent: the LUT is baked once here, the per-environment
@@ -869,6 +884,14 @@ namespace EmEn::Graphics
 			{
 				TraceError{ClassId} << "Unable to configure the post-processor !";
 			}
+		}
+
+		/* NOTE: MDI draws scenes: below the scene-rendering target (overlay only) it never starts. */
+		if ( m_MDIEnabled && !m_vulkanInstance.sceneRenderingEnabled() )
+		{
+			TraceInfo{ClassId} << "'" << GraphicsMDIEnabledKey << "' is enabled, but the targeted Vulkan version draws the overlay only: Multi-Draw Indirect is disabled.";
+
+			m_MDIEnabled = false;
 		}
 
 		/* ⚠️ MDI indexes its per-draw SSBO with gl_DrawID (Saphir::VertexShader::prepareMDIModelMatrix(),
@@ -1481,6 +1504,22 @@ namespace EmEn::Graphics
 		createInfo.unnormalizedCoordinates = VK_FALSE;
 
 		setupCreateInfo(this->primaryServices().settings(), createInfo);
+
+		/* NOTE: Anisotropic filtering only with the samplerAnisotropy feature enabled (not at an overlay-only target:
+		 * VUID-VkSamplerCreateInfo-anisotropyEnable-01070, measured 2026-10-15), and never above the device limit (the
+		 * level is a settings value: any number, VUID-VkSamplerCreateInfo-anisotropyEnable-01071). */
+		if ( createInfo.anisotropyEnable == VK_TRUE )
+		{
+			if ( m_device == nullptr || !m_device->samplerAnisotropyEnabled() || !std::isfinite(createInfo.maxAnisotropy) )
+			{
+				createInfo.anisotropyEnable = VK_FALSE;
+				createInfo.maxAnisotropy = 1.0F;
+			}
+			else
+			{
+				createInfo.maxAnisotropy = std::clamp(createInfo.maxAnisotropy, 1.0F, m_device->physicalDevice()->propertiesVK10().limits.maxSamplerAnisotropy);
+			}
+		}
 
 		const auto hash = hashSamplerCreateInfo(createInfo);
 

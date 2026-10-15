@@ -325,6 +325,19 @@ namespace EmEn::Vulkan
 			return true;
 		}
 
+		/* NOTE: The entry points isReached() and waitUntilReached() call: core from Vulkan 1.2, VK_KHR_timeline_semaphore's
+		 * below. One not loaded refuses the timeline (the device then fails, never a null call later). */
+		const bool loaded = m_device.apiVersion() >= VK_API_VERSION_1_2 ?
+			vkWaitSemaphores != nullptr && vkGetSemaphoreCounterValue != nullptr :
+			vkWaitSemaphoresKHR != nullptr && vkGetSemaphoreCounterValueKHR != nullptr;
+
+		if ( !loaded )
+		{
+			TraceError{ClassId} << "The timeline semaphore entry points are not loaded for the queue '" << this->identifier() << "' !";
+
+			return false;
+		}
+
 		VkSemaphoreTypeCreateInfo typeCreateInfo{};
 		typeCreateInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO;
 		typeCreateInfo.semaphoreType = VK_SEMAPHORE_TYPE_TIMELINE;
@@ -380,7 +393,12 @@ namespace EmEn::Vulkan
 
 		uint64_t completedValue = 0;
 
-		if ( const auto result = vkGetSemaphoreCounterValue(m_device.handle(), m_timeline, &completedValue); result != VK_SUCCESS )
+		/* NOTE: Below Vulkan 1.2 the timeline is VK_KHR_timeline_semaphore's: its entry point, not the core one. */
+		const auto result = m_device.apiVersion() >= VK_API_VERSION_1_2 ?
+			vkGetSemaphoreCounterValue(m_device.handle(), m_timeline, &completedValue) :
+			vkGetSemaphoreCounterValueKHR(m_device.handle(), m_timeline, &completedValue);
+
+		if ( result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to read the timeline of the queue '" << this->identifier() << "' : " << vkResultToCString(result) << " !";
 
@@ -414,8 +432,12 @@ namespace EmEn::Vulkan
 		waitInfo.pSemaphores = &m_timeline;
 		waitInfo.pValues = &value;
 
-		/* [VULKAN-CPU-SYNC] vkWaitSemaphores() */
-		if ( const auto result = vkWaitSemaphores(m_device.handle(), &waitInfo, timeoutNanoseconds); result != VK_SUCCESS )
+		/* [VULKAN-CPU-SYNC] vkWaitSemaphores() (VK_KHR_timeline_semaphore's entry point below Vulkan 1.2) */
+		const auto result = m_device.apiVersion() >= VK_API_VERSION_1_2 ?
+			vkWaitSemaphores(m_device.handle(), &waitInfo, timeoutNanoseconds) :
+			vkWaitSemaphoresKHR(m_device.handle(), &waitInfo, timeoutNanoseconds);
+
+		if ( result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Waiting the timeline value " << value << " of the queue '" << this->identifier() << "' failed : " << vkResultToCString(result) << " !";
 

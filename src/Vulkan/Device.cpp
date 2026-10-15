@@ -62,6 +62,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <cstring>
 #include <ranges>
 #include <span>
 #include <sstream>
@@ -254,7 +255,11 @@ namespace EmEn::Vulkan
 		vulkanFunctions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
 
 		VmaAllocatorCreateInfo allocatorCreateInfo{};
-		allocatorCreateInfo.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT | VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+		/* NOTE: Each flag only with what it needs enabled on the device: VK_EXT_memory_budget, the bufferDeviceAddress
+		 * feature (Vulkan 1.2; not at a lower target). */
+		allocatorCreateInfo.flags =
+			(m_memoryBudgetEnabled ? static_cast< VmaAllocatorCreateFlags >(VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT) : 0U) |
+			(m_bufferDeviceAddressEnabled ? static_cast< VmaAllocatorCreateFlags >(VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT) : 0U);
 		allocatorCreateInfo.physicalDevice = m_physicalDevice->handle();
 		allocatorCreateInfo.device = m_deviceHandle;
 		allocatorCreateInfo.preferredLargeHeapBlockSize = 0; /* Default: 256Kb */
@@ -263,7 +268,7 @@ namespace EmEn::Vulkan
 		allocatorCreateInfo.pHeapSizeLimit = VK_NULL_HANDLE;
 		allocatorCreateInfo.pVulkanFunctions = &vulkanFunctions;
 		allocatorCreateInfo.instance = m_instance.handle();
-		allocatorCreateInfo.vulkanApiVersion = m_instance.info().pApplicationInfo->apiVersion;
+		allocatorCreateInfo.vulkanApiVersion = m_apiVersion;
 		allocatorCreateInfo.pTypeExternalMemoryHandleTypes = VK_NULL_HANDLE;
 
 		if ( const auto result = vmaCreateAllocator(&allocatorCreateInfo, &m_memoryAllocatorHandle); result != VK_SUCCESS )
@@ -290,8 +295,18 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Device::create (const DeviceRequirements & requirements, const std::vector< const char * > & extensions, bool useVMA) noexcept
+	Device::create (DeviceRequirements & requirements, const std::vector< const char * > & extensions, bool useVMA) noexcept
 	{
+		/* NOTE: The effective version: the application's target (the instance apiVersion) clamped to the device. No
+		 * device-level functionality above it may be used (engine item core-targets-a-vulkan-api-version). */
+		{
+			const auto target = m_instance.info().pApplicationInfo->apiVersion;
+			const auto reported = m_physicalDevice->propertiesVK10().apiVersion;
+			const auto device = VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(reported), VK_API_VERSION_MINOR(reported), 0);
+
+			m_apiVersion = std::min(VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(target), VK_API_VERSION_MINOR(target), 0), device);
+		}
+
 		if ( m_showInformation )
 		{
 			TraceInfo{ClassId} <<
@@ -365,6 +380,13 @@ namespace EmEn::Vulkan
 		const auto videoEncodeQueueFamilyFound = videoEncodeRequested && this->searchVideoEncodeQueueConfiguration(queueFamilyProperties, queueCreateInfos, queuePriorityValues);
 
 		/* Logical device creation. */
+		requirements.linkFeatureChain(m_apiVersion, extensions);
+
+		m_memoryBudgetEnabled = std::ranges::any_of(extensions, [] (const char * ext) {
+			return std::strcmp(ext, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME) == 0;
+		});
+		m_bufferDeviceAddressEnabled = m_apiVersion >= VK_API_VERSION_1_2 && requirements.featuresVK12().bufferDeviceAddress == VK_TRUE;
+
 		if ( !this->createDevice(requirements, queueCreateInfos, extensions) )
 		{
 			Tracer::error(ClassId, "Logical device creation failed!");
@@ -379,6 +401,7 @@ namespace EmEn::Vulkan
 
 		m_hostQueryResetEnabled = requirements.featuresVK12().hostQueryReset == VK_TRUE;
 		m_geometryShaderEnabled = requirements.featuresVK10().geometryShader == VK_TRUE;
+		m_samplerAnisotropyEnabled = requirements.featuresVK10().samplerAnisotropy == VK_TRUE;
 
 		/* NOTE: Detect if the mesh shader extension was enabled on this device (optional stages). */
 		m_meshShadersEnabled = std::ranges::any_of(extensions, [] (const char * ext) {
@@ -1130,6 +1153,17 @@ namespace EmEn::Vulkan
 	uint32_t
 	Device::checkMultisampleCount (uint32_t samples) const noexcept
 	{
+		/* NOTE: Multisampling resolves the depth through vkCreateRenderPass2() (Vulkan 1.2): below, one sample. */
+		if ( m_apiVersion < VK_API_VERSION_1_2 )
+		{
+			if ( samples > 1 )
+			{
+				TraceWarning{ClassId} << samples << " samples requested, but the targeted Vulkan version is below 1.2: multisampling is disabled.";
+			}
+
+			return 1;
+		}
+
 		/* NOTE: The highest count both framebuffer attachments support, at most the request (a settings value: any
 		 * number). A count between two supported ones takes the lower one, never an unsupported one. */
 		return static_cast< uint32_t >(PhysicalDevice::highestSampleCountAtMost(m_physicalDevice->supportedFramebufferSampleCounts(), samples));

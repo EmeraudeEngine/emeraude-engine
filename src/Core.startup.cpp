@@ -96,7 +96,8 @@ namespace EmEn
 
 		/* NOTE: The requirement is a major.minor version ("Vulkan 1.3"). */
 		std::stringstream requiredText;
-		requiredText << "Vulkan " << VK_API_VERSION_MAJOR(Vulkan::Instance::MinimumDeviceAPIVersion) << '.' << VK_API_VERSION_MINOR(Vulkan::Instance::MinimumDeviceAPIVersion);
+		const auto minimumVersion = m_vulkanInstance.minimumDeviceAPIVersion();
+		requiredText << "Vulkan " << VK_API_VERSION_MAJOR(minimumVersion) << '.' << VK_API_VERSION_MINOR(minimumVersion);
 		const auto requiredVersion = requiredText.str();
 
 		StartupRefusal refusal;
@@ -180,10 +181,19 @@ namespace EmEn
 					}
 
 					std::stringstream message;
-					message <<
-						"The graphics driver of '" << outdated->deviceName << "' (version " << outdated->driverVersion << ") is too old: "
-						"it supports " << vulkanVersionString(outdated->apiVersion) << ", and this application requires " << requiredVersion << ".\n\n"
-						"Update the graphics driver" << ( refusal.driverURL.empty() ? "." : ":\n" + refusal.driverURL );
+					message << "The graphics driver of '" << outdated->deviceName << "' (version " << outdated->driverVersion << ") is too old: ";
+
+					/* NOTE: A device at the required version may still lack what a recent driver gives (the timelines). */
+					if ( VK_MAKE_API_VERSION(0, VK_API_VERSION_MAJOR(outdated->apiVersion), VK_API_VERSION_MINOR(outdated->apiVersion), 0) >= minimumVersion )
+					{
+						message << "it lacks what this application requires (" << outdated->detail << ").\n\n";
+					}
+					else
+					{
+						message << "it supports " << vulkanVersionString(outdated->apiVersion) << ", and this application requires " << requiredVersion << ".\n\n";
+					}
+
+					message << "Update the graphics driver" << ( refusal.driverURL.empty() ? "." : ":\n" + refusal.driverURL );
 
 					refusal.message = message.str();
 
