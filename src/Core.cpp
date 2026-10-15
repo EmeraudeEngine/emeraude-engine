@@ -3565,8 +3565,8 @@ namespace EmEn
 
 		/* NOTE: A run that must not write the settings (--disable-settings-autosave) resets IN MEMORY only: the file on
 		 * disk stays exactly as it is — no backup rename, no fresh file — and the entries to keep are read from it
-		 * (owner decision 2026-10-15, engine item settings-version-reset-leaves-no-file-for-the-helpers: the rename
-		 * used to happen anyway, and with no fresh file a helper given the same --settings-filepath stopped). */
+		 * (owner decision 2026-10-15: the rename used to happen anyway, and with no fresh file a helper given the same
+		 * --settings-filepath stopped; docs/subsystems/source-tree/02-main-components.md § settings version guard). */
 		if ( !settings.isSaveAtExitEnabled() )
 		{
 			settings.clear();

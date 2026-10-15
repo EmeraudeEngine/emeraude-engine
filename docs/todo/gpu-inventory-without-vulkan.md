@@ -35,7 +35,8 @@ name the GPUs.
 ## What remains
 
 - [ ] The Intel-Mac PCI path of the macOS implementation is untested (no Intel Mac).
-- [ ] The CEF helper processes log the inventory too (3 lines per launch on macOS): skip it in a helper.
+- [x] The CEF helper processes logged the inventory too (3 lines per launch, macOS and Linux): a child process
+      (`Settings::isChildProcess()`) no longer takes it (2026-10-15; Linux: 1 line with 2 helpers started).
 
 ## ⚠️ Traps
 

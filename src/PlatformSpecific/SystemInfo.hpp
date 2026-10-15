@@ -125,7 +125,8 @@ namespace EmEn::PlatformSpecific
 			}
 
 			/**
-			 * @brief Returns a list of available GPU devices.
+			 * @brief Returns a list of available GPU devices (the operating system's adapter list).
+			 * @note Empty in a child process (a CEF helper): the inventory is only taken in the main process.
 			 * @return const Base::StaticVector< GPUDevice, 8 > &
 			 */
 			[[nodiscard]]

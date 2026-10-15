@@ -84,7 +84,13 @@ via `Base::Version` (`FromString` + `operator<=>`).
   render processes crashed, the JavaScript application timed out. Verified 2026-10-15 (Linux, projet-alpha
   test-only build with the guard on, a copy stamped 1.0.0 under 1.0.1): autosave disabled → the copy's
   hash unchanged, no `-bck`; autosave on → `-bck` and the fresh file stamped 1.0.1 present 6 s after the
-  launch; both runs: 0 helper stop, the CEF menu drawn, exit 0.
+  launch; both runs: 0 helper stop, the CEF menu drawn, exit 0. Windows peer, a downstream application
+  (engine 803d1681): the same two runs pass (the copy's hash unchanged at 3, 8, 35 s and after exit; the fresh
+  file stamped 1.0.1 present at 3 s), 0 validation message, exit in about 1 s.
+- ⚠️ The shutdown that once hung for more than 180 s in the startup-error state (helpers stopped, the JavaScript
+  application timed out) did NOT reproduce: with the old failure forced (the copy renamed away 0.4 s after the
+  launch), `Core.shutdown()` exited in 2.0 s. The first hang came with a killed run and the crash-report prompt of
+  the next launch; watch for it, no defect attributed.
 - No settings file (fresh install) → no-op. Backup failure → store left untouched (no clear, no data loss).
 
 > [!NOTE]

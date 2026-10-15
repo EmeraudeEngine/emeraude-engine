@@ -55,10 +55,12 @@ namespace EmEn::PlatformSpecific
 			m_informationFound = true;
 		}
 
-		if ( this->fetchGPUInformation() )
+		/* NOTE: The main process only: a child process (a CEF helper) neither starts Vulkan nor tells the user about a
+		 * refused startup, and its inventory was logged once per helper (3 lines per launch on macOS, 2026-10-15). */
+		if ( !m_settings.isChildProcess() && this->fetchGPUInformation() )
 		{
-			/* NOTE: Always logged (engine item gpu-inventory-without-vulkan): a report names the GPUs even when Vulkan
-			 * cannot start. */
+			/* NOTE: Always logged in the main process (engine item gpu-inventory-without-vulkan): a report names the GPUs
+			 * even when Vulkan cannot start. */
 			TraceInfo trace{ClassId};
 
 			trace << "Graphics adapters (operating system): " << m_GPUDevices.size();
