@@ -52,10 +52,13 @@ the-user.md`).
 - [x] Design: decided (above).
 - [x] Implementation and the Linux runs (2026-10-15): targets 1.3, 1.2, 1.1 with the validation layer, 0 validation
       message each; the knowledge is in `docs/subsystems/vulkan/23-the-application-targets-a-vulkan-version.md`.
-- [ ] Windows peer: `--vulkan-api-target=1.1`, the CEF main menu through the accelerated (zero-copy,
-      `VK_KHR_external_memory_win32`) import, a scene refused, 0 validation message; 1.2 and 1.3 unchanged.
-- [ ] macOS peer: the same at 1.1 on MoltenVK.
-- [ ] The downstream application overrides `targetVulkanAPIVersion()` (its own repository, at the owner's go).
+- [x] Windows peer (2026-10-15): 1.1 on the NVIDIA and the Intel GPU, 1.2, 1.3: 0 validation message (doc 23).
+- [x] macOS peer (2026-10-15): MoltenVK advertises the timeline extension, 1.1 starts; 0 validation message (doc 23).
+- [ ] The zero-copy CEF import at 1.1 on Windows: only a downstream application exercises it (projet-alpha's menu is
+      always OnPaint).
+- [x] The downstream application overrides `targetVulkanAPIVersion()` → 1.1 (its own repository, a branch pushed
+      2026-10-15). Its Linux run at 1.1 (RTX 3070 Ti, validation layer): its full interface drawn, 0 validation message,
+      exit 0. Its Windows build and run remain (with the Windows peer's engine check above).
 
 ## Gaps found by the inventory (to fix in the same pass or to item)
 

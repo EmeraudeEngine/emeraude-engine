@@ -46,6 +46,16 @@ BUFFER_DEVICE_ADDRESS / MEMORY_BUDGET flags only with their feature / extension)
   "Graphics driver too old … it lacks what this application requires (no timeline semaphores)" with the NVIDIA page,
   exit 97.
 
+### Verified on the peers (2026-10-15)
+
+- Windows (RTX 3500 Ada and Intel UHD RaptorLake-S, MSVC Release, validation layer): 1.1 on both GPUs — the menu drawn,
+  the demo refused, exit 0; 1.2 and 1.3 with the demo — per pixel at most 2/255 apart; 0 validation message in all 4
+  runs (the layer's INFO banner only).
+- macOS (Apple M6, MoltenVK 1.4.2): MoltenVK advertises VK_KHR_timeline_semaphore, so 1.1 starts (driven at 1.1.357);
+  VK_EXT_metal_objects enabled; the menu drawn, the demo refused, exit 0; 1.2 and 1.3 with the demo, 0 validation
+  message each.
+- A downstream application at 1.1 on Linux: its whole interface drawn, 0 validation message, exit 0.
+
 ### ⚠️ Traps
 
 - The effective version also limits the PHYSICAL-device queries: a 1.3 query (`vkGetPhysicalDeviceToolProperties`) on a
@@ -62,5 +72,10 @@ BUFFER_DEVICE_ADDRESS / MEMORY_BUDGET flags only with their feature / extension)
   unconditionally (`BufferTransferOperation`; invalid on any device without the RT extensions and with a dedicated
   transfer family); a sampler asked for anisotropy without the feature, or above the device limit (a settings value):
   `Renderer::getSampler()` now clamps both.
-- Not verified yet: Windows (the downstream application's platform, CEF zero-copy through
-  `VK_KHR_external_memory_win32` at 1.1), macOS (MoltenVK at 1.1), a real driver without timelines.
+- Below 1.2 the driver's name and information come from VK_KHR_driver_properties (the 1.2 structure is not queried):
+  without it the "Graphics device:" line said driver 'n/a' (Windows and macOS peers, 2026-10-15).
+- projet-alpha cannot exercise the CEF zero-copy import (its menu uses alpha-test event blocking, which needs the CPU
+  pixmap: always OnPaint; on Windows its CEF 149 D3D11 import is not written): `VK_KHR_external_memory_win32` is
+  enabled at 1.1, but the import itself is only proven through a downstream application.
+- Not verified yet: the zero-copy CEF import at 1.1 (a downstream application on Windows), a real driver without
+  timelines.

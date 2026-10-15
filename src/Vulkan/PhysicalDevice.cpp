@@ -187,6 +187,10 @@ namespace EmEn::Vulkan
 			/* NOTE: Below 1.2 the identifiers (the LUID matched against the operating system's adapter list) come from
 			 * the 1.1 core structure and are copied where the 1.2 one keeps them. */
 			VkPhysicalDeviceIDProperties idProperties{};
+			/* NOTE: Below 1.2 the driver's name and information (logged with the device, read by crash reports) come
+			 * from VK_KHR_driver_properties when advertised, copied where the 1.2 structure keeps them. */
+			VkPhysicalDeviceDriverProperties driverProperties{};
+			const bool driverPropertiesExtension = !atLeast12 && hasExtension(VK_KHR_DRIVER_PROPERTIES_EXTENSION_NAME);
 
 			if ( atLeast12 )
 			{
@@ -196,6 +200,11 @@ namespace EmEn::Vulkan
 			else
 			{
 				append(idProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ID_PROPERTIES);
+
+				if ( driverPropertiesExtension )
+				{
+					append(driverProperties, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES);
+				}
 			}
 
 			if ( atLeast13 )
@@ -212,6 +221,14 @@ namespace EmEn::Vulkan
 				std::ranges::copy(idProperties.deviceLUID, std::begin(m_propertiesVK11.deviceLUID));
 				m_propertiesVK11.deviceNodeMask = idProperties.deviceNodeMask;
 				m_propertiesVK11.deviceLUIDValid = idProperties.deviceLUIDValid;
+
+				if ( driverPropertiesExtension )
+				{
+					m_propertiesVK12.driverID = driverProperties.driverID;
+					std::ranges::copy(driverProperties.driverName, std::begin(m_propertiesVK12.driverName));
+					std::ranges::copy(driverProperties.driverInfo, std::begin(m_propertiesVK12.driverInfo));
+					m_propertiesVK12.conformanceVersion = driverProperties.conformanceVersion;
+				}
 			}
 		}
 
