@@ -157,7 +157,7 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		if ( !this->createSession() || !this->createSessionParameters() || !this->createPictures() )
+		if ( !this->queryCodecCapabilities() || !this->createSession() || !this->createSessionParameters() || !this->createPictures() )
 		{
 			this->destroy();
 
@@ -295,6 +295,79 @@ namespace EmEn::Vulkan
 	}
 
 	bool
+	VideoEncoderH265::queryCodecCapabilities () noexcept
+	{
+		VkVideoEncodeH265CapabilitiesKHR h265Capabilities{};
+		h265Capabilities.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_CAPABILITIES_KHR;
+
+		VkVideoEncodeCapabilitiesKHR encodeCapabilities{};
+		encodeCapabilities.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_CAPABILITIES_KHR;
+		encodeCapabilities.pNext = &h265Capabilities;
+
+		VkVideoCapabilitiesKHR videoCapabilities{};
+		videoCapabilities.sType = VK_STRUCTURE_TYPE_VIDEO_CAPABILITIES_KHR;
+		videoCapabilities.pNext = &encodeCapabilities;
+
+		if ( vkGetPhysicalDeviceVideoCapabilitiesKHR == nullptr || vkGetPhysicalDeviceVideoCapabilitiesKHR(m_device->physicalDevice()->handle(), &m_profile, &videoCapabilities) != VK_SUCCESS )
+		{
+			Tracer::error(ClassId, "Unable to query the H.265 encode capabilities !");
+
+			return false;
+		}
+
+		/* CTB: 32 when offered (the NVENC configuration validated since 2026-09), else the largest the device has. */
+		if ( (h265Capabilities.ctbSizes & VK_VIDEO_ENCODE_H265_CTB_SIZE_32_BIT_KHR) != 0 )
+		{
+			m_log2CTBSize = 5;
+		}
+		else if ( (h265Capabilities.ctbSizes & VK_VIDEO_ENCODE_H265_CTB_SIZE_64_BIT_KHR) != 0 )
+		{
+			m_log2CTBSize = 6;
+		}
+		else if ( (h265Capabilities.ctbSizes & VK_VIDEO_ENCODE_H265_CTB_SIZE_16_BIT_KHR) != 0 )
+		{
+			m_log2CTBSize = 4;
+		}
+		else
+		{
+			TraceError{ClassId} << "The device reports no usable H.265 CTB size (0x" << std::hex << h265Capabilities.ctbSizes << std::dec << ") !";
+
+			return false;
+		}
+
+		/* The largest transform block the device has, never above the CTB (H.265: max TB <= CTB, and <= 32). */
+		m_log2MaxTransformBlockSize = 0;
+
+		for ( uint32_t log2Size = 5; log2Size >= 2; --log2Size )
+		{
+			const auto bit = static_cast< VkVideoEncodeH265TransformBlockSizeFlagsKHR >(1U << (log2Size - 2));
+
+			if ( log2Size <= m_log2CTBSize && (h265Capabilities.transformBlockSizes & bit) != 0 )
+			{
+				m_log2MaxTransformBlockSize = log2Size;
+
+				break;
+			}
+		}
+
+		if ( m_log2MaxTransformBlockSize == 0 || (h265Capabilities.transformBlockSizes & VK_VIDEO_ENCODE_H265_TRANSFORM_BLOCK_SIZE_4_BIT_KHR) == 0 )
+		{
+			TraceError{ClassId} << "The device reports no usable H.265 transform block sizes (0x" << std::hex << h265Capabilities.transformBlockSizes << std::dec << ") !";
+
+			return false;
+		}
+
+		m_saoSupported = (h265Capabilities.stdSyntaxFlags & VK_VIDEO_ENCODE_H265_STD_SAMPLE_ADAPTIVE_OFFSET_ENABLED_FLAG_SET_BIT_KHR) != 0;
+
+		TraceInfo{ClassId} <<
+			"H.265 codec capabilities: CTB sizes 0x" << std::hex << h265Capabilities.ctbSizes << ", transform block sizes 0x" << h265Capabilities.transformBlockSizes <<
+			", std syntax flags 0x" << h265Capabilities.stdSyntaxFlags << std::dec << " -> CTB " << (1U << m_log2CTBSize) << ", max TB " << (1U << m_log2MaxTransformBlockSize) <<
+			", SAO " << ( m_saoSupported ? "on" : "off" ) << ".";
+
+		return true;
+	}
+
+	bool
 	VideoEncoderH265::createSessionParameters () noexcept
 	{
 		/* The NVENC hardware works with 16x16 minimum coding blocks (the reference
@@ -326,14 +399,18 @@ namespace EmEn::Vulkan
 		 * conformance window crops back to the requested display size. */
 		m_stdSPS = {};
 		m_stdSPS.flags.sps_temporal_id_nesting_flag = 1;
-		m_stdSPS.flags.sample_adaptive_offset_enabled_flag = 1;
+		/* NOTE: SAO only when the implementation lets the application set it (stdSyntaxFlags). */
+		m_stdSPS.flags.sample_adaptive_offset_enabled_flag = m_saoSupported ? 1U : 0U;
 		m_stdSPS.chroma_format_idc = STD_VIDEO_H265_CHROMA_FORMAT_IDC_420;
 		m_stdSPS.pic_width_in_luma_samples = alignedWidth;
 		m_stdSPS.pic_height_in_luma_samples = alignedHeight;
 		m_stdSPS.log2_max_pic_order_cnt_lsb_minus4 = 4;
 		m_stdSPS.log2_min_luma_coding_block_size_minus3 = 1; /* minCB 16 (NVENC). */
-		m_stdSPS.log2_diff_max_min_luma_coding_block_size = 1; /* 16..32 CTB. */
-		m_stdSPS.log2_diff_max_min_luma_transform_block_size = 3; /* 4..32 TB. */
+		/* NOTE: The CTB and the transform-block sizes come from the device (VkVideoEncodeH265CapabilitiesKHR): an SPS that
+		 * announces a CTB the hardware does not use desynchronises the CTU raster. NVENC was hard-coded (CTB 32); AMD VCN
+		 * encodes 64x64 CTBs only, and its stream was undecodable past the first CTB rows (2026-10-15, RADV RENOIR). */
+		m_stdSPS.log2_diff_max_min_luma_coding_block_size = static_cast< uint8_t >(m_log2CTBSize - 4); /* 16..CTB. */
+		m_stdSPS.log2_diff_max_min_luma_transform_block_size = static_cast< uint8_t >(m_log2MaxTransformBlockSize - 2); /* 4..max TB. */
 		m_stdSPS.pProfileTierLevel = &m_stdProfileTierLevel;
 		m_stdSPS.pDecPicBufMgr = &m_stdDecPicBufMgr;
 
@@ -418,7 +495,15 @@ namespace EmEn::Vulkan
 
 		m_encodedParameters.resize(dataSize);
 
-		if ( m_fpGetEncodedSessionParameters(m_device->handle(), &getInfo, nullptr, &dataSize, m_encodedParameters.data()) != VK_SUCCESS )
+		/* NOTE: The driver may rewrite the parameters it cannot honour; the stream carries ITS version (retrieved here). */
+		VkVideoEncodeH265SessionParametersFeedbackInfoKHR h265Feedback{};
+		h265Feedback.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_H265_SESSION_PARAMETERS_FEEDBACK_INFO_KHR;
+
+		VkVideoEncodeSessionParametersFeedbackInfoKHR feedback{};
+		feedback.sType = VK_STRUCTURE_TYPE_VIDEO_ENCODE_SESSION_PARAMETERS_FEEDBACK_INFO_KHR;
+		feedback.pNext = &h265Feedback;
+
+		if ( m_fpGetEncodedSessionParameters(m_device->handle(), &getInfo, &feedback, &dataSize, m_encodedParameters.data()) != VK_SUCCESS )
 		{
 			Tracer::error(ClassId, "Unable to retrieve the encoded session parameters !");
 
@@ -427,7 +512,9 @@ namespace EmEn::Vulkan
 
 		m_encodedParameters.resize(dataSize);
 
-		TraceInfo{ClassId} << "Driver-encoded VPS/SPS/PPS retrieved (" << dataSize << " bytes).";
+		TraceInfo{ClassId} <<
+			"Driver-encoded VPS/SPS/PPS retrieved (" << dataSize << " bytes; driver overrides: VPS " << ( h265Feedback.hasStdVPSOverrides != VK_FALSE ? "yes" : "no" ) <<
+			", SPS " << ( h265Feedback.hasStdSPSOverrides != VK_FALSE ? "yes" : "no" ) << ", PPS " << ( h265Feedback.hasStdPPSOverrides != VK_FALSE ? "yes" : "no" ) << ").";
 
 		return true;
 	}

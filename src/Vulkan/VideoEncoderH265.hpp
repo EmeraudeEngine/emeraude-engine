@@ -145,6 +145,14 @@ namespace EmEn::Vulkan
 			void recordPlaneUploadWithRelease (const CommandBuffer & commandBuffer) const noexcept;
 
 			/**
+			 * @brief Queries the device's H.265 encode capabilities and chooses the CTB size, the largest transform block
+			 * and SAO from them (the SPS announces exactly what the hardware encodes).
+			 * @return bool False when the device offers no usable configuration.
+			 */
+			[[nodiscard]]
+			bool queryCodecCapabilities () noexcept;
+
+			/**
 			 * @brief Resolves the Vulkan Video entry points through vkGetDeviceProcAddr.
 			 * @return bool True when every function was found.
 			 */
@@ -235,10 +243,13 @@ namespace EmEn::Vulkan
 			uint64_t m_frameIndex{0};
 			uint32_t m_gopFrameIndex{0}; ///< Position inside the current GOP (0 = IDR).
 			uint32_t m_setupSlot{0}; ///< DPB slot receiving the reconstructed picture.
+			uint32_t m_log2CTBSize{5}; ///< The coding tree block size chosen from the device (queryCodecCapabilities()).
+			uint32_t m_log2MaxTransformBlockSize{5}; ///< The largest transform block chosen from the device.
 			bool m_rateControlInitialized{false};
 			bool m_dpbInitialized{false};
 			/* NOTE: The video-encode family cannot copy (AMD: encode-only, no TRANSFER): the plane upload runs on the
 			 * graphics queue and the picture changes family by a release / acquire pair (owner decision 2026-10-15). */
 			bool m_uploadOnGraphicsQueue{false};
+			bool m_saoSupported{false}; ///< SAO may be enabled in the SPS (stdSyntaxFlags).
 	};
 }
