@@ -70,10 +70,57 @@ Fix (this item): both depths = `CtbLog2SizeY - 2`, the maximum H.265 allows (7.4
 write it. NVIDIA after it (Linux, RTX 3070 Ti, CTB 32 → depth 3, read back with `trace_headers`): 181 pictures,
 0 decode error, 0 VUID, picture 100 clean.
 
+## After the SPS fix: still non-conformant on AMD, the reference decoder says so (2026-10-15, LinuxB-PA)
+
+AMD rushes with the depth fix (engine 7bd7cebf, then 283602aa; the withholding bypassed locally, test-only):
+- libav decodes 177/177 pictures with 0 error and plausible images.
+- The hardware decoders stop at the same CU-row band of every picture (flat-green concealment): VA-API `vah265dec` on
+  the same VCN, and the NVIDIA Vulkan decoder.
+- Per CTB, libav and the hardware already differ slightly from CTB 0 (row means 0.1-0.4/765). On the radeonsi and NVIDIA
+  streams the same decoders agree bit-exactly.
+- One VCL NAL per picture (IDR_N_LP, no dependent slice segment, no entry points).
+- Every slice NAL ends with exactly 193 zero bytes, whatever its size (23-79 KB).
+
+**The HEVC reference decoder (HM, master 9c1f298) is the arbiter:**
+- It decodes our NVIDIA stream and the radeonsi stream.
+- It aborts on picture 0 of EVERY AMD stream: CABAC reads past the end of the slice data
+  (`TComInputBitstream::readByte: m_fifo_idx < m_fifo.size()`); before the depth fix, the slice did not end on its
+  trailing bits.
+- The trace build runs out of data inside CU 119, where `vah265dec` conceals from CTB 100.
+- So the stream is non-conformant: the hardware decoders are right, and libav is lenient. libav's plausible bottom half
+  is prediction over padding.
+
+Ruled out:
+- the trailing zeros (stripped: same failure);
+- the encode-to-host visibility: 283602aa's VIDEO_ENCODE → HOST barrier changes nothing;
+- RADV reports no query result status ("reports no query result status"), so a failed encode cannot be seen.
+
+Environment:
+- Radeon iGPU 0x1638 = Cezanne ("RADV RENOIR"; firmware green_sardine_vcn), Mesa 26.0.8, kernel 7.0.0-38,
+  linux-firmware 20260319.
+- RADV exposes the encode extensions WITHOUT RADV_PERFTEST: they are on by default.
+- Context: RADV enables Vulkan encode by default only on recent enough encoder firmware; Mesa closed a broken-HEVC
+  report on VCN3 (Steam Deck) as a firmware problem.
+
 ## What remains
 
-- [ ] AMD: a rush with the SPS fix and `hardwareEncodeWithheld()` bypassed LOCALLY (test-only, never committed),
-      decoded with libav / VA-API: clean → lift the withholding; still corrupt → a RADV/VCN2 report upstream.
+- [ ] The VCN firmware version (`sudo cat /sys/kernel/debug/dri/*/amdgpu_firmware_info`, owner at the AMD machine).
+- [ ] Experiments, each test-only and at the owner's go on the AMD machine; stop at the first that HM decodes:
+      (a) log the feedback offset / bytesWritten and dump the bytes past offset+bytesWritten: if data continues after
+      the 193 zeros, RADV misreports the length;
+      (b) CQP (rate control off) on top of the depth fix: no VBR-driven `cu_qp_delta`;
+      (c) the radeonsi parameters (`amp_enabled_flag` 1, `strong_intra_smoothing_enabled_flag` 1,
+      `pps_loop_filter_across_slices_enabled_flag` 1).
+- [ ] Then a Mesa (RADV, VCN2) report with the HM evidence: the same VCN encodes conformant HEVC through radeonsi VA,
+      not through RADV Vulkan. The hardware H.265 stays withheld on AMD meanwhile (owner decision).
+
+Evidence for the report, kept on the AMD test machine (LinuxB, not this one): `~/amd-h265-evidence-2026-10-15/` (38 MB,
+README.md inside). It holds:
+- the two AMD streams with the depth fix (HM aborts on both);
+- the radeonsi VA all-intra reference stream and the NVIDIA control (both clean in HM);
+- the HM version and every TAppDecoder log, plus the ENC_DEC_TRACE trace;
+- the segment and green-census tables;
+- the parsing and decoding scripts.
 
 ## ⚠️ Traps
 
