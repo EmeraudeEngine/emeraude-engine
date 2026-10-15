@@ -3563,6 +3563,36 @@ namespace EmEn
 			return;
 		}
 
+		/* NOTE: A run that must not write the settings (--disable-settings-autosave) resets IN MEMORY only: the file on
+		 * disk stays exactly as it is — no backup rename, no fresh file — and the entries to keep are read from it
+		 * (owner decision 2026-10-15, engine item settings-version-reset-leaves-no-file-for-the-helpers: the rename
+		 * used to happen anyway, and with no fresh file a helper given the same --settings-filepath stopped). */
+		if ( !settings.isSaveAtExitEnabled() )
+		{
+			settings.clear();
+
+			SettingsKeyRestoration::Report report;
+
+			if ( !m_settingsKeyRestoration.restore(settingsPath, settings, report) )
+			{
+				TraceError{ClassId} << "Settings version guard: unable to read the entries to keep back from the settings file. The run starts on fully fresh settings.";
+			}
+
+			TraceWarning{ClassId} <<
+				"\n"
+				"======================================================================" "\n"
+				"  SETTINGS RESET IN MEMORY (version guard, the file is not written)" "\n"
+				"======================================================================" "\n"
+				"Reset reason: " << reason << "." "\n"
+				"The settings file is left untouched (the settings are not saved in this run):" "\n"
+				"  " << Base::IO::toU8String(settingsPath) << "\n"
+				"The run uses fresh settings, except the entries kept from the file:" "\n" <<
+				Core::formatRestorationReport(report) <<
+				"======================================================================";
+
+			return;
+		}
+
 		const auto timestamp = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
 		const auto backupPath = IO::u8path(IO::toU8String(settingsPath) + "." + std::to_string(timestamp) + "-bck");
 
@@ -3579,8 +3609,7 @@ namespace EmEn
 		}
 
 		/* Clear the loaded store: the application keeps running on a clean base, every service
-		 * re-generates its defaults lazily, and the fresh file is written at save-at-exit with the
-		 * current version. */
+		 * re-generates its defaults lazily (save-at-exit writes them with the current version). */
 		settings.clear();
 
 		/* Read the declared entries back from the backup into the fresh store. A backup that cannot be
@@ -3593,6 +3622,15 @@ namespace EmEn
 			TraceError{ClassId} << "Settings version guard: unable to read the entries to keep back from the backup. The application starts on fully fresh settings.";
 		}
 
+		/* NOTE: The fresh file (the kept entries and the current version stamps) is written NOW: the path never stays empty
+		 * until save-at-exit, where every process reading it (the CEF helpers, given the same --settings-filepath) found
+		 * nothing and a crash before the exit left no settings at all (owner decision 2026-10-15). A failure is reported;
+		 * save-at-exit still writes the file then. */
+		if ( !settings.save() )
+		{
+			TraceError{ClassId} << "Settings version guard: unable to write the fresh settings file '" << Base::IO::toU8String(settingsPath) << "' now; it will be written at exit.";
+		}
+
 		TraceWarning{ClassId} <<
 			"\n"
 			"======================================================================" "\n"
@@ -3601,7 +3639,7 @@ namespace EmEn
 			"Reset reason: " << reason << "." "\n"
 			"The settings file has been backed up to:" "\n"
 			"  " << Base::IO::toU8String(backupPath) << "\n"
-			"The application starts on fresh settings, except the entries kept from the backup:" "\n" <<
+			"The application starts on fresh settings, written at once, except the entries kept from the backup:" "\n" <<
 			Core::formatRestorationReport(report) <<
 			"======================================================================";
 	}

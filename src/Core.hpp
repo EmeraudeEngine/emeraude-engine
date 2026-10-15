@@ -1571,7 +1571,9 @@ namespace EmEn
 			 * the in-memory store is cleared, then the entries declared in @ref settingsKeyRestoration() are
 			 * read back from that backup into the fresh store. An exact match or a downgrade keeps the
 			 * settings. Does nothing if no settings file exists (fresh install). On a backup failure it
-			 * leaves the settings untouched (no data loss, no reset).
+			 * leaves the settings untouched (no data loss, no reset). The fresh file (kept entries and version
+			 * stamps) is written at once after the backup, so the path never stays empty. A run that does not
+			 * save its settings (--disable-settings-autosave) resets in memory only: the file is not touched.
 			 */
 			void resetSettingsIfOutdated () noexcept;
 

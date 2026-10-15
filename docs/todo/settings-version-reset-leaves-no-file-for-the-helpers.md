@@ -34,7 +34,8 @@ engine (WrittenByEngineVersion 1.0.0, engine 1.0.1). It cost two failed runs.
 
 ## What remains
 
-- [ ] Owner decision on the fix, among (or combining):
+- [x] Fix (owner decision 2026-10-15: (a) + (b)), verified on Linux; knowledge in
+      `docs/subsystems/source-tree/02-main-components.md` § settings version guard. The options were:
   - (a) write the fresh settings file at once after a reset (the restored entries included), so the path never stays
     empty;
   - (b) under `--disable-settings-autosave`, reset IN MEMORY only: no rename, the file on disk untouched (the flag's
@@ -42,8 +43,10 @@ engine (WrittenByEngineVersion 1.0.0, engine 1.0.1). It cost two failed runs.
   - (c) a helper process never stops on a missing named file: it falls back to the defaults, or to the `-bck` backup.
 - [ ] The shutdown that does not finish in the startup-error state: reproduce and attribute (engine `Core` vs the
   downstream application's startup-error path).
-- [ ] Test: an old-stamped settings copy + `--settings-filepath` + `--disable-settings-autosave`, then the same
-  without the flags. Check the helpers, the file on disk, and the exit.
+- [x] Test: an old-stamped copy + `--settings-filepath`, with and without `--disable-settings-autosave` (Linux,
+  2026-10-15, see the doc). (a) also closes the production gap: the helpers now read the restored entries in the first
+  run after an engine update.
+- [ ] Windows peer: the same two runs on the downstream application (its helpers, its startup).
 
 ## ⚠️ Traps
 

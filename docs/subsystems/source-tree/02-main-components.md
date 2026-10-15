@@ -70,9 +70,21 @@ via `Base::Version` (`FromString` + `operator<=>`).
   2. **engine version increased** (stored `WrittenByEngineVersion` < `Identification::EngineVersion`);
   3. **application version increased** (stored `WrittenByApplicationVersion` < `applicationVersion`).
 - On a hit → backup `settings.json.<timestamp>-bck` (same rename as `executeResetSettings()`) **and**
-  `Settings::clear()` the in-memory store, then continue. Services re-generate defaults lazily; the
-  fresh file is written at save-at-exit with the current stamps. An exact match or a **downgrade**
+  `Settings::clear()` the in-memory store, the kept entries restored, then **the fresh file (kept entries
+  + current stamps) is written AT ONCE** (`Settings::save()`), and the run continues; services
+  re-generate defaults lazily and save-at-exit completes the file. An exact match or a **downgrade**
   (stored newer than current) → kept.
+- **A run that does not save its settings (`--disable-settings-autosave`, i.e. `!isSaveAtExitEnabled()`)
+  resets IN MEMORY only**: no rename, no write, the file on disk untouched; the kept entries are read
+  from the file itself; the banner says "SETTINGS RESET IN MEMORY".
+- Why (owner decision 2026-10-15, found by the Windows peer on a downstream application): the guard used
+  to rename the file and write the fresh one only at exit — even under `--disable-settings-autosave`
+  (which then never wrote it). Until then no file existed at that path, and every CEF helper given the
+  same `--settings-filepath` stopped ("named on the command line doesn't exist", `Settings.cpp`): all
+  render processes crashed, the JavaScript application timed out. Verified 2026-10-15 (Linux, projet-alpha
+  test-only build with the guard on, a copy stamped 1.0.0 under 1.0.1): autosave disabled → the copy's
+  hash unchanged, no `-bck`; autosave on → `-bck` and the fresh file stamped 1.0.1 present 6 s after the
+  launch; both runs: 0 helper stop, the CEF menu drawn, exit 0.
 - No settings file (fresh install) → no-op. Backup failure → store left untouched (no clear, no data loss).
 
 > [!NOTE]
