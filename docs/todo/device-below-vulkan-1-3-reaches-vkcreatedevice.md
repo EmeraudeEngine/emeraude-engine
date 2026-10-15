@@ -39,8 +39,8 @@ Vulkan 1.3 on Pascal since the R510/R511 branch (early 2022).
   the device is not created.
 - `getGraphicsDevice()` = the selection, then `createGraphicsDevice()` on each compatible device from the best: a
   device that cannot be created no longer ends the startup.
-- Every refusal is recorded: `Instance::deviceRefusals()` (device, driver, API version, reason), for
-  `incompatible-gpu-is-never-told-to-the-user`.
+- Every refusal is recorded: `Instance::deviceRefusals()` (device, driver, API version, reason), for the
+  user-facing refusal (`docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md`).
 - Verified (Linux, RTX 3070 Ti + Intel RPL-S + llvmpipe, validation layer): a test-only build reporting llvmpipe as 1.2
   and the NVIDIA GPU without a required feature refused both and started on the Intel iGPU, 0 VUID, clean exit.
 

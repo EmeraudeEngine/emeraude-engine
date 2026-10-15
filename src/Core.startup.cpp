@@ -38,10 +38,10 @@
 #include "Tracer.hpp"
 
 /*
- * A startup refused for the graphics hardware or its driver, told to the user (engine item
- * incompatible-gpu-is-never-told-to-the-user, owner decisions 2026-10-15: the engine classifies and shows a native
- * dialog in English by default, the application may replace it through Core::onStartupRefused(); the message links the
- * GPU vendor's driver page). Measured in user crash reports of a downstream application, 2026-10-15: 11 of 12 reports
+ * A startup refused for the graphics hardware or its driver, told to the user
+ * (docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md, owner decisions 2026-10-15: the engine classifies and
+ * shows a native dialog in English by default, the application may replace it through Core::onStartupRefused(); the
+ * message links the GPU vendor's driver page). Measured in user crash reports of a downstream application, 2026-10-15: 11 of 12 reports
  * were such silent startup refusals.
  */
 namespace EmEn

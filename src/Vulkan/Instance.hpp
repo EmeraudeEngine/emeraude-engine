@@ -85,7 +85,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Why a physical device was not used (the startup diagnosis, the user-facing message of a refused
-			 * startup: engine item incompatible-gpu-is-never-told-to-the-user).
+			 * startup: docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md).
 			 */
 			struct DeviceRefusal final
 			{

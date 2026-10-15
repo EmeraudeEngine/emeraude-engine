@@ -206,7 +206,7 @@ namespace EmEn
 
 			/** @brief Exit code of a startup refused for the graphics hardware or its driver (startupRefusal()).
 			 * @details Distinct from a crash: a downstream crash reporter can tell "incompatible system" from an incident
-			 * (engine item incompatible-gpu-is-never-told-to-the-user, owner decision 2026-10-15).
+			 * (docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md, owner decision 2026-10-15).
 			 */
 			static constexpr int IncompatibleSystemExitCode{97};
 

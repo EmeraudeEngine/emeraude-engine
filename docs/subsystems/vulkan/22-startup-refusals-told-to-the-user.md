@@ -72,8 +72,12 @@ NVIDIA `https://www.nvidia.com/drivers`, AMD `https://www.amd.com/en/support/dow
   pages (the software adapter left out), exit 97. ⚠️ A MessageBox shows URLs as text, not links.
 - macOS (macOS-PA, Apple M6): the inventory names "Apple M6" (IOKit, driver com.apple.AGXG18G); MoltenVK reports Vulkan
   1.3, above the macOS minimum 1.2; with no ICD `vkCreateInstance()` answers `VK_ERROR_INCOMPATIBLE_DRIVER` and the
-  NSAlert runs unparented and modal before the window exists (GLFW already made NSApp). ⚠️ A SIGTERM is not served while
-  the modal alert is up.
+  NSAlert runs unparented and modal before the window exists (GLFW already made NSApp); once dismissed, a clean teardown
+  to "Core level terminated" and exit code 97 (2026-10-15). ⚠️ A SIGTERM is not served while the modal alert is up.
+- The "Graphics device:" line decodes the vendor driver versions: Windows NVIDIA "596.58", Windows Intel "101.7088"
+  (Intel packing), Linux NVIDIA; Apple M6 through MoltenVK (2026-10-15).
+- Possible improvement, not open work (owner informed): a Windows TaskDialog with hyperlinks would make the driver URLs
+  clickable.
 - ⚠️ Not verified: a real `VK_INCOMPLETE` machine (Windows AMD hybrid laptops), a real outdated driver, an Intel Mac.
 - ⚠️ DXGI / IOKit names differ from Vulkan's ("Intel(R) UHD Graphics" vs "Intel(R) RaptorLake-S Mobile Graphics
   Controller"): match the two lists by the LUID / the vendor and device ids, never by name.

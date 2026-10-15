@@ -1025,7 +1025,7 @@ namespace EmEn::Vulkan
 
 			if ( auto logicalDevice = this->createGraphicsDevice(window, candidate); logicalDevice != nullptr )
 			{
-				/* NOTE: Always logged (engine item log-the-gpu-driver-version): every report states the GPU and its driver. */
+				/* NOTE: Always logged (docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md): every report states the GPU and its driver. */
 				const auto & properties = candidate->propertiesVK10();
 				const auto & propertiesVK12 = candidate->propertiesVK12();
 

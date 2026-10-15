@@ -15,8 +15,8 @@ tags: [diagnostics, startup, drivers]
 The only GPU inventory of the engine comes from Vulkan (`vkEnumeratePhysicalDevices`). When the instance cannot be
 created (`VK_ERROR_INCOMPATIBLE_DRIVER`) or the enumeration fails, the log and any downstream report contain no GPU
 at all: impossible to tell "only an old integrated GPU without a Vulkan driver" (not compatible) from "a capable
-discrete GPU whose driver is missing or broken" (update the driver). The user-facing message of
-`incompatible-gpu-is-never-told-to-the-user` needs that distinction.
+discrete GPU whose driver is missing or broken" (update the driver). The user-facing refusal message
+(`docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md`) needs that distinction.
 
 Measured in user crash reports of a downstream application, 2026-10-15: a Windows 10 desktop (Intel Core i5-4460)
 fails with `VK_ERROR_INCOMPATIBLE_DRIVER` twice; two Ryzen laptops fail at the enumeration. None of the reports can
