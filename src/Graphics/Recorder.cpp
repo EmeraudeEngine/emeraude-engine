@@ -298,6 +298,10 @@ namespace EmEn::Graphics
 		{
 			encoder = "software VP9 (forced by settings)";
 		}
+		else if ( this->hardwareEncodeWithheld() )
+		{
+			encoder = "software VP9 (the AMD hardware H.265 encode writes undecodable streams: withheld)";
+		}
 
 		TraceInfo{ClassId} << "Video recording configured : " << m_targetFramerate << " FPS (studio CFR), Preset: " << qualityPresetToString(m_qualityPreset) << ", Encoder: " << encoder;
 
@@ -353,7 +357,22 @@ namespace EmEn::Graphics
 
 		const auto device = m_renderer.device();
 
-		return device != nullptr && device->videoEncodeH265Enabled();
+		return device != nullptr && device->videoEncodeH265Enabled() && !this->hardwareEncodeWithheld();
+	}
+
+	bool
+	Recorder::hardwareEncodeWithheld () const noexcept
+	{
+		/* NOTE: Owner decision 2026-10-15. On AMD (RADV, VCN2 Radeon RENOIR, Mesa 26.0.8) every variant tried wrote
+		 * well-formed parameter sets and slice headers but slice DATA that desyncs within the first CTB rows (VBR, constant
+		 * QP, a 64-aligned extent, explicit slice SAO, SAO off), while NVIDIA decodes clean on the same machine and build:
+		 * a driver defect candidate (engine item video-encoder-h265-transfer-on-encode-only-queue). The software VP9 path
+		 * makes valid rushes; this is withdrawn once the cause is settled. */
+		constexpr uint32_t AMDVendorID{0x1002};
+
+		const auto device = m_renderer.device();
+
+		return device != nullptr && device->videoEncodeH265Enabled() && device->physicalDevice()->propertiesVK10().vendorID == AMDVendorID;
 	}
 
 	const char *

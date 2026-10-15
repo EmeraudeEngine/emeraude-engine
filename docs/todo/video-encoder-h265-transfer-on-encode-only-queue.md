@@ -44,11 +44,22 @@ apparently also exposes TRANSFER, which is why it passes there (181 pictures, 0 
   messages (06462, cmdpool, 09675) and a SIGSEGV inside RADV at the 6th frame, 0 picture written — a crash, not only
   VUIDs. NVIDIA after the fix: a 6 s rush, 181 pictures, decodes, 0 VUID.
 
+## AMD stream corruption (2026-10-15, LinuxB-PA, RADV RENOIR / Mesa 26.0.8)
+
+After the upload fix (no crash, 0 VUID) the AMD stream is UNDECODABLE: well-formed VPS / SPS / PPS (RADV overrides
+SPS and PPS: CTB 64, cu_qp_delta on, dependent slices on) and well-formed slice headers (RADV builds them itself), but
+the slice DATA desyncs within the first 1-3 CTB rows (libav: invalid cu_qp_delta, CABAC_MAX_BIN), in every variant
+tried: VBR; rate control off + constant QP 24 (half the errors); a 64-aligned picture extent; explicit slice SAO flags;
+SAO off in the SPS (honoured). NVIDIA decodes clean on the same machine and build. Engine 7cbefbbc derives the CTB,
+transform-block sizes and SAO from `VkVideoEncodeH265CapabilitiesKHR` (correct per the specification; no effect on AMD,
+whose driver already overrode them). Owner decision 2026-10-15: `Recorder::hardwareEncodeWithheld()` withholds the
+hardware H.265 encode on AMD (vendor 0x1002) — the software VP9 path makes the rushes — until the cause is settled.
+
 ## What remains
 
-- [ ] The AMD run on the fix (LinuxB-PA): 0 VUID, no crash, the file decodes, the pictures look right (padding rows of
-      the 1280x768 coded picture).
-- [ ] Windows Intel iGPU: check whether its encode family exposes TRANSFER.
+- [ ] The reference encode on the same GPU (GStreamer `vulkanh265enc`, owner decision 2026-10-15): corrupt too →
+      a RADV/VCN2 defect to report upstream with the evidence; clean → compare its parameters with ours.
+- [ ] Then lift `hardwareEncodeWithheld()` (or keep it per driver version, on the evidence).
 
 ## ⚠️ Traps
 

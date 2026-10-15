@@ -230,6 +230,14 @@ namespace EmEn::Graphics
 			bool hardwarePath () const noexcept;
 
 			/**
+			 * @brief Returns whether the hardware H.265 encode is withheld on this device although it has it (AMD: the
+			 * streams are undecodable, owner decision 2026-10-15): the software VP9 path is used instead.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hardwareEncodeWithheld () const noexcept;
+
+			/**
 			 * @brief Returns the target recording framerate.
 			 * @return uint32_t
 			 */
