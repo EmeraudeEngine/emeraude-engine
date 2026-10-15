@@ -76,8 +76,8 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief The lowest Vulkan API version an application may target (Core::targetVulkanAPIVersion()), with
 			 * VK_KHR_timeline_semaphore required below 1.2. Owner decision 2026-10-15: a desktop driver stuck at 1.0
-			 * predates the timeline extension, so 1.0 would accept no more machine (engine item
-			 * core-targets-a-vulkan-api-version).
+			 * predates the timeline extension, so 1.0 would accept no more machine
+			 * (docs/subsystems/vulkan/23-the-application-targets-a-vulkan-version.md).
 			 */
 			static constexpr uint32_t LowestTargetAPIVersion{VK_API_VERSION_1_1};
 

@@ -298,7 +298,7 @@ namespace EmEn::Vulkan
 	Device::create (DeviceRequirements & requirements, const std::vector< const char * > & extensions, bool useVMA) noexcept
 	{
 		/* NOTE: The effective version: the application's target (the instance apiVersion) clamped to the device. No
-		 * device-level functionality above it may be used (engine item core-targets-a-vulkan-api-version). */
+		 * device-level functionality above it may be used (docs/subsystems/vulkan/23-the-application-targets-a-vulkan-version.md). */
 		{
 			const auto target = m_instance.info().pApplicationInfo->apiVersion;
 			const auto reported = m_physicalDevice->propertiesVK10().apiVersion;

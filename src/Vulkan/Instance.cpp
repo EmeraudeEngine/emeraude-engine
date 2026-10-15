@@ -1213,8 +1213,8 @@ namespace EmEn::Vulkan
 		const auto effectiveVersion = this->effectiveAPIVersion(*selectedPhysicalDevice);
 
 		/* NOTE: The scene (3D) renderer's features, from its target on (SceneRenderingAPIVersion). Below it the engine draws
-		 * the overlay only and requires nothing beyond Vulkan 1.1 and the timelines (engine item
-		 * core-targets-a-vulkan-api-version). */
+		 * the overlay only and requires nothing beyond Vulkan 1.1 and the timelines
+		 * (docs/subsystems/vulkan/23-the-application-targets-a-vulkan-version.md). */
 		if ( this->sceneRenderingEnabled() )
 		{
 			// FIXME: Check to enable "VK_EXT_non_seamless_cube_map" extension

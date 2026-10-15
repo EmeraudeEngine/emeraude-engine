@@ -110,8 +110,8 @@ namespace EmEn::Scenes
 	{
 		/* NOTE: A scene needs the scene renderer (bindless descriptor indexing, Vulkan 1.2): below that target the
 		 * application draws the overlay only and no scene is ever built — its construction already creates the scene
-		 * renderer's effects (measured 2026-10-15: a crash in the post-process construction at a 1.1 target). Engine item
-		 * core-targets-a-vulkan-api-version, owner decision 2026-10-15. */
+		 * renderer's effects (measured 2026-10-15: a crash in the post-process construction at a 1.1 target). Owner
+		 * decision 2026-10-15, docs/subsystems/vulkan/23-the-application-targets-a-vulkan-version.md. */
 		if ( const auto & instance = m_resourceManager.graphicsRenderer().vulkanInstance(); !instance.sceneRenderingEnabled() )
 		{
 			TraceError{ClassId} <<

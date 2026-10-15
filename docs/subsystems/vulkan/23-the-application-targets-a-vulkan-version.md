@@ -2,7 +2,7 @@
 
 A downstream application that only shows the overlay was refused on older drivers: the engine required Vulkan 1.3 and
 the 3D renderer's features on every device. Owner decisions 2026-10-15 (engine item
-`core-targets-a-vulkan-api-version`): the application chooses the version it targets from `Core`, the engine uses
+`core-targets-a-vulkan-api-version`, closed 2026-10-15 after the three OS and the downstream application): the application chooses the version it targets from `Core`, the engine uses
 nothing above it on any device and turns off what needs more; a driver too old for the target is told to the user
 (`22-startup-refusals-told-to-the-user.md`).
 
@@ -54,7 +54,13 @@ BUFFER_DEVICE_ADDRESS / MEMORY_BUDGET flags only with their feature / extension)
 - macOS (Apple M6, MoltenVK 1.4.2): MoltenVK advertises VK_KHR_timeline_semaphore, so 1.1 starts (driven at 1.1.357);
   VK_EXT_metal_objects enabled; the menu drawn, the demo refused, exit 0; 1.2 and 1.3 with the demo, 0 validation
   message each.
-- A downstream application at 1.1 on Linux: its whole interface drawn, 0 validation message, exit 0.
+- Linux AMD (Radeon Cezanne iGPU, RADV Mesa 26.0.8) and an RTX 3050 Ti Laptop: 1.1 on both — the menu drawn (pixel-identical
+  between the two GPUs), the demo refused; 1.2 and 1.3 with the demo, converged pictures at most 4/255 apart (the first
+  captures differ by the auto-exposure convergence: compare after it); 0 validation message in every run.
+- A downstream application overriding `targetVulkanAPIVersion()` → 1.1: on Linux (RTX 3070 Ti) its whole interface
+  drawn, 0 validation message, exit 0; on Windows (RTX 3500 Ada and Intel UHD, engine 9b17acab) the same, the driver
+  name logged at 1.1, and the CEF zero-copy import USED at 1.1 (`VK_KHR_external_memory_win32`, "First accelerated
+  (shared-texture) frame" from its 3D, file and splash views; its UI view stays OnPaint by design).
 
 ### ⚠️ Traps
 
@@ -77,5 +83,4 @@ BUFFER_DEVICE_ADDRESS / MEMORY_BUDGET flags only with their feature / extension)
 - projet-alpha cannot exercise the CEF zero-copy import (its menu uses alpha-test event blocking, which needs the CPU
   pixmap: always OnPaint; on Windows its CEF 149 D3D11 import is not written): `VK_KHR_external_memory_win32` is
   enabled at 1.1, but the import itself is only proven through a downstream application.
-- Not verified yet: the zero-copy CEF import at 1.1 (a downstream application on Windows), a real driver without
-  timelines.
+- Not verified on a real machine: a driver without timelines (proven by a test-only build only).

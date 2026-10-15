@@ -47,8 +47,8 @@ namespace EmEn::Vulkan
 	{
 		/* NOTE: The EFFECTIVE version (the lower of the device's and the instance's) decides which queries and query
 		 * structures are valid: one of a version above it, or of an extension the device does not advertise, must not be
-		 * used (engine item core-targets-a-vulkan-api-version). The *2 queries themselves are Vulkan 1.1: a 1.0 device
-		 * is only described by the 1.0 queries (it is refused below the 1.1 floor anyway). */
+		 * used (docs/subsystems/vulkan/23-the-application-targets-a-vulkan-version.md). The *2 queries themselves are
+		 * Vulkan 1.1: a 1.0 device is only described by the 1.0 queries (it is refused below the 1.1 floor anyway). */
 		vkGetPhysicalDeviceProperties(m_physicalDevice, &m_properties.properties);
 
 		const auto deviceVersion = std::min(
