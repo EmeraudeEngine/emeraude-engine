@@ -63,7 +63,10 @@ reload through `ResourceTrait::LocalDataReloadJob` (else `acquireLocalData()` wo
 the queued tasks from the pool's queue and these guards run on the STOPPING thread (a task already dequeued: on its
 worker); they touch ONLY what they hold — never the container. `stopBackgroundWork()` uses `TaskGroup::waitForAll()`:
 when it returns, every discarded task's guard has run, and it never waits behind other owners' queued work.
-`stopBackgroundWork()` traces every group that took more than 10 ms to stop, and its total.
+`stopBackgroundWork()` traces every group that took more than 10 ms to stop, and its total. A load the stop cancelled
+ends Failed through `ResourceTrait::abandonLoading()` — WITHOUT an error line — and each container traces ONE line, "N
+resource load(s) cancelled by the stop." (owner decision 2026-10-15: macOS measured 374-389 `[Error]` lines for a quit
+during the sponza load before it; real load failures stay errors).
 
 ⚠️ Since 2026-10-15 `ResourceTrait.hpp` includes `ThreadPool.hpp` (the provider's `TaskGroup` member): every resource
 header pays for it (compile time, the lowest priority).

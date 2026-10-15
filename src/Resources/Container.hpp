@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -134,10 +135,11 @@ namespace EmEn::Resources
 				/**
 				 * @brief Constructs the guard.
 				 * @param resource The resource the task loads or creates.
+				 * @param discardCount The container's count of discarded tasks (its stop reports it once).
 				 */
-				explicit
-				DiscardedTaskGuard (const std::shared_ptr< ResourceTrait > & resource) noexcept
-					: m_resource{resource}
+				DiscardedTaskGuard (const std::shared_ptr< ResourceTrait > & resource, std::shared_ptr< std::atomic< size_t > > discardCount) noexcept
+					: m_resource{resource},
+					m_discardCount{std::move(discardCount)}
 				{
 
 				}
@@ -160,6 +162,7 @@ namespace EmEn::Resources
 			private:
 
 				std::shared_ptr< ResourceTrait > m_resource;
+				std::shared_ptr< std::atomic< size_t > > m_discardCount;
 				bool m_ran{false};
 		};
 
@@ -662,6 +665,12 @@ namespace EmEn::Resources
 			{
 				m_tasks.requestStop();
 				m_tasks.waitForAll();
+
+				/* NOTE: One line for the loads the stop cancelled (each resource ended Failed, silently). */
+				if ( const auto discarded = m_discardCount->exchange(0); discarded > 0 )
+				{
+					TraceInfo{resource_t::ClassId} << discarded << " resource load(s) cancelled by the stop.";
+				}
 			}
 
 			/** @copydoc EmEn::Resources::ContainerInterface::setVerbosity(bool) noexcept */
@@ -1474,7 +1483,7 @@ namespace EmEn::Resources
 					return this->getDefaultResourceUnlocked();
 				}
 
-				if ( !ServiceAccess::submitTask(m_primaryServices, m_tasks, [createFunction, newResource, guard = std::make_shared< ServiceAccess::DiscardedTaskGuard >(newResource)] (const std::stop_token &) {
+				if ( !ServiceAccess::submitTask(m_primaryServices, m_tasks, [createFunction, newResource, guard = std::make_shared< ServiceAccess::DiscardedTaskGuard >(newResource, m_discardCount)] (const std::stop_token &) {
 					guard->markRan();
 
 					if ( createFunction(*newResource) ) {
@@ -1956,7 +1965,7 @@ namespace EmEn::Resources
 			submitLoadingTask (const LoadingRequest & request) noexcept
 			{
 				/* NOTE: `this` is safe: the container owns the task (m_tasks, destroyed first), and its stop waits for it. */
-				return ServiceAccess::submitTask(m_primaryServices, m_tasks, [this, request, guard = std::make_shared< ServiceAccess::DiscardedTaskGuard >(request.resource())] (const std::stop_token &) {
+				return ServiceAccess::submitTask(m_primaryServices, m_tasks, [this, request, guard = std::make_shared< ServiceAccess::DiscardedTaskGuard >(request.resource(), m_discardCount)] (const std::stop_token &) {
 					guard->markRan();
 
 					this->loadingTask(request);
@@ -2061,6 +2070,9 @@ namespace EmEn::Resources
 			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources;		///< Map of loaded resources (name -> resource).
 			std::unordered_multimap< int, LoadingRequest > m_externalResources;				 ///< Parked download requests (ticket -> request; several resources may share a URL).
 			mutable std::mutex m_resourcesAccess;												 ///< Mutex protecting m_resources and m_externalResources.
+			/* NOTE: Shared with the DiscardedTaskGuards: they count the loads the stop cancelled (stopBackgroundWork() reports
+			 * them in one line). */
+			std::shared_ptr< std::atomic< size_t > > m_discardCount{std::make_shared< std::atomic< size_t > >(0)};
 			bool m_verboseEnabled{false};														 ///< Verbose logging flag for detailed trace output.
 			/* NOTE: LAST (Ave Robustus II): the loading tasks and the manual creations read the members above through
 			 * `this`; destroyed first, the group stops them and waits for the running ones. */

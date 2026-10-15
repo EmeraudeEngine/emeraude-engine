@@ -613,6 +613,24 @@ namespace EmEn::Resources
 	}
 
 	bool
+	ResourceTrait::abandonLoading () noexcept
+	{
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		/* NOTE: setLoadSuccess(false) without its error line (the load never ran: the application stopped). */
+		m_status = Status::Failed;
+
+		this->notify(LoadFailed, this->name());
+
+		this->releaseLinksAfterFailure();
+
+		return true;
+	}
+
+	bool
 	ResourceTrait::setManualLoadSuccess (bool status) noexcept
 	{
 		/* Avoid it to call this method on an automatic loading resource. */

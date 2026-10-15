@@ -68,10 +68,14 @@ namespace EmEn::Resources::ServiceAccess
 			return;
 		}
 
-		/* NOTE: A resource whose task never ran: put in the Failed state, so its parents stop waiting. */
+		/* NOTE: A resource whose task never ran: put in the Failed state, so its parents stop waiting — silently, the
+		 * container's stop reports the count in one line (owner decision 2026-10-15). */
 		if ( const auto status = m_resource->status(); status == Status::Unloaded || status == Status::Enqueuing || status == Status::ManualEnqueuing )
 		{
-			static_cast< void >(m_resource->failLoading());
+			if ( m_resource->abandonLoading() && m_discardCount != nullptr )
+			{
+				m_discardCount->fetch_add(1);
+			}
 		}
 	}
 

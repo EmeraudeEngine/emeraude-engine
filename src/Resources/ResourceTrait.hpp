@@ -657,6 +657,15 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @brief Fails a load the application's stop cancelled before it ran: the resource ends Failed, its parents and
+			 * observers are told (LoadFailed) and its links released, as failLoading() — WITHOUT an error line: the caller
+			 * reports the cancelled loads in one summary (owner decision 2026-10-15: a quit during a load is not hundreds of
+			 * load errors).
+			 * @return bool False when the resource was not waiting for its load.
+			 */
+			bool abandonLoading () noexcept;
+
+			/**
 			 * @brief Completes manual loading by setting the final status.
 			 *
 			 * This method transitions the resource from ManualEnqueuing to either Loaded or Failed.
