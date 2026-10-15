@@ -78,5 +78,16 @@ Verified on macOS (M6, 2026-10-15, sponza quit at 2 s, still loading, ~390 loads
 without", 0 "fails: its dependency" (were 24-28 and 0-1), 0 `[Error]` and the same single AL warning as a normal quit
 after the command, quit in 0.55-0.91 s, 0 VUID, exit 0.
 
+**Measured (engine d38bf755 and after, 2026-10-15; former item thread-pool-jobs-owned-through-a-task-handle).**
+- Before (2026-10-08), `Core` cancelled through a flag and drained the pool: the shutdown with automatic LODs took 2.2 s
+  on Linux, 3-4 s on macOS, 21-26 s on Windows; `sponza` 6.5 s; `terrain` quit while loading took 20.0 s, because its
+  cloud growth jobs and the clipmap upload ran to completion first.
+- After, Linux (RTX 3070 Ti, validation layer):
+  - `sponza` with automatic LODs quits in 0.60-0.72 s at 8 / 12 / 16 / 25 s (at 8 s, the jobs in flight stop); 0 VUID.
+  - `terrain` quit during its load exits 1.27 s after the command executes. The command itself waits for the main
+    thread while the act loads: item `act-load-blocks-main-thread`.
+- TSan stress `EmeraudeResourceJobsStress` (projet-alpha `docs/unit-testing.md` § ThreadSanitizer): 0 report.
+- Peers: Windows, base suites green (2531 tests); macOS, `sponza` quit at 2 s in 0.48-0.71 s.
+
 ⚠️ Since 2026-10-15 `ResourceTrait.hpp` includes `ThreadPool.hpp` (the provider's `TaskGroup` member): every resource
 header pays for it (compile time, the lowest priority).
