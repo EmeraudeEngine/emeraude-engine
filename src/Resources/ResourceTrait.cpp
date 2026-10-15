@@ -370,14 +370,29 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::goOnAfterDependencyFailure (const ResourceTrait & dependency) noexcept
 	{
+		/* NOTE: A dependency the application's stop cancelled is no failure to report (owner decision 2026-10-15): the
+		 * container's stop summarises the cancelled loads in one line. */
+		const bool cancelled = dependency.loadAbandoned();
+
 		if ( this->onDependencyFailed(dependency) )
 		{
-			TraceWarning{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") goes on without its failed dependency '" << dependency.name() << "' (" << dependency.classLabel() << ").";
+			if ( !cancelled )
+			{
+				TraceWarning{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") goes on without its failed dependency '" << dependency.name() << "' (" << dependency.classLabel() << ").";
+			}
 
 			return true;
 		}
 
-		TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") fails: its dependency '" << dependency.name() << "' (" << dependency.classLabel() << ") failed.";
+		if ( cancelled )
+		{
+			/* NOTE: Its own parents stay silent too. */
+			m_loadAbandoned.store(true, std::memory_order_release);
+		}
+		else
+		{
+			TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") fails: its dependency '" << dependency.name() << "' (" << dependency.classLabel() << ") failed.";
+		}
 
 		m_status = Status::Failed;
 
@@ -620,7 +635,9 @@ namespace EmEn::Resources
 			return false;
 		}
 
-		/* NOTE: setLoadSuccess(false) without its error line (the load never ran: the application stopped). */
+		/* NOTE: setLoadSuccess(false) without its error line (the load never ran: the application stopped). Set first:
+		 * the parents told below read it. */
+		m_loadAbandoned.store(true, std::memory_order_release);
 		m_status = Status::Failed;
 
 		this->notify(LoadFailed, this->name());

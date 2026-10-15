@@ -666,6 +666,18 @@ namespace EmEn::Resources
 			bool abandonLoading () noexcept;
 
 			/**
+			 * @brief Returns whether the load was abandoned because the application stopped (abandonLoading(), or a
+			 * dependency abandoned that way): the dependency messages of its parents stay silent.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			loadAbandoned () const noexcept
+			{
+				return m_loadAbandoned.load(std::memory_order_acquire);
+			}
+
+			/**
 			 * @brief Completes manual loading by setting the final status.
 			 *
 			 * This method transitions the resource from ManualEnqueuing to either Loaded or Failed.
@@ -1384,5 +1396,7 @@ namespace EmEn::Resources
 			bool m_localDataReloading{false};
 			/* NOTE: Guarded by m_dependenciesAccess: true while ONE thread runs onDependenciesLoaded() (checkDependencies()). */
 			bool m_dependenciesFinalizing{false};
+			/* NOTE: Atomic: set by the thread that stops the loads, read by a parent on any thread. */
+			std::atomic_bool m_loadAbandoned{false};
 	};
 }
