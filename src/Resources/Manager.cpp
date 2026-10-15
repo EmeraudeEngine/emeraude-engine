@@ -296,6 +296,13 @@ namespace EmEn::Resources
 	void
 	Manager::stopBackgroundWork () noexcept
 	{
+		using Clock = std::chrono::steady_clock;
+
+		/* NOTE: A wait above this threshold is traced: the shutdown phase is visible on every OS (2026-10-15). */
+		constexpr std::chrono::milliseconds TracedWait{10};
+
+		const auto start = Clock::now();
+
 		/* No release pass is scheduled any more; a running one stops at its next container. */
 		m_releaseLocalData = false;
 		m_localDataReleasePass.reset();
@@ -304,11 +311,27 @@ namespace EmEn::Resources
 		 * ones. */
 		for ( const auto & container : m_containers | std::views::values )
 		{
+			const auto containerStart = Clock::now();
+
 			container->stopBackgroundWork();
+
+			if ( const auto waited = Clock::now() - containerStart; waited > TracedWait )
+			{
+				TraceInfo{ClassId} << "stopBackgroundWork(): the '" << container->name() << "' tasks took " << std::chrono::duration_cast< std::chrono::milliseconds >(waited).count() << " ms to stop.";
+			}
 		}
 
 		/* Last: a load that ran above may have started a local-data reload. */
+		const auto jobsStart = Clock::now();
+
 		this->stopResourceJobs();
+
+		if ( const auto waited = Clock::now() - jobsStart; waited > TracedWait )
+		{
+			TraceInfo{ClassId} << "stopBackgroundWork(): the resource jobs took " << std::chrono::duration_cast< std::chrono::milliseconds >(waited).count() << " ms to stop.";
+		}
+
+		TraceInfo{ClassId} << "stopBackgroundWork(): every resource job stopped in " << std::chrono::duration_cast< std::chrono::milliseconds >(Clock::now() - start).count() << " ms.";
 	}
 
 	size_t

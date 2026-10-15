@@ -59,9 +59,11 @@ are joined, before any service they touch goes. Idempotent; `Manager::onTerminat
 **A job that never runs.** A job stopped before it starts never runs (base `TaskGroup` / `TaskHandle` contract,
 2026-10-15). A loading task or a manual creation discarded that way puts its resource in the Failed state through
 `ServiceAccess::DiscardedTaskGuard` (so its parents stop waiting, owner ruling 2026-10-01); a discarded reload ends the
-reload through `ResourceTrait::LocalDataReloadJob` (else `acquireLocalData()` would wait forever). These guards run on
-a worker and touch ONLY what they hold — never the container (it may be gone). `stopBackgroundWork()` uses
-`TaskGroup::waitForAll()`: when it returns, every discarded task's guard has run.
+reload through `ResourceTrait::LocalDataReloadJob` (else `acquireLocalData()` would wait forever). The stop removes
+the queued tasks from the pool's queue and these guards run on the STOPPING thread (a task already dequeued: on its
+worker); they touch ONLY what they hold — never the container. `stopBackgroundWork()` uses `TaskGroup::waitForAll()`:
+when it returns, every discarded task's guard has run, and it never waits behind other owners' queued work.
+`stopBackgroundWork()` traces every group that took more than 10 ms to stop, and its total.
 
 ⚠️ Since 2026-10-15 `ResourceTrait.hpp` includes `ThreadPool.hpp` (the provider's `TaskGroup` member): every resource
 header pays for it (compile time, the lowest priority).

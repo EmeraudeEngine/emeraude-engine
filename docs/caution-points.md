@@ -8458,7 +8458,9 @@ manager is a primary service, terminated after the renderer and the device, so i
 services they touch go.
 - ⚠️ A job stopped before it starts NEVER RUNS (base contract): what its waiters expect is released by a "never ran"
   guard in its destructor (`ServiceAccess::DiscardedTaskGuard` fails the resource; `ResourceTrait::LocalDataReloadJob`
-  ends the reload), which touches only what it holds.
+  ends the reload), which touches only what it holds. The stop REMOVES the queued tasks from the pool's queue (base
+  `ThreadPool::purgeQueued()`): a first version only discarded them when a worker dequeued them, and the macOS M6 shutdown
+  then waited 5.8 s behind the whole automatic-LOD generation queued before them (2026-10-15, fixed the same day).
 - ⚠️ A job that holds its owner's last reference destroys the owner on its own thread, which then waits for itself:
   aborted (base D2). A mesh's LOD job captures `this`, never the mesh.
 - ⚠️ An application (a `Core` subclass) that still holds GPU resources when `Core::terminate()` runs keeps them
