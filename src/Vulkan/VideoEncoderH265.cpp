@@ -411,6 +411,13 @@ namespace EmEn::Vulkan
 		 * encodes 64x64 CTBs only, and its stream was undecodable past the first CTB rows (2026-10-15, RADV RENOIR). */
 		m_stdSPS.log2_diff_max_min_luma_coding_block_size = static_cast< uint8_t >(m_log2CTBSize - 4); /* 16..CTB. */
 		m_stdSPS.log2_diff_max_min_luma_transform_block_size = static_cast< uint8_t >(m_log2MaxTransformBlockSize - 2); /* 4..max TB. */
+		/* NOTE: The deepest transform tree H.265 allows (7.4.3.2.1: 0..CtbLog2SizeY - MinTbLog2SizeY), as Mesa radeonsi
+		 * and GStreamer vah265enc write it: the encoder chooses its transform splits, the SPS must let the stream signal
+		 * them. Left at 0, AMD VCN still split its transform trees and wrote split_transform_flag / cbf syntax a depth-0
+		 * SPS declares absent: the stream was undecodable past the first CTBs (RADV RENOIR, 2026-10-15); NVENC honours
+		 * any depth. */
+		m_stdSPS.max_transform_hierarchy_depth_inter = static_cast< uint8_t >(m_log2CTBSize - 2);
+		m_stdSPS.max_transform_hierarchy_depth_intra = static_cast< uint8_t >(m_log2CTBSize - 2);
 		m_stdSPS.pProfileTierLevel = &m_stdProfileTierLevel;
 		m_stdSPS.pDecPicBufMgr = &m_stdDecPicBufMgr;
 

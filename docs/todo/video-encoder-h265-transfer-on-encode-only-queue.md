@@ -55,11 +55,25 @@ transform-block sizes and SAO from `VkVideoEncodeH265CapabilitiesKHR` (correct p
 whose driver already overrode them). Owner decision 2026-10-15: `Recorder::hardwareEncodeWithheld()` withholds the
 hardware H.265 encode on AMD (vendor 0x1002) — the software VP9 path makes the rushes — until the cause is settled.
 
+## The reference encodes point at our SPS (2026-10-15, LinuxB-PA)
+
+GStreamer 1.28.2 has no `vulkanh265enc` (only `vulkanh264enc`). Instead: `vah265enc` (VA-API HEVC on the SAME VCN2
+through Mesa radeonsi) and `vulkanh264enc` on RADV, 180 frames 1280x720 NV12 each, decoded by `avdec`: ALL clean (0
+error, 180/180) — default CBR, VBR, all-intra VBR (zone-plate, snow 12 MB like our broken streams), CQP 24, and the
+Vulkan H.264 encode on RADV. Our AMD stream cross-decoded by VA-API (`vah265dec`) and the NVIDIA Vulkan decoder gives
+the same garbage as libav: the stream itself is invalid.
+Parameters, the clean VA stream against ours: `max_transform_hierarchy_depth_inter / intra` 4 / 4 against **0 / 0**
+(never set: `m_stdSPS = {}`); the rest is identical or harmless (amp 1/0, loop filter across slices 1/0, POC lsb
+4/8). A depth-0 SPS declares no `split_transform_flag` below the implicit split; VCN still splits its transform trees
+and writes that syntax → CABAC desync after the first CTBs, our exact symptom. NVENC honours depth 0, hence clean.
+Fix (this item): both depths = `CtbLog2SizeY - 2`, the maximum H.265 allows (7.4.3.2.1), as radeonsi / vah265enc
+write it. NVIDIA after it (Linux, RTX 3070 Ti, CTB 32 → depth 3, read back with `trace_headers`): 181 pictures,
+0 decode error, 0 VUID, picture 100 clean.
+
 ## What remains
 
-- [ ] The reference encode on the same GPU (GStreamer `vulkanh265enc`, owner decision 2026-10-15): corrupt too →
-      a RADV/VCN2 defect to report upstream with the evidence; clean → compare its parameters with ours.
-- [ ] Then lift `hardwareEncodeWithheld()` (or keep it per driver version, on the evidence).
+- [ ] AMD: a rush with the SPS fix and `hardwareEncodeWithheld()` bypassed LOCALLY (test-only, never committed),
+      decoded with libav / VA-API: clean → lift the withholding; still corrupt → a RADV/VCN2 report upstream.
 
 ## ⚠️ Traps
 
