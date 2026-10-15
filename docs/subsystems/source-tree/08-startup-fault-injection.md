@@ -60,6 +60,27 @@ dependencies/emeraude-engine/tools/stress/startup-fault-sweep.sh $PWD/.claude-bu
 - 0 validation message, 0 ASan error, 0 leak of the cascade.
 - The reference run: every service up, exit 0, 0 leak of the cascade.
 
+### Verified on Windows (Window-PA, RTX 3500 Ada, MSVC, engine 74a1edc5, 2026-10-16)
+
+- 34 services, the 34th being `AudioExternalInputService` (a microphone exists there; the Linux runs use
+  `ALSOFT_DRIVERS=null`, no capture device):
+  - 20 clean refusals (exit 1) and 14 clean degradations (exit 0);
+  - every injection hit, no hang (the 120 s watchdog never fired);
+  - 0 validation message, 0 VUID, 0 ASan error, under ASan and in a plain build.
+  - Durations: base-level refusals < 0.3 s; core-level refusals 2-4 s plain, 6-11 s under ASan (the Vulkan instance
+    and device creation with the validation layer, ~2 s, doubled by ASan); nothing waits on a timeout.
+- projet-alpha (CEF), plain build with the option, 5 services (UI manager, overlay, renderer, instance, notifier):
+  - exit 0 or 1, never a refusal dialog (an injected instance failure is not told as a driver refusal), 0 VUID;
+  - the shutdown 1.2-1.4 s when the application came up.
+- MSVC AddressSanitizer — `EMERAUDE_ENABLE_ASAN` adds `-fsanitize=address` (Linux only). Window-PA's build, which
+  could become the switch's Windows branch:
+  - `CMAKE_C/CXX_FLAGS` add `/fsanitize=address /Z7 /D_DISABLE_VECTOR_ANNOTATION /D_DISABLE_STRING_ANNOTATION`;
+  - `/DEBUG` on the executable and shared linker flags;
+  - `clang_rt.asan_dynamic-x86_64.dll` (the VC bin directory) on `PATH` at run time.
+  - `/Z7` is required: without debug information MSVC warns C5072, fatal under `/WX`.
+  - The two defines avoid the annotation mismatch with the prebuilt, uninstrumented static libraries.
+  - ⚠️ MSVC ASan has no LeakSanitizer: the leak half of the sweep has no Windows equivalent.
+
 ### Native handles in RAII holders (owner decision 2026-10-16: option A, defence in depth)
 
 The sweep injects at the service level; a failure INSIDE an `onInitialize()` (after it acquired a native handle) is
