@@ -59,3 +59,26 @@ dependencies/emeraude-engine/tools/stress/startup-fault-sweep.sh $PWD/.claude-bu
   video input, recorders, physics, audio, track mixer, system notification, notifier;
 - 0 validation message, 0 ASan error, 0 leak of the cascade.
 - The reference run: every service up, exit 0, 0 leak of the cascade.
+
+### Native handles in RAII holders (owner decision 2026-10-16: option A, defence in depth)
+
+The sweep injects at the service level; a failure INSIDE an `onInitialize()` (after it acquired a native handle) is
+the other half. A service whose `onInitialize()` fails is never terminated, so what it acquired must be released by its
+members.
+- `Audio/OpenALHandles.hpp`: `ALCDeviceHandle`, `ALCCaptureDeviceHandle`, `ALCContextHandle` (`std::unique_ptr` with a
+  deleter; a context is made non-current before it is destroyed). The audio manager, the audio recorder and the
+  external input hold their devices and contexts in them, each device declared before its contexts. `onTerminate()`
+  still releases them in order with its checks and logs (`release()` for a close whose answer is logged).
+  - Fixed through it: a failed context creation in the audio manager left the output device open. Proven with a
+    test-only build: the context creation forced to fail, the holder closed the device at destruction ("closed a
+    device: yes"). LeakSanitizer does not see this class: OpenAL Soft keeps its devices reachable in a global list.
+  - Fixed in the audio recorder: a failure to open the output device destroyed the game context while it was the
+    current one, without restoring the audio manager's context; one `releaseContexts()` now ends every failure branch
+    and `onTerminate()`.
+- `PlatformManager::GLFWLibrary`: owns `glfwInit()`, `glfwTerminate()` at its end, declared after the Vulkan loader
+  (GLFW terminated before the loader closes). Fixed through it: a missing Vulkan support after `glfwInit()` left GLFW
+  initialized.
+- `Vulkan::Instance` already released in its destructor (P0, H3): unchanged.
+- Verified after the change: the sweep again (33 runs, 0 issue); a projet-alpha rush with the voice-over (the output,
+  loopback and capture devices closed with their logs; 181 pictures, the WAVs valid; 0 VUID).
+

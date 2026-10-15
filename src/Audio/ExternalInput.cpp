@@ -172,12 +172,12 @@ namespace EmEn::Audio
 		}
 
 		/* NOTE: Opening the output input device. */
-		m_device = alcCaptureOpenDevice(
+		m_device.reset(alcCaptureOpenDevice(
 			m_selectedDeviceName.c_str(),
 			static_cast< ALuint >(m_frequency),
 			AL_FORMAT_MONO16,
 			bufferSize * 1024
-		);
+		));
 
 		if ( m_device == nullptr )
 		{
@@ -186,7 +186,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		TraceSuccess{ClassId} << "The input audio device '" << alcGetString(m_device, ALC_CAPTURE_DEVICE_SPECIFIER) << "' selected !";
+		TraceSuccess{ClassId} << "The input audio device '" << alcGetString(m_device.get(), ALC_CAPTURE_DEVICE_SPECIFIER) << "' selected !";
 
 		return true;
 	}
@@ -203,10 +203,10 @@ namespace EmEn::Audio
 		m_process.requestStop();
 		m_process.join();
 
-		/* NOTE: Release the output audio device. */
-		if ( m_device != nullptr )
+		/* NOTE: Release the input audio device: taken back from its holder, closed here with its check. */
+		if ( auto * device = m_device.release(); device != nullptr )
 		{
-			if ( alcCaptureCloseDevice(m_device) == ALC_TRUE )
+			if ( alcCaptureCloseDevice(device) == ALC_TRUE )
 			{
 				TraceSuccess{ClassId} << "The input audio device '" << m_selectedDeviceName << "' closed !";
 
@@ -216,8 +216,6 @@ namespace EmEn::Audio
 			{
 				TraceError{ClassId} << "Unable to close the input audio device '" << m_selectedDeviceName << "' !";
 			}
-
-			m_device = nullptr;
 		}
 
 		return true;
@@ -234,7 +232,7 @@ namespace EmEn::Audio
 		m_samples.clear();
 		m_streamingMode = false;
 
-		alcCaptureStart(m_device);
+		alcCaptureStart(m_device.get());
 
 		m_isRecording = true;
 
@@ -271,7 +269,7 @@ namespace EmEn::Audio
 		m_streamByteCount = 0;
 		m_streamingMode = true;
 
-		alcCaptureStart(m_device);
+		alcCaptureStart(m_device.get());
 
 		m_isRecording = true;
 
@@ -289,7 +287,7 @@ namespace EmEn::Audio
 		/* The system refused the thread (Base::Thread traced why): the recording is refused (owner policy, 2026-10-07). */
 		TraceError{ClassId} << "Unable to start the recording thread: the recording is refused !";
 
-		alcCaptureStop(m_device);
+		alcCaptureStop(m_device.get());
 
 		m_isRecording = false;
 
@@ -309,7 +307,7 @@ namespace EmEn::Audio
 			return;
 		}
 
-		alcCaptureStop(m_device);
+		alcCaptureStop(m_device.get());
 
 		m_isRecording = false;
 
@@ -399,7 +397,7 @@ namespace EmEn::Audio
 	{
 		ALCint sampleCount = 0;
 
-		alcGetIntegerv(m_device, ALC_CAPTURE_SAMPLES, 1, &sampleCount);
+		alcGetIntegerv(m_device.get(), ALC_CAPTURE_SAMPLES, 1, &sampleCount);
 
 		if ( sampleCount <= 0 )
 		{
@@ -410,7 +408,7 @@ namespace EmEn::Audio
 		{
 			m_streamBuffer.resize(static_cast< size_t >(sampleCount));
 
-			alcCaptureSamples(m_device, m_streamBuffer.data(), sampleCount);
+			alcCaptureSamples(m_device.get(), m_streamBuffer.data(), sampleCount);
 
 			const auto bytes = static_cast< size_t >(sampleCount) * sizeof(int16_t);
 			m_outputFileStream.write(reinterpret_cast< const char * >(m_streamBuffer.data()), static_cast< std::streamsize >(bytes));
@@ -422,7 +420,7 @@ namespace EmEn::Audio
 
 			m_samples.resize(offset + static_cast< size_t >(sampleCount));
 
-			alcCaptureSamples(m_device, &m_samples[offset], sampleCount);
+			alcCaptureSamples(m_device.get(), &m_samples[offset], sampleCount);
 		}
 	}
 

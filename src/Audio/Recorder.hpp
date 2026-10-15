@@ -44,6 +44,7 @@
 #include "Thread.hpp"
 #include "WaveFactory/Types.hpp"
 #include "OpenALExtensions.hpp"
+#include "OpenALHandles.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -117,7 +118,7 @@ namespace EmEn::Audio
 			ALCdevice *
 			loopbackDevice () const noexcept
 			{
-				return m_loopbackDevice;
+				return m_loopbackDevice.get();
 			}
 
 			/**
@@ -129,7 +130,7 @@ namespace EmEn::Audio
 			ALCcontext *
 			gameContext () const noexcept
 			{
-				return m_gameContext;
+				return m_gameContext.get();
 			}
 
 			/**
@@ -210,6 +211,14 @@ namespace EmEn::Audio
 			bool onTerminate () noexcept override;
 
 			/**
+			 * @brief Releases the contexts and devices in order: the audio manager's context made current again (when the
+			 * game context is), each context before its device. Every failure branch of onInitialize() and onTerminate()
+			 * end here.
+			 * @pre The render thread is joined (or never started).
+			 */
+			void releaseContexts () noexcept;
+
+			/**
 			 * @brief Render thread entry point that continuously renders loopback samples and forwards to speakers.
 			 *
 			 * Sets the playback context as thread-local, creates a streaming source with 4 buffers on the playback
@@ -238,11 +247,13 @@ namespace EmEn::Audio
 
 			PrimaryServices & m_primaryServices; ///< Primary services for settings and filesystem access.
 			Manager & m_audioManager; ///< Audio manager owning this recorder.
-			ALCdevice * m_loopbackDevice{nullptr}; ///< OpenAL loopback device (renders to buffer instead of speakers).
-			ALCdevice * m_playbackDevice{nullptr}; ///< Real output device for speaker passthrough.
-			ALCcontext * m_gameContext{nullptr}; ///< Game audio context on the loopback device (set as global current).
-			ALCcontext * m_playbackContext{nullptr}; ///< Playback context on the real output device (thread-local on render thread).
-			ALCcontext * m_previousGlobalContext{nullptr}; ///< Saved previous global context to restore on terminate.
+			/* NOTE: Owned (Ave Robustus II P3): the devices before the contexts created on them, destroyed after them.
+			 * releaseContexts() releases them in order; the holders close whatever is left. */
+			ALCDeviceHandle m_loopbackDevice; ///< OpenAL loopback device (renders to buffer instead of speakers).
+			ALCDeviceHandle m_playbackDevice; ///< Real output device for speaker passthrough.
+			ALCContextHandle m_gameContext; ///< Game audio context on the loopback device (set as global current).
+			ALCContextHandle m_playbackContext; ///< Playback context on the real output device (thread-local on render thread).
+			ALCcontext * m_previousGlobalContext{nullptr}; ///< NOT owned: the audio manager's context, made current again at the release.
 			Base::WaveFactory::Frequency m_playbackFrequency{Base::WaveFactory::Frequency::PCM48000Hz}; ///< Playback frequency (typically 48kHz).
 			uint16_t m_channelCount{2}; ///< Number of audio channels (2 = stereo, 6 = 5.1 surround).
 			std::atomic< bool > m_recording{false}; ///< True when actively recording audio to WAV.

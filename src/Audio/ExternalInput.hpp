@@ -45,6 +45,7 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Audio/OpenALHandles.hpp"
 #include "Thread.hpp"
 #include "WaveFactory/Types.hpp"
 
@@ -177,7 +178,8 @@ namespace EmEn::Audio
 			PrimaryServices & m_primaryServices; ///< Primary services for settings and filesystem access.
 			std::vector< std::string > m_availableDevices;
 			std::string m_selectedDeviceName;
-			ALCdevice * m_device{nullptr};
+			/* NOTE: Owned (Ave Robustus II P3): onTerminate() closes it with its check, the holder closes what is left. */
+			ALCCaptureDeviceHandle m_device;
 			Base::WaveFactory::Frequency m_frequency{Base::WaveFactory::Frequency::PCM48000Hz};
 			/* Memory mode. */
 			std::vector< ALshort > m_samples;

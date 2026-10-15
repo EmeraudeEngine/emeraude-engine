@@ -189,7 +189,7 @@ namespace EmEn
 
 		glfwInitVulkanLoader(m_vulkanLoader.getInstanceProcAddr());
 
-		if ( glfwInit() == GLFW_FALSE )
+		if ( !m_glfw.initialize() )
 		{
 			Tracer::fatal(ClassId, "Unable to initialize GLFW. Aborting ...");
 
@@ -200,6 +200,10 @@ namespace EmEn
 		if ( glfwVulkanSupported() == GLFW_FALSE )
 		{
 			Tracer::fatal(ClassId, "Vulkan API is not supported by this system ! Aborting ...");
+
+			/* NOTE: A service that fails is never terminated: GLFW is terminated here (its holder would otherwise do it
+			 * at the destruction, after the loader is long unused). */
+			m_glfw.terminate();
 
 			return false;
 		}
@@ -258,10 +262,37 @@ namespace EmEn
 		return prepared;
 	}
 
+	PlatformManager::GLFWLibrary::~GLFWLibrary ()
+	{
+		this->terminate();
+	}
+
+	bool
+	PlatformManager::GLFWLibrary::initialize () noexcept
+	{
+		if ( !m_initialized )
+		{
+			m_initialized = glfwInit() == GLFW_TRUE;
+		}
+
+		return m_initialized;
+	}
+
+	void
+	PlatformManager::GLFWLibrary::terminate () noexcept
+	{
+		if ( m_initialized )
+		{
+			glfwTerminate();
+
+			m_initialized = false;
+		}
+	}
+
 	bool
 	PlatformManager::onTerminate () noexcept
 	{
-		glfwTerminate();
+		m_glfw.terminate();
 
 		/* Removing callback. */
 		glfwSetErrorCallback(nullptr);

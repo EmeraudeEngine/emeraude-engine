@@ -44,6 +44,7 @@
 
 /* Local inclusions for usages. */
 #include "Audio/ExternalInput.hpp"
+#include "Audio/OpenALHandles.hpp"
 #include "Audio/Recorder.hpp"
 #include "Audio/TrackMixer.hpp"
 #include "WaveFactory/Types.hpp"
@@ -506,8 +507,11 @@ namespace EmEn::Audio
 			std::vector< ServiceInterface * > m_subServicesEnabled;
 			std::vector< std::string > m_availableDevices;
 			std::string m_selectedDeviceName;
-			ALCdevice * m_device{nullptr};
-			ALCcontext * m_context{nullptr};
+			/* NOTE: Owned (Ave Robustus II P3): the device before its context, destroyed after it. onTerminate() closes them in
+			 * order; the holders close what a half-done onInitialize() left (a service never initialized is never
+			 * terminated: a context creation failure used to leave the device open). */
+			ALCDeviceHandle m_device;
+			ALCContextHandle m_context;
 			std::map< ALCint, ALCint > m_contextAttributes;
 			Base::WaveFactory::Frequency m_playbackFrequency{Base::WaveFactory::Frequency::PCM48000Hz};
 			size_t m_musicChunkSize{DefaultAudioMusicChunkSize};

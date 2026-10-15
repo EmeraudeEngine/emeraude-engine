@@ -75,7 +75,7 @@ namespace EmEn::Audio
 		m_playbackFrequency = m_audioManager.frequencyPlayback();
 
 		/* Step 1: Create the loopback device (no hardware output). */
-		m_loopbackDevice = OpenAL::alcLoopbackOpenDeviceSOFT(nullptr);
+		m_loopbackDevice.reset(OpenAL::alcLoopbackOpenDeviceSOFT(nullptr));
 
 		if ( m_loopbackDevice == nullptr )
 		{
@@ -90,7 +90,7 @@ namespace EmEn::Audio
 
 		if ( outputMode == "Surround51" )
 		{
-			if ( OpenAL::alcIsRenderFormatSupportedSOFT(m_loopbackDevice, static_cast< ALCsizei >(m_playbackFrequency), ALC_5POINT1_SOFT, ALC_SHORT_SOFT) != ALC_FALSE )
+			if ( OpenAL::alcIsRenderFormatSupportedSOFT(m_loopbackDevice.get(), static_cast< ALCsizei >(m_playbackFrequency), ALC_5POINT1_SOFT, ALC_SHORT_SOFT) != ALC_FALSE )
 			{
 				channelFormat = ALC_5POINT1_SOFT;
 				m_channelCount = 6;
@@ -104,12 +104,11 @@ namespace EmEn::Audio
 		}
 
 		/* Check if the chosen render format is supported. */
-		if ( OpenAL::alcIsRenderFormatSupportedSOFT(m_loopbackDevice, static_cast< ALCsizei >(m_playbackFrequency), channelFormat, ALC_SHORT_SOFT) == ALC_FALSE )
+		if ( OpenAL::alcIsRenderFormatSupportedSOFT(m_loopbackDevice.get(), static_cast< ALCsizei >(m_playbackFrequency), channelFormat, ALC_SHORT_SOFT) == ALC_FALSE )
 		{
 			TraceError{ClassId} << "Loopback render format (" << m_channelCount << "ch, int16, " << static_cast< int >(m_playbackFrequency) << "Hz) not supported !";
 
-			alcCloseDevice(m_loopbackDevice);
-			m_loopbackDevice = nullptr;
+			this->releaseContexts();
 
 			return false;
 		}
@@ -126,14 +125,13 @@ namespace EmEn::Audio
 			0
 		};
 
-		m_gameContext = alcCreateContext(m_loopbackDevice, loopbackAttrs.data());
+		m_gameContext.reset(alcCreateContext(m_loopbackDevice.get(), loopbackAttrs.data()));
 
 		if ( m_gameContext == nullptr )
 		{
 			Tracer::error(ClassId, "Failed to create loopback context !");
 
-			alcCloseDevice(m_loopbackDevice);
-			m_loopbackDevice = nullptr;
+			this->releaseContexts();
 
 			return false;
 		}
@@ -143,19 +141,18 @@ namespace EmEn::Audio
 		 * objects on the loopback device.  The render thread overrides this
 		 * with its own thread-local playback context. */
 		m_previousGlobalContext = alcGetCurrentContext();
-		alcMakeContextCurrent(m_gameContext);
+		alcMakeContextCurrent(m_gameContext.get());
 
 		/* Step 2: Open the real output device for speaker passthrough. */
-		m_playbackDevice = alcOpenDevice(outputDeviceName.c_str());
+		m_playbackDevice.reset(alcOpenDevice(outputDeviceName.c_str()));
 
 		if ( m_playbackDevice == nullptr )
 		{
 			Tracer::error(ClassId, "Failed to open real output device for loopback passthrough !");
 
-			alcDestroyContext(m_gameContext);
-			m_gameContext = nullptr;
-			alcCloseDevice(m_loopbackDevice);
-			m_loopbackDevice = nullptr;
+			/* NOTE: The previous global context (the audio manager's) is made current again: this branch used to destroy
+			 * the game context while current, leaving the whole audio without a context. */
+			this->releaseContexts();
 
 			return false;
 		}
@@ -180,18 +177,13 @@ namespace EmEn::Audio
 			0
 		};
 
-		m_playbackContext = alcCreateContext(m_playbackDevice, playbackAttrs.data());
+		m_playbackContext.reset(alcCreateContext(m_playbackDevice.get(), playbackAttrs.data()));
 
 		if ( m_playbackContext == nullptr )
 		{
 			Tracer::error(ClassId, "Failed to create playback context for loopback passthrough !");
 
-			alcCloseDevice(m_playbackDevice);
-			m_playbackDevice = nullptr;
-			alcDestroyContext(m_gameContext);
-			m_gameContext = nullptr;
-			alcCloseDevice(m_loopbackDevice);
-			m_loopbackDevice = nullptr;
+			this->releaseContexts();
 
 			return false;
 		}
@@ -239,35 +231,7 @@ namespace EmEn::Audio
 			m_renderThread.join();
 		}
 
-		/* Restore the previous global context before destroying loopback resources. */
-		alcMakeContextCurrent(m_previousGlobalContext);
-		m_previousGlobalContext = nullptr;
-
-		/* Destroy playback context and device. */
-		if ( m_playbackContext != nullptr )
-		{
-			alcDestroyContext(m_playbackContext);
-			m_playbackContext = nullptr;
-		}
-
-		if ( m_playbackDevice != nullptr )
-		{
-			alcCloseDevice(m_playbackDevice);
-			m_playbackDevice = nullptr;
-		}
-
-		/* Destroy loopback context and device. */
-		if ( m_gameContext != nullptr )
-		{
-			alcDestroyContext(m_gameContext);
-			m_gameContext = nullptr;
-		}
-
-		if ( m_loopbackDevice != nullptr )
-		{
-			alcCloseDevice(m_loopbackDevice);
-			m_loopbackDevice = nullptr;
-		}
+		this->releaseContexts();
 
 		Tracer::success(ClassId, "Loopback passthrough terminated.");
 
@@ -275,10 +239,29 @@ namespace EmEn::Audio
 	}
 
 	void
+	Recorder::releaseContexts () noexcept
+	{
+		/* NOTE: The previous global context (the audio manager's) first, when the game context is the current one: a
+		 * current context cannot be destroyed, and the audio must keep a context. */
+		if ( m_gameContext != nullptr && alcGetCurrentContext() == m_gameContext.get() )
+		{
+			alcMakeContextCurrent(m_previousGlobalContext);
+		}
+
+		m_previousGlobalContext = nullptr;
+
+		/* NOTE: Each context before its device (the holders' order too). */
+		m_playbackContext.reset();
+		m_playbackDevice.reset();
+		m_gameContext.reset();
+		m_loopbackDevice.reset();
+	}
+
+	void
 	Recorder::renderThreadFunc (const std::stop_token & stopToken) noexcept
 	{
 		/* Set the playback context on this thread. */
-		OpenAL::alcSetThreadContext(m_playbackContext);
+		OpenAL::alcSetThreadContext(m_playbackContext.get());
 
 		constexpr ALsizei ChunkSamples = 1024;
 		constexpr size_t NumBuffers = 4;
@@ -299,7 +282,7 @@ namespace EmEn::Audio
 		/* Prime all buffers. */
 		for ( auto buf : buffers )
 		{
-			OpenAL::alcRenderSamplesSOFT(m_loopbackDevice, renderBuf.data(), ChunkSamples);
+			OpenAL::alcRenderSamplesSOFT(m_loopbackDevice.get(), renderBuf.data(), ChunkSamples);
 
 			alBufferData(buf, alFormat, renderBuf.data(),
 				static_cast< ALsizei >(renderBuf.size() * sizeof(int16_t)), frequency);
@@ -320,7 +303,7 @@ namespace EmEn::Audio
 				alSourceUnqueueBuffers(source, 1, &buf);
 
 				/* Render from the loopback device. */
-				OpenAL::alcRenderSamplesSOFT(m_loopbackDevice, renderBuf.data(), ChunkSamples);
+				OpenAL::alcRenderSamplesSOFT(m_loopbackDevice.get(), renderBuf.data(), ChunkSamples);
 
 				/* If recording, write samples to stream. */
 				if ( m_recording.load(std::memory_order_relaxed) )

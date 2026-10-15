@@ -158,9 +158,9 @@ namespace EmEn::Audio
 		}
 
 		/* NOTE: Opening the output audio device. */
-		m_device = alcOpenDevice(m_selectedDeviceName.c_str());
+		m_device.reset(alcOpenDevice(m_selectedDeviceName.c_str()));
 
-		if ( alcGetErrors(m_device, "alcOpenDevice()", __FILE__, __LINE__) || m_device == nullptr )
+		if ( alcGetErrors(m_device.get(), "alcOpenDevice()", __FILE__, __LINE__) || m_device == nullptr )
 		{
 			TraceError{ClassId} << "Unable to open the output audio device '" << m_selectedDeviceName << "' !";
 
@@ -169,11 +169,11 @@ namespace EmEn::Audio
 
 		if ( m_usingAdvancedEnumeration )
 		{
-			TraceSuccess{ClassId} << "The output audio device '" << alcGetString(m_device, ALC_ALL_DEVICES_SPECIFIER) << "' selected !";
+			TraceSuccess{ClassId} << "The output audio device '" << alcGetString(m_device.get(), ALC_ALL_DEVICES_SPECIFIER) << "' selected !";
 		}
 		else
 		{
-			TraceSuccess{ClassId} << "The output audio device '" << alcGetString(m_device, ALC_DEVICE_SPECIFIER) << "' selected !";
+			TraceSuccess{ClassId} << "The output audio device '" << alcGetString(m_device.get(), ALC_DEVICE_SPECIFIER) << "' selected !";
 		}
 
 		/* Resolve the audio output mode (Auto, Stereo, Surround51). */
@@ -203,16 +203,16 @@ namespace EmEn::Audio
 		};
 
 		/* Context creation and set it as default. */
-		m_context = alcCreateContext(m_device, attributeList.data());
+		m_context.reset(alcCreateContext(m_device.get(), attributeList.data()));
 
-		if ( alcGetErrors(m_device, "alcCreateContext()", __FILE__, __LINE__) || m_context == nullptr )
+		if ( alcGetErrors(m_device.get(), "alcCreateContext()", __FILE__, __LINE__) || m_context == nullptr )
 		{
 			Tracer::error(ClassId, "Unable to create an audio context !");
 
 			return false;
 		}
 
-		if ( alcMakeContextCurrent(m_context) == AL_FALSE || alcGetErrors(m_device, "alcMakeContextCurrent()", __FILE__, __LINE__) )
+		if ( alcMakeContextCurrent(m_context.get()) == AL_FALSE || alcGetErrors(m_device.get(), "alcMakeContextCurrent()", __FILE__, __LINE__) )
 		{
 			Tracer::error(ClassId, "Unable set the current audio context !");
 
@@ -224,9 +224,9 @@ namespace EmEn::Audio
 		/* OpenAL EFX extensions. */
 		if ( settings.getOrSetDefault< bool >(OpenALUseEFXExtensionsKey, DefaultOpenALUseEFXExtensions) )
 		{
-			OpenAL::installExtensionSystemEvents(m_device);
+			OpenAL::installExtensionSystemEvents(m_device.get());
 
-			OpenAL::installExtensionEFX(m_device);
+			OpenAL::installExtensionEFX(m_device.get());
 		}
 
 		return this->saveContextAttributes();
@@ -362,7 +362,7 @@ namespace EmEn::Audio
 			Tracer::warning(ClassId, "There was unread problem with AL during initialization !");
 		}
 
-		if ( alcGetErrors(m_device, "GlobalInitFlush", __FILE__, __LINE__) )
+		if ( alcGetErrors(m_device.get(), "GlobalInitFlush", __FILE__, __LINE__) )
 		{
 			Tracer::warning(ClassId, "There was unread problem with ALC during initialization !");
 		}
@@ -410,27 +410,22 @@ namespace EmEn::Audio
 			Tracer::warning(ClassId, "There was unread problem with AL during execution !");
 		}
 
-		if ( alcGetErrors(m_device, "GlobalReleaseFlush", __FILE__, __LINE__) )
+		if ( alcGetErrors(m_device.get(), "GlobalReleaseFlush", __FILE__, __LINE__) )
 		{
 			Tracer::warning(ClassId, "There was unread problem with ALC during execution !");
 		}
 
 		auto & settings = m_primaryServices.settings();
 
-		/* NOTE: Release the audio context. */
+		/* NOTE: Release the audio context (its holder makes it non-current first). */
 		alcMakeContextCurrent(nullptr);
 
-		if ( m_context != nullptr )
-		{
-			alcDestroyContext(m_context);
+		m_context.reset();
 
-			m_context = nullptr;
-		}
-
-		/* NOTE: Release the output audio device. */
-		if ( m_device != nullptr )
+		/* NOTE: Release the output audio device: taken back from its holder, closed here with its check. */
+		if ( auto * device = m_device.release(); device != nullptr )
 		{
-			if ( alcCloseDevice(m_device) == ALC_TRUE )
+			if ( alcCloseDevice(device) == ALC_TRUE )
 			{
 				TraceSuccess{ClassId} << "The output audio device '" << m_selectedDeviceName << "' closed !";
 
@@ -440,8 +435,6 @@ namespace EmEn::Audio
 			{
 				TraceError{ClassId} << "Unable to close the output audio device '" << m_selectedDeviceName << "' !";
 			}
-
-			m_device = nullptr;
 		}
 
 		return error == 0;
@@ -691,7 +684,7 @@ namespace EmEn::Audio
 		{
 			if ( const auto it = m_contextAttributes.find(ALC_MAJOR_VERSION); it == m_contextAttributes.end() )
 			{
-				alcGetIntegerv(m_device, ALC_MAJOR_VERSION, 1, &major);
+				alcGetIntegerv(m_device.get(), ALC_MAJOR_VERSION, 1, &major);
 			}
 			else
 			{
@@ -700,7 +693,7 @@ namespace EmEn::Audio
 
 			if ( const auto it = m_contextAttributes.find(ALC_MINOR_VERSION); it == m_contextAttributes.end() )
 			{
-				alcGetIntegerv(m_device, ALC_MINOR_VERSION, 1, &minor);
+				alcGetIntegerv(m_device.get(), ALC_MINOR_VERSION, 1, &minor);
 			}
 			else
 			{
@@ -725,7 +718,7 @@ namespace EmEn::Audio
 		{
 			if ( const auto it = m_contextAttributes.find(ALC_EFX_MAJOR_VERSION); it == m_contextAttributes.end() )
 			{
-				alcGetIntegerv(m_device, ALC_EFX_MAJOR_VERSION, 1, &major);
+				alcGetIntegerv(m_device.get(), ALC_EFX_MAJOR_VERSION, 1, &major);
 			}
 			else
 			{
@@ -734,7 +727,7 @@ namespace EmEn::Audio
 
 			if ( const auto it = m_contextAttributes.find(ALC_EFX_MINOR_VERSION); it == m_contextAttributes.end() )
 			{
-				alcGetIntegerv(m_device, ALC_EFX_MINOR_VERSION, 1, &minor);
+				alcGetIntegerv(m_device.get(), ALC_EFX_MINOR_VERSION, 1, &minor);
 			}
 			else
 			{
@@ -1016,16 +1009,16 @@ namespace EmEn::Audio
 
 		ALCint size = 0;
 
-		alcGetIntegerv(m_device, ALC_ATTRIBUTES_SIZE, 1, &size);
+		alcGetIntegerv(m_device.get(), ALC_ATTRIBUTES_SIZE, 1, &size);
 
 		if ( size > 0 )
 		{
 			attributes.resize(static_cast< size_t >(size));
 
-			alcGetIntegerv(m_device, ALC_ALL_ATTRIBUTES, size, attributes.data());
+			alcGetIntegerv(m_device.get(), ALC_ALL_ATTRIBUTES, size, attributes.data());
 		}
 
-		if ( alcGetErrors(m_device, "alcGetIntegerv", __FILE__, __LINE__) )
+		if ( alcGetErrors(m_device.get(), "alcGetIntegerv", __FILE__, __LINE__) )
 		{
 			Tracer::warning(ClassId, "Unable to fetch device attributes correctly !");
 		}

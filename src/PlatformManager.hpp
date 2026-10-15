@@ -124,6 +124,43 @@ namespace EmEn
 
 		private:
 
+			/**
+			 * @brief Owns the GLFW library's initialization (Ave Robustus II P3: a native resource in an RAII holder):
+			 * glfwTerminate() at its end. A failure after glfwInit() (no Vulkan support) used to leave GLFW initialized: a
+			 * service that fails to start is never terminated.
+			 */
+			class GLFWLibrary final
+			{
+				public:
+
+					GLFWLibrary () noexcept = default;
+
+					GLFWLibrary (const GLFWLibrary & copy) noexcept = delete;
+
+					GLFWLibrary (GLFWLibrary && copy) noexcept = delete;
+
+					GLFWLibrary & operator= (const GLFWLibrary & copy) noexcept = delete;
+
+					GLFWLibrary & operator= (GLFWLibrary && copy) noexcept = delete;
+
+					/** @brief Terminates GLFW when this object initialized it. */
+					~GLFWLibrary ();
+
+					/**
+					 * @brief Initializes GLFW (glfwInit()), once.
+					 * @return bool
+					 */
+					[[nodiscard]]
+					bool initialize () noexcept;
+
+					/** @brief Terminates GLFW (glfwTerminate()) when this object initialized it. */
+					void terminate () noexcept;
+
+				private:
+
+					bool m_initialized{false};
+			};
+
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
 			bool onInitialize () noexcept override;
 
@@ -134,6 +171,8 @@ namespace EmEn
 			/* NOTE: Opened before glfwInit(), closed after glfwTerminate(); this service is initialized before the Vulkan
 			 * instance and terminated after it, so every Vulkan object is gone before the loader closes. */
 			Vulkan::Loader m_vulkanLoader;
+			/* NOTE: After the loader: destroyed (GLFW terminated) before the loader closes. */
+			GLFWLibrary m_glfw;
 			bool m_showInformation{false};
 	};
 }
