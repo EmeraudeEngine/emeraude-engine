@@ -204,6 +204,8 @@ namespace EmEn::Vulkan
 				result = vkCreateInstance(&m_createInfo, nullptr, &m_instance);
 			}
 
+			m_creationResult = result;
+
 			if ( result != VK_SUCCESS )
 			{
 				switch ( result )

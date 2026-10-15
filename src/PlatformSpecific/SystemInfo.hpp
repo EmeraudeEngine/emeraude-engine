@@ -170,6 +170,14 @@ namespace EmEn::PlatformSpecific
 			bool fetchCPUInformation () noexcept;
 
 			/**
+			 * @brief Lists the graphics adapters through the operating system, independently of Vulkan (engine item
+			 * gpu-inventory-without-vulkan): when no Vulkan driver answers, the startup diagnosis still names the GPUs.
+			 * Linux: /sys/class/drm; Windows: DXGI; macOS: Metal / IOKit.
+			 * @return bool True when the platform could list them (an empty list included).
+			 */
+			bool fetchGPUInformation () noexcept;
+
+			/**
 			 * @brief Returns the CPU brand string the OS provides, when cpu_features cannot read one.
 			 * @note Apple Silicon only (sysctl machdep.cpu.brand_string, e.g. "Apple M2"); empty elsewhere.
 			 * @return std::string

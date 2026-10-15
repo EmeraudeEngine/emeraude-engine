@@ -1,7 +1,7 @@
 ---
 id: gpu-inventory-without-vulkan
 title: When Vulkan fails, nothing says which GPUs the machine has
-status: open
+status: in-progress
 priority: high
 scope: PlatformSpecific, SystemInfo, Vulkan/Instance
 opened: 2026-10-15
@@ -22,15 +22,20 @@ Measured in user crash reports of a downstream application, 2026-10-15: a Window
 fails with `VK_ERROR_INCOMPATIBLE_DRIVER` twice; two Ryzen laptops fail at the enumeration. None of the reports can
 name the GPUs.
 
+## Done (2026-10-15)
+
+- `SystemInfo::fetchGPUInformation()` fills `GPUDevice` (driver name / version, `software` added) and logs one line at
+  startup ("Graphics adapters (operating system): N | …"); the startup refusal message uses it (names, vendor pages).
+  Linux (sysfs + `pci.ids`, integrated vs discrete by the root PCI bus, a stated heuristic); Windows by Window-PA (DXGI
+  `EnumAdapters1`, the UMD version, the LUID as the bus, the Basic Render Driver flagged software, integrated at
+  <= 512 MiB dedicated — stated heuristic); macOS by macOS-PA (IOKit `IOAccelerator`, owner decision: no Metal, which
+  would load the very drivers being diagnosed). Verified on the three OS (Linux RTX 3070 Ti + Intel UHD 770; Windows RTX
+  3500 Ada + Intel UHD + Basic Render; macOS Apple M6).
+
 ## What remains
 
-- [ ] A Vulkan-independent adapter list, logged at startup next to the system information: Windows through DXGI
-      (`IDXGIFactory1::EnumAdapters1`: description, vendor / device id, dedicated memory, LUID, driver version through
-      `CheckInterfaceSupport` or the registry), Linux through `/sys/class/drm/*/device` (vendor, device, driver),
-      macOS through IOKit / Metal device names.
-- [ ] Exposed through `SystemInfo` so a downstream application can put it in its reports.
-- [ ] Used by the Vulkan failure classification (`incompatible-gpu-is-never-told-to-the-user`).
-- [ ] Runtime verification on the three OS, recorded in the topic doc.
+- [ ] The Intel-Mac PCI path of the macOS implementation is untested (no Intel Mac).
+- [ ] The CEF helper processes log the inventory too (3 lines per launch on macOS): skip it in a helper.
 
 ## ⚠️ Traps
 

@@ -346,6 +346,18 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns the answer of vkCreateInstance() (VK_SUCCESS before any attempt): VK_ERROR_INCOMPATIBLE_DRIVER
+			 * means no driver supports Vulkan on this computer.
+			 * @return VkResult
+			 */
+			[[nodiscard]]
+			VkResult
+			creationResult () const noexcept
+			{
+				return m_creationResult;
+			}
+
+			/**
 			 * @brief Returns a list of validation layers available from Vulkan.
 			 * @note This method follows the vkEnumerateDeviceLayerProperties() deprecation.
 			 * @return std::vector< VkLayerProperties >
@@ -639,6 +651,7 @@ namespace EmEn::Vulkan
 			std::optional< DeviceIdentity > m_preferredGraphicsDevice;
 			/* NOTE: Filled during the device selection (main thread), read for the startup diagnosis. */
 			std::vector< DeviceRefusal > m_deviceRefusals;
+			VkResult m_creationResult{VK_SUCCESS};
 			DeviceAutoSelectMode m_autoSelectMode{DeviceAutoSelectMode::Performance};
 			bool m_showInformation{false};
 			bool m_debugMode{false};

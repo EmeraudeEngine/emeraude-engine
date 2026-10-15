@@ -1,7 +1,7 @@
 ---
 id: incompatible-gpu-is-never-told-to-the-user
 title: A startup refused for the graphics hardware or driver is never told to the user
-status: open
+status: in-progress
 priority: high
 scope: Core, Vulkan/Instance, Graphics/Renderer
 opened: 2026-10-15
@@ -23,29 +23,28 @@ outdated, to update it.**
 Measured in user crash reports of a downstream application, 2026-10-15: of 12 reports, 11 are such silent startup
 refusals (5 machines); one user relaunched five times, another twice — nothing told them why.
 
+## Done (2026-10-15)
+
+- Owner decisions 2026-10-15: the engine shows a native dialog in English by default, the application may replace it
+  (`Core::onStartupRefused(const StartupRefusal &)` returns true), the message links the GPU vendor's driver page.
+- `Core::initializeCoreLevel()` records the failing service; `Core::diagnoseStartupRefusal()` (`src/Core.startup.cpp`)
+  classifies `NoVulkanDriver` / `OutdatedDriver` / `IncompatibleHardware` from `Vulkan::Instance::creationResult()`,
+  `physicalDevices()`, `deviceRefusals()` and the OS GPU list; `tellStartupRefusal()` shows the dialog; the process exits
+  with `Core::IncompatibleSystemExitCode` (97). Doc: `docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md`.
+- Verified: Linux (zenity; the three causes, forced), Windows (an unparented MessageBox naming both GPUs and both
+  driver pages, the software adapter left out, exit 97), macOS M6 (the NSAlert runs unparented and modal before the
+  window exists).
+
 ## What remains
 
-- [ ] Classify the failure into causes a user can act on, each with its own message:
-  - **no Vulkan driver at all** (`vkCreateInstance` → `VK_ERROR_INCOMPATIBLE_DRIVER`, or no physical device):
-    "no graphics driver supporting Vulkan was found — install / update the graphics driver; if the computer only has
-    an old integrated GPU, it is not compatible";
-  - **driver too old** (a device below the required Vulkan version, `device-below-vulkan-1-3-reaches-vkcreatedevice`):
-    name the GPU, its driver version, and ask to update the driver;
-  - **hardware not compatible** (a required feature the device cannot have whatever the driver): name the GPU and say
-    it is not supported;
-  - anything else: a generic message pointing to the log.
-- [ ] Show it in a native dialog (`PlatformSpecific/Desktop/Dialog/`) before the exit, then exit with a dedicated
-      non-zero code so a downstream crash reporter can tell "incompatible system" from a crash.
-- [ ] Expose the classification to the application (a hook or a queryable result) so a downstream application can
-      word, localise or replace the message, and record it in its own reports.
-- [ ] Runtime verification: each message triggered once (forced minimum version, no ICD via an empty
-      `VK_DRIVER_FILES`, …) and recorded in the topic doc.
+- [ ] macOS: the exit code 97 after the alert is dismissed (the owner's screen was locked during the run).
+- Noted for the owner, not open work: the Windows MessageBox shows the URLs as text (a TaskDialog with hyperlinks
+  would make them clickable); a SIGTERM is not served while the modal dialog is up (macOS, measured).
 
 ## Open questions (owner, when the item is started)
 
-- Engine dialog by default with an application override, or the application only? Who owns the wording and its
-  translations?
-- A link to the GPU vendors' driver pages in the message, or not?
+- Answered 2026-10-15: the engine's dialog by default with an application override; the engine owns the English
+  wording, the application its translations (through the hook); vendor driver links included.
 
 ## References
 

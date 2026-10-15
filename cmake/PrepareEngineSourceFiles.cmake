@@ -183,6 +183,7 @@ else ()
         # ROOT
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Core.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Core.console.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/Core.startup.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/CursorAtlas.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformManager.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Notifier.cpp

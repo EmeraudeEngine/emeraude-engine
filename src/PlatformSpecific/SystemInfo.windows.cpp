@@ -32,6 +32,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 
 /* Third-party inclusions. */
 #ifndef NOMINMAX
@@ -43,12 +44,72 @@
 #define _WIN32_DCOM // NOLINT
 #include <Windows.h>
 #include <comdef.h>
+#include <dxgi.h>
 #include <psapi.h>
 #include <Wbemidl.h>
+#include <wrl/client.h>
 #pragma comment(lib, "wbemuuid.lib")
+#pragma comment(lib, "dxgi.lib")
 
 /* Local inclusions. */
 #include "Helpers.hpp"
+#include "Vulkan/Types.hpp"
+
+namespace
+{
+	/** @brief Microsoft's PCI vendor ID: the Basic Render Driver (WARP) and other software adapters. */
+	constexpr UINT MicrosoftVendorID{0x1414};
+
+	/**
+	 * @brief The dedicated video memory at or below which a hardware adapter is called integrated.
+	 * @note An integrated GPU's dedicated memory is a small firmware carve-out of the system RAM (Intel: 128 MiB on the
+	 * RaptorLake-S iGPU, measured 2026-10-15; AMD APUs: 512 MiB by default), a discrete GPU has its own gigabytes (the
+	 * smallest current ones have 2 GiB). An AMD APU whose firmware carve-out was raised past 512 MiB reads as discrete:
+	 * DXGI 1.1 tells no "integrated" flag, and this list is informative (the Vulkan device type decides the device).
+	 */
+	constexpr SIZE_T IntegratedDedicatedMemoryLimit{SIZE_T{512} * 1024 * 1024};
+
+	/**
+	 * @brief Appends a value as fixed-width upper-case hexadecimal digits.
+	 * @param output A reference to the output string.
+	 * @param value The value.
+	 * @param digits The number of digits (the value is masked to them).
+	 */
+	void
+	appendHex (std::string & output, uint64_t value, int digits) noexcept
+	{
+		constexpr std::string_view Digits{"0123456789ABCDEF"};
+
+		for ( int shift = (digits - 1) * 4; shift >= 0; shift -= 4 )
+		{
+			output.push_back(Digits[static_cast< size_t >((value >> shift) & 0xFU)]);
+		}
+	}
+
+	/**
+	 * @brief Formats a user-mode driver version as a.b.c.d (four 16-bit fields, IDXGIAdapter::CheckInterfaceSupport()).
+	 * @param version The packed version.
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	std::string
+	formatDriverVersion (uint64_t version) noexcept
+	{
+		std::string output;
+
+		for ( int field = 3; field >= 0; --field )
+		{
+			output += std::to_string((version >> (field * 16)) & 0xFFFFU);
+
+			if ( field > 0 )
+			{
+				output.push_back('.');
+			}
+		}
+
+		return output;
+	}
+}
 
 namespace EmEn::PlatformSpecific
 {
@@ -263,6 +324,104 @@ namespace EmEn::PlatformSpecific
 
 			CoUninitialize();
 		}
+
+		return true;
+	}
+
+	bool
+	SystemInfo::fetchGPUInformation () noexcept
+	{
+		/* NOTE: DXGI lists the adapters the OS drives, with or without a Vulkan driver: what the user is told when the
+		 * Vulkan startup refuses. Doc: https://learn.microsoft.com/en-us/windows/win32/api/dxgi/nf-dxgi-idxgifactory1-enumadapters1 */
+		Microsoft::WRL::ComPtr< IDXGIFactory1 > factory;
+
+		if ( const auto result = CreateDXGIFactory1(IID_PPV_ARGS(factory.GetAddressOf())); FAILED(result) )
+		{
+			std::cerr << "CreateDXGIFactory1() failed : 0x" << std::hex << static_cast< unsigned long >(result) << std::dec << std::endl;
+
+			return false;
+		}
+
+		/* NOTE: A bound on the walk (Power of Ten rule 2): a machine has a handful of adapters. */
+		constexpr UINT MaxAdapters{64};
+
+		for ( UINT index = 0; index < MaxAdapters; ++index )
+		{
+			Microsoft::WRL::ComPtr< IDXGIAdapter1 > adapter;
+
+			const auto enumeration = factory->EnumAdapters1(index, adapter.GetAddressOf());
+
+			if ( enumeration == DXGI_ERROR_NOT_FOUND )
+			{
+				return true;
+			}
+
+			if ( FAILED(enumeration) )
+			{
+				std::cerr << "IDXGIFactory1::EnumAdapters1(" << index << ") failed : 0x" << std::hex << static_cast< unsigned long >(enumeration) << std::dec << std::endl;
+
+				return false;
+			}
+
+			DXGI_ADAPTER_DESC1 description{};
+
+			if ( const auto result = adapter->GetDesc1(&description); FAILED(result) )
+			{
+				std::cerr << "IDXGIAdapter1::GetDesc1() failed for adapter #" << index << " : 0x" << std::hex << static_cast< unsigned long >(result) << std::dec << std::endl;
+
+				continue;
+			}
+
+			if ( m_GPUDevices.full() )
+			{
+				std::cerr << "More than " << m_GPUDevices.capacity() << " graphics adapters: adapter #" << index << " and the next ones are not listed." << std::endl;
+
+				return true;
+			}
+
+			GPUDevice device;
+
+			/* NOTE: Description is a fixed WCHAR[128], NUL-terminated by DXGI; the view stops at the array end anyway. */
+			const std::wstring_view name{description.Description, std::size(description.Description)};
+
+			device.deviceName = convertWideToUTF8(std::wstring{name.substr(0, name.find(L'\0'))});
+			device.vendorID = description.VendorId;
+			device.deviceID = description.DeviceId;
+			/* The subsystem vendor (high 16 bits of SubSysId) is the board maker (ASUS, MSI, a laptop brand...). */
+			device.manufacturerID = description.SubSysId >> 16;
+			device.availableMemory = description.DedicatedVideoMemory;
+			device.dedicatedMemory = description.DedicatedVideoMemory > 0;
+			device.software = (description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != 0 || description.VendorId == MicrosoftVendorID;
+
+			if ( device.software )
+			{
+				device.vendorName = "Microsoft";
+				device.deviceType = GPUDeviceType::CPU;
+			}
+			else
+			{
+				device.vendorName = Vulkan::to_cstring(Vulkan::toVendor(description.VendorId));
+				device.deviceType = description.DedicatedVideoMemory <= IntegratedDedicatedMemoryLimit ? GPUDeviceType::IntegratedGPU : GPUDeviceType::DiscreteGPU;
+			}
+
+			/* NOTE: The LUID is what Vulkan reports as VkPhysicalDeviceIDProperties::deviceLUID: the key that matches both lists. */
+			device.bus = "LUID 0x";
+			appendHex(device.bus, static_cast< uint32_t >(description.AdapterLuid.HighPart), 8);
+			appendHex(device.bus, description.AdapterLuid.LowPart, 8);
+
+			/* NOTE: The user-mode driver version (the Windows driver version, e.g. 32.0.15.9658 for NVIDIA 596.58);
+			 * IDXGIDevice is the only interface this query accepts. */
+			device.driverName = device.vendorName;
+
+			if ( LARGE_INTEGER userModeVersion{}; SUCCEEDED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &userModeVersion)) )
+			{
+				device.driverVersion = formatDriverVersion(static_cast< uint64_t >(userModeVersion.QuadPart));
+			}
+
+			m_GPUDevices.emplace_back(std::move(device));
+		}
+
+		std::cerr << "More than " << MaxAdapters << " graphics adapters enumerated: the walk stopped." << std::endl;
 
 		return true;
 	}

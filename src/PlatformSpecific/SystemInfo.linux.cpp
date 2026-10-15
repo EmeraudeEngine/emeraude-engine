@@ -27,10 +27,17 @@
 #include "SystemInfo.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <array>
+#include <charconv>
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 #include <string>
+#include <string_view>
+#include <utility>
 
 /* Third-party inclusions. */
 #include <sys/resource.h>
@@ -38,6 +45,7 @@
 #include <unistd.h>
 
 /* Local inclusions. */
+#include "IO/IO.hpp"
 #include "String.hpp"
 
 namespace EmEn::PlatformSpecific
@@ -62,6 +70,114 @@ namespace EmEn::PlatformSpecific
 			}
 
 			return static_cast< size_t >(count) * static_cast< size_t >(size);
+		}
+
+		/**
+		 * @brief Reads the first line of a small text file (a sysfs attribute), without its line end.
+		 * @param path The file.
+		 * @return std::string Empty when unreadable.
+		 */
+		[[nodiscard]]
+		std::string
+		readFirstLine (const std::filesystem::path & path) noexcept
+		{
+			std::ifstream file{path};
+			std::string line;
+
+			if ( !file.is_open() || !std::getline(file, line) )
+			{
+				return {};
+			}
+
+			return line;
+		}
+
+		/**
+		 * @brief Parses a sysfs hexadecimal identifier ("0x10de").
+		 * @param text The text.
+		 * @return uint32_t 0 when invalid.
+		 */
+		[[nodiscard]]
+		uint32_t
+		parseHexIdentifier (std::string_view text) noexcept
+		{
+			if ( text.starts_with("0x") || text.starts_with("0X") )
+			{
+				text.remove_prefix(2);
+			}
+
+			uint32_t value = 0;
+
+			if ( const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value, 16); error != std::errc{} )
+			{
+				return 0;
+			}
+
+			return value;
+		}
+
+		/**
+		 * @brief Looks a PCI vendor / device name up in the system's pci.ids database (pciutils / hwdata), when present.
+		 * @note The file is read line by line once per adapter (~1.5 MB, bounded): a vendor line is "vvvv  Name", its
+		 * devices follow as "\tdddd  Name".
+		 * @param vendorID The PCI vendor id.
+		 * @param deviceID The PCI device id.
+		 * @return std::pair< std::string, std::string > The vendor and device names, empty when unknown.
+		 */
+		[[nodiscard]]
+		std::pair< std::string, std::string >
+		lookUpPCINames (uint32_t vendorID, uint32_t deviceID) noexcept
+		{
+			constexpr std::array< const char *, 2 > Databases{"/usr/share/hwdata/pci.ids", "/usr/share/misc/pci.ids"};
+
+			for ( const auto * database : Databases )
+			{
+				std::ifstream file{database};
+
+				if ( !file.is_open() )
+				{
+					continue;
+				}
+
+				std::string vendorName;
+				std::string line;
+				bool inVendor = false;
+
+				while ( std::getline(file, line) )
+				{
+					if ( line.empty() || line.front() == '#' )
+					{
+						continue;
+					}
+
+					if ( line.front() != '\t' )
+					{
+						/* A new vendor (or the class section, which ends the vendor list: its lines start with 'C'). */
+						if ( inVendor || line.front() == 'C' )
+						{
+							break;
+						}
+
+						if ( line.size() > 6 && parseHexIdentifier(std::string_view{line}.substr(0, 4)) == vendorID )
+						{
+							inVendor = true;
+							vendorName = line.substr(6);
+						}
+
+						continue;
+					}
+
+					/* A device line of the vendor: "\tdddd  Name" (a sub-device line starts with two tabs). */
+					if ( inVendor && line.size() > 7 && line[1] != '\t' && parseHexIdentifier(std::string_view{line}.substr(1, 4)) == deviceID )
+					{
+						return {vendorName, line.substr(7)};
+					}
+				}
+
+				return {vendorName, {}};
+			}
+
+			return {};
 		}
 	}
 
@@ -243,6 +359,104 @@ namespace EmEn::PlatformSpecific
 			position == std::string::npos ?
 			realPath :
 			realPath.substr(0, position);
+	}
+
+	bool
+	SystemInfo::fetchGPUInformation () noexcept
+	{
+		/* NOTE: One DRM card per adapter ("card0", "card1"; "card0-DP-1" are its connectors, "renderD128" its render
+		 * node). Bounded by the directory's size and the StaticVector's capacity. */
+		const std::filesystem::path drmClass{"/sys/class/drm"};
+
+		if ( !Base::IO::directoryExists(drmClass) )
+		{
+			return false;
+		}
+
+		m_GPUDevices.clear();
+
+		for ( const auto & entry : Base::IO::directoryEntries(drmClass) )
+		{
+			const auto name = entry.filename().string();
+
+			if ( !name.starts_with("card") || name.size() == 4 || !std::all_of(name.begin() + 4, name.end(), [] (char character) { return character >= '0' && character <= '9'; }) )
+			{
+				continue;
+			}
+
+			if ( m_GPUDevices.full() )
+			{
+				break;
+			}
+
+			const auto device = entry / "device";
+
+			GPUDevice adapter;
+			adapter.vendorID = parseHexIdentifier(readFirstLine(device / "vendor"));
+			adapter.deviceID = parseHexIdentifier(readFirstLine(device / "device"));
+
+			/* The driver and the bus come from the device's uevent ("DRIVER=nvidia", "PCI_SLOT_NAME=0000:01:00.0"). */
+			{
+				std::ifstream uevent{device / "uevent"};
+				std::string line;
+
+				while ( std::getline(uevent, line) )
+				{
+					if ( line.starts_with("DRIVER=") )
+					{
+						adapter.driverName = line.substr(7);
+					}
+					else if ( line.starts_with("PCI_SLOT_NAME=") )
+					{
+						adapter.bus = line.substr(14);
+					}
+				}
+			}
+
+			/* NOTE: A kernel module publishes its version there when it has one (nvidia does, the in-tree drivers do not). */
+			if ( !adapter.driverName.empty() )
+			{
+				adapter.driverVersion = readFirstLine(std::filesystem::path{"/sys/module"} / adapter.driverName / "version");
+			}
+
+			/* NOTE: A framebuffer driver is not a GPU. */
+			adapter.software = adapter.driverName == "simpledrm" || adapter.driverName == "efifb" || adapter.driverName == "vboxvideo";
+
+			/* NOTE: A heuristic, stated as such: an integrated GPU sits on the root PCI bus ("0000:00:..."). */
+			const bool rootBus = adapter.bus.size() > 7 && adapter.bus.compare(5, 2, "00") == 0;
+			if ( adapter.software )
+			{
+				adapter.deviceType = GPUDeviceType::Other;
+			}
+			else
+			{
+				adapter.deviceType = rootBus ? GPUDeviceType::IntegratedGPU : GPUDeviceType::DiscreteGPU;
+			}
+
+			adapter.dedicatedMemory = !rootBus && !adapter.software;
+
+			auto [vendorName, deviceName] = lookUpPCINames(adapter.vendorID, adapter.deviceID);
+
+			if ( !vendorName.empty() )
+			{
+				adapter.vendorName = std::move(vendorName);
+			}
+
+			if ( !deviceName.empty() )
+			{
+				adapter.deviceName = std::move(deviceName);
+			}
+			else
+			{
+				std::stringstream fallback;
+				fallback << adapter.vendorName << " device 0x" << std::hex << adapter.deviceID;
+				adapter.deviceName = fallback.str();
+			}
+
+			m_GPUDevices.emplace_back(std::move(adapter));
+		}
+
+		return true;
 	}
 
 	std::string

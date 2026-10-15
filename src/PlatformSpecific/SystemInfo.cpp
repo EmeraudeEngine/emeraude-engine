@@ -55,6 +55,27 @@ namespace EmEn::PlatformSpecific
 			m_informationFound = true;
 		}
 
+		if ( this->fetchGPUInformation() )
+		{
+			/* NOTE: Always logged (engine item gpu-inventory-without-vulkan): a report names the GPUs even when Vulkan
+			 * cannot start. */
+			TraceInfo trace{ClassId};
+
+			trace << "Graphics adapters (operating system): " << m_GPUDevices.size();
+
+			for ( const auto & device : m_GPUDevices )
+			{
+				trace << " | '" << device.deviceName << "' (vendor 0x" << std::hex << device.vendorID << ", device 0x" << device.deviceID << std::dec << ", driver " << ( device.driverName.empty() ? "?" : device.driverName );
+
+				if ( !device.driverVersion.empty() )
+				{
+					trace << ' ' << device.driverVersion;
+				}
+
+				trace << ( device.software ? ", software" : "" ) << ')';
+			}
+		}
+
 		return true;
 	}
 
@@ -258,6 +279,8 @@ namespace EmEn::PlatformSpecific
 				" - Name : " << GPUDevice.deviceName << "\n"
 				" - Device type : " << to_string(GPUDevice.deviceType) << "\n"
 				" - Manufacturer : " << GPUDevice.manufacturerName << " (" << GPUDevice.manufacturerID << ")" << "\n"
+				" - Driver : " << GPUDevice.driverName << ' ' << GPUDevice.driverVersion << "\n"
+				" - Software adapter : " << ( GPUDevice.software ? "Yes" : "No" ) << "\n"
 				" - Is dedicated memory : " << ( GPUDevice.dedicatedMemory ? "Yes" : "No" ) << "\n"
 				" - Available memory : " << static_cast< float >(GPUDevice.availableMemory) / MegaByteDivisor << " GiB" << "\n"
 				" - BUS : " << GPUDevice.bus << "\n\n";

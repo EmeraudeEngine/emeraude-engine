@@ -603,12 +603,21 @@ namespace EmEn
 				/* NOTE: Finish the core initialization with secondary services. */
 				if ( !this->initializeCoreLevel() )
 				{
+					/* NOTE: A startup refused for the graphics hardware or its driver is TOLD to the user (owner decision
+					 * 2026-10-15): the application's hook, else a native dialog; then a dedicated exit code. */
+					const auto refusal = this->diagnoseStartupRefusal();
+
+					if ( refusal.has_value() )
+					{
+						this->tellStartupRefusal(*refusal);
+					}
+
 					/* NOTE: The secondary services that started before the failing one are registered in
 					 * m_secondaryServicesEnabled: terminate() releases them in reverse order (the destructor only knew
 					 * the primary ones — Ave Robustus II, H1). */
 					static_cast< void >(this->terminate());
 
-					return EXIT_FAILURE;
+					return refusal.has_value() ? IncompatibleSystemExitCode : EXIT_FAILURE;
 				}
 
 				Tracer::success(ClassId, "Engine at application level initialized !");
@@ -1137,6 +1146,8 @@ namespace EmEn
 		{
 			TraceFatal{ClassId} << m_platformManager.name() << " service failed to execute!";
 
+			m_coreLevelFailure = CoreLevelFailure::Platform;
+
 			return false;
 		}
 
@@ -1148,6 +1159,8 @@ namespace EmEn
 		else
 		{
 			TraceFatal{ClassId} << m_vulkanInstance.name() << " service failed to execute!";
+
+			m_coreLevelFailure = CoreLevelFailure::VulkanInstance;
 
 			return false;
 		}
@@ -1164,6 +1177,8 @@ namespace EmEn
 		else
 		{
 			TraceFatal{ClassId} << m_window.name() << " service failed to execute!";
+
+			m_coreLevelFailure = CoreLevelFailure::Window;
 
 			return false;
 		}
@@ -1196,6 +1211,8 @@ namespace EmEn
 		{
 			TraceFatal{ClassId} << m_inputManager.name() << " service failed to execute!";
 
+			m_coreLevelFailure = CoreLevelFailure::Input;
+
 			return false;
 		}
 
@@ -1213,6 +1230,8 @@ namespace EmEn
 		else
 		{
 			TraceFatal{ClassId} << m_graphicsRenderer.name() << " service failed to execute!";
+
+			m_coreLevelFailure = CoreLevelFailure::GraphicsRenderer;
 
 			return false;
 		}

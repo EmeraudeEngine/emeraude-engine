@@ -204,6 +204,42 @@ namespace EmEn
 			 */
 			static constexpr int DeviceLostExitCode{98};
 
+			/** @brief Exit code of a startup refused for the graphics hardware or its driver (startupRefusal()).
+			 * @details Distinct from a crash: a downstream crash reporter can tell "incompatible system" from an incident
+			 * (engine item incompatible-gpu-is-never-told-to-the-user, owner decision 2026-10-15).
+			 */
+			static constexpr int IncompatibleSystemExitCode{97};
+
+			/**
+			 * @brief Why the startup was refused for the graphics hardware or driver, in terms a user can act on (owner
+			 * decision 2026-10-15: the user is told the hardware is not compatible, or to update an outdated driver).
+			 */
+			struct StartupRefusal final
+			{
+				/** @brief The cause. */
+				enum class Cause : uint8_t
+				{
+					/** @brief No driver supporting Vulkan (vkCreateInstance answered VK_ERROR_INCOMPATIBLE_DRIVER, or no device). */
+					NoVulkanDriver,
+					/** @brief A GPU whose driver is too old (below Vulkan::Instance::MinimumDeviceAPIVersion). */
+					OutdatedDriver,
+					/** @brief No GPU that can run the engine, whatever its driver (a required feature missing). */
+					IncompatibleHardware,
+					/** @brief Anything else: the log says why. */
+					Other
+				};
+
+				/** @brief The dialog title (English). */
+				std::string title;
+				/** @brief The message (English), naming the GPU and its driver when known. */
+				std::string message;
+				/** @brief The GPU vendor's driver page when the vendor is known (NVIDIA, AMD, Intel), else empty. */
+				std::string driverURL;
+				/** @brief The physical devices refused, and why (Vulkan::Instance::deviceRefusals()). */
+				std::vector< Vulkan::Instance::DeviceRefusal > refusals;
+				Cause cause{Cause::Other};
+			};
+
 			/** @brief How long the application may take to acknowledge a stop requested by the system (end of the user
 			 * session, SIGTERM / SIGHUP / SIGINT, Windows shutdown) before the stop proceeds anyway (owner decision
 			 * 2026-10-11).
@@ -1367,6 +1403,32 @@ namespace EmEn
 			 */
 			bool initializeCoreLevel () noexcept;
 
+			/** @brief The secondary service whose initialization failed (initializeCoreLevel()), for the refusal diagnosis. */
+			enum class CoreLevelFailure : uint8_t
+			{
+				None,
+				Platform,
+				VulkanInstance,
+				Window,
+				Input,
+				GraphicsRenderer
+			};
+
+			/**
+			 * @brief Classifies a startup refused by the Vulkan instance or the graphics renderer
+			 * (m_coreLevelFailure), from what the Vulkan instance recorded: its creation result, the devices found, the
+			 * devices refused and why.
+			 * @return std::optional< StartupRefusal > None when the failure is not a graphics hardware / driver one.
+			 */
+			[[nodiscard]]
+			std::optional< StartupRefusal > diagnoseStartupRefusal () const noexcept;
+
+			/**
+			 * @brief Tells the user why the startup was refused: the application's hook first, else a native dialog.
+			 * @param refusal The classified refusal.
+			 */
+			void tellStartupRefusal (const StartupRefusal & refusal) noexcept;
+
 			/**
 			 * @brief Initializes the rendering surface and swap-chain.
 			 * @return true if screen initialization succeeded.
@@ -1642,6 +1704,22 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Called when the startup is refused for the graphics hardware or its driver, before the engine shows
+			 * its own native dialog and exits with IncompatibleSystemExitCode.
+			 * @details The application may show its own message (its wording, its translations) and record the refusal in
+			 * its reports; returning true replaces the engine's dialog. The window may not exist yet.
+			 * @param refusal The classified refusal.
+			 * @return bool True when the application told the user itself (the engine shows nothing).
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			onStartupRefused ([[maybe_unused]] const StartupRefusal & refusal) noexcept
+			{
+				return false;
+			}
+
+			/**
 			 * @brief Called after all services are initialized, before the main loop.
 			 * @details This is the primary initialization hook for applications.
 			 * Load scenes, create entities, and set up game state here.
@@ -1854,6 +1932,7 @@ namespace EmEn
 			uint64_t m_lifetime{0};							 ///< Total runtime in microseconds.
 			size_t m_cycle{0};								  ///< Main loop iteration count.
 			StartupMode m_startupMode{StartupMode::Continue};   ///< Startup behavior mode.
+			CoreLevelFailure m_coreLevelFailure{CoreLevelFailure::None}; ///< The service that stopped initializeCoreLevel().
 			std::queue< std::string > m_coreMessages;		   ///< Pending messages for display. @todo Display in ImGui.
 			std::filesystem::path m_rushVoiceOverPath;
 			int m_userExitCode{0};

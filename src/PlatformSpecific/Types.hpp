@@ -148,12 +148,18 @@ namespace EmEn::PlatformSpecific
 		/* The brand of the device distribution, like MSI, ASUS, ... */
 		std::string manufacturerName{"Unknown"};
 		uint32_t manufacturerID{0};
-		/* Tell if the device has its own memory or share the system RAM.
-		 * The size will be the dedicated memory or the allocated part in RAM in bytes. */
-		bool dedicatedMemory{true};
+		/* The size of the dedicated memory, or of the part of the system RAM it may use, in bytes (0: unknown). */
 		size_t availableMemory{0};
 		/* The device identifier on the system bus (Something like PCI:1:0:0). */
 		std::string bus;
+		/* The kernel / OS driver of the adapter ("nvidia", "amdgpu", "i915", a Windows driver description...). */
+		std::string driverName;
+		/* The driver version as the operating system reports it (empty: unknown). */
+		std::string driverVersion;
+		/* Tell if the device has its own memory or share the system RAM. */
+		bool dedicatedMemory{true};
+		/* A software adapter (Microsoft Basic Render Driver, a framebuffer driver): listed, never counted as a GPU. */
+		bool software{false};
 	};
 
 	/** @brief Describe the operating system. */
