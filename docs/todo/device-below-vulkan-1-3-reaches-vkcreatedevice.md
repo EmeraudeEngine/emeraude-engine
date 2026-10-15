@@ -1,7 +1,7 @@
 ---
 id: device-below-vulkan-1-3-reaches-vkcreatedevice
 title: A device below Vulkan 1.3 (outdated driver) is selected and dies at vkCreateDevice, with no fallback
-status: open
+status: in-progress
 priority: high
 scope: Vulkan/Instance
 opened: 2026-10-15
@@ -30,21 +30,24 @@ in 1.3 — not advertised, i.e. a 1.2 driver) + Intel UHD Graphics 630. The same
 user, same day) reports Vulkan 1.4.303 and runs normally: the hardware is fine, the driver is not. NVIDIA exposes
 Vulkan 1.3 on Pascal since the R510/R511 branch (early 2022).
 
+## Done (2026-10-15, engine 7dfbe4c0)
+
+- `Instance::MinimumDeviceAPIVersion` (1.3; 1.2 on macOS, whose shaders target 1.2 / SPIR-V 1.5) and
+  `RequestedAPIVersion` for the instance; `checkDeviceAPIVersion()` refuses a device below it (graphics and compute
+  selection) with one line: device, driver version, the reported and required versions, "update the graphics driver".
+- The required features are checked BEFORE `vkCreateDevice()` (`requireVK10/11/12/13`): the missing ones are named and
+  the device is not created.
+- `getGraphicsDevice()` = the selection, then `createGraphicsDevice()` on each compatible device from the best: a
+  device that cannot be created no longer ends the startup.
+- Every refusal is recorded: `Instance::deviceRefusals()` (device, driver, API version, reason), for
+  `incompatible-gpu-is-never-told-to-the-user`.
+- Verified (Linux, RTX 3070 Ti + Intel RPL-S + llvmpipe, validation layer): a test-only build reporting llvmpipe as 1.2
+  and the NVIDIA GPU without a required feature refused both and started on the Intel iGPU, 0 VUID, clean exit.
+
 ## What remains
 
-- [ ] `checkDeviceCompatibility()`: refuse a device whose `apiVersion` is below the engine's minimum (one named
-      constant, shared with the instance `apiVersion`), with an explicit log line: device name, its API version,
-      the required version, the driver version (decoded, `PhysicalDevice::DriverVersionString()`), and "update the
-      graphics driver".
-- [ ] Keep the reason of each refused device so the user-facing message can use it
-      (`incompatible-gpu-is-never-told-to-the-user`).
-- [ ] When `Device::create()` fails on the selected device, try the next compatible scored device before giving up
-      (preferred / forced selection included: log that it was abandoned and why).
-- [ ] On `VK_ERROR_FEATURE_NOT_PRESENT`, log which requested features the device does not advertise (compare the
-      requested chain with the queried one) — the code is otherwise silent on the culprit.
-- [ ] The unconditional driver line of `log-the-gpu-driver-version` belongs to the same diagnosis: do both.
-- [ ] Runtime verification recorded in the topic doc (no 1.2 driver here: force the minimum above the local device's
-      version to exercise the refusal and the fallback).
+- [ ] macOS: confirm the API version MoltenVK reports (the 1.2 minimum there) on the M6.
+- [ ] Windows: a run (no outdated driver at hand: the forced path as on Linux).
 
 ## ⚠️ Traps
 

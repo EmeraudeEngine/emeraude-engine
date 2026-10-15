@@ -1,7 +1,7 @@
 ---
 id: video-encoder-h265-transfer-on-encode-only-queue
 title: The H.265 hardware encoder records copies and transfer barriers on an encode-only queue (AMD: 55 VUIDs per rush)
-status: open
+status: in-progress
 priority: high
 scope: Vulkan/VideoEncoderH265
 opened: 2026-10-01
@@ -33,17 +33,22 @@ capped at 10 by the layer's duplicate limit, so the errors are probably raised o
 `m_videoCommandPool` (created on the encode family, `:151`; the command buffer at `:670`). NVIDIA's encode family (#4)
 apparently also exposes TRANSFER, which is why it passes there (181 pictures, 0 VUID). AMD's family #3 does not.
 
+## Done (2026-10-15, engine b53c63b5)
+
+- Owner decision 2026-10-15, by family: `VideoEncoderH265::create()` checks the encode family's flags; when it cannot
+  copy (no TRANSFER / COMPUTE / GRAPHICS), `recordPlaneUploadWithRelease()` uploads the NV12 planes on the graphics
+  queue (in the plane-readback command buffer) and RELEASES the picture to the encode family; the encode queue only
+  ACQUIRES it (same layouts TRANSFER_DST -> VIDEO_ENCODE_SRC, no source stage). NVIDIA keeps its path.
+- The copy runs on a family with a (1,1,1) granularity, so the record extent (1280x720) is valid there (07738).
+- Reproduced on Linux 2026-10-15 (LinuxB-PA, Radeon RENOIR, RADV Mesa 26.0.8, encode family #3 encode-only): 21 VUID
+  messages (06462, cmdpool, 09675) and a SIGSEGV inside RADV at the 6th frame, 0 picture written — a crash, not only
+  VUIDs. NVIDIA after the fix: a 6 s rush, 181 pictures, decodes, 0 VUID.
+
 ## What remains
 
-- [ ] Choose the upload path (an owner decision):
-  - record the plane upload on a TRANSFER-, COMPUTE- or GRAPHICS-capable family, and hand the picture to the encode
-    family with a queue-family ownership transfer (release + acquire, ordered by a semaphore);
-  - or check the encode family's flags at creation, keep the current path when it has TRANSFER, and use the other
-    path otherwise.
-- [ ] Copy the padded coded extent (1280x768 here) or respect the granularity, not the record extent.
-- [ ] Re-validate on an encode family WITHOUT TRANSFER and on NVIDIA: 0 VUID, the file decodes. No AMD machine is
-  left (the Windows peer is now an RTX 3500 Ada + an Intel iGPU): first check whether the Intel iGPU's encode family
-  exposes TRANSFER — if it does not, it reproduces the AMD case.
+- [ ] The AMD run on the fix (LinuxB-PA): 0 VUID, no crash, the file decodes, the pictures look right (padding rows of
+      the 1280x768 coded picture).
+- [ ] Windows Intel iGPU: check whether its encode family exposes TRANSFER.
 
 ## ⚠️ Traps
 

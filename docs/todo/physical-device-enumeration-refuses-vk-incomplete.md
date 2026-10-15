@@ -1,7 +1,7 @@
 ---
 id: physical-device-enumeration-refuses-vk-incomplete
 title: The physical device enumeration treats VK_INCOMPLETE as a failure and stops the engine
-status: open
+status: in-progress
 priority: high
 scope: Vulkan/Instance
 opened: 2026-10-15
@@ -28,16 +28,20 @@ the log cannot tell, see `gpu-inventory-without-vulkan`):
 
 These machines very likely have a perfectly capable GPU: the engine refuses them for nothing.
 
+## Done (2026-10-15, engine 7dfbe4c0)
+
+- `Vulkan::enumerate()` (`src/Vulkan/Utility.hpp`): the standard loop (count, size, fill; again while `VK_INCOMPLETE`,
+  8 attempts at most, the last answer kept); only a negative `VkResult` fails. `preparePhysicalDevices()` uses it, logs
+  the number of devices found and warns on a retry.
+- Every other two-call enumeration goes through it: instance / device layers and extensions, tool properties, surface
+  formats, present modes, present rectangles, video session memory requirements; `PhysicalDeviceProbe` accepts any
+  non-negative answer. The swap-chain image query keeps `VK_SUCCESS` only, on purpose (its count is the swap-chain's
+  own: a partial list would be missing images — commented there).
+
 ## What remains
 
-- [ ] Enumerate with the standard loop: query the count, size the array, fill; repeat while the answer is
-      `VK_INCOMPLETE` (bounded number of attempts, the last answer kept), accept `VK_SUCCESS` and a final
-      `VK_INCOMPLETE` as valid data; only a negative `VkResult` is a failure.
-- [ ] Log the number of physical devices found and the number of retries when there was one.
-- [ ] Check every other two-call enumeration of the engine for the same mistake (extensions, layers, queue families,
-      surface formats / present modes, swap-chain images) and fix them the same way.
-- [ ] Runtime verification recorded in the topic doc (no reproduction machine here: at least a forced
-      `VK_INCOMPLETE` path, e.g. a fill array one element short).
+- [ ] A run on a machine that answers `VK_INCOMPLETE` (a Windows AMD hybrid laptop, as in the reports): no reproduction
+      machine here; the Linux path is verified unchanged (3 devices found).
 
 ## References
 

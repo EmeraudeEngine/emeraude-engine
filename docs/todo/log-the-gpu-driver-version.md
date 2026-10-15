@@ -1,7 +1,7 @@
 ---
 id: log-the-gpu-driver-version
 title: The startup log never states the GPU driver version
-status: open
+status: in-progress
 priority: high
 scope: Vulkan/Instance, Vulkan/PhysicalDevice
 opened: 2026-09-22
@@ -28,7 +28,13 @@ unless `EMERAUDE_INFOS_DEFAULTS`, `src/SettingKeys.hpp:310-315`, read at `src/Vu
 "Graphics capable physical device selected" lines (`src/Vulkan/Instance.cpp:1011`, `:1015`, `:1021`) print the name
 only. `VkPhysicalDeviceDriverProperties` is never queried.
 
+## Done (2026-10-15, engine 7dfbe4c0)
+
+- One unconditional line at device creation: `Graphics device: '<name>' (<type>, vendor 0x…, device 0x…), driver
+  '<driverName>' (<driverInfo>), driver version <decoded>, Vulkan x.y.z.` — driverName / driverInfo come from
+  `VkPhysicalDeviceVulkan12Properties` (already queried). Linux: `'NVIDIA GeForce RTX 3070 Ti' (Discrete GPU device,
+  vendor 0x10de, device 0x2207), driver 'NVIDIA' (615.71.09), driver version 615.71.09, Vulkan 1.4.351`.
+
 ## What remains
 
-- [ ] One unconditional line at device selection: name, type, driver name + info, API version, driver version.
-- [ ] Query `VkPhysicalDeviceDriverProperties` (driverName, driverInfo) for it.
+- [ ] The line checked on macOS and Windows (the vendor decoding there), then this item closes.
