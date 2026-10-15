@@ -8467,3 +8467,12 @@ services they touch go.
 Proof (Linux, 2026-10-15): `sponza` with automatic LODs quits in 0.60-0.72 s whatever the moment (62.8 s with the drain
 alone, 2.2-9.1 s with the flag), 0 VUID; `EmeraudeResourceJobsStress` under TSan 0 report over 4 runs (projet-alpha
 `docs/unit-testing.md` § ThreadSanitizer, 4).
+
+### ⚠️ A raw `std::cout` beside the Tracer is a data race (2026-10-15, found by macOS-PA's TSan run)
+
+The Tracer writes to `std::cout` under its own mutex; code that writes `std::cout` / `std::cerr` DIRECTLY while engine
+threads trace (a pool worker loading a resource traces through `TraceInfo`) races on the stream's formatting state
+(`ios_base::width`). libc++ (macOS) reports it under TSan — 3 of 6 `EmeraudeResourceJobsStress` runs; libstdc++ did
+not. **Rule:** while the engine runs, print through the Tracer (`TraceInfo{ClassId} << …`), never a raw stream; a raw
+stream is fine only before `Core` starts its threads or after `run()` returned. The three stress executables were
+fixed the same day.

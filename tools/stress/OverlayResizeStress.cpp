@@ -212,7 +212,7 @@ namespace
 			{
 				if ( this->window().isWindowLessMode() )
 				{
-					std::cerr << "[OverlayResizeStress] A window is required: do not pass --window-less !" "\n";
+					TraceError{ClassId} << "A window is required: do not pass --window-less !";
 
 					return false;
 				}
@@ -224,7 +224,7 @@ namespace
 
 				if ( screen == nullptr )
 				{
-					std::cerr << "[OverlayResizeStress] Unable to create the stress screen !" "\n";
+					TraceError{ClassId} << "Unable to create the stress screen !";
 
 					return false;
 				}
@@ -233,7 +233,7 @@ namespace
 
 				if ( surface == nullptr )
 				{
-					std::cerr << "[OverlayResizeStress] Unable to create the stress surface !" "\n";
+					TraceError{ClassId} << "Unable to create the stress surface !";
 
 					return false;
 				}
@@ -250,7 +250,7 @@ namespace
 				m_start = std::chrono::steady_clock::now();
 				m_nextResize = m_start;
 
-				std::cout << "[OverlayResizeStress] Resizing every " << ResizePeriod.count() << " ms for " << RunDuration.count() << " s." "\n";
+				TraceInfo{ClassId} << "Resizing every " << ResizePeriod.count() << " ms for " << RunDuration.count() << " s.";
 
 				return true;
 			}
@@ -405,7 +405,7 @@ namespace
 
 				static_cast< void >(this->overlayManager().destroyScreen(StressScreenName));
 
-				std::cout << "[OverlayResizeStress] " << m_resizeRequests << " resize requests, " << m_observer.resizes() << " OverlayResized, " << m_observer.scaleChanges() << " OverlayScaleChanged, " << m_observer.redrawRequests() << " RedrawRequested, " << m_geometryChanges.load() << " geometry changes, " << m_stackChurns.load() << " surface churns, " << m_pointerMoves << " pointer moves, off-thread creation " << ( m_offThreadCreationRefused.load() ? "refused" : "NOT refused" ) << "." "\n";
+				TraceInfo{ClassId} << m_resizeRequests << " resize requests, " << m_observer.resizes() << " OverlayResized, " << m_observer.scaleChanges() << " OverlayScaleChanged, " << m_observer.redrawRequests() << " RedrawRequested, " << m_geometryChanges.load() << " geometry changes, " << m_stackChurns.load() << " surface churns, " << m_pointerMoves << " pointer moves, off-thread creation " << ( m_offThreadCreationRefused.load() ? "refused" : "NOT refused" ) << ".";
 
 				return true;
 			}

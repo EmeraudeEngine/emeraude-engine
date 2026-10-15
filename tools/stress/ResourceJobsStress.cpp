@@ -117,7 +117,7 @@ namespace
 
 				if ( m_material == nullptr )
 				{
-					std::cerr << "[ResourceJobsStress] No default material !" "\n";
+					TraceError{ClassId} << "No default material !";
 
 					return false;
 				}
@@ -126,7 +126,7 @@ namespace
 				m_lastCreation = m_start;
 				m_lastUnload = m_start;
 
-				std::cout << "[ResourceJobsStress] Creating meshes with automatic LODs for " << RunDuration.count() << " s." "\n";
+				TraceInfo{ClassId} << "Creating meshes with automatic LODs for " << RunDuration.count() << " s.";
 
 				return true;
 			}
@@ -146,7 +146,7 @@ namespace
 					/* NOTE: In the middle of the work: loads, LOD jobs and reloads are in flight. */
 					m_stopping = true;
 
-					std::cout << "[ResourceJobsStress] " << m_creations << " meshes created, " << m_unloaded << " resources unloaded, " << m_reloadRequests << " local-data requests; stopping with " << m_meshes.size() << " meshes alive." "\n";
+					TraceInfo{ClassId} << m_creations << " meshes created, " << m_unloaded << " resources unloaded, " << m_reloadRequests << " local-data requests; stopping with " << m_meshes.size() << " meshes alive.";
 
 					this->stop();
 

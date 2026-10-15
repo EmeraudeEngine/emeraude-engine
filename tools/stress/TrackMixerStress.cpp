@@ -112,7 +112,7 @@ namespace
 
 				if ( !mixer.usable() )
 				{
-					std::cerr << "[TrackMixerStress] The track mixer is unavailable (no audio device ?) !" "\n";
+					TraceError{ClassId} << "The track mixer is unavailable (no audio device ?) !";
 
 					return false;
 				}
@@ -121,7 +121,7 @@ namespace
 
 				if ( names.empty() )
 				{
-					std::cerr << "[TrackMixerStress] No playlist manifest: pass --add-data-directory=<a data directory with MusicPlaylists> !" "\n";
+					TraceError{ClassId} << "No playlist manifest: pass --add-data-directory=<a data directory with MusicPlaylists> !";
 
 					return false;
 				}
@@ -130,7 +130,7 @@ namespace
 
 				if ( m_playlist == nullptr || !mixer.loadPlaylist(m_playlist) )
 				{
-					std::cerr << "[TrackMixerStress] Unable to load the playlist '" << names.front() << "' !" "\n";
+					TraceError{ClassId} << "Unable to load the playlist '" << names.front() << "' !";
 
 					return false;
 				}
@@ -144,13 +144,13 @@ namespace
 				{
 					if ( !m_drivers[index].start([this, index, token = m_stop.get_token()] { this->drive(index, token); }) )
 					{
-						std::cerr << "[TrackMixerStress] Unable to start the driver thread #" << index << " !" "\n";
+						TraceError{ClassId} << "Unable to start the driver thread #" << index << " !";
 
 						return false;
 					}
 				}
 
-				std::cout << "[TrackMixerStress] Playlist '" << names.front() << "' loaded, " << DriverCount << " drivers for " << RunDuration.count() << " s." "\n";
+				TraceInfo{ClassId} << "Playlist '" << names.front() << "' loaded, " << DriverCount << " drivers for " << RunDuration.count() << " s.";
 
 				return true;
 			}
@@ -181,7 +181,7 @@ namespace
 				/* NOTE: The services are still up: the drivers stop and join before the mixer goes. */
 				this->stopDrivers();
 
-				std::cout << "[TrackMixerStress] " << m_calls.load() << " calls by the drivers, " << m_logicReads.load() << " logic-thread reads." "\n";
+				TraceInfo{ClassId} << m_calls.load() << " calls by the drivers, " << m_logicReads.load() << " logic-thread reads.";
 
 				return true;
 			}
