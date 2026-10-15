@@ -251,5 +251,8 @@ namespace EmEn::Vulkan
 			 * graphics queue and the picture changes family by a release / acquire pair (owner decision 2026-10-15). */
 			bool m_uploadOnGraphicsQueue{false};
 			bool m_saoSupported{false}; ///< SAO may be enabled in the SPS (stdSyntaxFlags).
+			/* NOTE: The encode family reports the result status of its queries (queryResultStatusSupport): the feedback
+			 * query is read WITH_STATUS and a failed encode is refused instead of its bytes kept. */
+			bool m_encodeStatusSupported{false};
 	};
 }

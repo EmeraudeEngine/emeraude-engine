@@ -30,6 +30,7 @@
 #include <cstring>
 
 /* Local inclusions. */
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
@@ -154,6 +155,44 @@ namespace EmEn::Vulkan
 			if ( m_uploadOnGraphicsQueue )
 			{
 				Tracer::info(ClassId, "The video-encode queue family cannot copy: the NV12 planes are uploaded on the graphics queue and handed over by a queue family ownership transfer.");
+			}
+		}
+
+		/* NOTE: VK_QUERY_RESULT_WITH_STATUS_BIT_KHR is valid only on a family with queryResultStatusSupport
+		 * (VkQueueFamilyQueryResultStatusPropertiesKHR, VK_KHR_video_queue). */
+		{
+			/* NOTE: Both tables are filled to their capacity once: no reallocation, the pNext pointers stay valid. */
+			Base::StaticVector< VkQueueFamilyQueryResultStatusPropertiesKHR, PhysicalDevice::MaxQueueFamilies > statuses;
+			statuses.resize(PhysicalDevice::MaxQueueFamilies, {
+				.sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_QUERY_RESULT_STATUS_PROPERTIES_KHR,
+				.pNext = nullptr,
+				.queryResultStatusSupport = VK_FALSE
+			});
+
+			Base::StaticVector< VkQueueFamilyProperties2, PhysicalDevice::MaxQueueFamilies > families;
+			families.resize(PhysicalDevice::MaxQueueFamilies, {
+				.sType = VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2,
+				.pNext = nullptr,
+				.queueFamilyProperties{}
+			});
+
+			for ( size_t index = 0; index < families.size(); ++index )
+			{
+				families[index].pNext = &statuses[index];
+			}
+
+			/* NOTE: The count in is the array capacity: the call fills that many families at most. */
+			auto count = static_cast< uint32_t >(families.size());
+
+			vkGetPhysicalDeviceQueueFamilyProperties2(m_device->physicalDevice()->handle(), &count, families.data());
+
+			const auto encodeFamily = m_device->getVideoEncodeFamilyIndex();
+
+			m_encodeStatusSupported = encodeFamily < count && statuses[encodeFamily].queryResultStatusSupport == VK_TRUE;
+
+			if ( !m_encodeStatusSupported )
+			{
+				Tracer::warning(ClassId, "The video-encode queue family reports no query result status: a failed encode cannot be detected.");
 			}
 		}
 
@@ -1110,6 +1149,24 @@ namespace EmEn::Vulkan
 
 		m_fpCmdEndVideoCoding(commandBuffer->handle(), &endInfo);
 
+		/* NOTE: The packet is read by the host after the queue wait: the encode writes must be made available and visible
+		 * to the host (a fence or queue wait alone does not, Vulkan memory model § host access). */
+		{
+			VkMemoryBarrier2 toHost{};
+			toHost.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2;
+			toHost.srcStageMask = VK_PIPELINE_STAGE_2_VIDEO_ENCODE_BIT_KHR;
+			toHost.srcAccessMask = VK_ACCESS_2_VIDEO_ENCODE_WRITE_BIT_KHR;
+			toHost.dstStageMask = VK_PIPELINE_STAGE_2_HOST_BIT;
+			toHost.dstAccessMask = VK_ACCESS_2_HOST_READ_BIT;
+
+			VkDependencyInfo dependencyInfo{};
+			dependencyInfo.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO;
+			dependencyInfo.memoryBarrierCount = 1;
+			dependencyInfo.pMemoryBarriers = &toHost;
+
+			vkCmdPipelineBarrier2(commandBuffer->handle(), &dependencyInfo);
+		}
+
 		if ( !commandBuffer->end() )
 		{
 			Tracer::error(ClassId, "Unable to end the encode command buffer !");
@@ -1126,12 +1183,34 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* Fetch the packet location through the feedback query. */
-		std::array< uint32_t, 2 > feedback{0, 0}; /* offset, bytes written. */
+		/* Fetch the packet location through the feedback query: offset, bytes written, then the result status when the
+		 * family reports it (a negative VkQueryResultStatusKHR: the encode failed, e.g. an insufficient bitstream range). */
+		std::array< uint32_t, 3 > feedback{0, 0, 0};
+		const VkQueryResultFlags resultFlags = static_cast< VkQueryResultFlags >(VK_QUERY_RESULT_WAIT_BIT) | (m_encodeStatusSupported ? static_cast< VkQueryResultFlags >(VK_QUERY_RESULT_WITH_STATUS_BIT_KHR) : 0U);
+		const size_t resultSize = (m_encodeStatusSupported ? 3U : 2U) * sizeof(uint32_t);
 
-		if ( vkGetQueryPoolResults(m_device->handle(), m_feedbackQueryPool, 0, 1, sizeof(feedback), feedback.data(), sizeof(feedback), VK_QUERY_RESULT_WAIT_BIT) != VK_SUCCESS )
+		if ( vkGetQueryPoolResults(m_device->handle(), m_feedbackQueryPool, 0, 1, resultSize, feedback.data(), resultSize, resultFlags) != VK_SUCCESS )
 		{
 			Tracer::error(ClassId, "Unable to read the encode feedback query !");
+
+			return false;
+		}
+
+		if ( m_encodeStatusSupported )
+		{
+			const auto status = static_cast< int32_t >(feedback[2]);
+
+			if ( status <= 0 )
+			{
+				TraceError{ClassId} << "The encode of picture #" << m_frameIndex << " failed (query result status " << status << ") !";
+
+				return false;
+			}
+		}
+
+		if ( static_cast< VkDeviceSize >(feedback[0]) + feedback[1] > m_bitstreamBuffer->bytes() )
+		{
+			TraceError{ClassId} << "The encode feedback points outside the bitstream buffer (offset " << feedback[0] << ", " << feedback[1] << " bytes) !";
 
 			return false;
 		}
