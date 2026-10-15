@@ -29,6 +29,11 @@ one to do.
   unloaded and `stopBackgroundWork()` reported 0 ms.
 - macOS (M6): a quit at 2 s during the sponza load cancels ~390 loads at the stop and takes 0.55-0.91 s, because there
   the stop comes while the loads are still queued.
+- Windows (RTX 3500 Ada, 2026-10-16, automatic LODs):
+  - quit at 8 s: the act removal took 8.99 s while 259 LODs completed;
+  - quit at 4 s: 3.2 s with 142 LODs, then "the 'Indexed geometry manager' tasks took 1398 ms to stop" (the IvySim
+    load);
+  - the time follows the LOD work in flight.
 
 ## What remains
 

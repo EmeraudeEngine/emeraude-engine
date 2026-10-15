@@ -3,7 +3,7 @@
 Every dedicated thread of the engine is a `Base::Thread` (emeraude-base, the `std::jthread` model: a body taking a
 `std::stop_token` receives it; `requestStop()`; the destructor requests the stop, then joins; no `detach()`; a
 self-join aborts). Since 2026-10-15 no owner stops its thread with a hand-made flag (item `jobs-owned-by-their-starter`,
-plan Ave Robustus II § 4.2, P2).
+closed 2026-10-16 after the three OS; plan Ave Robustus II § 4.2, P2).
 
 ### The rules
 
@@ -54,3 +54,22 @@ its own `m_accepting` under its list lock (true from the end of `onInitialize()`
   - the remote console thread stopped; the shutdown took 0.37 s; 0 VUID, exit 0.
 - `OnDemand` rendering (test-only build, the mode a downstream application uses): the menu drawn, a screenshot taken,
   the shutdown from the idle wait in 0.74 s.
+
+### Verified on the peers (2026-10-15/16)
+
+- macOS (M6, AppleClang PARANOID, 0 warning):
+  - TSan, 0 report: `EmeraudeTrackMixerStress` 2 runs (~19 650 calls), `EmeraudeResourceJobsStress`;
+  - a VP9 rush with the voice-over: 174 pictures, 0 decode error; the WAVs valid; the journal closes properly; the
+    shutdown 0.32 s;
+  - `sponza` quit while loading: 0.59-0.69 s;
+  - 0 validation message.
+- Windows (RTX 3500 Ada, MSVC, 0 warning; base suites 2531/2531):
+  - the H.265 and VP9 rushes with the voice-over: 181 pictures each, the WAVs valid, the journals closed properly,
+    the shutdown 0.63-0.73 s;
+  - a VP9 rush with `Core.shutdown()` sent 0.01 s after the stop: the background drain completes inside the shutdown
+    (181/181 pictures, exit in 0.76 s);
+  - the downstream application (OnDemand rendering, Vulkan 1.1 target): shutdown from the idle wait in 0.87-1.08 s;
+  - 0 validation message everywhere.
+- ⚠️ The game-audio WAV of the `default` demo is silent on every OS: the demo plays no sound during a rush. With
+  music started (`Core.AudioManagerService.TrackMixerService.play()`) the loopback WAV carries the signal (Linux).
+
