@@ -43,7 +43,6 @@
 #endif
 #define _WIN32_DCOM // NOLINT
 #include <Windows.h>
-#include <comdef.h>
 #include <dxgi.h>
 #include <psapi.h>
 #include <Wbemidl.h>
@@ -52,6 +51,7 @@
 #pragma comment(lib, "dxgi.lib")
 
 /* Local inclusions. */
+#include "COM.windows.hpp"
 #include "Helpers.hpp"
 #include "Vulkan/Types.hpp"
 
@@ -187,8 +187,10 @@ namespace EmEn::PlatformSpecific
 			// System: 070B744C-3067-11B2-A85C-F9984AD22366
 			// Requested: 070B744C-3067-11B2-A85C-F9984AD22366
 
-			/* NOTE: Init COM */
-			HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+			/* NOTE: Init COM. Any failure refuses, RPC_E_CHANGED_MODE included (no reference taken then); S_OK and S_FALSE
+			 * take one, given back by the destructor on every return below. */
+			const ComInitialization comInitialization{COINIT_MULTITHREADED};
+			HRESULT hr = comInitialization.result();
 
 			if ( FAILED(hr) )
 			{
@@ -204,78 +206,73 @@ namespace EmEn::PlatformSpecific
 			{
 				std::cerr << "CoInitializeSecurity() : 0x" << std::hex << hr << std::endl;
 
-				CoUninitialize();
-
 				return false;
 			}
 
-			/* NOTE: WMI connexion. */
-			IWbemLocator * pLoc = nullptr;
-			hr = CoCreateInstance(CLSID_WbemLocator, nullptr, CLSCTX_INPROC_SERVER, IID_IWbemLocator, reinterpret_cast< LPVOID * >(&pLoc));
+			/* NOTE: WMI connexion. The interfaces are declared after the COM initialization: released before
+			 * CoUninitialize(), in the reverse order of their declaration. */
+			Microsoft::WRL::ComPtr< IWbemLocator > pLoc;
+			hr = CoCreateInstance(CLSID_WbemLocator, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(pLoc.GetAddressOf()));
 
 			if ( FAILED(hr) )
 			{
 				std::cerr << "CoCreateInstance() : 0x" << std::hex << hr << std::endl;
 
-				CoUninitialize();
-
 				return false;
 			}
 
-			IWbemServices * pSvc = nullptr;
+			Microsoft::WRL::ComPtr< IWbemServices > pSvc;
 
-			/* NOTE: Connect to root\cimv2 space */
-			hr = pLoc->ConnectServer(_bstr_t(L"ROOT\\CIMV2"), nullptr, nullptr, nullptr, NULL, nullptr, nullptr, &pSvc);
+			/* NOTE: Connect to root\cimv2 space. A failed BSTR allocation is reported as E_OUTOFMEMORY by the trace below. */
+			const BasicString wmiNamespace{L"ROOT\\CIMV2"};
+
+			hr = wmiNamespace.get() != nullptr ? pLoc->ConnectServer(wmiNamespace.get(), nullptr, nullptr, nullptr, NULL, nullptr, nullptr, pSvc.GetAddressOf()) : E_OUTOFMEMORY;
 
 			if ( FAILED(hr) )
 			{
 				std::cerr << "Unable to connect to WMI (ROOT\\CIMV2) : 0x" << std::hex << hr << std::endl;
 
-				pLoc->Release();
-
-				CoUninitialize();
-
 				return false;
 			}
 
 			/* NOTE: Execute WQL request */
-			hr = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, nullptr, RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
+			hr = CoSetProxyBlanket(pSvc.Get(), RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, nullptr, RPC_C_AUTHN_LEVEL_CALL, RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
 
 			if ( FAILED(hr) )
 			{
 				std::cerr << "CoSetProxyBlanket() : 0x" << std::hex << hr << std::endl;
 
-				pSvc->Release();
-				pLoc->Release();
-
-				CoUninitialize();
-
 				return false;
 			}
 
-			/* NOTE: Use WQL (WMI Query Language) to get UUID. */
-			IEnumWbemClassObject* pEnumerator = nullptr;
+			/* NOTE: Use WQL (WMI Query Language) to get UUID. A failed BSTR allocation is reported as E_OUTOFMEMORY by the
+			 * trace below. */
+			Microsoft::WRL::ComPtr< IEnumWbemClassObject > pEnumerator;
+			const BasicString queryLanguage{L"WQL"};
+			const BasicString query{L"SELECT UUID FROM Win32_ComputerSystemProduct"};
 
-			hr = pSvc->ExecQuery(bstr_t("WQL"), bstr_t("SELECT UUID FROM Win32_ComputerSystemProduct"), WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr, &pEnumerator);
+			if ( queryLanguage.get() != nullptr && query.get() != nullptr )
+			{
+				hr = pSvc->ExecQuery(queryLanguage.get(), query.get(), WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr, pEnumerator.GetAddressOf());
+			}
+			else
+			{
+				hr = E_OUTOFMEMORY;
+			}
 
 			if ( FAILED(hr) )
 			{
 				std::cerr << "Unable to execute the query : 0x" << std::hex << hr << std::endl;
 
-				pSvc->Release();
-				pLoc->Release();
-
-				CoUninitialize();
-
 				return false;
 			}
 
-			IWbemClassObject * pclsObj = nullptr;
-			ULONG uReturn = 0;
-
-			if ( pEnumerator )
+			if ( pEnumerator != nullptr )
 			{
-				hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+				Microsoft::WRL::ComPtr< IWbemClassObject > pclsObj;
+				ULONG uReturn = 0;
+
+				hr = pEnumerator->Next(WBEM_INFINITE, 1, pclsObj.GetAddressOf(), &uReturn);
 
 				if ( SUCCEEDED(hr) && uReturn != 0 && pclsObj != nullptr )
 				{
@@ -294,8 +291,6 @@ namespace EmEn::PlatformSpecific
 					}
 
 					VariantClear(&vtProp);
-
-					pclsObj->Release();
 				}
 				else if ( FAILED(hr) )
 				{
@@ -306,23 +301,6 @@ namespace EmEn::PlatformSpecific
 					std::cerr << "No Win32_ComputerSystemProduct object found !" << std::endl;
 				}
 			}
-
-			if ( pEnumerator )
-			{
-				pEnumerator->Release();
-			}
-
-			if ( pSvc )
-			{
-				pSvc->Release();
-			}
-
-			if ( pLoc )
-			{
-				pLoc->Release();
-			}
-
-			CoUninitialize();
 		}
 
 		return true;

@@ -41,8 +41,10 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <shobjidl.h>
+#include <wrl/client.h>
 
 /* Local inclusions. */
+#include "PlatformSpecific/COM.windows.hpp"
 #include "PlatformSpecific/Helpers.hpp"
 #include "Tracer.hpp"
 #include "Window.hpp"
@@ -164,57 +166,25 @@ namespace EmEn::PlatformSpecific::Desktop
 	void
 	setTaskbarIconProgression (const Window & window, float progress, ProgressMode mode) noexcept
 	{
-		ITaskbarList3 * taskbar = nullptr;
-
 		/* Initialize COM if not already done. */
-		HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+		const ComInitialization comInitialization{COINIT_APARTMENTTHREADED};
 
-		/* NOTE: S_OK and S_FALSE both take a reference that CoUninitialize() must give back (it was never called);
-		 * RPC_E_CHANGED_MODE takes none. Released on every return below. */
-		class ComScope final
-		{
-			public:
-
-				explicit ComScope (bool initialized) noexcept
-					: m_initialized{initialized}
-				{
-
-				}
-
-				ComScope (const ComScope & copy) noexcept = delete;
-				ComScope (ComScope && copy) noexcept = delete;
-				ComScope & operator= (const ComScope & copy) noexcept = delete;
-				ComScope & operator= (ComScope && copy) noexcept = delete;
-
-				~ComScope ()
-				{
-					if ( m_initialized )
-					{
-						CoUninitialize();
-					}
-				}
-
-			private:
-
-				bool m_initialized;
-		};
-
-		const ComScope comScope{SUCCEEDED(hr)};
-
-		if ( FAILED(hr) && hr != RPC_E_CHANGED_MODE )
+		if ( FAILED(comInitialization.result()) && comInitialization.result() != RPC_E_CHANGED_MODE )
 		{
 			Tracer::error(TracerTag, "Failed to initialize COM for taskbar progress.");
 
 			return;
 		}
 
+		/* NOTE: Declared after the COM initialization: released before CoUninitialize(). */
+		Microsoft::WRL::ComPtr< ITaskbarList3 > taskbar;
+
 		/* Create ITaskbarList3 instance. */
-		hr = CoCreateInstance(
+		HRESULT hr = CoCreateInstance(
 			CLSID_TaskbarList,
 			nullptr,
 			CLSCTX_INPROC_SERVER,
-			IID_ITaskbarList3,
-			reinterpret_cast< void ** >(&taskbar)
+			IID_PPV_ARGS(taskbar.GetAddressOf())
 		);
 
 		if ( FAILED(hr) || taskbar == nullptr )
@@ -229,8 +199,6 @@ namespace EmEn::PlatformSpecific::Desktop
 
 		if ( FAILED(hr) )
 		{
-			taskbar->Release();
-
 			Tracer::error(TracerTag, "Failed to initialize ITaskbarList3.");
 
 			return;
@@ -242,7 +210,6 @@ namespace EmEn::PlatformSpecific::Desktop
 		if ( std::isnan(progress) || progress < 0.0F )
 		{
 			taskbar->SetProgressState(hwnd, TBPF_NOPROGRESS);
-			taskbar->Release();
 
 			return;
 		}
@@ -282,7 +249,5 @@ namespace EmEn::PlatformSpecific::Desktop
 			const auto progressValue = static_cast< ULONGLONG >(std::min(progress, 1.0F) * 100.0F);
 			taskbar->SetProgressValue(hwnd, progressValue, 100);
 		}
-
-		taskbar->Release();
 	}
 }

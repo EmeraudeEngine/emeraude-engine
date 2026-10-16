@@ -26,6 +26,13 @@
 
 #include "VideoCaptureDevice.hpp"
 
+/* STL inclusions. */
+#include <memory>
+#include <optional>
+#include <span>
+#include <string>
+#include <utility>
+
 /* Third-party inclusions. */
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -38,8 +45,10 @@
 #include <mferror.h>
 #include <mfidl.h>
 #include <mfreadwrite.h>
+#include <wrl/client.h>
 
 /* Local inclusions. */
+#include "COM.windows.hpp"
 #include "Helpers.hpp"
 #include "Tracer.hpp"
 
@@ -47,72 +56,316 @@ namespace EmEn::PlatformSpecific
 {
 	constexpr auto TracerTag{"VideoCaptureDevice"};
 
-	/* The platform-specific context (VideoCaptureDevice::m_platformContext). */
-	struct VideoCaptureDevice::PlatformContext
+	namespace
 	{
-		IMFSourceReader * sourceReader{nullptr};
-		IMFMediaSource * mediaSource{nullptr};
-		bool isRGB32{false};
-		bool comInitialized{false};
-		bool mfStarted{false};
-	};
-
-	/* Initializes COM and Media Foundation. Returns true on success. */
-	static bool
-	initializeCOMAndMF (bool & comInitialized, bool & mfStarted) noexcept
-	{
-		HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-
-		if ( SUCCEEDED(hr) )
+		/**
+		 * @brief COM, then Media Foundation, for the lifetime of this object; MFShutdown() then CoUninitialize() at its
+		 * destruction, each one only when its start took a reference.
+		 * @note COM already initialized with the other threading model on this thread (RPC_E_CHANGED_MODE) is acceptable:
+		 * no reference taken. Any other COM failure skips MFStartup(). Thread-affine, like ComInitialization.
+		 */
+		class MediaFoundationScope final
 		{
-			comInitialized = true;
-		}
-		else if ( hr == RPC_E_CHANGED_MODE )
+			public:
+
+				/**
+				 * @brief Initializes COM (single-threaded apartment) and starts Media Foundation.
+				 */
+				MediaFoundationScope () noexcept
+					: m_comInitialization{COINIT_APARTMENTTHREADED}
+				{
+					const auto comResult = m_comInitialization.result();
+
+					if ( FAILED(comResult) && comResult != RPC_E_CHANGED_MODE )
+					{
+						TraceError{TracerTag} << "CoInitializeEx failed (HRESULT: " << comResult << ").";
+
+						return;
+					}
+
+					const auto startResult = MFStartup(MF_VERSION);
+
+					if ( FAILED(startResult) )
+					{
+						TraceError{TracerTag} << "MFStartup failed (HRESULT: " << startResult << ").";
+
+						return;
+					}
+
+					m_started = true;
+				}
+
+				/** @brief Deleted copy constructor. */
+				MediaFoundationScope (const MediaFoundationScope & copy) noexcept = delete;
+
+				/** @brief Deleted move constructor. */
+				MediaFoundationScope (MediaFoundationScope && copy) noexcept = delete;
+
+				/** @brief Deleted copy assignment. */
+				MediaFoundationScope & operator= (const MediaFoundationScope & copy) noexcept = delete;
+
+				/** @brief Deleted move assignment. */
+				MediaFoundationScope & operator= (MediaFoundationScope && copy) noexcept = delete;
+
+				/**
+				 * @brief Shuts Media Foundation down when it was started; the COM member is destroyed after it.
+				 */
+				~MediaFoundationScope ()
+				{
+					if ( m_started )
+					{
+						MFShutdown();
+					}
+				}
+
+				/**
+				 * @brief Returns whether COM is usable and Media Foundation started.
+				 * @return bool
+				 */
+				[[nodiscard]]
+				bool
+				started () const noexcept
+				{
+					return m_started;
+				}
+
+			private:
+
+				ComInitialization m_comInitialization;
+				bool m_started{false};
+		};
+
+		/**
+		 * @brief The activation objects of the video capture devices (MFEnumDeviceSources()): every element released, then
+		 * the array freed (CoTaskMemFree), by the destructor.
+		 */
+		class DeviceActivates final
 		{
-			/* COM already initialized with a different threading model; that's acceptable. */
-			comInitialized = false;
-		}
-		else
+			public:
+
+				/**
+				 * @brief Enumerates the device sources.
+				 * @param attributes The enumeration attributes (the source type).
+				 */
+				explicit
+				DeviceActivates (IMFAttributes * attributes) noexcept
+				{
+					IMFActivate ** array = nullptr;
+					UINT32 count = 0;
+
+					m_result = MFEnumDeviceSources(attributes, &array, &count);
+
+					/* NOTE: Owned at once (a failure leaves a null array, which the deleter accepts). */
+					m_array.reset(array);
+
+					if ( SUCCEEDED(m_result) && m_array != nullptr )
+					{
+						m_count = count;
+					}
+				}
+
+				/** @brief Deleted copy constructor. */
+				DeviceActivates (const DeviceActivates & copy) noexcept = delete;
+
+				/** @brief Deleted move constructor. */
+				DeviceActivates (DeviceActivates && copy) noexcept = delete;
+
+				/** @brief Deleted copy assignment. */
+				DeviceActivates & operator= (const DeviceActivates & copy) noexcept = delete;
+
+				/** @brief Deleted move assignment. */
+				DeviceActivates & operator= (DeviceActivates && copy) noexcept = delete;
+
+				/**
+				 * @brief Releases every activation object; the array member is freed after it.
+				 */
+				~DeviceActivates ()
+				{
+					for ( auto * activate : this->items() )
+					{
+						/* NOTE: Adopted without AddRef(): the ComPtr gives the enumeration's reference back. */
+						Microsoft::WRL::ComPtr< IMFActivate > enumerated;
+						enumerated.Attach(activate);
+					}
+				}
+
+				/**
+				 * @brief Returns the result of MFEnumDeviceSources().
+				 * @return HRESULT
+				 */
+				[[nodiscard]]
+				HRESULT
+				result () const noexcept
+				{
+					return m_result;
+				}
+
+				/**
+				 * @brief Returns the activation objects (none after a failed enumeration).
+				 * @return std::span< IMFActivate * const >
+				 */
+				[[nodiscard]]
+				std::span< IMFActivate * const >
+				items () const noexcept
+				{
+					return {m_array.get(), m_count};
+				}
+
+			private:
+
+				CoTaskMemPointer< IMFActivate * > m_array;
+				UINT32 m_count{0};
+				HRESULT m_result{E_FAIL};
+		};
+
+		/**
+		 * @brief A media buffer locked for reading (IMFMediaBuffer::Lock()), unlocked by the destructor.
+		 * @note The buffer must outlive this object: declare its owner first.
+		 */
+		class MediaBufferLock final
 		{
-			TraceError{TracerTag} << "CoInitializeEx failed (HRESULT: " << hr << ").";
+			public:
 
-			return false;
-		}
+				/**
+				 * @brief Locks the buffer.
+				 * @param buffer A reference to the buffer.
+				 */
+				explicit
+				MediaBufferLock (IMFMediaBuffer & buffer) noexcept
+					: m_buffer{&buffer}
+				{
+					m_result = buffer.Lock(&m_data, &m_maxLength, &m_currentLength);
+				}
 
-		hr = MFStartup(MF_VERSION);
+				/** @brief Deleted copy constructor. */
+				MediaBufferLock (const MediaBufferLock & copy) noexcept = delete;
 
-		if ( FAILED(hr) )
+				/** @brief Deleted move constructor. */
+				MediaBufferLock (MediaBufferLock && copy) noexcept = delete;
+
+				/** @brief Deleted copy assignment. */
+				MediaBufferLock & operator= (const MediaBufferLock & copy) noexcept = delete;
+
+				/** @brief Deleted move assignment. */
+				MediaBufferLock & operator= (MediaBufferLock && copy) noexcept = delete;
+
+				/**
+				 * @brief Unlocks the buffer when the lock succeeded.
+				 */
+				~MediaBufferLock ()
+				{
+					if ( SUCCEEDED(m_result) )
+					{
+						m_buffer->Unlock();
+					}
+				}
+
+				/**
+				 * @brief Returns the result of IMFMediaBuffer::Lock().
+				 * @return HRESULT
+				 */
+				[[nodiscard]]
+				HRESULT
+				result () const noexcept
+				{
+					return m_result;
+				}
+
+				/**
+				 * @brief Returns the locked bytes (null when the lock failed).
+				 * @return const BYTE *
+				 */
+				[[nodiscard]]
+				const BYTE *
+				data () const noexcept
+				{
+					return m_data;
+				}
+
+				/**
+				 * @brief Returns the number of valid bytes in the buffer.
+				 * @return DWORD
+				 */
+				[[nodiscard]]
+				DWORD
+				currentLength () const noexcept
+				{
+					return m_currentLength;
+				}
+
+			private:
+
+				IMFMediaBuffer * m_buffer;
+				BYTE * m_data{nullptr};
+				DWORD m_maxLength{0};
+				DWORD m_currentLength{0};
+				HRESULT m_result{E_FAIL};
+		};
+
+		/**
+		 * @brief Returns a string attribute of an activation object in UTF-8 (IMFAttributes::GetAllocatedString()).
+		 * @param activate A reference to the activation object.
+		 * @param key The attribute key.
+		 * @return std::optional< std::string >
+		 */
+		[[nodiscard]]
+		std::optional< std::string >
+		getAllocatedString (IMFActivate & activate, const GUID & key) noexcept
 		{
-			TraceError{TracerTag} << "MFStartup failed (HRESULT: " << hr << ").";
+			wchar_t * rawString = nullptr;
+			UINT32 length = 0;
 
-			if ( comInitialized )
+			const auto result = activate.GetAllocatedString(key, &rawString, &length);
+
+			/* NOTE: Owned at once (a failure leaves a null pointer, which the deleter accepts). */
+			const CoTaskMemPointer< wchar_t > string{rawString};
+
+			if ( FAILED(result) || string == nullptr )
 			{
-				CoUninitialize();
-				comInitialized = false;
+				return std::nullopt;
 			}
 
-			return false;
+			return convertWideToUTF8(string.get());
 		}
-
-		mfStarted = true;
-
-		return true;
 	}
 
-	/* Shuts down Media Foundation and COM. */
-	static void
-	shutdownCOMAndMF (bool comInitialized, bool mfStarted) noexcept
+	/* The platform-specific context (VideoCaptureDevice::m_platformContext). */
+	struct VideoCaptureDevice::PlatformContext final
 	{
-		if ( mfStarted )
+		/** @brief Constructs the context: COM and Media Foundation started (check mediaFoundation.started()). */
+		PlatformContext () noexcept = default;
+
+		/** @brief Deleted copy constructor. */
+		PlatformContext (const PlatformContext & copy) noexcept = delete;
+
+		/** @brief Deleted move constructor. */
+		PlatformContext (PlatformContext && copy) noexcept = delete;
+
+		/** @brief Deleted copy assignment. */
+		PlatformContext & operator= (const PlatformContext & copy) noexcept = delete;
+
+		/** @brief Deleted move assignment. */
+		PlatformContext & operator= (PlatformContext && copy) noexcept = delete;
+
+		/**
+		 * @brief Stops the capture in order: the reader released, the source shut down then released (member destruction),
+		 * then MFShutdown() and CoUninitialize() (mediaFoundation, declared first, is destroyed last).
+		 */
+		~PlatformContext ()
 		{
-			MFShutdown();
+			sourceReader.Reset();
+
+			if ( mediaSource != nullptr )
+			{
+				mediaSource->Shutdown();
+			}
 		}
 
-		if ( comInitialized )
-		{
-			CoUninitialize();
-		}
-	}
+		MediaFoundationScope mediaFoundation;
+		Microsoft::WRL::ComPtr< IMFMediaSource > mediaSource;
+		Microsoft::WRL::ComPtr< IMFSourceReader > sourceReader;
+		bool isRGB32{false};
+	};
 
 	/* Converts BGRA (RGB32) data to RGBA by swapping B and R channels. */
 	static void
@@ -145,23 +398,20 @@ namespace EmEn::PlatformSpecific
 	{
 		std::vector< VideoCaptureDeviceInfo > devices;
 
-		bool comInitialized = false;
-		bool mfStarted = false;
+		const MediaFoundationScope mediaFoundation;
 
-		if ( !initializeCOMAndMF(comInitialized, mfStarted) )
+		if ( !mediaFoundation.started() )
 		{
 			return devices;
 		}
 
 		/* Create attributes to request video capture devices. */
-		IMFAttributes * attributes = nullptr;
-		HRESULT hr = MFCreateAttributes(&attributes, 1);
+		Microsoft::WRL::ComPtr< IMFAttributes > attributes;
+		HRESULT hr = MFCreateAttributes(attributes.GetAddressOf(), 1);
 
 		if ( FAILED(hr) )
 		{
 			TraceError{TracerTag} << "MFCreateAttributes failed (HRESULT: " << hr << ").";
-
-			shutdownCOMAndMF(comInitialized, mfStarted);
 
 			return devices;
 		}
@@ -172,63 +422,42 @@ namespace EmEn::PlatformSpecific
 		{
 			TraceError{TracerTag} << "Failed to set device source type attribute (HRESULT: " << hr << ").";
 
-			attributes->Release();
-			shutdownCOMAndMF(comInitialized, mfStarted);
-
 			return devices;
 		}
 
 		/* Enumerate devices. */
-		IMFActivate ** activateArray = nullptr;
-		UINT32 deviceCount = 0;
+		const DeviceActivates activates{attributes.Get()};
 
-		hr = MFEnumDeviceSources(attributes, &activateArray, &deviceCount);
-		attributes->Release();
-
-		if ( FAILED(hr) )
+		if ( FAILED(activates.result()) )
 		{
-			TraceError{TracerTag} << "MFEnumDeviceSources failed (HRESULT: " << hr << ").";
-
-			shutdownCOMAndMF(comInitialized, mfStarted);
+			TraceError{TracerTag} << "MFEnumDeviceSources failed (HRESULT: " << activates.result() << ").";
 
 			return devices;
 		}
 
-		for ( UINT32 i = 0; i < deviceCount; ++i )
+		UINT32 index = 0;
+
+		for ( auto * activate : activates.items() )
 		{
 			VideoCaptureDeviceInfo info;
-			info.index = i;
+			info.index = index;
 
 			/* Get the friendly name. */
-			wchar_t * friendlyName = nullptr;
-			UINT32 nameLength = 0;
-
-			hr = activateArray[i]->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME, &friendlyName, &nameLength);
-
-			if ( SUCCEEDED(hr) && friendlyName != nullptr )
+			if ( auto friendlyName = getAllocatedString(*activate, MF_DEVSOURCE_ATTRIBUTE_FRIENDLY_NAME); friendlyName.has_value() )
 			{
-				info.deviceName = convertWideToUTF8(friendlyName);
-				CoTaskMemFree(friendlyName);
+				info.deviceName = std::move(friendlyName.value());
 			}
 
 			/* Get the symbolic link. */
-			wchar_t * symbolicLink = nullptr;
-			UINT32 linkLength = 0;
-
-			hr = activateArray[i]->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, &symbolicLink, &linkLength);
-
-			if ( SUCCEEDED(hr) && symbolicLink != nullptr )
+			if ( auto symbolicLink = getAllocatedString(*activate, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK); symbolicLink.has_value() )
 			{
-				info.devicePath = convertWideToUTF8(symbolicLink);
-				CoTaskMemFree(symbolicLink);
+				info.devicePath = std::move(symbolicLink.value());
 			}
 
 			devices.emplace_back(std::move(info));
 
-			activateArray[i]->Release();
+			++index;
 		}
-
-		CoTaskMemFree(activateArray);
 
 		if ( devices.empty() )
 		{
@@ -238,8 +467,6 @@ namespace EmEn::PlatformSpecific
 		{
 			TraceInfo{TracerTag} << "Found " << devices.size() << " video capture device(s) on Windows.";
 		}
-
-		shutdownCOMAndMF(comInitialized, mfStarted);
 
 		return devices;
 	}
@@ -254,6 +481,7 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
+		/* NOTE: Every early return below destroys the context, which stops what was started so far, in order. */
 		std::unique_ptr< PlatformContext > context{new (std::nothrow) PlatformContext{}};
 
 		if ( context == nullptr )
@@ -263,138 +491,96 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
-		if ( !initializeCOMAndMF(context->comInitialized, context->mfStarted) )
+		if ( !context->mediaFoundation.started() )
 		{
-
 			return false;
 		}
 
-		/* Create attributes to enumerate video capture devices. */
-		IMFAttributes * attributes = nullptr;
-		HRESULT hr = MFCreateAttributes(&attributes, 1);
+		Microsoft::WRL::ComPtr< IMFActivate > matchedActivate;
 
-		if ( FAILED(hr) )
+		/* NOTE: The enumeration (its attributes, every activation object but the matched one) is released at the end of
+		 * this block, before the media source is activated. */
 		{
-			TraceError{TracerTag} << "MFCreateAttributes failed (HRESULT: " << hr << ").";
+			/* Create attributes to enumerate video capture devices. */
+			Microsoft::WRL::ComPtr< IMFAttributes > attributes;
+			const HRESULT hr = MFCreateAttributes(attributes.GetAddressOf(), 1);
 
-			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-
-			return false;
-		}
-
-		hr = attributes->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
-
-		if ( FAILED(hr) )
-		{
-			attributes->Release();
-			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-
-			return false;
-		}
-
-		/* Enumerate and find the matching device. */
-		IMFActivate ** activateArray = nullptr;
-		UINT32 deviceCount = 0;
-
-		hr = MFEnumDeviceSources(attributes, &activateArray, &deviceCount);
-		attributes->Release();
-
-		if ( FAILED(hr) )
-		{
-			TraceError{TracerTag} << "MFEnumDeviceSources failed (HRESULT: " << hr << ").";
-
-			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-
-			return false;
-		}
-
-		/* Find the device matching devicePath. */
-		IMFActivate * matchedActivate = nullptr;
-
-		for ( UINT32 i = 0; i < deviceCount; ++i )
-		{
-			wchar_t * symbolicLink = nullptr;
-			UINT32 linkLength = 0;
-
-			hr = activateArray[i]->GetAllocatedString(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK, &symbolicLink, &linkLength);
-
-			if ( SUCCEEDED(hr) && symbolicLink != nullptr )
+			if ( FAILED(hr) )
 			{
-				const std::string link = convertWideToUTF8(symbolicLink);
-				CoTaskMemFree(symbolicLink);
+				TraceError{TracerTag} << "MFCreateAttributes failed (HRESULT: " << hr << ").";
 
-				if ( link == devicePath )
+				return false;
+			}
+
+			if ( FAILED(attributes->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID)) )
+			{
+				return false;
+			}
+
+			/* Enumerate and find the matching device. */
+			const DeviceActivates activates{attributes.Get()};
+
+			if ( FAILED(activates.result()) )
+			{
+				TraceError{TracerTag} << "MFEnumDeviceSources failed (HRESULT: " << activates.result() << ").";
+
+				return false;
+			}
+
+			/* Find the device matching devicePath. */
+			for ( auto * activate : activates.items() )
+			{
+				if ( const auto link = getAllocatedString(*activate, MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_SYMBOLIC_LINK); link.has_value() && link.value() == devicePath )
 				{
-					matchedActivate = activateArray[i];
-					matchedActivate->AddRef();
+					/* NOTE: The ComPtr assignment takes its own reference (and gives back a previous match's: two devices
+					 * with the same link leaked one AddRef()). */
+					matchedActivate = activate;
 				}
 			}
 		}
-
-		/* Release all enumerated activates. */
-		for ( UINT32 i = 0; i < deviceCount; ++i )
-		{
-			activateArray[i]->Release();
-		}
-
-		CoTaskMemFree(activateArray);
 
 		if ( matchedActivate == nullptr )
 		{
 			TraceError{TracerTag} << "Failed to find video device matching '" << devicePath << "' on Windows.";
 
-			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-
 			return false;
 		}
 
 		/* Activate the media source. */
-		hr = matchedActivate->ActivateObject(IID_PPV_ARGS(&context->mediaSource));
-		matchedActivate->Release();
+		HRESULT hr = matchedActivate->ActivateObject(IID_PPV_ARGS(context->mediaSource.GetAddressOf()));
 
 		if ( FAILED(hr) )
 		{
 			TraceError{TracerTag} << "Failed to activate media source (HRESULT: " << hr << ").";
 
-			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-
 			return false;
 		}
 
 		/* Create source reader from media source. */
-		IMFAttributes * readerAttributes = nullptr;
-		MFCreateAttributes(&readerAttributes, 1);
+		Microsoft::WRL::ComPtr< IMFAttributes > readerAttributes;
+		MFCreateAttributes(readerAttributes.GetAddressOf(), 1);
 
-		hr = MFCreateSourceReaderFromMediaSource(context->mediaSource, readerAttributes, &context->sourceReader);
-
-		if ( readerAttributes != nullptr )
-		{
-			readerAttributes->Release();
-		}
+		hr = MFCreateSourceReaderFromMediaSource(context->mediaSource.Get(), readerAttributes.Get(), context->sourceReader.GetAddressOf());
 
 		if ( FAILED(hr) )
 		{
 			TraceError{TracerTag} << "Failed to create source reader (HRESULT: " << hr << ").";
 
-			context->mediaSource->Shutdown();
-			context->mediaSource->Release();
-			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-
 			return false;
 		}
 
 		/* Try to configure RGB32 output format first. */
-		IMFMediaType * mediaType = nullptr;
-		hr = MFCreateMediaType(&mediaType);
+		Microsoft::WRL::ComPtr< IMFMediaType > mediaType;
+		hr = MFCreateMediaType(mediaType.GetAddressOf());
 
 		if ( SUCCEEDED(hr) )
 		{
 			mediaType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video);
 			mediaType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_RGB32);
-			MFSetAttributeSize(mediaType, MF_MT_FRAME_SIZE, requestedWidth, requestedHeight);
+			MFSetAttributeSize(mediaType.Get(), MF_MT_FRAME_SIZE, requestedWidth, requestedHeight);
 
 			hr = context->sourceReader->SetCurrentMediaType(
-				static_cast< DWORD >(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr, mediaType);
+				static_cast< DWORD >(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr, mediaType.Get());
 
 			if ( SUCCEEDED(hr) )
 			{
@@ -406,33 +592,26 @@ namespace EmEn::PlatformSpecific
 				mediaType->SetGUID(MF_MT_SUBTYPE, MFVideoFormat_YUY2);
 
 				hr = context->sourceReader->SetCurrentMediaType(
-					static_cast< DWORD >(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr, mediaType);
+					static_cast< DWORD >(MF_SOURCE_READER_FIRST_VIDEO_STREAM), nullptr, mediaType.Get());
 
 				if ( SUCCEEDED(hr) )
 				{
 					context->isRGB32 = false;
 				}
 			}
-
-			mediaType->Release();
 		}
 
 		if ( FAILED(hr) )
 		{
 			TraceError{TracerTag} << "Failed to configure output media type (HRESULT: " << hr << ").";
 
-			context->sourceReader->Release();
-			context->mediaSource->Shutdown();
-			context->mediaSource->Release();
-			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-
 			return false;
 		}
 
 		/* Read back the actual negotiated format to get real dimensions. */
-		IMFMediaType * currentType = nullptr;
+		Microsoft::WRL::ComPtr< IMFMediaType > currentType;
 		hr = context->sourceReader->GetCurrentMediaType(
-			static_cast< DWORD >(MF_SOURCE_READER_FIRST_VIDEO_STREAM), &currentType);
+			static_cast< DWORD >(MF_SOURCE_READER_FIRST_VIDEO_STREAM), currentType.GetAddressOf());
 
 		if ( SUCCEEDED(hr) && currentType != nullptr )
 		{
@@ -440,7 +619,7 @@ namespace EmEn::PlatformSpecific
 			UINT32 actualHeight = 0;
 
 			/* NOTE: The size is taken only when the attribute is really there (its result was ignored). */
-			if ( SUCCEEDED(MFGetAttributeSize(currentType, MF_MT_FRAME_SIZE, &actualWidth, &actualHeight)) )
+			if ( SUCCEEDED(MFGetAttributeSize(currentType.Get(), MF_MT_FRAME_SIZE, &actualWidth, &actualHeight)) )
 			{
 				m_width = actualWidth;
 				m_height = actualHeight;
@@ -450,8 +629,6 @@ namespace EmEn::PlatformSpecific
 				m_width = requestedWidth;
 				m_height = requestedHeight;
 			}
-
-			currentType->Release();
 		}
 		else
 		{
@@ -476,25 +653,7 @@ namespace EmEn::PlatformSpecific
 			return;
 		}
 
-		auto * context = m_platformContext.get();
-
-		if ( context != nullptr )
-		{
-			if ( context->sourceReader != nullptr )
-			{
-				context->sourceReader->Release();
-			}
-
-			if ( context->mediaSource != nullptr )
-			{
-				context->mediaSource->Shutdown();
-				context->mediaSource->Release();
-			}
-
-			shutdownCOMAndMF(context->comInitialized, context->mfStarted);
-
-		}
-
+		/* NOTE: The context's destructor stops the capture: reader, source (Shutdown()), Media Foundation, COM. */
 		m_platformContext.reset();
 		m_isOpen = false;
 		m_width = 0;
@@ -525,13 +684,13 @@ namespace EmEn::PlatformSpecific
 		DWORD streamIndex = 0;
 		DWORD streamFlags = 0;
 		LONGLONG timestamp = 0;
-		IMFSample * sample = nullptr;
+		Microsoft::WRL::ComPtr< IMFSample > sample;
 
 		for ( int attempt = 0; attempt < MaxReadAttempts; ++attempt )
 		{
 			HRESULT hr = context->sourceReader->ReadSample(
 				static_cast< DWORD >(MF_SOURCE_READER_FIRST_VIDEO_STREAM),
-				0, &streamIndex, &streamFlags, &timestamp, &sample);
+				0, &streamIndex, &streamFlags, &timestamp, sample.ReleaseAndGetAddressOf());
 
 			if ( FAILED(hr) )
 			{
@@ -559,50 +718,43 @@ namespace EmEn::PlatformSpecific
 		 * read again, or the next frames were read with the old one (an over-read on the RGB32 path). */
 		if ( (streamFlags & MF_SOURCE_READERF_CURRENTMEDIATYPECHANGED) != 0 )
 		{
-			IMFMediaType * changedType = nullptr;
+			Microsoft::WRL::ComPtr< IMFMediaType > changedType;
 
-			if ( SUCCEEDED(context->sourceReader->GetCurrentMediaType(static_cast< DWORD >(MF_SOURCE_READER_FIRST_VIDEO_STREAM), &changedType)) && changedType != nullptr )
+			if ( SUCCEEDED(context->sourceReader->GetCurrentMediaType(static_cast< DWORD >(MF_SOURCE_READER_FIRST_VIDEO_STREAM), changedType.GetAddressOf())) && changedType != nullptr )
 			{
 				UINT32 changedWidth = 0;
 				UINT32 changedHeight = 0;
 
-				if ( SUCCEEDED(MFGetAttributeSize(changedType, MF_MT_FRAME_SIZE, &changedWidth, &changedHeight)) )
+				if ( SUCCEEDED(MFGetAttributeSize(changedType.Get(), MF_MT_FRAME_SIZE, &changedWidth, &changedHeight)) )
 				{
 					m_width = changedWidth;
 					m_height = changedHeight;
 				}
-
-				changedType->Release();
 			}
 		}
 
-		IMFMediaBuffer * buffer = nullptr;
-		HRESULT hr = sample->GetBufferByIndex(0, &buffer);
+		/* NOTE: Declared in this order: the lock is undone before the buffer is released, the buffer before the sample. */
+		Microsoft::WRL::ComPtr< IMFMediaBuffer > buffer;
+		const HRESULT hr = sample->GetBufferByIndex(0, buffer.GetAddressOf());
 
 		if ( FAILED(hr) || buffer == nullptr )
 		{
-			sample->Release();
-
 			TraceWarning{TracerTag} << "Failed to get buffer from sample (HRESULT: " << hr << ").";
 
 			return false;
 		}
 
-		BYTE * rawData = nullptr;
-		DWORD maxLength = 0;
-		DWORD currentLength = 0;
+		const MediaBufferLock lock{*buffer.Get()};
 
-		hr = buffer->Lock(&rawData, &maxLength, &currentLength);
-
-		if ( FAILED(hr) )
+		if ( FAILED(lock.result()) )
 		{
-			buffer->Release();
-			sample->Release();
-
-			TraceWarning{TracerTag} << "Failed to lock media buffer (HRESULT: " << hr << ").";
+			TraceWarning{TracerTag} << "Failed to lock media buffer (HRESULT: " << lock.result() << ").";
 
 			return false;
 		}
+
+		const BYTE * rawData = lock.data();
+		const DWORD currentLength = lock.currentLength();
 
 		if ( context->isRGB32 )
 		{
@@ -612,10 +764,6 @@ namespace EmEn::PlatformSpecific
 			/* NOTE: The conversion reads pixelCount * 4 bytes: a shorter buffer was read past its end. */
 			if ( pixelCount == 0 || currentLength < pixelCount * 4 )
 			{
-				buffer->Unlock();
-				buffer->Release();
-				sample->Release();
-
 				TraceWarning{TracerTag} << "Incomplete RGB32 frame (" << currentLength << " bytes for " << m_width << "x" << m_height << ") dropped.";
 
 				return false;
@@ -628,19 +776,11 @@ namespace EmEn::PlatformSpecific
 			/* YUY2 format. Use the shared YUYV->RGBA converter, which refuses a frame shorter than the format. */
 			if ( !convertYUYVtoRGBA(rawData, currentLength, rgbaOutput, m_width, m_height) )
 			{
-				buffer->Unlock();
-				buffer->Release();
-				sample->Release();
-
 				TraceWarning{TracerTag} << "Incomplete YUY2 frame (" << currentLength << " bytes for " << m_width << "x" << m_height << ") dropped.";
 
 				return false;
 			}
 		}
-
-		buffer->Unlock();
-		buffer->Release();
-		sample->Release();
 
 		return true;
 	}

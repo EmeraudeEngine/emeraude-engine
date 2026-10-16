@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -46,8 +47,10 @@
 #include <Windows.h>
 #include <commdlg.h>
 #include <shobjidl.h>
+#include <wrl/client.h>
 
 /* Local inclusions. */
+#include "PlatformSpecific/COM.windows.hpp"
 #include "PlatformSpecific/Helpers.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
@@ -221,20 +224,15 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		/* NOTE: An IFileSaveDialog (it was stored in an IFileOpenDialog pointer, which only worked because every method
 		 * used sits in an IFileDialog slot). */
-		IFileSaveDialog * dialogHandle = nullptr;
+		Microsoft::WRL::ComPtr< IFileSaveDialog > dialogHandle;
 
-		HRESULT hr = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_ALL, IID_IFileSaveDialog, reinterpret_cast< void * * >(&dialogHandle));
+		HRESULT hr = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_ALL, IID_PPV_ARGS(dialogHandle.GetAddressOf()));
 		if ( FAILED(hr) )
 		{
 			Tracer::error(ClassId, "Unable to create the dialog instance !");
 
 			return false;
 		}
-
-		/* NOTE: Create an automatic dialog release. */
-		std::unique_ptr< IFileSaveDialog, void (*)(IFileSaveDialog *) > autoRelease(dialogHandle, [] (IFileSaveDialog * p) {
-			p->Release();
-		});
 
 		/* NOTE: Set the dialog title. */
 		const auto title = convertUTF8ToWide(this->title());
@@ -306,19 +304,17 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 		 * paths coming from cross-platform sources (JS, POSIX-style config) are accepted. */
 		if ( !m_defaultDirectory.empty() )
 		{
-			IShellItem * folderItem = nullptr;
+			Microsoft::WRL::ComPtr< IShellItem > folderItem;
 			const auto dirWide = std::filesystem::path{m_defaultDirectory}.make_preferred().wstring();
-			HRESULT hr2 = SHCreateItemFromParsingName(dirWide.c_str(), nullptr, IID_IShellItem, reinterpret_cast< void * * >(&folderItem));
+			HRESULT hr2 = SHCreateItemFromParsingName(dirWide.c_str(), nullptr, IID_PPV_ARGS(folderItem.GetAddressOf()));
 
 			if ( SUCCEEDED(hr2) && folderItem != nullptr )
 			{
-				HRESULT hr3 = dialogHandle->SetFolder(folderItem);
+				HRESULT hr3 = dialogHandle->SetFolder(folderItem.Get());
 				if ( FAILED(hr3) )
 				{
 					Tracer::error(ClassId, "SetFolder failed on the dialog instance !");
 				}
-
-				folderItem->Release();
 			}
 			else
 			{
@@ -356,9 +352,9 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 
 		/* Get the filepath selected. */
 		{
-			IShellItem * item = nullptr;
+			Microsoft::WRL::ComPtr< IShellItem > item;
 
-			hr = dialogHandle->GetResult(&item);
+			hr = dialogHandle->GetResult(item.GetAddressOf());
 			if ( FAILED(hr) )
 			{
 				Tracer::error(ClassId, "Unable to get the item selected !");
@@ -367,24 +363,22 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			}
 
 			{
-				PWSTR filepath = nullptr;
+				PWSTR rawFilepath = nullptr;
 
-				hr = item->GetDisplayName(SIGDN_FILESYSPATH, &filepath);
-				if ( FAILED(hr) )
+				hr = item->GetDisplayName(SIGDN_FILESYSPATH, &rawFilepath);
+
+				/* NOTE: Owned at once (a failure leaves a null pointer, which the deleter accepts). */
+				const CoTaskMemPointer< wchar_t > filepath{rawFilepath};
+
+				if ( FAILED(hr) || filepath == nullptr )
 				{
-					item->Release();
-
 					Tracer::error(ClassId, "Unable to get the filepath from the item selected !");
 
 					return false;
 				}
 
-				m_filepath = filepath;
-
-				CoTaskMemFree(filepath);
+				m_filepath = filepath.get();
 			}
-
-			item->Release();
 		}
 
 		return true;
