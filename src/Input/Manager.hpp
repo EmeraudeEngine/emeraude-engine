@@ -795,6 +795,11 @@ namespace EmEn::Input
 			std::set< int > m_gamepadIDs;
 			std::array< double, 2 > m_pointerScalingFactors{1.0, 1.0};
 			std::array< double, 2 > m_lastPointerCoordinates{0.0, 0.0};
+#if IS_MACOS
+			/* The pinch-gesture NSEvent monitor (an Objective-C object retained through __bridge_retained), one per manager:
+			 * installMacOSGestureHandlers() / removeMacOSGestureHandlers(), the destructor. Main thread only. */
+			void * m_magnificationEventMonitor{nullptr};
+#endif
 			/* The window callback context attachment and the joystick callback: their end detaches this manager. */
 			Base::ScopedRegistration m_windowAttachment;
 			Base::ScopedRegistration m_joystickCallbackRegistration;

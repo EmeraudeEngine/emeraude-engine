@@ -39,17 +39,15 @@
 
 namespace EmEn::Input
 {
-	static id g_magnificationEventMonitor = nil;
-
 	void
 	Manager::installMacOSGestureHandlers (GLFWwindow * window) noexcept
 	{
 		/* Install local event monitor for magnification (pinch-to-zoom) gestures. */
 		/* NOTE: The block captures this manager: removeMacOSGestureHandlers() runs before it ends (unlinkWindowCallbacks(),
-		 * and the destructor). A second install replaces the first monitor. */
+		 * and the destructor). A second install replaces this manager's first monitor; another manager keeps its own. */
 		this->removeMacOSGestureHandlers();
 
-		g_magnificationEventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMagnify
+		const id monitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMagnify
 			handler:^NSEvent * (NSEvent * event)
 			{
 				/* Get the magnification delta (positive = zoom in, negative = zoom out). */
@@ -69,15 +67,21 @@ namespace EmEn::Input
 				return event;
 			}
 		];
+
+		/* NOTE: Owned by this manager until removeMacOSGestureHandlers() hands it back to ARC. */
+		m_magnificationEventMonitor = (__bridge_retained void *)monitor;
 	}
 
 	void
 	Manager::removeMacOSGestureHandlers () noexcept
 	{
-		if ( g_magnificationEventMonitor != nil )
+		if ( m_magnificationEventMonitor != nullptr )
 		{
-			[NSEvent removeMonitor:g_magnificationEventMonitor];
-			g_magnificationEventMonitor = nil;
+			const id monitor = (__bridge_transfer id)m_magnificationEventMonitor;
+
+			m_magnificationEventMonitor = nullptr;
+
+			[NSEvent removeMonitor:monitor];
 		}
 	}
 }
