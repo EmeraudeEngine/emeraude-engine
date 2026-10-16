@@ -106,6 +106,9 @@ reference, given back by `close()` (the destructor closes; a move transfers it).
 process called `WSAStartup()` behind an unguarded static flag and nothing ever called `WSACleanup()`. Winsock counts
 the references, so other users (Asio in `TCPClient` / `TCPServer`, which starts its own) are unaffected. The
 `WSARecvMsg` extension pointer stays provider-wide, cached in an atomic (several clients may receive at once).
+The static `ssdpDiscover()`, which has no socket owner, holds a `WinsockReference` (RAII) for the call, declared before
+its socket so every return path closes the socket first. ⚠️ Lot 3 first missed that call site (Linux never compiles the
+`#ifdef _WIN32` branch): the Windows build failed on the removed `ensureWsa()` until the fix.
 
 ⚠️⚠️ **A return of 0 from `receive()` is AMBIGUOUS, and `timedOut` is the only thing that
 disambiguates it (since 2026-08-28).** A zero-length datagram is legal in UDP and returns 0 exactly

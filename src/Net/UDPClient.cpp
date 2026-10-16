@@ -90,6 +90,59 @@ namespace EmEn::Net
 	}
 
 #ifdef _WIN32
+	namespace
+	{
+		/**
+		 * @brief One Winsock reference for a scope (WSAStartup() / WSACleanup(), reference-counted by Winsock).
+		 * @note For the static discovery, which has no socket owner to hold one; declared BEFORE its socket, so every
+		 * return path closes the socket first and gives the reference back last.
+		 */
+		class WinsockReference final
+		{
+			public:
+
+				WinsockReference () noexcept
+					: m_started{WinsockReference::start()}
+				{
+
+				}
+
+				WinsockReference (const WinsockReference & copy) noexcept = delete;
+				WinsockReference (WinsockReference && copy) noexcept = delete;
+				WinsockReference & operator= (const WinsockReference & copy) noexcept = delete;
+				WinsockReference & operator= (WinsockReference && copy) noexcept = delete;
+
+				~WinsockReference ()
+				{
+					if ( m_started )
+					{
+						WSACleanup();
+					}
+				}
+
+				[[nodiscard]]
+				bool
+				started () const noexcept
+				{
+					return m_started;
+				}
+
+			private:
+
+				[[nodiscard]]
+				static
+				bool
+				start () noexcept
+				{
+					WSADATA wsaData{};
+
+					return WSAStartup(MAKEWORD(2, 2), &wsaData) == 0;
+				}
+
+				bool m_started;
+		};
+	}
+
 	/*
 	 * WSARecvMsg() has no import library: it must be fetched from the provider through
 	 * WSAIoctl(). The pointer is provider-wide, so resolving it once is enough; several
@@ -1219,7 +1272,9 @@ namespace EmEn::Net
 		std::vector< SSDPDevice > devices;
 
 #ifdef _WIN32
-		if ( !ensureWsa() )
+		const WinsockReference winsock;
+
+		if ( !winsock.started() )
 		{
 			return devices;
 		}
