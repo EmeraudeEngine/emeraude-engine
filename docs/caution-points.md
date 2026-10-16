@@ -2518,7 +2518,9 @@ defects followed: the last material parsed imposed its usage on all of them; a w
 (the vegetation albedo of `Scenes::Toolkit` and the flagstones of projet-alpha's `relief`, loaded synchronously, reached the GPU LINEAR every time); and a write
 during the upload was a data race on a plain `bool`. The WAD loader showed it at its worst: it created its textures
 linear on purpose, then `setAlbedoComponent()` rewrote them sRGB while both tasks ran on the pool — the format of a
-Doom map depended on which finished first. Its textures are sRGB now, like every colour (owner decision 2026-10-14).
+Doom map depended on which finished first. Its textures are sRGB now, like every colour (owner decision 2026-10-14);
+the map then read ~4× darker (decoded texels), so `WADLoader::FullBrightLuminance` went 2000 → 8000 nits on
+2026-10-15 (measured A/B: the WADLoader doc, § *Re-anchored for sRGB textures*).
 
 Proof (`normal-map-debug 4,2,0`, the pair mode: two materials on the store image `Walls/Bricks001-normal`, one
 flipped, in one scene, under the TOP omni): two texture resources, `Walls/Bricks001-normal` and

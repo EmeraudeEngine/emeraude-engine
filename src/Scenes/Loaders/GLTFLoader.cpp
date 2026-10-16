@@ -2792,8 +2792,8 @@ namespace EmEn::Scenes::Loaders
 			 * DamagedHelmet was measured invisible for exactly this reason.
 			 *
 			 * A reference luminance is therefore REQUIRED to bridge the unitless asset to the
-			 * photometric renderer. 2000 nits matches the anchor already used by the WAD
-			 * materializer. ⚠️ The VALUE and the PLACE (loader vs material vs shader) are an
+			 * photometric renderer. 2000 nits matched the anchor of the WAD materializer until
+			 * 2026-10-15 (8000 since: it compensates the sRGB decoding of the map's texels). ⚠️ The VALUE and the PLACE (loader vs material vs shader) are an
 			 * engine-wide decision pending owner arbitration — this constant is the experiment that
 			 * demonstrates the mechanism, not a settled convention. */
 			constexpr auto EmissiveLuminanceAnchor{2000.0F};

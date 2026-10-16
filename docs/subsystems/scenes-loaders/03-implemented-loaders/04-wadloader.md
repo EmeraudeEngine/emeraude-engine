@@ -192,7 +192,8 @@ the lump is `W94_1`. The case-sensitive lookup **silently failed**, the composed
 
 **Photometric anchor — `FullBrightLuminance` + the demo's fixed exposure, ONE JOINT CALIBRATION (Aug 2026):**
 
-Public constant `WADLoader::FullBrightLuminance = 2000.0F` (nits, cd/m²). Every map material
+Public constant `WADLoader::FullBrightLuminance = 8000.0F` (nits, cd/m²; **2000 until 2026-10-15**, see
+*Re-anchored for sRGB textures* below). Every map material
 (`Material::BasicResource`, one per bucket) also does:
 
 ```cpp
@@ -200,7 +201,8 @@ materialResource.setAutoIlluminationAmount(1.0F);
 materialResource.setEmissiveStrength(FullBrightLuminance);
 ```
 
-The emitted quantity is therefore **texel × vertexColor × 2000 nits**. The surfaces **EMIT, they are
+The emitted quantity is therefore **texel × vertexColor × 8000 nits**, the texel DECODED to linear (the
+textures are sRGB since 2026-10-14). The surfaces **EMIT, they are
 not LIT** — the sector light level is already baked into the vertex colors, so re-lighting would
 double-count it. Exactly the same reasoning `SkyBoxResource` uses for a sky.
 
@@ -228,9 +230,29 @@ The triad, **derived** (engine photometry, `Graphics/Photometry.hpp`):
 | Aperture / shutter / sensitivity | f/8 · 1/125 s · **ISO 125** |
 | EV100 | `log2(6400)` = **12.64** |
 | Clipping point | **7680 nits** |
-| Fully-lit surface (2000 nits) | **0.26** display-linear |
+| Fully-lit WHITE texel (8000 nits; 2000 → 0.26 until 2026-10-15) | **1.04** — the clipping point |
 | Clear sky at 8000 nits | **1.04** — just at the top |
 | Skies that still clip | **2 of 28**: JeGray (25500) and AutumnField (31800) |
+
+**Re-anchored for sRGB textures (2026-10-15, owner decision): 2000 → 8000 nits, the exposure kept.**
+Since 2026-10-14 the map textures are sRGB (texture identity, `docs/caution-points.md`): a texel is
+decoded to linear (about `texel^2.2`) before it meets the anchor, so at 2000 nits the map emitted ~4×
+less than the calibration assumed. Measured at the E1M1 start (`setPosition(33, 1.2, 113)`,
+`lookAt(33, 2.845, 103)`, RTX 3070 Ti, validation layer, 0 VUID), the former linear textures as the
+reference (a local A/B build, never committed):
+
+| Variant | Frame mean /255 | Walls p50 | Floor p50 |
+|---------|-----------------|-----------|-----------|
+| Linear textures, 2000 nits (before 2026-10-14) | 32.6 | 93 | 33 |
+| sRGB textures, 2000 nits | 12.2 | 41 | 10 |
+| **sRGB textures, 8000 nits** | **30.2** | **109** | **23** |
+
+Display-linear ratio linear / sRGB at 2000 nits: 4.4 (frame), 3.9 (walls), 5.1 (floor) — the anchor
+took ×4. The joint calibration still holds in what the map ACTUALLY emits: the exposure triad is
+untouched, so the sky relationship is unchanged. No single factor can reproduce the former look (the
+sRGB curve is not linear): bright texels end a little brighter, dark ones darker — the colours are
+the textures' real ones, the linear chain had washed them out. ⚠️ A WHITE texel in a fully-lit sector
+now reaches the clipping point (1.04); none clipped at the E1M1 start (max 214/255).
 
 **The owner's principle, now confirmed:** ONE fixed configuration suffices for EVERY Doom map,
 because all Doom maps are authored on the same scale (sector light 0-255, same meaning everywhere).
@@ -318,7 +340,8 @@ look.
   linear on purpose (a perceptual chain, texel × sector light, for the direct swap-chain path), but
   `setAlbedoComponent()` then rewrote them sRGB on the shared resource while both tasks ran on the pool:
   the format depended on which finished first (`docs/caution-points.md`, texture identity). The albedo
-  setter now requires an sRGB texture; the sector light stays raw.
+  setter now requires an sRGB texture; the sector light stays raw. The map read ~4× darker, so
+  `FullBrightLuminance` went 2000 → 8000 nits on 2026-10-15 (§ *Re-anchored for sRGB textures*).
 
 **V1 limitations (future work):** no collision (the demo flies through); fine texture alignment
 still approximate on ordinary walls. **Two-sided middle textures are NO LONGER skipped** — they are

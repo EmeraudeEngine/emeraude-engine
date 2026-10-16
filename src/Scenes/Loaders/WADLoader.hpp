@@ -83,12 +83,19 @@ namespace EmEn::Scenes::Loaders
 			 * but sat 5 stops under a daylight sky, so the exposure that rendered the map correctly
 			 * blew the sky to pure white over half the frame on any outdoor map — the map itself was
 			 * exposed correctly the whole time, which is what makes that failure so confusing to
-			 * diagnose. At 2000 nits the map sits just under a clear sky and both fit in one frame.
-			 * The demo pairs this with f/8 at 1/125 s and ISO 125 (EV100 12.64, clipping at 7680
-			 * nits), which puts a fully-lit surface at 0.26 display-linear and leaves 26 of the 28
-			 * shipped skies unclipped. See DoomLoader::onEnabled() for the derivation.
+			 * diagnose. The demo pairs it with f/8 at 1/125 s and ISO 125 (EV100 12.64, clipping at
+			 * 7680 nits), which leaves 26 of the 28 shipped skies unclipped. See
+			 * DoomLoader::onEnabled() for the derivation.
+			 * @note 8000 nits since 2026-10-15 (2000 before, owner decision): the textures are sRGB
+			 * since 2026-10-14, so a texel is DECODED to linear (about texel^2.2) before it meets
+			 * this anchor, and the map emitted ~4x less at 2000 nits (measured at the E1M1 start,
+			 * display-linear: 4.4x on the frame, 3.9x on the walls, 5.1x on the floor). The anchor
+			 * was raised by that factor so the map's ACTUAL emission meets the same fixed exposure
+			 * again (frame mean 30/255 against 33 with the former linear textures). Consequence: a
+			 * WHITE texel in a fully-lit sector now reaches 1.04 display-linear, the clipping point;
+			 * Doom's palette rarely gets there (max 214/255 at the E1M1 start).
 			 */
-			static constexpr auto FullBrightLuminance{2000.0F};
+			static constexpr auto FullBrightLuminance{8000.0F};
 
 			/**
 			 * @brief Constructs the WAD loader.
