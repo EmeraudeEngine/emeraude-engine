@@ -167,14 +167,15 @@ refused and why): `docs/ai-runtime-control.md` § "Driving an entity's component
 
 ### Creating a New Component
 0. ⚠️ **A component MAY move or query its own entity from `processLogics()`** (`Node::setPosition()`,
-   `getComponent()`, `forEachComponent()`…): `m_componentsMutex` is a **recursive mutex** since
-   2026-09-13, so the same-thread re-entry that used to deadlock the logic thread (black frame,
-   live console — `SunCourse`) is legal by construction. A move requested from the loop is still
-   DEFERRED by `onContainerMove()` to the end of the loop (same cycle) so the siblings are not
-   moved mid-iteration — same family as the deferred `ComponentBoundariesModified` refresh. What
-   stays FORBIDDEN from inside the loop is a structural change: `linkComponent()`,
-   `removeComponent()`, `clearComponents()` trace an error and do nothing (they would invalidate
-   the iteration) — a component leaves by returning `true` from `shouldBeRemoved()`.
+   `getComponent()`, `forEachComponent()`…): since 2026-10-17 (Ave Robustus II P-W) the components run on a COPY of
+   the list, WITHOUT `m_componentsMutex` (a plain annotated `Base::Mutex` again; it was recursive from 2026-09-13 for
+   this re-entry — `SunCourse` had deadlocked the logic thread: black frame, live console). A move requested during the
+   dispatch is still DEFERRED by `onContainerMove()` to its end (same cycle), so the siblings are not moved
+   mid-cycle — same family as the deferred `ComponentBoundariesModified` refresh. A structural change stays FORBIDDEN
+   from the dispatching thread: `linkComponent()`, `removeComponent()`, `clearComponents()` trace an error and do
+   nothing — a component leaves by returning `true` from `shouldBeRemoved()`; ANOTHER thread doing it waits for the
+   dispatch to end. ⚠️ `forEachComponent()`'s callback still runs UNDER the lock (the render gathers): it must not call
+   the entity's component API (a deadlock) — collect, then act.
 1. Inherit from `Component::Abstract` (Abstract.hpp)
 2. Implement `processLogics()` if per-frame logic needed
 3. Implement `move()` if reaction to entity movement needed

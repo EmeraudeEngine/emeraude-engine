@@ -410,6 +410,16 @@ unlocked access at compile time. Base `docs/subsystems/source-tree/26-thread-saf
   resource given ITSELF as a dependency, the same mutex twice (undefined behaviour), now refused as a cycle before any
   lock, and the two locks are taken one after the other under the graph lock (no path holds a node's lock while taking
   another's). Found while reading, no caller does it today: no runtime repro.
+- Lot Scenes A (2026-10-17): `AbstractEntity` (no longer recursive — the components run on a copy of the list WITHOUT
+  the lock, CP.22; the dispatching thread's structural changes refused, another thread waits on a condition variable;
+  `forEachComponent()`'s callback still under the lock: it must not call the entity's component API), `Camera`,
+  `AVConsole::AbstractVirtualDevice` (its two-device locks a `Base::MutexPairLock`; a device connecting to itself is
+  refused — it locked its own mutex twice), `AVConsole::Manager` (its `*NoLock` helpers `EMEN_REQUIRES`),
+  `Editor::Manager`, `GeometryDeduplicator`, `BindlessTextureSet`, `CloudSet`, `LightSet` (the set accessors
+  `EMEN_REQUIRES`, the mutex accessor `EMEN_RETURN_CAPABILITY`; every caller already held it), `PhysicsRecorder`. Cost
+  of the non-recursive dispatch, interleaved A/B (8 pairs, `balls-of-steel`'s logic cycle): +0.9 % median, inside the
+  noise (±4 %); a first NON-interleaved comparison said +2.5 %: machine drift. Not exercised at run time: the automatic
+  removal (`shouldBeRemoved()`: a broken instance, an expired sun course).
 
 ## Paths and Text Encoding — rule C (owner decision, 2026-10-12)
 

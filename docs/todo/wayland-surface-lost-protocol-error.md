@@ -56,6 +56,25 @@ Not attributed: the main-thread console poll stopped, cause unknown — the P-W 
 excluded. ⚠️ Next time: `gdb -p <pid> -batch -ex "thread apply all bt 15"` on the hung process BEFORE killing it
 (the log alone cannot tell a deadlock from a blocked swap-chain recreation).
 
+Second occurrence, 2026-10-17 (`balls-of-steel`, no other instance, engine c3d7a247 + a temporary timing probe): the
+same picture — `SURFACE_LOST`, then the LOGIC thread kept running (its probe lines continued after the console client
+connected) while `Core.shutdown()` was never executed: the main thread stopped polling the console. A swap-chain in
+`Failure` is never recreated (only `Degraded` is retried, `Renderer::retryDegradedSwapChain()`), which does not by
+itself explain a main thread that no longer polls; the likeliest place is the GLFW / Wayland event wait on a display
+connection the protocol error broke — unproven. A hunt of 38 runs right after (balls-of-steel, a shutdown 40 s in,
+`gdb` armed on a 15 s hang) saw NO loss at all: both losses of these two days came during desktop activity (the
+owner's window closing, the owner working), the hunts on a quiet desktop never reproduce it.
+
+**Attributed, 2026-10-17 (third occurrence, balls-of-steel, a `gdb` stack of every thread taken 15 s after the ignored
+`Core.shutdown()`):** NO engine lock is involved. The logic thread was computing physics
+(`SoftStepSolver::solveContacts()`), the render thread updating the overlay (`Overlay::Manager::updateVideoMemory()`):
+both alive. The MAIN thread was inside GLFW's Wayland event wait — `Core::run()` → `_glfwWaitEventsTimeoutWayland()` →
+`handleEvents()` → the libdecor-gtk plugin → `wl_display_dispatch_queue_pending()` — and never came back to the
+engine loop, which is where the console commands are executed. So after the protocol error, GLFW / libdecor keeps the
+main thread: the window is dead AND the application can no longer be driven (console, MCP, shutdown). What remains
+here, besides the root cause: a way out for that state (the main loop must not depend on the dead display connection —
+e.g. detect the lost surface, stop polling Wayland, and still serve the console / shut down).
+
 ## What remains — in order
 
 **New data, 2026-10-12 (Linux, engine 9054be48 + uncommitted lot 2, Release, no validation layer):** reproduced at the

@@ -38,6 +38,7 @@
 #include <vector>
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 
 /* Forward declarations. */
@@ -221,22 +222,22 @@ namespace EmEn::Scenes
 			 */
 			static void unregisterFromBucket (std::vector< Entry > & entries, std::unordered_map< const Vulkan::TextureInterface *, uint32_t > & lookup, std::queue< uint32_t > & freeIndices, const Vulkan::TextureInterface * texture) noexcept;
 
-			mutable std::mutex m_access;
+			mutable Base::Mutex m_access;
 
-			std::vector< Entry > m_textures2D;
-			std::vector< Entry > m_texturesCube;
-			std::vector< Entry > m_texturesCubeArray;
-			std::vector< Entry > m_textures3D;
+			std::vector< Entry > m_textures2D EMEN_GUARDED_BY(m_access);
+			std::vector< Entry > m_texturesCube EMEN_GUARDED_BY(m_access);
+			std::vector< Entry > m_texturesCubeArray EMEN_GUARDED_BY(m_access);
+			std::vector< Entry > m_textures3D EMEN_GUARDED_BY(m_access);
 
-			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookup2D;
-			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookupCube;
-			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookupCubeArray;
-			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookup3D;
+			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookup2D EMEN_GUARDED_BY(m_access);
+			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookupCube EMEN_GUARDED_BY(m_access);
+			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookupCubeArray EMEN_GUARDED_BY(m_access);
+			std::unordered_map< const Vulkan::TextureInterface *, uint32_t > m_lookup3D EMEN_GUARDED_BY(m_access);
 
-			std::queue< uint32_t > m_free2D;
-			std::queue< uint32_t > m_freeCube;
-			std::queue< uint32_t > m_freeCubeArray;
-			std::queue< uint32_t > m_free3D;
+			std::queue< uint32_t > m_free2D EMEN_GUARDED_BY(m_access);
+			std::queue< uint32_t > m_freeCube EMEN_GUARDED_BY(m_access);
+			std::queue< uint32_t > m_freeCubeArray EMEN_GUARDED_BY(m_access);
+			std::queue< uint32_t > m_free3D EMEN_GUARDED_BY(m_access);
 
 			/* First dynamic slot of every array, pushed by the owning scene — see setCapacities().
 			 * The compile-time default is only a fallback for a set used before the scene wires it. */

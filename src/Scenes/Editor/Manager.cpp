@@ -682,7 +682,7 @@ namespace EmEn::Scenes::Editor
 	std::vector< std::shared_ptr< AbstractEntity > >
 	Manager::selection () const noexcept
 	{
-		const std::scoped_lock lock{m_selectionAccess};
+		const Base::MutexLock lock{m_selectionAccess};
 
 		std::vector< std::shared_ptr< AbstractEntity > > entities;
 		entities.reserve(m_selection.size());
@@ -701,7 +701,7 @@ namespace EmEn::Scenes::Editor
 	std::shared_ptr< AbstractEntity >
 	Manager::activeEntity () const noexcept
 	{
-		const std::scoped_lock lock{m_selectionAccess};
+		const Base::MutexLock lock{m_selectionAccess};
 
 		for ( const auto & held : std::views::reverse(m_selection) )
 		{
@@ -727,7 +727,7 @@ namespace EmEn::Scenes::Editor
 		}
 
 		{
-			const std::scoped_lock lock{m_selectionAccess};
+			const Base::MutexLock lock{m_selectionAccess};
 
 			m_selection.clear();
 			m_selection.emplace_back(shared);
@@ -752,7 +752,7 @@ namespace EmEn::Scenes::Editor
 		size_t count = 0;
 
 		{
-			const std::scoped_lock lock{m_selectionAccess};
+			const Base::MutexLock lock{m_selectionAccess};
 
 			/* The dead are dropped on the way. */
 			const auto sizeBefore = m_selection.size();
@@ -781,7 +781,7 @@ namespace EmEn::Scenes::Editor
 	Manager::clearSelection () noexcept
 	{
 		{
-			const std::scoped_lock lock{m_selectionAccess};
+			const Base::MutexLock lock{m_selectionAccess};
 
 			m_selection.clear();
 		}

@@ -42,6 +42,7 @@
 #include "Input/PointerListenerInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "ScopedRegistration.hpp"
 #include "Gizmo/Abstract.hpp"
 #include "Gizmo/Rotate.hpp"
@@ -465,8 +466,8 @@ namespace EmEn::Scenes::Editor
 
 			/* Selection state: held weakly (an entity may die while selected), the last one is the active one.
 			 * Written by the input (main) thread, read by the logic thread: guarded. */
-			std::vector< std::weak_ptr< AbstractEntity > > m_selection;
-			mutable std::mutex m_selectionAccess;
+			std::vector< std::weak_ptr< AbstractEntity > > m_selection EMEN_GUARDED_BY(m_selectionAccess);
+			mutable Base::Mutex m_selectionAccess;
 			/** @brief Whether the gizmo is drawn (Transformation state with a selection), set by processLogics(), read by render(). */
 			std::atomic_bool m_gizmoShown{false};
 

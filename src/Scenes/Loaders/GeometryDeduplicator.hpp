@@ -37,6 +37,7 @@
 #include <utility>
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "VertexFactory/Shape.hpp"
 
 /* Forward declarations. */
@@ -111,7 +112,7 @@ namespace EmEn::Scenes::Loaders
 				const auto contentKey = GeometryDeduplicator::key(shape, flags);
 
 				{
-					const std::scoped_lock lock{m_access};
+					const Base::MutexLock lock{m_access};
 
 					if ( const auto it = m_geometries.find(contentKey); it != m_geometries.end() )
 					{
@@ -126,7 +127,7 @@ namespace EmEn::Scenes::Loaders
 
 				if ( geometry != nullptr )
 				{
-					const std::scoped_lock lock{m_access};
+					const Base::MutexLock lock{m_access};
 
 					m_geometries.emplace(contentKey, geometry);
 				}
@@ -142,7 +143,7 @@ namespace EmEn::Scenes::Loaders
 			size_t
 			sharedCount () const noexcept
 			{
-				const std::scoped_lock lock{m_access};
+				const Base::MutexLock lock{m_access};
 
 				return m_sharedCount;
 			}
@@ -155,16 +156,16 @@ namespace EmEn::Scenes::Loaders
 			uint64_t
 			sharedVertexCount () const noexcept
 			{
-				const std::scoped_lock lock{m_access};
+				const Base::MutexLock lock{m_access};
 
 				return m_sharedVertexCount;
 			}
 
 		private:
 
-			mutable std::mutex m_access;
-			std::map< Key, std::shared_ptr< Graphics::Geometry::IndexedVertexResource > > m_geometries;
-			size_t m_sharedCount{0};
-			uint64_t m_sharedVertexCount{0};
+			mutable Base::Mutex m_access;
+			std::map< Key, std::shared_ptr< Graphics::Geometry::IndexedVertexResource > > m_geometries EMEN_GUARDED_BY(m_access);
+			size_t m_sharedCount EMEN_GUARDED_BY(m_access){0};
+			uint64_t m_sharedVertexCount EMEN_GUARDED_BY(m_access){0};
 	};
 }

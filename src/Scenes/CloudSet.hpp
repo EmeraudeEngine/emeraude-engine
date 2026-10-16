@@ -37,6 +37,9 @@
 #include <type_traits>
 #include <vector>
 
+/* Local inclusions for usages. */
+#include "Mutex.hpp"
+
 /* Forward declarations. */
 namespace EmEn
 {
@@ -209,7 +212,7 @@ namespace EmEn::Scenes
 			void
 			forEach (function_t && function) const noexcept requires (std::is_invocable_v< function_t, const Component::CloudVolume & >)
 			{
-				const std::scoped_lock lock{m_access};
+				const Base::MutexLock lock{m_access};
 
 				for ( const auto & cloud : m_clouds )
 				{
@@ -219,8 +222,8 @@ namespace EmEn::Scenes
 
 		private:
 
-			mutable std::mutex m_access;
-			std::vector< std::shared_ptr< Component::CloudVolume > > m_clouds;
+			mutable Base::Mutex m_access;
+			std::vector< std::shared_ptr< Component::CloudVolume > > m_clouds EMEN_GUARDED_BY(m_access);
 			std::atomic< size_t > m_count{0};
 			/* The shadow map — RENDER THREAD only, created on first use. */
 			std::unique_ptr< Graphics::CloudShadowMap > m_shadowMap;

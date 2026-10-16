@@ -40,6 +40,7 @@
 #include "emeraude_export.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "Math/Vector.hpp"
 #include "Physics/MovableTrait.hpp"
 
@@ -151,15 +152,15 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			static const char * stateName (State state) noexcept;
 
-			mutable std::mutex m_access;
+			mutable Base::Mutex m_access;
 			/** Set while a recording is waiting or running: an idle sample() returns without taking the lock. */
 			std::atomic< bool > m_armed{false};
-			std::vector< std::string > m_nodeNames;
-			std::vector< std::weak_ptr< Node > > m_nodes;
-			std::vector< Sample > m_samples;
-			size_t m_firstCycle{0};
-			size_t m_cycleCount{0};
-			size_t m_recordedCycles{0};
-			State m_state{State::Idle};
+			std::vector< std::string > m_nodeNames EMEN_GUARDED_BY(m_access);
+			std::vector< std::weak_ptr< Node > > m_nodes EMEN_GUARDED_BY(m_access);
+			std::vector< Sample > m_samples EMEN_GUARDED_BY(m_access);
+			size_t m_firstCycle EMEN_GUARDED_BY(m_access){0};
+			size_t m_cycleCount EMEN_GUARDED_BY(m_access){0};
+			size_t m_recordedCycles EMEN_GUARDED_BY(m_access){0};
+			State m_state EMEN_GUARDED_BY(m_access){State::Idle};
 	};
 }

@@ -36,6 +36,7 @@
 #include <mutex>
 #include <string>
 #include <string_view>
+#include <thread>
 
 /* Local inclusions for inheritances. */
 #include "FlagArrayTrait.hpp"
@@ -52,6 +53,8 @@
 #include "Math/OrientedCuboid.hpp"
 #include "Math/Space3D/AACuboid.hpp"
 #include "StaticVector.hpp"
+#include "ConditionVariable.hpp"
+#include "Mutex.hpp"
 #include "Physics/CollisionModelInterface.hpp"
 
 /* Forward declarations. */
@@ -414,7 +417,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< Component::CharacterController >
 			characterController () const noexcept
 			{
-				const std::scoped_lock lock{m_componentsMutex};
+				const Base::MutexLock lock{m_componentsMutex};
 
 				return m_characterController;
 			}
@@ -428,7 +431,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< Component::Vehicle >
 			vehicle () const noexcept
 			{
-				const std::scoped_lock lock{m_componentsMutex};
+				const Base::MutexLock lock{m_componentsMutex};
 
 				return m_vehicle;
 			}
@@ -495,7 +498,7 @@ namespace EmEn::Scenes
 			bool
 			hasComponent () const noexcept
 			{
-				const std::scoped_lock lock{m_componentsMutex};
+				const Base::MutexLock lock{m_componentsMutex};
 
 				return !m_components.empty();
 			}
@@ -544,7 +547,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< component_t >
 			getComponent (std::string_view name) noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
 			{
-				const std::scoped_lock lock{m_componentsMutex};
+				const Base::MutexLock lock{m_componentsMutex};
 
 				for ( const auto & component : m_components )
 				{
@@ -573,7 +576,7 @@ namespace EmEn::Scenes
 			Base::StaticVector< std::shared_ptr< component_t >, MaxComponentCount >
 			getComponentsOfType () noexcept requires (std::is_base_of_v< Component::Abstract, component_t >)
 			{
-				const std::scoped_lock lock{m_componentsMutex};
+				const Base::MutexLock lock{m_componentsMutex};
 
 				Base::StaticVector< std::shared_ptr< component_t >, MaxComponentCount > result;
 
@@ -598,13 +601,16 @@ namespace EmEn::Scenes
 			 * @param processComponent The function to execute for each component.
 			 *
 			 * @note This method is thread-safe (protected by m_componentsMutex).
-			 * @warning The function should not add/remove components (would deadlock).
+			 * @warning The function runs UNDER m_componentsMutex (the render gathers walk every entity every frame: no copy
+			 * of the list here), and the mutex is not recursive: the function must not call this entity's component API
+			 * (getComponent(), containsComponent(), componentBuilder(), add / remove...) — a deadlock. Collect during the
+			 * walk, act after it (projet-alpha's AssetLoader does).
 			 */
 			template< typename function_t >
 			void
 			forEachComponent (function_t && processComponent) noexcept requires (std::is_invocable_v< function_t, Component::Abstract & >)
 			{
-				const std::scoped_lock lock{m_componentsMutex};
+				const Base::MutexLock lock{m_componentsMutex};
 
 				for ( const auto & component : m_components )
 				{
@@ -627,7 +633,7 @@ namespace EmEn::Scenes
 			void
 			forEachComponent (function_t && processComponent) const noexcept requires (std::is_invocable_v< function_t, const Component::Abstract & >)
 			{
-				const std::scoped_lock lock{m_componentsMutex};
+				const Base::MutexLock lock{m_componentsMutex};
 
 				for ( const auto & component : m_components )
 				{
@@ -1288,6 +1294,18 @@ namespace EmEn::Scenes
 			void unlinkComponent (const std::shared_ptr< Component::Abstract > & component) noexcept;
 
 			/**
+			 * @brief Waits while ANOTHER thread dispatches the component logics; reports whether THIS thread does.
+			 * @note The dispatch runs the components WITHOUT the lock (they may call back their entity): the list must not
+			 * change meanwhile. Another thread waits for its end (as it did on the lock before 2026-10-17); the
+			 * dispatching thread itself — a component adding or removing a sibling from its processLogics() — is told so,
+			 * and the caller refuses.
+			 * @param lock A reference to the guard holding m_componentsMutex.
+			 * @return bool True when the calling thread is the one dispatching.
+			 */
+			[[nodiscard]]
+			bool awaitComponentDispatch (Base::MutexLock & lock) noexcept EMEN_REQUIRES(m_componentsMutex);
+
+			/**
 			 * @brief Updates enabled visual debug overlays when entity properties change.
 			 *
 			 * Called by updateEntityProperties() to refresh debug visuals (bounding box,
@@ -1432,24 +1450,32 @@ namespace EmEn::Scenes
 			virtual void onLocationDataUpdate () noexcept = 0;
 
 			const Scene & m_scene;						  ///< Reference to parent scene (immutable, valid for lifetime).
-			Base::StaticVector< std::shared_ptr< Component::Abstract >, MaxComponentCount > m_components; ///< Fixed-size component storage.
-			mutable std::recursive_mutex m_componentsMutex;   ///< Protects m_components. RECURSIVE by design (2026-09-13): a component may query or move its entity from its own processLogics(), which runs under this lock — a same-thread re-entry is legal by construction, never a deadlock.
+			Base::StaticVector< std::shared_ptr< Component::Abstract >, MaxComponentCount > m_components EMEN_GUARDED_BY(m_componentsMutex); ///< Fixed-size component storage.
+			/* NOTE: No longer recursive (Ave Robustus II P-W, owner decision 2026-10-16): the components run on a copy of the
+			 * list, WITHOUT this lock, so a component calling back its entity takes it afresh (CP.22). */
+			mutable Base::Mutex m_componentsMutex; ///< Protects m_components and the dispatch state.
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;  ///< Aggregated physical properties (mass, drag, etc.).
 			std::unique_ptr< Physics::CollisionModelInterface > m_collisionModel; ///< Collision model for narrow-phase detection.
-			std::shared_ptr< Component::CharacterController > m_characterController; ///< The kinematic character controller component, if any (under m_componentsMutex).
-			std::shared_ptr< Component::Vehicle > m_vehicle; ///< The vehicle component, if any (under m_componentsMutex).
+			std::shared_ptr< Component::CharacterController > m_characterController EMEN_GUARDED_BY(m_componentsMutex); ///< The kinematic character controller component, if any (under m_componentsMutex).
+			std::shared_ptr< Component::Vehicle > m_vehicle EMEN_GUARDED_BY(m_componentsMutex); ///< The vehicle component, if any (under m_componentsMutex).
 			Base::Math::Space3D::AACuboid< float > m_renderBoundingBox; ///< Local VISUAL extent, merged from renderable components. Drives the rendering octree, never collision.
 			const uint32_t m_birthTime{0};				  ///< Scene timestamp at creation (milliseconds).
 			const uint64_t m_creationNumber{0};			 ///< Creation order in the scene (creationNumber()).
 			size_t m_lastUpdatedMoveCycle{0};			   ///< Last engine cycle when entity moved (for hasMoved()).
 			mutable uint64_t m_renderingGatherStamp{0};	 ///< The last rendering gather that collected the entity (markCollectedByRenderingGather()).
-			Base::Math::CartesianFrame< float > m_deferredMoveCoordinates; ///< World coordinates of a move requested from a component's processLogics(), dispatched after the component loop.
+			Base::Math::CartesianFrame< float > m_deferredMoveCoordinates EMEN_GUARDED_BY(m_componentsMutex); ///< World coordinates of a move requested from a component's processLogics(), dispatched after the component loop.
 			Base::Math::Vector< 3, float > m_filedPosition; ///< World position at the last logic-thread filing (recordFiledFrame()).
 			Base::Math::Vector< 3, float > m_filedUpward; ///< World upward at the last logic-thread filing.
 			Base::Math::Vector< 3, float > m_filedBackward; ///< World backward at the last logic-thread filing.
 			bool m_collisionBoundariesDirty{false};		 ///< Deferred collision shape refresh request (set under m_componentsMutex, consumed after it).
-			bool m_dispatchingComponentLogics{false};	   ///< True while processLogics() walks the components under m_componentsMutex (logic thread only).
-			bool m_containerMoveDeferred{false};			///< A move arrived during the component loop: dispatch m_deferredMoveCoordinates after it.
+			/** @brief Signalled when a component dispatch ends (awaitComponentDispatch()). */
+			Base::ConditionVariable m_componentDispatchEnded;
+			/** @brief The thread running the component dispatch, while m_dispatchingComponentLogics is set. */
+			std::thread::id m_componentDispatchThread EMEN_GUARDED_BY(m_componentsMutex);
+			/** @brief The threads waiting in awaitComponentDispatch(): the dispatch end notifies only when there is one. */
+			uint32_t m_componentDispatchWaiters EMEN_GUARDED_BY(m_componentsMutex){0};
+			bool m_dispatchingComponentLogics EMEN_GUARDED_BY(m_componentsMutex){false};	   ///< True while processLogics() runs the components (on a copy of the list, without the lock).
+			bool m_containerMoveDeferred EMEN_GUARDED_BY(m_componentsMutex){false};			///< A move arrived during the component loop: dispatch m_deferredMoveCoordinates after it.
 			bool m_filedFrameRecorded{false};				///< recordFiledFrame() ran (logic thread only).
 	};
 

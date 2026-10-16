@@ -44,7 +44,7 @@ namespace EmEn::Scenes::AVConsole
 		}
 
 		{
-			const std::scoped_lock lock{m_IOAccess, targetDevice->m_IOAccess};
+			const Base::MutexPairLock lock{m_IOAccess, targetDevice->m_IOAccess};
 
 			/* NOTE: Performs connexion from the other input list device first. */
 			if ( !targetDevice->m_inputDevicesConnected.emplace(this->shared_from_this()).second )
@@ -69,8 +69,14 @@ namespace EmEn::Scenes::AVConsole
 	ConnexionResult
 	AbstractVirtualDevice::disconnect (EngineContext & engineContext, const std::shared_ptr< AbstractVirtualDevice > & targetDevice, bool fireEvents) noexcept
 	{
+		/* NOTE: A device is never connected to itself (canConnect()): and the pair lock below needs two mutexes. */
+		if ( targetDevice == nullptr || targetDevice.get() == this )
 		{
-			const std::scoped_lock lock{m_IOAccess, targetDevice->m_IOAccess};
+			return ConnexionResult::NotAllowed;
+		}
+
+		{
+			const Base::MutexPairLock lock{m_IOAccess, targetDevice->m_IOAccess};
 
 			/* NOTE: Performs disconnection from the other input list device first. */
 			if ( targetDevice->m_inputDevicesConnected.erase(this->shared_from_this()) == 0 )
@@ -96,7 +102,7 @@ namespace EmEn::Scenes::AVConsole
 	AbstractVirtualDevice::disconnectFromAll (EngineContext & engineContext, bool fireEvents) noexcept
 	{
 		/* NOTE: The same discipline as connect() / disconnect(): both sides of a link are edited under ONE
-		 * std::scoped_lock of the two mutexes (no lock-order deadlock between two devices), and the events are
+		 * Base::MutexPairLock of the two mutexes (std::lock(): no lock-order deadlock between two devices), and the events are
 		 * fired once the locks are released (a handler may query this device). weak_from_this(): valid even when no
 		 * shared_ptr owns this device any more (the teardown path; shared_from_this() crashed there). */
 		const auto thisDevice = this->weak_from_this();
@@ -105,7 +111,7 @@ namespace EmEn::Scenes::AVConsole
 		std::vector< std::shared_ptr< AbstractVirtualDevice > > outputDevices;
 
 		{
-			const std::scoped_lock lock{m_IOAccess};
+			const Base::MutexLock lock{m_IOAccess};
 
 			inputDevices.reserve(m_inputDevicesConnected.size());
 			outputDevices.reserve(m_outputDevicesConnected.size());
@@ -130,7 +136,7 @@ namespace EmEn::Scenes::AVConsole
 		for ( const auto & inputDevice : inputDevices )
 		{
 			{
-				const std::scoped_lock lock{m_IOAccess, inputDevice->m_IOAccess};
+				const Base::MutexPairLock lock{m_IOAccess, inputDevice->m_IOAccess};
 
 				inputDevice->m_outputDevicesConnected.erase(thisDevice);
 				m_inputDevicesConnected.erase(inputDevice);
@@ -145,7 +151,7 @@ namespace EmEn::Scenes::AVConsole
 		for ( const auto & outputDevice : outputDevices )
 		{
 			{
-				const std::scoped_lock lock{m_IOAccess, outputDevice->m_IOAccess};
+				const Base::MutexPairLock lock{m_IOAccess, outputDevice->m_IOAccess};
 
 				outputDevice->m_inputDevicesConnected.erase(thisDevice);
 				m_outputDevicesConnected.erase(outputDevice);
@@ -158,7 +164,7 @@ namespace EmEn::Scenes::AVConsole
 		}
 
 		/* The expired leftovers (devices already gone). */
-		const std::scoped_lock lock{m_IOAccess};
+		const Base::MutexLock lock{m_IOAccess};
 
 		m_inputDevicesConnected.clear();
 		m_outputDevicesConnected.clear();
@@ -167,7 +173,7 @@ namespace EmEn::Scenes::AVConsole
 	std::string
 	AbstractVirtualDevice::getConnexionState () const noexcept
 	{
-		const std::scoped_lock lock{m_IOAccess};
+		const Base::MutexLock lock{m_IOAccess};
 
 		std::stringstream string;
 

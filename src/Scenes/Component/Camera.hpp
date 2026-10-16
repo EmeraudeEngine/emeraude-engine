@@ -43,6 +43,7 @@
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "Graphics/DirectPostProcessEffect.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Scenes/AVConsole/Types.hpp"
@@ -820,7 +821,7 @@ namespace EmEn::Scenes::Component
 			std::shared_ptr< const Graphics::DirectEffectList >
 			lensEffects () const noexcept
 			{
-				const std::scoped_lock lock{m_lensEffectsAccess};
+				const Base::MutexLock lock{m_lensEffectsAccess};
 
 				return m_lensEffects;
 			}
@@ -922,9 +923,9 @@ namespace EmEn::Scenes::Component
 
 			/** @brief Guards the PUBLICATION of the lens-effect list (the pointer swap), not its
 			 * content: published lists are immutable, mutators build a fresh copy (copy-on-write). */
-			mutable std::mutex m_lensEffectsAccess;
+			mutable Base::Mutex m_lensEffectsAccess;
 			/** @brief Immutable lens-effect snapshot; nullptr = no lens effect. */
-			std::shared_ptr< const Graphics::DirectEffectList > m_lensEffects;
+			std::shared_ptr< const Graphics::DirectEffectList > m_lensEffects EMEN_GUARDED_BY(m_lensEffectsAccess);
 			float m_distance{DefaultGraphicsViewDistance};
 			float m_nearestObjectDistance{Graphics::ViewMatricesInterface::DefaultNearestObjectDistance};
 			float m_near{0.0F};

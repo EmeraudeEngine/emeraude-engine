@@ -1398,6 +1398,12 @@ sat on one).
 > took the SAME mutex to dispatch `move()` to the siblings. A `std::mutex` is not recursive:
 > the logic thread waited for itself, forever. The scene never published a state again.
 >
+> ⚠️ **Superseded 2026-10-17 (Ave Robustus II P-W, owner decision):** layer 1 below is replaced — the components now
+> run on a COPY of the list WITHOUT the lock (CP.22), so a re-entry takes the lock afresh and `m_componentsMutex` is a
+> plain annotated `Base::Mutex` again; the dispatching thread's structural changes are still refused, another thread
+> waits for the dispatch end (`awaitComponentDispatch()`). Measured: `sponza --demo-options 1` (this case) runs and
+> shuts down; the interleaved A/B on `balls-of-steel`'s logic cycle, +0.9 % median, inside the noise (±4 %).
+>
 > **Fix (contract, two layers — owner rule: if a deadlock is easy to write, make it impossible):**
 > 1. `m_componentsMutex` is a **`std::recursive_mutex`**: any same-thread re-entry from a
 >    component's `processLogics()` — a move, `getComponent()`, `forEachComponent()`,

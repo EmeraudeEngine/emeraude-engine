@@ -382,7 +382,7 @@ namespace EmEn::Scenes::Component
 	Camera::addLensEffect (const std::shared_ptr< DirectPostProcessEffect > & effect) noexcept
 	{
 		{
-			const std::scoped_lock lock{m_lensEffectsAccess};
+			const Base::MutexLock lock{m_lensEffectsAccess};
 
 			/* We don't want to notify an effect twice. */
 			if ( m_lensEffects != nullptr && std::ranges::find(*m_lensEffects, effect) != m_lensEffects->cend() )
@@ -405,7 +405,7 @@ namespace EmEn::Scenes::Component
 	Camera::removeLensEffect (const std::shared_ptr< DirectPostProcessEffect > & effect) noexcept
 	{
 		{
-			const std::scoped_lock lock{m_lensEffectsAccess};
+			const Base::MutexLock lock{m_lensEffectsAccess};
 
 			if ( m_lensEffects == nullptr )
 			{
@@ -435,7 +435,7 @@ namespace EmEn::Scenes::Component
 	Camera::clearLensEffects () noexcept
 	{
 		{
-			const std::scoped_lock lock{m_lensEffectsAccess};
+			const Base::MutexLock lock{m_lensEffectsAccess};
 
 			if ( m_lensEffects == nullptr || m_lensEffects->empty() )
 			{

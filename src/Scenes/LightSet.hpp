@@ -44,6 +44,7 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "Component/DirectionalLight.hpp"
 #include "Component/LineLight.hpp"
 #include "Component/PointLight.hpp"
@@ -185,11 +186,11 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns the light set mutex.
-			 * @return std::mutex &
+			 * @return Base::Mutex &
 			 */
 			[[nodiscard]]
-			std::mutex &
-			mutex () const noexcept
+			Base::Mutex &
+			mutex () const noexcept EMEN_RETURN_CAPABILITY(m_lightsAccess)
 			{
 				return m_lightsAccess;
 			}
@@ -436,7 +437,7 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			const std::set< std::shared_ptr< Component::AbstractLightEmitter > > &
-			lights () const noexcept
+			lights () const noexcept EMEN_REQUIRES(m_lightsAccess)
 			{
 				return m_lights;
 			}
@@ -447,7 +448,7 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			const std::set< std::shared_ptr< Component::DirectionalLight > > &
-			directionalLights () const noexcept
+			directionalLights () const noexcept EMEN_REQUIRES(m_lightsAccess)
 			{
 				return m_directionalLights;
 			}
@@ -469,7 +470,7 @@ namespace EmEn::Scenes
 			forEachDirectionalLight (function_t && process) const noexcept
 				requires (std::is_invocable_v< function_t, const std::shared_ptr< Component::DirectionalLight > & >)
 			{
-				const std::scoped_lock lock{m_lightsAccess};
+				const Base::MutexLock lock{m_lightsAccess};
 
 				for ( const auto & light : m_directionalLights )
 				{
@@ -484,7 +485,7 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			const std::set< std::shared_ptr< Component::PointLight > > &
-			pointLights () const noexcept
+			pointLights () const noexcept EMEN_REQUIRES(m_lightsAccess)
 			{
 				return m_pointLights;
 			}
@@ -495,7 +496,7 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			const std::set< std::shared_ptr< Component::SpotLight > > &
-			spotLights () const noexcept
+			spotLights () const noexcept EMEN_REQUIRES(m_lightsAccess)
 			{
 				return m_spotLights;
 			}
@@ -530,7 +531,7 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			const std::set< std::shared_ptr< Component::LineLight > > &
-			lineLights () const noexcept
+			lineLights () const noexcept EMEN_REQUIRES(m_lightsAccess)
 			{
 				return m_lineLights;
 			}
@@ -692,11 +693,11 @@ namespace EmEn::Scenes
 			 */
 			void retireLight (const std::shared_ptr< Component::AbstractLightEmitter > & light) noexcept;
 
-			std::set< std::shared_ptr< Component::AbstractLightEmitter > > m_lights;
-			std::set< std::shared_ptr< Component::DirectionalLight > > m_directionalLights;
-			std::set< std::shared_ptr< Component::PointLight > > m_pointLights;
-			std::set< std::shared_ptr< Component::SpotLight > > m_spotLights;
-			std::set< std::shared_ptr< Component::LineLight > > m_lineLights;
+			std::set< std::shared_ptr< Component::AbstractLightEmitter > > m_lights EMEN_GUARDED_BY(m_lightsAccess);
+			std::set< std::shared_ptr< Component::DirectionalLight > > m_directionalLights EMEN_GUARDED_BY(m_lightsAccess);
+			std::set< std::shared_ptr< Component::PointLight > > m_pointLights EMEN_GUARDED_BY(m_lightsAccess);
+			std::set< std::shared_ptr< Component::SpotLight > > m_spotLights EMEN_GUARDED_BY(m_lightsAccess);
+			std::set< std::shared_ptr< Component::LineLight > > m_lineLights EMEN_GUARDED_BY(m_lightsAccess);
 			std::weak_ptr< Component::DirectionalLight > m_mainDirectionalLight;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_directionalLightUBO;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_pointLightUBO;
@@ -707,7 +708,7 @@ namespace EmEn::Scenes
 			/** @brief The punctual and line-segment entries competing for the RT SSBO (updateVideoMemory(), render thread,
 			 * guarded by m_lightsAccess, capacity kept across frames). */
 			mutable std::vector< RTLightCandidate > m_RTLightCandidates;
-			mutable std::mutex m_lightsAccess;
+			mutable Base::Mutex m_lightsAccess;
 			/** @brief Lights removed from the sets, each stamped with the render frame counter at removal. Guarded by m_lightsAccess. */
 			std::vector< std::pair< std::shared_ptr< Component::AbstractLightEmitter >, uint64_t > > m_retiredLights;
 			/** @brief Render frames drained so far (destroyRetiredLights() calls). Guarded by m_lightsAccess. */

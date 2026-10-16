@@ -36,6 +36,7 @@
 #include <string>
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "CoreTypes.hpp"
 #include "Types.hpp"
@@ -122,7 +123,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			hasInputConnected () const noexcept
 			{
-				const std::scoped_lock lock{m_IOAccess};
+				const Base::MutexLock lock{m_IOAccess};
 
 				return !m_inputDevicesConnected.empty();
 			}
@@ -135,7 +136,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			hasOutputConnected () const noexcept
 			{
-				const std::scoped_lock lock{m_IOAccess};
+				const Base::MutexLock lock{m_IOAccess};
 
 				return !m_outputDevicesConnected.empty();
 			}
@@ -150,7 +151,7 @@ namespace EmEn::Scenes::AVConsole
 			forEachInputs (function_t && processInput) const noexcept
 				requires (std::is_invocable_v< function_t, const std::shared_ptr< AbstractVirtualDevice > & >)
 			{
-				const std::scoped_lock lock{m_IOAccess};
+				const Base::MutexLock lock{m_IOAccess};
 
 				for ( const auto & input : m_inputDevicesConnected )
 				{
@@ -168,7 +169,7 @@ namespace EmEn::Scenes::AVConsole
 			forEachOutputs (function_t && processOutput) const noexcept
 				requires (std::is_invocable_v< function_t, const std::shared_ptr< AbstractVirtualDevice > & >)
 			{
-				const std::scoped_lock lock{m_IOAccess};
+				const Base::MutexLock lock{m_IOAccess};
 
 				for ( const auto & output : m_outputDevicesConnected )
 				{
@@ -186,7 +187,7 @@ namespace EmEn::Scenes::AVConsole
 			bool
 			isConnectedWith (const std::shared_ptr< AbstractVirtualDevice > & device, ConnexionType direction) const noexcept
 			{
-				const std::scoped_lock lock{m_IOAccess};
+				const Base::MutexLock lock{m_IOAccess};
 
 				if ( direction == ConnexionType::Input || direction == ConnexionType::Both )
 				{
@@ -211,6 +212,12 @@ namespace EmEn::Scenes::AVConsole
 			ConnexionResult
 			canConnect (const std::shared_ptr< AbstractVirtualDevice > & targetDevice) const noexcept
 			{
+				/* NOTE: A device is never its own target (connect() would lock its own mutex twice). */
+				if ( targetDevice == nullptr || targetDevice.get() == this )
+				{
+					return ConnexionResult::NotAllowed;
+				}
+
 				/* NOTE: Avoid connecting an audio device with a video device -> non sens! */
 				if ( m_type != targetDevice->m_type )
 				{
@@ -424,8 +431,8 @@ namespace EmEn::Scenes::AVConsole
 			/* NOTE: Ordered by OWNER (std::owner_less<>): nothing is hashed, so an expired device is still a valid key. The
 			 * former unordered_set hashed through a shared_ptr built from the weak_ptr, which throws (an abort here) on an
 			 * expired one — on a rehash with MSVC, which does not cache hashes (triad 2026-10-01). */
-			std::set< std::weak_ptr< AbstractVirtualDevice >, std::owner_less<> > m_inputDevicesConnected;
-			std::set< std::weak_ptr< AbstractVirtualDevice >, std::owner_less<> > m_outputDevicesConnected;
-			mutable std::mutex m_IOAccess;
+			std::set< std::weak_ptr< AbstractVirtualDevice >, std::owner_less<> > m_inputDevicesConnected EMEN_GUARDED_BY(m_IOAccess);
+			std::set< std::weak_ptr< AbstractVirtualDevice >, std::owner_less<> > m_outputDevicesConnected EMEN_GUARDED_BY(m_IOAccess);
+			mutable Base::Mutex m_IOAccess;
 	};
 }

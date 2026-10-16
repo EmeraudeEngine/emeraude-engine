@@ -2229,7 +2229,7 @@ namespace EmEn::Scenes
 		std::vector< std::shared_ptr< Component::LineLight > > lineLights;
 
 		{
-			const std::scoped_lock lock{m_lightSet.mutex()};
+			const Base::MutexLock lock{m_lightSet.mutex()};
 
 			directionalLights.assign(m_lightSet.directionalLights().begin(), m_lightSet.directionalLights().end());
 			pointLights.assign(m_lightSet.pointLights().begin(), m_lightSet.pointLights().end());
@@ -2567,7 +2567,7 @@ namespace EmEn::Scenes
 	StaticVector< RenderPassType, MaxPassCount >
 	Scene::prepareRenderPassTypes (const RenderableInstance::Abstract & renderableInstance) const noexcept
 	{
-		const std::scoped_lock lock{m_lightSet.mutex()};
+		const Base::MutexLock lock{m_lightSet.mutex()};
 
 		StaticVector< RenderPassType, MaxPassCount > renderPassTypes;
 

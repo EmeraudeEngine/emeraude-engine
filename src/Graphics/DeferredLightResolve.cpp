@@ -906,7 +906,7 @@ void main()
 		size_t visibleCount = 0;
 
 		{
-			const std::scoped_lock lock{lightSet.mutex()};
+			const Base::MutexLock lock{lightSet.mutex()};
 
 			/* 1. Classify every eligible light from its published block, the frame's render state: INVISIBLE when its
 			 * reach misses the frustum (an unbounded light never does), else a candidate ranked by its distance to the

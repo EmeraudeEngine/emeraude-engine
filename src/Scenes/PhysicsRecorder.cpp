@@ -151,7 +151,7 @@ namespace EmEn::Scenes
 			}
 		}
 
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		m_nodeNames = std::move(nodeNames);
 		m_nodes.clear();
@@ -170,7 +170,7 @@ namespace EmEn::Scenes
 	void
 	PhysicsRecorder::stop () noexcept
 	{
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		if ( m_state == State::Waiting || m_state == State::Recording )
 		{
@@ -188,7 +188,7 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		if ( m_state != State::Waiting && m_state != State::Recording )
 		{
@@ -254,7 +254,7 @@ namespace EmEn::Scenes
 	std::string
 	PhysicsRecorder::status () const noexcept
 	{
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		std::stringstream output;
 
@@ -269,7 +269,7 @@ namespace EmEn::Scenes
 		std::stringstream output;
 
 		{
-			const std::scoped_lock lock{m_access};
+			const Base::MutexLock lock{m_access};
 
 			if ( m_state != State::Complete || m_samples.empty() )
 			{

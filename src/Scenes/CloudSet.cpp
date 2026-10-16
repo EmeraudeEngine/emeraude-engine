@@ -202,7 +202,7 @@ namespace EmEn::Scenes
 		/* Outside the lock: the registration may observe the shape resource, which takes its own. */
 		cloud->createOnHardware(scene);
 
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		if ( std::ranges::find(m_clouds, cloud) != m_clouds.end() )
 		{
@@ -222,7 +222,7 @@ namespace EmEn::Scenes
 		}
 
 		{
-			const std::scoped_lock lock{m_access};
+			const Base::MutexLock lock{m_access};
 
 			std::erase(m_clouds, cloud);
 			m_count.store(m_clouds.size(), std::memory_order_release);
@@ -237,7 +237,7 @@ namespace EmEn::Scenes
 		std::vector< std::shared_ptr< Component::CloudVolume > > clouds;
 
 		{
-			const std::scoped_lock lock{m_access};
+			const Base::MutexLock lock{m_access};
 
 			clouds.swap(m_clouds);
 			m_count.store(0, std::memory_order_release);
