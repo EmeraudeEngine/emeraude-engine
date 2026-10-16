@@ -4,6 +4,17 @@ Every failure path of the startup is run in turn: the startup of one named servi
 exit cleanly — no leak, no hang, no VUID. Owner decisions 2026-10-16: a CMake option plus an argument (never in a
 release), and the measure before the fixes.
 
+### Before the sweep (P0, 2026-10-08)
+
+- `Core::run()` returned `EXIT_FAILURE` when `initializeCoreLevel()` failed, without `terminate()`: the Vulkan instance,
+  OpenAL and GLFW leaked, and the audio threads could hang at exit. Since `c6c237755` it terminates, and `~Core()`
+  terminates whatever user / secondary service is still registered (safety net, decision D3-a).
+- First proofs, by hand: no Vulkan driver (`VK_DRIVER_FILES` pointing at a missing manifest) — the instance fails, the
+  started services terminate, exit 1 in 0.29 s; a Vulkan DEVICE whose creation fails (the physics-acceleration device)
+  is released and the process exits 0, once the `Device` <-> `Queue` reference cycle that kept it alive was broken
+  (`a3d82895`). The sweep below generalises them to every service (the engine item `core-init-failure-skips-terminate`,
+  closed 2026-10-16).
+
 ### The mechanism
 
 - CMake `EMERAUDE_FAULT_INJECTION` (off by default; a TEST build only) → `EmEn::FaultInjectionEnabled`
