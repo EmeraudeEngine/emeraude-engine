@@ -110,6 +110,27 @@ dependencies/emeraude-engine/tools/stress/startup-fault-sweep.sh $PWD/.claude-bu
 - Every shutdown logged `AL_INVALID_NAME` at `GlobalReleaseFlush` (Linux too): the audio sources and buffers were
   deleted after their context and device. Fixed 2026-10-16 (engine `docs/subsystems/audio/06-critical-points.md`).
 
+### The sanitizer switch across the cascade (2026-10-16)
+
+- `EMERAUDE_ENABLE_ASAN` instrumented the engine and its consumers only: the engine target's PUBLIC flags never reach
+  emeraude-base, built before it (0 / 55 base TUs on Linux, macOS and Windows; ThreadPool, Thread, the containers ran
+  uninstrumented in the sweeps above). Owner decision: emeraude-base reads the same option name, as it already did for
+  `EMERAUDE_ENABLE_TSAN` (`emeraude_base_flags`: ASan alone, the MSVC branch with its defines). Base's own
+  `EMERAUDE_ENABLE_SANITIZERS` (ASan + UBSan) stays for its unit tests. Check the coverage in `compile_commands.json`.
+- Verified with the switch alone (no hand-made flags):
+  - Linux (clang 19, after the base change): base 55 / 55 and engine 466 / 466 TUs instrumented; the sweep 33
+    services, 20 / 13, 0 ASan error, 0 leak, 0 validation message;
+  - macOS (AppleClang, before the base change): engine 468 / 468; 0 warning (the 3 GLFW `sprintf` warnings came
+    from the hand-made flags); the sweep identical to Linux, 0 ASan error, the layer loaded through
+    `VK_ADD_LAYER_PATH`;
+  - Windows (MSVC, before the base change): engine 465 / 494, projet-alpha 108 / 108; no D9025, 0 warning; the sweep
+    34 services, 20 / 14, 0 ASan error, 0 VUID.
+- The audio shutdown fix (`docs/subsystems/audio/06-critical-points.md`) was verified on the three OS: 0 "not deleted"
+  in OpenAL Soft's log, 0 "unread problem with AL"; macOS and Windows rushes with the voice-over valid; TSan
+  `EmeraudeTrackMixerStress` 0 report (Linux, macOS).
+- ⚠️ Seen once on Windows, not reproduced idle: under a 28-job build the shutdown took 19.9 s, 13.4 s of it between
+  the end of the secondary services and the first primary one (0.07-0.10 s idle). Not investigated.
+
 ### Native handles in RAII holders (owner decision 2026-10-16: option A, defence in depth)
 
 The sweep injects at the service level; a failure INSIDE an `onInitialize()` (after it acquired a native handle) is
