@@ -33,6 +33,14 @@ Controller::executeCommand(string, outputs)
                         (succeeded, Outputs) → RemoteProtocol::serializeResponse() → respond() to that client (ALWAYS, one line)
 ```
 
+### Identity: a controllable is never copied nor moved (2026-10-16, Ave Robustus II P4)
+
+`ControllableTrait` deletes its copy and move: the console tree and the parent hold the object's ADDRESS, and the bound
+commands capture the derived object's `this`. Before, the defaulted copy / move gave a moved-to object the parent link
+while the tree still pointed at the original, and the copied commands still ran on the original. Its destructor
+removes it from the console and the parent and orphans its children (unchanged). No class of the cascade copied one
+(the whole build, engine and projet-alpha, compiled with the deletion).
+
 ### Thread safety
 
 - `RemoteListener` uses `std::mutex` for the command queue and client list

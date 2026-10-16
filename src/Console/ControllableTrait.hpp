@@ -51,31 +51,35 @@ namespace EmEn::Console
 	{
 		public:
 
-			/**
-			 * @brief Copy constructor.
-			 * @param copy A reference to the copied instance.
-			 */
-			ControllableTrait (const ControllableTrait & copy) noexcept = default;
+			/* NOTE: Neither copyable nor movable (Ave Robustus II P4, 2026-10-16): the console tree and the parent hold
+			 * this object's ADDRESS, and the bound commands capture the derived object's `this` — a copy or a moved-to
+			 * object kept the parent link while the tree still pointed at the original, and ran its commands on it. */
 
 			/**
-			 * @brief Move constructor.
+			 * @brief Copy constructor (deleted).
 			 * @param copy A reference to the copied instance.
 			 */
-			ControllableTrait (ControllableTrait && copy) noexcept = default;
+			ControllableTrait (const ControllableTrait & copy) = delete;
 
 			/**
-			 * @brief Copy assignment.
+			 * @brief Move constructor (deleted).
+			 * @param copy A reference to the copied instance.
+			 */
+			ControllableTrait (ControllableTrait && copy) = delete;
+
+			/**
+			 * @brief Copy assignment (deleted).
 			 * @param copy A reference to the copied instance.
 			 * @return ControllableTrait &
 			 */
-			ControllableTrait & operator= (const ControllableTrait & copy) noexcept = default;
+			ControllableTrait & operator= (const ControllableTrait & copy) = delete;
 
 			/**
-			 * @brief Move assignment.
+			 * @brief Move assignment (deleted).
 			 * @param copy A reference to the copied instance.
 			 * @return ControllableTrait &
 			 */
-			ControllableTrait & operator= (ControllableTrait && copy) noexcept = default;
+			ControllableTrait & operator= (ControllableTrait && copy) = delete;
 
 			/**
 			 * @brief The destructor auto removes this object from the console.
