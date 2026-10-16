@@ -14,6 +14,13 @@ assemble script (MP4/AAC / WebM/Opus).
 hardware-capable device: A/B comparison of the two encoders, and royalty-free WebM/VP9 on
 demand. The startup log states which one is active — `Encoder: hardware H.265` /
 `software VP9 (forced by settings)` / `software VP9 (no hardware support)`.
+⚠️ **AMD: the hardware H.265 is withheld** (`Recorder::hardwareEncodeWithheld()`, vendor 0x1002, owner decision
+2026-10-15): the log says `software VP9 (the AMD hardware H.265 encode writes undecodable streams: withheld)`. Cause
+found 2026-10-16 (RADV, Mesa 26.0.8, VCN2, firmware ENC 1.24): the driver writes each slice at byte 192 of the bitstream
+buffer while its encode feedback reports offset 0 (the specification requires the data at `dstBufferOffset`, offset 0
+for the first encode); the size it reports is right. Read from 192, the stream is conformant (HM 181 / 181, bit-exact
+with libav and VA-API). No workaround in the engine (owner): lifted per driver version once Mesa is fixed — engine item
+`video-encoder-h265-transfer-on-encode-only-queue`.
 
 ### ONE mode: studio CFR (owner decision, Aug 2026)
 The RushMaker produces promotion rushes — **image quality is the only metric**. There is no

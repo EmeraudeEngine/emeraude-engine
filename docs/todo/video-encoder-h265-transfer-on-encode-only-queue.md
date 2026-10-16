@@ -102,25 +102,42 @@ Environment:
 - Context: RADV enables Vulkan encode by default only on recent enough encoder firmware; Mesa closed a broken-HEVC
   report on VCN3 (Steam Deck) as a firmware problem.
 
+## Root cause: RADV misreports the bitstream offset (2026-10-16, LinuxB-PA, experiment (a))
+
+- Firmware (kernel log, boot 2026-10-16): `[VCN instance 0] Found VCN firmware Version ENC: 1.24 DEC: 8 VEP: 0
+  Revision: 9`; Mesa 26.0.8, RADV RENOIR (Cezanne iGPU 0x1638).
+- Method: the whole host-coherent bitstream buffer set to a 0xA5 sentinel before each submit; after the feedback query,
+  the offset, the byte count and the first / last non-sentinel byte logged; 8 raw buffers dumped.
+- All 364 pictures of 2 rushes: the feedback OFFSET is 0, the first byte written is at **192** (`00 00 00 01 26 01`,
+  the IDR_N_LP start code), bytes [0, 192) keep the sentinel. The BYTES_WRITTEN value is right: the slice ends at
+  192 + bytesWritten on its rbsp stop bit, then 0-7 zero bytes pad to 8.
+- The engine (`dstBufferOffset = 0`, both feedback flags requested, `VideoEncoderH265.cpp` reads
+  `[feedback[0], feedback[0] + feedback[1])`) therefore read 192 never-written bytes and lost the slice's last 192:
+  the "193 trailing zeros" (192 + the next start code's leading 0), HM reading past the slice data, the hardware
+  decoders concealing from a CTB row on — all explained.
+- Read from byte 192 (test-only): HM 181 / 181 pictures, exit 0; libav 181 frames, 0 error; `vah265dec` 181; green
+  census 0 / 181; the YUV of HM, libav and VA bit-exact on 181 / 181. The SPS depth fix (`0c83af85`) stays needed.
+- The engine is conformant: VkVideoEncodeFeedbackFlagBitsKHR — the reported offset is relative to `dstBufferOffset`,
+  and is always 0 for the first encode operation, so the data must start at `dstBufferOffset`. A RADV defect. Mesa
+  already fixed a neighbouring one ("Fix encode bitstream buffer offset and alignment", 25.1.7 / 25.2.0-rc3); this one
+  is present in 26.0.8. LinuxB-PA's reading of the source (not verified on hardware): `radv_query.c` writes
+  `offset = src32[5]` and `bytes = src32[6] - src32[8]`; radeonsi places its slice at `enc->bs_offset` — the slice
+  may start at `src32[8]` or after a VCN2 header reserve.
+- Owner decision 2026-10-16: no workaround in the engine; the hardware H.265 stays withheld on AMD
+  (`Recorder::hardwareEncodeWithheld()`, VP9 instead) until Mesa is fixed; a Mesa report, written by Linux-PA, filed
+  by the owner.
+
 ## What remains
 
-- [ ] The VCN firmware version (`sudo cat /sys/kernel/debug/dri/*/amdgpu_firmware_info`, owner at the AMD machine).
-- [ ] Experiments, each test-only and at the owner's go on the AMD machine; stop at the first that HM decodes:
-      (a) log the feedback offset / bytesWritten and dump the bytes past offset+bytesWritten: if data continues after
-      the 193 zeros, RADV misreports the length;
-      (b) CQP (rate control off) on top of the depth fix: no VBR-driven `cu_qp_delta`;
-      (c) the radeonsi parameters (`amp_enabled_flag` 1, `strong_intra_smoothing_enabled_flag` 1,
-      `pps_loop_filter_across_slices_enabled_flag` 1).
-- [ ] Then a Mesa (RADV, VCN2) report with the HM evidence: the same VCN encodes conformant HEVC through radeonsi VA,
-      not through RADV Vulkan. The hardware H.265 stays withheld on AMD meanwhile (owner decision).
+- [ ] The owner files the Mesa report (gitlab.freedesktop.org/mesa/mesa), with the streams from LinuxB.
+- [ ] Once a fixed Mesa ships: re-test on the AMD machine (HM on a rush), then lift the withholding for the fixed
+      versions only (driver version check), and delete this item after the knowledge moves to
+      `docs/subsystems/graphics/11-10-video-recording.md`.
 
-Evidence for the report, kept on the AMD test machine (LinuxB, not this one): `~/amd-h265-evidence-2026-10-15/` (38 MB,
-README.md inside). It holds:
-- the two AMD streams with the depth fix (HM aborts on both);
-- the radeonsi VA all-intra reference stream and the NVIDIA control (both clean in HM);
-- the HM version and every TAppDecoder log, plus the ENC_DEC_TRACE trace;
-- the segment and green-census tables;
-- the parsing and decoding scripts.
+Evidence on the AMD test machine (LinuxB, not this one): `~/amd-h265-evidence-2026-10-15/` (52 MB, README inside,
+section 2026-10-16): the AMD streams (depth fix; read as-is and read from 192), the radeonsi VA reference and the NVIDIA
+control, the HM version and every TAppDecoder log, the per-picture feedback logs, the 8 raw buffer dumps, the firmware
+line, the test patch and the launcher.
 
 ## ⚠️ Traps
 
