@@ -32,6 +32,8 @@
 
 namespace EmEn::Input
 {
+	std::array< GamepadState, DeviceCount > GamepadController::s_devicesState{};
+
 	bool
 	GamepadController::usable () const noexcept
 	{

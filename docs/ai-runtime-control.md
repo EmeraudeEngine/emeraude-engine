@@ -1361,7 +1361,7 @@ Core
 +-- AudioManagerService
 |   +-- TrackMixerService   (play, pause, stop, volume, playlist, etc.)
 +-- FileSystemService       (getJson, get, print)
-+-- InputManagerService     (keyPress, mouseClick, mousePress, mouseRelease, mouseMove, pointerState)
++-- InputManagerService     (keyPress, keyDown, keyUp, mouseClick, mousePress, mouseRelease, mouseMove, pointerState, gamepadState, joystickState)
 +-- RendererService         (screenshot, getStatus)
 +-- ResourcesManagerService (listContainers, listResources)
 +-- SceneManagerService     (createScene, setGround, setBackground, addMesh, etc.)

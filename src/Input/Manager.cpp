@@ -1294,6 +1294,69 @@ namespace EmEn::Input
 			return Console::CommandResult::fromOutputs(std::move(outputs), true);
 		}, Console::CommandHint::ReadOnly);
 
+		/* NOTE: Read-only probes of the polled device state (the per-input atomics read by the logic thread, Ave Robustus
+		 * II P5): nothing else shows what a gamepad or a joystick reports. */
+		const auto connectedSlots = [] (const std::set< int > & slots) {
+			std::stringstream list;
+
+			for ( const auto slot : slots )
+			{
+				list << ' ' << slot;
+			}
+
+			return slots.empty() ? std::string{" none"} : list.str();
+		};
+
+		this->bindCommand("gamepadState", "Reports the buttons and axes of a connected gamepad (the state the actors poll).",
+			{
+				{"slot", "The gamepad slot (GLFW joystick ID, 0-15)."}
+			},
+			[this, connectedSlots] (int32_t slot) {
+				if ( !m_gamepadIDs.contains(slot) )
+				{
+					return Console::CommandResult::error("No gamepad at slot " + std::to_string(slot) + " (connected:" + connectedSlots(m_gamepadIDs) + ").");
+				}
+
+				/* NOTE: Nothing enables the per-frame copy by default: the probe then reads the device once itself (the same
+				 * read and atomic publish the per-frame copy does, on this main thread). */
+				const auto polled = this->isCopyGamepadsStateEnabled();
+
+				if ( !polled )
+				{
+					GamepadController::readDeviceState(slot);
+				}
+
+				GamepadController gamepad;
+				gamepad.attachDeviceID(slot);
+
+				return Console::CommandResult::success(std::string{polled ? "Per-frame copy enabled.\n" : "Per-frame copy disabled: read from the device now.\n"} + gamepad.getRawState());
+			}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("joystickState", "Reports the axes, buttons and hats of a connected joystick (the state the actors poll).",
+			{
+				{"slot", "The joystick slot (GLFW joystick ID, 0-15)."}
+			},
+			[this, connectedSlots] (int32_t slot) {
+				if ( !m_joystickIDs.contains(slot) )
+				{
+					return Console::CommandResult::error("No joystick at slot " + std::to_string(slot) + " (connected:" + connectedSlots(m_joystickIDs) + ").");
+				}
+
+				/* NOTE: Nothing enables the per-frame copy by default: the probe then reads the device once itself (the same
+				 * read and atomic publish the per-frame copy does, on this main thread). */
+				const auto polled = this->isCopyJoysticksStateEnabled();
+
+				if ( !polled )
+				{
+					JoystickController::readDeviceState(slot);
+				}
+
+				JoystickController joystick;
+				joystick.attachDeviceID(slot);
+
+				return Console::CommandResult::success(std::string{polled ? "Per-frame copy enabled.\n" : "Per-frame copy disabled: read from the device now.\n"} + joystick.getRawState());
+			}, Console::CommandHint::ReadOnly);
+
 		this->bindCommand("mouseClick", "Injects a mouse click (press then release, so it cannot hold a drag).",
 			{
 				{"x", "Horizontal position, in PHYSICAL pixels from the left of the framebuffer."},

@@ -32,6 +32,25 @@ between `changeKeyState()` on one thread and `isAnyKeyPressed()` on the other, r
 - The injected keys stay OR-ed into the hardware state at each copy (a console `keyDown` survives the per-frame read).
 - `JoystickState` lost its `EMEN_API` (it is only the private static's element type; atomics make it non-copyable).
 
+### Reading it from the console (2026-10-16)
+
+`Core.InputManagerService.gamepadState(slot)` and `joystickState(slot)` (read-only, also MCP tools) report a connected
+device's buttons / axes / hats through `getRawState()`; an unknown slot is refused with the connected list.
+⚠️ The per-frame copy of the gamepad and joystick states is OFF by default (`enableCopyGamepadsState()` /
+`enableCopyJoysticksState()`, nothing in the cascade turns them on): the probe then reads the device once itself (the
+same read and atomic publish, on the main thread) and says so ("Per-frame copy disabled: read from the device now.").
+Measured 2026-10-16, Linux, a Logitech F710 at slot 0: at rest the triggers read -1 and the sticks ±0.004; while the
+owner pressed the controls, a 1 Hz poll caught button 12 (D-pad right), both triggers (axis 5 = 1, axis 4 = 0.18) and
+the right stick (axis 2 = 0.2). Windows, a "Retro Controller": hot unplug / replug traced at slot 0.
+
+### ⚠️ MSVC: no `inline static` atomic arrays in an exported class
+
+`GamepadController::s_devicesState` was first an `inline static` member: MSVC gives an inline static of an `EMEN_API`
+class a dynamic initializer in every importing translation unit (`std::atomic` arrays are not constant-initializable
+for it), removes it as unreferenced and warns C4505 — under `/WX`, 27 projet-alpha TUs failed (found by the Windows
+peer; `constinit` is refused, C2127). Every such state is defined out of line in the controller's `.cpp`
+(`JoystickController.hpp` already carried that note).
+
 ### Proof
 
 - `tools/stress/InputStateStress.cpp` (`EmeraudeInputStateStress`, built with `EMERAUDE_ENABLE_TSAN`): the main thread

@@ -269,7 +269,10 @@ namespace EmEn::Input
 			[[nodiscard]]
 			bool usable () const noexcept;
 
-			inline static std::array< GamepadState, DeviceCount > s_devicesState{};
+			/* NOTE: Defined in GamepadController.cpp, not inline here: MSVC gives an inline static of this exported class a
+			 * dynamic initializer (the std::atomic arrays are not constant-initializable for it) in every importing
+			 * translation unit, then warns C4505 when it removes it (/WX: a build failure — found by the Windows peer). */
+			static std::array< GamepadState, DeviceCount > s_devicesState;
 
 			int32_t m_deviceID{-1};
 			float m_threshold{0.15F};
