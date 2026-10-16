@@ -78,25 +78,25 @@ namespace EmEn::Vulkan::Sync
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Semaphore (const Semaphore & copy) noexcept = default;
+			Semaphore (const Semaphore & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Semaphore (Semaphore && copy) noexcept = default;
+			Semaphore (Semaphore && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Semaphore & operator= (const Semaphore & copy) noexcept = default;
+			Semaphore & operator= (const Semaphore & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Semaphore & operator= (Semaphore && copy) noexcept = default;
+			Semaphore & operator= (Semaphore && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the semaphore.

@@ -105,25 +105,25 @@ namespace EmEn::Vulkan
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			PipelineLayout (const PipelineLayout & copy) noexcept = default;
+			PipelineLayout (const PipelineLayout & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			PipelineLayout (PipelineLayout && copy) noexcept = default;
+			PipelineLayout (PipelineLayout && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			PipelineLayout & operator= (const PipelineLayout & copy) noexcept = default;
+			PipelineLayout & operator= (const PipelineLayout & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			PipelineLayout & operator= (PipelineLayout && copy) noexcept = default;
+			PipelineLayout & operator= (PipelineLayout && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the pipeline layout.

@@ -76,25 +76,25 @@ namespace EmEn::Vulkan
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			DescriptorSet (const DescriptorSet & copy) noexcept = default;
+			DescriptorSet (const DescriptorSet & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			DescriptorSet (DescriptorSet && copy) noexcept = default;
+			DescriptorSet (DescriptorSet && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			DescriptorSet & operator= (const DescriptorSet & copy) noexcept = default;
+			DescriptorSet & operator= (const DescriptorSet & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			DescriptorSet & operator= (DescriptorSet && copy) noexcept = default;
+			DescriptorSet & operator= (DescriptorSet && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the descriptor set.

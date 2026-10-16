@@ -86,25 +86,25 @@ namespace EmEn::Vulkan
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			DeviceMemory (const DeviceMemory & copy) noexcept = default;
+			DeviceMemory (const DeviceMemory & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			DeviceMemory (DeviceMemory && copy) noexcept = default;
+			DeviceMemory (DeviceMemory && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			DeviceMemory & operator= (const DeviceMemory & copy) noexcept = default;
+			DeviceMemory & operator= (const DeviceMemory & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			DeviceMemory & operator= (DeviceMemory && copy) noexcept = default;
+			DeviceMemory & operator= (DeviceMemory && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the device memory.

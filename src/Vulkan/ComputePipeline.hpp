@@ -88,25 +88,25 @@ namespace EmEn::Vulkan
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			ComputePipeline (const ComputePipeline & copy) noexcept = default;
+			ComputePipeline (const ComputePipeline & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			ComputePipeline (ComputePipeline && copy) noexcept = default;
+			ComputePipeline (ComputePipeline && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			ComputePipeline & operator= (const ComputePipeline & copy) noexcept = default;
+			ComputePipeline & operator= (const ComputePipeline & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			ComputePipeline & operator= (ComputePipeline && copy) noexcept = default;
+			ComputePipeline & operator= (ComputePipeline && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the compute pipeline.

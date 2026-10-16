@@ -51,25 +51,25 @@ namespace EmEn::Audio::Effects
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Abstract (const Abstract & copy) noexcept = default;
+			Abstract (const Abstract & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Abstract (Abstract && copy) noexcept = default;
+			Abstract (Abstract && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Abstract & operator= (const Abstract & copy) noexcept = default;
+			Abstract & operator= (const Abstract & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Abstract & operator= (Abstract && copy) noexcept = default;
+			Abstract & operator= (Abstract && copy) noexcept = delete;
 
 			/** @copydoc EmEn::Audio::AbstractObject::isCreated() const */
 			[[nodiscard]]

@@ -88,25 +88,25 @@ namespace EmEn::Vulkan
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			RenderPass (const RenderPass & copy) noexcept = default;
+			RenderPass (const RenderPass & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			RenderPass (RenderPass && copy) noexcept = default;
+			RenderPass (RenderPass && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			RenderPass & operator= (const RenderPass & copy) noexcept = default;
+			RenderPass & operator= (const RenderPass & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			RenderPass & operator= (RenderPass && copy) noexcept = default;
+			RenderPass & operator= (RenderPass && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the render pass.

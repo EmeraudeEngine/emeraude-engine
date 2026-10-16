@@ -105,8 +105,6 @@ namespace EmEn::Audio
 			}
 		}
 
-		s_audioCaptureAvailable = true;
-
 		return true;
 	}
 

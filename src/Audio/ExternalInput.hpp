@@ -172,9 +172,6 @@ namespace EmEn::Audio
 			 */
 			bool writeWAVHeader (std::ostream & stream, uint32_t dataSize) const noexcept;
 
-			/** @brief No audio capture device found to record sound. */
-			static inline bool s_audioCaptureAvailable{false};
-
 			PrimaryServices & m_primaryServices; ///< Primary services for settings and filesystem access.
 			std::vector< std::string > m_availableDevices;
 			std::string m_selectedDeviceName;

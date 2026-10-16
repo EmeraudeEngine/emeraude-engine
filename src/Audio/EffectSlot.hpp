@@ -61,25 +61,25 @@ namespace EmEn::Audio
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			EffectSlot (const EffectSlot & copy) noexcept = default;
+			EffectSlot (const EffectSlot & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			EffectSlot (EffectSlot && copy) noexcept = default;
+			EffectSlot (EffectSlot && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			EffectSlot & operator= (const EffectSlot & copy) noexcept = default;
+			EffectSlot & operator= (const EffectSlot & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			EffectSlot & operator= (EffectSlot && copy) noexcept = default;
+			EffectSlot & operator= (EffectSlot && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the effect slot.

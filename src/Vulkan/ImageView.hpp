@@ -90,25 +90,25 @@ namespace EmEn::Vulkan
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			ImageView (const ImageView & copy) noexcept = default;
+			ImageView (const ImageView & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			ImageView (ImageView && copy) noexcept = default;
+			ImageView (ImageView && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			ImageView & operator= (const ImageView & copy) noexcept = default;
+			ImageView & operator= (const ImageView & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			ImageView & operator= (ImageView && copy) noexcept = default;
+			ImageView & operator= (ImageView && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the image view.

@@ -111,25 +111,25 @@ namespace EmEn::Vulkan::Sync
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Event (const Event & copy) noexcept = default;
+			Event (const Event & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Event (Event && copy) noexcept = default;
+			Event (Event && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Event & operator= (const Event & copy) noexcept = default;
+			Event & operator= (const Event & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Event & operator= (Event && copy) noexcept = default;
+			Event & operator= (Event && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the event.

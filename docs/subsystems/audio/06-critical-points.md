@@ -21,5 +21,7 @@
   - A `SourceRequest` still held at the audio shutdown is a contract fault (owner decision 2026-10-16): traced, aborted
     in Debug; in Release the pool is kept so no source is destroyed under its holder.
   - `Buffer` and `Source` own their OpenAL name: neither copyable nor movable (a copy deleted the name twice).
+  - So do `Effects::Abstract`, `Filters::Abstract` and `EffectSlot` (and every effect / filter): neither copyable nor
+    movable since Ave Robustus II P5 (2026-10-16) — the defaulted move did not clear the name either.
 - **Microphone privacy**: `Core/Audio/Capture/Enable` must be explicitly `true` before any microphone access. Default is `false`. Voice-over (`Core/RushMaker/EnableVoiceOver`) depends on this gate.
 - **Available devices in settings**: Both playback (`Core/Audio/AvailableDevices`) and capture (`Core/Audio/Capture/AvailableDevices`) device lists are written to settings on each startup for easy device switching via settings file editing

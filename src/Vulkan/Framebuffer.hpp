@@ -104,25 +104,25 @@ namespace EmEn::Vulkan
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Framebuffer (const Framebuffer & copy) noexcept = default;
+			Framebuffer (const Framebuffer & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Framebuffer (Framebuffer && copy) noexcept = default;
+			Framebuffer (Framebuffer && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Framebuffer & operator= (const Framebuffer & copy) noexcept = default;
+			Framebuffer & operator= (const Framebuffer & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Framebuffer & operator= (Framebuffer && copy) noexcept = default;
+			Framebuffer & operator= (Framebuffer && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the framebuffer.

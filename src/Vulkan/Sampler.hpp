@@ -64,25 +64,25 @@ namespace EmEn::Vulkan
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Sampler (const Sampler & copy) noexcept = default;
+			Sampler (const Sampler & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Sampler (Sampler && copy) noexcept = default;
+			Sampler (Sampler && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Sampler & operator= (const Sampler & copy) noexcept = default;
+			Sampler & operator= (const Sampler & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			Sampler & operator= (Sampler && copy) noexcept = default;
+			Sampler & operator= (Sampler && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the sampler.

@@ -171,18 +171,35 @@ namespace EmEn::PlatformSpecific::Desktop
 
 		/* NOTE: S_OK and S_FALSE both take a reference that CoUninitialize() must give back (it was never called);
 		 * RPC_E_CHANGED_MODE takes none. Released on every return below. */
-		struct ComScope final
+		class ComScope final
 		{
-			bool initialized{false};
+			public:
 
-			~ComScope ()
-			{
-				if ( initialized )
+				explicit ComScope (bool initialized) noexcept
+					: m_initialized{initialized}
 				{
-					CoUninitialize();
+
 				}
-			}
-		} comScope{SUCCEEDED(hr)};
+
+				ComScope (const ComScope & copy) noexcept = delete;
+				ComScope (ComScope && copy) noexcept = delete;
+				ComScope & operator= (const ComScope & copy) noexcept = delete;
+				ComScope & operator= (ComScope && copy) noexcept = delete;
+
+				~ComScope ()
+				{
+					if ( m_initialized )
+					{
+						CoUninitialize();
+					}
+				}
+
+			private:
+
+				bool m_initialized;
+		};
+
+		const ComScope comScope{SUCCEEDED(hr)};
 
 		if ( FAILED(hr) && hr != RPC_E_CHANGED_MODE )
 		{

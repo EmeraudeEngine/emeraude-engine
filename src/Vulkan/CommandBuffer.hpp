@@ -125,25 +125,25 @@ namespace EmEn::Vulkan
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			CommandBuffer (const CommandBuffer & copy) noexcept = default;
+			CommandBuffer (const CommandBuffer & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			CommandBuffer (CommandBuffer && copy) noexcept = default;
+			CommandBuffer (CommandBuffer && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			CommandBuffer & operator= (const CommandBuffer & copy) noexcept = default;
+			CommandBuffer & operator= (const CommandBuffer & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			CommandBuffer & operator= (CommandBuffer && copy) noexcept = default;
+			CommandBuffer & operator= (CommandBuffer && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the command buffer.

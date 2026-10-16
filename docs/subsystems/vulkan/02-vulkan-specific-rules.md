@@ -5,6 +5,15 @@
 - Use abstraction classes: `Device`, `Buffer`, `Image`, `Pipeline`, etc.
 - All Vulkan resources must be encapsulated
 
+### A handle owner is neither copyable nor movable
+
+Every wrapper whose destructor destroys or frees its Vulkan handle deletes its copy AND move (constructor and
+assignment): a defaulted copy or move duplicates the handle without clearing it, and both ends then destroy it.
+Wrappers are shared through `std::shared_ptr`. Done for `Image`, then (Ave Robustus II P5, 2026-10-16) `Sampler`,
+`ComputePipeline`, `DescriptorSetLayout`, `DeviceMemory`, `Framebuffer`, `ImageView`, `PipelineLayout`, `RenderPass`,
+`ShaderModule`, `Sync::Event`, `Sync::Semaphore`, `CommandBuffer`, `DescriptorSet`. `Buffer` keeps a real move
+(it clears the source). **A new wrapper does the same.**
+
 ### Debug Object Naming (mandatory for every Vulkan object)
 
 > [!CRITICAL]

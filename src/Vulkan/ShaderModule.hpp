@@ -92,25 +92,25 @@ namespace EmEn::Vulkan
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			ShaderModule (const ShaderModule & copy) noexcept = default;
+			ShaderModule (const ShaderModule & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			ShaderModule (ShaderModule && copy) noexcept = default;
+			ShaderModule (ShaderModule && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			ShaderModule & operator= (const ShaderModule & copy) noexcept = default;
+			ShaderModule & operator= (const ShaderModule & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 */
-			ShaderModule & operator= (ShaderModule && copy) noexcept = default;
+			ShaderModule & operator= (ShaderModule && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs a shader module.
