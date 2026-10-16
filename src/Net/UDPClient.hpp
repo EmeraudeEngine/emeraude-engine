@@ -330,5 +330,9 @@ namespace EmEn::Net
 			int m_fd{-1};
 #endif
 			bool m_datagramInfoEnabled{false};
+#ifdef _WIN32
+			/* NOTE: Winsock is reference-counted: an open socket holds one WSAStartup(), given back by close(). */
+			bool m_winsockStarted{false};
+#endif
 	};
 }

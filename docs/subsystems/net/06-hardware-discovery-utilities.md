@@ -101,6 +101,12 @@ the per-platform width is kept because the leniency is undocumented, not because
 
 **Platform**: Cross-platform (BSD sockets on Linux/macOS, Winsock on Windows). No external dependencies.
 
+**Winsock lifetime (Windows, Ave Robustus II P5, 2026-10-16)**: each OPEN socket holds its own `WSAStartup()`
+reference, given back by `close()` (the destructor closes; a move transfers it). Before, the first `open()` of the
+process called `WSAStartup()` behind an unguarded static flag and nothing ever called `WSACleanup()`. Winsock counts
+the references, so other users (Asio in `TCPClient` / `TCPServer`, which starts its own) are unaffected. The
+`WSARecvMsg` extension pointer stays provider-wide, cached in an atomic (several clients may receive at once).
+
 ⚠️⚠️ **A return of 0 from `receive()` is AMBIGUOUS, and `timedOut` is the only thing that
 disambiguates it (since 2026-08-28).** A zero-length datagram is legal in UDP and returns 0 exactly
 like an expired wait. Before the flag existed the two were **byte-for-byte identical** through

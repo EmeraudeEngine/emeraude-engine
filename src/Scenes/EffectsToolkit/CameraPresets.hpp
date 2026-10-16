@@ -82,9 +82,7 @@ namespace EmEn::Scenes::EffectsToolkit
 		/** @brief Cool cinematic twilight: f/2.8 on full frame, -0.4 EV. */
 		BlueHour,
 		/** @brief Retro 8-bits pixel-art display: the palette over an exposed frame (the tone mapping stays on — the sensor is not a style). */
-		Retro8Bits,
-		/** @brief User-provided style, registered through CameraPresets::setCustomStyle(). */
-		Custom
+		Retro8Bits
 	};
 
 	/**
@@ -93,8 +91,10 @@ namespace EmEn::Scenes::EffectsToolkit
 	 * optics, exposure, DoF/HDR materialization and the lens-effect stack. The stack is a
 	 * FACTORY, not instances: every application produces fresh effects, so two cameras
 	 * carrying the same style never share effect state. Apply it directly with
-	 * CameraPresets::Apply(camera, style), or register it once with setCustomStyle() to
-	 * make it available through the CameraPreset::Custom token (Toolkit creation, cycles).
+	 * CameraPresets::Apply(camera, style), or at creation with the Toolkit::generatePerspectiveCamera()
+	 * overload taking a style. There is no global registration: the style travels with the call
+	 * (Ave Robustus II P5, owner decision 2026-10-16 — the former setCustomStyle() / Custom token
+	 * was a process-wide mutable slot).
 	 */
 	struct CameraStyle
 	{
@@ -127,8 +127,7 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	/**
 	 * @brief Applies a camera preset from its token.
 	 * @note Dispatches to the matching preset function below; 'Normal' resets the camera
-	 * to the bare state (Neutral); 'Custom' applies the style registered through
-	 * setCustomStyle() (falls back to Neutral with a warning when none is registered).
+	 * to the bare state (Neutral). A consumer style goes through Apply(camera, style).
 	 * @param camera A reference to the camera to configure.
 	 * @param preset The preset token.
 	 */
@@ -141,15 +140,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	 * @param style A reference to the style declaration.
 	 */
 	EMEN_API void Apply (Component::Camera & camera, const CameraStyle & style) noexcept;
-
-	/**
-	 * @brief Registers the user style behind the CameraPreset::Custom token.
-	 * @note Engine-consumer entry point: register once (typically at scene setup, on the
-	 * logic thread), then use CameraPreset::Custom anywhere a token is accepted
-	 * (Toolkit::generatePerspectiveCamera(), runtime cycles...).
-	 * @param style A reference to the style declaration (copied).
-	 */
-	EMEN_API void setCustomStyle (const CameraStyle & style) noexcept;
 
 	/**
 	 * @brief Camera presets — full photographic configurations (physical camera model).

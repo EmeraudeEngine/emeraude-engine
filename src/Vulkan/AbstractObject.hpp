@@ -33,8 +33,10 @@
 /* STL inclusions. */
 #include <iostream>
 #include <map>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <utility>
 
 /* Third-party inclusions. */
 #include "volk.h"
@@ -164,7 +166,7 @@ namespace EmEn::Vulkan
 
 					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << identifier << "' @" << this << ") destructed !" "\n";
 
-					s_tracking.erase(this);
+					AbstractObject::untrack(this);
 				}
 				else
 				{
@@ -188,7 +190,7 @@ namespace EmEn::Vulkan
 
 				if constexpr ( VulkanTrackingDebugEnabled )
 				{
-					s_tracking[this] = this->identifier();
+					AbstractObject::track(this, this->identifier());
 
 					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << this->identifier() << "', @" << this << ") is marked !" "\n";
 				}
@@ -259,7 +261,20 @@ namespace EmEn::Vulkan
 				return m_isCreated;
 			}
 
-			static inline std::map< void *, std::string > s_tracking{};
+			/**
+			 * @brief Returns a copy of the Vulkan objects alive (VulkanTrackingDebugEnabled only), keyed by address.
+			 * @note A copy: the loader threads keep creating and destroying objects while the caller reads it.
+			 * @return std::map< const void *, std::string >
+			 */
+			[[nodiscard]]
+			static
+			std::map< const void *, std::string >
+			trackedObjects () noexcept
+			{
+				const std::scoped_lock lock{s_trackingAccess};
+
+				return s_tracking;
+			}
 
 		protected:
 
@@ -270,7 +285,7 @@ namespace EmEn::Vulkan
 			{
 				if constexpr ( VulkanTrackingDebugEnabled )
 				{
-					s_tracking[this] = "";
+					AbstractObject::track(this, {});
 
 					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object (@" << this << ") constructed !" "\n";
 				}
@@ -295,7 +310,39 @@ namespace EmEn::Vulkan
 			}
 
 		private:
-			
+
+			/**
+			 * @brief Records a Vulkan object alive (VulkanTrackingDebugEnabled only).
+			 * @param object The object address.
+			 * @param identifier The object identifier.
+			 */
+			static
+			void
+			track (const void * object, std::string identifier) noexcept
+			{
+				const std::scoped_lock lock{s_trackingAccess};
+
+				s_tracking[object] = std::move(identifier);
+			}
+
+			/**
+			 * @brief Forgets a Vulkan object (VulkanTrackingDebugEnabled only).
+			 * @param object The object address.
+			 */
+			static
+			void
+			untrack (const void * object) noexcept
+			{
+				const std::scoped_lock lock{s_trackingAccess};
+
+				s_tracking.erase(object);
+			}
+
+			/* NOTE: The Vulkan objects alive, for the leak report at shutdown (VulkanTrackingDebugEnabled only). Objects
+			 * are created and destroyed by the loader threads too: every access holds the lock. */
+			static inline std::mutex s_trackingAccess;
+			static inline std::map< const void *, std::string > s_tracking{};
+
 			[[no_unique_address]]
 			Identifier m_identifier; /* NOTE: In release mode, this shouldn't take any memory space. */
 			bool m_isCreated{false};

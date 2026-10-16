@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <atomic>
+#include <mutex>
 #include <string>
 
 /* Third-party inclusions. */
@@ -134,22 +135,30 @@ namespace EmEn::PlatformSpecific::Desktop
 		{
 			/* Create a temporary hidden message-only window. */
 			static const wchar_t * className = L"EmEnNotificationWindow";
+
+			/* NOTE: Two notifications may be pushed from two threads: the check and the registration hold one lock
+			 * (a failed registration is retried by the next notification, as before). */
+			static std::mutex classRegistrationAccess;
 			static bool classRegistered = false;
 
-			if ( !classRegistered )
 			{
-				WNDCLASSEXW wc = {};
-				wc.cbSize = sizeof(wc);
-				wc.lpfnWndProc = DefWindowProcW;
-				wc.hInstance = GetModuleHandleW(nullptr);
-				wc.lpszClassName = className;
+				const std::scoped_lock lock{classRegistrationAccess};
 
-				if ( RegisterClassExW(&wc) == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS )
+				if ( !classRegistered )
 				{
-					return false;
-				}
+					WNDCLASSEXW wc = {};
+					wc.cbSize = sizeof(wc);
+					wc.lpfnWndProc = DefWindowProcW;
+					wc.hInstance = GetModuleHandleW(nullptr);
+					wc.lpszClassName = className;
 
-				classRegistered = true;
+					if ( RegisterClassExW(&wc) == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS )
+					{
+						return false;
+					}
+
+					classRegistered = true;
+				}
 			}
 
 			/* Create a message-only window (HWND_MESSAGE parent). */

@@ -151,9 +151,12 @@ a cubemap face has no format, no lens and no grading.
 engine consumer declares its own photographic style as a DATA block (optics, exposure,
 DoF/HDR flags, and a lens-stack FACTORY — fresh effect instances per application, no
 state sharing between cameras). Usable two ways: `CameraPresets::Apply(camera, style)`
-directly (unlimited ad-hoc styles), or registered once behind the `CameraPreset::Custom`
-token via `CameraPresets::setCustomStyle(style)` (then usable at Toolkit creation and in
-runtime cycles; unset token falls back to Neutral with a warning). The factory may return
+on an existing camera, or at creation with the `Toolkit::generatePerspectiveCamera()` overload
+that takes a `CameraStyle` instead of a token. The style travels WITH the call: there is no
+global registration any more (Ave Robustus II P5, owner decision 2026-10-16 — the former
+`setCustomStyle()` + `CameraPreset::Custom` token was a process-wide mutable slot, read and
+written without a lock); a consumer that cycles styles keeps its own (projet-alpha's KeyPad5/6
+cycle lists the 13 tokens, then applies its style directly). The factory may return
 effect classes OWNED BY THE APPLICATION (subclass `DirectPostProcessEffect`, override
 `generateFragmentShaderCode()` — the whole surface is public/EMEN_API): validated with
 projet-alpha's `BitmapMonochromeEffect` (1-bit ordered-dither, its own GLSL — the engine

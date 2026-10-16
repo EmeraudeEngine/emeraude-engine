@@ -90,47 +90,31 @@ namespace EmEn::Net
 	}
 
 #ifdef _WIN32
-	static bool
-	ensureWsa () noexcept
-	{
-		static bool initialized = false;
-
-		if ( !initialized )
-		{
-			WSADATA wsaData{};
-
-			if ( WSAStartup(MAKEWORD(2, 2), &wsaData) != 0 )
-			{
-				return false;
-			}
-
-			initialized = true;
-		}
-
-		return true;
-	}
-
 	/*
 	 * WSARecvMsg() has no import library: it must be fetched from the provider through
-	 * WSAIoctl(). The pointer is provider-wide, so resolving it once is enough.
+	 * WSAIoctl(). The pointer is provider-wide, so resolving it once is enough; several
+	 * clients may receive at once, hence the atomic (they all store the same value).
 	 */
 	static LPFN_WSARECVMSG
 	resolveWSARecvMsg (SocketType sock) noexcept
 	{
-		static LPFN_WSARECVMSG function = nullptr;
+		static std::atomic< LPFN_WSARECVMSG > s_function{nullptr};
 
-		if ( function != nullptr )
+		if ( const auto function = s_function.load(std::memory_order_acquire); function != nullptr )
 		{
 			return function;
 		}
 
+		LPFN_WSARECVMSG function = nullptr;
 		GUID guid = WSAID_WSARECVMSG;
 		DWORD bytesReturned = 0;
 
 		if ( WSAIoctl(sock, SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), &function, sizeof(function), &bytesReturned, nullptr, nullptr) != 0 )
 		{
-			function = nullptr;
+			return nullptr;
 		}
+
+		s_function.store(function, std::memory_order_release);
 
 		return function;
 	}
@@ -391,6 +375,9 @@ namespace EmEn::Net
 		m_fd(std::exchange(other.m_fd, -1)),
 #endif
 		m_datagramInfoEnabled(std::exchange(other.m_datagramInfoEnabled, false))
+#ifdef _WIN32
+		, m_winsockStarted(std::exchange(other.m_winsockStarted, false))
+#endif
 	{
 		/* A moved-from vector is valid but unspecified: the source must not keep claiming
 		 * memberships that now belong to this socket. */
@@ -413,6 +400,7 @@ namespace EmEn::Net
 
 #ifdef _WIN32
 			m_socket = std::exchange(other.m_socket, ~uintptr_t{0});
+			m_winsockStarted = std::exchange(other.m_winsockStarted, false);
 #else
 			m_fd = std::exchange(other.m_fd, -1);
 #endif
@@ -448,7 +436,11 @@ namespace EmEn::Net
 		}
 
 #ifdef _WIN32
-		if ( !ensureWsa() )
+		/* NOTE: Each open socket takes its own Winsock reference, given back by close() (it used to be taken once
+		 * per process behind an unguarded flag, and never given back). */
+		WSADATA wsaData{};
+
+		if ( WSAStartup(MAKEWORD(2, 2), &wsaData) != 0 )
 		{
 			return false;
 		}
@@ -457,10 +449,13 @@ namespace EmEn::Net
 
 		if ( sock == INVALID_SOCKET )
 		{
+			WSACleanup();
+
 			return false;
 		}
 
 		m_socket = static_cast< uintptr_t >(sock);
+		m_winsockStarted = true;
 #else
 		m_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 
@@ -587,6 +582,13 @@ namespace EmEn::Net
 		{
 			platformCloseSocket(static_cast< SocketType >(m_socket));
 			m_socket = ~uintptr_t{0};
+		}
+
+		if ( m_winsockStarted )
+		{
+			WSACleanup();
+
+			m_winsockStarted = false;
 		}
 #else
 		if ( m_fd != -1 )

@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -494,6 +495,34 @@ namespace EmEn::Scenes
 				}
 
 				return {entity, component};
+			}
+
+			/**
+			 * @brief Generates a camera using the perspective projection, with a consumer camera style.
+			 * @note The style is applied at creation (EffectsToolkit::CameraPresets::Apply(camera, style)); there is
+			 * no global style registration (Ave Robustus II P5, 2026-10-16).
+			 * @tparam entity_t The type of entity, a scene node or a static entity.
+			 * @param entityName The used for the node and the camera component.
+			 * @param focalLength The lens focal length in millimeters, on a full-frame sensor.
+			 * @param lookAt A position where the camera should initially look at.
+			 * @param primaryDevice Set the camera as the primary device.
+			 * @param showModel Enables a model to visualize the camera.
+			 * @param style A reference to the camera style (the extension contract).
+			 * @return BuiltEntity< entity_t, Component::Camera >
+			 */
+			template< typename entity_t = StaticEntity >
+			BuiltEntity< entity_t, Component::Camera >
+			generatePerspectiveCamera (const std::string & entityName, float focalLength, const Base::Math::Vector< 3, float > & lookAt, bool primaryDevice, bool showModel, const EffectsToolkit::CameraStyle & style) noexcept
+				requires (std::is_base_of_v< AbstractEntity, entity_t >)
+			{
+				auto built = this->generatePerspectiveCamera< entity_t >(entityName, focalLength, lookAt, primaryDevice, showModel, EffectsToolkit::CameraPreset::Normal);
+
+				if ( built.component() != nullptr )
+				{
+					EffectsToolkit::CameraPresets::Apply(*built.component(), style);
+				}
+
+				return built;
 			}
 
 			/**
@@ -1462,7 +1491,8 @@ namespace EmEn::Scenes
 			/* Flag names. */
 			static constexpr auto Debug{0UL};
 
-			static size_t s_autoEntityCount;
+			/* NOTE: Process-wide (every toolkit numbers from it) and atomic: toolkits may build on several threads. */
+			static std::atomic< size_t > s_autoEntityCount;
 
 			Settings & m_settings;
 			/** @brief The bounding sphere is enlarged by this factor inside its view: the margin keeps a view — and

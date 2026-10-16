@@ -1958,11 +1958,11 @@ namespace EmEn
 
 		if constexpr ( VulkanTrackingDebugEnabled )
 		{
-			if ( const auto vkAliveObjectCount = AbstractObject::s_tracking.size(); vkAliveObjectCount > 0 )
+			if ( const auto aliveObjects = AbstractObject::trackedObjects(); !aliveObjects.empty() )
 			{
-				std::cerr << "[DEBUG:VK_TRACKING] There is " << vkAliveObjectCount << " Vulkan objects not properly destructed !" "\n";
+				std::cerr << "[DEBUG:VK_TRACKING] There is " << aliveObjects.size() << " Vulkan objects not properly destructed !" "\n";
 
-				for ( auto & [address, identifier] : AbstractObject::s_tracking )
+				for ( const auto & [address, identifier] : aliveObjects )
 				{
 					std::cerr << "[DEBUG:VK_TRACKING] The Vulkan object @" << address << " '" << identifier << "' still alive !" << "\n";
 

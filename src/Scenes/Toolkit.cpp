@@ -48,7 +48,7 @@ namespace EmEn::Scenes
 	using namespace Base::VertexFactory;
 	using namespace Graphics;
 
-	size_t Toolkit::s_autoEntityCount{0};
+	std::atomic< size_t > Toolkit::s_autoEntityCount{0};
 
 	float
 	Toolkit::viewDistanceSetting () const noexcept
@@ -290,7 +290,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< Node >
 	Toolkit::generateNode (const std::string & entityName, GenPolicy genPolicy, bool movable) noexcept
 	{
-		const auto name = String::incrementalLabel(entityName.empty() ? "AutoNode" : entityName, s_autoEntityCount);
+		const auto name = (entityName.empty() ? std::string{"AutoNode"} : entityName) + std::to_string(s_autoEntityCount.fetch_add(1, std::memory_order_relaxed));
 
 		if ( m_scene == nullptr )
 		{
@@ -376,7 +376,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< StaticEntity >
 	Toolkit::generateStaticEntity (const std::string & entityName, GenPolicy genPolicy) noexcept
 	{
-		const auto name = String::incrementalLabel(entityName.empty() ? "AutoNode" : entityName, s_autoEntityCount);
+		const auto name = (entityName.empty() ? std::string{"AutoNode"} : entityName) + std::to_string(s_autoEntityCount.fetch_add(1, std::memory_order_relaxed));
 
 		if ( m_scene == nullptr )
 		{

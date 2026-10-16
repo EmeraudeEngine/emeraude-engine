@@ -133,27 +133,6 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 				camera.addLensEffect(effect);
 			}
 		}
-
-		/**
-		 * @brief [Internal] Storage slot for the user style behind CameraPreset::Custom.
-		 * @note Function-local statics: no global construction order issue. Written once at
-		 * setup (logic thread), read on style application — same-thread usage expected.
-		 */
-		CameraStyle &
-		customStyleSlot () noexcept
-		{
-			static CameraStyle style;
-
-			return style;
-		}
-
-		bool &
-		customStyleDefined () noexcept
-		{
-			static bool defined{false};
-
-			return defined;
-		}
 	}
 
 	void
@@ -195,30 +174,10 @@ namespace EmEn::Scenes::EffectsToolkit::CameraPresets
 	}
 
 	void
-	setCustomStyle (const CameraStyle & style) noexcept
-	{
-		customStyleSlot() = style;
-		customStyleDefined() = true;
-	}
-
-	void
 	Apply (Component::Camera & camera, CameraPreset preset) noexcept
 	{
 		switch ( preset )
 		{
-			case CameraPreset::Custom :
-				if ( customStyleDefined() )
-				{
-					Apply(camera, customStyleSlot());
-				}
-				else
-				{
-					Tracer::warning("CameraPresets", "No custom camera style registered (see setCustomStyle()) : falling back to Neutral.");
-
-					Neutral(camera);
-				}
-				break;
-
 			case CameraPreset::HighQuality :
 				HighQuality(camera);
 				break;
