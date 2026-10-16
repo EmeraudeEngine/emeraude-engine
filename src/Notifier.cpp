@@ -84,8 +84,9 @@ namespace EmEn
 		}
 
 		/* NOTE: Create a timer to update the notification lifetime. */
-		/* NOTE: The timer is owned by this object (EventTrait): its thread never outlives it. */
-		m_timerID = this->createTimer([this] (Time::TimerID /*timerID*/)
+		/* NOTE: The timer is owned by this object through its handle (the last member): its thread never outlives the
+		 * members its callback uses, even when this initialization fails below. */
+		m_timer = this->createTimer([this] (Time::TimerID /*timerID*/)
 		{
 			bool empty = false;
 
@@ -160,7 +161,7 @@ namespace EmEn
 			m_accepting = false;
 		}
 
-		this->destroyTimer(m_timerID);
+		m_timer.reset();
 
 		m_font.reset();
 

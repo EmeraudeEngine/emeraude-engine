@@ -176,12 +176,14 @@ namespace EmEn
 			std::shared_ptr< Graphics::FontResource > m_font;
 			Base::PixelFactory::TextProcessor< uint8_t > m_processor;
 			Base::PixelFactory::Color< float > m_clearColor{Base::PixelFactory::TranslucentDarkGrey};
-			Base::Time::TimerID m_timerID{0};
 			/* NOTE: The lock of the notification list, Clang-checked (decision D12). Taken after the surface's buffer
 			 * lock in renderNotifications(), never before it. */
 			mutable Base::Mutex m_notificationAccess;
 			std::vector< std::pair< std::string, int32_t > > m_notifications EMEN_GUARDED_BY(m_notificationAccess);
 			/* NOTE: True from the end of onInitialize() to the start of onTerminate(): push() accepts only then. */
 			bool m_accepting EMEN_GUARDED_BY(m_notificationAccess){false};
+			/* NOTE: LAST (Ave Robustus II): its callback uses the members above; destroyed first, it stops and joins the
+			 * timer before they go — also when onInitialize() failed and onTerminate() never runs. */
+			Base::Time::TimerHandle m_timer;
 	};
 }

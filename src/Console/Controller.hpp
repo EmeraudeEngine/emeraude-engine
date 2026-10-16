@@ -40,7 +40,6 @@
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "ObservableTrait.hpp"
-#include "Time/EventTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "ControllableTrait.hpp"
@@ -61,9 +60,8 @@ namespace EmEn::Console
 	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Base::ObservableTrait This is a service is observable.
-	 * @extends EmEn::Base::Time::EventTrait This service needs to delay some behavior.
 	 */
-	class EMEN_API Controller final : public ServiceInterface, public Base::ObservableTrait, private Base::Time::EventTrait< uint32_t, std::milli >
+	class EMEN_API Controller final : public ServiceInterface, public Base::ObservableTrait
 	{
 		public:
 
