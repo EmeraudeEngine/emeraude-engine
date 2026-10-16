@@ -54,6 +54,7 @@
 
 /* Local inclusions for usages. */
 #include "Constants.hpp"
+#include "ScopedRegistration.hpp"
 #include "Audio/Ambience.hpp"
 #include "Component/Visual.hpp"
 #include "Graphics/Compute/IBLBaker.hpp"
@@ -391,13 +392,11 @@ namespace EmEn::Scenes
 			 *
 			 * Releases the NodeController from input management and stops
 			 * any active debug controls. The scene remains initialized and
-			 * can be re-enabled later.
-			 *
-			 * @param inputManager Reference to unregister keyboard listeners.
+			 * can be re-enabled later. The controllers' input registrations end here (Ave Robustus II P4: tokens).
 			 *
 			 * @see enable() To reactivate the scene.
 			 */
-			void disable (Input::Manager & inputManager) noexcept;
+			void disable () noexcept;
 
 			/**
 			 * @brief Main logic update called every frame by the Core engine.
@@ -3112,6 +3111,10 @@ namespace EmEn::Scenes
 			NodeController m_nodeController;
 			/** @brief Pointer-driven camera orbit controller. Inert without a controlled node. */
 			OrbitController m_orbitController;
+			/** @brief The controllers' registrations with the input manager while the scene is enabled (enable() /
+			 * disable()); declared after the controllers: their end unregisters them first. */
+			Base::ScopedRegistration m_nodeControllerRegistration;
+			Base::ScopedRegistration m_orbitControllerRegistration;
 
 			/* ============================================================
 			 * [PRIVATE: FAST ACCESS STRUCTURES]

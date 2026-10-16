@@ -51,9 +51,6 @@ namespace EmEn
 	using namespace Graphics;
 	using namespace Vulkan;
 
-	/* Static instance pointer for the GLFW monitor callback. */
-	Window * Window::s_instance{nullptr};
-
 	bool
 	Window::showInformation () const noexcept
 	{
@@ -402,7 +399,7 @@ namespace EmEn
 		 * NOTE: It will automatically remove all callbacks. */
 		m_handle.reset();
 
-		s_instance = nullptr;
+		m_monitorCallbackRegistration.reset();
 
 		return true;
 	}
@@ -1434,7 +1431,7 @@ namespace EmEn
 		this->setFramebufferState(static_cast< uint32_t >(width), static_cast< uint32_t >(height));
 
 		/* Register all callbacks related to the window object. */
-		glfwSetWindowUserPointer(m_handle.get(), this);
+		glfwSetWindowUserPointer(m_handle.get(), &m_callbackContext);
 		glfwSetWindowPosCallback(m_handle.get(), windowPositionCallback);
 		glfwSetWindowSizeCallback(m_handle.get(), windowSizeCallback);
 		glfwSetWindowCloseCallback(m_handle.get(), windowCloseCallback);
@@ -1553,9 +1550,27 @@ namespace EmEn
 			}
 		}
 
-		/* Register the static instance and the hot-plug callback. */
-		s_instance = this;
-		glfwSetMonitorCallback(monitorConfigurationChanged);
+		/* Register the hot-plug callback and its receiver (the callback carries no user pointer). */
+		if ( !m_monitorCallbackRegistration.active() )
+		{
+			if ( s_monitorCallbackReceiver != nullptr )
+			{
+				Tracer::error(ClassId, "Another window already receives the monitor hot-plug events : this one will not.");
+			}
+			else
+			{
+				s_monitorCallbackReceiver = this;
+
+				glfwSetMonitorCallback(monitorConfigurationChanged);
+
+				m_monitorCallbackRegistration = ScopedRegistration{[] () {
+					/* NOTE: After glfwTerminate() GLFW refuses the call (GLFW_NOT_INITIALIZED, no effect). */
+					glfwSetMonitorCallback(nullptr);
+
+					s_monitorCallbackReceiver = nullptr;
+				}};
+			}
+		}
 
 		return true;
 	}
@@ -1632,6 +1647,23 @@ namespace EmEn
 		return list;
 	}
 
+	ScopedRegistration
+	Window::attachInputManager (Input::Manager & inputManager) noexcept
+	{
+		if ( m_callbackContext.inputManager != nullptr )
+		{
+			Tracer::error(ClassId, "An input manager is already attached to this window !");
+
+			return {};
+		}
+
+		m_callbackContext.inputManager = &inputManager;
+
+		return ScopedRegistration{[this] () {
+			m_callbackContext.inputManager = nullptr;
+		}};
+	}
+
 	void
 	Window::framebufferSizeCallback (GLFWwindow * window, int width, int height) noexcept
 	{
@@ -1640,7 +1672,7 @@ namespace EmEn
 			TraceInfo{ClassId} << "Framebuffer size changed to " << width << "x" << height << " px." "\n";
 		}
 
-		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
+		auto * _this = Window::fromHandle(window);
 
 		if ( _this == nullptr )
 		{
@@ -1674,7 +1706,7 @@ namespace EmEn
 			TraceInfo{ClassId} << "Window refresh request." "\n";
 		}
 
-		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
+		auto * _this = Window::fromHandle(window);
 
 		if ( _this == nullptr )
 		{
@@ -1692,7 +1724,7 @@ namespace EmEn
 			TraceInfo{ClassId} << "Window size changed to " << width << "x" << height << " pt." "\n";
 		}
 
-		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
+		auto * _this = Window::fromHandle(window);
 
 		if ( _this == nullptr )
 		{
@@ -1723,7 +1755,7 @@ namespace EmEn
 			TraceInfo{ClassId} << "Window position changed to X:" << xPosition << ", Y:" << yPosition << "." "\n";
 		}
 
-		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
+		auto * _this = Window::fromHandle(window);
 
 		if ( _this == nullptr )
 		{
@@ -1760,10 +1792,10 @@ namespace EmEn
 		}
 
 		/* Refresh the monitor cache and notify observers. */
-		if ( s_instance != nullptr )
+		if ( s_monitorCallbackReceiver != nullptr )
 		{
-			s_instance->refreshMonitorDevices();
-			s_instance->notify(OSMonitorConfigurationChanged);
+			s_monitorCallbackReceiver->refreshMonitorDevices();
+			s_monitorCallbackReceiver->notify(OSMonitorConfigurationChanged);
 		}
 	}
 
@@ -1775,7 +1807,7 @@ namespace EmEn
 			TraceInfo{ClassId} << "Window close requested." "\n";
 		}
 
-		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
+		auto * _this = Window::fromHandle(window);
 
 		if ( _this == nullptr )
 		{
@@ -1798,7 +1830,7 @@ namespace EmEn
 			TraceInfo{ClassId} << "Window is " << ( focused == GLFW_TRUE ? "focused" : "blurred" ) << "." "\n";
 		}
 
-		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
+		auto * _this = Window::fromHandle(window);
 
 		if ( _this == nullptr )
 		{
@@ -1816,7 +1848,7 @@ namespace EmEn
 			TraceInfo{ClassId} << "Window is " << ( hidden == GLFW_TRUE ? "hidden" : "visible" ) << "." "\n";
 		}
 
-		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
+		auto * _this = Window::fromHandle(window);
 
 		if ( _this == nullptr )
 		{
@@ -1834,7 +1866,7 @@ namespace EmEn
 			TraceInfo{ClassId} << "Window is " << ( maximized == GLFW_TRUE ? "maximized" : "minimized" ) << "." "\n";
 		}
 
-		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
+		auto * _this = Window::fromHandle(window);
 
 		if ( _this == nullptr )
 		{
@@ -1852,7 +1884,7 @@ namespace EmEn
 			TraceInfo{ClassId} << "Window scale changed to X:" << xScale << ", Y:" << yScale << "." "\n";
 		}
 
-		auto * _this = static_cast< Window * >(glfwGetWindowUserPointer(window));
+		auto * _this = Window::fromHandle(window);
 
 		if ( _this == nullptr )
 		{

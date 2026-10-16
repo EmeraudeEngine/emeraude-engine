@@ -478,7 +478,7 @@ struct MonitorDevice {
 
 **Accessor**: `monitorDevices()` returns `const StaticVector< MonitorDevice, 16 > &` (stack-allocated, no heap pressure during hot-plug).
 
-**Hot-plug**: `refreshMonitorDevices()` called on GLFW monitor callback. Observers receive `OSMonitorConfigurationChanged` notification. Uses static `s_instance` pointer (GLFW monitor callbacks have no user pointer).
+**Hot-plug**: `refreshMonitorDevices()` called on GLFW monitor callback. Observers receive `OSMonitorConfigurationChanged` notification. Uses the static `s_monitorCallbackReceiver`, set and cleared only by the `m_monitorCallbackRegistration` token (GLFW monitor callbacks have no user pointer); the window callbacks reach the `Window` through its `CallbackContext`, the window user pointer (`docs/subsystems/input/02-listener-registrations-and-callbacks.md`).
 
 **Implementation**: GLFW 3.4+ API (cross-platform: `glfwGetMonitors`, `glfwGetVideoMode`, `glfwGetMonitorContentScale`, `glfwSetMonitorCallback`).
 

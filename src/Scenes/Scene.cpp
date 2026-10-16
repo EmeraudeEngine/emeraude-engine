@@ -341,8 +341,8 @@ namespace EmEn::Scenes
 			TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
 		}
 
-		inputManager.addKeyboardListener(&m_nodeController);
-		inputManager.addPointerListener(&m_orbitController);
+		m_nodeControllerRegistration = inputManager.addKeyboardListener(&m_nodeController);
+		m_orbitControllerRegistration = inputManager.addPointerListener(&m_orbitController);
 
 		this->wakeupAllEntities();
 
@@ -350,17 +350,17 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::disable (Input::Manager & inputManager) noexcept
+	Scene::disable () noexcept
 	{
 		/* FIXME: Find a better way to stop the node controller! */
 		m_nodeController.releaseNode();
 		m_nodeController.disconnectDevice();
 
-		inputManager.removeKeyboardListener(&m_nodeController);
+		m_nodeControllerRegistration.reset();
 
 		m_orbitController.releaseNode();
 
-		inputManager.removePointerListener(&m_orbitController);
+		m_orbitControllerRegistration.reset();
 
 		this->suspendAllEntities();
 	}

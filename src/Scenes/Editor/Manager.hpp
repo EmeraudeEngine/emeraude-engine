@@ -42,6 +42,7 @@
 #include "Input/PointerListenerInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "ScopedRegistration.hpp"
 #include "Gizmo/Abstract.hpp"
 #include "Gizmo/Rotate.hpp"
 #include "Gizmo/Scale.hpp"
@@ -446,6 +447,9 @@ namespace EmEn::Scenes::Editor
 			Input::Manager & m_inputManager;
 			Resources::Manager & m_resourceManager;
 			Notifier & m_notifier;
+			/* The keyboard and pointer registrations with the input manager (constructor): their end unregisters. */
+			Base::ScopedRegistration m_keyboardRegistration;
+			Base::ScopedRegistration m_pointerRegistration;
 
 			/* Scene context. */
 			Scene * m_scene{nullptr};

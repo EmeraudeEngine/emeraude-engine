@@ -31,8 +31,10 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <filesystem>
 #include <ranges>
 #include <utility>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "GLFW/glfw3.h"
@@ -59,6 +61,9 @@ namespace EmEn::Input
 	Manager::linkWindowCallbacks (bool enableKeyboard, bool enablePointer) noexcept
 	{
 		auto * window = m_window.handle();
+
+		/* NOTE: The input callbacks reach this manager through the window's callback context (no static instance). */
+		m_windowAttachment = m_window.attachInputManager(*this);
 
 		/* Keyboard listeners. */
 		if ( enableKeyboard )
@@ -95,7 +100,24 @@ namespace EmEn::Input
 		/* Misc. listeners. */
 		/* TODO: Make it optional */
 		glfwSetDropCallback(window, dropCallback);
-		glfwSetJoystickCallback(joystickCallback);
+
+		/* NOTE: The joystick callback carries no window: its receiver is a static, set and cleared by the registration. */
+		if ( s_joystickCallbackReceiver == nullptr )
+		{
+			s_joystickCallbackReceiver = this;
+
+			glfwSetJoystickCallback(joystickCallback);
+
+			m_joystickCallbackRegistration = ScopedRegistration{[] () {
+				glfwSetJoystickCallback(nullptr);
+
+				s_joystickCallbackReceiver = nullptr;
+			}};
+		}
+		else
+		{
+			Tracer::error(ClassId, "Another input manager already receives the joystick events : this one will not.");
+		}
 
 		m_windowLinked = true;
 	}
@@ -122,7 +144,9 @@ namespace EmEn::Input
 
 		/* Misc. listeners. */
 		glfwSetDropCallback(window, nullptr);
-		glfwSetJoystickCallback(nullptr);
+
+		m_joystickCallbackRegistration.reset();
+		m_windowAttachment.reset();
 
 		m_windowLinked = false;
 	}
@@ -205,11 +229,19 @@ namespace EmEn::Input
 		m_isListeningPointer = state;
 	}
 
+	Manager *
+	Manager::fromHandle (GLFWwindow * handle) noexcept
+	{
+		const auto * context = Window::callbackContext(handle);
+
+		return context != nullptr ? context->inputManager : nullptr;
+	}
+
 	std::array< float, 2 >
-	Manager::getPointerLocation (GLFWwindow * window) noexcept
+	Manager::pointerLocation (GLFWwindow * window) const noexcept
 	{
 		/* NOTE: If the pointer is locked (mouse view), we don't care about computing the position. */
-		if ( s_instance->isPointerLocked() )
+		if ( this->isPointerLocked() )
 		{
 			return {0.5F, 0.5F};
 		}
@@ -219,17 +251,56 @@ namespace EmEn::Input
 
 		glfwGetCursorPos(window, &xPosition, &yPosition);
 
-		if ( s_instance->m_pointerCoordinatesScalingEnabled )
+		if ( m_pointerCoordinatesScalingEnabled )
 		{
-			xPosition *= s_instance->m_pointerScalingFactors[0];
-			yPosition *= s_instance->m_pointerScalingFactors[1];
+			xPosition *= m_pointerScalingFactors[0];
+			yPosition *= m_pointerScalingFactors[1];
 		}
 
 		return {static_cast< float >(xPosition), static_cast< float >(yPosition)};
 	}
 
 	void
-	Manager::keyCallback (GLFWwindow * /*handle*/, int key, int scancode, int action, int modifiers) noexcept
+	Manager::dispatchKeyEvent (int32_t key, int32_t scancode, int32_t action, int32_t modifiers) noexcept
+	{
+		this->dispatch(m_keyboardListeners, [key, scancode, action, modifiers] (KeyboardListenerInterface & listener) {
+			if ( !listener.isListeningKeyboard() )
+			{
+				return false;
+			}
+
+			switch ( action )
+			{
+				case GLFW_PRESS :
+					return listener.onKeyPress(key, scancode, modifiers, false);
+
+				case GLFW_REPEAT :
+					return listener.onKeyPress(key, scancode, modifiers, true);
+
+				case GLFW_RELEASE :
+					return listener.onKeyRelease(key, scancode, modifiers);
+
+				default:
+					return false;
+			}
+		});
+	}
+
+	void
+	Manager::dispatchCharacter (uint32_t codepoint) noexcept
+	{
+		this->dispatch(m_keyboardListeners, [codepoint] (KeyboardListenerInterface & listener) {
+			if ( !listener.isListeningKeyboard() || !listener.isTextModeEnabled() )
+			{
+				return false;
+			}
+
+			return listener.onCharacterType(codepoint);
+		});
+	}
+
+	void
+	Manager::keyCallback (GLFWwindow * handle, int key, int scancode, int action, int modifiers) noexcept
 	{
 		if constexpr ( KeyboardInputDebugEnabled )
 		{
@@ -260,42 +331,14 @@ namespace EmEn::Input
 				break;
 		}
 
-		for ( const auto & listener : s_instance->m_keyboardListeners )
+		if ( auto * manager = fromHandle(handle); manager != nullptr )
 		{
-			if ( !listener->isListeningKeyboard() )
-			{
-				continue;
-			}
-
-			auto eventProcessed = false;
-
-			switch ( action )
-			{
-				case GLFW_PRESS :
-					eventProcessed = listener->onKeyPress(key, scancode, modifiers, false);
-					break;
-
-				case GLFW_REPEAT :
-					eventProcessed = listener->onKeyPress(key, scancode, modifiers, true);
-					break;
-
-				case GLFW_RELEASE :
-					eventProcessed = listener->onKeyRelease(key, scancode, modifiers);
-					break;
-
-				default:
-					break;
-			}
-			
-			if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
-			{
-				break;
-			}
+			manager->dispatchKeyEvent(key, scancode, action, modifiers);
 		}
 	}
 
 	void
-	Manager::charCallback (GLFWwindow * /*handle*/, unsigned int codepoint) noexcept
+	Manager::charCallback (GLFWwindow * handle, unsigned int codepoint) noexcept
 	{
 		if constexpr ( KeyboardInputDebugEnabled )
 		{
@@ -304,24 +347,14 @@ namespace EmEn::Input
 				"Unicode: " << codepoint << '\n';
 		}
 
-		for ( const auto & listener : s_instance->m_keyboardListeners )
+		if ( auto * manager = fromHandle(handle); manager != nullptr )
 		{
-			if ( !listener->isListeningKeyboard() || !listener->isTextModeEnabled() )
-			{
-				continue;
-			}
-
-			const auto eventProcessed = listener->onCharacterType(codepoint);
-
-			if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
-			{
-				break;
-			}
+			manager->dispatchCharacter(codepoint);
 		}
 	}
 
 	void
-	Manager::charModsCallback (GLFWwindow * /*handle*/, unsigned int codepoint, int modifiers) noexcept
+	Manager::charModsCallback (GLFWwindow * handle, unsigned int codepoint, int modifiers) noexcept
 	{
 		if constexpr ( KeyboardInputDebugEnabled )
 		{
@@ -331,19 +364,9 @@ namespace EmEn::Input
 				"Keyboard modifiers: " << getModifierListString(modifiers) << "\n";
 		}
 
-		for ( const auto & listener : s_instance->m_keyboardListeners )
+		if ( auto * manager = fromHandle(handle); manager != nullptr )
 		{
-			if ( !listener->isListeningKeyboard() || !listener->isTextModeEnabled() )
-			{
-				continue;
-			}
-
-			const auto eventProcessed = listener->onCharacterType(codepoint);
-
-			if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
-			{
-				break;
-			}
+			manager->dispatchCharacter(codepoint);
 		}
 	}
 
@@ -351,39 +374,34 @@ namespace EmEn::Input
 	Manager::dispatchRelativePointerPosition (double xPosition, double yPosition) noexcept
 	{
 		/* NOTE: Compute the relative position from the last one. */
-		const auto deltaX = static_cast< float >(xPosition - s_instance->m_lastPointerCoordinates[0]);
-		const auto deltaY = static_cast< float >(yPosition - s_instance->m_lastPointerCoordinates[1]);
+		const auto deltaX = static_cast< float >(xPosition - m_lastPointerCoordinates[0]);
+		const auto deltaY = static_cast< float >(yPosition - m_lastPointerCoordinates[1]);
 
 		if constexpr ( PointerHeavyInputDebugEnabled )
 		{
 			TraceDebug{ClassId} << "[RelativeMode] X:" << deltaX << ", Y:" << deltaY << '\n';
 		}
 
-		if ( s_instance->m_moveEventsTracking != nullptr )
+		if ( m_moveEventsTracking != nullptr )
 		{
-			s_instance->m_moveEventsTracking->onPointerMove(deltaX, deltaY);
+			m_moveEventsTracking->onPointerMove(deltaX, deltaY);
 		}
 		else
 		{
-			for ( const auto & listener : s_instance->m_pointerListeners )
-			{
+			this->dispatch(m_pointerListeners, [deltaX, deltaY] (PointerListenerInterface & listener) {
 				/* NOTE: If the listener is disabled or in absolute mode, we jump to the next listener. */
-				if ( !listener->isListeningPointer() || listener->isAbsoluteModeEnabled() )
+				if ( !listener.isListeningPointer() || listener.isAbsoluteModeEnabled() )
 				{
-					continue;
+					return false;
 				}
 
-				/* NOTE: If the event is processed and the listener blocks events propagation, we stop the loop. */
-				if ( listener->onPointerMove(deltaX, deltaY) && !listener->isPropagatingProcessedEvents() )
-				{
-					break;
-				}
-			}
+				return listener.onPointerMove(deltaX, deltaY);
+			});
 		}
 
 		/* Save the last position. */
-		s_instance->m_lastPointerCoordinates[0] = xPosition;
-		s_instance->m_lastPointerCoordinates[1] = yPosition;
+		m_lastPointerCoordinates[0] = xPosition;
+		m_lastPointerCoordinates[1] = yPosition;
 	}
 
 	void
@@ -392,31 +410,46 @@ namespace EmEn::Input
 		const auto pointerX = static_cast< float >(xPosition);
 		const auto pointerY = static_cast< float >(yPosition);
 
-		if ( s_instance->m_moveEventsTracking != nullptr )
+		if ( m_moveEventsTracking != nullptr )
 		{
-			s_instance->m_moveEventsTracking->onPointerMove(pointerX, pointerY);
+			m_moveEventsTracking->onPointerMove(pointerX, pointerY);
+
+			return;
+		}
+
+		this->dispatch(m_pointerListeners, [pointerX, pointerY] (PointerListenerInterface & listener) {
+			/* NOTE: If the listener is disabled or in relative mode, we jump to the next listener. */
+			if ( !listener.isListeningPointer() || listener.isRelativeModeEnabled() )
+			{
+				return false;
+			}
+
+			return listener.onPointerMove(pointerX, pointerY);
+		});
+	}
+
+	void
+	Manager::processCursorPosition (double xPosition, double yPosition) noexcept
+	{
+		if ( m_pointerCoordinatesScalingEnabled )
+		{
+			xPosition *= m_pointerScalingFactors[0];
+			yPosition *= m_pointerScalingFactors[1];
+		}
+
+		/* If the pointer is locked, we serve the listener in relative mode ('mouse look' like an FPS). */
+		if ( this->isPointerLocked() )
+		{
+			this->dispatchRelativePointerPosition(xPosition, yPosition);
 		}
 		else
 		{
-			for ( const auto & listener : s_instance->m_pointerListeners )
-			{
-				/* NOTE: If the listener is disabled or in relative mode, we jump to the next listener. */
-				if ( !listener->isListeningPointer() || listener->isRelativeModeEnabled() )
-				{
-					continue;
-				}
-
-				/* NOTE: If the event is processed and the listener blocks events propagation, we stop the loop. */
-				if ( listener->onPointerMove(pointerX, pointerY) && !listener->isPropagatingProcessedEvents() )
-				{
-					break;
-				}
-			}
+			this->dispatchAbsolutePointerPosition(xPosition, yPosition);
 		}
 	}
 
 	void
-	Manager::cursorPositionCallback (GLFWwindow * /*window*/, double xPosition, double yPosition) noexcept
+	Manager::cursorPositionCallback (GLFWwindow * handle, double xPosition, double yPosition) noexcept
 	{
 		if constexpr ( PointerHeavyInputDebugEnabled )
 		{
@@ -425,25 +458,52 @@ namespace EmEn::Input
 				"[AbsoluteMode] X:" << xPosition << ", Y:" << yPosition << '\n';
 		}
 
-		if ( s_instance->m_pointerCoordinatesScalingEnabled )
+		if ( auto * manager = fromHandle(handle); manager != nullptr )
 		{
-			xPosition *= s_instance->m_pointerScalingFactors[0];
-			yPosition *= s_instance->m_pointerScalingFactors[1];
-		}
-
-		/* If the pointer is locked, we serve the listener in relative mode ('mouse look' like an FPS). */
-		if ( s_instance->isPointerLocked() )
-		{
-			Manager::dispatchRelativePointerPosition(xPosition, yPosition);
-		}
-		else
-		{
-			Manager::dispatchAbsolutePointerPosition(xPosition, yPosition);
+			manager->processCursorPosition(xPosition, yPosition);
 		}
 	}
 
 	void
-	Manager::cursorEnterCallback (GLFWwindow * window, int entered) noexcept
+	Manager::processCursorEnter (GLFWwindow * window, int entered) noexcept
+	{
+		/* NOTE: Retrieve the pointer position to set the entering/leaving coordinates. */
+		const auto position = this->pointerLocation(window);
+
+		/* NOTE: This must always be processed to avoid bug. */
+		if ( m_moveEventsTracking != nullptr )
+		{
+			if ( entered == GLFW_TRUE )
+			{
+				m_moveEventsTracking->onPointerEnter(position[0], position[1]);
+
+				if ( !m_pointerController.isAnyButtonPressed() )
+				{
+					m_moveEventsTracking = nullptr;
+				}
+			}
+			else
+			{
+				m_moveEventsTracking->onPointerLeave(position[0], position[1]);
+			}
+
+			return;
+		}
+
+		this->dispatch(m_pointerListeners, [entered, &position] (PointerListenerInterface & listener) {
+			if ( !listener.isListeningPointer() )
+			{
+				return false;
+			}
+
+			return entered == GLFW_TRUE ?
+				listener.onPointerEnter(position[0], position[1]) :
+				listener.onPointerLeave(position[0], position[1]);
+		});
+	}
+
+	void
+	Manager::cursorEnterCallback (GLFWwindow * handle, int entered) noexcept
 	{
 		if constexpr ( PointerInputDebugEnabled )
 		{
@@ -452,52 +512,17 @@ namespace EmEn::Input
 				"Action: " << ( entered == GLFW_TRUE ? "entering" : "leaving" ) <<  "\n";
 		}
 
-		/* NOTE: Retrieve the pointer position to set the entering/leaving coordinates. */
-		const auto position = Manager::getPointerLocation(window);
-
-		/* NOTE: This must always be processed to avoid bug. */
-		if ( s_instance->m_moveEventsTracking != nullptr )
+		if ( auto * manager = fromHandle(handle); manager != nullptr )
 		{
-			if ( entered == GLFW_TRUE )
-			{
-				s_instance->m_moveEventsTracking->onPointerEnter(position[0], position[1]);
-
-				if ( !s_instance->m_pointerController.isAnyButtonPressed() )
-				{
-					s_instance->m_moveEventsTracking = nullptr;
-				}
-			}
-			else
-			{
-				s_instance->m_moveEventsTracking->onPointerLeave(position[0], position[1]);
-			}
-
-			return;
-		}
-
-		for ( const auto & listener : s_instance->m_pointerListeners )
-		{
-			if ( !listener->isListeningPointer() )
-			{
-				continue;
-			}
-
-			const auto eventProcessed = entered == GLFW_TRUE ?
-				listener->onPointerEnter(position[0], position[1]) :
-				listener->onPointerLeave(position[0], position[1]);
-
-			if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
-			{
-				break;
-			}
+			manager->processCursorEnter(handle, entered);
 		}
 	}
 
 	void
-	Manager::mouseButtonCallback (GLFWwindow * window, int button, int action, int modifiers) noexcept
+	Manager::processMouseButton (GLFWwindow * window, int button, int action, int modifiers) noexcept
 	{
 		/* NOTE: Retrieve the pointer position to set the click coordinates. */
-		const auto position = Manager::getPointerLocation(window);
+		const auto position = this->pointerLocation(window);
 
 		if constexpr ( PointerInputDebugEnabled )
 		{
@@ -510,47 +535,68 @@ namespace EmEn::Input
 		}
 
 		/* NOTE: On release, automatically stop the tracking. */
-		if ( s_instance->m_moveEventsTracking != nullptr && action == GLFW_RELEASE )
+		if ( m_moveEventsTracking != nullptr && action == GLFW_RELEASE )
 		{
-			s_instance->m_moveEventsTracking->onButtonRelease(position[0], position[1], button, modifiers);
-			s_instance->m_moveEventsTracking = nullptr;
+			auto * tracked = std::exchange(m_moveEventsTracking, nullptr);
+
+			tracked->onButtonRelease(position[0], position[1], button, modifiers);
 
 			return;
 		}
 
-		for ( const auto & listener : s_instance->m_pointerListeners )
-		{
-			if ( !listener->isListeningPointer() )
+		this->dispatch(m_pointerListeners, [this, &position, button, action, modifiers] (PointerListenerInterface & listener) {
+			if ( !listener.isListeningPointer() )
 			{
-				continue;
+				return false;
 			}
-
-			auto eventProcessed = false;
 
 			if ( action == GLFW_PRESS )
 			{
 				/* NOTE: Check if we need to lock this listener to track move events. */
-				if ( !listener->isAbsoluteModeEnabled() && listener->isListenerLockedOnMoveEvents() )
+				if ( !listener.isAbsoluteModeEnabled() && listener.isListenerLockedOnMoveEvents() )
 				{
-					s_instance->m_moveEventsTracking = listener;
+					m_moveEventsTracking = &listener;
 				}
 
-				eventProcessed = listener->onButtonPress(position[0], position[1], button, modifiers);
-			}
-			else
-			{
-				eventProcessed = listener->onButtonRelease(position[0], position[1], button, modifiers);
+				return listener.onButtonPress(position[0], position[1], button, modifiers);
 			}
 
-			if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
-			{
-				break;
-			}
+			return listener.onButtonRelease(position[0], position[1], button, modifiers);
+		});
+	}
+
+	void
+	Manager::mouseButtonCallback (GLFWwindow * handle, int button, int action, int modifiers) noexcept
+	{
+		if ( auto * manager = fromHandle(handle); manager != nullptr )
+		{
+			manager->processMouseButton(handle, button, action, modifiers);
 		}
 	}
 
 	void
-	Manager::scrollCallback (GLFWwindow * window, double xOffset, double yOffset) noexcept
+	Manager::dispatchMouseWheel (const std::array< float, 2 > & position, float xOffset, float yOffset, int32_t modifiers) noexcept
+	{
+		if ( m_moveEventsTracking != nullptr )
+		{
+			/* NOTE: If the move is locked on one listener, checks for listening or relative mode is already done. */
+			m_moveEventsTracking->onMouseWheel(position[0], position[1], xOffset, yOffset, modifiers);
+
+			return;
+		}
+
+		this->dispatch(m_pointerListeners, [&position, xOffset, yOffset, modifiers] (PointerListenerInterface & listener) {
+			if ( !listener.isListeningPointer() )
+			{
+				return false;
+			}
+
+			return listener.onMouseWheel(position[0], position[1], xOffset, yOffset, modifiers);
+		});
+	}
+
+	void
+	Manager::scrollCallback (GLFWwindow * handle, double xOffset, double yOffset) noexcept
 	{
 		if constexpr ( PointerHeavyInputDebugEnabled )
 		{
@@ -559,66 +605,55 @@ namespace EmEn::Input
 				"Offset X:" << xOffset << ", Y:" << yOffset << '\n';
 		}
 
-		/* NOTE: Retrieve the pointer position to set the scroll coordinates. */
-		const auto position = Manager::getPointerLocation(window);
+		auto * manager = fromHandle(handle);
 
-		const auto xOffsetF = static_cast< float >(xOffset);
-		const auto yOffsetF = static_cast< float >(yOffset);
+		if ( manager == nullptr )
+		{
+			return;
+		}
+
+		/* NOTE: Retrieve the pointer position to set the scroll coordinates. */
+		const auto position = manager->pointerLocation(handle);
 
 		/* NOTE: Retrieve keyboard modifiers (Ctrl, Shift, Alt, Super) during scroll */
 		int32_t modifiers = 0;
-		const auto leftCtrl = glfwGetKey(window, GLFW_KEY_LEFT_CONTROL);
-		const auto rightCtrl = glfwGetKey(window, GLFW_KEY_RIGHT_CONTROL);
-		const auto leftShift = glfwGetKey(window, GLFW_KEY_LEFT_SHIFT);
-		const auto rightShift = glfwGetKey(window, GLFW_KEY_RIGHT_SHIFT);
 
-		if ( leftCtrl == GLFW_PRESS || rightCtrl == GLFW_PRESS )
+		if ( glfwGetKey(handle, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS || glfwGetKey(handle, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS )
 		{
 			modifiers |= GLFW_MOD_CONTROL;
 		}
-		if ( leftShift == GLFW_PRESS || rightShift == GLFW_PRESS )
+
+		if ( glfwGetKey(handle, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS || glfwGetKey(handle, GLFW_KEY_RIGHT_SHIFT) == GLFW_PRESS )
 		{
 			modifiers |= GLFW_MOD_SHIFT;
 		}
-		if ( glfwGetKey(window, GLFW_KEY_LEFT_ALT) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS )
+
+		if ( glfwGetKey(handle, GLFW_KEY_LEFT_ALT) == GLFW_PRESS || glfwGetKey(handle, GLFW_KEY_RIGHT_ALT) == GLFW_PRESS )
 		{
 			modifiers |= GLFW_MOD_ALT;
 		}
-		if ( glfwGetKey(window, GLFW_KEY_LEFT_SUPER) == GLFW_PRESS || glfwGetKey(window, GLFW_KEY_RIGHT_SUPER) == GLFW_PRESS )
+
+		if ( glfwGetKey(handle, GLFW_KEY_LEFT_SUPER) == GLFW_PRESS || glfwGetKey(handle, GLFW_KEY_RIGHT_SUPER) == GLFW_PRESS )
 		{
 			modifiers |= GLFW_MOD_SUPER;
 		}
 
-		if ( s_instance->m_moveEventsTracking != nullptr )
-		{
-			/* NOTE: If the move is locked on one listener, checks for listening or relative mode is already done. */
-			s_instance->m_moveEventsTracking->onMouseWheel(position[0], position[1], xOffsetF, yOffsetF, modifiers);
-		}
-		else
-		{
-			for ( const auto & listener : s_instance->m_pointerListeners )
-			{
-				if ( !listener->isListeningPointer() )
-				{
-					continue;
-				}
-
-				const auto eventProcessed = listener->onMouseWheel(position[0], position[1], xOffsetF, yOffsetF, modifiers);
-
-				if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
-				{
-					break;
-				}
-			}
-		}
+		manager->dispatchMouseWheel(position, static_cast< float >(xOffset), static_cast< float >(yOffset), modifiers);
 	}
 
 	void
-	Manager::dropCallback (GLFWwindow * /*handle*/, int count, const char * * paths) noexcept
+	Manager::dropCallback (GLFWwindow * handle, int count, const char * * paths) noexcept
 	{
 		if constexpr ( WindowEventsDebugEnabled )
 		{
 			TraceDebug{ClassId} << count << " files has been dropped into the window." "\n";
+		}
+
+		auto * manager = fromHandle(handle);
+
+		if ( manager == nullptr )
+		{
+			return;
 		}
 
 		std::vector< std::filesystem::path > fsPaths;
@@ -642,20 +677,13 @@ namespace EmEn::Input
 		/* NOTE: Only send existing files. */
 		if ( !fsPaths.empty() )
 		{
-			s_instance->notify(DroppedFiles, fsPaths);
+			manager->notify(DroppedFiles, fsPaths);
 		}
 	}
 
 	void
-	Manager::joystickCallback (int jid, int event) noexcept
+	Manager::processJoystickEvent (int jid, int event) noexcept
 	{
-		if constexpr ( PointerInputDebugEnabled )
-		{
-			TraceDebug{ClassId} <<
-				"Joystick/gamepad configuration changed!" "\n"
-				"Device ID #" << jid << " is " << ( event == GLFW_CONNECTED ? "connected" : "disconnected" ) << "." "\n";
-		}
-
 		switch ( event )
 		{
 			case GLFW_CONNECTED :
@@ -663,13 +691,13 @@ namespace EmEn::Input
 				{
 					TraceInfo{ClassId} << "Gamepad '" << glfwGetGamepadName(jid) << "' (GUID:" <<  glfwGetJoystickGUID(jid) << ") connected at slot #" << jid << " !";
 
-					s_instance->m_gamepadIDs.emplace(jid);
+					m_gamepadIDs.emplace(jid);
 				}
 				else
 				{
 					TraceInfo{ClassId} << "Joystick '" << glfwGetJoystickName(jid) << "' (GUID:" <<  glfwGetJoystickGUID(jid) << ") connected at slot #" << jid << " !";
 
-					s_instance->m_joystickIDs.emplace(jid);
+					m_joystickIDs.emplace(jid);
 				}
 				break;
 
@@ -685,13 +713,29 @@ namespace EmEn::Input
 				GamepadController::clearDeviceState(jid);
 
 				/* We remove the ID from both ID sets. */
-				s_instance->m_joystickIDs.erase(jid);
-				s_instance->m_gamepadIDs.erase(jid);
+				m_joystickIDs.erase(jid);
+				m_gamepadIDs.erase(jid);
 			}
 				break;
 
 			default :
 				break;
+		}
+	}
+
+	void
+	Manager::joystickCallback (int jid, int event) noexcept
+	{
+		if constexpr ( PointerInputDebugEnabled )
+		{
+			TraceDebug{ClassId} <<
+				"Joystick/gamepad configuration changed!" "\n"
+				"Device ID #" << jid << " is " << ( event == GLFW_CONNECTED ? "connected" : "disconnected" ) << "." "\n";
+		}
+
+		if ( s_joystickCallbackReceiver != nullptr )
+		{
+			s_joystickCallbackReceiver->processJoystickEvent(jid, event);
 		}
 	}
 
@@ -868,48 +912,101 @@ namespace EmEn::Input
 		glfwPostEmptyEvent();
 	}
 
-	void
+	ScopedRegistration
 	Manager::addKeyboardListener (KeyboardListenerInterface * listener) noexcept
 	{
-		if ( std::ranges::binary_search(std::as_const(m_keyboardListeners), listener) )
+		if ( listener == nullptr )
+		{
+			Tracer::error(ClassId, "A null keyboard listener cannot be added !");
+
+			return {};
+		}
+
+		/* ⚠️ `find`, NOT `binary_search`: the list is insertion-ordered (newest first), never sorted. */
+		if ( std::ranges::find(m_keyboardListeners, listener) != m_keyboardListeners.cend() || std::ranges::find(m_pendingKeyboardListeners, listener) != m_pendingKeyboardListeners.cend() )
 		{
 			TraceWarning{ClassId} << "Listener @" << listener << " already added!";
 
-			return;
+			return {};
 		}
 
-		m_keyboardListeners.emplace(m_keyboardListeners.begin(), listener);
+		if ( m_dispatchDepth > 0 )
+		{
+			m_pendingKeyboardListeners.push_back(listener);
+		}
+		else
+		{
+			m_keyboardListeners.emplace(m_keyboardListeners.begin(), listener);
+		}
+
+		return ScopedRegistration{[this, listener] () {
+			this->removeKeyboardListener(listener);
+		}};
 	}
 
 	void
 	Manager::removeKeyboardListener (KeyboardListenerInterface * listener) noexcept
 	{
-		m_keyboardListeners.erase(std::ranges::remove(m_keyboardListeners, listener).begin(), m_keyboardListeners.end());
-	}
+		std::erase(m_pendingKeyboardListeners, listener);
 
-	void
-	Manager::removeAllKeyboardListeners () noexcept
-	{
-		m_keyboardListeners.clear();
-	}
-
-	void
-	Manager::addPointerListener (PointerListenerInterface * listener, bool priority) noexcept
-	{
-		/* ⚠️ `find`, NOT `binary_search`: this vector is insertion-ordered and never sorted, so a
-		 * binary search over it is meaningless — the duplicate guard it was written as could miss a
-		 * real duplicate or invent one, at the compiler's discretion. */
-		if ( std::ranges::find(m_pointerListeners, listener) != m_pointerListeners.cend() )
+		if ( m_dispatchDepth > 0 )
 		{
-			TraceWarning{ClassId} << "Listener @" << listener << " already added!";
+			/* NOTE: A dispatch walks the list: the slot is emptied, the list compacted when the dispatch ends. */
+			std::ranges::replace(m_keyboardListeners, listener, nullptr);
+
+			m_listenerSlotsReleased = true;
 
 			return;
 		}
 
+		std::erase(m_keyboardListeners, listener);
+	}
+
+	ScopedRegistration
+	Manager::addPointerListener (PointerListenerInterface * listener, bool priority) noexcept
+	{
+		if ( listener == nullptr )
+		{
+			Tracer::error(ClassId, "A null pointer listener cannot be added !");
+
+			return {};
+		}
+
+		/* ⚠️ `find`, NOT `binary_search`: this vector is insertion-ordered and never sorted, so a
+		 * binary search over it is meaningless — the duplicate guard it was written as could miss a
+		 * real duplicate or invent one, at the compiler's discretion. */
+		const auto pending = std::ranges::find_if(m_pendingPointerListeners, [listener] (const auto & entry) {
+			return entry.first == listener;
+		});
+
+		if ( std::ranges::find(m_pointerListeners, listener) != m_pointerListeners.cend() || pending != m_pendingPointerListeners.cend() )
+		{
+			TraceWarning{ClassId} << "Listener @" << listener << " already added!";
+
+			return {};
+		}
+
+		if ( m_dispatchDepth > 0 )
+		{
+			m_pendingPointerListeners.emplace_back(listener, priority);
+		}
+		else
+		{
+			this->insertPointerListener(listener, priority);
+		}
+
+		return ScopedRegistration{[this, listener] () {
+			this->removePointerListener(listener);
+		}};
+	}
+
+	void
+	Manager::insertPointerListener (PointerListenerInterface * listener, bool priority) noexcept
+	{
 		/* ⚠️⚠️ THE INVARIANT: the priority listener, when there is one, sits at index 0 and every
-		 * other listener is inserted just after it. That is why the five dispatch loops below need
-		 * no special case — they simply walk the vector, and none of them can be forgotten.
-		 * Everything else keeps the newest-first order it always had. */
+		 * other listener is inserted just after it. That is why the dispatch loops need no special
+		 * case — they simply walk the vector, and none of them can be forgotten. Everything else
+		 * keeps the newest-first order it always had. */
 		if ( priority )
 		{
 			if ( m_priorityPointerListener != nullptr && m_priorityPointerListener != listener )
@@ -937,17 +1034,50 @@ namespace EmEn::Input
 			m_priorityPointerListener = nullptr;
 		}
 
-		m_pointerListeners.erase(std::ranges::remove(m_pointerListeners, listener).begin(), m_pointerListeners.end());
+		/* NOTE: A tracked listener must never be served once removed. */
+		if ( m_moveEventsTracking == listener )
+		{
+			m_moveEventsTracking = nullptr;
+		}
+
+		std::erase_if(m_pendingPointerListeners, [listener] (const auto & entry) {
+			return entry.first == listener;
+		});
+
+		if ( m_dispatchDepth > 0 )
+		{
+			/* NOTE: A dispatch walks the list: the slot is emptied, the list compacted when the dispatch ends. */
+			std::ranges::replace(m_pointerListeners, listener, nullptr);
+
+			m_listenerSlotsReleased = true;
+
+			return;
+		}
+
+		std::erase(m_pointerListeners, listener);
 	}
 
 	void
-	Manager::removeAllPointerListeners () noexcept
+	Manager::applyPendingListenerChanges () noexcept
 	{
-		/* Released with the listeners: a dangling slot would make every later insertion skip index 0
-		 * to protect a priority listener that no longer exists. */
-		m_priorityPointerListener = nullptr;
+		if ( m_listenerSlotsReleased )
+		{
+			std::erase(m_keyboardListeners, nullptr);
+			std::erase(m_pointerListeners, nullptr);
 
-		m_pointerListeners.clear();
+			m_listenerSlotsReleased = false;
+		}
+
+		/* NOTE: In the order they were requested, as if each had been added at once. */
+		for ( auto * listener : std::exchange(m_pendingKeyboardListeners, {}) )
+		{
+			m_keyboardListeners.emplace(m_keyboardListeners.begin(), listener);
+		}
+
+		for ( const auto & [listener, priority] : std::exchange(m_pendingPointerListeners, {}) )
+		{
+			this->insertPointerListener(listener, priority);
+		}
 	}
 
 	void
@@ -985,103 +1115,38 @@ namespace EmEn::Input
 	void
 	Manager::injectKeyEvent (int32_t key, int32_t modifiers, int32_t action) noexcept
 	{
-		if ( s_instance == nullptr )
-		{
-			return;
-		}
-
-		for ( const auto & listener : s_instance->m_keyboardListeners )
-		{
-			if ( !listener->isListeningKeyboard() )
-			{
-				continue;
-			}
-
-			auto eventProcessed = false;
-
-			switch ( action )
-			{
-				case GLFW_PRESS :
-					eventProcessed = listener->onKeyPress(key, 0, modifiers, false);
-					break;
-
-				case GLFW_REPEAT :
-					eventProcessed = listener->onKeyPress(key, 0, modifiers, true);
-					break;
-
-				case GLFW_RELEASE :
-					eventProcessed = listener->onKeyRelease(key, 0, modifiers);
-					break;
-
-				default:
-					break;
-			}
-
-			if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
-			{
-				break;
-			}
-		}
+		this->dispatchKeyEvent(key, 0, action, modifiers);
 	}
 
 	void
 	Manager::injectMouseClickEvent (float positionX, float positionY, int32_t button, int32_t modifiers, int32_t action) noexcept
 	{
-		if ( s_instance == nullptr )
-		{
-			return;
-		}
-
-		/* NOTE: Copy the listener list before iterating (same reason as keyboard). */
-		const auto pointerListeners = s_instance->m_pointerListeners;
-
-		for ( const auto & listener : pointerListeners )
-		{
-			if ( !listener->isListeningPointer() )
+		this->dispatch(m_pointerListeners, [positionX, positionY, button, modifiers, action] (PointerListenerInterface & listener) {
+			if ( !listener.isListeningPointer() )
 			{
-				continue;
+				return false;
 			}
-
-			auto eventProcessed = false;
 
 			if ( action == GLFW_PRESS )
 			{
-				eventProcessed = listener->onButtonPress(positionX, positionY, button, modifiers);
-			}
-			else
-			{
-				eventProcessed = listener->onButtonRelease(positionX, positionY, button, modifiers);
+				return listener.onButtonPress(positionX, positionY, button, modifiers);
 			}
 
-			if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
-			{
-				break;
-			}
-		}
+			return listener.onButtonRelease(positionX, positionY, button, modifiers);
+		});
 	}
 
 	void
 	Manager::injectPointerMoveEvent (float positionX, float positionY) noexcept
 	{
-		if ( s_instance == nullptr )
-		{
-			return;
-		}
-
-		const auto pointerListeners = s_instance->m_pointerListeners;
-
-		for ( const auto & listener : pointerListeners )
-		{
-			if ( !listener->isListeningPointer() || listener->isRelativeModeEnabled() )
+		this->dispatch(m_pointerListeners, [positionX, positionY] (PointerListenerInterface & listener) {
+			if ( !listener.isListeningPointer() || listener.isRelativeModeEnabled() )
 			{
-				continue;
+				return false;
 			}
 
-			if ( listener->onPointerMove(positionX, positionY) && !listener->isPropagatingProcessedEvents() )
-			{
-				break;
-			}
-		}
+			return listener.onPointerMove(positionX, positionY);
+		});
 	}
 
 	void
@@ -1124,7 +1189,7 @@ namespace EmEn::Input
 				{"key", "The GLFW key code (e.g. 298 for F9, 256 for Escape)."},
 				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
 			},
-			[checkKey] (int32_t key, int32_t modifiers) {
+			[this, checkKey] (int32_t key, int32_t modifiers) {
 				std::string error;
 
 				if ( !checkKey(key, modifiers, error) )
@@ -1132,8 +1197,8 @@ namespace EmEn::Input
 					return Console::CommandResult::error(error);
 				}
 
-				Manager::injectKeyEvent(key, modifiers, GLFW_PRESS);
-				Manager::injectKeyEvent(key, modifiers, GLFW_RELEASE);
+				this->injectKeyEvent(key, modifiers, GLFW_PRESS);
+				this->injectKeyEvent(key, modifiers, GLFW_RELEASE);
 
 				return Console::CommandResult::success("Key event injected.");
 			});
@@ -1144,7 +1209,7 @@ namespace EmEn::Input
 				{"key", "The GLFW key code (e.g. 87 for W)."},
 				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
 			},
-			[checkKey] (int32_t key, int32_t modifiers) {
+			[this, checkKey] (int32_t key, int32_t modifiers) {
 				std::string error;
 
 				if ( !checkKey(key, modifiers, error) )
@@ -1153,7 +1218,7 @@ namespace EmEn::Input
 				}
 
 				KeyboardController::injectKeyState(key, true);
-				Manager::injectKeyEvent(key, modifiers, GLFW_PRESS);
+				this->injectKeyEvent(key, modifiers, GLFW_PRESS);
 
 				return Console::CommandResult::success("Key held.");
 			});
@@ -1163,7 +1228,7 @@ namespace EmEn::Input
 				{"key", "The GLFW key code."},
 				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
 			},
-			[checkKey] (int32_t key, int32_t modifiers) {
+			[this, checkKey] (int32_t key, int32_t modifiers) {
 				std::string error;
 
 				if ( !checkKey(key, modifiers, error) )
@@ -1172,7 +1237,7 @@ namespace EmEn::Input
 				}
 
 				KeyboardController::injectKeyState(key, false);
-				Manager::injectKeyEvent(key, modifiers, GLFW_RELEASE);
+				this->injectKeyEvent(key, modifiers, GLFW_RELEASE);
 
 				return Console::CommandResult::success("Key released.");
 			});
@@ -1236,7 +1301,7 @@ namespace EmEn::Input
 				{"button", "The GLFW mouse button (0 left, 1 right, 2 middle).", 0},
 				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
 			},
-			[checkButton] (float x, float y, int32_t button, int32_t modifiers) {
+			[this, checkButton] (float x, float y, int32_t button, int32_t modifiers) {
 				std::string error;
 
 				if ( !checkButton(button, modifiers, error) )
@@ -1244,8 +1309,8 @@ namespace EmEn::Input
 					return Console::CommandResult::error(error);
 				}
 
-				Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
-				Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
+				this->injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
+				this->injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
 
 				return Console::CommandResult::success("Mouse click injected.");
 			});
@@ -1265,7 +1330,7 @@ namespace EmEn::Input
 				{"button", "The GLFW mouse button (0 left, 1 right, 2 middle).", 0},
 				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
 			},
-			[checkButton] (float x, float y, int32_t button, int32_t modifiers) {
+			[this, checkButton] (float x, float y, int32_t button, int32_t modifiers) {
 				std::string error;
 
 				if ( !checkButton(button, modifiers, error) )
@@ -1273,7 +1338,7 @@ namespace EmEn::Input
 					return Console::CommandResult::error(error);
 				}
 
-				Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
+				this->injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
 
 				return Console::CommandResult::success("Mouse button press injected (it stays DOWN until mouseRelease).");
 			});
@@ -1285,7 +1350,7 @@ namespace EmEn::Input
 				{"button", "The GLFW mouse button (0 left, 1 right, 2 middle).", 0},
 				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
 			},
-			[checkButton] (float x, float y, int32_t button, int32_t modifiers) {
+			[this, checkButton] (float x, float y, int32_t button, int32_t modifiers) {
 				std::string error;
 
 				if ( !checkButton(button, modifiers, error) )
@@ -1293,7 +1358,7 @@ namespace EmEn::Input
 					return Console::CommandResult::error(error);
 				}
 
-				Manager::injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
+				this->injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
 
 				return Console::CommandResult::success("Mouse button release injected.");
 			});
@@ -1303,8 +1368,8 @@ namespace EmEn::Input
 				{"x", "Horizontal position, in PHYSICAL pixels from the left of the framebuffer."},
 				{"y", "Vertical position, in PHYSICAL pixels from the top of the framebuffer."}
 			},
-			[] (float x, float y) {
-				Manager::injectPointerMoveEvent(x, y);
+			[this] (float x, float y) {
+				this->injectPointerMoveEvent(x, y);
 
 				return Console::CommandResult::success("Mouse move injected.");
 			});

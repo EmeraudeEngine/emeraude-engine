@@ -507,7 +507,7 @@ namespace EmEn::Scenes
 			 * destroy samplers/images still referenced by the descriptor set. */
 			m_activeScene->AVConsoleManager().graphicsRenderer().bindlessTextureManager().clearTextureSet(m_activeScene->bindlessTextureSet());
 
-			m_activeScene->disable(m_inputManager);
+			m_activeScene->disable();
 
 			/* ⚠️ The console holds a RAW back-pointer to the child object. A scene going away with
 			 * its stack still registered leaves that pointer dangling, and the next `help` walks it. */

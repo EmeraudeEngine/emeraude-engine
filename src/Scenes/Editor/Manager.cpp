@@ -129,8 +129,8 @@ namespace EmEn::Scenes::Editor
 		m_notifier{notifier}
 	{
 		/* NOTE: Register once. Listening is controlled by enableKeyboardListening/enablePointerListening. */
-		m_inputManager.addKeyboardListener(this);
-		m_inputManager.addPointerListener(this);
+		m_keyboardRegistration = m_inputManager.addKeyboardListener(this);
+		m_pointerRegistration = m_inputManager.addPointerListener(this);
 
 #ifdef IMGUI_ENABLED
 		m_panel = [this] {
@@ -293,8 +293,8 @@ namespace EmEn::Scenes::Editor
 			this->deactivate();
 		}
 
-		m_inputManager.removeKeyboardListener(this);
-		m_inputManager.removePointerListener(this);
+		m_keyboardRegistration.reset();
+		m_pointerRegistration.reset();
 	}
 
 	void

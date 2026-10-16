@@ -40,10 +40,12 @@ class MyController : public KeyboardInterface {
     void onKeyRelease(Key key) override { ... }
 };
 
-// Registration
-MyController controller;
-inputManager.registerKeyboardListener(&controller);
+// Registration: a token, held by the owner, whose end unregisters (Ave Robustus II P4)
+Base::ScopedRegistration m_registration = inputManager.addKeyboardListener(&controller);
 ```
+
+Details (tokens, the deferred removal during a dispatch, the GLFW callback context):
+[`docs/subsystems/input/02-listener-registrations-and-callbacks.md`](../../docs/subsystems/input/02-listener-registrations-and-callbacks.md).
 
 **Usage example**:
 - OverlayManager inherits keyboard/mouse interfaces
@@ -230,7 +232,10 @@ Whether scaling is enabled is decided by **`Core::updatePointerScaling()`** (`Co
   gamepad axis inversion and the gamepad `isButtonReleased()` bug fixed 2026-09-30:
   [`docs/subsystems/input/01-controller-queries-are-a-trust-boundary.md`](../../docs/subsystems/input/01-controller-queries-are-a-trust-boundary.md).
 
-- **Unregistration**: Unregister listeners before destruction
+- **Registrations are tokens** — `addKeyboardListener()` / `addPointerListener()` return a `Base::ScopedRegistration`
+  held by the owner; a dispatch never walks a list that changes; the GLFW callbacks reach the manager through the
+  window's callback context (no static instance):
+  [`docs/subsystems/input/02-listener-registrations-and-callbacks.md`](../../docs/subsystems/input/02-listener-registrations-and-callbacks.md).
 - **No built-in mapping**: Application responsible for action mapping
 - **Dual approach**: Choose events (reactive) or polling (direct) based on need
 - **GLFW dependency**: Input wraps GLFW, follows its limitations/capabilities

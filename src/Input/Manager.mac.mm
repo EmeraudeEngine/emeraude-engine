@@ -45,14 +45,13 @@ namespace EmEn::Input
 	Manager::installMacOSGestureHandlers (GLFWwindow * window) noexcept
 	{
 		/* Install local event monitor for magnification (pinch-to-zoom) gestures. */
+		/* NOTE: The block captures this manager: removeMacOSGestureHandlers() runs before it ends (unlinkWindowCallbacks(),
+		 * and the destructor). A second install replaces the first monitor. */
+		this->removeMacOSGestureHandlers();
+
 		g_magnificationEventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskMagnify
 			handler:^NSEvent * (NSEvent * event)
 			{
-				if ( s_instance == nullptr )
-				{
-					return event;
-				}
-
 				/* Get the magnification delta (positive = zoom in, negative = zoom out). */
 				const auto magnification = [event magnification];
 
@@ -61,39 +60,10 @@ namespace EmEn::Input
 				const auto yOffset = magnification * 50.0;  /* Scale factor to match scroll sensitivity. */
 
 				/* Convert to GLFW coordinates (origin at top-left) */
-				const auto position = getPointerLocation(window);
+				const auto position = this->pointerLocation(window);
 
-				/* Trigger scroll callback with CTRL modifier to simulate pinch-to-zoom */
-				const auto xOffsetF = 0.0F;
-				const auto yOffsetF = static_cast< float >(yOffset);
-				const auto modifiers = GLFW_MOD_CONTROL;  // Mark as Ctrl to indicate zoom gesture
-
-				/* Dispatch to scroll listeners with CTRL modifier. */
-				if ( s_instance->m_moveEventsTracking != nullptr )
-				{
-					s_instance->m_moveEventsTracking->onMouseWheel(
-						position[0], position[1], xOffsetF, yOffsetF, modifiers
-					);
-				}
-				else
-				{
-					for ( const auto & listener : s_instance->m_pointerListeners )
-					{
-						if ( !listener->isListeningPointer() )
-						{
-							continue;
-						}
-
-						const auto eventProcessed = listener->onMouseWheel(
-							position[0], position[1], xOffsetF, yOffsetF, modifiers
-						);
-
-						if ( eventProcessed && !listener->isPropagatingProcessedEvents() )
-						{
-							break;
-						}
-					}
-				}
+				/* Dispatch as a scroll with CTRL, to simulate pinch-to-zoom. */
+				this->dispatchMouseWheel(position, 0.0F, static_cast< float >(yOffset), GLFW_MOD_CONTROL);
 
 				/* Return event to allow normal processing. */
 				return event;

@@ -1206,7 +1206,7 @@ namespace EmEn
 			m_inputManager.enableCopyPointerState(true);
 
 			/* Adds Core keyboard listener to the input manager. */
-			m_inputManager.addKeyboardListener(this);
+			m_coreKeyboardRegistration = m_inputManager.addKeyboardListener(this);
 
 			/* NOTE: Scale the cursor to physical pixels on windowing systems that report it in
 			 * logical/DIP coordinates (macOS, Linux/Wayland), so it stays consistent with the

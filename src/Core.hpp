@@ -145,6 +145,7 @@
 #include "Help/Lexicon.hpp"
 #include "Identification.hpp"
 #include "Input/Manager.hpp"
+#include "ScopedRegistration.hpp"
 #include "Notifier.hpp"
 #include "Overlay/Manager.hpp"
 #include "Physics/Manager.hpp"
@@ -1951,6 +1952,7 @@ namespace EmEn
 			std::vector< ServiceInterface * > m_userServiceEnabled;	   ///< User-registered service pointers.
 			/* Runtime state. */
 			CursorAtlas m_cursorAtlas;						  ///< Custom cursor cache.
+			Base::ScopedRegistration m_coreKeyboardRegistration; ///< Core's keyboard registration with m_inputManager (declared after it: destroyed first).
 			uint64_t m_lifetime{0};							 ///< Total runtime in microseconds.
 			size_t m_cycle{0};								  ///< Main loop iteration count.
 			StartupMode m_startupMode{StartupMode::Continue};   ///< Startup behavior mode.

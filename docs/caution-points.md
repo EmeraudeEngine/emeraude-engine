@@ -3016,7 +3016,9 @@ be forgotten; everything else keeps its newest-first order.
 
 ⚠️ `addPointerListener()` guarded against duplicates with `std::ranges::binary_search` over a vector
 that is **never sorted** — front-insertion guarantees it is not. The guard could miss a real
-duplicate or invent one. Now `std::ranges::find`.
+duplicate or invent one. Now `std::ranges::find` (`addKeyboardListener()` too, since 2026-10-16).
+Registrations are tokens and a dispatch never walks a shrinking list since 2026-10-16:
+`docs/subsystems/input/02-listener-registrations-and-callbacks.md`.
 
 ## Scene Rendering
 

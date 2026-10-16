@@ -51,6 +51,7 @@
 
 /* Local inclusions for usages. */
 #include "Identification.hpp"
+#include "ScopedRegistration.hpp"
 #include "StaticVector.hpp"
 #include "Vulkan/Surface.hpp"
 #if IS_MACOS || IS_WINDOWS
@@ -62,6 +63,11 @@ namespace EmEn
 	namespace Vulkan
 	{
 		class Instance;
+	}
+
+	namespace Input
+	{
+		class Manager;
 	}
 
 	class PrimaryServices;
@@ -292,6 +298,49 @@ namespace EmEn
 			{
 				return m_handle.get();
 			}
+
+			/**
+			 * @brief What a GLFW callback of this window reaches through the window user pointer: GLFW gives each window
+			 * ONE user-pointer slot, owned by the Window (Ave Robustus II P4, owner decision 2026-10-16: no static instance
+			 * for the window callbacks).
+			 */
+			struct CallbackContext final
+			{
+				/** @brief The window (set at construction, never null). */
+				Window * window{nullptr};
+				/** @brief The input manager while it is attached (attachInputManager()), else nullptr. */
+				Input::Manager * inputManager{nullptr};
+			};
+
+			/**
+			 * @brief Returns the callback context of a GLFW window created by a Window.
+			 * @param handle A GLFW window handle (may be nullptr).
+			 * @return CallbackContext * nullptr when the handle is null or carries no context.
+			 * @note Main thread (the GLFW callbacks run on the thread that pumps the events).
+			 */
+			[[nodiscard]]
+			static
+			CallbackContext *
+			callbackContext (GLFWwindow * handle) noexcept
+			{
+				if ( handle == nullptr )
+				{
+					return nullptr;
+				}
+
+				return static_cast< CallbackContext * >(glfwGetWindowUserPointer(handle));
+			}
+
+			/**
+			 * @brief Attaches the input manager to the window's callback context: its GLFW input callbacks reach it there.
+			 * @param inputManager A reference to the input manager.
+			 * @return Base::ScopedRegistration The attachment: its end detaches the manager. Empty when another manager is
+			 * already attached (traced).
+			 * @pre The window outlives the returned token (Core declares the window before the input manager).
+			 * @note Main thread.
+			 */
+			[[nodiscard]]
+			Base::ScopedRegistration attachInputManager (Input::Manager & inputManager) noexcept;
 
 #if IS_MACOS
 			/**
@@ -958,6 +1007,21 @@ namespace EmEn
 			static void windowSizeCallback (GLFWwindow * window, int width, int height) noexcept;
 
 			/**
+			 * @brief Returns the Window a GLFW window callback belongs to, through its callback context.
+			 * @param handle The GLFW window handle given to the callback.
+			 * @return Window * nullptr when the handle carries no context.
+			 */
+			[[nodiscard]]
+			static
+			Window *
+			fromHandle (GLFWwindow * handle) noexcept
+			{
+				const auto * context = callbackContext(handle);
+
+				return context != nullptr ? context->window : nullptr;
+			}
+
+			/**
 			 * @brief Notifies a window position change on the user desktop.
 			 * @param window A pointer to the system window handle.
 			 * @param xPosition The new x position of the window.
@@ -1046,6 +1110,8 @@ namespace EmEn
 			std::string m_title;
 			State m_state{};
 			std::unique_ptr< GLFWwindow, std::function< void (GLFWwindow *) > > m_handle;
+			/* The window user pointer of m_handle: its address is stable for the Window's whole life. */
+			CallbackContext m_callbackContext{.window = this, .inputManager = nullptr};
 			std::unique_ptr< Vulkan::Surface > m_surface;
 #if IS_WINDOWS
 			WNDPROC m_originalWndProc{nullptr};
@@ -1061,6 +1127,8 @@ namespace EmEn
 #endif
 			/* The framebuffer size for the render thread (publishedFramebufferSize()): width in the high 32 bits. */
 			std::atomic< uint64_t > m_publishedFramebufferSize{0};
+			/* The monitor hot-plug callback and its receiver (checkMonitors()): its end uninstalls both. */
+			Base::ScopedRegistration m_monitorCallbackRegistration;
 			bool m_windowLess{false};
 			bool m_saveWindowPropertiesAtExit{false};
 			bool m_isUserResizing{false};
@@ -1072,7 +1140,8 @@ namespace EmEn
 #endif
 			Base::StaticVector< MonitorDevice, 16 > m_monitorDevices;
 
-			/** @brief Static instance pointer for the GLFW monitor callback (no user pointer available on monitor callbacks). */
-			static Window * s_instance;
+			/** @brief The window served by the GLFW monitor callback, which carries no user pointer: set and cleared only by
+			 * m_monitorCallbackRegistration (one window at a time), read on the main thread, null-checked. */
+			inline static Window * s_monitorCallbackReceiver{nullptr};
 	};
 }

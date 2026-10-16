@@ -125,7 +125,7 @@ namespace EmEn::Overlay
 
 		if ( state )
 		{
-			inputManager.addKeyboardListener(this);
+			m_keyboardRegistration = inputManager.addKeyboardListener(this);
 
 			/* ⚠️⚠️ PRIORITY. The overlay is drawn ON TOP of the scene, so it must be offered the
 			 * pointer first — input follows the visual stacking. Without it any scene registered
@@ -134,12 +134,12 @@ namespace EmEn::Overlay
 			 * orbit controller a node to drive and the controller then answers `true` instead of
 			 * declining. It stayed unnoticed because a demo scene's controller has no node and
 			 * declines, so the menu worked there. */
-			inputManager.addPointerListener(this, true);
+			m_pointerRegistration = inputManager.addPointerListener(this, true);
 		}
 		else
 		{
-			inputManager.removeKeyboardListener(this);
-			inputManager.removePointerListener(this);
+			m_keyboardRegistration.reset();
+			m_pointerRegistration.reset();
 		}
 
 		m_enabled = state;
@@ -233,6 +233,11 @@ namespace EmEn::Overlay
 #endif
 
 		this->forget(&m_resourceManager.graphicsRenderer().window());
+
+		/* NOTE: The input manager must not serve a terminated overlay (enable(false) is never called at the end). */
+		m_keyboardRegistration.reset();
+		m_pointerRegistration.reset();
+		m_enabled = false;
 
 		m_screens.clear();
 

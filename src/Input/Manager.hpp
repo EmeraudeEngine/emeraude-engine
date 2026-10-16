@@ -37,6 +37,7 @@
 #include <cstddef>
 #include <array>
 #include <set>
+#include <utility>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -52,6 +53,7 @@
 #include "KeyboardListenerInterface.hpp"
 #include "PointerController.hpp"
 #include "PointerListenerInterface.hpp"
+#include "ScopedRegistration.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -94,14 +96,7 @@ namespace EmEn::Input
 				m_primaryServices{primaryServices},
 				m_window{window}
 			{
-				if ( s_instance != nullptr )
-				{
-					std::cerr << "Input::Manager(), constructor called twice !" "\n";
 
-					std::terminate();
-				}
-
-				s_instance = this;
 			}
 
 			/**
@@ -139,7 +134,10 @@ namespace EmEn::Input
 			 */
 			~Manager () override
 			{
-				s_instance = nullptr;
+#if IS_MACOS
+				/* NOTE: The gesture monitor's block captures this manager (onTerminate() removes it first). */
+				this->removeMacOSGestureHandlers();
+#endif
 			}
 
 			/**
@@ -412,19 +410,14 @@ namespace EmEn::Input
 			/**
 			 * @brief Adds an object the keyboard can control, like a player.
 			 * @param listener A pointer to a keyboard listener interfaced object.
+			 * @return Base::ScopedRegistration The registration: the listener is served until this token ends (Ave Robustus
+			 * II P4). Empty when the listener is null or already registered (traced).
+			 * @pre The input manager outlives the token (Core declares it before every service and scene that listens).
+			 * @note Main thread. Added or removed DURING a dispatch, a listener takes effect after it: a removed one is
+			 * never called again, not even later in the same dispatch.
 			 */
-			void addKeyboardListener (KeyboardListenerInterface * listener) noexcept;
-
-			/**
-			 * @brief Removes an object of keyboard listeners.
-			 * @param listener A pointer to a keyboard listener interfaced object.
-			 */
-			void removeKeyboardListener (KeyboardListenerInterface * listener) noexcept;
-
-			/**
-			 * @brief Clears all keyboard listeners.
-			 */
-			void removeAllKeyboardListeners () noexcept;
+			[[nodiscard]]
+			Base::ScopedRegistration addKeyboardListener (KeyboardListenerInterface * listener) noexcept;
 
 			/**
 			 * @brief Adds an object the pointer can control, like a player.
@@ -443,19 +436,13 @@ namespace EmEn::Input
 			 *
 			 * @param listener A pointer to a pointer listener interfaced object.
 			 * @param priority Serve this listener BEFORE every other one. Default false.
+			 * @return Base::ScopedRegistration The registration: the listener is served until this token ends (Ave Robustus
+			 * II P4). Empty when the listener is null or already registered (traced).
+			 * @pre The input manager outlives the token.
+			 * @note Main thread; the same dispatch rule as addKeyboardListener().
 			 */
-			void addPointerListener (PointerListenerInterface * listener, bool priority = false) noexcept;
-
-			/**
-			 * @brief Removes an object of pointer listeners.
-			 * @param listener A pointer to a pointer listener interfaced object.
-			 */
-			void removePointerListener (PointerListenerInterface * listener) noexcept;
-
-			/**
-			 * @brief Clears all pointer listeners.
-			 */
-			void removeAllPointerListeners () noexcept;
+			[[nodiscard]]
+			Base::ScopedRegistration addPointerListener (PointerListenerInterface * listener, bool priority = false) noexcept;
 
 #if IS_MACOS
 			/**
@@ -476,7 +463,7 @@ namespace EmEn::Input
 			 * @param modifiers The modifier keys mask (see Input::ModKey enum).
 			 * @param action GLFW action: 1 = press, 0 = release, 2 = repeat.
 			 */
-			static void injectKeyEvent (int32_t key, int32_t modifiers, int32_t action = 1) noexcept;
+			void injectKeyEvent (int32_t key, int32_t modifiers, int32_t action = 1) noexcept;
 
 			/**
 			 * @brief Injects a synthetic mouse click event at the given screen coordinates.
@@ -486,16 +473,188 @@ namespace EmEn::Input
 			 * @param modifiers The modifier keys mask.
 			 * @param action GLFW action: 1 = press, 0 = release.
 			 */
-			static void injectMouseClickEvent (float positionX, float positionY, int32_t button = 0, int32_t modifiers = 0, int32_t action = 1) noexcept;
+			void injectMouseClickEvent (float positionX, float positionY, int32_t button = 0, int32_t modifiers = 0, int32_t action = 1) noexcept;
 
 			/**
 			 * @brief Injects a synthetic pointer move event.
 			 * @param positionX The X coordinate in screen pixels (absolute mode).
 			 * @param positionY The Y coordinate in screen pixels (absolute mode).
 			 */
-			static void injectPointerMoveEvent (float positionX, float positionY) noexcept;
+			void injectPointerMoveEvent (float positionX, float positionY) noexcept;
 
 		private:
+
+			/**
+			 * @brief Marks a listener dispatch in progress: additions wait and removals leave a null slot until the
+			 * outermost dispatch ends, which applies them (Ave Robustus II P4, owner decision 2026-10-16: a listener list is
+			 * never resized while it is walked).
+			 */
+			class DispatchScope final
+			{
+				public:
+
+					/**
+					 * @brief Opens a dispatch.
+					 * @param manager The input manager.
+					 */
+					explicit
+					DispatchScope (Manager & manager) noexcept
+						: m_manager{manager}
+					{
+						++m_manager.m_dispatchDepth;
+					}
+
+					/** @brief Closes the dispatch; the outermost one applies the changes requested meanwhile. */
+					~DispatchScope ()
+					{
+						--m_manager.m_dispatchDepth;
+
+						if ( m_manager.m_dispatchDepth == 0 )
+						{
+							m_manager.applyPendingListenerChanges();
+						}
+					}
+
+					/** @brief Copy constructor (deleted). */
+					DispatchScope (const DispatchScope & copy) = delete;
+
+					/** @brief Move constructor (deleted). */
+					DispatchScope (DispatchScope && copy) = delete;
+
+					/** @brief Copy assignment (deleted). */
+					DispatchScope & operator= (const DispatchScope & copy) = delete;
+
+					/** @brief Move assignment (deleted). */
+					DispatchScope & operator= (DispatchScope && copy) = delete;
+
+				private:
+
+					Manager & m_manager;
+			};
+
+			/**
+			 * @brief Serves an event to every listener of a list, newest first, until one processes it without
+			 * propagating it.
+			 * @tparam listener_t The listener interface.
+			 * @tparam handler_t A callable taking a listener_t & and returning whether the event was processed.
+			 * @param listeners The list (m_keyboardListeners or m_pointerListeners).
+			 * @param handler The event for one listener.
+			 * @note The list keeps its size during the walk (DispatchScope), so an index stays valid. A listener removed by
+			 * its own handler cannot be asked about propagation any more: an event it processed stops there.
+			 */
+			template< typename listener_t, typename handler_t >
+			void
+			dispatch (std::vector< listener_t * > & listeners, const handler_t & handler) noexcept
+			{
+				const DispatchScope scope{*this};
+
+				for ( size_t index = 0; index < listeners.size(); ++index )
+				{
+					auto * listener = listeners[index];
+
+					if ( listener == nullptr )
+					{
+						continue;
+					}
+
+					if ( !handler(*listener) )
+					{
+						continue;
+					}
+
+					if ( listeners[index] == nullptr || !listener->isPropagatingProcessedEvents() )
+					{
+						break;
+					}
+				}
+			}
+
+			/**
+			 * @brief Removes a keyboard listener (the undo of addKeyboardListener()'s token).
+			 * @param listener The listener.
+			 */
+			void removeKeyboardListener (KeyboardListenerInterface * listener) noexcept;
+
+			/**
+			 * @brief Removes a pointer listener (the undo of addPointerListener()'s token); it also loses the priority and
+			 * the move-events tracking it held.
+			 * @param listener The listener.
+			 */
+			void removePointerListener (PointerListenerInterface * listener) noexcept;
+
+			/**
+			 * @brief Inserts a pointer listener now, keeping the priority invariant (outside a dispatch only).
+			 * @param listener The listener.
+			 * @param priority Whether it takes the priority slot.
+			 */
+			void insertPointerListener (PointerListenerInterface * listener, bool priority) noexcept;
+
+			/**
+			 * @brief Applies the additions and removals requested during the dispatch that just ended.
+			 */
+			void applyPendingListenerChanges () noexcept;
+
+			/**
+			 * @brief Returns the input manager attached to a GLFW window, through the window's callback context.
+			 * @param handle The GLFW window handle given to a callback.
+			 * @return Manager * nullptr when none is attached.
+			 */
+			[[nodiscard]]
+			static Manager * fromHandle (GLFWwindow * handle) noexcept;
+
+			/**
+			 * @brief Serves a key event to the keyboard listeners.
+			 * @param key The key code.
+			 * @param scancode The OS scancode (0 for an injected event).
+			 * @param action GLFW_PRESS, GLFW_REPEAT or GLFW_RELEASE.
+			 * @param modifiers The modifier keys mask.
+			 */
+			void dispatchKeyEvent (int32_t key, int32_t scancode, int32_t action, int32_t modifiers) noexcept;
+
+			/**
+			 * @brief Serves a typed character to the keyboard listeners in text mode.
+			 * @param codepoint The Unicode value of the character.
+			 */
+			void dispatchCharacter (uint32_t codepoint) noexcept;
+
+			/**
+			 * @brief Serves a wheel event to the tracking listener, or to the pointer listeners.
+			 * @param position The pointer position.
+			 * @param xOffset The distance in X.
+			 * @param yOffset The distance in Y.
+			 * @param modifiers The modifier keys mask.
+			 */
+			void dispatchMouseWheel (const std::array< float, 2 > & position, float xOffset, float yOffset, int32_t modifiers) noexcept;
+
+			/**
+			 * @brief Handles a cursor move (the cursor position callback).
+			 * @param xPosition The X position of the cursor.
+			 * @param yPosition The Y position of the cursor.
+			 */
+			void processCursorPosition (double xPosition, double yPosition) noexcept;
+
+			/**
+			 * @brief Handles the cursor entering or leaving the window.
+			 * @param window The GLFW window.
+			 * @param entered GLFW_TRUE when entering.
+			 */
+			void processCursorEnter (GLFWwindow * window, int entered) noexcept;
+
+			/**
+			 * @brief Handles a pointer button event.
+			 * @param window The GLFW window.
+			 * @param button Which pointer button.
+			 * @param action Pressed or released.
+			 * @param modifiers The modifier keys mask.
+			 */
+			void processMouseButton (GLFWwindow * window, int button, int action, int modifiers) noexcept;
+
+			/**
+			 * @brief Handles a joystick or gamepad connection change.
+			 * @param jid The joystick id.
+			 * @param event GLFW_CONNECTED or GLFW_DISCONNECTED.
+			 */
+			void processJoystickEvent (int jid, int event) noexcept;
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
 			bool onInitialize () noexcept override;
@@ -524,7 +683,7 @@ namespace EmEn::Input
 			 * @return std::array< float, 2 >
 			 */
 			[[nodiscard]]
-			static std::array< float, 2 > getPointerLocation (GLFWwindow * window) noexcept;
+			std::array< float, 2 > pointerLocation (GLFWwindow * window) const noexcept;
 
 			/**
 			 * @brief The callback for the glfw API to handle key inputs.
@@ -556,14 +715,14 @@ namespace EmEn::Input
 			 * @param xPosition The X position of the cursor.
 			 * @param yPosition The Y position of the cursor.
 			 */
-			static void dispatchRelativePointerPosition (double xPosition, double yPosition) noexcept;
+			void dispatchRelativePointerPosition (double xPosition, double yPosition) noexcept;
 
 			/**
 			 * @brief Separate method for an absolute mode pointer called by the main Manager::cursorPositionCallback() method.
 			 * @param xPosition The X position of the cursor.
 			 * @param yPosition The Y position of the cursor.
 			 */
-			static void dispatchAbsolutePointerPosition (double xPosition, double yPosition) noexcept;
+			void dispatchAbsolutePointerPosition (double xPosition, double yPosition) noexcept;
 
 			/**
 			 * @brief The callback for the glfw API to handle cursor position changes.
@@ -614,12 +773,18 @@ namespace EmEn::Input
 
 			static constexpr auto GameControllerDBFile{"gamecontrollerdb.txt"};
 
-			inline static Manager * s_instance{nullptr};
+			/** @brief The manager served by the GLFW joystick callback, which carries no window: set and cleared only by
+			 * m_joystickCallbackRegistration (one manager at a time), read on the main thread, null-checked. */
+			inline static Manager * s_joystickCallbackReceiver{nullptr};
 
 			PrimaryServices & m_primaryServices;
 			Window & m_window;
+			/* NOTE: Main thread only (registrations, GLFW callbacks, console injections); a removed listener leaves a null
+			 * slot while a dispatch walks the list (DispatchScope). */
 			std::vector< KeyboardListenerInterface * > m_keyboardListeners;
 			std::vector< PointerListenerInterface * > m_pointerListeners;
+			std::vector< KeyboardListenerInterface * > m_pendingKeyboardListeners;
+			std::vector< std::pair< PointerListenerInterface *, bool > > m_pendingPointerListeners;
 			/** @brief The listener served first, kept at index 0 of the vector above — the whole
 			 * invariant, which is why the dispatch loops need no special case. nullptr when none. */
 			PointerListenerInterface * m_priorityPointerListener{nullptr};
@@ -630,6 +795,11 @@ namespace EmEn::Input
 			std::set< int > m_gamepadIDs;
 			std::array< double, 2 > m_pointerScalingFactors{1.0, 1.0};
 			std::array< double, 2 > m_lastPointerCoordinates{0.0, 0.0};
+			/* The window callback context attachment and the joystick callback: their end detaches this manager. */
+			Base::ScopedRegistration m_windowAttachment;
+			Base::ScopedRegistration m_joystickCallbackRegistration;
+			uint32_t m_dispatchDepth{0};
+			bool m_listenerSlotsReleased{false};
 			bool m_showInformation{false};
 			bool m_windowLess{false};
 			bool m_windowLinked{false};

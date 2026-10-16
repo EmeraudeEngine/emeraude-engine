@@ -53,6 +53,7 @@
 
 /* Local inclusions for usages. */
 #include "Input/Manager.hpp"
+#include "ScopedRegistration.hpp"
 #include "FramebufferProperties.hpp"
 
 /* Forward declarations. */
@@ -631,6 +632,9 @@ namespace EmEn::Overlay
 			/* The thread running a representation pass (none outside one), and a redraw requested during it. */
 			std::atomic< std::thread::id > m_representationPassThread;
 			std::atomic_bool m_redrawDeferred{false};
+			/* The keyboard and pointer registrations with the input manager (enable()): their end unregisters. */
+			Base::ScopedRegistration m_keyboardRegistration;
+			Base::ScopedRegistration m_pointerRegistration;
 			bool m_enabled{false};
 #ifdef IMGUI_ENABLED
 			/** @brief False in a window-less run: ImGUI's platform backend needs a GLFW window. */
