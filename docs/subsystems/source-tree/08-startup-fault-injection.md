@@ -128,8 +128,10 @@ dependencies/emeraude-engine/tools/stress/startup-fault-sweep.sh $PWD/.claude-bu
 - The audio shutdown fix (`docs/subsystems/audio/06-critical-points.md`) was verified on the three OS: 0 "not deleted"
   in OpenAL Soft's log, 0 "unread problem with AL"; macOS and Windows rushes with the voice-over valid; TSan
   `EmeraudeTrackMixerStress` 0 report (Linux, macOS).
-- ⚠️ Seen once on Windows, not reproduced idle: under a 28-job build the shutdown took 19.9 s, 13.4 s of it between
-  the end of the secondary services and the first primary one (0.07-0.10 s idle). Not investigated.
+- ⚠️ Seen on Windows under a 28-job build: the shutdown took 19.9 s, 13.4 s of it between the end of the secondary
+  services and the first primary one (0.07-0.10 s idle). Investigated and accepted (2026-10-16): not the engine but
+  the application's `CefShutdown()` and its own process exit, the kernel teardown running on a starved Chromium
+  background thread (projet-alpha `docs/cef-integration.md` § Shutdown holds the measurements).
 
 ### Native handles in RAII holders (owner decision 2026-10-16: option A, defence in depth)
 
