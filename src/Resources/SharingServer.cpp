@@ -101,9 +101,9 @@ namespace EmEn::Resources
 		m_http->stop();
 
 		{
-			std::unique_lock< std::mutex > lock{m_jobsAccess};
+			Base::MutexLock lock{m_jobsAccess};
 
-			m_jobsDone.wait(lock, [this] () {
+			m_jobsDone.wait(lock, [this] () EMEN_REQUIRES(m_jobsAccess) {
 				return m_jobsInFlight == 0;
 			});
 		}
@@ -404,7 +404,7 @@ namespace EmEn::Resources
 	SharingServer::answerDigest (const std::shared_ptr< Connection > & connection, const std::filesystem::path & filepath) noexcept
 	{
 		{
-			const std::scoped_lock lock{m_jobsAccess};
+			const Base::MutexLock lock{m_jobsAccess};
 
 			if ( m_threadPool == nullptr || m_jobsInFlight >= MaxDigestJobs )
 			{
@@ -448,22 +448,22 @@ namespace EmEn::Resources
 
 			/* NOTE: notified UNDER the lock: the destructor waits for m_jobsInFlight == 0 on this condition variable;
 			 * notified after the unlock, it could see the count, return and destroy m_jobsDone before this notify. */
-			const std::scoped_lock lock{m_jobsAccess};
+			const Base::MutexLock lock{m_jobsAccess};
 
 			--m_jobsInFlight;
 
-			m_jobsDone.notify_all();
+			m_jobsDone.notifyAll();
 		});
 
 		if ( !enqueued )
 		{
 			{
-				const std::scoped_lock lock{m_jobsAccess};
+				const Base::MutexLock lock{m_jobsAccess};
 
 				--m_jobsInFlight;
 
 				/* NOTE: The destructor may already wait (a refused enqueue happens when the pool stops): wake it. */
-				m_jobsDone.notify_all();
+				m_jobsDone.notifyAll();
 			}
 
 			connection->respondEmpty(503, "Retry-After: 5\r\n");

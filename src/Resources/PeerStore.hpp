@@ -43,6 +43,8 @@
 #include "json/json.h"
 
 /* Local inclusions for usages. */
+#include "ConditionVariable.hpp"
+#include "Mutex.hpp"
 #include "Network/HTTPSClient.hpp"
 #include "Network/URI.hpp"
 
@@ -241,9 +243,9 @@ namespace EmEn::Resources
 			std::unique_ptr< asio::ssl::context > m_tlsContext;
 			std::unique_ptr< Base::Network::HTTPSClient > m_requestClient;
 			std::unique_ptr< Base::Network::HTTPSClient > m_downloadClient;
-			mutable std::mutex m_stateAccess;
-			std::condition_variable m_jobDone;
-			State m_state;
+			mutable Base::Mutex m_stateAccess;
+			Base::ConditionVariable m_jobDone;
+			State m_state EMEN_GUARDED_BY(m_stateAccess);
 			std::atomic< bool > m_cancel{false};
 	};
 }

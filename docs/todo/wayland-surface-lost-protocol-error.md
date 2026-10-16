@@ -44,6 +44,18 @@ kovidgoyal/kitty#7767, blender#135039, wezterm#6699.
 Since 2026-08-22 both reporting sites (`Queue::present()`, `SwapChain::acquireNextImage()`) print
 that reading next to the error through `vkResultDiagnosticHint()`.
 
+## Observed 2026-10-16 — a shutdown that did not happen after the loss
+
+A test instance of projet-alpha (`default`, Linux, RTX 3070 Ti, Wayland, engine 4fec0c77 + the uncommitted P-W
+Resources annotation lot), launched beside the owner's own instance, got `VK_ERROR_SURFACE_LOST_KHR` at about the
+moment the owner closed theirs. The frames went on (staging releases traced), the remote console ACCEPTED the
+connection of `Core.shutdown()` but the command was NEVER executed ("Executing command" absent) — the process was
+still alive 120 s later and killed by the run's timeout (exit 137). Before (2026-08), a loss was followed by a clean
+`exit 0`. Not reproduced: 3 lone runs and a two-instance run with the first closed all ended `exit 0`, no loss.
+Not attributed: the main-thread console poll stopped, cause unknown — the P-W lock changes of that day are not
+excluded. ⚠️ Next time: `gdb -p <pid> -batch -ex "thread apply all bt 15"` on the hung process BEFORE killing it
+(the log alone cannot tell a deadlock from a blocked swap-chain recreation).
+
 ## What remains — in order
 
 **New data, 2026-10-12 (Linux, engine 9054be48 + uncommitted lot 2, Release, no validation layer):** reproduced at the

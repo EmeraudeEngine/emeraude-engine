@@ -400,6 +400,16 @@ unlocked access at compile time. Base `docs/subsystems/source-tree/26-thread-saf
   `PendingSubmissions`, `Device` (the deferred destructor pointer), `GPUProfiler`, `TransferManager` annotated; the
   analysis found the initialization / termination paths touching the guarded members without the lock
   (`TransferManager`, `LayoutManager`, `AccelerationStructureBuilder`), now locked.
+- Lot Resources (2026-10-16): `Container` (the loaded and parked resources; its `@pre`-documented helpers now
+  `EMEN_REQUIRES`), `Manager` (the local stores; the index readers run at initialization under the lock, now
+  `EMEN_REQUIRES`; the directory scan collects the store directories in its walk and fills them in the function body —
+  the analysis cannot follow a lambda through the `IO::forEachDirectoryEntry()` template), `PeerStore` / `SharingServer`
+  (`Base::ConditionVariable`), `ResourceTrait` (the dependency lists and the local-data lease state; the graph lock a
+  `Base::Mutex`). Found: `isTopResource()` / `dependencyCount()`, documented thread-safe, read the lists unlocked
+  (now locked); `addDependency()` locked the resource and its dependency with one `std::scoped_lock{a, b}` — for a
+  resource given ITSELF as a dependency, the same mutex twice (undefined behaviour), now refused as a cycle before any
+  lock, and the two locks are taken one after the other under the graph lock (no path holds a node's lock while taking
+  another's). Found while reading, no caller does it today: no runtime repro.
 
 ## Paths and Text Encoding — rule C (owner decision, 2026-10-12)
 

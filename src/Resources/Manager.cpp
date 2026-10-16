@@ -438,7 +438,7 @@ namespace EmEn::Resources
 			return false;
 		}
 
-		const std::scoped_lock lock{m_localStoresAccess};
+		const Base::MutexLock lock{m_localStoresAccess};
 
 		return this->parseStores(m_primaryServices.fileSystem(), stores, m_showInformation);
 	}
@@ -603,7 +603,12 @@ namespace EmEn::Resources
 
 			/* First, iterate over first-level directories which represent stores.
 			 * NOTE: never a range-for over directory_iterator: its operator++ throws (terminate under -fno-exceptions). */
-			const auto storesWalked = IO::forEachDirectoryEntry(dataStoreDirectory, false, [&] (const std::filesystem::directory_entry & storeEntry) {
+			/* NOTE: The walk only collects the store directories: the stores themselves are created and filled below, in this
+			 * function that holds the store lock (EMEN_REQUIRES) — the analysis cannot follow a lambda through the
+			 * forEachDirectoryEntry() template. */
+			std::vector< std::filesystem::path > storeDirectories;
+
+			const auto storesWalked = IO::forEachDirectoryEntry(dataStoreDirectory, false, [&storeDirectories] (const std::filesystem::directory_entry & storeEntry) {
 				std::error_code entryError;
 
 				if ( !storeEntry.is_directory(entryError) )
@@ -612,13 +617,25 @@ namespace EmEn::Resources
 					return true;
 				}
 
-				const auto storeName = Base::IO::toU8String(storeEntry.path().filename());
-
 				/* Skip hidden directories (starting with dot). */
-				if ( storeName.starts_with('.') )
+				if ( Base::IO::toU8String(storeEntry.path().filename()).starts_with('.') )
 				{
 					return true;
 				}
+
+				storeDirectories.emplace_back(storeEntry.path());
+
+				return true;
+			});
+
+			if ( !storesWalked )
+			{
+				TraceWarning{ClassId} << "The data-stores directory " << dataStoreDirectory << " could not be fully scanned (see the IO error above).";
+			}
+
+			for ( const auto & storeDirectory : storeDirectories )
+			{
+				const auto storeName = Base::IO::toU8String(storeDirectory.filename());
 
 				if ( m_showInformation )
 				{
@@ -636,8 +653,7 @@ namespace EmEn::Resources
 					}
 				}
 
-				const auto & store = m_localStores[storeName];
-				const auto & storeDirectory = storeEntry.path();
+				const auto store = m_localStores[storeName];
 
 				/* Now, recursively scan files within this store directory. */
 				const auto filesWalked = IO::forEachDirectoryEntry(storeDirectory, true, [&] (const std::filesystem::directory_entry & fileEntry) {
@@ -710,13 +726,6 @@ namespace EmEn::Resources
 				{
 					TraceWarning{ClassId} << "The store directory " << storeDirectory << " could not be fully scanned (see the IO error above).";
 				}
-
-				return true;
-			});
-
-			if ( !storesWalked )
-			{
-				TraceWarning{ClassId} << "The data-stores directory " << dataStoreDirectory << " could not be fully scanned (see the IO error above).";
 			}
 		}
 
@@ -759,7 +768,7 @@ namespace EmEn::Resources
 
 		/* NOTE: Initialize the store service. */
 		{
-			const std::scoped_lock lock{m_localStoresAccess};
+			const Base::MutexLock lock{m_localStoresAccess};
 
 			if ( m_useDynamicScan )
 			{
@@ -1016,6 +1025,8 @@ namespace EmEn::Resources
 	{
 		out << "Resources stores :" "\n";
 
+		const Base::MutexLock lock{obj.m_localStoresAccess};
+
 		for ( const auto & [name, store] : obj.m_localStores )
 		{
 			out << " - " << name << " (" << store->size() << " resources)" << '\n';
@@ -1067,7 +1078,7 @@ namespace EmEn::Resources
 		Json::Value stores{Json::objectValue};
 
 		{
-			const std::scoped_lock lock{m_localStoresAccess};
+			const Base::MutexLock lock{m_localStoresAccess};
 
 			std::vector< std::string > storeNames;
 			storeNames.reserve(m_localStores.size());

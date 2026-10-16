@@ -58,6 +58,8 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "ConditionVariable.hpp"
+#include "Mutex.hpp"
 #include "BaseInformation.hpp"
 #include "ThreadPool.hpp"
 #include "Types.hpp"
@@ -538,6 +540,9 @@ namespace EmEn::Resources
 			bool
 			isTopResource () const noexcept
 			{
+				/* NOTE: Documented thread-safe, it read the list unlocked while addDependency() could grow it (D12, 2026-10-16). */
+				const Base::MutexLock lock{m_dependenciesAccess};
+
 				return m_parentsToNotify.empty();
 			}
 
@@ -555,6 +560,8 @@ namespace EmEn::Resources
 			size_t
 			dependencyCount () const noexcept
 			{
+				const Base::MutexLock lock{m_dependenciesAccess};
+
 				return m_dependenciesToWaitFor.size();
 			}
 
@@ -1381,21 +1388,21 @@ namespace EmEn::Resources
 			static constexpr uint32_t DirectLoading = 1U << 31;
 
 			AbstractServiceProvider & m_serviceProvider;
-			std::vector< std::shared_ptr< ResourceTrait > > m_parentsToNotify;
-			std::vector< std::shared_ptr< ResourceTrait > > m_dependenciesToWaitFor;
+			std::vector< std::shared_ptr< ResourceTrait > > m_parentsToNotify EMEN_GUARDED_BY(m_dependenciesAccess);
+			std::vector< std::shared_ptr< ResourceTrait > > m_dependenciesToWaitFor EMEN_GUARDED_BY(m_dependenciesAccess);
 			std::atomic< Status > m_status{Status::Unloaded};
-			mutable std::mutex m_dependenciesAccess;
-			mutable std::mutex m_localDataAccess;
-			std::condition_variable m_localDataReloaded;
-			std::optional< BaseInformation > m_localDataSource;
-			mutable std::chrono::steady_clock::time_point m_localDataReleasableSince;
-			mutable uint32_t m_localDataLeases{0};
-			mutable bool m_localDataReleasable{false};
-			bool m_localDataRetained{false};
-			bool m_localDataReleased{false};
-			bool m_localDataReloading{false};
-			/* NOTE: Guarded by m_dependenciesAccess: true while ONE thread runs onDependenciesLoaded() (checkDependencies()). */
-			bool m_dependenciesFinalizing{false};
+			mutable Base::Mutex m_dependenciesAccess;
+			mutable Base::Mutex m_localDataAccess;
+			Base::ConditionVariable m_localDataReloaded;
+			std::optional< BaseInformation > m_localDataSource EMEN_GUARDED_BY(m_localDataAccess);
+			mutable std::chrono::steady_clock::time_point m_localDataReleasableSince EMEN_GUARDED_BY(m_localDataAccess);
+			mutable uint32_t m_localDataLeases EMEN_GUARDED_BY(m_localDataAccess){0};
+			mutable bool m_localDataReleasable EMEN_GUARDED_BY(m_localDataAccess){false};
+			bool m_localDataRetained EMEN_GUARDED_BY(m_localDataAccess){false};
+			bool m_localDataReleased EMEN_GUARDED_BY(m_localDataAccess){false};
+			bool m_localDataReloading EMEN_GUARDED_BY(m_localDataAccess){false};
+			/* NOTE: True while ONE thread runs onDependenciesLoaded() (checkDependencies()). */
+			bool m_dependenciesFinalizing EMEN_GUARDED_BY(m_dependenciesAccess){false};
 			/* NOTE: Atomic: set by the thread that stops the loads, read by a parent on any thread. */
 			std::atomic_bool m_loadAbandoned{false};
 	};

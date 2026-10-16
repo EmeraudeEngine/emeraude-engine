@@ -54,6 +54,7 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "BaseInformation.hpp"
 #include "BaseUtility.hpp"
 #include "Hash/Hash.hpp"
@@ -640,7 +641,7 @@ namespace EmEn::Resources
 				/* NOTE: the cleanup runs even without a local store — a container fed by
 				 * createResource() alone still holds resources and download requests. */
 				{
-					const std::scoped_lock scopeLock{m_resourcesAccess};
+					const Base::MutexLock scopeLock{m_resourcesAccess};
 
 					/* ⚠️ A request still waiting for its download must reach a terminal state here:
 					 * dropping it silently leaves observers waiting on a resource that will never
@@ -685,7 +686,7 @@ namespace EmEn::Resources
 			size_t
 			resourceCount () const noexcept override
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				return m_resources.size();
 			}
@@ -724,7 +725,7 @@ namespace EmEn::Resources
 			std::vector< std::string >
 			loadedResourceNames () const noexcept
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				std::vector< std::string > names;
 				names.reserve(m_resources.size());
@@ -744,7 +745,7 @@ namespace EmEn::Resources
 			std::vector< std::shared_ptr< resource_t > >
 			resourcesSnapshot () const noexcept
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				std::vector< std::shared_ptr< resource_t > > resources;
 				resources.reserve(m_resources.size());
@@ -767,7 +768,7 @@ namespace EmEn::Resources
 			requestResource (const std::string & name) noexcept override
 			{
 				{
-					const std::scoped_lock scopeLock{m_resourcesAccess};
+					const Base::MutexLock scopeLock{m_resourcesAccess};
 
 					if ( !m_resources.contains(name) && ( m_localStore == nullptr || !m_localStore->contains(name) ) )
 					{
@@ -785,7 +786,7 @@ namespace EmEn::Resources
 			std::optional< Status >
 			resourceStatus (const std::string & name) const noexcept override
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				if ( const auto resourceIt = m_resources.find(name); resourceIt != m_resources.cend() )
 				{
@@ -805,7 +806,7 @@ namespace EmEn::Resources
 			std::shared_ptr< ResourceTrait >
 			findResource (const std::string & name) const noexcept override
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				if ( const auto resourceIt = m_resources.find(name); resourceIt != m_resources.cend() )
 				{
@@ -820,7 +821,7 @@ namespace EmEn::Resources
 			size_t
 			memoryOccupied () const noexcept override
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				size_t bytes = 0;
 
@@ -843,7 +844,7 @@ namespace EmEn::Resources
 			size_t
 			unusedMemoryOccupied () const noexcept override
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				size_t bytes = 0;
 
@@ -873,7 +874,7 @@ namespace EmEn::Resources
 				std::vector< std::shared_ptr< resource_t > > candidates;
 
 				{
-					const std::scoped_lock scopeLock{m_resourcesAccess};
+					const Base::MutexLock scopeLock{m_resourcesAccess};
 
 					candidates.reserve(m_resources.size());
 
@@ -900,7 +901,7 @@ namespace EmEn::Resources
 			size_t
 			unloadUnusedResources () noexcept override
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				if ( m_resources.empty() )
 				{
@@ -956,7 +957,7 @@ namespace EmEn::Resources
 			bool
 			isResourceLoaded (const std::string & resourceName) const noexcept
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				return m_resources.contains(resourceName);
 			}
@@ -983,7 +984,7 @@ namespace EmEn::Resources
 					return false;
 				}
 
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				/* First, check in live resources.
 				 * NOTE: Do not use Container::isResourceLoaded() to prevent from mutex deadlock. */
@@ -1013,7 +1014,7 @@ namespace EmEn::Resources
 					return std::nullopt;
 				}
 
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				const auto resourceIt = m_localStore->find(resourceName);
 
@@ -1117,7 +1118,7 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			createResource (const std::string & resourceName, uint32_t resourceFlags = 0) noexcept
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				return this->createResourceUnlocked(resourceName, resourceFlags);
 			}
@@ -1141,7 +1142,7 @@ namespace EmEn::Resources
 			bool
 			addResource (const std::shared_ptr< resource_t > & resource) noexcept
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				if ( m_resources.contains(resource->name()) ) [[unlikely]]
 				{
@@ -1177,7 +1178,7 @@ namespace EmEn::Resources
 				/* Declared BEFORE the lock: destroyed after it, so a synchronous load runs unlocked. */
 				DeferredSyncLoad deferredSyncLoad{*this};
 
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				/* NOTE: Do not use Container::isResourceLoaded() to prevent from mutex deadlock. */
 				if ( m_resources.contains(resourceName) )
@@ -1245,7 +1246,7 @@ namespace EmEn::Resources
 			std::shared_ptr< resource_t >
 			getDefaultResource () noexcept
 			{
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				return this->getDefaultResourceUnlocked();
 			}
@@ -1287,7 +1288,7 @@ namespace EmEn::Resources
 				/* Declared BEFORE the lock: destroyed after it, so a synchronous load runs unlocked. */
 				DeferredSyncLoad deferredSyncLoad{*this};
 
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				if ( resourceName == Default )
 				{
@@ -1353,7 +1354,7 @@ namespace EmEn::Resources
 				/* Declared BEFORE the lock: destroyed after it, so a synchronous load runs unlocked. */
 				DeferredSyncLoad deferredSyncLoad{*this};
 
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, asyncLoad, deferredSyncLoad);
 
@@ -1394,7 +1395,7 @@ namespace EmEn::Resources
 				/* Declared BEFORE the lock: destroyed after it, so a synchronous load runs unlocked. */
 				DeferredSyncLoad deferredSyncLoad{*this};
 
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, false, deferredSyncLoad);
 
@@ -1486,7 +1487,7 @@ namespace EmEn::Resources
 				/* Declared BEFORE the lock: destroyed after it, so a synchronous load runs unlocked. */
 				DeferredSyncLoad deferredSyncLoad{*this};
 
-				const std::scoped_lock scopeLock{m_resourcesAccess};
+				const Base::MutexLock scopeLock{m_resourcesAccess};
 
 				const auto alreadyLoadedResource = this->checkLoadedResource(resourceName, true, deferredSyncLoad);
 
@@ -1613,7 +1614,7 @@ namespace EmEn::Resources
 				{
 					if ( notificationCode == ServiceAccess::fileDownloadedNotificationCode() )
 					{
-						const std::scoped_lock scopeLock{m_resourcesAccess};
+						const Base::MutexLock scopeLock{m_resourcesAccess};
 
 						const auto * const downloadTicketPayload = Base::anyValue< int >(data, this->resourceClassId());
 
@@ -1702,7 +1703,7 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			createResourceUnlocked (const std::string & resourceName, uint32_t resourceFlags) noexcept
+			createResourceUnlocked (const std::string & resourceName, uint32_t resourceFlags) noexcept EMEN_REQUIRES(m_resourcesAccess)
 			{
 				if ( resourceName == Default )
 				{
@@ -1768,7 +1769,7 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			getDefaultResourceUnlocked () noexcept
+			getDefaultResourceUnlocked () noexcept EMEN_REQUIRES(m_resourcesAccess)
 			{
 				/* Checks in loaded resources. */
 				{
@@ -1821,7 +1822,7 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			checkLoadedResource (const std::string & resourceName, bool asyncLoad, DeferredSyncLoad & deferredSyncLoad) noexcept
+			checkLoadedResource (const std::string & resourceName, bool asyncLoad, DeferredSyncLoad & deferredSyncLoad) noexcept EMEN_REQUIRES(m_resourcesAccess)
 			{
 				if ( resourceName == Default )
 				{
@@ -1870,7 +1871,7 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			std::shared_ptr< resource_t >
-			pushInLoadingQueue (const BaseInformation & baseInformation, bool asyncLoad, DeferredSyncLoad & deferredSyncLoad) noexcept
+			pushInLoadingQueue (const BaseInformation & baseInformation, bool asyncLoad, DeferredSyncLoad & deferredSyncLoad) noexcept EMEN_REQUIRES(m_resourcesAccess)
 			{
 				const auto & name = baseInformation.name();
 
@@ -2087,9 +2088,9 @@ namespace EmEn::Resources
 			PrimaryServices & m_primaryServices;													 ///< Core engine services (threading, networking, filesystem).
 			AbstractServiceProvider & m_serviceProvider;										  ///< Service provider for resource loading operations.
 			std::shared_ptr< std::unordered_map< std::string, BaseInformation > > m_localStore;  ///< Shared store of available resource metadata (name -> BaseInformation).
-			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources;		///< Map of loaded resources (name -> resource).
-			std::unordered_multimap< int, LoadingRequest > m_externalResources;				 ///< Parked download requests (ticket -> request; several resources may share a URL).
-			mutable std::mutex m_resourcesAccess;												 ///< Mutex protecting m_resources and m_externalResources.
+			std::unordered_map< std::string, std::shared_ptr< resource_t > > m_resources EMEN_GUARDED_BY(m_resourcesAccess);		///< Map of loaded resources (name -> resource).
+			std::unordered_multimap< int, LoadingRequest > m_externalResources EMEN_GUARDED_BY(m_resourcesAccess);				 ///< Parked download requests (ticket -> request; several resources may share a URL).
+			mutable Base::Mutex m_resourcesAccess;												 ///< Mutex protecting m_resources and m_externalResources.
 			/* NOTE: Shared with the DiscardedTaskGuards: they count the loads the stop cancelled (stopBackgroundWork() reports
 			 * them in one line). */
 			std::shared_ptr< std::atomic< size_t > > m_discardCount{std::make_shared< std::atomic< size_t > >(0)};

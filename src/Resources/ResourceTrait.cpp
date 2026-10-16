@@ -57,13 +57,13 @@ namespace EmEn::Resources
 		 * @brief Returns the dependency-graph lock: it serialises every edge insertion with its cycle check
 		 * (addDependency()). Lock order: this one first, then node locks (m_dependenciesAccess).
 		 * @note A function-local static: constructed on first use, whatever the static initialisation order.
-		 * @return std::mutex &
+		 * @return Base::Mutex &
 		 */
 		[[nodiscard]]
-		std::mutex &
+		Base::Mutex &
 		dependencyGraphAccess () noexcept
 		{
-			static std::mutex graphAccess;
+			static Base::Mutex graphAccess;
 
 			return graphAccess;
 		}
@@ -174,12 +174,29 @@ namespace EmEn::Resources
 			Tracer::error(TracerTag, "The dependency pointer is null !");
 
 			{
-				const std::scoped_lock lock{m_dependenciesAccess};
+				const Base::MutexLock lock{m_dependenciesAccess};
 
 				m_status = Status::Failed;
 			}
 
 			/* NOTE: The dependencies already added and the parents are released (no link may cycle once failed). */
+			this->releaseLinksAfterFailure();
+
+			return false;
+		}
+
+		/* NOTE: A resource depending on itself is a cycle. Refused before any lock: the two-node locking below took the
+		 * same mutex twice (std::scoped_lock{m, m}: undefined behaviour, 2026-10-16). */
+		if ( dependency.get() == this ) [[unlikely]]
+		{
+			TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") cannot depend on itself !";
+
+			{
+				const Base::MutexLock lock{m_dependenciesAccess};
+
+				m_status = Status::Failed;
+			}
+
 			this->releaseLinksAfterFailure();
 
 			return false;
@@ -193,14 +210,15 @@ namespace EmEn::Resources
 		const auto added = [&] () noexcept -> bool {
 			/* NOTE: The graph lock FIRST (lock order: graph → node): the cycle check below and the insertion are atomic
 			 * against every other addDependency(). The check copies each node's list under that node's lock alone. */
-			const std::scoped_lock graphLock{dependencyGraphAccess()};
+			const Base::MutexLock graphLock{dependencyGraphAccess()};
 
 			const auto createsCycle = this->wouldCreateCycle(dependency);
 
-			/* NOTE: Lock both this resource's and the dependency's mutex to safely modify
-			 * both dependency lists. std::scoped_lock handles deadlock avoidance by
-			 * acquiring locks in a consistent order. */
-			const std::scoped_lock lock{m_dependenciesAccess, dependency->m_dependenciesAccess};
+			/* NOTE: This resource's lock, then the dependency's: both lists change. The graph lock above serializes every
+			 * two-node locking (no other path holds one node's lock while taking another's), so the order cannot invert.
+			 * The two are distinct: a self-dependency was refused before. */
+			const Base::MutexLock lock{m_dependenciesAccess};
+			const Base::MutexLock dependencyLock{dependency->m_dependenciesAccess};
 
 			/* First, we check the current resource status. */
 			switch ( m_status )
@@ -336,7 +354,7 @@ namespace EmEn::Resources
 		}
 
 		{
-			const std::scoped_lock lock{m_dependenciesAccess};
+			const Base::MutexLock lock{m_dependenciesAccess};
 
 			/* NOTE: Removes the loaded resource from dependencies. */
 			std::erase(m_dependenciesToWaitFor, dependency);
@@ -356,7 +374,7 @@ namespace EmEn::Resources
 		}
 
 		{
-			const std::scoped_lock lock{m_dependenciesAccess};
+			const Base::MutexLock lock{m_dependenciesAccess};
 
 			std::erase(m_dependenciesToWaitFor, dependency);
 		}
@@ -409,7 +427,7 @@ namespace EmEn::Resources
 		std::vector< std::shared_ptr< ResourceTrait > > parents;
 
 		{
-			const std::scoped_lock lock{m_dependenciesAccess};
+			const Base::MutexLock lock{m_dependenciesAccess};
 
 			parents = std::move(m_parentsToNotify);
 			m_parentsToNotify.clear();
@@ -448,7 +466,7 @@ namespace EmEn::Resources
 		auto pendingAction = Action::None;
 
 		{
-			const std::scoped_lock lock{m_dependenciesAccess};
+			const Base::MutexLock lock{m_dependenciesAccess};
 
 			/* NOTE: First, we check the current resource status. */
 			switch ( m_status )
@@ -520,7 +538,7 @@ namespace EmEn::Resources
 			std::vector< std::shared_ptr< ResourceTrait > > parentsToNotifyCopy;
 
 			{
-				const std::scoped_lock lock{m_dependenciesAccess};
+				const Base::MutexLock lock{m_dependenciesAccess};
 
 				m_dependenciesFinalizing = false;
 
@@ -533,7 +551,8 @@ namespace EmEn::Resources
 						TraceSuccess{TracerTag} << "Resource '" << this->name() << "' (" << this->classLabel() << ") is successfully loaded !";
 					}
 
-					if ( !this->isTopResource() )
+					/* NOTE: The list itself (the lock is held here; isTopResource() takes it). */
+					if ( !m_parentsToNotify.empty() )
 					{
 						/* Copy parents list to notify outside lock. */
 						parentsToNotifyCopy = std::move(m_parentsToNotify);
@@ -740,7 +759,7 @@ namespace EmEn::Resources
 				continue;
 			}
 
-			const std::scoped_lock nodeLock{node->m_dependenciesAccess};
+			const Base::MutexLock nodeLock{node->m_dependenciesAccess};
 
 			pending.insert(pending.end(), node->m_dependenciesToWaitFor.cbegin(), node->m_dependenciesToWaitFor.cend());
 		}
@@ -761,7 +780,7 @@ namespace EmEn::Resources
 		}
 
 		{
-			const std::scoped_lock scopeLock{m_localDataAccess};
+			const Base::MutexLock scopeLock{m_localDataAccess};
 
 			if ( m_localDataReleased )
 			{
@@ -777,7 +796,7 @@ namespace EmEn::Resources
 	void
 	ResourceTrait::retainLocalData () noexcept
 	{
-		const std::scoped_lock scopeLock{m_localDataAccess};
+		const Base::MutexLock scopeLock{m_localDataAccess};
 
 		m_localDataRetained = true;
 	}
@@ -785,7 +804,7 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::localDataRetained () const noexcept
 	{
-		const std::scoped_lock scopeLock{m_localDataAccess};
+		const Base::MutexLock scopeLock{m_localDataAccess};
 
 		return m_localDataRetained;
 	}
@@ -793,7 +812,7 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::isLocalDataResident () const noexcept
 	{
-		const std::scoped_lock scopeLock{m_localDataAccess};
+		const Base::MutexLock scopeLock{m_localDataAccess};
 
 		return !m_localDataReleased;
 	}
@@ -806,7 +825,7 @@ namespace EmEn::Resources
 			return;
 		}
 
-		const std::scoped_lock scopeLock{m_localDataAccess};
+		const Base::MutexLock scopeLock{m_localDataAccess};
 
 		if ( !m_localDataReleasable )
 		{
@@ -823,7 +842,7 @@ namespace EmEn::Resources
 			return false;
 		}
 
-		const std::scoped_lock scopeLock{m_localDataAccess};
+		const Base::MutexLock scopeLock{m_localDataAccess};
 
 		if ( !m_localDataReleasable || m_localDataRetained || m_localDataReleased || m_localDataLeases > 0 || now - m_localDataReleasableSince < graceDelay )
 		{
@@ -840,7 +859,7 @@ namespace EmEn::Resources
 	void
 	ResourceTrait::raiseLocalDataLeases () const noexcept
 	{
-		const std::scoped_lock scopeLock{m_localDataAccess};
+		const Base::MutexLock scopeLock{m_localDataAccess};
 
 		++m_localDataLeases;
 	}
@@ -848,7 +867,7 @@ namespace EmEn::Resources
 	void
 	ResourceTrait::lowerLocalDataLeases () const noexcept
 	{
-		const std::scoped_lock scopeLock{m_localDataAccess};
+		const Base::MutexLock scopeLock{m_localDataAccess};
 
 		if ( m_localDataLeases > 0 )
 		{
@@ -869,10 +888,10 @@ namespace EmEn::Resources
 		}
 
 		{
-			std::unique_lock lock{m_localDataAccess};
+			Base::MutexLock lock{m_localDataAccess};
 
 			/* NOTE: Another caller is reloading the copy: wait for its outcome. */
-			m_localDataReloaded.wait(lock, [this] {
+			m_localDataReloaded.wait(lock, [this] () EMEN_REQUIRES(m_localDataAccess) {
 				return !m_localDataReloading;
 			});
 
@@ -909,7 +928,7 @@ namespace EmEn::Resources
 		}
 
 		{
-			const std::scoped_lock scopeLock{m_localDataAccess};
+			const Base::MutexLock scopeLock{m_localDataAccess};
 
 			if ( m_localDataReloading )
 			{
@@ -948,12 +967,12 @@ namespace EmEn::Resources
 		}
 
 		{
-			const std::scoped_lock scopeLock{m_resource->m_localDataAccess};
+			const Base::MutexLock scopeLock{m_resource->m_localDataAccess};
 
 			m_resource->m_localDataReloading = false;
 		}
 
-		m_resource->m_localDataReloaded.notify_all();
+		m_resource->m_localDataReloaded.notifyAll();
 	}
 
 	void
@@ -994,7 +1013,7 @@ namespace EmEn::Resources
 	void
 	ResourceTrait::setLocalDataSource (const BaseInformation & source) noexcept
 	{
-		const std::scoped_lock scopeLock{m_localDataAccess};
+		const Base::MutexLock scopeLock{m_localDataAccess};
 
 		m_localDataSource = source;
 	}
@@ -1002,7 +1021,7 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::hasLocalDataSource () const noexcept
 	{
-		const std::scoped_lock scopeLock{m_localDataAccess};
+		const Base::MutexLock scopeLock{m_localDataAccess};
 
 		return m_localDataSource.has_value();
 	}
@@ -1022,7 +1041,7 @@ namespace EmEn::Resources
 		std::optional< BaseInformation > source;
 
 		{
-			const std::scoped_lock scopeLock{m_localDataAccess};
+			const Base::MutexLock scopeLock{m_localDataAccess};
 
 			source = m_localDataSource;
 		}
@@ -1045,7 +1064,7 @@ namespace EmEn::Resources
 		LocalDataLease lease;
 
 		{
-			const std::scoped_lock scopeLock{m_localDataAccess};
+			const Base::MutexLock scopeLock{m_localDataAccess};
 
 			m_localDataReloading = false;
 
@@ -1062,7 +1081,7 @@ namespace EmEn::Resources
 			}
 		}
 
-		m_localDataReloaded.notify_all();
+		m_localDataReloaded.notifyAll();
 
 		if ( reloaded )
 		{

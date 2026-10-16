@@ -43,6 +43,7 @@
 #include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "Container.hpp"
 #include "ResourceTrait.hpp"
 
@@ -439,7 +440,7 @@ namespace EmEn::Resources
 			 * @since 0.8.35
 			 */
 			[[nodiscard]]
-			bool readResourceIndexes () noexcept;
+			bool readResourceIndexes () noexcept EMEN_REQUIRES(m_localStoresAccess);
 
 			/**
 			 * @brief Scans data-stores directories to automatically discover resources.
@@ -461,7 +462,7 @@ namespace EmEn::Resources
 			 * @since 0.8.35
 			 */
 			[[nodiscard]]
-			bool scanResourceDirectories () noexcept;
+			bool scanResourceDirectories () noexcept EMEN_REQUIRES(m_localStoresAccess);
 
 			/**
 			 * @brief Determines the appropriate store name for a file during dynamic scanning.
@@ -508,7 +509,7 @@ namespace EmEn::Resources
 			 * @since 0.8.35
 			 */
 			[[nodiscard]]
-			bool parseStores (const FileSystem & fileSystem, const Json::Value & storesObject, bool verbose) noexcept;
+			bool parseStores (const FileSystem & fileSystem, const Json::Value & storesObject, bool verbose) noexcept EMEN_REQUIRES(m_localStoresAccess);
 
 			/**
 			 * @brief Retrieves a resource store by its name.
@@ -531,7 +532,7 @@ namespace EmEn::Resources
 			 * @since 0.8.35
 			 */
 			[[nodiscard]]
-			std::shared_ptr< std::unordered_map< std::string, BaseInformation > > getLocalStore (const std::string & storeName) noexcept;
+			std::shared_ptr< std::unordered_map< std::string, BaseInformation > > getLocalStore (const std::string & storeName) noexcept EMEN_REQUIRES(m_localStoresAccess);
 
 			/**
 			 * @brief Outputs Manager state to a stream.
@@ -602,13 +603,13 @@ namespace EmEn::Resources
 			 * @param index The peer's index root.
 			 * @return size_t The number of resources added.
 			 */
-			size_t mergePeerIndex (const Json::Value & index) noexcept;
+			size_t mergePeerIndex (const Json::Value & index) noexcept EMEN_REQUIRES(m_localStoresAccess);
 
 			/**
 			 * @brief Reads the sharing and peer settings: the peer's index is merged, the server started.
 			 * @note Called by onInitialize() with m_localStoresAccess held, before the containers exist.
 			 */
-			void connectPeer () noexcept;
+			void connectPeer () noexcept EMEN_REQUIRES(m_localStoresAccess);
 
 			/**
 			 * @brief Starts the sharing server when 'Core/Resources/Sharing/Enabled' says so.
@@ -618,11 +619,11 @@ namespace EmEn::Resources
 			/** @brief Reference to the engine's primary services provider. */
 			PrimaryServices & m_primaryServices;
 			/** @brief Map of resource stores, indexed by store name, containing resource metadata. */
-			std::unordered_map< std::string, std::shared_ptr< std::unordered_map< std::string, BaseInformation > > > m_localStores;
+			std::unordered_map< std::string, std::shared_ptr< std::unordered_map< std::string, BaseInformation > > > m_localStores EMEN_GUARDED_BY(m_localStoresAccess);
 			/** @brief Map of resource containers, indexed by resource type, managing loaded resources. */
 			std::unordered_map< std::type_index, std::unique_ptr< ContainerInterface > > m_containers;
 			/** @brief Mutex protecting concurrent access to m_localStores. */
-			mutable std::mutex m_localStoresAccess;
+			mutable Base::Mutex m_localStoresAccess;
 			/** @brief The peer engine (Core/Resources/Peer/URL), when one is configured. */
 			std::unique_ptr< PeerStore > m_peerStore;
 			/** @brief This engine's sharing server (Core/Resources/Sharing/Enabled). */

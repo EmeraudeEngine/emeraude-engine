@@ -41,6 +41,8 @@
 #include <string_view>
 
 /* Local inclusions for usages. */
+#include "ConditionVariable.hpp"
+#include "Mutex.hpp"
 #include "Network/HTTPServer.hpp"
 
 /* Forward declarations. */
@@ -203,8 +205,8 @@ namespace EmEn::Resources
 			std::shared_ptr< Base::ThreadPool > m_threadPool;
 			IndexBuilder m_indexBuilder;
 			std::unique_ptr< Base::Network::HTTPServer > m_http;
-			std::mutex m_jobsAccess;
-			std::condition_variable m_jobsDone;
-			size_t m_jobsInFlight{0};
+			Base::Mutex m_jobsAccess;
+			Base::ConditionVariable m_jobsDone;
+			size_t m_jobsInFlight EMEN_GUARDED_BY(m_jobsAccess){0};
 	};
 }

@@ -100,9 +100,9 @@ namespace EmEn::Resources
 	{
 		m_cancel = true;
 
-		std::unique_lock< std::mutex > lock{m_stateAccess};
+		Base::MutexLock lock{m_stateAccess};
 
-		m_jobDone.wait(lock, [this] () {
+		m_jobDone.wait(lock, [this] () EMEN_REQUIRES(m_stateAccess) {
 			return !m_state.running;
 		});
 	}
@@ -161,7 +161,7 @@ namespace EmEn::Resources
 		}
 
 		{
-			const std::scoped_lock lock{m_stateAccess};
+			const Base::MutexLock lock{m_stateAccess};
 
 			if ( m_state.running )
 			{
@@ -180,22 +180,22 @@ namespace EmEn::Resources
 
 			/* NOTE: notified UNDER the lock: ~PeerStore() waits for running == false on this condition variable; notified
 			 * after the unlock, the destructor could see the flag, return and destroy m_jobDone before this notify. */
-			const std::scoped_lock lock{m_stateAccess};
+			const Base::MutexLock lock{m_stateAccess};
 
 			m_state.running = false;
 			m_state.currentFile.clear();
 
-			m_jobDone.notify_all();
+			m_jobDone.notifyAll();
 		});
 
 		if ( !enqueued )
 		{
-			const std::scoped_lock lock{m_stateAccess};
+			const Base::MutexLock lock{m_stateAccess};
 
 			m_state.running = false;
 
 			/* NOTE: Same contract as the job's end: a waiting destructor must be woken. */
-			m_jobDone.notify_all();
+			m_jobDone.notifyAll();
 		}
 
 		return enqueued;
@@ -204,7 +204,7 @@ namespace EmEn::Resources
 	Json::Value
 	PeerStore::status () const noexcept
 	{
-		const std::scoped_lock lock{m_stateAccess};
+		const Base::MutexLock lock{m_stateAccess};
 
 		Json::Value status{Json::objectValue};
 		status["peer"] = m_baseURL;
@@ -243,7 +243,7 @@ namespace EmEn::Resources
 	{
 		TraceError{ClassId} << message;
 
-		const std::scoped_lock lock{m_stateAccess};
+		const Base::MutexLock lock{m_stateAccess};
 
 		if ( m_state.errors.size() < MaxReportedErrors )
 		{
@@ -343,7 +343,7 @@ namespace EmEn::Resources
 		}
 
 		{
-			const std::scoped_lock lock{m_stateAccess};
+			const Base::MutexLock lock{m_stateAccess};
 
 			m_state.filesListed = files->size();
 		}
@@ -362,7 +362,7 @@ namespace EmEn::Resources
 			this->fetchFile(*root, file);
 		}
 
-		const std::scoped_lock lock{m_stateAccess};
+		const Base::MutexLock lock{m_stateAccess};
 
 		TraceSuccess{ClassId} << "Fetch of '" << relativePath << "' done: " << m_state.filesFetched << " fetched, " << m_state.filesKept << " kept, " << m_state.filesFailed << " failed.";
 	}
@@ -371,7 +371,7 @@ namespace EmEn::Resources
 	PeerStore::fetchFile (const std::filesystem::path & root, const RemoteFile & file) noexcept
 	{
 		const auto countFailure = [this] () {
-			const std::scoped_lock lock{m_stateAccess};
+			const Base::MutexLock lock{m_stateAccess};
 
 			++m_state.filesFailed;
 		};
@@ -391,7 +391,7 @@ namespace EmEn::Resources
 
 		if ( file.size && std::filesystem::is_regular_file(*destination, errorCode) && std::filesystem::file_size(*destination, errorCode) == *file.size && !errorCode )
 		{
-			const std::scoped_lock lock{m_stateAccess};
+			const Base::MutexLock lock{m_stateAccess};
 
 			++m_state.filesKept;
 
@@ -409,7 +409,7 @@ namespace EmEn::Resources
 		}
 
 		{
-			const std::scoped_lock lock{m_stateAccess};
+			const Base::MutexLock lock{m_stateAccess};
 
 			m_state.currentFile = file.path;
 			m_state.currentBytes = 0;
@@ -428,7 +428,7 @@ namespace EmEn::Resources
 		}
 
 		const auto progress = [this] (uint64_t received, std::optional< uint64_t > total) {
-			const std::scoped_lock lock{m_stateAccess};
+			const Base::MutexLock lock{m_stateAccess};
 
 			m_state.currentBytes = received;
 			m_state.currentTotal = total.value_or(m_state.currentTotal);
@@ -506,7 +506,7 @@ namespace EmEn::Resources
 
 		TraceSuccess{ClassId} << "'" << file.path << "' fetched (" << ( errorCode ? 0 : size ) << " bytes, SHA-256 " << *localDigest << ").";
 
-		const std::scoped_lock lock{m_stateAccess};
+		const Base::MutexLock lock{m_stateAccess};
 
 		++m_state.filesFetched;
 		m_state.bytesReceived += errorCode ? 0 : size;
