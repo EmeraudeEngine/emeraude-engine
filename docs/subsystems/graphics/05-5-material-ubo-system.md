@@ -41,6 +41,16 @@ Each `StandardResource` has:
 >    free slot then writes it; the `m_elementsAccess` mutex makes the pair atomic. Without it two
 >    materials receive the **same** `m_sharedUBOIndex`, hence the same UBO byte offset, and overwrite
 >    each other's uniform block with no error reported at all.
+> 3. **A seat is a token** (Ave Robustus II P4, 2026-10-16). `addElement()` returns a
+>    `Base::ScopedRegistration`, empty when the buffer cannot grow (the failure the old `false` meant);
+>    the owner keeps it as `m_sharedUBOSeat`, declared after `m_sharedUniformBuffer`. Its end frees the
+>    seat **by its index** (an object destroyed and another built at the same address cannot free a
+>    seat that is not theirs), through a weak reference to the buffer (the buffer is
+>    `enable_shared_from_this`, always created by `SharedUBOManager` with `make_shared`). There is no
+>    `removeElement()` any more. Holders: the light emitters (`addToSharedUniformBuffer()` /
+>    `removeFromSharedUniformBuffer()`; a light destroyed without `destroyFromHardware()`, as in
+>    `LightSet::removeAllLights()` at scene teardown, now frees its seat too) and the Standard, Beam and
+>    Path materials (`createElementInSharedBuffer()` / `destroy()`).
 >
 > `writeElementData()` is deliberately **not** guarded: once a seat is granted its owner holds it
 > exclusively and writes to a byte range that belongs to no one else. Do not add a lock there — it

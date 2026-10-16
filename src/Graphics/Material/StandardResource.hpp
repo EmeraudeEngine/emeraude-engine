@@ -39,6 +39,7 @@
 #include "Component/Interface.hpp"
 
 /* Local inclusions for usages. */
+#include "ScopedRegistration.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
 #include "PixelFactory/Types.hpp"
@@ -1992,6 +1993,8 @@ namespace EmEn::Graphics::Material
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
+			/* The seat in m_sharedUniformBuffer (Ave Robustus II P4): its end frees it. Declared after the buffer. */
+			Base::ScopedRegistration m_sharedUBOSeat;
 			/** @brief The atlas of an imposter material (setImposterAtlas()), held so its textures outlive the material. */
 			std::shared_ptr< ImposterAtlas > m_imposterAtlas;
 			Renderer * m_renderer{nullptr}; ///< Set by create(): the flusher of dynamic properties (owned by the engine, outlives every material).

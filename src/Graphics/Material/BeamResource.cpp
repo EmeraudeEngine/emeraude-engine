@@ -155,10 +155,7 @@ namespace EmEn::Graphics::Material
 	void
 	BeamResource::destroy () noexcept
 	{
-		if ( m_sharedUniformBuffer != nullptr )
-		{
-			m_sharedUniformBuffer->removeElement(this);
-		}
+		m_sharedUBOSeat.reset();
 
 		m_descriptorSet.reset();
 		m_descriptorSetLayout.reset();
@@ -179,7 +176,9 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !m_sharedUniformBuffer->addElement(this, m_sharedUBOIndex) )
+		m_sharedUBOSeat = m_sharedUniformBuffer->addElement(this, m_sharedUBOIndex);
+
+		if ( !m_sharedUBOSeat.active() )
 		{
 			Tracer::error(ClassId, "Unable to add the beam material to the shared uniform buffer !");
 

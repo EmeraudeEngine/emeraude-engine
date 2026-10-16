@@ -38,6 +38,7 @@
 #include <vector>
 
 /* Local inclusions for usages. */
+#include "ScopedRegistration.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
 
@@ -50,9 +51,10 @@ namespace EmEn::Graphics
 {
 	/**
 	 * @brief The shared uniform buffer class.
-	 * @note This is a higher concept to manage an UBO to store multiple data with a fixed-sized structure.
+	 * @note This is a higher concept to manage an UBO to store multiple data with a fixed-sized structure. Always
+	 * owned by a std::shared_ptr (SharedUBOManager): a seat's token reaches the buffer through a weak reference.
 	 */
-	class EMEN_API SharedUniformBuffer final
+	class EMEN_API SharedUniformBuffer final : public std::enable_shared_from_this< SharedUniformBuffer >
 	{
 		public:
 
@@ -128,19 +130,17 @@ namespace EmEn::Graphics
 			Vulkan::DescriptorSet * descriptorSet (uint32_t index) const noexcept;
 
 			/**
-			 * @brief Adds a new element to the uniform buffer object.
-			 * @param element A raw pointer to link the element.
-			 * @param offset A reference to an unsigned integer to get the offset.
-			 * @return bool
+			 * @brief Takes a free seat for an element (the buffer grows a bank when every seat is taken).
+			 * @param element A raw pointer to the element (an identity only, never dereferenced).
+			 * @param offset A reference to an unsigned integer to get the seat index.
+			 * @return Base::ScopedRegistration The seat: its end frees it, by its index (Ave Robustus II P4, 2026-10-16).
+			 * Empty when the buffer cannot grow any further (traced).
+			 * @pre The buffer is owned by a std::shared_ptr: the token holds a weak reference, so the seat may outlive
+			 * the buffer (its end then does nothing).
+			 * @note Thread-safe (the seat table's lock), from the resource pool and the render thread.
 			 */
 			[[nodiscard]]
-			bool addElement (const void * element, uint32_t & offset) noexcept;
-
-			/**
-			 * @brief Removes an element from the uniform buffer object.
-			 * @param element A raw pointer from the linked element.
-			 */
-			void removeElement (const void * element) noexcept;
+			Base::ScopedRegistration addElement (const void * element, uint32_t & offset) noexcept;
 
 			/**
 			 * @brief Returns the number of elements present in the buffer.
@@ -308,6 +308,22 @@ namespace EmEn::Graphics
 			uint32_t m_frameStride{0};
 			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_uniformBufferObjects;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
+			/**
+			 * @brief Returns the token of a seat just taken.
+			 * @param offset The seat index.
+			 * @param element The element that took it.
+			 * @return Base::ScopedRegistration
+			 */
+			[[nodiscard]]
+			Base::ScopedRegistration seatToken (uint32_t offset, const void * element) noexcept;
+
+			/**
+			 * @brief Frees a seat (the undo of addElement()'s token); a seat that no longer holds this element is left.
+			 * @param offset The seat index.
+			 * @param element The element that took it.
+			 */
+			void releaseSeat (uint32_t offset, const void * element) noexcept;
+
 			std::vector< const void * > m_elements;
 			/* NOTE: Guards the seat table only. Owners are registered concurrently from the resource
 			 * thread pool, and claiming a seat is a scan followed by a write: without this lock two

@@ -202,7 +202,7 @@ namespace EmEn::Graphics
 		return this->addBuffer();
 	}
 
-	bool
+	Base::ScopedRegistration
 	SharedUniformBuffer::addElement (const void * element, uint32_t & offset) noexcept
 	{
 		/* NOTE: Scanning for a free seat and claiming it MUST be atomic, otherwise two concurrent
@@ -219,7 +219,7 @@ namespace EmEn::Graphics
 			{
 				seat = element;
 
-				return true;
+				return this->seatToken(offset, element);
 			}
 
 			offset++;
@@ -240,26 +240,35 @@ namespace EmEn::Graphics
 				"and cannot grow any further ! The owner will fail to load and its geometry will "
 				"leave the scene.";
 
-			return false;
+			return {};
 		}
 
 		m_elements[offset] = element;
 
-		return true;
+		return this->seatToken(offset, element);
+	}
+
+	Base::ScopedRegistration
+	SharedUniformBuffer::seatToken (uint32_t offset, const void * element) noexcept
+	{
+		/* NOTE: By index, not by address: an element destroyed and another one built at the same address cannot free a
+		 * seat that is not theirs. The weak reference lets a seat outlive the buffer. */
+		return Base::ScopedRegistration{[weakThis = this->weak_from_this(), offset, element] () {
+			if ( const auto self = weakThis.lock(); self != nullptr )
+			{
+				self->releaseSeat(offset, element);
+			}
+		}};
 	}
 
 	void
-	SharedUniformBuffer::removeElement (const void * element) noexcept
+	SharedUniformBuffer::releaseSeat (uint32_t offset, const void * element) noexcept
 	{
 		const std::scoped_lock lock{m_elementsAccess};
 
-		const auto elementIt = std::ranges::find_if(m_elements, [element] (const auto & seat) {
-			return seat == element;
-		});
-
-		if ( elementIt != m_elements.end() )
+		if ( offset < m_elements.size() && m_elements[offset] == element )
 		{
-			*elementIt = nullptr;
+			m_elements[offset] = nullptr;
 		}
 	}
 

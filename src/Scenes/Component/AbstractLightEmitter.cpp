@@ -78,7 +78,9 @@ namespace EmEn::Scenes::Component
 			return false;
 		}
 
-		if ( !m_sharedUniformBuffer->addElement(this, m_sharedUBOIndex) )
+		m_sharedUBOSeat = m_sharedUniformBuffer->addElement(this, m_sharedUBOIndex);
+
+		if ( !m_sharedUBOSeat.active() )
 		{
 			TraceError{TracerTag} << "Unable to add the light in the shared uniform buffer !";
 
@@ -96,7 +98,7 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		m_sharedUniformBuffer->removeElement(this);
+		m_sharedUBOSeat.reset();
 		m_sharedUniformBuffer.reset();
 	}
 

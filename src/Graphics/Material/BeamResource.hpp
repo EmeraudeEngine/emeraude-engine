@@ -40,6 +40,7 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
+#include "ScopedRegistration.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
 #include "PixelFactory/Color.hpp"
 
@@ -550,6 +551,8 @@ namespace EmEn::Graphics::Material
 				0.0F, 0.0F, 0.0F, 0.0F
 			};
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
+			/* The seat in m_sharedUniformBuffer (Ave Robustus II P4): its end frees it. Declared after the buffer. */
+			Base::ScopedRegistration m_sharedUBOSeat;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 			Renderer * m_renderer{nullptr}; ///< Set by create(): the flusher of dynamic properties (owned by the engine).

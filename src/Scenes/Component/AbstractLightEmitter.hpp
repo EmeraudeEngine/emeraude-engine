@@ -43,6 +43,7 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "ScopedRegistration.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Math/Space3D/Sphere.hpp"
 #include "PixelFactory/Color.hpp"
@@ -815,6 +816,9 @@ namespace EmEn::Scenes::Component
 			float m_intensity{DefaultIntensity};
 			uint32_t m_shadowMapResolution{0};
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_sharedUniformBuffer;
+			/* The seat in m_sharedUniformBuffer: its end frees it (a light destroyed without destroyFromHardware(), e.g.
+			 * LightSet::removeAllLights(), no longer leaks it). Declared after the buffer. */
+			Base::ScopedRegistration m_sharedUBOSeat;
 			/** @brief Published copies of the uniform block, one per render state slot. */
 			std::array< std::array< float, MaxUniformBlockElementCount >, RenderStateSlotCount > m_publishedBlocks{};
 			/** @brief Logic generation each published slot was filled from. */
