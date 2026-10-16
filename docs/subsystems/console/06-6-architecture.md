@@ -41,6 +41,13 @@ while the tree still pointed at the original, and the copied commands still ran 
 removes it from the console and the parent and orphans its children (unchanged). No class of the cascade copied one
 (the whole build, engine and projet-alpha, compiled with the deletion).
 
+No global console instance (2026-10-16, owner decision): `Controller::instance()` and its static are gone. An object
+registers at the root with `registerToConsole(Controller &)` (`Core` with its `m_consoleController`, an application
+through `consoleController()`); the console's `add()` records itself in the object (`m_console`), and both sides
+detach at their end — the object's destructor removes it from the console, the console's destructor (and `remove()`)
+clears the object's link. Children register under a parent (`registerToObject()`), as before. The tree revision
+(`markConsoleTreeChanged()`, read by the MCP server for `tools/list_changed`) stays a static atomic counter.
+
 ### Thread safety
 
 - `RemoteListener` uses `std::mutex` for the command queue and client list

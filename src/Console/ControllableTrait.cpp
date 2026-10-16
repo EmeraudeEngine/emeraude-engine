@@ -43,12 +43,10 @@ namespace EmEn::Console
 
 	ControllableTrait::~ControllableTrait ()
 	{
-		auto * console = Controller::instance();
-
-		/* Auto remove from console. */
-		if ( console != nullptr )
+		/* Auto remove from the console it is registered at (cleared by the console if it ended first). */
+		if ( m_console != nullptr )
 		{
-			console->remove(*this);
+			static_cast< void >(m_console->remove(*this));
 		}
 
 		/* Auto remove from the parent object: a stale map entry would dispatch
@@ -224,18 +222,9 @@ namespace EmEn::Console
 	}
 
 	bool
-	ControllableTrait::registerToConsole () noexcept
+	ControllableTrait::registerToConsole (Controller & console) noexcept
 	{
-		auto * console = Controller::instance();
-
-		if ( console == nullptr )
-		{
-			TraceError{TracerTag} << "Console controller is not available !";
-
-			return false;
-		}
-
-		if ( !console->add(*this) )
+		if ( !console.add(*this) )
 		{
 			TraceError{TracerTag} << "Unable to register this object to the console.";
 

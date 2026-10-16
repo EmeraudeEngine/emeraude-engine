@@ -46,7 +46,6 @@ namespace EmEn::Console
 {
 	using namespace Base;
 
-	Controller * Controller::s_instance{nullptr};
 	std::atomic< uint64_t > Controller::s_consoleTreeRevision{0};
 
 	bool
@@ -261,6 +260,17 @@ namespace EmEn::Console
 		return true;
 	}
 
+	Controller::~Controller ()
+	{
+		for ( auto * controllable : m_consoleObjects | std::views::values )
+		{
+			if ( controllable != nullptr && controllable->m_console == this )
+			{
+				controllable->m_console = nullptr;
+			}
+		}
+	}
+
 	bool
 	Controller::add (ControllableTrait & controllable) noexcept
 	{
@@ -275,6 +285,8 @@ namespace EmEn::Console
 
 		if ( inserted )
 		{
+			controllable.m_console = this;
+
 			Controller::markConsoleTreeChanged();
 		}
 
@@ -291,6 +303,11 @@ namespace EmEn::Console
 			return false;
 		}
 
+		if ( objectIt->second != nullptr && objectIt->second->m_console == this )
+		{
+			objectIt->second->m_console = nullptr;
+		}
+
 		m_consoleObjects.erase(objectIt);
 
 		Controller::markConsoleTreeChanged();
@@ -305,6 +322,11 @@ namespace EmEn::Console
 		{
 			if ( it->second == &pointer )
 			{
+				if ( it->second->m_console == this )
+				{
+					it->second->m_console = nullptr;
+				}
+
 				m_consoleObjects.erase(it);
 
 				Controller::markConsoleTreeChanged();

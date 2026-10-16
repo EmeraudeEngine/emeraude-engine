@@ -337,7 +337,8 @@ def test_screenshot(bench: Bench, endpoint: Endpoint, names: list) -> None:
     bench.check(max(width, height) <= 1568, f"the image is reduced to ≤ 1568 px ({width}×{height})", f"{width}x{height}")
 
     text = " ".join(item.get("text", "") for item in content if item.get("type") == "text")
-    match = re.search(r'"([^"]+\.png)"', text)
+    # NOTE: The path is UTF-8 text, quoted or not (since the Windows UTF-8 path pass it is written unquoted).
+    match = re.search(r'Screenshot saved: "?(.+?\.png)"?(?: \(|$)', text)
     bench.check(match is not None and os.path.exists(match.group(1)), "the full-resolution file path is given and exists", text[:200])
 
 

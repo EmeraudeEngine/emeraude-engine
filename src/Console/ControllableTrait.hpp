@@ -44,11 +44,16 @@
 
 namespace EmEn::Console
 {
+	class Controller;
+
 	/**
 	 * @brief Interface to register an object controllable with the console.
 	 */
 	class EMEN_API ControllableTrait
 	{
+		/* NOTE: The console sets and clears m_console (add(), remove(), its destructor). */
+		friend class Controller;
+
 		public:
 
 			/* NOTE: Neither copyable nor movable (Ave Robustus II P4, 2026-10-16): the console tree and the parent hold
@@ -254,10 +259,14 @@ namespace EmEn::Console
 			void unbindCommand (const std::string & commandNames) noexcept;
 
 			/**
-			 * @brief Register this controllable object directly in the console.
+			 * @brief Registers this controllable object at the root of a console.
+			 * @note Ave Robustus II P4 (owner decision 2026-10-16): the console is given, not reached through a global
+			 * instance. Both sides detach at their end: this object's destructor removes it from the console, the
+			 * console's destructor forgets it.
+			 * @param console A reference to the console controller.
 			 * @return bool
 			 */
-			bool registerToConsole () noexcept;
+			bool registerToConsole (Controller & console) noexcept;
 
 		private:
 
@@ -293,6 +302,10 @@ namespace EmEn::Console
 			 * dangling entry — a stale entry means every command dispatched to that identifier
 			 * executes on freed memory). */
 			ControllableTrait * m_parentObject{nullptr};
+			/** @brief The console this object is registered at the root of (registerToConsole(), Controller::add()),
+			 * cleared in both directions: by Controller::remove() and the console's destructor, and by this object's
+			 * destructor, which removes it. Main thread only. */
+			Controller * m_console{nullptr};
 			/** @brief Whether onRegisterToConsole() already ran: commands are bound once for
 			 * the object's lifetime, not per registration (an object can unregister and
 			 * re-register, e.g. a game act cycling active/inactive). */

@@ -101,14 +101,7 @@ namespace EmEn::Console
 				: ServiceInterface{ClassId},
 				m_primaryServices{primaryServices}
 			{
-				if ( s_instance != nullptr )
-				{
-					std::cerr << "Controller::Controller(), constructor called twice !" "\n";
 
-					std::terminate();
-				}
-
-				s_instance = this;
 			}
 
 			/**
@@ -138,12 +131,10 @@ namespace EmEn::Console
 			Controller & operator= (Controller && copy) noexcept = delete;
 
 			/**
-			 * @brief Destructs the console controller.
+			 * @brief Destructs the console controller: the objects still registered at its root forget it (they would
+			 * otherwise remove themselves from a destroyed console).
 			 */
-			~Controller () override
-			{
-				s_instance = nullptr;
-			}
+			~Controller () override;
 
 			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].
@@ -356,15 +347,6 @@ namespace EmEn::Console
 				return s_consoleTreeRevision.load(std::memory_order_relaxed);
 			}
 
-			//[[deprecated("This method must be removed !")]]
-			[[nodiscard]]
-			static
-			Controller *
-			instance () noexcept
-			{
-				return s_instance; // FIXME: Remove this
-			}
-
 			/**
 			 * @brief Loop over object names.
 			 * FIXME Checks this method, this should be non-static.
@@ -416,7 +398,6 @@ namespace EmEn::Console
 			static constexpr auto InputTextName{"Input"};
 			static constexpr auto OutputTextName{"Output"};
 
-			static Controller * s_instance;
 			static std::atomic< uint64_t > s_consoleTreeRevision;
 
 			PrimaryServices & m_primaryServices;

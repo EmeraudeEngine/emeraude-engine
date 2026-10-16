@@ -1055,7 +1055,7 @@ namespace EmEn
 		{
 			TraceSuccess{ClassId} << m_consoleController.name() << " service up !";
 
-			this->registerToConsole();
+			this->registerToConsole(m_consoleController);
 
 			m_primaryServices.arguments().registerToObject(*this);
 			m_primaryServices.fileSystem().registerToObject(*this);
