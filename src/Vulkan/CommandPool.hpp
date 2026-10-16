@@ -37,6 +37,9 @@
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
+/* Local inclusions for usages. */
+#include "Mutex.hpp"
+
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
@@ -195,6 +198,6 @@ namespace EmEn::Vulkan
 
 			VkCommandPool m_handle{VK_NULL_HANDLE};
 			VkCommandPoolCreateInfo m_createInfo{};
-			mutable std::mutex m_commandPoolAccess;
+			mutable Base::Mutex m_commandPoolAccess;
 	};
 }

@@ -1398,7 +1398,7 @@ namespace EmEn::Vulkan
 	void
 	Device::setDeferredDestructor (DeferredDestructor * deferredDestructor) noexcept
 	{
-		const std::scoped_lock lock{m_deferredDestructorAccess};
+		const Base::MutexLock lock{m_deferredDestructorAccess};
 
 		m_deferredDestructor = deferredDestructor;
 	}
@@ -1413,7 +1413,7 @@ namespace EmEn::Vulkan
 
 		if ( !points.empty() )
 		{
-			const std::scoped_lock lock{m_deferredDestructorAccess};
+			const Base::MutexLock lock{m_deferredDestructorAccess};
 
 			if ( m_deferredDestructor != nullptr )
 			{

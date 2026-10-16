@@ -45,6 +45,7 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "BufferTransferOperation.hpp"
 #include "ImageTransferOperation.hpp"
 #include "Tracer.hpp"
@@ -154,7 +155,7 @@ namespace EmEn::Vulkan
 			uploadBuffer (Buffer & targetBuffer, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
 				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
-				const std::scoped_lock lock{m_transferOperationsAccess};
+				const Base::MutexLock lock{m_transferOperationsAccess};
 
 				if ( !this->usable() )
 				{
@@ -202,7 +203,7 @@ namespace EmEn::Vulkan
 			uploadImage (Image & targetImage, size_t requiredBytes, function_t && writeData) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
 				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
-				const std::scoped_lock lock{m_transferOperationsAccess};
+				const Base::MutexLock lock{m_transferOperationsAccess};
 
 				if ( !this->usable() )
 				{
@@ -251,7 +252,7 @@ namespace EmEn::Vulkan
 			uploadCompressedImage (Image & targetImage, size_t requiredBytes, function_t && writeData, const std::vector< VkBufferImageCopy > & mipRegions) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
 				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
-				const std::scoped_lock lock{m_transferOperationsAccess};
+				const Base::MutexLock lock{m_transferOperationsAccess};
 
 				if ( !this->usable() )
 				{
@@ -303,7 +304,7 @@ namespace EmEn::Vulkan
 			uploadImageRegion (Image & targetImage, size_t requiredBytes, function_t && writeData, const VkBufferImageCopy & region) noexcept requires (std::is_invocable_v< function_t, const Buffer & >)
 			{
 				/* [VULKAN-CPU-SYNC] Transfer to GPU (Abusive lock!) */
-				const std::scoped_lock lock{m_transferOperationsAccess};
+				const Base::MutexLock lock{m_transferOperationsAccess};
 
 				if ( !this->usable() )
 				{
@@ -420,7 +421,7 @@ namespace EmEn::Vulkan
 			 * @return BufferTransferOperation *
 			 */
 			[[nodiscard]]
-			BufferTransferOperation * getAndReserveBufferTransferOperation (size_t requiredBytes) noexcept;
+			BufferTransferOperation * getAndReserveBufferTransferOperation (size_t requiredBytes) noexcept EMEN_REQUIRES(m_transferOperationsAccess);
 
 			/**
 			 * @brief Returns a locked image transfer operation.
@@ -428,18 +429,18 @@ namespace EmEn::Vulkan
 			 * @return ImageTransferOperation *
 			 */
 			[[nodiscard]]
-			ImageTransferOperation * getAndReserveImageTransferOperation (size_t requiredBytes) noexcept;
+			ImageTransferOperation * getAndReserveImageTransferOperation (size_t requiredBytes) noexcept EMEN_REQUIRES(m_transferOperationsAccess);
 
 			std::shared_ptr< Device > m_device;
 			std::shared_ptr< CommandPool > m_transferCommandPool;
 			std::shared_ptr< CommandPool > m_graphicsCommandPool;
-			std::vector< BufferTransferOperation > m_bufferTransferOperations;
-			std::vector< ImageTransferOperation > m_imageTransferOperations;
-			std::unique_ptr< CommandBuffer > m_imageLayoutTransitionCommandBuffer;
-			std::unique_ptr< Sync::Fence > m_imageLayoutTransitionFence;
+			std::vector< BufferTransferOperation > m_bufferTransferOperations EMEN_GUARDED_BY(m_transferOperationsAccess);
+			std::vector< ImageTransferOperation > m_imageTransferOperations EMEN_GUARDED_BY(m_transferOperationsAccess);
+			std::unique_ptr< CommandBuffer > m_imageLayoutTransitionCommandBuffer EMEN_GUARDED_BY(m_transferOperationsAccess);
+			std::unique_ptr< Sync::Fence > m_imageLayoutTransitionFence EMEN_GUARDED_BY(m_transferOperationsAccess);
 			std::chrono::steady_clock::time_point m_lastStagingRelease;
 			size_t m_releasedStagingCount{0};
 			size_t m_releasedStagingBytes{0};
-			mutable std::mutex m_transferOperationsAccess;
+			mutable Base::Mutex m_transferOperationsAccess;
 	};
 }

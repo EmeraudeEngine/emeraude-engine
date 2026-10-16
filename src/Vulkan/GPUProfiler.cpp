@@ -208,7 +208,7 @@ namespace EmEn::Vulkan
 			return;
 		}
 
-		const std::scoped_lock lock{m_accumulatedAccess};
+		const Base::MutexLock lock{m_accumulatedAccess};
 
 		/* NOTE: The records are in command-stream order: each new label is placed after the entries of this frame's
 		 * previous records, so the display order follows the stream whatever frame a scope first appeared in. */
@@ -366,7 +366,7 @@ namespace EmEn::Vulkan
 	{
 		std::vector< Timing > timings;
 
-		const std::scoped_lock lock{m_accumulatedAccess};
+		const Base::MutexLock lock{m_accumulatedAccess};
 
 		timings.reserve(m_accumulated.size());
 
@@ -388,7 +388,7 @@ namespace EmEn::Vulkan
 	void
 	GPUProfiler::resetStatistics () noexcept
 	{
-		const std::scoped_lock lock{m_accumulatedAccess};
+		const Base::MutexLock lock{m_accumulatedAccess};
 
 		m_accumulated.clear();
 	}

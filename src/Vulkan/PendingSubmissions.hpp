@@ -35,6 +35,7 @@
 #include <mutex>
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "StaticVector.hpp"
 
 namespace EmEn::Vulkan
@@ -111,10 +112,12 @@ namespace EmEn::Vulkan
 			{
 				if ( this != &other )
 				{
-					const std::scoped_lock lock{m_mutex, other.m_mutex};
+					/* NOTE: One lock at a time (the other's, then this one's): never two held together, so no lock order. */
+					auto points = other.takeAll();
 
-					m_points = other.m_points;
-					other.m_points.clear();
+					const Base::MutexLock lock{m_mutex};
+
+					m_points = std::move(points);
 				}
 
 				return *this;
@@ -170,7 +173,7 @@ namespace EmEn::Vulkan
 			Points
 			takeAll () noexcept
 			{
-				const std::scoped_lock lock{m_mutex};
+				const Base::MutexLock lock{m_mutex};
 
 				Points points{m_points};
 
@@ -179,7 +182,7 @@ namespace EmEn::Vulkan
 				return points;
 			}
 
-			mutable std::mutex m_mutex;
-			Points m_points;
+			mutable Base::Mutex m_mutex;
+			Points m_points EMEN_GUARDED_BY(m_mutex);
 	};
 }

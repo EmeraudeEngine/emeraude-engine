@@ -51,6 +51,7 @@ using VmaAllocator = struct VmaAllocator_T *;
 #include "NameableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "PhysicalDevice.hpp"
 #include "DeviceQueueConfiguration.hpp"
 #include "PendingSubmissions.hpp"
@@ -1032,8 +1033,8 @@ namespace EmEn::Vulkan
 			DeviceQueueConfiguration m_transferQueueConfiguration;
 			DeviceQueueConfiguration m_videoEncodeQueueConfiguration;
 			mutable std::mutex m_logicalDeviceAccess;
-			DeferredDestructor * m_deferredDestructor{nullptr};
-			std::mutex m_deferredDestructorAccess;
+			DeferredDestructor * m_deferredDestructor EMEN_GUARDED_BY(m_deferredDestructorAccess){nullptr};
+			Base::Mutex m_deferredDestructorAccess;
 			mutable std::atomic_bool m_deviceLostReported{false};
 			/** @brief Set for the duration of restorePipelineCache(): destroy() during it is a contract fault. */
 			std::atomic_bool m_pipelineCacheRestoreInFlight{false};

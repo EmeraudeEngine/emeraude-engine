@@ -39,6 +39,9 @@
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
+/* Local inclusions for usages. */
+#include "Mutex.hpp"
+
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
@@ -200,7 +203,7 @@ namespace EmEn::Vulkan
 			size_t
 			pageCount () const noexcept
 			{
-				const std::scoped_lock lock{m_descriptorPoolAccess};
+				const Base::MutexLock lock{m_descriptorPoolAccess};
 
 				return m_handle != VK_NULL_HANDLE ? 1 + m_extraPages.size() : 0;
 			}
@@ -228,9 +231,9 @@ namespace EmEn::Vulkan
 			VkDescriptorPoolCreateInfo m_createInfo{};
 			std::vector< VkDescriptorPoolSize > m_descriptorPoolSizes;
 			/** @brief Pages added on exhaustion, in creation order; the last one is where allocations go. */
-			mutable std::vector< VkDescriptorPool > m_extraPages;
+			mutable std::vector< VkDescriptorPool > m_extraPages EMEN_GUARDED_BY(m_descriptorPoolAccess);
 			/** @brief The page of every set allocated from an extra page (a set absent from it is the first page's). */
-			mutable std::unordered_map< VkDescriptorSet, VkDescriptorPool > m_setPages;
-			mutable std::mutex m_descriptorPoolAccess;
+			mutable std::unordered_map< VkDescriptorSet, VkDescriptorPool > m_setPages EMEN_GUARDED_BY(m_descriptorPoolAccess);
+			mutable Base::Mutex m_descriptorPoolAccess;
 	};
 }

@@ -378,6 +378,29 @@ they apply to the engine unchanged. The engine's consequences:
 - Reuse the engine's lifetime mechanisms before adding one: `Vulkan::DeferredDestructor`, `ResourceTrait`
   dependencies, `LocalDataLease`, `Container::DeferredSyncLoad`, Observer auto-detach.
 
+### Mutexes are annotated (decision D12, the engine pass started 2026-10-16)
+
+A member a mutex protects is declared `EMEN_GUARDED_BY(theMutex)`, and the mutex is an annotated emeraude-base type,
+so Clang's `-Wthread-safety` (paranoid set, the pre-push `clang -fsyntax-only` check, the macOS build) refuses every
+unlocked access at compile time. Base `docs/subsystems/source-tree/26-thread-safety-annotations.md` has the types.
+
+- `Base::Mutex` + `Base::MutexLock` (exclusive); `Base::SharedMutex` + `SharedMutexReadLock` / `SharedMutexWriteLock`;
+  `Base::ConditionVariable` to wait on a `MutexLock` (`std::condition_variable_any` only for a `std::stop_token` wait);
+  a non-blocking attempt is `if ( !mutex.try_lock() ) { return; } const Base::MutexLock lock{mutex, std::adopt_lock};`.
+- A private helper called with the lock held: `EMEN_REQUIRES(theMutex)`; a predicate of a wait: the lambda carries
+  `EMEN_REQUIRES(theMutex)`. An initialization or termination that touches guarded members takes the lock too (cheap,
+  and the analysis then holds everywhere).
+- Never two mutexes held at once by one `std::scoped_lock` (the analysis cannot follow it): take them one after the
+  other when the operation allows it (`Vulkan::PendingSubmissions`' move assignment).
+- A mutex that only serializes calls on an externally-synchronized handle and protects NO member has nothing to
+  annotate: it may stay a `std::mutex`. Today: `Vulkan::Device::m_logicalDeviceAccess` (handed out as a
+  `std::unique_lock` by `lockAccess()` to the queues and the overlay), and the `Base::Mutex` of `Vulkan::CommandPool`
+  and `Vulkan::Buffer` (host writes) guard calls, not members.
+- Lot Vulkan (2026-10-16): `DescriptorPool`, `LayoutManager`, `AccelerationStructureBuilder`, `DeferredDestructor`,
+  `PendingSubmissions`, `Device` (the deferred destructor pointer), `GPUProfiler`, `TransferManager` annotated; the
+  analysis found the initialization / termination paths touching the guarded members without the lock
+  (`TransferManager`, `LayoutManager`, `AccelerationStructureBuilder`), now locked.
+
 ## Paths and Text Encoding — rule C (owner decision, 2026-10-12)
 
 Every `std::string` of the cascade is UTF-8: JSON, settings, the command line, console / MCP arguments and replies, logs,

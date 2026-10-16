@@ -69,6 +69,9 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* NOTE: The transition command buffer and fence are guarded: initialized under the lock like every later use. */
+		const Base::MutexLock lock{m_transferOperationsAccess};
+
 		/* Read the queue configuration from the device. */
 		if ( m_device->hasBasicSupport() )
 		{
@@ -113,11 +116,15 @@ namespace EmEn::Vulkan
 	{
 		m_device->waitIdle("TransferManager::onTerminate()");
 
-		m_imageLayoutTransitionFence = nullptr;
-		m_imageLayoutTransitionCommandBuffer = nullptr;
+		{
+			const Base::MutexLock lock{m_transferOperationsAccess};
 
-		m_bufferTransferOperations.clear();
-		m_imageTransferOperations.clear();
+			m_imageLayoutTransitionFence = nullptr;
+			m_imageLayoutTransitionCommandBuffer = nullptr;
+
+			m_bufferTransferOperations.clear();
+			m_imageTransferOperations.clear();
+		}
 
 		m_graphicsCommandPool.reset();
 		m_transferCommandPool.reset();
@@ -130,7 +137,7 @@ namespace EmEn::Vulkan
 	bool
 	TransferManager::transitionImageLayout (Image & image, VkImageAspectFlags aspectMask, VkImageLayout oldLayout, VkImageLayout newLayout) const noexcept
 	{
-		const std::scoped_lock lock{m_transferOperationsAccess};
+		const Base::MutexLock lock{m_transferOperationsAccess};
 
 		if ( !(*m_imageLayoutTransitionFence).reset() )
 		{
@@ -246,7 +253,7 @@ namespace EmEn::Vulkan
 	TransferManager::downloadBuffer (const Buffer & sourceBuffer, std::span< std::byte > destination) noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Transfer from GPU (Abusive lock!) */
-		const std::scoped_lock lock{m_transferOperationsAccess};
+		const Base::MutexLock lock{m_transferOperationsAccess};
 
 		if ( !this->usable() )
 		{
@@ -341,7 +348,7 @@ namespace EmEn::Vulkan
 	TransferManager::downloadImage (const Image & sourceImage, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Pixmap< uint8_t > & pixmap) noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Transfer from GPU (Abusive lock!) */
-		const std::scoped_lock lock{m_transferOperationsAccess};
+		const Base::MutexLock lock{m_transferOperationsAccess};
 
 		if ( !this->usable() )
 		{
@@ -757,12 +764,13 @@ namespace EmEn::Vulkan
 	void
 	TransferManager::releaseIdleStagingBuffers () noexcept
 	{
-		const std::unique_lock lock{m_transferOperationsAccess, std::try_to_lock};
-
-		if ( !lock.owns_lock() )
+		/* NOTE: The analysis follows a try_lock() in a condition and the guard adopting it right after. */
+		if ( !m_transferOperationsAccess.try_lock() )
 		{
 			return;
 		}
+
+		const Base::MutexLock lock{m_transferOperationsAccess, std::adopt_lock};
 
 		const auto now = std::chrono::steady_clock::now();
 		const auto intervalElapsed = now - m_lastStagingRelease >= StagingReleaseInterval;
@@ -810,7 +818,7 @@ namespace EmEn::Vulkan
 	bool
 	TransferManager::clearDepthImage (Image & image, float depthValue, uint32_t stencilValue) const noexcept
 	{
-		const std::scoped_lock lock{m_transferOperationsAccess};
+		const Base::MutexLock lock{m_transferOperationsAccess};
 
 		if ( !(*m_imageLayoutTransitionFence).reset() )
 		{
@@ -875,7 +883,7 @@ namespace EmEn::Vulkan
 	bool
 	TransferManager::clearColorImage (Image & image, VkClearColorValue clearColor) const noexcept
 	{
-		const std::scoped_lock lock{m_transferOperationsAccess};
+		const Base::MutexLock lock{m_transferOperationsAccess};
 
 		if ( !(*m_imageLayoutTransitionFence).reset() )
 		{

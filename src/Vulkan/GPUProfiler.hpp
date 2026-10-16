@@ -38,6 +38,9 @@
 /* Local inclusions for inheritances. */
 #include "Vulkan/AbstractDeviceDependentObject.hpp"
 
+/* Local inclusions for usages. */
+#include "Mutex.hpp"
+
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
@@ -320,12 +323,12 @@ namespace EmEn::Vulkan
 			 * @param insertPosition Where a new label goes: one past the furthest entry of this frame's previous records.
 			 * @return std::size_t The entry index of the label.
 			 */
-			std::size_t accumulate (const char * label, uint32_t depth, float milliseconds, std::size_t insertPosition) noexcept;
+			std::size_t accumulate (const char * label, uint32_t depth, float milliseconds, std::size_t insertPosition) noexcept EMEN_REQUIRES(m_accumulatedAccess);
 
 			std::vector< FrameData > m_frames;
 			std::vector< uint32_t > m_openScopes;
-			std::vector< std::pair< std::string, Accumulated > > m_accumulated;
-			mutable std::mutex m_accumulatedAccess;
+			std::vector< std::pair< std::string, Accumulated > > m_accumulated EMEN_GUARDED_BY(m_accumulatedAccess);
+			mutable Base::Mutex m_accumulatedAccess;
 			double m_timestampPeriodNS{0.0};
 			uint64_t m_timestampMask{~0ULL};
 			uint32_t m_currentSlot{0};

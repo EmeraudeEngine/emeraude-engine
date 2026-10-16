@@ -101,6 +101,9 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* NOTE: The command buffer and the fence are guarded: created under the lock like every later use. */
+		const Base::MutexLock lock{m_buildAccess};
+
 		/* 4. Create command buffer. */
 		m_commandBuffer = std::make_unique< CommandBuffer >(m_commandPool, true);
 
@@ -136,7 +139,7 @@ namespace EmEn::Vulkan
 			return nullptr;
 		}
 
-		const std::scoped_lock lock{m_buildAccess};
+		const Base::MutexLock lock{m_buildAccess};
 
 		/* Device already lost: refuse silently (the loss is reported once, loudly, at detection).
 		 * Logging per call here floods the console and hides the first, real fault. */
@@ -476,7 +479,7 @@ namespace EmEn::Vulkan
 	std::unique_ptr< TLASBuildRequest >
 	AccelerationStructureBuilder::prepareTLAS (const std::vector< TLASInstanceInput > & instances) noexcept
 	{
-		const std::scoped_lock lock{m_buildAccess};
+		const Base::MutexLock lock{m_buildAccess};
 
 		/* Device already lost: refuse silently (reported once at detection). */
 		if ( m_deviceLost )
@@ -651,7 +654,7 @@ namespace EmEn::Vulkan
 
 	template< typename function_t >
 	bool
-	AccelerationStructureBuilder::submitOneShot (function_t && recordCommands) noexcept
+	AccelerationStructureBuilder::submitOneShot (function_t && recordCommands) noexcept EMEN_REQUIRES(m_buildAccess)
 	{
 		/* 1. Reset and begin command buffer. */
 		if ( !(*m_commandBuffer).reset() )

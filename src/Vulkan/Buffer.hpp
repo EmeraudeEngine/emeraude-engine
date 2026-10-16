@@ -40,6 +40,7 @@ using VmaAllocation = struct VmaAllocation_T *;
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "DeviceMemory.hpp"
 #include "MemoryRegion.hpp"
 #include "PendingSubmissions.hpp"
@@ -459,7 +460,7 @@ namespace EmEn::Vulkan
 			VmaAllocation m_memoryAllocation{VK_NULL_HANDLE};
 			VkDeviceSize m_minimumAlignment{0};
 			PendingSubmissions m_pendingSubmissions;
-			mutable std::mutex m_hostMemoryAccess;
+			mutable Base::Mutex m_hostMemoryAccess;
 			bool m_hostVisible{false};
 			bool m_hostReadable{false};
 			bool m_dedicatedMemory{false};

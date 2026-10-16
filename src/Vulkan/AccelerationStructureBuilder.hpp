@@ -39,6 +39,7 @@
 #include "volk.h"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "AccelerationStructure.hpp"
 
 /* Forward declarations. */
@@ -234,13 +235,13 @@ namespace EmEn::Vulkan
 			 */
 			template< typename function_t >
 			[[nodiscard]]
-			bool submitOneShot (function_t && recordCommands) noexcept;
+			bool submitOneShot (function_t && recordCommands) noexcept EMEN_REQUIRES(m_buildAccess);
 
 			std::shared_ptr< Device > m_device;
 			std::shared_ptr< CommandPool > m_commandPool;
-			std::unique_ptr< CommandBuffer > m_commandBuffer;
-			std::unique_ptr< Sync::Fence > m_fence;
-			std::mutex m_buildAccess;
+			std::unique_ptr< CommandBuffer > m_commandBuffer EMEN_GUARDED_BY(m_buildAccess);
+			std::unique_ptr< Sync::Fence > m_fence EMEN_GUARDED_BY(m_buildAccess);
+			Base::Mutex m_buildAccess;
 			uint32_t m_graphicsFamilyIndex{0};
 
 			/* Extension function pointers. */

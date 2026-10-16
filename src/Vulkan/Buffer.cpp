@@ -408,7 +408,7 @@ namespace EmEn::Vulkan
 		}
 
 		/* [VULKAN-CPU-SYNC] CHECK */
-		const std::scoped_lock lock{m_hostMemoryAccess};
+		const Base::MutexLock lock{m_hostMemoryAccess};
 
 		if ( !this->isCreated() )
 		{
@@ -466,7 +466,7 @@ namespace EmEn::Vulkan
 		}
 
 		// [VULKAN-CPU-SYNC] CHECK
-		const std::scoped_lock lock{m_hostMemoryAccess};
+		const Base::MutexLock lock{m_hostMemoryAccess};
 
 		if ( !this->isCreated() )
 		{

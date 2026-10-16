@@ -42,6 +42,7 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "StaticVector.hpp"
 
 /* Forward declarations. */
@@ -139,8 +140,8 @@ namespace EmEn::Vulkan
 			bool onTerminate () noexcept override;
 
 			std::shared_ptr< Device > m_device;
-			std::unordered_map< std::string, std::shared_ptr< DescriptorSetLayout > > m_descriptorSetLayouts;
-			std::unordered_map< std::string, std::shared_ptr< PipelineLayout > > m_pipelineLayouts;
-			mutable std::mutex m_access;
+			std::unordered_map< std::string, std::shared_ptr< DescriptorSetLayout > > m_descriptorSetLayouts EMEN_GUARDED_BY(m_access);
+			std::unordered_map< std::string, std::shared_ptr< PipelineLayout > > m_pipelineLayouts EMEN_GUARDED_BY(m_access);
+			mutable Base::Mutex m_access;
 	};
 }

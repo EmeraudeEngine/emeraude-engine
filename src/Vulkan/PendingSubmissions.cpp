@@ -51,7 +51,7 @@ namespace EmEn::Vulkan
 			return;
 		}
 
-		const std::scoped_lock lock{m_mutex};
+		const Base::MutexLock lock{m_mutex};
 
 		/* NOTE: A queue completes its submissions in order: the latest value covers the earlier ones. */
 		for ( auto & point : m_points )
@@ -95,7 +95,7 @@ namespace EmEn::Vulkan
 		Points unreached;
 
 		{
-			const std::scoped_lock lock{m_mutex};
+			const Base::MutexLock lock{m_mutex};
 
 			for ( const auto & point : m_points )
 			{

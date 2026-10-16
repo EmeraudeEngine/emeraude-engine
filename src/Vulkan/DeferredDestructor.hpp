@@ -39,6 +39,9 @@
 #include <utility>
 #include <vector>
 
+/* Local inclusions for usages. */
+#include "Mutex.hpp"
+
 namespace EmEn::Vulkan
 {
 	/**
@@ -103,7 +106,7 @@ namespace EmEn::Vulkan
 			void
 			setFramesInFlight (uint32_t framesInFlight) noexcept
 			{
-				const std::scoped_lock lock{m_mutex};
+				const Base::MutexLock lock{m_mutex};
 
 				m_delayTicks = std::max(framesInFlight, 1U);
 			}
@@ -120,7 +123,7 @@ namespace EmEn::Vulkan
 					return;
 				}
 
-				const std::scoped_lock lock{m_mutex};
+				const Base::MutexLock lock{m_mutex};
 
 				m_entries.emplace_back(Entry{
 					.retiredAtTick = m_currentTick,
@@ -158,7 +161,7 @@ namespace EmEn::Vulkan
 					return;
 				}
 
-				const std::scoped_lock lock{m_mutex};
+				const Base::MutexLock lock{m_mutex};
 
 				m_entries.emplace_back(Entry{
 					.retiredAtTick = m_currentTick,
@@ -185,7 +188,7 @@ namespace EmEn::Vulkan
 					return;
 				}
 
-				const std::scoped_lock lock{m_mutex};
+				const Base::MutexLock lock{m_mutex};
 
 				m_entries.emplace_back(Entry{
 					.retiredAtTick = m_currentTick,
@@ -207,7 +210,7 @@ namespace EmEn::Vulkan
 				std::vector< Entry > expired;
 
 				{
-					const std::scoped_lock lock{m_mutex};
+					const Base::MutexLock lock{m_mutex};
 
 					++m_currentTick;
 
@@ -255,7 +258,7 @@ namespace EmEn::Vulkan
 				std::deque< Entry > entries;
 
 				{
-					const std::scoped_lock lock{m_mutex};
+					const Base::MutexLock lock{m_mutex};
 
 					entries.swap(m_entries);
 				}
@@ -281,9 +284,9 @@ namespace EmEn::Vulkan
 				std::function< bool () > isReady;
 			};
 
-			std::mutex m_mutex;
-			std::deque< Entry > m_entries;
-			uint64_t m_currentTick{0};
-			uint32_t m_delayTicks{5};
+			Base::Mutex m_mutex;
+			std::deque< Entry > m_entries EMEN_GUARDED_BY(m_mutex);
+			uint64_t m_currentTick EMEN_GUARDED_BY(m_mutex){0};
+			uint32_t m_delayTicks EMEN_GUARDED_BY(m_mutex){5};
 	};
 }
