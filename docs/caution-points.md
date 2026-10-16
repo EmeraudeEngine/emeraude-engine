@@ -8364,6 +8364,19 @@ the lock guard). The overlay stress found the two last ones as self-deadlocks on
 by design: an override must not call into the manager or take the surface's buffer lock — the CEF web views only post to
 CEF (audited).
 
+### ⚠️ The overlay's redraw requester reaches the manager through a severable link (2026-10-16, Ave Robustus II P4)
+
+Every screen and surface received `[this]` of the `Overlay::Manager` as its redraw requester, called from any thread
+(the notifier's timer, the render thread), never withdrawn: a screen or surface kept elsewhere (the notifier, the
+application) after the manager ended would have called a destroyed object — safe only by destruction order. Now the
+requester holds a `weak_ptr` to `Manager::RedrawLink {atomic manager, atomic requestsInFlight}`: it counts itself in
+flight, then reads the manager; `severRedrawLink()` (`onTerminate()`, the destructor) clears the manager, then waits for
+the requests in flight (sequentially consistent). ⚠️ NO lock may be held during the request: it notifies
+`RedrawRequested`, whose handlers take the overlay's locks — a first version under a link mutex inverted the lock
+order with a representation pass (`EmeraudeOverlayResizeStress`, TSan lock-order-inversion, 2026-10-16). Verified:
+the stress twice under TSan (285 resizes, ~4 100 redraw requests, 0 report), the ASan startup sweep, projet-alpha
+`sponza` + the menu 0 VUID.
+
 ### ⚠️ Overlay::Surface visibility is atomic (2026-10-12)
 
 `show()` / `hide()` are called from any thread (the notifier's timer, a web view), `isVisible()` by the render thread:

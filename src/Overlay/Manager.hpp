@@ -136,6 +136,23 @@ namespace EmEn::Overlay
 			Manager (PrimaryServices & primaryServices, Resources::Manager & resourceManager) noexcept;
 
 			/**
+			 * @brief Destructs the overlay manager: the screens and surfaces still alive elsewhere can no longer reach it.
+			 */
+			~Manager () override;
+
+			/** @brief Copy constructor (deleted: a service). */
+			Manager (const Manager & copy) = delete;
+
+			/** @brief Move constructor (deleted). */
+			Manager (Manager && copy) = delete;
+
+			/** @brief Copy assignment (deleted). */
+			Manager & operator= (const Manager & copy) = delete;
+
+			/** @brief Move assignment (deleted). */
+			Manager & operator= (Manager && copy) = delete;
+
+			/**
 			 * @brief Returns the unique identifier for this class [Thread-safe].
 			 * @return size_t
 			 */
@@ -603,6 +620,13 @@ namespace EmEn::Overlay
 
 #endif
 
+			/**
+			 * @brief Makes every redraw requester handed to the screens and surfaces a no-op, after waiting for the
+			 * requests in progress.
+			 * @pre Not called from a redraw request (it would wait for itself).
+			 */
+			void severRedrawLink () noexcept;
+
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourceManager;
 			FramebufferProperties m_framebufferProperties;
@@ -632,6 +656,21 @@ namespace EmEn::Overlay
 			/* The thread running a representation pass (none outside one), and a redraw requested during it. */
 			std::atomic< std::thread::id > m_representationPassThread;
 			std::atomic_bool m_redrawDeferred{false};
+			/**
+			 * @brief What the screens' and surfaces' redraw requester reaches (Ave Robustus II P4, owner decision
+			 * 2026-10-16): this manager until severRedrawLink() (onTerminate(), the destructor). The requester holds a weak
+			 * reference, counts itself in flight, then reads the manager; severRedrawLink() clears the manager, then waits
+			 * until no request is in flight (sequentially consistent: a request either sees the null manager or is waited
+			 * for). No lock is held during a request: it notifies RedrawRequested, whose handlers take the overlay's locks
+			 * (a lock held there inverted the lock order with a representation pass — TSan, 2026-10-16).
+			 */
+			struct RedrawLink final
+			{
+				std::atomic< Manager * > manager{nullptr};
+				std::atomic< uint32_t > requestsInFlight{0};
+			};
+
+			std::shared_ptr< RedrawLink > m_redrawLink{std::make_shared< RedrawLink >()};
 			/* The keyboard and pointer registrations with the input manager (enable()): their end unregisters. */
 			Base::ScopedRegistration m_keyboardRegistration;
 			Base::ScopedRegistration m_pointerRegistration;

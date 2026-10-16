@@ -87,7 +87,25 @@ namespace EmEn::Overlay
 		m_primaryServices{primaryServices},
 		m_resourceManager{resourceManager}
 	{
+		m_redrawLink->manager.store(this);
+
 		this->observe(&m_resourceManager.graphicsRenderer().window());
+	}
+
+	Manager::~Manager ()
+	{
+		this->severRedrawLink();
+	}
+
+	void
+	Manager::severRedrawLink () noexcept
+	{
+		m_redrawLink->manager.store(nullptr);
+
+		for ( auto inFlight = m_redrawLink->requestsInFlight.load(); inFlight != 0; inFlight = m_redrawLink->requestsInFlight.load() )
+		{
+			m_redrawLink->requestsInFlight.wait(inFlight);
+		}
 	}
 
 	std::shared_ptr< Program >
@@ -234,6 +252,9 @@ namespace EmEn::Overlay
 
 		this->forget(&m_resourceManager.graphicsRenderer().window());
 
+		/* NOTE: A screen or surface kept elsewhere (the notifier, the application) must not reach a terminated overlay. */
+		this->severRedrawLink();
+
 		/* NOTE: The input manager must not serve a terminated overlay (enable(false) is never called at the end). */
 		m_keyboardRegistration.reset();
 		m_pointerRegistration.reset();
@@ -294,7 +315,27 @@ namespace EmEn::Overlay
 
 			/* NOTE: Propagate the redraw requester so this screen and every surface it creates can
 			 * wake the on-demand rendering thread on any visual mutation. No-op in continuous rendering. */
-			screen->setRedrawRequester([this] { this->requestRedraw(); });
+			screen->setRedrawRequester([weakLink = std::weak_ptr< RedrawLink >{m_redrawLink}] {
+				const auto redrawLink = weakLink.lock();
+
+				if ( redrawLink == nullptr )
+				{
+					return;
+				}
+
+				/* NOTE: Counted in flight BEFORE the manager is read: severRedrawLink() then waits for this request. */
+				redrawLink->requestsInFlight.fetch_add(1);
+
+				if ( auto * manager = redrawLink->manager.load(); manager != nullptr )
+				{
+					manager->requestRedraw();
+				}
+
+				if ( redrawLink->requestsInFlight.fetch_sub(1) == 1 )
+				{
+					redrawLink->requestsInFlight.notify_all();
+				}
+			});
 
 			m_screens[name] = screen;
 		}
