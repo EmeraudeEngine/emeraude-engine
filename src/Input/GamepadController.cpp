@@ -27,6 +27,7 @@
 #include "GamepadController.hpp"
 
 /* STL inclusions. */
+#include <iterator>
 #include <sstream>
 
 namespace EmEn::Input
@@ -60,26 +61,28 @@ namespace EmEn::Input
 			return "No gamepad connected !" "\n";
 		}
 
-		const auto & [buttons, axes] = s_devicesState[static_cast< size_t >(m_deviceID)];
+		const auto & [buttons, axes] = *std::next(s_devicesState.cbegin(), m_deviceID);
 
 		std::stringstream output;
 		output << "Gamepad #" << m_deviceID << " mapping." "\n";
 
-		for ( auto button = GLFW_GAMEPAD_BUTTON_A; button < GLFW_GAMEPAD_BUTTON_LAST; button++ )
+		/* NOTE: Every button and axis (the former index loops stopped one short of each list). */
+		int32_t button = GLFW_GAMEPAD_BUTTON_A;
+
+		for ( const auto & state : buttons )
 		{
-			if ( buttons[button] != 0U )
-			{
-				output << "Button #" << button << " : Pressed" "\n";
-			}
-			else
-			{
-				output << "Button #" << button << " : Released" "\n";
-			}
+			output << "Button #" << button << ( state.load(std::memory_order_relaxed) != 0U ? " : Pressed" "\n" : " : Released" "\n" );
+
+			++button;
 		}
 
-		for ( auto axe = 0U; axe < GLFW_GAMEPAD_AXIS_LAST; axe++ )
+		int32_t axe = 0;
+
+		for ( const auto & value : axes )
 		{
-			output << "Axe #" << axe << " : " << axes[axe] << "\n";
+			output << "Axe #" << axe << " : " << value.load(std::memory_order_relaxed) << "\n";
+
+			++axe;
 		}
 
 		return output.str();
@@ -93,9 +96,37 @@ namespace EmEn::Input
 			return;
 		}
 
-		if ( glfwGetGamepadState(deviceID, &s_devicesState[static_cast< size_t >(deviceID)]) == GLFW_FALSE )
+		GLFWgamepadstate state{};
+
+		if ( glfwGetGamepadState(deviceID, &state) == GLFW_FALSE )
 		{
 			TraceError{ClassId} << "Gamepad device #" << deviceID << " is not connected !";
+
+			return;
+		}
+
+		auto & [buttons, axes] = *std::next(s_devicesState.begin(), deviceID);
+
+		/* NOTE: GamepadState mirrors GLFWgamepadstate's two arrays, element for element. */
+		static_assert(std::size(GLFWgamepadstate{}.buttons) == std::tuple_size_v< decltype(GamepadState::buttons) >);
+		static_assert(std::size(GLFWgamepadstate{}.axes) == std::tuple_size_v< decltype(GamepadState::axes) >);
+
+		const auto * hardwareButton = std::begin(state.buttons);
+
+		for ( auto & button : buttons )
+		{
+			button.store(*hardwareButton, std::memory_order_relaxed);
+
+			std::advance(hardwareButton, 1);
+		}
+
+		const auto * hardwareAxis = std::begin(state.axes);
+
+		for ( auto & axis : axes )
+		{
+			axis.store(*hardwareAxis, std::memory_order_relaxed);
+
+			std::advance(hardwareAxis, 1);
 		}
 	}
 
@@ -107,16 +138,16 @@ namespace EmEn::Input
 			return;
 		}
 
-		auto & [buttons, axes] = s_devicesState[static_cast< size_t >(deviceID)];
+		auto & [buttons, axes] = *std::next(s_devicesState.begin(), deviceID);
 
 		for ( auto & button : buttons )
 		{
-			button = 0;
+			button.store(0, std::memory_order_relaxed);
 		}
 
 		for ( auto & axe : axes )
 		{
-			axe = 0.0F;
+			axe.store(0.0F, std::memory_order_relaxed);
 		}
 	}
 }

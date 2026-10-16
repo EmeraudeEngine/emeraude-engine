@@ -236,10 +236,14 @@ Whether scaling is enabled is decided by **`Core::updatePointerScaling()`** (`Co
   held by the owner; a dispatch never walks a list that changes; the GLFW callbacks reach the manager through the
   window's callback context (no static instance):
   [`docs/subsystems/input/02-listener-registrations-and-callbacks.md`](../../docs/subsystems/input/02-listener-registrations-and-callbacks.md).
+
+- **The device state crosses threads** — written on the main thread, polled by the logic thread (the player): one
+  `std::atomic` per key / button / axis / hat, relaxed, no whole-device snapshot; the TSan proof `EmeraudeInputStateStress`:
+  [`docs/subsystems/input/03-device-state-across-threads.md`](../../docs/subsystems/input/03-device-state-across-threads.md).
 - **No built-in mapping**: Application responsible for action mapping
 - **Dual approach**: Choose events (reactive) or polling (direct) based on need
 - **GLFW dependency**: Input wraps GLFW, follows its limitations/capabilities
-- **Thread safety**: GLFW events come from main thread; inject methods are called from main thread via console poll
+- **Thread safety**: GLFW events come from main thread; inject methods are called from main thread via console poll; the polled STATE is also read by the logic thread (see the device-state point above)
 - **OverlayManager priority**: Automatically registered, may consume events
 - **Copy-before-iterate**: Inject methods MUST copy listener list before dispatch (see above)
 

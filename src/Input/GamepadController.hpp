@@ -30,8 +30,10 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <atomic>
+#include <cstdint>
+#include <iterator>
 #include <string>
 
 /* Third-party inclusions. */
@@ -52,6 +54,17 @@ namespace EmEn
 
 namespace EmEn::Input
 {
+	/**
+	 * @brief A gamepad state (GLFWgamepadstate's layout), one atomic per button and per axis.
+	 * @note Written on the main thread (GamepadController::readDeviceState()), read by the logic thread (Ave Robustus II
+	 * P5, owner decision 2026-10-16: one atomic per input, relaxed). Value-initialized: released, axes 0.
+	 */
+	struct GamepadState final
+	{
+		std::array< std::atomic< uint8_t >, GLFW_GAMEPAD_BUTTON_LAST + 1 > buttons{};
+		std::array< std::atomic< float >, GLFW_GAMEPAD_AXIS_LAST + 1 > axes{};
+	};
+
 	/**
 	 * @brief The gamepad controller class.
 	 * @extends EmEn::Input::ControllerInterface This is an input controller.
@@ -189,7 +202,7 @@ namespace EmEn::Input
 					return false;
 				}
 
-				return s_devicesState[static_cast< size_t >(m_deviceID)].buttons[button] == GLFW_PRESS;
+				return std::next(std::next(s_devicesState.cbegin(), m_deviceID)->buttons.cbegin(), static_cast< std::ptrdiff_t >(button))->load(std::memory_order_relaxed) == GLFW_PRESS;
 			}
 
 			/**
@@ -207,7 +220,7 @@ namespace EmEn::Input
 				}
 
 				/* NOTE: it answered `== GLFW_PRESS`, exactly like isButtonPressed() (triad 2026-09-30). */
-				return s_devicesState[static_cast< size_t >(m_deviceID)].buttons[button] != GLFW_PRESS;
+				return std::next(std::next(s_devicesState.cbegin(), m_deviceID)->buttons.cbegin(), static_cast< std::ptrdiff_t >(button))->load(std::memory_order_relaxed) != GLFW_PRESS;
 			}
 
 			/**
@@ -223,7 +236,7 @@ namespace EmEn::Input
 				 * with no device it indexed [-1] (triad 2026-09-30). */
 				if ( this->usable() && static_cast< size_t >(axe) < std::size(s_devicesState[0].axes) )
 				{
-					const auto value = s_devicesState[static_cast< size_t >(m_deviceID)].axes[axe];
+					const auto value = std::next(std::next(s_devicesState.cbegin(), m_deviceID)->axes.cbegin(), static_cast< std::ptrdiff_t >(axe))->load(std::memory_order_relaxed);
 
 					if ( value > m_threshold || value < -m_threshold )
 					{
@@ -256,7 +269,7 @@ namespace EmEn::Input
 			[[nodiscard]]
 			bool usable () const noexcept;
 
-			inline static std::array< GLFWgamepadstate, DeviceCount > s_devicesState{};
+			inline static std::array< GamepadState, DeviceCount > s_devicesState{};
 
 			int32_t m_deviceID{-1};
 			float m_threshold{0.15F};

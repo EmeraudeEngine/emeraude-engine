@@ -30,6 +30,8 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdlib>
+#include <iterator>
+#include <span>
 #include <sstream>
 
 /* Third-party inclusions. */
@@ -85,7 +87,7 @@ namespace EmEn::Input
 		 * no device `.at(-1)` threw, i.e. std::terminate (triad 2026-09-30). */
 		if ( this->usable() && static_cast< size_t >(axeIndex) < JoystickMaxAxis )
 		{
-			const auto value = s_devicesState[static_cast< size_t >(m_deviceID)].axes[axeIndex];
+			const auto value = std::next(std::next(s_devicesState.cbegin(), m_deviceID)->axes.cbegin(), static_cast< std::ptrdiff_t >(axeIndex))->load(std::memory_order_relaxed);
 
 			if ( value > m_threshold || value < -m_threshold )
 			{
@@ -110,7 +112,7 @@ namespace EmEn::Input
 			return false;
 		}
 
-		return s_devicesState[static_cast< size_t >(m_deviceID)].buttons[static_cast< size_t >(buttonNum)];
+		return std::next(std::next(s_devicesState.cbegin(), m_deviceID)->buttons.cbegin(), buttonNum)->load(std::memory_order_relaxed);
 	}
 
 	bool
@@ -127,7 +129,7 @@ namespace EmEn::Input
 			return true;
 		}
 
-		return !s_devicesState[static_cast< size_t >(m_deviceID)].buttons[static_cast< size_t >(buttonNum)];
+		return !std::next(std::next(s_devicesState.cbegin(), m_deviceID)->buttons.cbegin(), buttonNum)->load(std::memory_order_relaxed);
 	}
 
 	JoystickHatDirection
@@ -144,7 +146,7 @@ namespace EmEn::Input
 			return Center;
 		}
 
-		return s_devicesState[static_cast< size_t >(m_deviceID)].hats[static_cast< size_t >(hatNum)];
+		return std::next(std::next(s_devicesState.cbegin(), m_deviceID)->hats.cbegin(), hatNum)->load(std::memory_order_relaxed);
 	}
 
 	std::string
@@ -158,28 +160,27 @@ namespace EmEn::Input
 		std::stringstream output;
 		output << "Joystick #" << m_deviceID << " mapping." "\n";
 
-		const auto & [axes, buttons, hats] = s_devicesState[static_cast< size_t >(m_deviceID)];
+		const auto & [axes, buttons, hats] = *std::next(s_devicesState.cbegin(), m_deviceID);
 
-		for ( int32_t axe = 0; axe < JoystickMaxAxis; axe++ )
+		int32_t index = 0;
+
+		for ( const auto & axis : axes )
 		{
-			output << "Axe #" << axe << " : " << axes[static_cast< size_t >(axe)] << '\n';
+			output << "Axe #" << index++ << " : " << axis.load(std::memory_order_relaxed) << '\n';
 		}
 
-		for ( int32_t button = 0; button < JoystickMaxButtons; button++ )
+		index = 0;
+
+		for ( const auto & button : buttons )
 		{
-			if ( buttons[static_cast< size_t >(button)] )
-			{
-				output << "Button #" << button << " : Pressed" "\n";
-			}
-			else
-			{
-				output << "Button #" << button << " : Released" "\n";
-			}
+			output << "Button #" << index++ << ( button.load(std::memory_order_relaxed) ? " : Pressed" "\n" : " : Released" "\n" );
 		}
 
-		for ( int32_t hat = 0; hat < JoystickMaxHats; hat++ )
+		index = 0;
+
+		for ( const auto & hat : hats )
 		{
-			output << "Hat #" << hat << " : " << static_cast< int >(hats[static_cast< size_t >(hat)]) << '\n';
+			output << "Hat #" << index++ << " : " << static_cast< int >(hat.load(std::memory_order_relaxed)) << '\n';
 		}
 
 		return output.str();
@@ -193,29 +194,37 @@ namespace EmEn::Input
 			return;
 		}
 
-		auto & [axes, buttons, hats] = s_devicesState[static_cast< size_t >(deviceID)];
+		auto & [axes, buttons, hats] = *std::next(s_devicesState.begin(), deviceID);
+
+		/* NOTE: GLFW gives a pointer and a count (null and 0 when the joystick is gone): each list is published up to
+		 * the shorter of the two. */
+		const auto hardware = [] (const auto * values, int32_t count, size_t capacity) noexcept {
+			const auto size = values == nullptr || count <= 0 ? size_t{0} : std::min(static_cast< size_t >(count), capacity);
+
+			return std::span{values, size};
+		};
 
 		int32_t count = 0;
 
-		const auto * currentAxes = glfwGetJoystickAxes(deviceID, &count);
+		auto axisIt = axes.begin();
 
-		for ( int32_t index = 0; index < std::min(count, JoystickMaxAxis); index++ )
+		for ( const auto value : hardware(glfwGetJoystickAxes(deviceID, &count), count, axes.size()) )
 		{
-			axes[static_cast< size_t >(index)] = currentAxes[index];
+			(axisIt++)->store(value, std::memory_order_relaxed);
 		}
 
-		const auto * currentButtons = glfwGetJoystickButtons(deviceID, &count);
+		auto buttonIt = buttons.begin();
 
-		for ( int32_t index = 0; index < std::min(count, JoystickMaxButtons); index++ )
+		for ( const auto value : hardware(glfwGetJoystickButtons(deviceID, &count), count, buttons.size()) )
 		{
-			buttons[static_cast< size_t >(index)] = currentButtons[index] == GLFW_PRESS;
+			(buttonIt++)->store(value == GLFW_PRESS, std::memory_order_relaxed);
 		}
 
-		currentButtons = glfwGetJoystickHats(deviceID, &count);
+		auto hatIt = hats.begin();
 
-		for ( int32_t index = 0; index < std::min(count, JoystickMaxHats); index++ )
+		for ( const auto value : hardware(glfwGetJoystickHats(deviceID, &count), count, hats.size()) )
 		{
-			hats[static_cast< size_t >(index)] = static_cast< JoystickHatDirection >(currentButtons[index]);
+			(hatIt++)->store(static_cast< JoystickHatDirection >(value), std::memory_order_relaxed);
 		}
 	}
 
@@ -227,21 +236,21 @@ namespace EmEn::Input
 			return;
 		}
 
-		auto & [axes, buttons, hats] = s_devicesState[static_cast< size_t >(deviceID)];
+		auto & [axes, buttons, hats] = *std::next(s_devicesState.begin(), deviceID);
 
 		for ( auto & axis : axes )
 		{
-			axis = 0.0F;
+			axis.store(0.0F, std::memory_order_relaxed);
 		}
 
 		for ( auto & button : buttons )
 		{
-			button = false;
+			button.store(false, std::memory_order_relaxed);
 		}
 
 		for ( auto & hat : hats )
 		{
-			hat = Center;
+			hat.store(Center, std::memory_order_relaxed);
 		}
 	}
 }

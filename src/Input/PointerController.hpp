@@ -31,6 +31,8 @@
 
 /* STL inclusions. */
 #include <array>
+#include <atomic>
+#include <cstdint>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -122,7 +124,8 @@ namespace EmEn::Input
 
 		private:
 
-			static std::array< char, 8 > s_deviceState;
+			/* NOTE: Written on the main thread, read by the logic thread: one atomic per button (see KeyboardController). */
+			static std::array< std::atomic< uint8_t >, 8 > s_deviceState;
 
 			bool m_disabled{false};
 	};

@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cstddef>
+#include <iterator>
 #include <sstream>
 
 /* Third-party inclusions. */
@@ -39,7 +40,7 @@
 
 namespace EmEn::Input
 {
-	std::array< char, 8 > PointerController::s_deviceState{};
+	std::array< std::atomic< uint8_t >, 8 > PointerController::s_deviceState{};
 
 	bool
 	PointerController::isButtonPressed (MouseButton button) const noexcept
@@ -50,7 +51,7 @@ namespace EmEn::Input
 			return false;
 		}
 
-		return s_deviceState[static_cast< size_t >(button)] != 0;
+		return std::next(s_deviceState.cbegin(), static_cast< std::ptrdiff_t >(button))->load(std::memory_order_relaxed) != 0;
 	}
 
 	bool
@@ -61,8 +62,8 @@ namespace EmEn::Input
 			return false;
 		}
 
-		return std::ranges::any_of(s_deviceState, [] (auto state) {
-			return state != 0;
+		return std::ranges::any_of(s_deviceState, [] (const std::atomic< uint8_t > & state) {
+			return state.load(std::memory_order_relaxed) != 0;
 		});
 	}
 
@@ -74,7 +75,7 @@ namespace EmEn::Input
 			return true;
 		}
 
-		return s_deviceState[static_cast< size_t >(button)] == 0;
+		return std::next(s_deviceState.cbegin(), static_cast< std::ptrdiff_t >(button))->load(std::memory_order_relaxed) == 0;
 	}
 
 	std::string
@@ -84,16 +85,13 @@ namespace EmEn::Input
 
 		output << "Pointer mapping." "\n";
 
-		for ( int32_t button = GLFW_MOUSE_BUTTON_1; button < GLFW_MOUSE_BUTTON_LAST + 1; button++ )
+		int32_t button = GLFW_MOUSE_BUTTON_1;
+
+		for ( const auto & state : s_deviceState )
 		{
-			if ( s_deviceState[static_cast< size_t >(button)] != 0 )
-			{
-				output << "Button #" << button << " : Pressed" "\n";
-			}
-			else
-			{
-				output << "Button #" << button << " : Released" "\n";
-			}
+			output << "Button #" << button << ( state.load(std::memory_order_relaxed) != 0 ? " : Pressed" "\n" : " : Released" "\n" );
+
+			++button;
 		}
 
 		return output.str();
@@ -102,14 +100,26 @@ namespace EmEn::Input
 	void
 	PointerController::readDeviceState (const Window & window) noexcept
 	{
+		/* NOTE: Read in one go into a local buffer, then published button by button. */
+		std::array< char, 8 > hardware{};
+
 #ifdef GLFW_EM_CUSTOM_VERSION
-		glfwGetMouseButtonState(window.handle(), s_deviceState.data());
+		glfwGetMouseButtonState(window.handle(), hardware.data());
 #else
 		for ( int32_t button = GLFW_MOUSE_BUTTON_1; button < GLFW_MOUSE_BUTTON_LAST + 1; button++ )
 		{
-			s_deviceState[static_cast< size_t >(button)] = glfwGetMouseButton(window.handle(), button) == GLFW_PRESS ? 1 : 0;
+			hardware[static_cast< size_t >(button)] = glfwGetMouseButton(window.handle(), button) == GLFW_PRESS ? 1 : 0;
 		}
 #endif
+
+		auto hardwareIt = hardware.cbegin();
+
+		for ( auto & state : s_deviceState )
+		{
+			state.store(*hardwareIt != 0 ? 1 : 0, std::memory_order_relaxed);
+
+			++hardwareIt;
+		}
 
 		/* NOTE: glfwGetCursorPos() was removed from here, because of high CPU usage. */
 	}

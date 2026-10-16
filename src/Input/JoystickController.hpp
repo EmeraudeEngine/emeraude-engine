@@ -30,8 +30,9 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <atomic>
+#include <cstdint>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -48,12 +49,16 @@ namespace EmEn
 
 namespace EmEn::Input
 {
-	/** @brief Structure to copy the joystick state.  */
-	struct EMEN_API JoystickState
+	/**
+	 * @brief The joystick state, one atomic per axis, button and hat.
+	 * @note Written on the main thread (readDeviceState()), read by the logic thread (Ave Robustus II P5, owner decision
+	 * 2026-10-16: one atomic per input, relaxed). Value-initialized: axes 0, buttons released, hats Center (0).
+	 */
+	struct JoystickState final
 	{
-		std::array< float, 6 > axes{0.0F};
-		std::array< bool, JoystickMaxButtons > buttons{false};
-		std::array< JoystickHatDirection, JoystickMaxHats >hats{Center};
+		std::array< std::atomic< float >, JoystickMaxAxis > axes{};
+		std::array< std::atomic< bool >, JoystickMaxButtons > buttons{};
+		std::array< std::atomic< JoystickHatDirection >, JoystickMaxHats > hats{};
 	};
 
 	/**

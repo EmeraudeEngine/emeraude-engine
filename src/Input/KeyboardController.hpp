@@ -30,8 +30,9 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <atomic>
+#include <cstdint>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -152,9 +153,12 @@ namespace EmEn::Input
 
 		private:
 
-			static std::array< char, 349 > s_deviceState;
+			/* NOTE: Written on the main thread (GLFW callback, readDeviceState(), console injection), read by the logic
+			 * thread (the player's movement): one atomic per key, relaxed — a key is coherent on its own, as it always
+			 * was; no snapshot of the whole keyboard (Ave Robustus II P5, owner decision 2026-10-16). */
+			static std::array< std::atomic< uint8_t >, 349 > s_deviceState;
 			/** @brief The keys held by injection, OR-ed into the hardware state after each copy. */
-			static std::array< char, 349 > s_injectedState;
+			static std::array< std::atomic< uint8_t >, 349 > s_injectedState;
 
 			bool m_disabled{false};
 	};
