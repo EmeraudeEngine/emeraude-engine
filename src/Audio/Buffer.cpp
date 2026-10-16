@@ -56,6 +56,12 @@ namespace EmEn::Audio
 
 	Buffer::~Buffer ()
 	{
+		this->destroy();
+	}
+
+	void
+	Buffer::destroy () noexcept
+	{
 		if ( this->isCreated() )
 		{
 			alDeleteBuffers(1, this->identifierPointer());

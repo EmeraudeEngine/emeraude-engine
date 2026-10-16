@@ -27,6 +27,7 @@
 #include "Manager.hpp"
 
 /* STL inclusions. */
+#include <cstdlib>
 #include <cstring>
 #include <iostream>
 #include <ranges>
@@ -37,6 +38,7 @@
 #include "Arguments.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
+#include "MusicResource.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
 #include "SoundResource.hpp"
@@ -383,26 +385,47 @@ namespace EmEn::Audio
 
 		size_t error = 0;
 
-		/* Terminate sub-services. */
-		{
-			for ( auto * service : std::ranges::reverse_view(m_subServicesEnabled) )
+		const auto terminateSubService = [&error] (ServiceInterface & service) {
+			if ( service.terminate() )
 			{
-				if ( service->terminate() )
-				{
-					TraceSuccess{ClassId} << service->name() << " sub-service terminated gracefully!";
-				}
-				else
-				{
-					error++;
+				TraceSuccess{ClassId} << service.name() << " sub-service terminated gracefully!";
+			}
+			else
+			{
+				error++;
 
-					TraceError{ClassId} << service->name() << " sub-service failed to terminate properly!";
-				}
+				TraceError{ClassId} << service.name() << " sub-service failed to terminate properly!";
+			}
+		};
+
+		/* NOTE: Every OpenAL object is released while the context and the device it was created on exist (Ave Robustus
+		 * II). The recorder owns that context when it is up (its loopback "game" context, made current before any
+		 * other object was created): it is terminated LAST, after the sources, the other sub-services and the
+		 * buffers of the sound and music resources. */
+		this->releaseSources();
+
+		bool recorderEnabled = false;
+
+		for ( auto * service : std::ranges::reverse_view(m_subServicesEnabled) )
+		{
+			if ( service == &m_recorder )
+			{
+				recorderEnabled = true;
+
+				continue;
 			}
 
-			m_subServicesEnabled.clear();
+			terminateSubService(*service);
 		}
 
-		m_defaultSource.reset();
+		this->releaseResourceBuffers();
+
+		if ( recorderEnabled )
+		{
+			terminateSubService(m_recorder);
+		}
+
+		m_subServicesEnabled.clear();
 
 		/* NOTE: Check for missing errors from audio lib execution. */
 		if ( alGetErrors("GlobalReleaseFlush", __FILE__, __LINE__) )
@@ -748,6 +771,59 @@ namespace EmEn::Audio
 		const std::scoped_lock lock{m_sourcePoolMutex};
 
 		return m_availableSources.size();
+	}
+
+	void
+	Manager::releaseSources () noexcept
+	{
+		{
+			const std::scoped_lock lock{m_sourcePoolMutex};
+
+			if ( m_availableSources.size() < m_allSources.size() )
+			{
+				TraceError{ClassId} <<
+					"Manager::releaseSources(), contract violation: " << m_allSources.size() - m_availableSources.size() <<
+					" source(s) still requested at the "
+					"audio shutdown (a SourceRequest outlived its owner). The pool is kept.";
+
+				if constexpr ( IsDebug )
+				{
+					std::abort();
+				}
+			}
+			else
+			{
+				m_availableSources.clear();
+				m_allSources.clear();
+			}
+		}
+
+		m_defaultSource.reset();
+	}
+
+	void
+	Manager::releaseResourceBuffers () noexcept
+	{
+		size_t playables = 0;
+
+		const auto release = [&playables] (const auto * container) {
+			if ( container == nullptr )
+			{
+				return;
+			}
+
+			for ( const auto & playable : container->resourcesSnapshot() )
+			{
+				playable->releaseBuffers();
+
+				++playables;
+			}
+		};
+
+		release(m_resourceManager.container< SoundResource >());
+		release(m_resourceManager.container< MusicResource >());
+
+		TraceDebug{ClassId} << "The buffers of " << playables << " sound and music resource(s) released.";
 	}
 
 	SourceRequest

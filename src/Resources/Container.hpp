@@ -734,6 +734,26 @@ namespace EmEn::Resources
 				return names;
 			}
 
+			/**
+			 * @brief Returns a copy of the list of every resource held (loaded or not).
+			 * @note Thread-safe: locks m_resourcesAccess for the copy only; the caller works on the resources outside
+			 * the container lock.
+			 * @return std::vector< std::shared_ptr< resource_t > >
+			 */
+			[[nodiscard]]
+			std::vector< std::shared_ptr< resource_t > >
+			resourcesSnapshot () const noexcept
+			{
+				const std::scoped_lock scopeLock{m_resourcesAccess};
+
+				std::vector< std::shared_ptr< resource_t > > resources;
+				resources.reserve(m_resources.size());
+
+				std::ranges::copy(m_resources | std::views::values, std::back_inserter(resources));
+
+				return resources;
+			}
+
 			/** @copydoc EmEn::Resources::ContainerInterface::resourceClassId() const noexcept */
 			[[nodiscard]]
 			const char *

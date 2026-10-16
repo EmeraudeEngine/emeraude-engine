@@ -113,6 +113,16 @@ namespace EmEn::Audio
 				return m_buffer;
 			}
 
+			/** @copydoc EmEn::Audio::PlayableInterface::releaseBuffers() */
+			void
+			releaseBuffers () noexcept override
+			{
+				if ( m_buffer != nullptr )
+				{
+					m_buffer->destroy();
+				}
+			}
+
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
 			[[nodiscard]]
 			const char *

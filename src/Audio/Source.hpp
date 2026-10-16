@@ -50,6 +50,8 @@ namespace EmEn::Audio
 {
 	/**
 	 * @brief The Source class
+	 * @note It owns its OpenAL name: neither copyable nor movable (a copy or a moved-from object would delete the name
+	 * twice).
 	 * @extends EmEn::Audio::AbstractObject
 	 */
 	class EMEN_API Source final : public AbstractObject
@@ -75,27 +77,27 @@ namespace EmEn::Audio
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Source (const Source & copy) noexcept = default;
+			Source (const Source & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Source (Source && copy) noexcept = default;
+			Source (Source && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
 			 * @return Source &
 			 */
-			Source & operator= (const Source & copy) noexcept = default;
+			Source & operator= (const Source & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
 			 * @return Source &
 			 */
-			Source & operator= (Source && copy) noexcept = default;
+			Source & operator= (Source && copy) noexcept = delete;
 
 			/**
 			 * @brief Destructs the audio source.

@@ -90,6 +90,14 @@ namespace EmEn::Audio
 			[[nodiscard]]
 			virtual std::shared_ptr< const Buffer > buffer (size_t bufferIndex = 0) const noexcept = 0;
 
+			/**
+			 * @brief Deletes the OpenAL buffers of this playable now (Buffer::destroy()); the playable stays, silent.
+			 * @note Called by the audio manager's termination only, its device still open (owner decision 2026-10-16):
+			 * the resource manager, which holds the playables, terminates after it. The resource jobs are stopped by then
+			 * and no source uses a buffer any more.
+			 */
+			virtual void releaseBuffers () noexcept = 0;
+
 		protected:
 
 			/**

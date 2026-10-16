@@ -39,6 +39,8 @@ namespace EmEn::Audio
 {
 	/**
 	 * @brief The Buffer class.
+	 * @note It owns its OpenAL name: neither copyable nor movable (a copy or a moved-from object would delete the name
+	 * twice); shared through std::shared_ptr.
 	 * @extends EmEn::Audio::AbstractObject
 	 */
 	class EMEN_API Buffer final : public AbstractObject
@@ -57,30 +59,39 @@ namespace EmEn::Audio
 			 * @brief Copy constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Buffer (const Buffer & copy) noexcept = default;
+			Buffer (const Buffer & copy) noexcept = delete;
 
 			/**
 			 * @brief Move constructor.
 			 * @param copy A reference to the copied instance.
 			 */
-			Buffer (Buffer && copy) noexcept = default;
+			Buffer (Buffer && copy) noexcept = delete;
 
 			/**
 			 * @brief Copy assignment.
 			 * @param copy A reference to the copied instance.
+			 * @return Buffer &
 			 */
-			Buffer & operator= (const Buffer & copy) noexcept = default;
+			Buffer & operator= (const Buffer & copy) noexcept = delete;
 
 			/**
 			 * @brief Move assignment.
 			 * @param copy A reference to the copied instance.
+			 * @return Buffer &
 			 */
-			Buffer & operator= (Buffer && copy) noexcept = default;
+			Buffer & operator= (Buffer && copy) noexcept = delete;
 
 			/**
 			 *  @brief Destructs the buffer.
 			 */
 			~Buffer () override;
+
+			/**
+			 * @brief Deletes the OpenAL buffer now; the object stays, no longer created.
+			 * @note The audio manager's termination calls it (through PlayableInterface::releaseBuffers()) while the
+			 * device the buffer lives on is still open. No source may still use the buffer.
+			 */
+			void destroy () noexcept;
 
 			/** @copydoc EmEn::Audio::AbstractObject::isCreated() */
 			[[nodiscard]]

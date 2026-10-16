@@ -218,6 +218,11 @@ namespace EmEn::Audio
 		m_isFading = false;
 		m_loadingTrack.reset();
 
+		/* NOTE: The sources live on the audio manager's current context (the recorder's game context when it is up):
+		 * released here, while it still exists (Ave Robustus II). onInitialize() creates them again. */
+		m_trackA.reset();
+		m_trackB.reset();
+
 		return true;
 	}
 

@@ -413,6 +413,23 @@ namespace EmEn::Audio
 
 		private:
 
+			/**
+			 * @brief Releases the default source and the source pool, the context they were created on still current.
+			 * @note Called by onTerminate() BEFORE the sub-services: the sources were created after the recorder, on its
+			 * game context when it is up (the reverse of their creation). A SourceRequest still held here is a contract
+			 * fault (owner decision 2026-10-16): traced, aborted in Debug; in Release the pool is kept (no source is
+			 * destroyed under its holder).
+			 */
+			void releaseSources () noexcept;
+
+			/**
+			 * @brief Deletes the OpenAL buffers of every sound and music resource (PlayableInterface::releaseBuffers()).
+			 * @note Called by onTerminate() after the sources and every sub-service but the recorder, before the
+			 * recorder and the devices: the resource manager, which holds the resources, terminates after this service
+			 * (owner decision 2026-10-16). The resource jobs are stopped by then (Core), so no loader writes a buffer.
+			 */
+			void releaseResourceBuffers () noexcept;
+
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
 			bool onInitialize () noexcept override;
 

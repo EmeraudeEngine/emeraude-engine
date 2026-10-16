@@ -36,6 +36,10 @@ Path generation and coordinated start/stop of all recorders is owned by `Core::s
 - Crash-safe: data is on disk even if header isn't patched (recoverable by ffmpeg)
 - Setup creates: loopback device, game context, playback device/context, render thread
 - Shutdown stops recording, joins render thread, releases all OpenAL resources
+- ⚠️ The recorder owns the context every other OpenAL object of the engine is created on (its game context is made
+  current BEFORE the audio manager creates its sources): `Audio::Manager::onTerminate()` terminates it LAST, after the
+  default source and the pool, the other sub-services and the buffers of the sound and music resources (2026-10-16,
+  [`06-critical-points.md`](06-critical-points.md))
 
 ### Code References
 - `Recorder.hpp` — Class declaration with full Doxygen documentation
