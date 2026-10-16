@@ -282,9 +282,11 @@ namespace EmEn::Scenes
 					{
 						m_AVConsoleManager.addVideoDevice(swapChain, true);
 
-						m_renderToViewAccess.lock();
-						m_renderToViews.emplace(swapChain);
-						m_renderToViewAccess.unlock();
+						{
+							const std::scoped_lock lock{m_renderToViewAccess};
+
+							m_renderToViews.emplace(swapChain);
+						}
 
 						TraceDebug{ClassId} << "SwapChain added to AVConsole!";
 					}
