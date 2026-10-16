@@ -104,8 +104,9 @@ namespace EmEn
 			else
 			{
 				TraceWarning{ClassId} <<
-					"The Vulkan loader environment was not prepared (PlatformManager::prepareVulkanLoaderEnvironment() must be "
-					"called by main() before any thread) : the validation layer shipped with the application may not be found.";
+					"No shipped layer directory in VK_ADD_LAYER_PATH : either main() did not call "
+					"PlatformManager::prepareVulkanLoaderEnvironment() before any thread, or no 'vulkan/explicit_layer.d' sits "
+					"beside the binary (nor in a macOS bundle's Contents/Resources). The validation layer may not be found.";
 			}
 
 #if IS_MACOS

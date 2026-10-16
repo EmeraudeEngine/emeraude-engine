@@ -185,7 +185,7 @@ For a debug build, swap `Release` → `Debug` everywhere (build directory, `CMAK
 | `EMERAUDE_ENABLE_RENDERDOC` | `Off` | RenderDoc in-application API (see below). |
 | `EMERAUDE_USE_EXPLICIT_EXPORTS` | `On` (MSVC), `Off` elsewhere | Windows: explicit `EMEN_API` export macro instead of `WINDOWS_EXPORT_ALL_SYMBOLS`. **`On` is mandatory on MSVC since 2026-08**: the engine's symbol surface exceeded the hard PE limit of 65535 exported ordinals per DLL, so export-all can no longer link (`LNK1189`). Costs: a longer consuming-application link, and every new consumer-referenced public symbol must carry `EMEN_API`. Inert on non-MSVC platforms (ELF/Mach-O export via symbol visibility). See [`docs/windows-export-api.md`](docs/windows-export-api.md). |
 | `EMERAUDE_USE_STATIC_RUNTIME` | `Off` | Windows: static MSVC runtime (`/MT`). Also selects the matching prebuilt archive. |
-| `EMERAUDE_ENABLE_ASAN` / `MSAN` / `LSAN` / `TSAN` / `UBSAN` | `Off` | Sanitizers (Linux only). |
+| `EMERAUDE_ENABLE_ASAN` / `MSAN` / `LSAN` / `TSAN` / `UBSAN` | `Off` | Sanitizers. Linux: all five. macOS: ASan, TSan, UBSan (AppleClang arm64 has no LeakSanitizer: `ASAN_OPTIONS=detect_leaks=0`). MSVC: ASan only (`clang_rt.asan_dynamic-x86_64.dll` on `PATH`). |
 | `EMERAUDE_DEBUG_KEYBOARD_INPUT`, `EMERAUDE_DEBUG_POINTER_INPUT`, `EMERAUDE_DEBUG_WINDOW_EVENTS`, `EMERAUDE_DEBUG_VULKAN_TRACKING` | `Off` | Console tracing of the matching subsystem. |
 
 Options of the compile policy itself (standards, warnings-as-errors, exceptions, PCH) are

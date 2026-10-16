@@ -72,14 +72,43 @@ dependencies/emeraude-engine/tools/stress/startup-fault-sweep.sh $PWD/.claude-bu
 - projet-alpha (CEF), plain build with the option, 5 services (UI manager, overlay, renderer, instance, notifier):
   - exit 0 or 1, never a refusal dialog (an injected instance failure is not told as a driver refusal), 0 VUID;
   - the shutdown 1.2-1.4 s when the application came up.
-- MSVC AddressSanitizer — `EMERAUDE_ENABLE_ASAN` adds `-fsanitize=address` (Linux only). Window-PA's build, which
-  could become the switch's Windows branch:
+- MSVC AddressSanitizer — Window-PA's build, the switch's MSVC branch since 2026-10-16 (`EMERAUDE_ENABLE_ASAN` adds
+  these flags to the engine target, PUBLIC; Window-PA set them in `CMAKE_C/CXX_FLAGS`):
   - `CMAKE_C/CXX_FLAGS` add `/fsanitize=address /Z7 /D_DISABLE_VECTOR_ANNOTATION /D_DISABLE_STRING_ANNOTATION`;
   - `/DEBUG` on the executable and shared linker flags;
   - `clang_rt.asan_dynamic-x86_64.dll` (the VC bin directory) on `PATH` at run time.
   - `/Z7` is required: without debug information MSVC warns C5072, fatal under `/WX`.
   - The two defines avoid the annotation mismatch with the prebuilt, uninstrumented static libraries.
   - ⚠️ MSVC ASan has no LeakSanitizer: the leak half of the sweep has no Windows equivalent.
+
+### Verified on macOS (macOS-PA, Mac mini M6, AppleClang ASan, engine 74a1edc5, 2026-10-16)
+
+- 33 services, the same split as Linux: 20 clean refusals (exit 1), 13 clean degradations (exit 0); every injection
+  hit; every run under 2.1 s; 0 validation message (the layer proven loaded with `VK_LOADER_DEBUG=layer` in every run
+  that reaches the instance), 0 ASan error.
+- projet-alpha (CEF), plain build with the option, the same 5 services as Windows: exit 0 or 1, never a refusal
+  dialog, 0 VUID.
+- `EMERAUDE_ENABLE_ASAN` (and the engine's other `EMERAUDE_ENABLE_*SAN` switches) was a NO-OP on macOS and Windows:
+  the block sat in the Linux branch of the engine's `CMakeLists.txt`; that run instrumented by hand
+  (`-fsanitize=address -fno-omit-frame-pointer -g` in the C / C++ / Objective-C flags and the linker flags). Since
+  2026-10-16 (owner decision) the switches have their own section after the platform branches: macOS ASan / TSan /
+  UBSan, MSan refused; MSVC ASan only (Window-PA's recipe below), the others refused. (emeraude-base's own
+  `EMERAUDE_ENABLE_SANITIZERS` / `EMERAUDE_ENABLE_TSAN` always applied on macOS: the TSan runs of `source-tree/07`
+  went through them.)
+- ⚠️ AppleClang has NO LeakSanitizer on arm64: `ASAN_OPTIONS=detect_leaks=1` aborts every process at start (exit 134,
+  "detect_leaks is not supported on this platform"). Run with `detect_leaks=0`: the leak half of the sweep needs
+  Homebrew LLVM (its LeakSanitizer works) or stays a Linux check.
+- ⚠️ The validation layer is shipped in the bundle (`Contents/Resources/vulkan/explicit_layer.d`): a tool built
+  outside the bundle does not find it, and the engine warns "No shipped layer directory in VK_ADD_LAYER_PATH". Put that
+  directory in `VK_ADD_LAYER_PATH` for such a tool, and prove the load with `VK_LOADER_DEBUG=layer`; without it,
+  "validation 0" proves nothing. (The warning named only the missing call until 2026-10-16.)
+- The first launch of a NEW projet-alpha binary restored the 41 MB pipeline cache in 114.5 s (a cold Metal shader
+  cache), and `Core.shutdown()` at 10 s waited for it: exit 0 after 117 s. That is the uninterruptible restore of owner
+  decision D3 (engine `docs/subsystems/vulkan/18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md`), not a
+  hang; the second launch shut down in 0.2 s. A macOS run with a watchdog under 120 s must use its own
+  `--cache-directory` (no stored blob, no restore).
+- Every shutdown logged `AL_INVALID_NAME` at `GlobalReleaseFlush` (Linux too): the audio sources and buffers were
+  deleted after their context and device. Fixed 2026-10-16 (engine `docs/subsystems/audio/06-critical-points.md`).
 
 ### Native handles in RAII holders (owner decision 2026-10-16: option A, defence in depth)
 

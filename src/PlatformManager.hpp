@@ -70,8 +70,9 @@ namespace EmEn
 			 * application first in VK_ADD_LAYER_PATH, and on macOS the bundled MoltenVK driver (VK_DRIVER_FILES).
 			 * @note The consumer's main() calls it before anything else (before CEF and before the Core): POSIX setenv()
 			 * races any concurrent getenv(), and CEF's threads exist once CefInitialize() ran (owner decision 2026-10-11).
-			 * PlatformManager::onInitialize() only reads the result and warns when it was not called. An explicit
-			 * VK_LAYER_PATH / VK_DRIVER_FILES from the user still wins.
+			 * PlatformManager::onInitialize() only reads the result and warns when no shipped layer directory is in the
+			 * path: not called, or no 'vulkan/explicit_layer.d' beside the binary nor in the bundle (a tool outside a macOS
+			 * bundle). An explicit VK_LAYER_PATH / VK_DRIVER_FILES from the user still wins.
 			 * @return bool True when the shipped layer directory was put first.
 			 */
 			static bool prepareVulkanLoaderEnvironment () noexcept;
