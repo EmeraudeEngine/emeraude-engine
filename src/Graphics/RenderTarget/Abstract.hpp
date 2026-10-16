@@ -51,6 +51,11 @@ namespace EmEn
 	{
 		class ViewMatricesInterface;
 		class Renderer;
+
+		namespace RenderableInstance
+		{
+			class Abstract;
+		}
 	}
 
 	namespace Vulkan
@@ -281,7 +286,7 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			hasBeenRendered () const noexcept
 			{
-				return m_hasBeenRendered;
+				return m_hasBeenRendered.load();
 			}
 
 			/**
@@ -296,24 +301,20 @@ namespace EmEn::Graphics::RenderTarget
 			/**
 			 * @brief Excludes a renderable instance from this target's rendering.
 			 * @note The probe self-inclusion fix: a reflective subject rendered into its OWN
-			 * probe re-samples itself across frames (inception feedback). The key is opaque
-			 * (the RenderableInstance address) to keep the Graphics render target free of any
-			 * scene dependency.
-			 * @warning The caller owns the lifetime coherence: exclusions are not cleaned when
-			 * an instance dies — clear and re-register on scene content changes if needed.
-			 * @param renderableInstance The renderable instance address.
+			 * probe re-samples itself across frames (inception feedback). The target keeps a weak
+			 * reference (Ave Robustus II P4, owner decision 2026-10-16): a dead instance is never
+			 * matched again, even by another one built at its address.
+			 * @pre Before this target renders for the first time (owner decision 2026-10-16): the render
+			 * thread reads the list without a lock. A later call is refused (traced).
+			 * @param renderableInstance The renderable instance.
+			 * @return bool False when the instance is null or the target has already rendered.
 			 */
-			void
-			excludeFromRendering (const void * renderableInstance) noexcept
-			{
-				if ( renderableInstance != nullptr )
-				{
-					m_renderingExclusions.emplace_back(renderableInstance);
-				}
-			}
+			[[nodiscard]]
+			bool excludeFromRendering (const std::shared_ptr< const RenderableInstance::Abstract > & renderableInstance) noexcept;
 
 			/**
 			 * @brief Returns whether a renderable instance is excluded from this target.
+			 * @note Render thread, per instance: no lock, no allocation (an expired exclusion never matches).
 			 * @param renderableInstance The renderable instance address.
 			 * @return bool
 			 */
@@ -321,21 +322,9 @@ namespace EmEn::Graphics::RenderTarget
 			bool
 			isExcludedFromRendering (const void * renderableInstance) const noexcept
 			{
-				if ( m_renderingExclusions.empty() )
-				{
-					return false;
-				}
-
-				return std::ranges::find(m_renderingExclusions, renderableInstance) != m_renderingExclusions.cend();
-			}
-
-			/**
-			 * @brief Clears the rendering exclusion list.
-			 */
-			void
-			clearRenderingExclusions () noexcept
-			{
-				m_renderingExclusions.clear();
+				return std::ranges::any_of(m_renderingExclusions, [renderableInstance] (const auto & exclusion) {
+					return exclusion.address == renderableInstance && !exclusion.instance.expired();
+				});
 			}
 
 			/**
@@ -857,8 +846,16 @@ namespace EmEn::Graphics::RenderTarget
 			VkRect2D m_renderArea{};
 			RenderTargetType m_renderType;
 			std::shared_ptr< Vulkan::Sync::Semaphore > m_semaphore;
-			/** @brief Renderable instances excluded from this target (probe self-inclusion fix). */
-			std::vector< const void * > m_renderingExclusions;
+			/** @brief One renderable instance excluded from this target: its weak reference and its address. */
+			struct RenderingExclusion final
+			{
+				std::weak_ptr< const RenderableInstance::Abstract > instance;
+				const void * address{nullptr};
+			};
+
+			/** @brief Renderable instances excluded from this target (probe self-inclusion fix); filled before the
+			 * first render only (excludeFromRendering()). */
+			std::vector< RenderingExclusion > m_renderingExclusions;
 			/** @brief The single instance this target bakes, nullptr when it renders the whole scene. */
 			const void * m_bakeSubject{nullptr};
 			/** @brief This target's own colour clear value, used only when m_hasClearColorOverride. */
@@ -870,7 +867,8 @@ namespace EmEn::Graphics::RenderTarget
 			std::atomic< bool > m_automaticRendering{false};
 			std::atomic< bool > m_renderingSuspended{false};
 			bool m_suspendableByPostProcessReflections{false};
-			bool m_hasBeenRendered{false};
+			/* NOTE: Set by the render thread, read by excludeFromRendering() on the caller's thread. */
+			std::atomic< bool > m_hasBeenRendered{false};
 			bool m_hasClearColorOverride{false};
 			bool m_lastRenderHasContent{false};
 	};

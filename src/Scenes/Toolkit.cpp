@@ -233,7 +233,7 @@ namespace EmEn::Scenes
 			})
 			.build(tree, copies, Graphics::RenderableInstance::Lighting::Lit);
 
-		if ( copiesVisual == nullptr || !bakeTarget->enqueue(copiesVisual->getRenderableInstance().get(), atlas) )
+		if ( copiesVisual == nullptr || !bakeTarget->enqueue(copiesVisual->getRenderableInstance(), atlas) )
 		{
 			TraceError{ClassId} << "Unable to queue the imposter bake of '" << label << "' !";
 

@@ -113,12 +113,14 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Queues a bake. Thread-safe.
-			 * @param subject The renderable instance to bake (its address: RenderTarget::Abstract::setBakeSubject()).
+			 * @param subject The renderable instance to bake. The job keeps a weak reference (Ave Robustus II P4, owner
+			 * decision 2026-10-16): a subject that dies before its bake drops its job (traced) instead of keeping the queue
+			 * waiting for a render that never comes, and its address can never select another instance.
 			 * @param atlas The atlas it fills; it must be created and of this target's size.
-			 * @return bool False when the atlas does not fit the target.
+			 * @return bool False when the subject is null or the atlas does not fit the target.
 			 */
 			[[nodiscard]]
-			bool enqueue (const void * subject, const std::shared_ptr< ImposterAtlas > & atlas) noexcept;
+			bool enqueue (const std::shared_ptr< const RenderableInstance::Abstract > & subject, const std::shared_ptr< ImposterAtlas > & atlas) noexcept;
 
 			/**
 			 * @brief Returns the atlases baked by this target, still alive. Thread-safe.
@@ -228,10 +230,17 @@ namespace EmEn::Graphics::RenderTarget
 			/** @brief One queued bake. */
 			struct Job final
 			{
-				const void * subject{nullptr};
+				std::weak_ptr< const RenderableInstance::Abstract > subject;
+				const void * subjectAddress{nullptr};
 				std::shared_ptr< ImposterAtlas > atlas;
 				uint32_t warmUpRenders{WarmUpRenders};
 			};
+
+			/**
+			 * @brief Removes the front job (its atlas retired behind the frames in flight) and makes the next one the bake
+			 * subject. Call it under m_jobsAccess, on the render thread, with a job queued.
+			 */
+			void retireFrontJob () noexcept;
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
 			void updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override;

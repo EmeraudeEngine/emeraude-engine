@@ -21,9 +21,19 @@ while `populateRenderLists()` fills the lists — not at the draw sites. The MDI
 built FROM those lists, so they inherit the restriction for free. Filtering at draw time instead
 would have meant six sites, and the MDI path would have batched the excluded geometry anyway.
 
-⚠️ Same lifetime contract as `excludeFromRendering()`, and for the same reason: the key is the
-opaque `RenderableInstance` **address**, so `Graphics` keeps no dependency on `Scenes`. Nothing
-clears it when the instance dies — **clear it when the bake is done**.
+⚠️ **The keys follow the instance's life** (Ave Robustus II P4, owner decisions 2026-10-16). Until then the bake
+subject and the exclusions were bare `RenderableInstance` addresses that nothing cleared when the instance died (an
+instance built later at the same address could be excluded, or baked, in its place). `RenderableInstance::Abstract`
+belongs to `Graphics`, so the render target takes the instance itself:
+- `excludeFromRendering(std::shared_ptr< const RenderableInstance::Abstract >)` keeps a weak reference and its
+  address; the render thread matches the address of a LIVE instance only (no lock, no allocation per instance), and the
+  expired entries are purged at the next exclusion. `clearRenderingExclusions()` is gone.
+- ⚠️ An exclusion is accepted only **before the target renders for the first time** (the render thread reads the list
+  without a lock); a later call is refused and traced. `m_hasBeenRendered` is atomic for that check.
+- `ImposterBake::enqueue(std::shared_ptr< const RenderableInstance::Abstract >, atlas)`: the job keeps a weak
+  reference; a subject that dies before its bake drops its job (traced) instead of keeping the queue waiting for a
+  render that never comes. `setBakeSubject()` still takes the address of the live front subject.
+- Verified (Linux): `offscreen-rendering`, `reflexion-debug` (no refusal), `citadel` (12 atlases baked), 0 VUID.
 
 The rest of the bake mechanics already existed and were verified rather than assumed: a target
 with `setAutomaticRenderingState(false)` renders only while `setRenderOutOfDate()` flags it (the

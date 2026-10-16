@@ -86,7 +86,7 @@ namespace EmEn::Graphics::RenderTarget
 	}
 
 	bool
-	ImposterBake::enqueue (const void * subject, const std::shared_ptr< ImposterAtlas > & atlas) noexcept
+	ImposterBake::enqueue (const std::shared_ptr< const RenderableInstance::Abstract > & subject, const std::shared_ptr< ImposterAtlas > & atlas) noexcept
 	{
 		if ( subject == nullptr || atlas == nullptr || !atlas->isCreated() || atlas->size() != this->extent().width )
 		{
@@ -97,13 +97,13 @@ namespace EmEn::Graphics::RenderTarget
 
 		const std::scoped_lock lock{m_jobsAccess};
 
-		m_jobs.emplace_back(Job{.subject = subject, .atlas = atlas, .warmUpRenders = WarmUpRenders});
+		m_jobs.emplace_back(Job{.subject = subject, .subjectAddress = subject.get(), .atlas = atlas, .warmUpRenders = WarmUpRenders});
 
 		/* The front job's subject is the target's bake subject; the render thread moves it to the next job. The
 		 * flag is released AFTER the subject is set: the render thread acquires it before reading the subject. */
 		if ( m_jobs.size() == 1 )
 		{
-			this->setBakeSubject(subject);
+			this->setBakeSubject(subject.get());
 		}
 
 		m_hasJobs.store(true, std::memory_order_release);
@@ -200,6 +200,16 @@ namespace EmEn::Graphics::RenderTarget
 
 		auto & job = m_jobs.front();
 
+		/* NOTE: A subject that died before its bake is never drawn again: its job would wait forever. */
+		if ( job.subject.expired() )
+		{
+			TraceWarning{ClassId} << "The subject of the imposter atlas '" << job.atlas->name() << "' is gone before its bake: job dropped.";
+
+			this->retireFrontJob();
+
+			return;
+		}
+
 		/* The subject was not drawn (not loaded yet): the render was empty, keep the job. */
 		if ( !this->lastRenderHasContent() )
 		{
@@ -221,12 +231,18 @@ namespace EmEn::Graphics::RenderTarget
 
 		TraceInfo{ClassId} << "Imposter atlas '" << job.atlas->name() << "' baked.";
 
+		this->retireFrontJob();
+	}
+
+	void
+	ImposterBake::retireFrontJob () noexcept
+	{
 		/* NOTE: The job may hold the atlas's LAST reference (its material is its only other owner): popping it would
 		 * destroy the atlas images this very command buffer is recording into. It is retired, released once the
 		 * frames in flight are done (triad 2026-09-30: 20 vkEndCommandBuffer-00059 after citadel → beams → terrain). */
 		if ( m_deferredDestructor != nullptr )
 		{
-			m_deferredDestructor->retireObject(std::shared_ptr< void >{job.atlas});
+			m_deferredDestructor->retireObject(std::shared_ptr< void >{m_jobs.front().atlas});
 		}
 
 		m_jobs.pop_front();
@@ -239,7 +255,7 @@ namespace EmEn::Graphics::RenderTarget
 		}
 		else
 		{
-			this->setBakeSubject(m_jobs.front().subject);
+			this->setBakeSubject(m_jobs.front().subjectAddress);
 		}
 	}
 

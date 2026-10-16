@@ -44,6 +44,32 @@ namespace EmEn::Graphics::RenderTarget
 
 	constexpr auto TracerTag{"RenderTarget"};
 
+	bool
+	Abstract::excludeFromRendering (const std::shared_ptr< const RenderableInstance::Abstract > & renderableInstance) noexcept
+	{
+		if ( renderableInstance == nullptr )
+		{
+			TraceError{TracerTag} << "The render target '" << this->id() << "' cannot exclude a null renderable instance !";
+
+			return false;
+		}
+
+		if ( m_hasBeenRendered.load() )
+		{
+			TraceError{TracerTag} << "The render target '" << this->id() << "' has already rendered: an exclusion is refused (the render thread reads the list without a lock).";
+
+			return false;
+		}
+
+		std::erase_if(m_renderingExclusions, [] (const auto & exclusion) {
+			return exclusion.instance.expired();
+		});
+
+		m_renderingExclusions.emplace_back(RenderingExclusion{.instance = renderableInstance, .address = renderableInstance.get()});
+
+		return true;
+	}
+
 	uint32_t
 	Abstract::frameRegionCount (Renderer & renderer) const noexcept
 	{
