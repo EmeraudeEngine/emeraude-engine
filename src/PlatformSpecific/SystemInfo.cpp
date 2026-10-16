@@ -284,7 +284,7 @@ namespace EmEn::PlatformSpecific
 				" - Driver : " << GPUDevice.driverName << ' ' << GPUDevice.driverVersion << "\n"
 				" - Software adapter : " << ( GPUDevice.software ? "Yes" : "No" ) << "\n"
 				" - Is dedicated memory : " << ( GPUDevice.dedicatedMemory ? "Yes" : "No" ) << "\n"
-				" - Available memory : " << static_cast< float >(GPUDevice.availableMemory) / MegaByteDivisor << " GiB" << "\n"
+				" - Available memory : " << static_cast< float >(GPUDevice.availableMemory) / MegaByteDivisor << " MiB" << "\n"
 				" - BUS : " << GPUDevice.bus << "\n\n";
 		}
 
