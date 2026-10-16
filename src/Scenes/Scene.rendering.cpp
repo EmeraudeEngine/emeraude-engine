@@ -186,7 +186,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices2DUBO > >
 	Scene::createRenderToShadowMap (const std::string & name, uint32_t resolution, float viewDistance, bool isOrthographicProjection) noexcept
 	{
-		const std::scoped_lock lock{m_renderToShadowMapAccess};
+		const Base::MutexLock lock{m_renderToShadowMapAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -222,7 +222,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::ShadowMap< ViewMatrices3DUBO > >
 	Scene::createRenderToCubicShadowMap (const std::string & name, uint32_t resolution, float viewDistance) noexcept
 	{
-		const std::scoped_lock lock{m_renderToShadowMapAccess};
+		const Base::MutexLock lock{m_renderToShadowMapAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -258,7 +258,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::ShadowMap< ViewMatricesCascadedUBO > >
 	Scene::createRenderToCascadedShadowMap (const std::string & name, uint32_t resolution, float viewDistance, uint32_t cascadeCount, float lambda) noexcept
 	{
-		const std::scoped_lock lock{m_renderToShadowMapAccess};
+		const Base::MutexLock lock{m_renderToShadowMapAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -296,7 +296,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::Texture< ViewMatrices2DUBO > >
 	Scene::createRenderToTexture2D (const std::string & name, uint32_t width, uint32_t height, uint32_t colorCount, float viewDistance, bool isOrthographicProjection) noexcept
 	{
-		const std::scoped_lock lock{m_renderToTextureAccess};
+		const Base::MutexLock lock{m_renderToTextureAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -336,7 +336,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::ImposterBake >
 	Scene::imposterBakeTarget (uint32_t size) noexcept
 	{
-		const std::scoped_lock lock{m_renderToTextureAccess};
+		const Base::MutexLock lock{m_renderToTextureAccess};
 
 		if ( m_imposterBake != nullptr )
 		{
@@ -369,7 +369,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::Texture< ViewMatrices3DUBO > >
 	Scene::createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection, uint32_t colorBits) noexcept
 	{
-		const std::scoped_lock lock{m_renderToTextureAccess};
+		const Base::MutexLock lock{m_renderToTextureAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -417,7 +417,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::View< ViewMatrices2DUBO > >
 	Scene::createRenderToView (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice) noexcept
 	{
-		const std::scoped_lock lock{m_renderToViewAccess};
+		const Base::MutexLock lock{m_renderToViewAccess};
 
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
 		{
@@ -451,7 +451,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< RenderTarget::View< ViewMatrices3DUBO > >
 	Scene::createRenderToCubicView (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice) noexcept
 	{
-		const std::scoped_lock lock{m_renderToViewAccess};
+		const Base::MutexLock lock{m_renderToViewAccess};
 
 		/* Checks name availability. */
 		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
@@ -499,20 +499,18 @@ namespace EmEn::Scenes
 		const uint32_t readStateIndex = m_frameReadStateIndex;
 		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
 
+		/* NOTE: The iteration helpers lock the lists; an empty list costs one lock and no call. */
 		if ( shadowMapEnabled )
 		{
-			if ( !m_renderToShadowMaps.empty() )
-			{
-				this->forEachRenderToShadowMap([readStateIndex, frameIndex] (const auto & renderTarget) {
-					if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex, frameIndex) )
-					{
-						TraceError{ClassId} << "Failed to update the video memory of the render target (Shadow map) from readStateIndex #" << readStateIndex << " !";
-					}
-				});
-			}
+			this->forEachRenderToShadowMap([readStateIndex, frameIndex] (const auto & renderTarget) {
+				if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex, frameIndex) )
+				{
+					TraceError{ClassId} << "Failed to update the video memory of the render target (Shadow map) from readStateIndex #" << readStateIndex << " !";
+				}
+			});
 		}
 
-		if ( renderToTextureEnabled && !m_renderToTextures.empty() )
+		if ( renderToTextureEnabled )
 		{
 			this->forEachRenderToTexture([readStateIndex, frameIndex] (const auto & renderTarget) {
 				if ( !renderTarget->viewMatrices().updateVideoMemory(readStateIndex, frameIndex) )
@@ -623,7 +621,7 @@ namespace EmEn::Scenes
 	void
 	Scene::setHighlightedEntity (const std::shared_ptr< AbstractEntity > & entity) noexcept
 	{
-		const std::scoped_lock lock{m_highlightedEntityAccess};
+		const Base::MutexLock lock{m_highlightedEntityAccess};
 
 		m_highlightedEntities.clear();
 
@@ -652,7 +650,7 @@ namespace EmEn::Scenes
 			}
 		}
 
-		const std::scoped_lock lock{m_highlightedEntityAccess};
+		const Base::MutexLock lock{m_highlightedEntityAccess};
 
 		m_highlightedEntities = std::move(set);
 	}
@@ -665,7 +663,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		const std::scoped_lock lock{m_highlightedEntityAccess};
+		const Base::MutexLock lock{m_highlightedEntityAccess};
 
 		/* The dead are dropped on the way. */
 		std::erase_if(m_highlightedEntities, [] (const auto & held) { return held.expired(); });
@@ -688,7 +686,7 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		const std::scoped_lock lock{m_highlightedEntityAccess};
+		const Base::MutexLock lock{m_highlightedEntityAccess};
 
 		const bool found = std::ranges::any_of(m_highlightedEntities, [&entity] (const auto & held) { return held.lock() == entity; });
 
@@ -705,7 +703,7 @@ namespace EmEn::Scenes
 	void
 	Scene::clearHighlightedEntities () noexcept
 	{
-		const std::scoped_lock lock{m_highlightedEntityAccess};
+		const Base::MutexLock lock{m_highlightedEntityAccess};
 
 		m_highlightedEntities.clear();
 	}
@@ -713,7 +711,7 @@ namespace EmEn::Scenes
 	std::vector< std::shared_ptr< AbstractEntity > >
 	Scene::highlightedEntities () const noexcept
 	{
-		const std::scoped_lock lock{m_highlightedEntityAccess};
+		const Base::MutexLock lock{m_highlightedEntityAccess};
 
 		std::vector< std::shared_ptr< AbstractEntity > > entities;
 		entities.reserve(m_highlightedEntities.size());
@@ -892,7 +890,7 @@ namespace EmEn::Scenes
 		const auto publications = m_publicationCount.load(std::memory_order_seq_cst) - m_framePublicationCount;
 		const auto latchToEndMS = std::chrono::duration< double, std::milli >(std::chrono::steady_clock::now() - m_frameLatchTime).count();
 
-		const std::scoped_lock lock{m_renderStatisticsAccess};
+		const Base::MutexLock lock{m_renderStatisticsAccess};
 
 		m_stateSyncStatistics.frames++;
 
@@ -910,7 +908,7 @@ namespace EmEn::Scenes
 	Scene::StateSyncStatistics
 	Scene::stateSyncStatistics (bool reset) noexcept
 	{
-		const std::scoped_lock lock{m_renderStatisticsAccess};
+		const Base::MutexLock lock{m_renderStatisticsAccess};
 
 		const auto statistics = m_stateSyncStatistics;
 
@@ -950,7 +948,7 @@ namespace EmEn::Scenes
 				Scene::accumulateRenderStatistics(m_renderLists[listIndex], viewStatistics);
 			}
 
-			const std::scoped_lock lock{m_renderStatisticsAccess};
+			const Base::MutexLock lock{m_renderStatisticsAccess};
 
 			m_viewRenderStatistics = viewStatistics;
 			m_shadowRenderStatistics = m_pendingShadowRenderStatistics;
@@ -1147,7 +1145,7 @@ namespace EmEn::Scenes
 
 		/* Static entities. */
 		{
-			const std::scoped_lock lock{m_staticEntitiesAccess};
+			const Base::MutexLock lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
@@ -1184,7 +1182,7 @@ namespace EmEn::Scenes
 
 		/* Scene node tree. */
 		{
-			const std::scoped_lock lock{m_sceneNodesAccess};
+			const Base::MutexLock lock{m_sceneNodesAccess};
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
@@ -1234,10 +1232,15 @@ namespace EmEn::Scenes
 		/* State synchronisation measurement: announced BEFORE the first byte of the slot is written. */
 		m_slotWriteGenerations[nextTarget].fetch_add(1, std::memory_order_seq_cst);
 
-		/* Synchronize static entities. */
-		for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
+		/* Synchronize static entities.
+		 * NOTE: Lock order: the static entity list, then each entity's component list (as the render loops). */
 		{
-			staticEntity->publishStateForRendering(nextTarget);
+			const Base::MutexLock lock{m_staticEntitiesAccess};
+
+			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
+			{
+				staticEntity->publishStateForRendering(nextTarget);
+			}
 		}
 
 		/* Synchronize scene nodes. */
@@ -1404,7 +1407,7 @@ namespace EmEn::Scenes
 	Scene::RenderListStatistics
 	Scene::viewRenderStatistics () const noexcept
 	{
-		const std::scoped_lock lock{m_renderStatisticsAccess};
+		const Base::MutexLock lock{m_renderStatisticsAccess};
 
 		return m_viewRenderStatistics;
 	}
@@ -1412,7 +1415,7 @@ namespace EmEn::Scenes
 	Scene::RenderListStatistics
 	Scene::shadowRenderStatistics () const noexcept
 	{
-		const std::scoped_lock lock{m_renderStatisticsAccess};
+		const Base::MutexLock lock{m_renderStatisticsAccess};
 
 		return m_shadowRenderStatistics;
 	}
@@ -1621,7 +1624,7 @@ namespace EmEn::Scenes
 		};
 
 		/* The entities: the rendering octree first, culled to the caster volume (the light's range for a cubemap). */
-		if ( m_renderingOctree != nullptr )
+		if ( this->hasRenderingOctree() )
 		{
 			if ( renderTarget->isCubemap() )
 			{
@@ -1648,7 +1651,7 @@ namespace EmEn::Scenes
 		else
 		{
 			{
-				const std::scoped_lock lock{m_staticEntitiesAccess};
+				const Base::MutexLock lock{m_staticEntitiesAccess};
 
 				for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 				{
@@ -1657,7 +1660,7 @@ namespace EmEn::Scenes
 			}
 
 			/* NOTE: Prevent scene node deletion from the logic update thread to crash the rendering. */
-			const std::scoped_lock lock{m_sceneNodesAccess};
+			const Base::MutexLock lock{m_sceneNodesAccess};
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
@@ -2047,7 +2050,7 @@ namespace EmEn::Scenes
 
 		/* The entities: the rendering octree first — the frustum (the view range for a cubemap) for the raster, the
 		 * TLAS range for the RT list. */
-		if ( m_renderingOctree != nullptr )
+		if ( this->hasRenderingOctree() )
 		{
 			if ( renderTarget->isCubemap() )
 			{
@@ -2088,7 +2091,7 @@ namespace EmEn::Scenes
 		else
 		{
 			{
-				const std::scoped_lock lock{m_staticEntitiesAccess};
+				const Base::MutexLock lock{m_staticEntitiesAccess};
 
 				for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 				{
@@ -2102,7 +2105,7 @@ namespace EmEn::Scenes
 			}
 
 			/* NOTE: Prevent scene node deletion from the logic update thread to crash the rendering. */
-			const std::scoped_lock lock{m_sceneNodesAccess};
+			const Base::MutexLock lock{m_sceneNodesAccess};
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
@@ -2468,7 +2471,7 @@ namespace EmEn::Scenes
 
 		/* Check renderable objects from scene static entities. */
 		{
-			const std::scoped_lock lock{m_staticEntitiesAccess};
+			const Base::MutexLock lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
@@ -2491,7 +2494,7 @@ namespace EmEn::Scenes
 		/* Check renderable objects from the scene node tree. */
 		{
 			/* NOTE: Prevent scene node deletion from the logic update thread to crash the rendering. */
-			const std::scoped_lock lock{m_sceneNodesAccess};
+			const Base::MutexLock lock{m_sceneNodesAccess};
 
 			NodeCrawler< const Node > crawler{m_rootNode};
 
@@ -2721,12 +2724,25 @@ namespace EmEn::Scenes
 
 				if ( const auto renderTarget = std::dynamic_pointer_cast< RenderTarget::Abstract >(device) )
 				{
-					const std::scoped_lock lock{m_renderToShadowMapAccess, m_renderToTextureAccess, m_renderToViewAccess};
+					/* NOTE: If the conversion is successful, renderTarget is not null. Three independent lists: one lock
+					 * at a time (never two held together, so no order between them). */
+					{
+						const Base::MutexLock lock{m_renderToViewAccess};
 
-					/* NOTE: If the conversion is successful, renderTarget is not null. */
-					m_renderToViews.erase(renderTarget);
-					m_renderToTextures.erase(renderTarget);
-					m_renderToShadowMaps.erase(renderTarget);
+						m_renderToViews.erase(renderTarget);
+					}
+
+					{
+						const Base::MutexLock lock{m_renderToTextureAccess};
+
+						m_renderToTextures.erase(renderTarget);
+					}
+
+					{
+						const Base::MutexLock lock{m_renderToShadowMapAccess};
+
+						m_renderToShadowMaps.erase(renderTarget);
+					}
 				}
 
 				TraceDebug{ClassId} << "A video device has been removed from the scene.";

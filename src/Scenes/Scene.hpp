@@ -53,6 +53,7 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "Constants.hpp"
 #include "ScopedRegistration.hpp"
 #include "Audio/Ambience.hpp"
@@ -1238,6 +1239,8 @@ namespace EmEn::Scenes
 			std::shared_ptr< StaticEntity >
 			findStaticEntity (const std::string & staticEntityName) const noexcept
 			{
+				const Base::MutexLock lock{m_staticEntitiesAccess};
+
 				const auto staticEntityIt = m_staticEntities.find(staticEntityName);
 
 				if ( staticEntityIt == m_staticEntities.end() )
@@ -1263,7 +1266,7 @@ namespace EmEn::Scenes
 			forEachStaticEntities (function_t && process) const noexcept
 				requires (std::is_invocable_v< function_t, const StaticEntity & >)
 			{
-				const std::scoped_lock lock{m_staticEntitiesAccess};
+				const Base::MutexLock lock{m_staticEntitiesAccess};
 
 				for ( const auto & entity : m_staticEntities | std::views::values )
 				{
@@ -1283,7 +1286,7 @@ namespace EmEn::Scenes
 			forEachStaticEntities (function_t && process) noexcept
 				requires (std::is_invocable_v< function_t, StaticEntity & >)
 			{
-				const std::scoped_lock lock{m_staticEntitiesAccess};
+				const Base::MutexLock lock{m_staticEntitiesAccess};
 
 				for ( const auto & entity : m_staticEntities | std::views::values )
 				{
@@ -1654,7 +1657,7 @@ namespace EmEn::Scenes
 			std::shared_ptr< Graphics::RenderTarget::ImposterBake >
 			existingImposterBakeTarget () const noexcept
 			{
-				const std::scoped_lock lock{m_renderToTextureAccess};
+				const Base::MutexLock lock{m_renderToTextureAccess};
 
 				return m_imposterBake;
 			}
@@ -1734,7 +1737,7 @@ namespace EmEn::Scenes
 			withRenderToShadowMaps (function_t && process) const noexcept
 				requires (std::is_invocable_v< function_t, const RenderTargetAccessList & >)
 			{
-				const std::scoped_lock lock{m_renderToShadowMapAccess};
+				const Base::MutexLock lock{m_renderToShadowMapAccess};
 
 				std::forward< function_t >(process)(m_renderToShadowMaps);
 			}
@@ -1761,15 +1764,23 @@ namespace EmEn::Scenes
 				 * (SkyFollowsSun → refreshAmbientLightProperties() → here, under the node lock). Held across the
 				 * callback, the two orders crossed: a deadlock, the `terrain` forest frozen one second after its
 				 * start as soon as its imposter bake target joined this list (2026-09-23). */
-				for ( const auto & renderTarget : Scene::snapshotRenderTargets(m_renderToShadowMapAccess, m_renderToShadowMaps, "shadow map") )
+				std::vector< std::shared_ptr< Graphics::RenderTarget::Abstract > > renderTargets;
+
+				{
+					const Base::MutexLock lock{m_renderToShadowMapAccess};
+
+					renderTargets = Scene::liveRenderTargets(m_renderToShadowMaps, "shadow map");
+				}
+
+				for ( const auto & renderTarget : renderTargets )
 				{
 					process(renderTarget);
 				}
 			}
 
 			/**
-			 * @brief Returns the live targets of a render-target list, copied under its lock.
-			 * @param access A reference to the list's mutex.
+			 * @brief Returns the live targets of a render-target list.
+			 * @pre The caller holds the list's mutex (the analysis checks the caller: it passes the guarded list).
 			 * @param list A reference to the list.
 			 * @param label The kind of target, for the trace of an expired one.
 			 * @return std::vector< std::shared_ptr< Graphics::RenderTarget::Abstract > >
@@ -1777,10 +1788,8 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			static
 			std::vector< std::shared_ptr< Graphics::RenderTarget::Abstract > >
-			snapshotRenderTargets (std::mutex & access, const RenderTargetAccessList & list, const char * label) noexcept
+			liveRenderTargets (const RenderTargetAccessList & list, const char * label) noexcept
 			{
-				const std::scoped_lock lock{access};
-
 				std::vector< std::shared_ptr< Graphics::RenderTarget::Abstract > > targets;
 				targets.reserve(list.size());
 
@@ -1815,7 +1824,7 @@ namespace EmEn::Scenes
 			withRenderToTextures (function_t && process) const noexcept
 				requires (std::is_invocable_v< function_t, const RenderTargetAccessList & >)
 			{
-				const std::scoped_lock lock{m_renderToTextureAccess};
+				const Base::MutexLock lock{m_renderToTextureAccess};
 
 				std::forward< function_t >(process)(m_renderToTextures);
 			}
@@ -1844,7 +1853,15 @@ namespace EmEn::Scenes
 				 * (SkyFollowsSun → refreshAmbientLightProperties() → here, under the node lock). Held across the
 				 * callback, the two orders crossed: a deadlock, the `terrain` forest frozen one second after its
 				 * start as soon as its imposter bake target joined this list (2026-09-23). */
-				for ( const auto & renderTarget : Scene::snapshotRenderTargets(m_renderToTextureAccess, m_renderToTextures, "texture") )
+				std::vector< std::shared_ptr< Graphics::RenderTarget::Abstract > > renderTargets;
+
+				{
+					const Base::MutexLock lock{m_renderToTextureAccess};
+
+					renderTargets = Scene::liveRenderTargets(m_renderToTextures, "texture");
+				}
+
+				for ( const auto & renderTarget : renderTargets )
 				{
 					process(renderTarget);
 				}
@@ -1866,7 +1883,7 @@ namespace EmEn::Scenes
 			withRenderToViews (function_t && process) const noexcept
 				requires (std::is_invocable_v< function_t, const RenderTargetAccessList & >)
 			{
-				const std::scoped_lock lock{m_renderToViewAccess};
+				const Base::MutexLock lock{m_renderToViewAccess};
 
 				std::forward< function_t >(process)(m_renderToViews);
 			}
@@ -1895,7 +1912,15 @@ namespace EmEn::Scenes
 				 * (SkyFollowsSun → refreshAmbientLightProperties() → here, under the node lock). Held across the
 				 * callback, the two orders crossed: a deadlock, the `terrain` forest frozen one second after its
 				 * start as soon as its imposter bake target joined this list (2026-09-23). */
-				for ( const auto & renderTarget : Scene::snapshotRenderTargets(m_renderToViewAccess, m_renderToViews, "view") )
+				std::vector< std::shared_ptr< Graphics::RenderTarget::Abstract > > renderTargets;
+
+				{
+					const Base::MutexLock lock{m_renderToViewAccess};
+
+					renderTargets = Scene::liveRenderTargets(m_renderToViews, "view");
+				}
+
+				for ( const auto & renderTarget : renderTargets )
 				{
 					process(renderTarget);
 				}
@@ -2635,6 +2660,20 @@ namespace EmEn::Scenes
 			void onEntityContentModified (const std::shared_ptr< AbstractEntity > & entity) const noexcept;
 
 			/**
+			 * @brief Returns whether the rendering octree exists, under its lock.
+			 * @note A path choice only: gatherRenderingCandidates() tests the octree again under the lock.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasRenderingOctree () const noexcept
+			{
+				const Base::MutexLock lock{m_renderingOctreeAccess};
+
+				return m_renderingOctree != nullptr;
+			}
+
+			/**
 			 * @brief Collects the renderable entities a volume may see, from the rendering octree [RENDER THREAD].
 			 * @note ⚠️⚠️ THE OCTREE CULLS FIRST (2026-09-25, owner: "use the octree"): an entity lives in a sector that
 			 * contains it, so a sector the volume misses is skipped with its whole subtree — nothing below it can be
@@ -2661,7 +2700,7 @@ namespace EmEn::Scenes
 			{
 				candidates.clear();
 
-				const std::scoped_lock lock{m_renderingOctreeAccess};
+				const Base::MutexLock lock{m_renderingOctreeAccess};
 
 				const auto stamp = ++m_renderingGatherStamp;
 
@@ -3026,7 +3065,7 @@ namespace EmEn::Scenes
 			/** @brief Root of the dynamic node hierarchy tree. Never null. */
 			std::shared_ptr< Node > m_rootNode;
 			/** @brief Map of static entities by name. O(log n) lookup. */
-			std::map< std::string , std::shared_ptr< StaticEntity > > m_staticEntities;
+			std::map< std::string , std::shared_ptr< StaticEntity > > m_staticEntities EMEN_GUARDED_BY(m_staticEntitiesAccess);
 			/** @brief Scene background (skybox, procedural sky). May be null. */
 			std::shared_ptr< Graphics::Renderable::AbstractBackground > m_backgroundResource;
 			/** @brief Options of a requested background lighting derivation. */
@@ -3098,7 +3137,7 @@ namespace EmEn::Scenes
 			/** @brief The shadow statistics of the frame being built. Render thread only. */
 			RenderListStatistics m_pendingShadowRenderStatistics{};
 			/** @brief State synchronisation statistics, accumulated by endRenderFrame(). Guarded by m_renderStatisticsAccess. */
-			StateSyncStatistics m_stateSyncStatistics{};
+			StateSyncStatistics m_stateSyncStatistics EMEN_GUARDED_BY(m_renderStatisticsAccess){};
 			/** @brief The write generation of the latched slot, read at the latch. Render thread only. */
 			uint64_t m_frameSlotWriteGeneration{0};
 			/** @brief The publication count, read at the latch. Render thread only. */
@@ -3106,7 +3145,7 @@ namespace EmEn::Scenes
 			/** @brief When the frame latched its state. Render thread only. */
 			std::chrono::steady_clock::time_point m_frameLatchTime;
 			/** @brief Guards the published statistics records (render thread writes, console reads). */
-			mutable std::mutex m_renderStatisticsAccess;
+			mutable Base::Mutex m_renderStatisticsAccess;
 			/** @brief Debug camera controller. @bug Should not be persistent. */
 			NodeController m_nodeController;
 			/** @brief Pointer-driven camera orbit controller. Inert without a controlled node. */
@@ -3122,16 +3161,16 @@ namespace EmEn::Scenes
 			 * ============================================================ */
 
 			/** @brief Octree for rendering frustum culling. @note Uses shared_ptr due to enable_shared_from_this. */
-			std::shared_ptr< OctreeSector< AbstractEntity, false > > m_renderingOctree;
+			std::shared_ptr< OctreeSector< AbstractEntity, false > > m_renderingOctree EMEN_GUARDED_BY(m_renderingOctreeAccess);
 			/** @brief The renderable entities the rendering octree could not file (outside its bounds): always
 			 * rendering candidates. Guarded by m_renderingOctreeAccess. */
-			mutable std::unordered_set< std::shared_ptr< AbstractEntity > > m_renderingOctreeOverflow;
+			mutable std::unordered_set< std::shared_ptr< AbstractEntity > > m_renderingOctreeOverflow EMEN_GUARDED_BY(m_renderingOctreeAccess);
 			/** @brief Scratch of the render lists' octree queries (render thread only). */
 			std::vector< std::shared_ptr< AbstractEntity > > m_renderingCandidates;
 			/** @brief The stamp of the last rendering gather (gatherRenderingCandidates()). Guarded by m_renderingOctreeAccess. */
-			mutable uint64_t m_renderingGatherStamp{0};
+			mutable uint64_t m_renderingGatherStamp EMEN_GUARDED_BY(m_renderingOctreeAccess){0};
 			/** @brief Octree for physics broad-phase collision. @note Uses shared_ptr due to enable_shared_from_this. */
-			std::shared_ptr< OctreeSector< AbstractEntity, true > > m_physicsOctree;
+			std::shared_ptr< OctreeSector< AbstractEntity, true > > m_physicsOctree EMEN_GUARDED_BY(m_physicsOctreeAccess);
 			/** @brief Slots of m_sceneVisualComponents. ⚠️ The BACKGROUND is deliberately kept
 			 * OUT of the ray-tracing lists (see prepareRender): it is a backdrop shell, and in
 			 * the TLAS it walls the scene in so no ray can ever reach the sky. */
@@ -3147,13 +3186,13 @@ namespace EmEn::Scenes
 			 * the post-process chain so the camera exposure cannot touch its colors. */
 			Debug::Compass m_compass;
 			/** @brief Weak references to shadow map render targets. */
-			RenderTargetAccessList m_renderToShadowMaps;
+			RenderTargetAccessList m_renderToShadowMaps EMEN_GUARDED_BY(m_renderToShadowMapAccess);
 			/** @brief Weak references to texture render targets. */
-			RenderTargetAccessList m_renderToTextures;
+			RenderTargetAccessList m_renderToTextures EMEN_GUARDED_BY(m_renderToTextureAccess);
 			/** @brief The imposter bake target, created on first use (imposterBakeTarget()). */
 			std::shared_ptr< Graphics::RenderTarget::ImposterBake > m_imposterBake;
 			/** @brief Weak references to view render targets. */
-			RenderTargetAccessList m_renderToViews;
+			RenderTargetAccessList m_renderToViews EMEN_GUARDED_BY(m_renderToViewAccess);
 			/** @brief Weak references to scene modifiers (force fields, etc.). */
 			ModifierAccessList m_modifiers;
 
@@ -3170,11 +3209,11 @@ namespace EmEn::Scenes
 			 * writers come from the logic thread (notifications, console, camera cuts) while the
 			 * render thread resolves it every frame. Same publication-guard family as the
 			 * camera's lens-effect list. */
-			mutable std::mutex m_activeCameraAccess;
+			mutable Base::Mutex m_activeCameraAccess;
 			/** @brief WEAK reference to the active camera (photographic authority): an entity
 			 * that self-terminates leaves a reference that resolves to nullptr instead of a
 			 * dangling pointer — the self-healing lifetime contract of activeCamera(). */
-			std::weak_ptr< Component::Camera > m_activeCamera;
+			std::weak_ptr< Component::Camera > m_activeCamera EMEN_GUARDED_BY(m_activeCameraAccess);
 			/** @brief Physical environment (gravity, air density). Default: Earth. */
 			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
 			ParticipatingMedium m_participatingMedium{ParticipatingMedium::Vacuum()};
@@ -3263,25 +3302,23 @@ namespace EmEn::Scenes
 			/** @brief Publications since the scene was created (state synchronisation measurement). */
 			std::atomic_uint64_t m_publicationCount{0};
 			/** @brief Mutex protecting node tree operations. */
-			mutable std::mutex m_sceneNodesAccess;
+			mutable Base::Mutex m_sceneNodesAccess;
 			/** @brief Mutex protecting static entity map. */
-			mutable std::mutex m_staticEntitiesAccess;
+			mutable Base::Mutex m_staticEntitiesAccess;
 			/** @brief Mutex protecting rendering octree. */
-			mutable std::mutex m_renderingOctreeAccess;
+			mutable Base::Mutex m_renderingOctreeAccess;
 			/** @brief Mutex protecting physics octree. */
-			mutable std::mutex m_physicsOctreeAccess;
+			mutable Base::Mutex m_physicsOctreeAccess;
 			/** @brief Mutex protecting shadow map list. */
-			mutable std::mutex m_renderToShadowMapAccess;
+			mutable Base::Mutex m_renderToShadowMapAccess;
 			/** @brief Mutex protecting texture target list. */
-			mutable std::mutex m_renderToTextureAccess;
+			mutable Base::Mutex m_renderToTextureAccess;
 			/** @brief Mutex protecting view target list. */
-			mutable std::mutex m_renderToViewAccess;
-			/** @brief Mutex for double-buffer state copy operation. */
-			mutable std::mutex m_stateCopyLock;
+			mutable Base::Mutex m_renderToViewAccess;
 			/** @brief The entities the selection outline shows (setHighlightedEntities()), held weakly, in insertion order. */
-			std::vector< std::weak_ptr< AbstractEntity > > m_highlightedEntities;
+			std::vector< std::weak_ptr< AbstractEntity > > m_highlightedEntities EMEN_GUARDED_BY(m_highlightedEntityAccess);
 			/** @brief Mutex protecting m_highlightedEntities (set from any thread, read by the logic and render threads). */
-			mutable std::mutex m_highlightedEntityAccess;
+			mutable Base::Mutex m_highlightedEntityAccess;
 
 			/** @brief A highlighted entity's world render box in one render state slot, tagged with the entity it belongs to. */
 			struct PublishedHighlight final

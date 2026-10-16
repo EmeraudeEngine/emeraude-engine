@@ -141,9 +141,21 @@ namespace EmEn::Scenes::Component
 				entities.emplace_back(std::move(current));
 			}
 
-			scene.forEachStaticEntities([&scene, &entities] (const StaticEntity & staticEntity) {
-				entities.push_back({scene.findStaticEntity(staticEntity.name()), {staticEntity.name()}});
+			/* NOTE: Names first, lookups after: findStaticEntity() takes the static entity lock, which the
+			 * iteration holds (not recursive). An entity removed in between is skipped. */
+			std::vector< std::string > staticEntityNames;
+
+			scene.forEachStaticEntities([&staticEntityNames] (const StaticEntity & staticEntity) {
+				staticEntityNames.emplace_back(staticEntity.name());
 			});
+
+			for ( auto & staticEntityName : staticEntityNames )
+			{
+				if ( auto staticEntity = scene.findStaticEntity(staticEntityName); staticEntity != nullptr )
+				{
+					entities.push_back({std::move(staticEntity), {std::move(staticEntityName)}});
+				}
+			}
 
 			return entities;
 		}

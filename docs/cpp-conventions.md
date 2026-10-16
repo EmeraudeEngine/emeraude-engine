@@ -420,6 +420,28 @@ unlocked access at compile time. Base `docs/subsystems/source-tree/26-thread-saf
   of the non-recursive dispatch, interleaved A/B (8 pairs, `balls-of-steel`'s logic cycle): +0.9 % median, inside the
   noise (±4 %); a first NON-interleaved comparison said +2.5 %: machine drift. Not exercised at run time: the automatic
   removal (`shouldBeRemoved()`: a broken instance, an expired sun course).
+- Lot Scenes B (2026-10-17): `Scene` (the static entity map, the three render target lists, the active camera, the
+  highlighted entities, the state-sync statistics, the two octrees with the overflow set and the gather stamp; every
+  mutex a `Base::Mutex`; the unused `m_stateCopyLock` removed) and `Scenes::Manager` (the
+  scene list a `Base::Mutex`, the active scene a `Base::SharedMutex`, the exclusive-access announcement a
+  `Base::ConditionVariable`). Found — real concurrent accesses, now locked:
+  - `createStaticEntity()` / `removeStaticEntity()` changed the static entity map WITHOUT its lock while the render
+    thread walked it UNDER the lock; `findStaticEntity()`, `getStaticEntitySystemStatistics()`, the two debug-display
+    queries and `publishStateForRendering()`'s walk read it unlocked. `removeStaticEntity()` holds the lock around the
+    map operations only (the unlinking notifies observers and takes the octree locks) and erases by identity at the
+    end. The publication takes the list lock, then each entity's component lock: the order of the render loops.
+  - The ConsoleAdapter's entity collection called `findStaticEntity()` inside `forEachStaticEntities()` — with the
+    lookup locked, the same non-recursive mutex twice: it collects the names first and looks them up after.
+  - `updateVideoMemory()` tested `empty()` on two render target lists unlocked (the iteration helpers lock).
+  - The manager read `m_activeScene` without its shared access from the main thread (enable / disable / delete, the
+    editor toggle, 28 console commands): a private `activeSceneSnapshot()` copies the pointer under the read lock;
+    `enableScene()` checks for an active scene under its exclusive access (check and change atomic),
+    `disableActiveScene()` re-checks under it. Lock order: `m_sceneListAccess`, then `m_activeSceneSharedAccess`.
+  - Three lists erased under one `std::scoped_lock{a, b, c}`: one lock at a time now (no path holds two).
+  - The octree pointers were tested OUTSIDE their lock, then used under it (statistics, removal, the per-frame
+    refiling, the collision step, the two render-list gathers) while `rebuild*Octree()` / `destroyOctrees()` replace
+    them under it, and `buildOctrees()` created them unlocked: every test is now inside the lock; the render paths
+    choose their path with `hasRenderingOctree()` (locked), and `gatherRenderingCandidates()` tests again under it.
 
 ## Paths and Text Encoding — rule C (owner decision, 2026-10-12)
 

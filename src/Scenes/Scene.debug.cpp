@@ -244,6 +244,8 @@ namespace EmEn::Scenes
 	bool
 	Scene::groundZeroDisplayEnabled () const noexcept
 	{
+		const Base::MutexLock lock{m_staticEntitiesAccess};
+
 		return m_staticEntities.contains(GroundZeroPlaneDisplay);
 	}
 
@@ -336,6 +338,8 @@ namespace EmEn::Scenes
 	bool
 	Scene::boundaryPlanesDisplayEnabled () const noexcept
 	{
+		const Base::MutexLock lock{m_staticEntitiesAccess};
+
 		return m_staticEntities.contains(BoundaryPlanes[0].label);
 	}
 

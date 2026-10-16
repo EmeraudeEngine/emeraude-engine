@@ -72,7 +72,7 @@ namespace EmEn::Scenes
 		size_t destroyedCount = 0;
 
 		{
-			const std::scoped_lock lock{m_sceneListAccess};
+			const Base::MutexLock lock{m_sceneListAccess};
 
 			/* First, disable the possible current active scene. */
 			this->disableActiveScene();
@@ -124,7 +124,7 @@ namespace EmEn::Scenes
 		std::shared_ptr< Scene > newScene;
 
 		{
-			const std::scoped_lock lock{m_sceneListAccess};
+			const Base::MutexLock lock{m_sceneListAccess};
 
 			/* NOTE: m_scenes directly: hasSceneNamed() takes the list lock, already held here. */
 			if ( m_scenes.contains(sceneName) )
@@ -348,10 +348,10 @@ namespace EmEn::Scenes
 		/* NOTE: Taking the gate mutex before notifying closes the lost-wakeup window: a reader that
 		 * saw the count at one under that mutex is already waiting when the notification goes out. */
 		{
-			const std::scoped_lock lock{m_exclusiveAnnouncementAccess};
+			const Base::MutexLock lock{m_exclusiveAnnouncementAccess};
 		}
 
-		m_exclusiveAccessesWithdrawn.notify_all();
+		m_exclusiveAccessesWithdrawn.notifyAll();
 	}
 
 	void
@@ -363,7 +363,7 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		std::unique_lock< std::mutex > lock{m_exclusiveAnnouncementAccess};
+		Base::MutexLock lock{m_exclusiveAnnouncementAccess};
 
 		m_exclusiveAccessesWithdrawn.wait(lock, [this] {
 			return m_announcedExclusiveAccesses.load(std::memory_order_acquire) == 0;
@@ -374,7 +374,7 @@ namespace EmEn::Scenes
 	Manager::deleteScene (const std::string & sceneName) noexcept
 	{
 		{
-			const std::scoped_lock lock{m_sceneListAccess};
+			const Base::MutexLock lock{m_sceneListAccess};
 
 			const auto sceneIt = m_scenes.find(sceneName);
 
@@ -385,13 +385,11 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			/* NOTE: Disable the scene if this is the one being deleted. */
-			if ( sceneIt->second == m_activeScene )
+			/* NOTE: Disable the scene if this is the one being deleted.
+			 * Lock order: m_sceneListAccess, then m_activeSceneSharedAccess (here and in disableActiveScene()).
+			 * No code may take them in the reverse order. */
+			if ( sceneIt->second == this->activeSceneSnapshot() )
 			{
-				/* NOTE: This will lock the shared mutex here.
-				 * As long as we don't have any other code that locks these
-				 * two mutexes in reverse order (m_activeSceneSharedAccess -> m_sceneListAccess),
-				 * we are safe from a deadlock. */
 				this->disableActiveScene();
 			}
 
@@ -405,7 +403,7 @@ namespace EmEn::Scenes
 			 * delete; the switch/disable path stays hitch-free. */
 			{
 				const ExclusiveAccessAnnouncement announcement{*this};
-				const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
+				const Base::SharedMutexWriteLock activeSceneLock{m_activeSceneSharedAccess};
 
 				sceneIt->second->AVConsoleManager().graphicsRenderer().device()->waitIdle("Manager::deleteScene");
 
@@ -422,19 +420,20 @@ namespace EmEn::Scenes
 	bool
 	Manager::enableScene (const std::shared_ptr< Scene > & scene) noexcept
 	{
-		if ( m_activeScene != nullptr )
-		{
-			TraceWarning{ClassId} << "The scene '" << m_activeScene->name() << "' is still active. Disable it before !";
-
-			return false;
-		}
-
 		{
 			/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks.
 			 * Announced first: the render loop would otherwise take the shared access back before this
 			 * writer wakes (writer preference, see withSharedActiveScene()). */
 			const ExclusiveAccessAnnouncement announcement{*this};
-			const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
+			const Base::SharedMutexWriteLock activeSceneLock{m_activeSceneSharedAccess};
+
+			/* NOTE: Checked under the exclusive access: nothing can enable a scene between the check and the change. */
+			if ( m_activeScene != nullptr )
+			{
+				TraceWarning{ClassId} << "The scene '" << m_activeScene->name() << "' is still active. Disable it before !";
+
+				return false;
+			}
 
 			if ( scene == nullptr )
 			{
@@ -471,9 +470,9 @@ namespace EmEn::Scenes
 
 		/* Send out a message that the scene has been activated, once the exclusive access is released: a handler
 		 * calling hasActiveScene() or withSharedActiveScene() would otherwise deadlock on this thread. */
-		this->notify(SceneEnabled, m_activeScene);
+		this->notify(SceneEnabled, scene);
 
-		TraceSuccess{ClassId} << "Scene '" << m_activeScene->name() << "' loaded !";
+		TraceSuccess{ClassId} << "Scene '" << scene->name() << "' loaded !";
 
 		return true;
 	}
@@ -481,7 +480,7 @@ namespace EmEn::Scenes
 	bool
 	Manager::disableActiveScene () noexcept
 	{
-		if ( m_activeScene == nullptr )
+		if ( this->activeSceneSnapshot() == nullptr )
 		{
 			return false;
 		}
@@ -499,7 +498,13 @@ namespace EmEn::Scenes
 			 * Announced first: the render loop would otherwise take the shared access back before this
 			 * writer wakes (writer preference, see withSharedActiveScene()). */
 			const ExclusiveAccessAnnouncement announcement{*this};
-			const std::unique_lock< std::shared_mutex > activeSceneLock{m_activeSceneSharedAccess};
+			const Base::SharedMutexWriteLock activeSceneLock{m_activeSceneSharedAccess};
+
+			/* NOTE: Re-checked under the exclusive access: another caller may have disabled it since the check above. */
+			if ( m_activeScene == nullptr )
+			{
+				return false;
+			}
 
 			/* NOTE: Drop this scene's textures from the global bindless descriptor table before it stops
 			 * being rendered. The manager only ever mirrors the ACTIVE scene; a scene that is no longer
@@ -530,7 +535,7 @@ namespace EmEn::Scenes
 	std::vector< std::string >
 	Manager::getSceneNames () const noexcept
 	{
-		const std::scoped_lock lock{m_sceneListAccess};
+		const Base::MutexLock lock{m_sceneListAccess};
 
 		if ( m_scenes.empty() )
 		{
@@ -549,7 +554,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< Scene >
 	Manager::getScene (const std::string & sceneName) noexcept
 	{
-		const std::scoped_lock lock{m_sceneListAccess};
+		const Base::MutexLock lock{m_sceneListAccess};
 
 		const auto sceneIt = m_scenes.find(sceneName);
 
@@ -564,7 +569,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< const Scene >
 	Manager::getScene (const std::string & sceneName) const noexcept
 	{
-		const std::scoped_lock lock{m_sceneListAccess};
+		const Base::MutexLock lock{m_sceneListAccess};
 
 		const auto sceneIt = m_scenes.find(sceneName);
 
@@ -586,7 +591,9 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		if ( m_activeScene == nullptr )
+		const auto activeScene = this->activeSceneSnapshot();
+
+		if ( activeScene == nullptr )
 		{
 			Tracer::warning(ClassId, "No active scene to edit !");
 
@@ -596,7 +603,7 @@ namespace EmEn::Scenes
 		/* NOTE: Get the view matrices from the first render-to-view target (main camera). */
 		const Graphics::ViewMatricesInterface * viewMatrices = nullptr;
 
-		m_activeScene->forEachRenderToView([&viewMatrices] (const auto & renderTarget) {
+		activeScene->forEachRenderToView([&viewMatrices] (const auto & renderTarget) {
 			if ( viewMatrices == nullptr )
 			{
 				viewMatrices = &renderTarget->viewMatrices();
@@ -610,6 +617,6 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		m_editorManager.activate(*m_activeScene, *viewMatrices);
+		m_editorManager.activate(*activeScene, *viewMatrices);
 	}
 }

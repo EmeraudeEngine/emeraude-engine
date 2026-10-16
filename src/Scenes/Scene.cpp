@@ -222,7 +222,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< Component::Camera >
 	Scene::activeCamera () const noexcept
 	{
-		const std::scoped_lock lock{m_activeCameraAccess};
+		const Base::MutexLock lock{m_activeCameraAccess};
 
 		/* Self-healing: a camera whose entity died resolves to nullptr, and the
 		 * photographic effects dematerialize through the regular per-frame polling. */
@@ -232,7 +232,7 @@ namespace EmEn::Scenes
 	void
 	Scene::setActiveCamera (const std::shared_ptr< Component::Camera > & camera) noexcept
 	{
-		const std::scoped_lock lock{m_activeCameraAccess};
+		const Base::MutexLock lock{m_activeCameraAccess};
 
 		m_activeCamera = camera;
 	}
@@ -283,7 +283,7 @@ namespace EmEn::Scenes
 						m_AVConsoleManager.addVideoDevice(swapChain, true);
 
 						{
-							const std::scoped_lock lock{m_renderToViewAccess};
+							const Base::MutexLock lock{m_renderToViewAccess};
 
 							m_renderToViews.emplace(swapChain);
 						}
@@ -410,7 +410,7 @@ namespace EmEn::Scenes
 
 		/* Update scene static entities logics. */
 		{
-			const std::scoped_lock lock{m_staticEntitiesAccess};
+			const Base::MutexLock lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
@@ -423,7 +423,7 @@ namespace EmEn::Scenes
 
 		/* Update scene nodes logics. */
 		{
-			const std::scoped_lock lock{m_sceneNodesAccess};
+			const Base::MutexLock lock{m_sceneNodesAccess};
 
 			NodeCrawler< Node > crawler{m_rootNode};
 
@@ -545,7 +545,7 @@ namespace EmEn::Scenes
 	bool
 	Scene::rebuildRenderingOctree (bool keepElements) noexcept
 	{
-		const std::scoped_lock lock{m_renderingOctreeAccess};
+		const Base::MutexLock lock{m_renderingOctreeAccess};
 
 		if ( m_boundary <= 0.0F )
 		{
@@ -600,7 +600,7 @@ namespace EmEn::Scenes
 	bool
 	Scene::rebuildPhysicsOctree (bool keepElements) noexcept
 	{
-		const std::scoped_lock lock{m_physicsOctreeAccess};
+		const Base::MutexLock lock{m_physicsOctreeAccess};
 
 		if ( m_boundary <= 0.0F )
 		{
@@ -641,14 +641,14 @@ namespace EmEn::Scenes
 	{
 		std::stringstream output;
 
+		const Base::MutexLock renderingLock{m_renderingOctreeAccess};
+
 		if ( m_renderingOctree == nullptr )
 		{
 			output << "No rendering octree enabled !" "\n";
 		}
 		else
 		{
-			const std::scoped_lock lock{m_renderingOctreeAccess};
-
 			output <<
 				"Rendering octree :" "\n"
 				"Sector depth: " << m_renderingOctree->getDepth() << "\n"
@@ -663,14 +663,14 @@ namespace EmEn::Scenes
 			}
 		}
 
+		const Base::MutexLock physicsLock{m_physicsOctreeAccess};
+
 		if ( m_physicsOctree == nullptr )
 		{
 			output << "No physics octree enabled !" "\n";
 		}
 		else
 		{
-			const std::scoped_lock lock{m_physicsOctreeAccess};
-
 			output <<
 				"Physics octree :" "\n"
 				"Sector depth: " << m_physicsOctree->getDepth() << "\n"
@@ -869,7 +869,7 @@ namespace EmEn::Scenes
 		 * pose at the origin, no HDR, a white-over-black frame. */
 		if ( !(hasCamera && hasMicrophone) )
 		{
-			const std::scoped_lock lock{m_staticEntitiesAccess};
+			const Base::MutexLock lock{m_staticEntitiesAccess};
 
 			for ( const auto & staticEntity : m_staticEntities | std::views::values )
 			{
@@ -931,42 +931,50 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		if ( m_renderingOctree == nullptr )
 		{
-			m_renderingOctree = std::make_shared< OctreeSector< AbstractEntity, false > >(
-				Vector< 3, float >{m_boundary, m_boundary, m_boundary},
-				Vector< 3, float >{-m_boundary, -m_boundary, -m_boundary},
-				octreeOptions.renderingOctreeAutoExpandAt,
-				false
-			);
+			const Base::MutexLock lock{m_renderingOctreeAccess};
 
-			if ( octreeOptions.renderingOctreeReserve > 0 )
+			if ( m_renderingOctree == nullptr )
 			{
-				m_renderingOctree->reserve(octreeOptions.renderingOctreeReserve);
+				m_renderingOctree = std::make_shared< OctreeSector< AbstractEntity, false > >(
+					Vector< 3, float >{m_boundary, m_boundary, m_boundary},
+					Vector< 3, float >{-m_boundary, -m_boundary, -m_boundary},
+					octreeOptions.renderingOctreeAutoExpandAt,
+					false
+				);
+
+				if ( octreeOptions.renderingOctreeReserve > 0 )
+				{
+					m_renderingOctree->reserve(octreeOptions.renderingOctreeReserve);
+				}
+			}
+			else
+			{
+				TraceWarning{ClassId} << "The rendering octree already exists !";
 			}
 		}
-		else
-		{
-			TraceWarning{ClassId} << "The rendering octree already exists !";
-		}
 
-		if ( m_physicsOctree == nullptr )
 		{
-			m_physicsOctree = std::make_shared< OctreeSector< AbstractEntity, true > >(
-				Vector< 3, float >{m_boundary, m_boundary, m_boundary},
-				Vector< 3, float >{-m_boundary, -m_boundary, -m_boundary},
-				octreeOptions.physicsOctreeAutoExpandAt,
-				false
-			);
+			const Base::MutexLock lock{m_physicsOctreeAccess};
 
-			if ( octreeOptions.physicsOctreeReserve > 0 )
+			if ( m_physicsOctree == nullptr )
 			{
-				m_physicsOctree->reserve(octreeOptions.physicsOctreeReserve);
+				m_physicsOctree = std::make_shared< OctreeSector< AbstractEntity, true > >(
+					Vector< 3, float >{m_boundary, m_boundary, m_boundary},
+					Vector< 3, float >{-m_boundary, -m_boundary, -m_boundary},
+					octreeOptions.physicsOctreeAutoExpandAt,
+					false
+				);
+
+				if ( octreeOptions.physicsOctreeReserve > 0 )
+				{
+					m_physicsOctree->reserve(octreeOptions.physicsOctreeReserve);
+				}
 			}
-		}
-		else
-		{
-			TraceWarning{ClassId} << "The physics octree already exists !";
+			else
+			{
+				TraceWarning{ClassId} << "The physics octree already exists !";
+			}
 		}
 
 		return true;
@@ -975,19 +983,23 @@ namespace EmEn::Scenes
 	void
 	Scene::destroyOctrees () noexcept
 	{
-		if ( m_renderingOctree != nullptr )
 		{
-			const std::scoped_lock lock{m_renderingOctreeAccess};
+			const Base::MutexLock lock{m_renderingOctreeAccess};
 
-			m_renderingOctree = nullptr;
-			m_renderingOctreeOverflow.clear();
+			if ( m_renderingOctree != nullptr )
+			{
+				m_renderingOctree = nullptr;
+				m_renderingOctreeOverflow.clear();
+			}
 		}
 
-		if ( m_physicsOctree != nullptr )
 		{
-			const std::scoped_lock lock{m_physicsOctreeAccess};
+			const Base::MutexLock lock{m_physicsOctreeAccess};
 
-			m_physicsOctree = nullptr;
+			if ( m_physicsOctree != nullptr )
+			{
+				m_physicsOctree = nullptr;
+			}
 		}
 	}
 }

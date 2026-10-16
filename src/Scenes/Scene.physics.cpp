@@ -821,14 +821,14 @@ namespace EmEn::Scenes
 		movedEntities.clear();
 		impacts.clear();
 
+		/* Lock the physics octree for the duration of the simulation to prevent
+		 * concurrent modifications from other threads (e.g., checkEntityLocationInOctrees). */
+		const Base::MutexLock lock{m_physicsOctreeAccess};
+
 		if ( m_physicsOctree == nullptr )
 		{
 			return;
 		}
-
-		/* Lock the physics octree for the duration of the simulation to prevent
-		 * concurrent modifications from other threads (e.g., checkEntityLocationInOctrees). */
-		const std::scoped_lock lock{m_physicsOctreeAccess};
 
 		/* Declared after the lock, so released before it: what the step notifies waits for processLogics(). */
 		const PhysicsStepMark stepMark{m_physicsStepThread};

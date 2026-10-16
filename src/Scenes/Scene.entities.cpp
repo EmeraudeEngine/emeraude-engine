@@ -63,7 +63,7 @@ namespace EmEn::Scenes
 	void
 	Scene::resetNodeTree () const noexcept
 	{
-		const std::scoped_lock lock{m_sceneNodesAccess};
+		const Base::MutexLock lock{m_sceneNodesAccess};
 
 		m_rootNode->destroyTree();
 	}
@@ -166,7 +166,13 @@ namespace EmEn::Scenes
 		 * them are called `BlueTransWithMask` — so the scene received 16 entities and two of the
 		 * three blue spheres were absent from the grid, with nothing logged anywhere.
 		 * Neither glTF nor FBX makes node names unique; the caller must expect a collision. */
-		const auto [entityIt, inserted] = m_staticEntities.emplace(name, staticEntity);
+		bool inserted = false;
+
+		{
+			const Base::MutexLock lock{m_staticEntitiesAccess};
+
+			inserted = m_staticEntities.emplace(name, staticEntity).second;
+		}
 
 		if ( !inserted )
 		{
@@ -185,15 +191,22 @@ namespace EmEn::Scenes
 	bool
 	Scene::removeStaticEntity (const std::string & name) noexcept
 	{
-		/* First, check the presence of the entity in the list. */
-		const auto staticEntityIt = m_staticEntities.find(name);
+		/* First, check the presence of the entity in the list. The lock is held around the map
+		 * operations only: the unlinking below notifies observers and takes the octree locks. */
+		std::shared_ptr< StaticEntity > staticEntity;
 
-		if ( staticEntityIt == m_staticEntities.end() )
 		{
-			return false;
-		}
+			const Base::MutexLock lock{m_staticEntitiesAccess};
 
-		const auto staticEntity = staticEntityIt->second;
+			const auto staticEntityIt = m_staticEntities.find(name);
+
+			if ( staticEntityIt == m_staticEntities.end() )
+			{
+				return false;
+			}
+
+			staticEntity = staticEntityIt->second;
+		}
 
 		/* ⚠️ Unlink the components while the scene still OBSERVES the entity: the destruction
 		 * notifications (DirectionalLightDestroyed, ...) are what unregister lights from the
@@ -211,24 +224,39 @@ namespace EmEn::Scenes
 		 * WITHOUT the "not part of the octree" warning, which is only meaningful for a caller that
 		 * asserts membership. ⚠️ The unconditional physics erase used to warn on every entity that
 		 * never had a collision model — every explosion and fire of game-logic. */
-		if ( m_renderingOctree != nullptr )
 		{
-			const std::scoped_lock lock{m_renderingOctreeAccess};
+			const Base::MutexLock lock{m_renderingOctreeAccess};
 
-			m_renderingOctree->erase(staticEntity, false);
-			m_renderingOctreeOverflow.erase(staticEntity);
+			if ( m_renderingOctree != nullptr )
+			{
+				m_renderingOctree->erase(staticEntity, false);
+				m_renderingOctreeOverflow.erase(staticEntity);
+			}
 		}
 
-		if ( m_physicsOctree != nullptr )
 		{
-			const std::scoped_lock lock{m_physicsOctreeAccess};
+			const Base::MutexLock lock{m_physicsOctreeAccess};
 
-			m_physicsOctree->erase(staticEntity, false);
+			if ( m_physicsOctree != nullptr )
+			{
+				m_physicsOctree->erase(staticEntity, false);
+			}
 		}
 
 		staticEntity->clearComponents();
 
-		m_staticEntities.erase(staticEntityIt);
+		/* NOTE: Erase by identity: another thread may have removed this name and created a new
+		 * entity under it while the lock was not held. */
+		{
+			const Base::MutexLock lock{m_staticEntitiesAccess};
+
+			const auto staticEntityIt = m_staticEntities.find(name);
+
+			if ( staticEntityIt != m_staticEntities.end() && staticEntityIt->second == staticEntity )
+			{
+				m_staticEntities.erase(staticEntityIt);
+			}
+		}
 
 		return true;
 	}
@@ -274,6 +302,8 @@ namespace EmEn::Scenes
 		std::stringstream output;
 
 		output << "Static entity system: " "\n";
+
+		const Base::MutexLock lock{m_staticEntitiesAccess};
 
 		if ( m_staticEntities.empty() )
 		{
@@ -325,7 +355,7 @@ namespace EmEn::Scenes
 
 		/* Suspend all static entities. */
 		{
-			const std::scoped_lock lock{m_staticEntitiesAccess};
+			const Base::MutexLock lock{m_staticEntitiesAccess};
 
 			for ( const auto & entity : m_staticEntities | std::views::values )
 			{
@@ -335,7 +365,7 @@ namespace EmEn::Scenes
 
 		/* Suspend all nodes in the tree. */
 		{
-			const std::scoped_lock lock{m_sceneNodesAccess};
+			const Base::MutexLock lock{m_sceneNodesAccess};
 
 			NodeCrawler< Node > crawler{m_rootNode};
 
@@ -357,7 +387,7 @@ namespace EmEn::Scenes
 
 		/* Wakeup all static entities. */
 		{
-			const std::scoped_lock lock{m_staticEntitiesAccess};
+			const Base::MutexLock lock{m_staticEntitiesAccess};
 
 			for ( const auto & entity : m_staticEntities | std::views::values )
 			{
@@ -367,7 +397,7 @@ namespace EmEn::Scenes
 
 		/* Wakeup all nodes in the tree. */
 		{
-			const std::scoped_lock lock{m_sceneNodesAccess};
+			const Base::MutexLock lock{m_sceneNodesAccess};
 
 			NodeCrawler< Node > crawler{m_rootNode};
 
@@ -382,24 +412,27 @@ namespace EmEn::Scenes
 	Scene::checkEntityLocationInOctrees (const std::shared_ptr< AbstractEntity > & entity) const noexcept
 	{
 		/* Check the entity in the rendering octree. */
-		if ( m_renderingOctree != nullptr && entity->isRenderable() )
+		if ( entity->isRenderable() )
 		{
-			const std::scoped_lock lockGuard{m_renderingOctreeAccess};
+			const Base::MutexLock lockGuard{m_renderingOctreeAccess};
 
 			/* An entity outside the octree's bounds is still drawn: the render lists query the octree first
 			 * (gatherRenderingCandidates()), and walk the overflow as it is. */
-			if ( m_renderingOctree->updateOrInsert(entity) )
+			if ( m_renderingOctree != nullptr )
 			{
-				m_renderingOctreeOverflow.erase(entity);
-			}
-			else
-			{
-				m_renderingOctreeOverflow.insert(entity);
+				if ( m_renderingOctree->updateOrInsert(entity) )
+				{
+					m_renderingOctreeOverflow.erase(entity);
+				}
+				else
+				{
+					m_renderingOctreeOverflow.insert(entity);
+				}
 			}
 		}
 
 		/* Check the entity in the physics octree. */
-		if ( m_physicsOctree != nullptr && entity->isCollidable() )
+		if ( entity->isCollidable() )
 		{
 			/* NOTE: If there is no collision model, no physics simulation is possible. */
 			const auto * collisionModel = entity->collisionModel();
@@ -416,9 +449,12 @@ namespace EmEn::Scenes
 				return;
 			}
 
-			const std::scoped_lock lock{m_physicsOctreeAccess};
+			const Base::MutexLock lock{m_physicsOctreeAccess};
 
-			m_physicsOctree->updateOrInsert(entity);
+			if ( m_physicsOctree != nullptr )
+			{
+				m_physicsOctree->updateOrInsert(entity);
+			}
 		}
 	}
 
@@ -444,11 +480,14 @@ namespace EmEn::Scenes
 		 * Only an entity with a collision model can have been inserted — or one that HAD one: a withdrawn
 		 * model (setCollisionModel(nullptr), a corpse) leaves too, else it stayed filed with no shape and its
 		 * character controller stood it up again. */
-		if ( m_physicsOctree != nullptr && (entity->collisionModel() != nullptr ? !entity->isCollidable() : entity->isCollisionModelWithdrawn()) )
+		if ( entity->collisionModel() != nullptr ? !entity->isCollidable() : entity->isCollisionModelWithdrawn() )
 		{
-			const std::scoped_lock lock{m_physicsOctreeAccess};
+			const Base::MutexLock lock{m_physicsOctreeAccess};
 
-			m_physicsOctree->erase(entity, false);
+			if ( m_physicsOctree != nullptr )
+			{
+				m_physicsOctree->erase(entity, false);
+			}
 		}
 
 		this->checkEntityLocationInOctrees(entity);
@@ -487,19 +526,23 @@ namespace EmEn::Scenes
 				 * checkEntityLocationInOctrees() and may have changed since, so erase from both
 				 * octrees, silently — absence is legitimate (an explosion or a fire never had a
 				 * collision model, and was never in the physics octree). */
-				if ( m_renderingOctree != nullptr )
 				{
-					const std::scoped_lock lock{m_renderingOctreeAccess};
+					const Base::MutexLock lock{m_renderingOctreeAccess};
 
-					m_renderingOctree->erase(node, false);
-					m_renderingOctreeOverflow.erase(node);
+					if ( m_renderingOctree != nullptr )
+					{
+						m_renderingOctree->erase(node, false);
+						m_renderingOctreeOverflow.erase(node);
+					}
 				}
 
-				if ( m_physicsOctree != nullptr )
 				{
-					const std::scoped_lock lock{m_physicsOctreeAccess};
+					const Base::MutexLock lock{m_physicsOctreeAccess};
 
-					m_physicsOctree->erase(node, false);
+					if ( m_physicsOctree != nullptr )
+					{
+						m_physicsOctree->erase(node, false);
+					}
 				}
 			}
 				return true;

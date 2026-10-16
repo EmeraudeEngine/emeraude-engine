@@ -48,6 +48,9 @@
 #include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "ConditionVariable.hpp"
+#include "Mutex.hpp"
+#include "SharedMutex.hpp"
 #include "DefinitionResource.hpp"
 #include "Editor/Manager.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
@@ -226,7 +229,7 @@ namespace EmEn::Scenes
 			bool
 			hasSceneNamed (const std::string & sceneName) const noexcept
 			{
-				const std::scoped_lock lock{m_sceneListAccess};
+				const Base::MutexLock lock{m_sceneListAccess};
 
 				return m_scenes.contains(sceneName);
 			}
@@ -347,7 +350,7 @@ namespace EmEn::Scenes
 			{
 				this->waitForAnnouncedExclusiveAccesses();
 
-				const std::shared_lock lock{m_activeSceneSharedAccess};
+				const Base::SharedMutexReadLock lock{m_activeSceneSharedAccess};
 
 				return m_activeScene != nullptr;
 			}
@@ -373,7 +376,7 @@ namespace EmEn::Scenes
 			{
 				this->waitForAnnouncedExclusiveAccesses();
 
-				const std::shared_lock lock{m_activeSceneSharedAccess};
+				const Base::SharedMutexReadLock lock{m_activeSceneSharedAccess};
 
 				if ( abortOnNullScene && m_activeScene == nullptr )
 				{
@@ -395,7 +398,7 @@ namespace EmEn::Scenes
 			{
 				/* Announced BEFORE queuing on the lock, withdrawn AFTER releasing it (reverse destruction order). */
 				const ExclusiveAccessAnnouncement announcement{*this};
-				const std::unique_lock lock{m_activeSceneSharedAccess};
+				const Base::SharedMutexWriteLock lock{m_activeSceneSharedAccess};
 
 				if ( abortOnNullScene && m_activeScene == nullptr )
 				{
@@ -490,6 +493,21 @@ namespace EmEn::Scenes
 			 */
 			void waitForAnnouncedExclusiveAccesses () const noexcept;
 
+			/**
+			 * @brief Returns a copy of the active scene pointer, taken under the shared access.
+			 * @note For the main thread's own checks (the thread that enables and disables a scene): the copy keeps
+			 * the scene alive, and a decision that must hold until a change is re-checked under the exclusive access.
+			 * @return std::shared_ptr< Scene >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Scene >
+			activeSceneSnapshot () const noexcept
+			{
+				const Base::SharedMutexReadLock lock{m_activeSceneSharedAccess};
+
+				return m_activeScene;
+			}
+
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
 			bool onInitialize () noexcept override;
 
@@ -503,21 +521,21 @@ namespace EmEn::Scenes
 			Resources::Manager & m_resourceManager;
 			Input::Manager & m_inputManager;
 			Notifier & m_notifier;
-			std::map< std::string, std::shared_ptr< Scene > > m_scenes;
-			std::shared_ptr< Scene > m_activeScene;
+			std::map< std::string, std::shared_ptr< Scene > > m_scenes EMEN_GUARDED_BY(m_sceneListAccess);
+			std::shared_ptr< Scene > m_activeScene EMEN_GUARDED_BY(m_activeSceneSharedAccess);
 			ConsoleMemory m_consoleMemory;
 			/** @brief The console adapters of the component types (`SceneManagerService.PointLight`, …), sub-objects
 			 * of this service: every command addresses its component explicitly (Component/ConsoleAdapter.hpp). */
 			std::vector< std::unique_ptr< Console::ControllableTrait > > m_componentConsoleAdapters;
 			Editor::Manager m_editorManager{m_inputManager, m_resourceManager, m_notifier}; ///< Scene editor mode (picking, gizmo).
 			/** @brief Handle the thread-safe access to the member 'm_scenes', when creating, adding, moving a scene. */
-			mutable std::mutex m_sceneListAccess;
+			mutable Base::Mutex m_sceneListAccess;
 			/** @brief Handle a shared thread-safe access to the member 'm_activeScene', when manipulating the content of a scene. 'Readers' can share the access, while 'Writers' can have an exclusive lock.  */
-			mutable std::shared_mutex m_activeSceneSharedAccess;
+			mutable Base::SharedMutex m_activeSceneSharedAccess;
 			/** @brief The writer-preference gate of 'm_activeSceneSharedAccess': the exclusive accesses announced and not
 			 * finished, and what the readers wait on (see withSharedActiveScene()). */
 			mutable std::atomic< uint32_t > m_announcedExclusiveAccesses{0};
-			mutable std::mutex m_exclusiveAnnouncementAccess;
-			mutable std::condition_variable m_exclusiveAccessesWithdrawn;
+			mutable Base::Mutex m_exclusiveAnnouncementAccess;
+			mutable Base::ConditionVariable m_exclusiveAccessesWithdrawn;
 	};
 }
