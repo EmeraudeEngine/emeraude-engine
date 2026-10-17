@@ -824,7 +824,8 @@ namespace EmEn::Scenes
 			 * The node will be destroyed during the next trimTree() call, typically
 			 * at the end of the logic cycle. This allows safe removal during iteration.
 			 *
-			 * @note Thread-safe. Can be called from any thread.
+			 * @note Logic thread only (the thread of trimTree()): it sets a bit of the node's flag set, which is not atomic.
+			 * Documented "thread-safe, any thread" until 2026-10-17; every caller (the actors) runs on the logic thread.
 			 * @warning Cannot discard the root node (will log error and do nothing).
 			 * @see trimTree(), isDiscardable()
 			 */

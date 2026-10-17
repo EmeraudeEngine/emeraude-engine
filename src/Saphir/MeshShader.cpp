@@ -111,7 +111,7 @@ namespace EmEn::Saphir
 				break;
 
 			case MeshOutputTopology::Triangles :
-				topology = "triangles";
+				/* The initial value. */
 				break;
 		}
 

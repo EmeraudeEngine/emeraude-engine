@@ -478,3 +478,31 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **avoid-non-const-global-variables ×1** — `Window.linux.cpp` `s_waylandReader`: the libwayland functions resolved once
   for the process, used on the main thread only.
 - **cppcoreguidelines-pro-type-reinterpret-cast ×1 (2026-10-11), ON PURPOSE** — `entryPoint()` in `Vulkan/PhysicalDeviceProbe.cpp`: `vkGetInstanceProcAddr` answers a generic `PFN_vkVoidFunction` that the Vulkan binary interface requires to be cast to the entry point's real signature. The probe fetches its own entry points on purpose (it must never touch volk's global pointers, `Loader::VolkBinding::None`).
+
+## Clang Static Analyzer — first run (2026-10-17, Ave Robustus II P-W)
+
+How: `analyze-build-19 --cdb <db> --sarif --enable-checker optin.cplusplus.UninitializedObject --enable-checker
+optin.cplusplus.VirtualCall`, the database being projet-alpha's clang tree (`.claude-build-asan`) filtered to the
+cascade's OWN sources: 629 TUs (emeraude-base `src/`, the engine `src/`, projet-alpha `src/`; no third-party TU). The
+default checkers do not report inside headers (`--analyze-headers` not used). Result: 11 findings — emeraude-base 0,
+the engine 10, projet-alpha 1.
+
+Fixed (3, minor; 0 finding left on their TUs after the fix):
+- `Graphics/VolumetricImageResource.cpp` `core.DivideZero` — unreachable (the members are set to 32 just before), but a
+  `uint8_t` write may alias them: the gradient divides by the local `DefaultSize` now (no reload per texel either).
+- `Vulkan/SwapChain.cpp` `deadcode.DeadStores` — the present-mode reason's "default fallback" text was never shown
+  (every branch names its own): initialised to `nullptr`.
+- `Saphir/MeshShader.cpp` `deadcode.DeadStores` — the `Triangles` case rewrote the initial value: it keeps it.
+
+False positives (8), kept with their reason:
+- `Graphics/Renderer.cpp:2472` `cplusplus.Move` — `m_sceneTarget` moved into a deferred retirement: the call is
+  reached only through `m_sceneTarget != nullptr` (`renderFrame()`), a moved-from `shared_ptr` is null; the checker
+  does not take the comparison as a re-initialisation.
+- `Scenes/Loaders/USDLoader.cpp:855 / 933 / 943 / 948 / 955` `cplusplus.NewDeleteLeaks` — the allocation is
+  lightusd's `Animatable` copy constructor (`_ts.reset(new TimeSamples(...))`) inside the `std::optional` returned by
+  `get_value()`: owned by a `unique_ptr`, freed with the copy.
+- `Scenes/Loaders/USDLoader.cpp:1961` `core.NullDereference` — the vertex loop reads `points[index]` under
+  `index < points.size()` and a structured binding captured by reference, alive for the iteration.
+- projet-alpha `src/UI/WebView.CefRenderHandler.cpp:383` `core.NullDereference` — `srcBuffer`, a local captured by
+  reference in a lambda that `writeActiveBufferWithMapping()` runs synchronously (through a `std::function` the
+  analyzer does not follow); the popup buffer and its size are stored together (`width × height × 4`).

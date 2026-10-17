@@ -1684,7 +1684,8 @@ namespace EmEn::Vulkan
 
 		/* Select optimal present mode based on user preferences. */
 		VkPresentModeKHR selectedMode = VK_PRESENT_MODE_FIFO_KHR;
-		const char * selectionReason = "default fallback (always available)";
+		/* NOTE: Every branch below names its reason. */
+		const char * selectionReason = nullptr;
 
 		if ( m_VSyncEnabled )
 		{

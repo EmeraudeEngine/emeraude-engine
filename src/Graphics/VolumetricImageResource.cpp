@@ -58,9 +58,11 @@ namespace EmEn::Graphics
 				{
 					const auto index = ((static_cast< size_t >(zIndex) * m_height + yIndex) * m_width + xIndex) * m_colorCount;
 
-					m_data[index] = static_cast< uint8_t >(xIndex * 255 / (m_width - 1));
-					m_data[index + 1] = static_cast< uint8_t >(yIndex * 255 / (m_height - 1));
-					m_data[index + 2] = static_cast< uint8_t >(zIndex * 255 / (m_depth - 1));
+					/* NOTE: The constant, not the members: a byte write may alias them (the analyzer then assumed a
+					 * zero divisor, 2026-10-17), and they would be reloaded on every texel. */
+					m_data[index] = static_cast< uint8_t >(xIndex * 255 / (DefaultSize - 1));
+					m_data[index + 1] = static_cast< uint8_t >(yIndex * 255 / (DefaultSize - 1));
+					m_data[index + 2] = static_cast< uint8_t >(zIndex * 255 / (DefaultSize - 1));
 					m_data[index + 3] = 255;
 				}
 			}
