@@ -87,11 +87,8 @@ if ( EMERAUDE_USE_FULL_EXPORTS AND EMERAUDE_USE_LEAN_EXPORTS )
 	message(FATAL_ERROR "[EmeraudeEngine] EMERAUDE_USE_FULL_EXPORTS and EMERAUDE_USE_LEAN_EXPORTS are mutually exclusive. Enable exactly one (or neither to fall back on WINDOWS_EXPORT_ALL_SYMBOLS).")
 endif ()
 
-option(EMERAUDE_ENABLE_ASAN "Enable 'AddressSanitizer' library. Adds a dev tool to detects memory errors [SYSTEM] (Linux, macOS, MSVC; Default Off)." Off)
-option(EMERAUDE_ENABLE_MSAN "Enable 'MemorySanitizer' library. Adds a dev tool to detects memory corruption [SYSTEM] (Linux only, Default Off)." Off)
-option(EMERAUDE_ENABLE_LSAN "Enable 'LeakSanitizer' library. Adds a dev tool to detects memory leak [SYSTEM] (Linux, Homebrew LLVM on macOS; Default Off)." Off)
-option(EMERAUDE_ENABLE_TSAN "Enable 'ThreadSanitizer' library. Adds a dev tool to detects data race [SYSTEM] (Linux, macOS; Default Off)." Off)
-option(EMERAUDE_ENABLE_UBSAN "Enable 'UndefinedBehaviorSanitizer' library. Adds a dev tool to detects undefined behavior [SYSTEM] (Linux, macOS; Default Off)." Off)
+# The sanitizers (EMERAUDE_ENABLE_ASAN / LSAN / TSAN / UBSAN / MSAN) are emeraude-base options: base declares them,
+# checks what the toolchain offers and carries the flags to the whole cascade (emeraude-base README.md § Options).
 option(EMERAUDE_ENABLE_IMGUI "Enable 'libimgui' library. Adds a GUI to the engine [LOCAL] (Default Off)." Off)
 
 # Debug preprocessor macros control (Ignored in Release).
@@ -334,74 +331,6 @@ elseif ( UNIX )
 	)
 else ()
 	message(FATAL_ERROR "[EmeraudeEngine] Unsupported platform/compiler! NOTE: If you are on Windows be sure to use 'Visual Studio 2022' (>=).")
-endif ()
-
-## Sanitizers (development tools, never in a release)
-if ( MSVC )
-	if ( EMERAUDE_ENABLE_MSAN OR EMERAUDE_ENABLE_LSAN OR EMERAUDE_ENABLE_TSAN OR EMERAUDE_ENABLE_UBSAN )
-		message(FATAL_ERROR "[EmeraudeEngine] MSVC only has AddressSanitizer (EMERAUDE_ENABLE_ASAN), without LeakSanitizer.")
-	endif ()
-
-	if ( EMERAUDE_ENABLE_ASAN )
-		message("[EmeraudeEngine] Enabling AddressSanitizer tools (MSVC, clang_rt.asan_dynamic-x86_64.dll on PATH at run time) ...")
-
-		# /Z7: without debug information MSVC warns C5072, fatal under /WX. The two defines: the prebuilt static
-		# libraries are not instrumented, their container annotations would not match.
-		target_compile_options(${PROJECT_NAME} PUBLIC /fsanitize=address /Z7)
-		target_compile_definitions(${PROJECT_NAME} PUBLIC _DISABLE_VECTOR_ANNOTATION _DISABLE_STRING_ANNOTATION)
-		target_link_options(${PROJECT_NAME} PUBLIC /DEBUG /INCREMENTAL:NO)
-	endif ()
-else ()
-	if ( APPLE AND EMERAUDE_ENABLE_MSAN )
-		message(FATAL_ERROR "[EmeraudeEngine] MemorySanitizer is Linux only.")
-	endif ()
-
-	if ( CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang" AND CMAKE_SYSTEM_PROCESSOR STREQUAL "arm64" )
-		set(_emeraudeNoLeakSanitizer On)
-	endif ()
-
-	if ( EMERAUDE_ENABLE_LSAN AND _emeraudeNoLeakSanitizer )
-		message(FATAL_ERROR "[EmeraudeEngine] AppleClang has no LeakSanitizer on arm64: use Homebrew LLVM, or EMERAUDE_ENABLE_ASAN with ASAN_OPTIONS=detect_leaks=0.")
-	endif ()
-
-	if ( EMERAUDE_ENABLE_ASAN )
-		message("[EmeraudeEngine] Enabling AddressSanitizer tools ...")
-
-		if ( _emeraudeNoLeakSanitizer )
-			message("[EmeraudeEngine] AppleClang has no LeakSanitizer on arm64: run with ASAN_OPTIONS=detect_leaks=0.")
-		endif ()
-
-		target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=address -fno-omit-frame-pointer)
-		target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=address)
-	endif ()
-
-	if ( EMERAUDE_ENABLE_MSAN )
-		message("[EmeraudeEngine] Enabling MemorySanitizer tools ...")
-
-		target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=memory)
-		target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=memory)
-	endif ()
-
-	if ( EMERAUDE_ENABLE_LSAN )
-		message("[EmeraudeEngine] Enabling LeakSanitizer tools ...")
-
-		target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=leak)
-		target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=leak)
-	endif ()
-
-	if ( EMERAUDE_ENABLE_TSAN )
-		message("[EmeraudeEngine] Enabling ThreadSanitizer tools ...")
-
-		target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=thread)
-		target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=thread)
-	endif ()
-
-	if ( EMERAUDE_ENABLE_UBSAN )
-		message("[EmeraudeEngine] Enabling UndefinedBehaviorSanitizer tools ...")
-
-		target_compile_options(${PROJECT_NAME} PUBLIC -fsanitize=undefined -fsanitize=integer -fsanitize=nullability)
-		target_link_options(${PROJECT_NAME} PUBLIC -fsanitize=undefined -fsanitize=integer -fsanitize=nullability)
-	endif ()
 endif ()
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC ${EMERAUDE_COMPILE_DEFINITIONS})

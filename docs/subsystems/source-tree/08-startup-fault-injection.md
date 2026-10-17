@@ -128,6 +128,10 @@ dependencies/emeraude-engine/tools/stress/startup-fault-sweep.sh $PWD/.claude-bu
   uninstrumented in the sweeps above). Owner decision: emeraude-base reads the same option name, as it already did for
   `EMERAUDE_ENABLE_TSAN` (`emeraude_base_flags`: ASan alone, the MSVC branch with its defines). Base's own
   `EMERAUDE_ENABLE_SANITIZERS` (ASan + UBSan) stays for its unit tests. Check the coverage in `compile_commands.json`.
+  (2026-10-17: base declares all five switches — ASan, LSan, TSan, UBSan, MSan — and carries their flags to the whole
+  cascade; `EMERAUDE_ENABLE_SANITIZERS` was removed, the unit test gate is ASan + UBSan; the engine's own sanitizer
+  block was removed the same day — it duplicated base's and contradicted it: MSan refused on macOS where base skips it,
+  UBSan's clang-only `-fsanitize=integer,nullability` on GCC. Base `README.md` § Options.)
 - Verified with the switch alone (no hand-made flags):
   - Linux (clang 19, after the base change): base 55 / 55 and engine 466 / 466 TUs instrumented; the sweep 33
     services, 20 / 13, 0 ASan error, 0 leak, 0 validation message;
