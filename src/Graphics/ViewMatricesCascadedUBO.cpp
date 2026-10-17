@@ -646,10 +646,6 @@ namespace EmEn::Graphics
 		 * frame, and a stale value would address a region another frame-in-flight is still using. */
 		m_currentFrameRegion = frameIndex;
 
-		/* [VULKAN-CPU-SYNC] Maybe useless */
-		/* NOTE: Lock between updateVideoMemory() and destroy(). */
-		const std::scoped_lock lock{m_GPUBufferAccessLock};
-
 		const auto & uniformBufferObject = m_uniformBufferObjects[frameIndex];
 
 		auto * pointer = uniformBufferObject->mapMemoryAs< float >(0, VK_WHOLE_SIZE);
@@ -669,10 +665,6 @@ namespace EmEn::Graphics
 	void
 	ViewMatricesCascadedUBO::destroy () noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Maybe useless */
-		/* NOTE: Lock between updateVideoMemory() and destroy(). */
-		const std::scoped_lock lock{m_GPUBufferAccessLock};
-
 		m_descriptorSets.clear();
 		m_uniformBufferObjects.clear();
 	}

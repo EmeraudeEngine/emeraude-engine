@@ -34,7 +34,6 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -44,6 +43,7 @@
 /* Local inclusions for usages. */
 #include "Graphics/Frustum.hpp"
 #include "HeightfieldSurface.hpp"
+#include "Mutex.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -623,11 +623,11 @@ namespace EmEn::Graphics::Geometry
 			/* Ray-tracing proxy. */
 			std::unique_ptr< Vulkan::VertexBufferObject > m_rtVertexBufferObject;
 			std::unique_ptr< Vulkan::IndexBufferObject > m_rtIndexBufferObjectProxy;
-			mutable std::mutex m_pendingAccess;
-			PendingRayTracingProxy m_pendingProxy;
+			mutable Base::Mutex m_pendingAccess;
+			PendingRayTracingProxy m_pendingProxy EMEN_GUARDED_BY(m_pendingAccess);
 			Base::Math::Vector< 2, float > m_rtProxyCenter; ///< Logic thread.
 			std::atomic< bool > m_rtProxyUpdating{false};
-			bool m_hasPendingProxy{false};
+			bool m_hasPendingProxy EMEN_GUARDED_BY(m_pendingAccess){false};
 			bool m_surfaceUploaded{false};
 			bool m_detailWindowEnabled{false}; ///< Loading thread, before the terrain is rendered.
 	};

@@ -317,7 +317,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		{
-			const std::scoped_lock lock{m_geometryMutex};
+			const Base::MutexLock lock{m_geometryMutex};
 
 			/* ⚠️ m_geometry is a StaticVector of Geometry::MaxLODLevels: its emplace_back() does not grow, it
 			 * calls std::abort() when full, this build having no exceptions. Refusing here turns a
@@ -395,7 +395,7 @@ namespace EmEn::Graphics::Renderable
 		size_t carriedLevels = 0;
 
 		{
-			const std::scoped_lock lock{m_geometryMutex};
+			const Base::MutexLock lock{m_geometryMutex};
 
 			carriedLevels = m_geometry.size();
 		}
@@ -525,7 +525,7 @@ namespace EmEn::Graphics::Renderable
 
 		/* Thread-safe swap into the geometry array. */
 		{
-			const std::scoped_lock lock{m_geometryMutex};
+			const Base::MutexLock lock{m_geometryMutex};
 
 			/* Ensure sequential filling: LOD levels must be added in order. */
 			if ( m_geometry.size() == LODLevel && LODLevel < Geometry::MaxLODLevels )

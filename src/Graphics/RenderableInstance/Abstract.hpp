@@ -36,7 +36,6 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <source_location>
 #include <string>
 #include <vector>
@@ -52,6 +51,7 @@
 #include "Graphics/Types.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Math/Matrix.hpp"
+#include "Mutex.hpp"
 #include "RenderContext.hpp"
 #include "RenderStateTracker.hpp"
 #include "Vulkan/AccelerationStructureBuilder.hpp"
@@ -1457,12 +1457,6 @@ namespace EmEn::Graphics::RenderableInstance
 				return m_animationTimeMS;
 			}
 
-			/**
-			 * @brief Mutex protecting local data access (e.g. VBO data in Multiple).
-			 * @note Used to synchronize access between Logic thread (updating data) and Render thread (uploading to GPU).
-			 */
-			mutable std::mutex m_localDataAccess;
-
 		private:
 
 			/**
@@ -1589,12 +1583,12 @@ namespace EmEn::Graphics::RenderableInstance
 			mutable std::vector< Base::Math::Matrix< 4, float > > m_previousRenderedSkinningMatrices;
 			/** @brief Interleaved {current, previous} staging reused across updates (guarded by m_skinningStagingMutex):
 			 * the logic thread writes the current slots, the render thread the previous ones at upload. */
-			mutable std::vector< Base::Math::Matrix< 4, float > > m_skinningStaging;
+			mutable std::vector< Base::Math::Matrix< 4, float > > m_skinningStaging EMEN_GUARDED_BY(m_skinningStagingMutex);
 			std::shared_ptr< Vulkan::DescriptorPool > m_skinningDescriptorPool;
 			/** @brief One descriptor set per SSBO section (frame in flight). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_skinningDescriptorSets;
 			/** @brief Protects m_skinningStaging between the logic thread (staging) and the render thread (upload). */
-			mutable std::mutex m_skinningStagingMutex;
+			mutable Base::Mutex m_skinningStagingMutex;
 			/* Ray-tracing skinned geometry resources (per-instance).
 			 * The mirror buffer receives the compute-skinned vertices (same layout as the
 			 * source VBO) and feeds both the per-frame BLAS refit and the RT hit shading. */

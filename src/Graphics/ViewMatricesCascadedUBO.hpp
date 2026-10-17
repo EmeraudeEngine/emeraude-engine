@@ -34,7 +34,6 @@
 #include <vector>
 #include <cstddef>
 #include <memory>
-#include <mutex>
 
 /* Local inclusions for inheritances. */
 #include "ViewMatricesInterface.hpp"
@@ -469,6 +468,9 @@ namespace EmEn::Graphics
 			 * an offset; a cascaded view exists only for a CSM directional light, so there are very
 			 * few of them and the extra allocations are negligible.
 			 */
+			/* NOTE: No lock (owner decision, 2026-10-17): the two vectors are filled by create() before the render target is
+			 * published, then read and destroyed on the render thread only (updateVideoMemory(), descriptorSet(), destroy()
+			 * from RenderTarget::Abstract::destroyRenderTarget()); the destructor runs once nothing uses the object. */
 			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_uniformBufferObjects;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			/**
@@ -477,7 +479,6 @@ namespace EmEn::Graphics
 			 * same idiom ViewMatrices2DUBO uses for its jittered projection.
 			 */
 			mutable uint32_t m_currentFrameRegion{0};
-			mutable std::mutex m_GPUBufferAccessLock; /**< Mutex for GPU buffer access synchronization. */
 			uint32_t m_cascadeCount{MaxCascadeCount}; /**< Number of active cascades. */
 			float m_lambda{DefaultCascadeLambda}; /**< Split calculation blend factor. */
 	};

@@ -31,7 +31,6 @@
 
 /* STL inclusions. */
 #include <memory>
-#include <shared_mutex>
 #include <unordered_map>
 
 /* Local inclusions for inheritances. */
@@ -44,6 +43,7 @@
 #include "Math/Space3D/AACuboid.hpp"
 #include "Math/Space3D/Sphere.hpp"
 #include "ProgramCacheKey.hpp"
+#include "SharedMutex.hpp"
 
 namespace EmEn
 {
@@ -441,10 +441,10 @@ namespace EmEn::Graphics::Renderable
 			/** @brief Type alias for the outer cache (render target → program cache). */
 			using RenderTargetProgramCache = std::unordered_map< std::shared_ptr< const RenderTarget::Abstract >, ProgramCache >;
 
-			/** @brief Cache of shader programs per render target and configuration. */
-			mutable RenderTargetProgramCache m_programCache;
 			/** @brief Shared mutex protecting the program cache (read-heavy, write-rare). */
-			mutable std::shared_mutex m_programCacheMutex;
+			mutable Base::SharedMutex m_programCacheMutex;
+			/** @brief Cache of shader programs per render target and configuration. */
+			mutable RenderTargetProgramCache m_programCache EMEN_GUARDED_BY(m_programCacheMutex);
 			float m_uniformScale = 1.0F;
 			uint32_t m_vegetationFoliageLayer{NoFoliageLayer};
 	};

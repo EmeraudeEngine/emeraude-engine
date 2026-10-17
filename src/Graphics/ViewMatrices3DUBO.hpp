@@ -34,7 +34,6 @@
 #include <array>
 #include <memory>
 #include <vector>
-#include <mutex>
 
 /* Local inclusions for inheritances. */
 #include "ViewMatricesInterface.hpp"
@@ -319,11 +318,13 @@ namespace EmEn::Graphics
 			 * refraction and parallax occlusion mapping, so a single region let the raster of one
 			 * frame read what the host had already written for the next.
 			 */
+			/* NOTE: No lock (owner decision, 2026-10-17): the two vectors are filled by create() before the render target is
+			 * published, then read and destroyed on the render thread only (updateVideoMemory(), descriptorSet(), destroy()
+			 * from RenderTarget::Abstract::destroyRenderTarget()); the destructor runs once nothing uses the object. */
 			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_uniformBufferObjects;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			/** @brief Region the descriptor set currently addresses. Set by updateVideoMemory(), which is const. */
 			mutable uint32_t m_currentFrameRegion{0};
-			mutable std::mutex m_memoryAccess; /**< Mutex for GPU memory access synchronization. */
 	};
 
 	/**

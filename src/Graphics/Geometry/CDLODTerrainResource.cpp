@@ -1669,7 +1669,7 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			{
-				const std::scoped_lock lock{self->m_pendingAccess};
+				const Base::MutexLock lock{self->m_pendingAccess};
 
 				self->m_pendingProxy = std::move(proxy);
 				self->m_hasPendingProxy = true;
@@ -1693,7 +1693,7 @@ namespace EmEn::Graphics::Geometry
 		PendingRayTracingProxy proxy;
 
 		{
-			const std::scoped_lock lock{m_pendingAccess};
+			const Base::MutexLock lock{m_pendingAccess};
 
 			if ( !m_hasPendingProxy )
 			{
@@ -1726,7 +1726,7 @@ namespace EmEn::Graphics::Geometry
 	CDLODTerrainResource::destroyFromHardware (bool clearLocalData) noexcept
 	{
 		{
-			const std::scoped_lock lock{m_pendingAccess};
+			const Base::MutexLock lock{m_pendingAccess};
 
 			m_pendingProxy = {};
 			m_hasPendingProxy = false;

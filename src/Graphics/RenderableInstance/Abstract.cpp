@@ -440,7 +440,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		const std::scoped_lock lock{m_skinningStagingMutex};
+		const Base::MutexLock lock{m_skinningStagingMutex};
 
 		/* Interleaved {current, previous} (stride 2) — matches the vertex shader layout
 		 * (double skinning for the motion vectors). The logic thread writes the CURRENT slots only:
@@ -476,7 +476,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto section = static_cast< uint32_t >(frameCursor % m_skinningDescriptorSets.size());
 
 		{
-			const std::scoped_lock lock{m_skinningStagingMutex};
+			const Base::MutexLock lock{m_skinningStagingMutex};
 
 			/* Empty staging (no animation played yet): the sections hold the identity poses
 			 * written at creation, binding the section as-is is correct. */

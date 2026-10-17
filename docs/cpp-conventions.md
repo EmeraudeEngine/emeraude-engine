@@ -459,6 +459,21 @@ unlocked access at compile time. Base `docs/subsystems/source-tree/26-thread-saf
     bank count, published (release) once a bank is complete; the readers bound their index with it (acquire), no lock.
     Found with it: a bank whose buffer failed to create stayed in the vector (`usable()` counted it), and the dynamic
     flavour dereferenced a descriptor set without checking it — a failed bank is now removed.
+- Lot Graphics B (2026-10-17): the per-object locks.
+  - `Renderable::Abstract`: its program cache under a `Base::SharedMutex` (read / write locks).
+  - `MeshResource`, `MultiLayerMeshResource`: `Base::Mutex`; the level array keeps its lock-free read contract
+    (append-only, count published release / acquire), so only the append helper is `EMEN_REQUIRES`.
+  - `RenderableInstance::Abstract` (the skinning staging) and `Multiple` (its local data; `m_localDataAccess` moved
+    from the base, where it was a protected member only `Multiple` used — a clang-tidy finding on the touched line). Found: `setActiveInstanceCount()` (a particle emitter, logic thread, every tick) wrote the
+    count `instanceCount()` reads on the render thread — now an atomic; the public `resetModelMatrices()` rewrote the
+    local data without the lock (no caller today) — now locked; the instance count is `const` (constructor only) and the
+    vertex buffer object documented as frozen after the constructor (`createOnHardware()` has no other caller).
+  - `CDLODTerrainResource`: the pending ray-tracing proxy.
+  - `ViewMatrices2DUBO`, `ViewMatrices3DUBO`, `ViewMatricesCascadedUBO`: their mutex REMOVED (owner decision). It
+    locked only `updateVideoMemory()` and `destroy()` ("Maybe useless", its own comment), while every access is
+    either before the render target is published (`create()`) or on the render thread (`updateVideoMemory()`,
+    `descriptorSet()`, `destroy()` from `destroyRenderTarget()`, called by the renderer and the selection outline),
+    and the destructor runs once nothing uses the object. The contract is stated at the members.
   - The octree pointers were tested OUTSIDE their lock, then used under it (statistics, removal, the per-frame
     refiling, the collision step, the two render-list gathers) while `rebuild*Octree()` / `destroyOctrees()` replace
     them under it, and `buildOctrees()` created them unlocked: every test is now inside the lock; the render paths

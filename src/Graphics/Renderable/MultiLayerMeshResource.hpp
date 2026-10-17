@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <memory>
 #include <atomic>
-#include <mutex>
 #include <stop_token>
 #include <vector>
 
@@ -42,6 +41,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Mutex.hpp"
 #include "ThreadPool.hpp"
 #include "Types.hpp"
 
@@ -381,13 +381,13 @@ namespace EmEn::Graphics::Renderable
 			 * @pre m_geometryMutex is held and the array is not full.
 			 * @param geometryResource The level's geometry.
 			 */
-			void publishLevel (std::shared_ptr< Geometry::Interface > geometryResource) noexcept;
+			void publishLevel (std::shared_ptr< Geometry::Interface > geometryResource) noexcept EMEN_REQUIRES(m_geometryMutex);
 
 			/* ⚠️ APPEND-ONLY, read WITHOUT a lock — the contract of MeshResource::m_geometry (2026-10-07): writers append
 			 * under m_geometryMutex and publish the count (release), readers load it (acquire) and never look past it. */
 			Base::StaticVector< std::shared_ptr< Geometry::Interface >, Geometry::MaxLODLevels > m_geometry;
 			std::vector< MeshLayer > m_layers;
-			mutable std::mutex m_geometryMutex;
+			mutable Base::Mutex m_geometryMutex;
 			std::atomic< uint32_t > m_publishedLevelCount{0};
 			/* ⚠️ LAST (Ave Robustus II): the automatic LOD job reads every member above through `this`. Destroyed
 			 * first, its handle stops the job and waits for it (the decimation stops within milliseconds; a level

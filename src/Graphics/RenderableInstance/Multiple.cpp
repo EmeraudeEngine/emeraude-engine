@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <array>
 #include <cstring>
-#include <mutex>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
@@ -131,7 +130,7 @@ namespace EmEn::Graphics::RenderableInstance
 	Multiple::updateLocalData (const CartesianFrame< float > & instanceLocation, uint32_t instanceIndex) noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Protects local data (Logic Thread) */
-		const std::scoped_lock lock{m_localDataAccess};
+		const Base::MutexLock lock{m_localDataAccess};
 
 		/* Check against the local data. */
 		if ( instanceIndex >= m_instanceCount )
@@ -201,7 +200,7 @@ namespace EmEn::Graphics::RenderableInstance
 	Multiple::updateLocalData (const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t instanceOffset) noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Protects local data (Logic Thread) */
-		const std::scoped_lock lock{m_localDataAccess};
+		const Base::MutexLock lock{m_localDataAccess};
 
 		/* Check against the local data. */
 		if ( const auto endOffset = instanceOffset + instanceLocations.size(); endOffset > m_instanceCount )
@@ -342,7 +341,7 @@ namespace EmEn::Graphics::RenderableInstance
 	Multiple::createOnHardware(const std::shared_ptr< Device > & device) noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Protects local data (Render Thread) */
-		const std::scoped_lock lock{m_localDataAccess};
+		const Base::MutexLock lock{m_localDataAccess};
 
 		if ( this->isModelMatricesCreated() )
 		{
@@ -373,7 +372,7 @@ namespace EmEn::Graphics::RenderableInstance
 	Multiple::updateVideoMemory() noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Protects local data (Render Thread) */
-		const std::scoped_lock lock{m_localDataAccess};
+		const Base::MutexLock lock{m_localDataAccess};
 
 		if constexpr ( IsDebug )
 		{

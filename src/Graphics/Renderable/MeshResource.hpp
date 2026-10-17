@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <memory>
 #include <atomic>
-#include <mutex>
 #include <stop_token>
 
 /* Local inclusions for inheritances. */
@@ -41,6 +40,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Mutex.hpp"
 #include "ThreadPool.hpp"
 
 /* Forward declarations. */
@@ -254,7 +254,7 @@ namespace EmEn::Graphics::Renderable
 			 * @pre m_geometryMutex is held and the array is not full.
 			 * @param geometryResource The level's geometry.
 			 */
-			void publishLevel (std::shared_ptr< Geometry::Interface > geometryResource) noexcept;
+			void publishLevel (std::shared_ptr< Geometry::Interface > geometryResource) noexcept EMEN_REQUIRES(m_geometryMutex);
 
 			/* ⚠️ APPEND-ONLY, read WITHOUT a lock (2026-10-07, profile-driven: geometry() took this mutex on every draw).
 			 * The array is a StaticVector (it never reallocates) and a level, once there, is never replaced nor removed.
@@ -264,7 +264,7 @@ namespace EmEn::Graphics::Renderable
 			Base::StaticVector< std::shared_ptr< Geometry::Interface >, Geometry::MaxLODLevels > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
 			RasterizationOptions m_rasterizationOptions;
-			mutable std::mutex m_geometryMutex;
+			mutable Base::Mutex m_geometryMutex;
 			std::atomic< uint32_t > m_publishedLevelCount{0};
 			/* ⚠️ LAST (Ave Robustus II): the automatic LOD job reads every member above through `this`. Destroyed
 			 * first, its handle stops the job and waits for it (the decimation stops within milliseconds; a level

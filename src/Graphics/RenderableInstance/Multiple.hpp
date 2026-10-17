@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -41,6 +42,7 @@
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
 #include "Math/Matrix.hpp"
+#include "Mutex.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
@@ -111,7 +113,8 @@ namespace EmEn::Graphics::RenderableInstance
 			void
 			setActiveInstanceCount (uint32_t count) noexcept
 			{
-				m_activeInstanceCount = std::min(count, m_instanceCount);
+				/* NOTE: Written by the logic thread (a particle emitter, every tick), read by the render thread. */
+				m_activeInstanceCount.store(std::min(count, m_instanceCount), std::memory_order_relaxed);
 			}
 
 			/**
@@ -144,7 +147,11 @@ namespace EmEn::Graphics::RenderableInstance
 			void
 			resetModelMatrices () noexcept
 			{
-				this->resetLocalData();
+				{
+					const Base::MutexLock lock{m_localDataAccess};
+
+					this->resetLocalData();
+				}
 
 				this->disableFlag(ArePositionsSynchronized);
 			}
@@ -199,7 +206,7 @@ namespace EmEn::Graphics::RenderableInstance
 			uint32_t
 			instanceCount () const noexcept override
 			{
-				return m_activeInstanceCount;
+				return m_activeInstanceCount.load(std::memory_order_relaxed);
 			}
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::bindInstanceModelLayer(const Vulkan::CommandBuffer &, uint32_t, uint32_t) const */
@@ -224,7 +231,7 @@ namespace EmEn::Graphics::RenderableInstance
 			/**
 			 * @brief Resets local data to identity matrices.
 			 */
-			void resetLocalData () noexcept;
+			void resetLocalData () noexcept EMEN_REQUIRES(m_localDataAccess);
 
 			/**
 			 * @brief Converts a list of coordinates to a list of model matrices.
@@ -261,9 +268,14 @@ namespace EmEn::Graphics::RenderableInstance
 				return this->isFlagEnabled(EnableInstanceMotionHistory) ? MeshVBOWithHistoryElementCount : MeshVBOElementCount;
 			}
 
+			/* NOTE: Created by the constructor (createOnHardware()), never replaced: only its content changes, under
+			 * m_localDataAccess (updateVideoMemory()). */
 			std::unique_ptr< Vulkan::VertexBufferObject > m_vertexBufferObject;
-			std::vector< float > m_localData;
-			uint32_t m_instanceCount{0};
-			uint32_t m_activeInstanceCount{0};
+			/** @brief Guards the local data between the logic thread (updating it) and the render thread (uploading it). */
+			mutable Base::Mutex m_localDataAccess;
+			/* NOTE: Shared by the logic thread (updateLocalData()) and the render thread (updateVideoMemory()). */
+			std::vector< float > m_localData EMEN_GUARDED_BY(m_localDataAccess);
+			const uint32_t m_instanceCount{0};
+			std::atomic< uint32_t > m_activeInstanceCount{0};
 	};
 }

@@ -420,10 +420,6 @@ namespace EmEn::Graphics
 
 		}
 
-		/* [VULKAN-CPU-SYNC] Maybe useless */
-		/* NOTE: Lock between updateVideoMemory() and destroy(). */
-		const std::scoped_lock lock{m_memoryAccess};
-
 		if ( frameIndex >= m_uniformBufferObjects.size() )
 		{
 			TraceError{ClassId} << "Frame region overflow: asked for region #" << frameIndex << " but only " << m_uniformBufferObjects.size() << " exist !";
@@ -453,10 +449,6 @@ namespace EmEn::Graphics
 	void
 	ViewMatrices3DUBO::destroy () noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Maybe useless */
-		/* NOTE: Lock between updateVideoMemory() and destroy(). */
-		const std::scoped_lock lock{m_memoryAccess};
-
 		m_descriptorSets.clear();
 		m_uniformBufferObjects.clear();
 	}
