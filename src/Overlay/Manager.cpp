@@ -260,7 +260,17 @@ namespace EmEn::Overlay
 		m_pointerRegistration.reset();
 		m_enabled = false;
 
-		m_screens.clear();
+		/* NOTE: Taken out under the lock, destroyed outside it: a screen going away may call back into this manager. */
+		std::unordered_map< std::string, std::shared_ptr< UIScreen > > screens;
+
+		{
+			const Base::MutexLock lock{m_screensAccess};
+
+			screens = std::move(m_screens);
+			m_screens.clear();
+		}
+
+		screens.clear();
 
 		for ( auto & program : m_programs )
 		{
@@ -285,7 +295,7 @@ namespace EmEn::Overlay
 		std::shared_ptr< UIScreen > screen;
 
 		{
-			const std::scoped_lock lock{m_screensAccess};
+			const Base::MutexLock lock{m_screensAccess};
 
 			if constexpr ( IsDebug )
 			{
@@ -356,7 +366,7 @@ namespace EmEn::Overlay
 	Manager::createImGUIScreen (const std::string & name, const std::function< void () > & drawFunction) noexcept
 	{
 		/* NOTE: render() reads m_ImGUIScreens under this mutex on the render thread. */
-		const std::scoped_lock lock{m_screensAccess};
+		const Base::MutexLock lock{m_screensAccess};
 
 		if ( m_ImGUIScreens.contains(name) )
 		{
@@ -388,7 +398,7 @@ namespace EmEn::Overlay
 		std::shared_ptr< UIScreen > screen;
 
 		{
-			const std::scoped_lock lock{m_screensAccess};
+			const Base::MutexLock lock{m_screensAccess};
 
 			const auto screenIt = m_screens.find(name);
 
@@ -422,7 +432,7 @@ namespace EmEn::Overlay
 	Manager::InputTargets
 	Manager::inputTargets () const noexcept
 	{
-		const std::scoped_lock lock{m_screensAccess};
+		const Base::MutexLock lock{m_screensAccess};
 
 		InputTargets targets;
 		targets.screens.reserve(m_screens.size());
@@ -440,7 +450,7 @@ namespace EmEn::Overlay
 	std::shared_ptr< UIScreen >
 	Manager::findScreen (const std::string & name) const noexcept
 	{
-		const std::scoped_lock lock{m_screensAccess};
+		const Base::MutexLock lock{m_screensAccess};
 
 		const auto screenIt = m_screens.find(name);
 
@@ -450,7 +460,7 @@ namespace EmEn::Overlay
 	bool
 	Manager::eraseScreen (const std::string & name, const std::shared_ptr< UIScreen > & screen) noexcept
 	{
-		const std::scoped_lock lock{m_screensAccess};
+		const Base::MutexLock lock{m_screensAccess};
 
 		const auto screenIt = m_screens.find(name);
 
@@ -481,7 +491,7 @@ namespace EmEn::Overlay
 		std::vector< std::pair< std::string, std::shared_ptr< UIScreen > > > screens;
 
 		{
-			const std::scoped_lock lock{m_screensAccess};
+			const Base::MutexLock lock{m_screensAccess};
 
 			screens.assign(m_screens.begin(), m_screens.end());
 		}
@@ -582,7 +592,7 @@ namespace EmEn::Overlay
 	std::vector< std::string >
 	Manager::screensNameList () const noexcept
 	{
-		const std::scoped_lock lock{m_screensAccess};
+		const Base::MutexLock lock{m_screensAccess};
 
 		std::vector< std::string > screenNames;
 		screenNames.reserve(m_screens.size());
@@ -597,7 +607,7 @@ namespace EmEn::Overlay
 	std::vector< std::string >
 	Manager::activeScreensNameList () const noexcept
 	{
-		const std::scoped_lock lock{m_screensAccess};
+		const Base::MutexLock lock{m_screensAccess};
 
 		std::vector< std::string > screenNames;
 		screenNames.reserve(m_screens.size());
@@ -669,7 +679,7 @@ namespace EmEn::Overlay
 	{
 		{
 			/* NOTE: This can collide with the window resize event from Manager::onWindowResized() in another thread. */
-			const std::scoped_lock lock{m_physicalRepresentationUpdateMutex};
+			const Base::MutexLock lock{m_physicalRepresentationUpdateMutex};
 			const RepresentationPass pass{m_representationPassThread};
 
 			if ( this->isEnabled() )
@@ -705,7 +715,7 @@ namespace EmEn::Overlay
 	void
 	Manager::snapshotScreens () noexcept
 	{
-		const std::scoped_lock lock{m_screensAccess};
+		const Base::MutexLock lock{m_screensAccess};
 
 		m_screenSnapshot.clear();
 
@@ -788,7 +798,7 @@ namespace EmEn::Overlay
 
 		{
 			/* NOTE: This can collide with the successive call to Manager::processFrameUpdates() in the rendering loop. */
-			const std::scoped_lock lock{m_physicalRepresentationUpdateMutex};
+			const Base::MutexLock lock{m_physicalRepresentationUpdateMutex};
 			const RepresentationPass pass{m_representationPassThread};
 
 			/* Step 1: Update shared framebuffer properties with new window dimensions.
@@ -865,7 +875,7 @@ namespace EmEn::Overlay
 		 * and updateVideoMemory() take them so). This took the screens first and the representation lock further down:
 		 * a resize on the window's thread during a frame could deadlock (lock-order inversion found by ThreadSanitizer,
 		 * 2026-10-12). std::scoped_lock takes both without an order of its own. */
-		const std::scoped_lock lock{m_physicalRepresentationUpdateMutex, m_screensAccess};
+		const Base::MutexPairLock lock{m_physicalRepresentationUpdateMutex, m_screensAccess};
 
 		/* Check if the overlay is enabled and there is something to render.
 		 * NOTE: ImGUI screens live in a separate container, so an ImGUI-only
@@ -1060,7 +1070,7 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		const std::scoped_lock lock{m_screensAccess};
+		const Base::MutexLock lock{m_screensAccess};
 
 		m_inputExclusiveScreen = screen;
 

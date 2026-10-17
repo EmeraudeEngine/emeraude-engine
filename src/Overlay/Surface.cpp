@@ -425,12 +425,12 @@ namespace EmEn::Overlay
 	{
 		/* NOTE: A content writer holds the buffer: skip this pass, the next one catches up (CP.20: a guard, never a manual
 		 * lock / unlock pair). */
-		const std::unique_lock lock{m_framebufferAccess, std::try_to_lock};
-
-		if ( !lock.owns_lock() )
+		if ( !m_framebufferAccess.try_lock() )
 		{
 			return true;
 		}
+
+		const Base::MutexLock lock{m_framebufferAccess, std::adopt_lock};
 
 		/* Step 1: Handle size changes.
 		 * This is triggered by invalidate() from window resize or manual setSize()/setGeometry(). The size generation is
@@ -749,7 +749,7 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		const std::scoped_lock lock{m_framebufferAccess};
+		const Base::MutexLock lock{m_framebufferAccess};
 
 		if ( !m_transitionBuffer.isValid() )
 		{
@@ -786,7 +786,7 @@ namespace EmEn::Overlay
 			return;
 		}
 
-		const std::scoped_lock lock{m_requestedTransitionSizeMutex};
+		const Base::MutexLock lock{m_requestedTransitionSizeMutex};
 
 		m_requestedTransitionWidth = width;
 		m_requestedTransitionHeight = height;
@@ -800,7 +800,7 @@ namespace EmEn::Overlay
 		uint32_t requestedHeight = 0;
 
 		{
-			const std::scoped_lock lock{m_requestedTransitionSizeMutex};
+			const Base::MutexLock lock{m_requestedTransitionSizeMutex};
 
 			if ( !m_transitionResizeRequested )
 			{
@@ -1140,7 +1140,7 @@ namespace EmEn::Overlay
 
 		auto & renderer = *m_renderer;
 
-		const std::scoped_lock lock{m_framebufferAccess};
+		const Base::MutexLock lock{m_framebufferAccess};
 
 		const auto target = this->determineTargetBuffer(width, height);
 
@@ -1294,7 +1294,7 @@ namespace EmEn::Overlay
 
 		auto & renderer = *m_renderer;
 
-		const std::scoped_lock lock{m_framebufferAccess};
+		const Base::MutexLock lock{m_framebufferAccess};
 
 		/* NOTE: Route the frame by size through the transition machinery — same rules as the
 		 * CPU paths (see directPaint()/indirectPaint() rationale in the consumer). */
@@ -1468,7 +1468,7 @@ namespace EmEn::Overlay
 	void
 	Surface::setAcceleratedPopupVisible (bool visible) noexcept
 	{
-		const std::scoped_lock lock{m_framebufferAccess};
+		const Base::MutexLock lock{m_framebufferAccess};
 
 		m_acceleratedPopupVisible = visible;
 
@@ -1538,7 +1538,7 @@ namespace EmEn::Overlay
 
 		auto & renderer = *m_renderer;
 
-		const std::scoped_lock lock{m_framebufferAccess};
+		const Base::MutexLock lock{m_framebufferAccess};
 
 		if ( !m_acceleratedPopupVisible )
 		{
@@ -1725,7 +1725,7 @@ namespace EmEn::Overlay
 		float depth = 0.0F;
 
 		{
-			const std::scoped_lock lock{obj.m_geometryAccess};
+			const Base::MutexLock lock{obj.m_geometryAccess};
 
 			depth = obj.m_depth;
 		}

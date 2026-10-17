@@ -288,31 +288,39 @@ namespace EmEn::Audio
 		m_defaultSource = std::make_shared< Source >();
 
 		/* Create all sources available minus the default one and two for the track mixer. */
-		if ( m_contextAttributes[ALC_MONO_SOURCES] > 4 )
+		bool noSource = true;
+
 		{
-			const auto maxMonoSources = static_cast< size_t >(m_contextAttributes[ALC_MONO_SOURCES]) - 3;
+			const Base::MutexLock lock{m_sourcePoolMutex};
 
-			m_allSources.reserve(maxMonoSources);
-			m_availableSources.reserve(maxMonoSources);
-
-			for ( size_t index = 0; index < maxMonoSources; index++ )
+			if ( m_contextAttributes[ALC_MONO_SOURCES] > 4 )
 			{
-				auto source = std::make_shared< Source >();
+				const auto maxMonoSources = static_cast< size_t >(m_contextAttributes[ALC_MONO_SOURCES]) - 3;
 
-				if ( !source->isCreated() )
+				m_allSources.reserve(maxMonoSources);
+				m_availableSources.reserve(maxMonoSources);
+
+				for ( size_t index = 0; index < maxMonoSources; index++ )
 				{
-					TraceWarning{ClassId} << "Unable to create the source #" << index << " !";
+					auto source = std::make_shared< Source >();
 
-					break;
+					if ( !source->isCreated() )
+					{
+						TraceWarning{ClassId} << "Unable to create the source #" << index << " !";
+
+						break;
+					}
+
+					m_allSources.push_back(source);
+
+					m_availableSources.push_back(source.get());
 				}
-
-				m_allSources.push_back(source);
-
-				m_availableSources.push_back(source.get());
 			}
+
+			noSource = m_allSources.empty();
 		}
 
-		if ( m_allSources.empty() )
+		if ( noSource )
 		{
 			Tracer::error(ClassId, "No audio source available at all! Disabling th audio layer.");
 
@@ -768,7 +776,7 @@ namespace EmEn::Audio
 	size_t
 	Manager::getAvailableSourceCount () const noexcept
 	{
-		const std::scoped_lock lock{m_sourcePoolMutex};
+		const Base::MutexLock lock{m_sourcePoolMutex};
 
 		return m_availableSources.size();
 	}
@@ -777,7 +785,7 @@ namespace EmEn::Audio
 	Manager::releaseSources () noexcept
 	{
 		{
-			const std::scoped_lock lock{m_sourcePoolMutex};
+			const Base::MutexLock lock{m_sourcePoolMutex};
 
 			if ( m_availableSources.size() < m_allSources.size() )
 			{
@@ -829,7 +837,7 @@ namespace EmEn::Audio
 	SourceRequest
 	Manager::requestSource () noexcept
 	{
-		const std::scoped_lock lock{m_sourcePoolMutex};
+		const Base::MutexLock lock{m_sourcePoolMutex};
 
 		if ( m_availableSources.empty() )
 		{
@@ -850,7 +858,7 @@ namespace EmEn::Audio
 	{
 		if ( source != nullptr )
 		{
-			const std::scoped_lock lock{m_sourcePoolMutex};
+			const Base::MutexLock lock{m_sourcePoolMutex};
 
 			m_availableSources.push_back(source);
 		}

@@ -165,24 +165,32 @@ namespace EmEn::Net
 
 		m_impl->client = std::make_unique< Network::HTTPSClient >(m_impl->tlsContext, options);
 
-		if ( !this->loadCacheIndex() )
 		{
-			TraceWarning{ClassId} << "The download cache index could not be read, starting with an empty cache.";
+			const Base::MutexLock lock{m_itemsAccess};
+
+			if ( !this->loadCacheIndex() )
+			{
+				TraceWarning{ClassId} << "The download cache index could not be read, starting with an empty cache.";
+			}
 		}
 
 		/* A kill during a transfer leaves a .part file nothing else would ever reclaim: the index
 		 * does not know about it, and clearCache() only walks the index. */
 		this->sweepPartialFiles();
 
+		size_t cachedFiles = 0;
+
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			this->enforceCacheBudget();
+
+			cachedFiles = m_cache.size();
 		}
 
 		m_downloadEnabled = true;
 
-		TraceSuccess{ClassId} << "Downloads enabled, " << m_cache.size() << " file(s) in cache (" << Network::TrustStore::certificateCount(m_impl->tlsContext) << " trusted CA certificates).";
+		TraceSuccess{ClassId} << "Downloads enabled, " << cachedFiles << " file(s) in cache (" << Network::TrustStore::certificateCount(m_impl->tlsContext) << " trusted CA certificates).";
 
 		return true;
 	}
@@ -194,7 +202,7 @@ namespace EmEn::Net
 		 * terminate inside that window: a download() landing here would hand a worker a client
 		 * that is about to be destroyed. From now on every request is refused. */
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			m_shuttingDown = true;
 		}
@@ -205,7 +213,7 @@ namespace EmEn::Net
 		m_transfers.requestStop();
 		m_transfers.waitForAll();
 
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		if ( m_indexDirty && !this->writeCacheIndex(this->serializeCacheIndex()) )
 		{
@@ -460,7 +468,7 @@ namespace EmEn::Net
 	std::vector< std::tuple< std::string, std::filesystem::path, uint64_t > >
 	Manager::cachedFiles () const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		std::vector< std::tuple< std::string, std::filesystem::path, uint64_t > > files;
 		files.reserve(m_cache.size());
@@ -476,7 +484,7 @@ namespace EmEn::Net
 	bool
 	Manager::clearCache () noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		bool success = true;
 
@@ -533,7 +541,7 @@ namespace EmEn::Net
 
 		TraceInfo{ClassId} << "Peer " << origin << " registered (" << ( bearerToken.empty() ? "no token" : "bearer token" ) << ").";
 
-		const std::scoped_lock lock{m_peersAccess};
+		const Base::MutexLock lock{m_peersAccess};
 
 		m_peerTokens[std::move(origin)] = std::move(bearerToken);
 
@@ -551,7 +559,7 @@ namespace EmEn::Net
 		}
 
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			if ( m_shuttingDown )
 			{
@@ -566,7 +574,7 @@ namespace EmEn::Net
 			bool peer = false;
 
 			{
-				const std::scoped_lock lock{m_peersAccess};
+				const Base::MutexLock lock{m_peersAccess};
 
 				peer = m_peerTokens.contains(originOf(url));
 			}
@@ -586,7 +594,7 @@ namespace EmEn::Net
 		bool firstInFlight = false;
 
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			/* Same URL already tracked: O(1) now — the linear scan re-serialised every tracked
 			 * URL on every request. */
@@ -655,7 +663,7 @@ namespace EmEn::Net
 
 		if ( completeNow )
 		{
-			const std::scoped_lock lock{m_eventsAccess};
+			const Base::MutexLock lock{m_eventsAccess};
 
 			m_events.emplace_back(Event{.ticket = ticket, .code = FileDownloaded});
 
@@ -671,7 +679,7 @@ namespace EmEn::Net
 		 * emitted DownloadingStarted/Finished for transfers that never happened. */
 		if ( firstInFlight )
 		{
-			const std::scoped_lock lock{m_eventsAccess};
+			const Base::MutexLock lock{m_eventsAccess};
 
 			m_events.emplace_back(Event{.ticket = ticket, .code = DownloadingStarted});
 		}
@@ -683,13 +691,13 @@ namespace EmEn::Net
 			TraceError{ClassId} << "No thread pool available, '" << url.redacted() << "' fails.";
 
 			{
-				const std::scoped_lock lock{m_itemsAccess};
+				const Base::MutexLock lock{m_itemsAccess};
 
 				m_items[static_cast< size_t >(ticket) - 1].setError(Network::DownloadOutcome::LocalIO, 0);
 				--m_inFlight;
 			}
 
-			const std::scoped_lock lock{m_eventsAccess};
+			const Base::MutexLock lock{m_eventsAccess};
 
 			m_events.emplace_back(Event{.ticket = ticket, .code = FileDownloaded});
 
@@ -704,13 +712,13 @@ namespace EmEn::Net
 			TraceError{ClassId} << "The thread pool refused the task, '" << url.redacted() << "' fails.";
 
 			{
-				const std::scoped_lock lock{m_itemsAccess};
+				const Base::MutexLock lock{m_itemsAccess};
 
 				m_items[static_cast< size_t >(ticket) - 1].setError(Network::DownloadOutcome::LocalIO, 0);
 				--m_inFlight;
 			}
 
-			const std::scoped_lock lock{m_eventsAccess};
+			const Base::MutexLock lock{m_eventsAccess};
 
 			m_events.emplace_back(Event{.ticket = ticket, .code = FileDownloaded});
 		}
@@ -725,7 +733,7 @@ namespace EmEn::Net
 		std::filesystem::path filepath;
 
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			const auto & item = m_items[static_cast< size_t >(ticket) - 1];
 			url = item.url();
@@ -733,14 +741,14 @@ namespace EmEn::Net
 		}
 
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			if ( m_shuttingDown || m_impl->client == nullptr )
 			{
 				m_items[static_cast< size_t >(ticket) - 1].setError();
 				--m_inFlight;
 
-				const std::scoped_lock eventsLock{m_eventsAccess};
+				const Base::MutexLock eventsLock{m_eventsAccess};
 
 				m_events.emplace_back(Event{.ticket = ticket, .code = FileDownloaded});
 
@@ -749,7 +757,7 @@ namespace EmEn::Net
 		}
 
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			/* Pending until a worker actually picks it up — the state exists to be observable. */
 			m_items[static_cast< size_t >(ticket) - 1].setTransferring();
@@ -769,7 +777,7 @@ namespace EmEn::Net
 		 * per ticket per main-loop cycle, whatever the read granularity. */
 		const auto progressHook = [this, ticket] (uint64_t received, std::optional< uint64_t > total)
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			m_items[static_cast< size_t >(ticket) - 1].setProgress(received, total.value_or(0));
 		};
@@ -778,7 +786,7 @@ namespace EmEn::Net
 		Network::HTTPRequestOptions requestOptions;
 
 		{
-			const std::scoped_lock lock{m_peersAccess};
+			const Base::MutexLock lock{m_peersAccess};
 
 			if ( const auto peerIt = m_peerTokens.find(originOf(url)); peerIt != m_peerTokens.end() && !peerIt->second.empty() )
 			{
@@ -814,7 +822,7 @@ namespace EmEn::Net
 		}
 
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			auto & item = m_items[static_cast< size_t >(ticket) - 1];
 
@@ -837,7 +845,7 @@ namespace EmEn::Net
 			--m_inFlight;
 		}
 
-		const std::scoped_lock lock{m_eventsAccess};
+		const Base::MutexLock lock{m_eventsAccess};
 
 		m_events.emplace_back(Event{.ticket = ticket, .code = FileDownloaded});
 	}
@@ -848,7 +856,7 @@ namespace EmEn::Net
 		std::vector< Event > events;
 
 		{
-			const std::scoped_lock lock{m_eventsAccess};
+			const Base::MutexLock lock{m_eventsAccess};
 
 			events.swap(m_events);
 		}
@@ -859,7 +867,7 @@ namespace EmEn::Net
 			bool anyPending = false;
 
 			{
-				const std::scoped_lock lock{m_itemsAccess};
+				const Base::MutexLock lock{m_itemsAccess};
 
 				anyPending = m_inFlight > 0 && std::ranges::any_of(m_items, [] (const DownloadItem & item) {
 					return item.hasPendingProgress();
@@ -883,7 +891,7 @@ namespace EmEn::Net
 		std::vector< int > progressed;
 
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			/* ⚠️ The 1 -> 0 edge, not the value: a cache hit carries events without ever having
 			 * been in flight, and used to emit DownloadingFinished on every one of them. */
@@ -918,7 +926,7 @@ namespace EmEn::Net
 		{
 			if ( this->writeCacheIndex(indexContent) )
 			{
-				const std::scoped_lock lock{m_itemsAccess};
+				const Base::MutexLock lock{m_itemsAccess};
 
 				m_indexDirty = false;
 			}
@@ -937,7 +945,7 @@ namespace EmEn::Net
 	std::pair< uint64_t, uint64_t >
 	Manager::downloadProgress (int ticket) const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
 		{
@@ -954,7 +962,7 @@ namespace EmEn::Net
 	DownloadStatus
 	Manager::downloadStatus (int ticket) const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
 		{
@@ -967,7 +975,7 @@ namespace EmEn::Net
 	std::filesystem::path
 	Manager::downloadedFilepath (int ticket) const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
 		{
@@ -997,7 +1005,7 @@ namespace EmEn::Net
 	std::pair< Base::Network::DownloadOutcome, uint16_t >
 	Manager::downloadFailure (int ticket) const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		if ( ticket < 1 || static_cast< size_t >(ticket) > m_items.size() )
 		{
@@ -1010,7 +1018,7 @@ namespace EmEn::Net
 	size_t
 	Manager::fileCount () const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		return m_items.size();
 	}
@@ -1018,7 +1026,7 @@ namespace EmEn::Net
 	size_t
 	Manager::fileRemainingCount () const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		return m_inFlight;
 	}

@@ -53,6 +53,7 @@
 
 /* Local inclusions for usages. */
 #include "Input/Manager.hpp"
+#include "Mutex.hpp"
 #include "ScopedRegistration.hpp"
 #include "FramebufferProperties.hpp"
 
@@ -385,7 +386,7 @@ namespace EmEn::Overlay
 			void
 			disableInputExclusiveScreen () noexcept
 			{
-				const std::scoped_lock lock{m_screensAccess};
+				const Base::MutexLock lock{m_screensAccess};
 
 				m_inputExclusiveScreen.reset();
 			}
@@ -398,7 +399,7 @@ namespace EmEn::Overlay
 			bool
 			isInputExclusiveScreenEnabled () const noexcept
 			{
-				const std::scoped_lock lock{m_screensAccess};
+				const Base::MutexLock lock{m_screensAccess};
 
 				return m_inputExclusiveScreen != nullptr;
 			}
@@ -412,7 +413,7 @@ namespace EmEn::Overlay
 			std::shared_ptr< UIScreen >
 			inputExclusiveScreen () const noexcept
 			{
-				const std::scoped_lock lock{m_screensAccess};
+				const Base::MutexLock lock{m_screensAccess};
 
 				return m_inputExclusiveScreen;
 			}
@@ -632,10 +633,10 @@ namespace EmEn::Overlay
 			FramebufferProperties m_framebufferProperties;
 			std::shared_ptr< Graphics::Geometry::IndexedVertexResource > m_surfaceGeometry;
 			std::array< std::shared_ptr< Saphir::Program >, ProgramCount > m_programs;
-			std::unordered_map< std::string, std::shared_ptr< UIScreen > > m_screens;
+			std::unordered_map< std::string, std::shared_ptr< UIScreen > > m_screens EMEN_GUARDED_BY(m_screensAccess);
 			/* The screens being processed by a render-thread pass (snapshotScreens()), reused: no allocation per frame. */
 			std::vector< std::shared_ptr< UIScreen > > m_screenSnapshot;
-			std::shared_ptr< UIScreen > m_inputExclusiveScreen;
+			std::shared_ptr< UIScreen > m_inputExclusiveScreen EMEN_GUARDED_BY(m_screensAccess);
 #ifdef IMGUI_ENABLED
 			/* NOTE: These own the UTF-8 bytes that ImGuiIO::IniFilename / ::LogFilename point
 			 * at. ImGui keeps the raw 'const char *' and dereferences it much later — up to
@@ -648,8 +649,8 @@ namespace EmEn::Overlay
 			std::unordered_map< std::string, std::shared_ptr< ImGUIScreen > > m_ImGUIScreens;
 #endif
 			/* NOTE: Lock order: m_physicalRepresentationUpdateMutex THEN m_screensAccess (or both at once). */
-			mutable std::mutex m_physicalRepresentationUpdateMutex;
-			mutable std::mutex m_screensAccess;
+			mutable Base::Mutex m_physicalRepresentationUpdateMutex;
+			mutable Base::Mutex m_screensAccess;
 			/* The overlay's main thread (the service is constructed there): the only one allowed to create, destroy and
 			 * clear the screens, and their surfaces (UIScreen::isOwnerThread()). */
 			std::thread::id m_ownerThread{std::this_thread::get_id()};

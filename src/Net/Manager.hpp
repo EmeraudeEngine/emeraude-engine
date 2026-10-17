@@ -36,7 +36,6 @@
 #include <filesystem>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -49,6 +48,7 @@
 
 /* Local inclusions for usages. */
 #include "DownloadItem.hpp"
+#include "Mutex.hpp"
 #include "Network/URI.hpp"
 #include "ThreadPool.hpp"
 
@@ -312,14 +312,14 @@ namespace EmEn::Net
 			 * @brief Loads the cache index, dropping entries whose file vanished.
 			 * @return bool
 			 */
-			bool loadCacheIndex () noexcept;
+			bool loadCacheIndex () noexcept EMEN_REQUIRES(m_itemsAccess);
 
 			/**
 			 * @brief Serialises the cache index. Caller holds m_itemsAccess.
 			 * @return std::string
 			 */
 			[[nodiscard]]
-			std::string serializeCacheIndex () const noexcept;
+			std::string serializeCacheIndex () const noexcept EMEN_REQUIRES(m_itemsAccess);
 
 			/**
 			 * @brief Writes a serialised index to disk, atomically (temporary file + rename).
@@ -340,7 +340,7 @@ namespace EmEn::Net
 			 * @note Caller holds m_itemsAccess. A file a live Done ticket still points at is kept,
 			 * whatever its age.
 			 */
-			void enforceCacheBudget () noexcept;
+			void enforceCacheBudget () noexcept EMEN_REQUIRES(m_itemsAccess);
 
 			/**
 			 * @brief Removes partial files left by a crash or a kill.
@@ -362,22 +362,22 @@ namespace EmEn::Net
 			const std::shared_ptr< Base::ThreadPool > & m_threadPool;
 			std::unique_ptr< Impl > m_impl;
 			std::filesystem::path m_cacheDirectory;
-			mutable std::mutex m_itemsAccess;
-			std::vector< DownloadItem > m_items;
-			std::map< std::string, CacheEntry > m_cache;
+			mutable Base::Mutex m_itemsAccess;
+			std::vector< DownloadItem > m_items EMEN_GUARDED_BY(m_itemsAccess);
+			std::map< std::string, CacheEntry > m_cache EMEN_GUARDED_BY(m_itemsAccess);
 			/* URL -> ticket, so a repeat request does not re-serialise every tracked URL. */
-			std::map< std::string, int > m_ticketByURL;
-			std::mutex m_eventsAccess;
-			std::vector< Event > m_events;
+			std::map< std::string, int > m_ticketByURL EMEN_GUARDED_BY(m_itemsAccess);
+			Base::Mutex m_eventsAccess;
+			std::vector< Event > m_events EMEN_GUARDED_BY(m_eventsAccess);
 			/* Registered peers: origin ("scheme://host:port", lowercase) -> bearer token. */
-			mutable std::mutex m_peersAccess;
-			std::map< std::string, std::string > m_peerTokens;
-			size_t m_inFlight{0};
+			mutable Base::Mutex m_peersAccess;
+			std::map< std::string, std::string > m_peerTokens EMEN_GUARDED_BY(m_peersAccess);
+			size_t m_inFlight EMEN_GUARDED_BY(m_itemsAccess){0};
 			std::string m_disabledReason;
 			uint64_t m_cacheBudget{0};
-			uint64_t m_useCounter{0};
-			bool m_transferRunning{false};
-			bool m_indexDirty{false};
+			uint64_t m_useCounter EMEN_GUARDED_BY(m_itemsAccess){0};
+			bool m_transferRunning EMEN_GUARDED_BY(m_itemsAccess){false};
+			bool m_indexDirty EMEN_GUARDED_BY(m_itemsAccess){false};
 			bool m_downloadEnabled{false};
 			bool m_shuttingDown{false};
 			/* NOTE: LAST (Ave Robustus II): the transfers read the members above through `this`; onTerminate() stops and

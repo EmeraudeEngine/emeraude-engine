@@ -46,6 +46,7 @@
 /* Local inclusions for usages. */
 #include "FramebufferProperties.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Mutex.hpp"
 #include "Surface.hpp"
 #include "Tracer.hpp"
 
@@ -102,7 +103,7 @@ namespace EmEn::Overlay
 			{
 				/* NOTE: Read by the render thread (Overlay::Manager::render()) while the main thread adds surfaces (a data
 				 * race found by the overlay stress, 2026-10-13). */
-				const std::scoped_lock lock{m_surfacesMutex};
+				const Base::MutexLock lock{m_surfacesMutex};
 
 				return m_surfaces.empty();
 			}
@@ -252,7 +253,7 @@ namespace EmEn::Overlay
 				/* NOTE: Declared before the lock: the surface's arrival requests its redraw once the lock is released. */
 				DeferredRedraw redraw{*this};
 
-				const std::scoped_lock lock{m_surfacesMutex};
+				const Base::MutexLock lock{m_surfacesMutex};
 
 				if ( !m_framebufferProperties.isValid() )
 				{
@@ -418,7 +419,7 @@ namespace EmEn::Overlay
 			std::vector< std::shared_ptr< Surface > >
 			surfaces () const noexcept
 			{
-				const std::scoped_lock lock{m_surfacesMutex};
+				const Base::MutexLock lock{m_surfacesMutex};
 
 				return m_surfaces;
 			}
@@ -453,7 +454,7 @@ namespace EmEn::Overlay
 			void
 			disableInputExclusiveSurface () noexcept
 			{
-				const std::scoped_lock lock{m_surfacesMutex};
+				const Base::MutexLock lock{m_surfacesMutex};
 
 				m_inputExclusiveSurface.reset();
 			}
@@ -466,7 +467,7 @@ namespace EmEn::Overlay
 			bool
 			isInputExclusiveSurfaceEnabled () const noexcept
 			{
-				const std::scoped_lock lock{m_surfacesMutex};
+				const Base::MutexLock lock{m_surfacesMutex};
 
 				return !m_inputExclusiveSurface.expired();
 			}
@@ -480,7 +481,7 @@ namespace EmEn::Overlay
 			std::shared_ptr< Surface >
 			inputExclusiveSurface () const noexcept
 			{
-				const std::scoped_lock lock{m_surfacesMutex};
+				const Base::MutexLock lock{m_surfacesMutex};
 
 				return m_inputExclusiveSurface.lock();
 			}
@@ -510,7 +511,7 @@ namespace EmEn::Overlay
 			void
 			disablePointerMoveTapSurface () noexcept
 			{
-				const std::scoped_lock lock{m_surfacesMutex};
+				const Base::MutexLock lock{m_surfacesMutex};
 
 				m_pointerMoveTapSurface.reset();
 			}
@@ -523,7 +524,7 @@ namespace EmEn::Overlay
 			bool
 			isPointerMoveTapSurfaceEnabled () const noexcept
 			{
-				const std::scoped_lock lock{m_surfacesMutex};
+				const Base::MutexLock lock{m_surfacesMutex};
 
 				return !m_pointerMoveTapSurface.expired();
 			}
@@ -537,7 +538,7 @@ namespace EmEn::Overlay
 			std::shared_ptr< Surface >
 			pointerMoveTapSurface () const noexcept
 			{
-				const std::scoped_lock lock{m_surfacesMutex};
+				const Base::MutexLock lock{m_surfacesMutex};
 
 				return m_pointerMoveTapSurface.lock();
 			}
@@ -617,7 +618,7 @@ namespace EmEn::Overlay
 			 * the model matrix uses for the Z translation. The user never sees these values.
 			 * @note The caller MUST hold m_surfacesMutex when invoking this method.
 			 */
-			void recomputeDepths () const noexcept;
+			void recomputeDepths () const noexcept EMEN_REQUIRES(m_surfacesMutex);
 
 			/**
 			 * @brief Returns whether the caller runs on the owner thread; traces an error otherwise.
@@ -715,9 +716,9 @@ namespace EmEn::Overlay
 			Graphics::Renderer & m_graphicsRenderer;
 			const FramebufferProperties & m_framebufferProperties;
 			std::thread::id m_ownerThread;
-			std::vector< std::shared_ptr< Surface > > m_surfaces;
+			std::vector< std::shared_ptr< Surface > > m_surfaces EMEN_GUARDED_BY(m_surfacesMutex);
 			std::function< void () > m_redrawRequester; ///< Propagated from the Overlay::Manager to request a redraw on any visual mutation (on-demand rendering). @see setRedrawRequester()
-			std::weak_ptr< Surface > m_inputExclusiveSurface;
+			std::weak_ptr< Surface > m_inputExclusiveSurface EMEN_GUARDED_BY(m_surfacesMutex);
 			/* NOTE: Implicit pointer capture (grab). The surface that consumes a button
 			 * press receives every subsequent move/release/wheel until all of its buttons
 			 * are released — regardless of pointer position or alpha test. Mirrors Win32
@@ -739,8 +740,8 @@ namespace EmEn::Overlay
 			 * (unlike m_pointerCaptureSurface which is managed internally by the press/release dispatch). Lets a
 			 * surface react live to the cursor while another stacked surface holds the pointer capture (e.g. a slider
 			 * drag on an overlay view while a 3D view below keeps receiving the moves). */
-			std::weak_ptr< Surface > m_pointerMoveTapSurface;
-			mutable std::mutex m_surfacesMutex;
+			std::weak_ptr< Surface > m_pointerMoveTapSurface EMEN_GUARDED_BY(m_surfacesMutex);
+			mutable Base::Mutex m_surfacesMutex;
 			/* NOTE: Atomic: setVisibility() runs on the application's thread, the render thread reads it in
 			 * Overlay::Manager::render() (a data race found by the overlay stress, 2026-10-13). */
 			std::atomic_bool m_isVisible{false};

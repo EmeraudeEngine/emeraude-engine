@@ -124,7 +124,6 @@
 #include <chrono>
 #include <condition_variable>
 #include <limits>
-#include <mutex>
 #include <optional>
 #include <stop_token>
 #include <string>
@@ -145,6 +144,7 @@
 #include "Help/Lexicon.hpp"
 #include "Identification.hpp"
 #include "Input/Manager.hpp"
+#include "Mutex.hpp"
 #include "ScopedRegistration.hpp"
 #include "Notifier.hpp"
 #include "Overlay/Manager.hpp"
@@ -1970,7 +1970,7 @@ namespace EmEn
 			static constexpr auto MainLoopCycleNotScheduled{std::numeric_limits< int64_t >::max()}; ///< Sentinel for m_scheduledCycleDueTimeMS when no external cycle request is pending.
 			std::atomic< int64_t > m_scheduledCycleDueTimeMS{MainLoopCycleNotScheduled}; ///< Monotonic deadline (ms, Base::Time::elapsedMilliseconds() clock) of the next main-loop cycle requested via scheduleMainLoopCycle(). Written from any thread, consumed by the main loop.
 			/* On-demand rendering (used only in RenderingMode::OnDemand). @see setRenderingMode(), requestRedraw() */
-			std::mutex m_redrawMutex; ///< Guards the redraw condition variable / pending-frame budget against lost wakeups.
+			Base::Mutex m_redrawMutex; ///< Guards the redraw condition variable / pending-frame budget against lost wakeups.
 			std::condition_variable_any m_redrawCondition; ///< Wakes the sleeping rendering thread when a redraw is requested (_any: its wait also takes the loops' stop token).
 			std::atomic< uint32_t > m_pendingFrames{0}; ///< Frames still owed before the rendering thread may idle (multi-buffer refresh budget).
 			RenderingMode m_renderingMode{RenderingMode::Continuous}; ///< Rendering thread pacing mode. @see setRenderingMode()

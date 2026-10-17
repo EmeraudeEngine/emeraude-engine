@@ -102,7 +102,7 @@ namespace EmEn
 
 		if ( m_isSynchronous )
 		{
-			const std::scoped_lock lock{m_entriesAccess};
+			const Base::MutexLock lock{m_entriesAccess};
 
 			this->writeFooter(m_synchronousFile);
 
@@ -116,7 +116,7 @@ namespace EmEn
 		/* No writing thread (start() fell back): written here, under the same lock. */
 		if ( m_isSynchronous )
 		{
-			const std::scoped_lock lock{m_entriesAccess};
+			const Base::MutexLock lock{m_entriesAccess};
 
 			this->writeEntry(m_synchronousFile, TracerEntry{severity, tag, std::move(message), location, std::this_thread::get_id()});
 
@@ -127,7 +127,7 @@ namespace EmEn
 
 		{
 			/* NOTE: Lock between the writing logs task in a file and the push/pop method. */
-			const std::scoped_lock lock{m_entriesAccess};
+			const Base::MutexLock lock{m_entriesAccess};
 
 			m_entries.emplace(severity, tag, std::move(message), location, std::this_thread::get_id());
 		}
@@ -181,7 +181,7 @@ namespace EmEn
 	void
 	TracerLogger::clear () noexcept
 	{
-		const std::scoped_lock lock{m_entriesAccess};
+		const Base::MutexLock lock{m_entriesAccess};
 
 		std::queue< TracerEntry > emptyQueue;
 
@@ -201,11 +201,11 @@ namespace EmEn
 			std::queue< TracerEntry > localQueue;
 
 			{
-				std::unique_lock< std::mutex > lock{m_entriesAccess};
+				Base::MutexLock lock{m_entriesAccess};
 
 				/* NOTE: False only when the stop is requested AND nothing is queued: every entry pushed before the stop
 				 * is written (the loop used to end right after a pass, losing what came in meanwhile). */
-				if ( !m_condition.wait(lock, stopToken, [this] {
+				if ( !m_condition.wait(lock, stopToken, [this] () EMEN_REQUIRES(m_entriesAccess) {
 					return !m_entries.empty();
 				}) )
 				{
@@ -583,7 +583,7 @@ namespace EmEn
 		}
 
 		{
-			const std::scoped_lock sinkLock{m_consoleAccess};
+			const Base::MutexLock sinkLock{m_consoleAccess};
 			for (const auto& sink : m_sinks)
 			{
 				sink(severity, tag, message);
@@ -606,7 +606,7 @@ namespace EmEn
 			trace << "[" << location.file_name() << ':' << location.line() << ':' << location.column() << " `" << location.function_name() << "`]";
 		}
 
-		const std::scoped_lock lock{m_consoleAccess};
+		const Base::MutexLock lock{m_consoleAccess};
 
 		switch ( severity )
 		{
@@ -639,7 +639,7 @@ namespace EmEn
 		}
 
 		{
-			const std::scoped_lock sinkLock{m_consoleAccess};
+			const Base::MutexLock sinkLock{m_consoleAccess};
 			for (const auto& sink : m_sinks)
 			{
 				sink(Severity::Info, tag, message.empty() ? std::string(functionName) + "() called !" : std::string(functionName) + "() : " + std::string(message));
@@ -669,7 +669,7 @@ namespace EmEn
 			this->injectProcessInfo(trace);
 		}
 
-		const std::scoped_lock lock{m_consoleAccess};
+		const Base::MutexLock lock{m_consoleAccess};
 
 		std::cout << trace.str() << "\n";
 	}
@@ -750,14 +750,14 @@ namespace EmEn
 	void
 	Tracer::addSink(Sink sink) noexcept
 	{
-		const std::scoped_lock lock{m_consoleAccess};
+		const Base::MutexLock lock{m_consoleAccess};
 		m_sinks.emplace_back(std::move(sink));
 	}
 
 	void
 	Tracer::removeAllSinks() noexcept
 	{
-		const std::scoped_lock lock{m_consoleAccess};
+		const Base::MutexLock lock{m_consoleAccess};
 
 		m_sinks.clear();
 	}

@@ -33,7 +33,6 @@
 #include <atomic>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <queue>
 #include <set>
 #include <string>
@@ -45,6 +44,7 @@
 #include "Network/GracefulCloser.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "Thread.hpp"
 #include "SettingKeys.hpp"
 
@@ -229,16 +229,16 @@ namespace EmEn::Console
 			 * destroyed first, it holds weak references only; the lingering sockets die with the context's handlers. */
 			Base::Network::GracefulCloser m_gracefulCloser;
 			std::unique_ptr< asio::ip::tcp::acceptor > m_acceptor;
-			std::mutex m_clientsMutex;
-			std::set< std::shared_ptr< asio::ip::tcp::socket > > m_clients;
+			Base::Mutex m_clientsMutex;
+			std::set< std::shared_ptr< asio::ip::tcp::socket > > m_clients EMEN_GUARDED_BY(m_clientsMutex);
 			/** @brief Serializes every write and close on the client sockets: the network thread (transport
 			 * errors) and the main thread (responses) both write, and two interleaved writes would corrupt
 			 * a response line. */
-			std::mutex m_writeMutex;
-			std::mutex m_queueMutex;
-			std::queue< PendingCommand > m_commandsQueue;
+			Base::Mutex m_writeMutex;
+			Base::Mutex m_queueMutex;
+			std::queue< PendingCommand > m_commandsQueue EMEN_GUARDED_BY(m_queueMutex);
 			/** @brief Pending commands per client, guarded by m_queueMutex. */
-			std::map< const asio::ip::tcp::socket *, size_t > m_pendingPerClient;
+			std::map< const asio::ip::tcp::socket *, size_t > m_pendingPerClient EMEN_GUARDED_BY(m_queueMutex);
 			/* NOTE: Whether the listener accepts connections (isRunning()); not the thread's stop (its stop token). */
 			std::atomic< bool > m_running{false};
 			/* NOTE: LAST on purpose (Ave Robustus II, member order): the network thread's handlers use every member above,

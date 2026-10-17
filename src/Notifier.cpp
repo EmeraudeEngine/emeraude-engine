@@ -177,7 +177,7 @@ namespace EmEn
 	Notifier::renderNotifications () noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Lock the front framebuffer during write operations. */
-		const std::scoped_lock lock{m_surface->activeBufferMutex()};
+		const Base::MutexLock lock{m_surface->activeBufferMutex()};
 
 		/* NOTE: Skip rendering if the surface is being resized (pixmap dimensions may be invalid). */
 		if ( !m_surface->isVideoMemorySizeValid() )
@@ -226,7 +226,7 @@ namespace EmEn
 	Notifier::clearDisplay (const Color< float > & bgColor) const noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Lock the front framebuffer during write operations. */
-		const std::scoped_lock lock{m_surface->activeBufferMutex()};
+		const Base::MutexLock lock{m_surface->activeBufferMutex()};
 
 		if ( m_surface->activePixmap().fill(bgColor) )
 		{

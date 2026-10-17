@@ -266,7 +266,7 @@ namespace EmEn
 		{
 			/* NOTE: Mutate the shared budget under the same mutex the rendering thread waits on,
 			 * to close the lost-wakeup window between the predicate test and the wait. */
-			const std::scoped_lock lock{m_redrawMutex};
+			const Base::MutexLock lock{m_redrawMutex};
 
 			m_pendingFrames.store(budget, std::memory_order_relaxed);
 		}
@@ -325,7 +325,7 @@ namespace EmEn
 			 * (AppSystem, 2026-09-30). A capture also needs framesInFlight() frames past its copy to retire it. */
 			if ( m_renderingMode == RenderingMode::OnDemand && !m_sceneManager.hasActiveScene() )
 			{
-				std::unique_lock< std::mutex > lock{m_redrawMutex};
+				Base::MutexLock lock{m_redrawMutex};
 
 				const auto mustRender = [this] {
 					return m_pendingFrames.load(std::memory_order_relaxed) > 0 || m_graphicsRenderer.owesFrames();

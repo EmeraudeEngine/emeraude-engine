@@ -35,7 +35,6 @@
 #include <condition_variable>
 #include <filesystem>
 #include <fstream>
-#include <mutex>
 #include <queue>
 #include <source_location>
 #include <stop_token>
@@ -45,6 +44,7 @@
 
 /* Local inclusions for usages. */
 #include "CoreTypes.hpp"
+#include "Mutex.hpp"
 #include "Thread.hpp"
 
 namespace EmEn
@@ -313,11 +313,11 @@ namespace EmEn
 			void writeFooter (std::ostream & file) const noexcept;
 
 			std::filesystem::path m_filepath;
-			std::queue< TracerEntry > m_entries;
+			std::queue< TracerEntry > m_entries EMEN_GUARDED_BY(m_entriesAccess);
 			LogFormat m_logFormat;
 			/** @brief The log file written on each trace's thread when the system refused the writing thread. */
 			std::fstream m_synchronousFile;
-			std::mutex m_entriesAccess;
+			Base::Mutex m_entriesAccess;
 			/* NOTE: _any: its wait takes the thread's stop token (a stop request wakes it). */
 			std::condition_variable_any m_condition;
 			std::atomic_bool m_isUsable{false};

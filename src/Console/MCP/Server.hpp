@@ -31,7 +31,6 @@
 #include <cstdint>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
@@ -39,6 +38,7 @@
 #include "json/json.h"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "Network/HTTPServer.hpp"
 
 namespace EmEn::Console
@@ -233,8 +233,8 @@ namespace EmEn::Console::MCP
 			Base::Network::HTTPServer m_http;
 			/** @brief The notification streams by connection id, touched on the network thread only. */
 			std::map< uint64_t, Stream > m_streams;
-			std::mutex m_queueMutex;
-			std::vector< PendingRequest > m_pendingRequests;
+			Base::Mutex m_queueMutex;
+			std::vector< PendingRequest > m_pendingRequests EMEN_GUARDED_BY(m_queueMutex);
 			/** @brief The tool-name refusals last traced (main thread), so each is reported once. */
 			std::vector< std::string > m_reportedRejections;
 			uint64_t m_announcedTreeRevision{0};

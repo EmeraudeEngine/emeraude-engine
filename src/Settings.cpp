@@ -133,7 +133,7 @@ namespace EmEn
 
 		/* Reading the file ... */
 		{
-			const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+			const Base::SharedMutexWriteLock lock{m_storeAccess};
 
 			if ( !this->readFile(m_filepath) )
 			{
@@ -165,7 +165,7 @@ namespace EmEn
 				return false;
 			}
 
-			const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
+			const Base::SharedMutexReadLock lock{m_storeAccess};
 
 			if ( !this->writeFile(m_filepath) )
 			{
@@ -239,7 +239,7 @@ namespace EmEn
 	void
 	Settings::setValue (std::string_view settingPath, const SettingValue & value) noexcept
 	{
-		const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+		const Base::SharedMutexWriteLock lock{m_storeAccess};
 
 		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
@@ -249,7 +249,7 @@ namespace EmEn
 	void
 	Settings::setValueInArray (std::string_view settingPath, const SettingValue & value) noexcept
 	{
-		const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+		const Base::SharedMutexWriteLock lock{m_storeAccess};
 
 		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
@@ -264,7 +264,7 @@ namespace EmEn
 			return false;
 		}
 
-		const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+		const Base::SharedMutexWriteLock lock{m_storeAccess};
 
 		return this->readLevel(object, keyPrefix);
 	}
@@ -495,7 +495,7 @@ namespace EmEn
 	bool
 	Settings::variableExists (std::string_view settingPath) const noexcept
 	{
-		const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
+		const Base::SharedMutexReadLock lock{m_storeAccess};
 
 		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
@@ -512,7 +512,7 @@ namespace EmEn
 	bool
 	Settings::arrayExists (std::string_view settingPath) const noexcept
 	{
-		const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
+		const Base::SharedMutexReadLock lock{m_storeAccess};
 
 		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
@@ -553,7 +553,7 @@ namespace EmEn
 	bool
 	Settings::isArrayEmpty (std::string_view settingPath) const noexcept
 	{
-		const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
+		const Base::SharedMutexReadLock lock{m_storeAccess};
 
 		const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
@@ -578,7 +578,7 @@ namespace EmEn
 	bool
 	Settings::save () const noexcept
 	{
-		const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
+		const Base::SharedMutexReadLock lock{m_storeAccess};
 
 		if ( m_filepath.empty() )
 		{
@@ -593,7 +593,7 @@ namespace EmEn
 	std::string
 	Settings::toJsonString () const noexcept
 	{
-		const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
+		const Base::SharedMutexReadLock lock{m_storeAccess};
 
 		const auto getLevel = [] (Json::Value & root, const std::string & key) -> Json::Value & {
 			if ( key.empty() )
@@ -656,7 +656,7 @@ namespace EmEn
 	std::ostream &
 	operator<< (std::ostream & out, const Settings & obj)
 	{
-		const std::shared_lock< std::shared_mutex > lock{obj.m_storeAccess};
+		const Base::SharedMutexReadLock lock{obj.m_storeAccess};
 
 		auto printValue = [] (const SettingValue & value) -> std::string {
 			return std::visit([] < typename value_t >(const value_t & v) -> std::string {

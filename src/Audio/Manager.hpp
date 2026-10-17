@@ -33,7 +33,6 @@
 #include <cstdint>
 #include <array>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
@@ -47,6 +46,7 @@
 #include "Audio/OpenALHandles.hpp"
 #include "Audio/Recorder.hpp"
 #include "Audio/TrackMixer.hpp"
+#include "Mutex.hpp"
 #include "WaveFactory/Types.hpp"
 #include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "SettingKeys.hpp"
@@ -533,9 +533,9 @@ namespace EmEn::Audio
 			Base::WaveFactory::Frequency m_playbackFrequency{Base::WaveFactory::Frequency::PCM48000Hz};
 			size_t m_musicChunkSize{DefaultAudioMusicChunkSize};
 			std::shared_ptr< Source > m_defaultSource;
-			std::vector< std::shared_ptr< Source > > m_allSources;
-			std::vector< Source * > m_availableSources;
-			mutable std::mutex m_sourcePoolMutex;
+			mutable Base::Mutex m_sourcePoolMutex;
+			std::vector< std::shared_ptr< Source > > m_allSources EMEN_GUARDED_BY(m_sourcePoolMutex);
+			std::vector< Source * > m_availableSources EMEN_GUARDED_BY(m_sourcePoolMutex);
 			bool m_showInformation{false};
 			bool m_usingAdvancedEnumeration{false};
 			bool m_prebuiltSoundsGenerated{false};

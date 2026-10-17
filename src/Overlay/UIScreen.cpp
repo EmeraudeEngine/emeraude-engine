@@ -55,7 +55,7 @@ namespace EmEn::Overlay
 		/* NOTE: A copy taken under the mutex: the main thread reorders / destroys surfaces meanwhile, and a surface
 		 * update notifies observers that may call back into this screen (the mutex is not recursive). */
 		{
-			const std::scoped_lock lock{m_surfacesMutex};
+			const Base::MutexLock lock{m_surfacesMutex};
 
 			m_surfaceSnapshot.assign(m_surfaces.begin(), m_surfaces.end());
 		}
@@ -89,7 +89,7 @@ namespace EmEn::Overlay
 	void
 	UIScreen::render (const std::shared_ptr< RenderTarget::Abstract > & /*renderTarget*/, const CommandBuffer & commandBuffer, const PipelineLayout & pipelineLayout, const Geometry::IndexedVertexResource & surfaceGeometry) const noexcept
 	{
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		for ( const auto & surface : m_surfaces )
 		{
@@ -141,7 +141,7 @@ namespace EmEn::Overlay
 		/* NOTE: No device wait: a destroyed surface RETIRES its GPU buffers through the renderer's deferred destructor
 		 * (~Surface()), which covers the frames recorded or in flight that still sample them — a waitIdle() covered only
 		 * the submitted ones, and stalled the device under this lock. */
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		const auto surfaceIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -178,7 +178,7 @@ namespace EmEn::Overlay
 		DeferredRedraw redraw{*this};
 
 		/* NOTE: No device wait, see destroySurface(). */
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		m_surfaces.clear();
 
@@ -189,7 +189,7 @@ namespace EmEn::Overlay
 	std::shared_ptr< const Surface >
 	UIScreen::getSurface (const std::string & name) const noexcept
 	{
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		const auto surfaceIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -208,7 +208,7 @@ namespace EmEn::Overlay
 	std::shared_ptr< Surface >
 	UIScreen::getSurface (const std::string & name) noexcept
 	{
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		const auto surfaceIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -234,7 +234,7 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		m_inputExclusiveSurface = surface;
 
@@ -251,7 +251,7 @@ namespace EmEn::Overlay
 			return false;
 		}
 
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		m_pointerMoveTapSurface = surface;
 
@@ -652,7 +652,7 @@ namespace EmEn::Overlay
 	UIScreen::InputTargets
 	UIScreen::inputTargets () const noexcept
 	{
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		return InputTargets{
 			.surfaces = m_surfaces,
@@ -684,7 +684,7 @@ namespace EmEn::Overlay
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -725,7 +725,7 @@ namespace EmEn::Overlay
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -766,7 +766,7 @@ namespace EmEn::Overlay
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -805,7 +805,7 @@ namespace EmEn::Overlay
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -851,7 +851,7 @@ namespace EmEn::Overlay
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		const auto srcIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -911,7 +911,7 @@ namespace EmEn::Overlay
 		/* NOTE: Declared before the lock: the redraw is requested once the lock is released. */
 		DeferredRedraw redraw{*this};
 
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		const auto srcIt = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -954,7 +954,7 @@ namespace EmEn::Overlay
 	std::optional< size_t >
 	UIScreen::indexOf (const std::string & name) const noexcept
 	{
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		const auto it = std::ranges::find_if(m_surfaces, [&name] (const auto & s) {
 			return s->name() == name;
@@ -971,7 +971,7 @@ namespace EmEn::Overlay
 	std::vector< std::string >
 	UIScreen::stackOrder () const noexcept
 	{
-		const std::scoped_lock lock{m_surfacesMutex};
+		const Base::MutexLock lock{m_surfacesMutex};
 
 		std::vector< std::string > order;
 		order.reserve(m_surfaces.size());
@@ -988,7 +988,7 @@ namespace EmEn::Overlay
 	operator<< (std::ostream & out, const UIScreen & obj)
 	{
 		/* NOTE: The surface list is mutated under this mutex (stack order, creation, destruction). */
-		const std::scoped_lock lock{obj.m_surfacesMutex};
+		const Base::MutexLock lock{obj.m_surfacesMutex};
 
 		const auto exclusiveSurface = obj.m_inputExclusiveSurface.lock();
 		const auto pointerMoveTapSurface = obj.m_pointerMoveTapSurface.lock();

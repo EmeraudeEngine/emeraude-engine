@@ -267,7 +267,7 @@ namespace EmEn::Console
 		}
 
 		{
-			const std::scoped_lock lock{m_clientsMutex};
+			const Base::MutexLock lock{m_clientsMutex};
 
 			for ( const auto & client : m_clients )
 			{
@@ -291,7 +291,7 @@ namespace EmEn::Console
 	bool
 	RemoteListener::popCommand (PendingCommand & outCommand) noexcept
 	{
-		const std::scoped_lock lock{m_queueMutex};
+		const Base::MutexLock lock{m_queueMutex};
 
 		if ( m_commandsQueue.empty() )
 		{
@@ -323,7 +323,7 @@ namespace EmEn::Console
 		asio::error_code ec;
 
 		{
-			const std::scoped_lock writeLock{m_writeMutex};
+			const Base::MutexLock writeLock{m_writeMutex};
 
 			/* NOTE: checked under the write lock — disconnect() removes the client and hands its socket over under
 			 * the same lock; a socket lingering in the GracefulCloser is still open but no longer a client. */
@@ -337,7 +337,7 @@ namespace EmEn::Console
 
 		if ( ec )
 		{
-			const std::scoped_lock lock{m_clientsMutex};
+			const Base::MutexLock lock{m_clientsMutex};
 
 			m_clients.erase(client);
 		}
@@ -354,7 +354,7 @@ namespace EmEn::Console
 				size_t clientCount = 0;
 
 				{
-					const std::scoped_lock lock{m_clientsMutex};
+					const Base::MutexLock lock{m_clientsMutex};
 
 					clientCount = m_clients.size();
 				}
@@ -397,7 +397,7 @@ namespace EmEn::Console
 					TraceInfo{ClassId} << "New AI client connected to Remote Console.";
 
 					{
-						const std::scoped_lock lock{m_clientsMutex};
+						const Base::MutexLock lock{m_clientsMutex};
 
 						m_clients.insert(socket);
 					}
@@ -432,7 +432,7 @@ namespace EmEn::Console
 		bool overflow = false;
 
 		{
-			const std::scoped_lock lock{m_queueMutex};
+			const Base::MutexLock lock{m_queueMutex};
 
 			auto & pendingCount = m_pendingPerClient[client.get()];
 
@@ -470,7 +470,7 @@ namespace EmEn::Console
 		}
 
 		{
-			const std::scoped_lock writeLock{m_writeMutex};
+			const Base::MutexLock writeLock{m_writeMutex};
 
 			/* Removed under the write lock: respond() checks the membership under it. */
 			this->removeClient(client);
@@ -491,7 +491,7 @@ namespace EmEn::Console
 	bool
 	RemoteListener::isClient (const std::shared_ptr< asio::ip::tcp::socket > & socket) noexcept
 	{
-		const std::scoped_lock lock{m_clientsMutex};
+		const Base::MutexLock lock{m_clientsMutex};
 
 		return m_clients.contains(socket);
 	}
@@ -499,7 +499,7 @@ namespace EmEn::Console
 	void
 	RemoteListener::removeClient (const std::shared_ptr< asio::ip::tcp::socket > & socket) noexcept
 	{
-		const std::scoped_lock lock{m_clientsMutex};
+		const Base::MutexLock lock{m_clientsMutex};
 
 		m_clients.erase(socket);
 	}

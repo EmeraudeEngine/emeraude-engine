@@ -35,7 +35,6 @@
 #include <cstdint>
 #include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -48,6 +47,7 @@
 
 /* Local inclusions for usages. */
 #include "APIRequestItem.hpp"
+#include "Mutex.hpp"
 #include "Network/HTTPRequest.hpp"
 #include "Network/URI.hpp"
 #include "ThreadPool.hpp"
@@ -397,7 +397,7 @@ namespace EmEn::Net
 			 * only moment the newest ticket is guaranteed non-terminal. Running it after a
 			 * completion could erase the very ticket that just completed.
 			 */
-			void enforceRetentionCeiling () noexcept;
+			void enforceRetentionCeiling () noexcept EMEN_REQUIRES(m_itemsAccess);
 
 			/**
 			 * @brief Records a terminal event for a ticket and, when it was abandoned, swallows it.
@@ -411,15 +411,15 @@ namespace EmEn::Net
 			Settings & m_settings;
 			const std::shared_ptr< Base::ThreadPool > & m_threadPool;
 			std::unique_ptr< Impl > m_impl;
-			mutable std::mutex m_itemsAccess;
+			mutable Base::Mutex m_itemsAccess;
 			/* Keyed by ticket, NOT indexed: release() and the retention ceiling erase entries, which
 			 * a vector indexed by (ticket - 1) could not do without invalidating every other ticket. */
-			std::map< int, APIRequestItem > m_items;
+			std::map< int, APIRequestItem > m_items EMEN_GUARDED_BY(m_itemsAccess);
 			std::vector< std::pair< std::string, std::string > > m_defaultHeaders;
-			std::mutex m_eventsAccess;
-			std::vector< Event > m_events;
-			int m_nextTicket{1};
-			size_t m_inFlight{0};
+			Base::Mutex m_eventsAccess;
+			std::vector< Event > m_events EMEN_GUARDED_BY(m_eventsAccess);
+			int m_nextTicket EMEN_GUARDED_BY(m_itemsAccess){1};
+			size_t m_inFlight EMEN_GUARDED_BY(m_itemsAccess){0};
 			size_t m_retentionCeiling{0};
 			std::string m_disabledReason;
 			uint64_t m_maxResponseBytes{0};

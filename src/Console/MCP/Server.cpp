@@ -481,7 +481,7 @@ namespace EmEn::Console::MCP
 	bool
 	Server::enqueue (PendingRequest request) noexcept
 	{
-		const std::scoped_lock lock{m_queueMutex};
+		const Base::MutexLock lock{m_queueMutex};
 
 		if ( m_pendingRequests.size() >= MaxPendingRequests )
 		{
@@ -549,7 +549,7 @@ namespace EmEn::Console::MCP
 		std::vector< PendingRequest > requests;
 
 		{
-			const std::scoped_lock lock{m_queueMutex};
+			const Base::MutexLock lock{m_queueMutex};
 
 			requests.swap(m_pendingRequests);
 		}

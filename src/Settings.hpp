@@ -46,6 +46,7 @@
 #include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "SharedMutex.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn
@@ -525,7 +526,7 @@ namespace EmEn
 			void
 			set (std::string_view settingPath, const variable_t & value)
 			{
-				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+				const Base::SharedMutexWriteLock lock{m_storeAccess};
 
 				const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
@@ -565,7 +566,7 @@ namespace EmEn
 			void
 			setInArray (std::string_view settingPath, const variable_t & value)
 			{
-				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+				const Base::SharedMutexWriteLock lock{m_storeAccess};
 
 				const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
@@ -649,7 +650,7 @@ namespace EmEn
 			variable_t
 			get (const std::string & key, const variable_t & defaultValue = {}) const noexcept
 			{
-				const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
+				const Base::SharedMutexReadLock lock{m_storeAccess};
 
 				if ( const auto value = this->getVariable(key) )
 				{
@@ -678,7 +679,7 @@ namespace EmEn
 			variable_t
 			getOrSetDefault (const std::string & key, const variable_t & defaultValue = {})
 			{
-				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+				const Base::SharedMutexWriteLock lock{m_storeAccess};
 
 				const auto [storeKey, variableName] = Settings::parseAccessKey(key);
 
@@ -779,7 +780,7 @@ namespace EmEn
 			std::vector< variable_t >
 			getArrayAs (std::string_view settingPath) const noexcept
 			{
-				const std::shared_lock< std::shared_mutex > lock{m_storeAccess};
+				const Base::SharedMutexReadLock lock{m_storeAccess};
 
 				const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
@@ -830,7 +831,7 @@ namespace EmEn
 			void
 			clearArray (std::string_view settingPath)
 			{
-				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+				const Base::SharedMutexWriteLock lock{m_storeAccess};
 
 				const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
@@ -856,7 +857,7 @@ namespace EmEn
 			void
 			removeKey (std::string_view settingPath)
 			{
-				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+				const Base::SharedMutexWriteLock lock{m_storeAccess};
 
 				const auto & [key, variableName] = Settings::parseAccessKey(settingPath);
 
@@ -881,7 +882,7 @@ namespace EmEn
 			void
 			clear ()
 			{
-				const std::unique_lock< std::shared_mutex > lock{m_storeAccess};
+				const Base::SharedMutexWriteLock lock{m_storeAccess};
 
 				m_stores.clear();
 			}
@@ -1040,7 +1041,7 @@ namespace EmEn
 			 * @return The stored value wrapped in @c std::optional, or @c std::nullopt.
 			 */
 			[[nodiscard]]
-			std::optional< SettingValue > getVariable (std::string_view settingPath) const noexcept;
+			std::optional< SettingValue > getVariable (std::string_view settingPath) const noexcept EMEN_REQUIRES_SHARED(m_storeAccess);
 
 			/**
 			 * @brief Converts a @ref SettingValue variant to a @c Json::Value for serialization.
@@ -1493,7 +1494,7 @@ namespace EmEn
 			 * @return @c true on success, @c false if a recursive level fails.
 			 */
 			[[nodiscard]]
-			bool readLevel (const Json::Value & data, const std::string & key) noexcept;
+			bool readLevel (const Json::Value & data, const std::string & key) noexcept EMEN_REQUIRES(m_storeAccess);
 
 			/**
 			 * @brief Parses the JSON settings file at @p filepath into the store map.
@@ -1506,7 +1507,7 @@ namespace EmEn
 			 * @return @c true on success, @c false if the file cannot be parsed.
 			 */
 			[[nodiscard]]
-			bool readFile (const std::filesystem::path & filepath) noexcept;
+			bool readFile (const std::filesystem::path & filepath) noexcept EMEN_REQUIRES(m_storeAccess);
 
 			/**
 			 * @brief Serializes all stores to a JSON settings file at @p filepath.
@@ -1520,7 +1521,7 @@ namespace EmEn
 			 * @return @c true on success, @c false if serialization or disk write fails.
 			 */
 			[[nodiscard]]
-			bool writeFile (const std::filesystem::path & filepath) const noexcept;
+			bool writeFile (const std::filesystem::path & filepath) const noexcept EMEN_REQUIRES_SHARED(m_storeAccess);
 
 			/**
 			 * @brief Writes a human-readable representation of all settings to @p out.
@@ -1539,9 +1540,9 @@ namespace EmEn
 			const Arguments & m_arguments;
 			const FileSystem & m_fileSystem;
 			std::string m_applicationVersion; ///< Application version string recorded under @ref ApplicationVersionKey when writing the file.
-			std::map< std::string, SettingStore, std::less<> > m_stores; ///< Map of store-key to SettingStore; the key is the slash-delimited path prefix (empty string for the root store).
+			std::map< std::string, SettingStore, std::less<> > m_stores EMEN_GUARDED_BY(m_storeAccess); ///< Map of store-key to SettingStore; the key is the slash-delimited path prefix (empty string for the root store).
 			std::filesystem::path m_filepath;
-			mutable std::shared_mutex m_storeAccess; ///< Reader-writer mutex protecting @c m_stores; shared for reads, exclusive for writes.
+			mutable Base::SharedMutex m_storeAccess; ///< Reader-writer mutex protecting @c m_stores; shared for reads, exclusive for writes.
 			bool m_childProcess{false};
 			bool m_showInformation{false};
 			bool m_saveAtExit{false};

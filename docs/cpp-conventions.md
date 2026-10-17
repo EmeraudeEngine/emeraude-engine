@@ -474,6 +474,26 @@ unlocked access at compile time. Base `docs/subsystems/source-tree/26-thread-saf
     either before the render target is published (`create()`) or on the render thread (`updateVideoMemory()`,
     `descriptorSet()`, `destroy()` from `destroyRenderTarget()`, called by the renderer and the selection outline),
     and the destructor runs once nothing uses the object. The contract is stated at the members.
+- Lots Overlay, Console, Net and the engine root (2026-10-17) — the last members of the census:
+  - `Overlay::Surface` (the geometry state under `m_geometryAccess`, the requested transition size; `updateModelMatrix()`
+    `EMEN_REQUIRES`; its try-lock pass is `try_lock()` + `MutexLock(adopt_lock)`; `activeBufferMutex()` returns the
+    `Base::Mutex`, `EMEN_RETURN_CAPABILITY`), `UIScreen` (the stack, the input-exclusive surface, the move tap;
+    `recomputeDepths()` `EMEN_REQUIRES`), `Overlay::Manager` (the screens; its two-lock pass a `Base::MutexPairLock`;
+    `onTerminate()` emptied the screens without the lock — taken out under it, destroyed outside it). The two
+    framebuffers stay unannotated: the content providers write them in their overrides (`onActiveBufferReady()`,
+    `onTransitionBufferReady()`) with the lock held by contract, and an annotation would reach every downstream
+    override. `m_physicalRepresentationUpdateMutex` serializes a pass, it guards no member.
+  - `Console::RemoteListener` (the clients, the command queue; `m_writeMutex` serializes the socket writes) and
+    `Console::MCP::Server` (the pending requests).
+  - `Net::APIClient` and `Net::Manager` (the tickets, the events, the cache index, the peers; the helpers documented
+    "caller holds m_itemsAccess" now `EMEN_REQUIRES`; the cache index loads under the lock at initialization).
+  - `Settings` (the stores under a `Base::SharedMutex`; `readLevel()` / `readFile()` `EMEN_REQUIRES`, `writeFile()` /
+    `getVariable()` `EMEN_REQUIRES_SHARED`), `Audio::Manager` (the source pool; its creation at initialization now under
+    the lock), `TracerLogger` (the entry queue; its `condition_variable_any` kept for the stop token), `Tracer` (its
+    console mutex serializes the output, no member) and `Core` (the redraw mutex: no member, the budget is atomic).
+  - Left `std::mutex` on purpose: `Device::m_logicalDeviceAccess` (serializes handle calls), `MusicResource`'s
+    file-static `s_tsfMutex` (serializes a library that is not thread-safe, TinySoundFont). Every
+    `std::condition_variable_any` waited with a `stop_token` stays, over a `Base::MutexLock`.
   - The octree pointers were tested OUTSIDE their lock, then used under it (statistics, removal, the per-frame
     refiling, the collision step, the two render-list gathers) while `rebuild*Octree()` / `destroyOctrees()` replace
     them under it, and `buildOctrees()` created them unlocked: every test is now inside the lock; the render paths

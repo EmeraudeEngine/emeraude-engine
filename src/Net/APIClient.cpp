@@ -183,7 +183,7 @@ namespace EmEn::Net
 		 * terminate inside that window: a request() landing here would hand a worker a client that
 		 * is about to be destroyed. From now on every call is refused. */
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			m_shuttingDown = true;
 		}
@@ -193,7 +193,7 @@ namespace EmEn::Net
 		m_requests.requestStop();
 		m_requests.waitForAll();
 
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		m_items.clear();
 		/* ⚠️ The default headers usually carry a bearer token: it must not outlive the service in
@@ -216,7 +216,7 @@ namespace EmEn::Net
 			return false;
 		}
 
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		for ( auto & header : m_defaultHeaders )
 		{
@@ -236,7 +236,7 @@ namespace EmEn::Net
 	bool
 	APIClient::removeDefaultHeader (const std::string & name) noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		const auto removed = std::erase_if(m_defaultHeaders, [&name] (const auto & header) {
 			return headerNameEquals(header.first, name);
@@ -248,7 +248,7 @@ namespace EmEn::Net
 	void
 	APIClient::clearDefaultHeaders () noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		m_defaultHeaders.clear();
 	}
@@ -256,7 +256,7 @@ namespace EmEn::Net
 	std::vector< std::pair< std::string, std::string > >
 	APIClient::defaultHeaders () const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		return m_defaultHeaders;
 	}
@@ -283,7 +283,7 @@ namespace EmEn::Net
 		/* Merge the defaults UNDER the per-call headers: a call that wants another Authorization
 		 * for one endpoint must be able to say so without disturbing the service-wide one. */
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			if ( m_shuttingDown )
 			{
@@ -328,7 +328,7 @@ namespace EmEn::Net
 		bool firstInFlight = false;
 
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			ticket = m_nextTicket++;
 
@@ -343,7 +343,7 @@ namespace EmEn::Net
 
 		if ( firstInFlight )
 		{
-			const std::scoped_lock lock{m_eventsAccess};
+			const Base::MutexLock lock{m_eventsAccess};
 
 			m_events.emplace_back(Event{
 				.ticket = ticket,
@@ -358,7 +358,7 @@ namespace EmEn::Net
 			TraceError{ClassId} << "No thread pool available, '" << url.redacted() << "' fails.";
 
 			{
-				const std::scoped_lock lock{m_itemsAccess};
+				const Base::MutexLock lock{m_itemsAccess};
 
 				/* ⚠️ find(), never at(): std::map::at() THROWS, and the whole cascade is built
 				 * -fno-exceptions — that is a terminate, not an error path. */
@@ -383,7 +383,7 @@ namespace EmEn::Net
 			TraceError{ClassId} << "The thread pool refused the task, '" << url.redacted() << "' fails.";
 
 			{
-				const std::scoped_lock lock{m_itemsAccess};
+				const Base::MutexLock lock{m_itemsAccess};
 
 				if ( const auto itemIt = m_items.find(ticket); itemIt != m_items.end() )
 				{
@@ -417,7 +417,7 @@ namespace EmEn::Net
 		Network::HTTPRequestOptions options;
 
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			const auto itemIt = m_items.find(ticket);
 
@@ -482,7 +482,7 @@ namespace EmEn::Net
 		bool cancelled = false;
 
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			const auto itemIt = m_items.find(ticket);
 
@@ -542,7 +542,7 @@ namespace EmEn::Net
 			return;
 		}
 
-		const std::scoped_lock lock{m_eventsAccess};
+		const Base::MutexLock lock{m_eventsAccess};
 
 		m_events.emplace_back(Event{
 			.ticket = ticket,
@@ -606,7 +606,7 @@ namespace EmEn::Net
 		std::vector< Event > events;
 
 		{
-			const std::scoped_lock lock{m_eventsAccess};
+			const Base::MutexLock lock{m_eventsAccess};
 
 			events.swap(m_events);
 		}
@@ -620,7 +620,7 @@ namespace EmEn::Net
 		bool finished = false;
 
 		{
-			const std::scoped_lock lock{m_itemsAccess};
+			const Base::MutexLock lock{m_itemsAccess};
 
 			/* ⚠️ The 1 -> 0 edge, not the value, and read from m_inFlight rather than from the
 			 * events: a cancelled ticket queues no event at all, so counting events would leave
@@ -640,7 +640,7 @@ namespace EmEn::Net
 	bool
 	APIClient::release (int ticket) noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		const auto itemIt = m_items.find(ticket);
 
@@ -664,7 +664,7 @@ namespace EmEn::Net
 	bool
 	APIClient::cancel (int ticket) noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		const auto itemIt = m_items.find(ticket);
 
@@ -683,7 +683,7 @@ namespace EmEn::Net
 	APIRequestStatus
 	APIClient::requestStatus (int ticket) const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		const auto itemIt = m_items.find(ticket);
 
@@ -693,7 +693,7 @@ namespace EmEn::Net
 	uint16_t
 	APIClient::responseStatusCode (int ticket) const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		const auto itemIt = m_items.find(ticket);
 
@@ -703,7 +703,7 @@ namespace EmEn::Net
 	std::string
 	APIClient::responseBody (int ticket) const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		const auto itemIt = m_items.find(ticket);
 
@@ -718,7 +718,7 @@ namespace EmEn::Net
 	bool
 	APIClient::responseJSON (int ticket, Json::Value & json) const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		const auto itemIt = m_items.find(ticket);
 
@@ -735,7 +735,7 @@ namespace EmEn::Net
 	std::string
 	APIClient::responseHeader (int ticket, const std::string & name) const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		const auto itemIt = m_items.find(ticket);
 
@@ -750,7 +750,7 @@ namespace EmEn::Net
 	std::pair< Base::Network::DownloadOutcome, uint16_t >
 	APIClient::requestFailure (int ticket) const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		const auto itemIt = m_items.find(ticket);
 
@@ -765,7 +765,7 @@ namespace EmEn::Net
 	size_t
 	APIClient::retainedCount () const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		return m_items.size();
 	}
@@ -773,7 +773,7 @@ namespace EmEn::Net
 	size_t
 	APIClient::inFlightCount () const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		return m_inFlight;
 	}
@@ -781,7 +781,7 @@ namespace EmEn::Net
 	std::vector< std::tuple< int, std::string, std::string, APIRequestStatus, uint16_t > >
 	APIClient::heldTickets () const noexcept
 	{
-		const std::scoped_lock lock{m_itemsAccess};
+		const Base::MutexLock lock{m_itemsAccess};
 
 		std::vector< std::tuple< int, std::string, std::string, APIRequestStatus, uint16_t > > tickets;
 		tickets.reserve(m_items.size());

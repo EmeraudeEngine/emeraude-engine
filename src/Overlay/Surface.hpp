@@ -46,6 +46,7 @@
 /* Local inclusions for usages. */
 #include "Math/Matrix.hpp"
 #include "Math/Space2D/AARectangle.hpp"
+#include "Mutex.hpp"
 #include "NameableTrait.hpp"
 #include "Tracer.hpp"
 #include "Framebuffer.hpp"
@@ -428,7 +429,7 @@ namespace EmEn::Overlay
 			FramebufferProperties
 			latchedProperties () const noexcept
 			{
-				const std::scoped_lock lock{m_geometryAccess};
+				const Base::MutexLock lock{m_geometryAccess};
 
 				return m_latchedProperties;
 			}
@@ -442,7 +443,7 @@ namespace EmEn::Overlay
 			Base::Math::Space2D::AARectangle< float >
 			geometry () const noexcept
 			{
-				const std::scoped_lock lock{m_geometryAccess};
+				const Base::MutexLock lock{m_geometryAccess};
 
 				return m_rectangle;
 			}
@@ -456,7 +457,7 @@ namespace EmEn::Overlay
 			Base::Math::Matrix< 4, float >
 			modelMatrix () const noexcept
 			{
-				const std::scoped_lock lock{m_geometryAccess};
+				const Base::MutexLock lock{m_geometryAccess};
 
 				return m_modelMatrix;
 			}
@@ -488,11 +489,11 @@ namespace EmEn::Overlay
 
 			/**
 			 * @brief Returns the mutex to access the active buffer for writing operation.
-			 * @return std::mutex &
+			 * @return Base::Mutex &
 			 */
 			[[nodiscard]]
-			std::mutex &
-			activeBufferMutex () const noexcept
+			Base::Mutex &
+			activeBufferMutex () const noexcept EMEN_RETURN_CAPABILITY(m_framebufferAccess)
 			{
 				return m_framebufferAccess;
 			}
@@ -508,7 +509,7 @@ namespace EmEn::Overlay
 			setGeometry (const Base::Math::Space2D::AARectangle< float > & rectangle) noexcept
 			{
 				{
-					const std::scoped_lock lock{m_geometryAccess};
+					const Base::MutexLock lock{m_geometryAccess};
 
 					m_rectangle = rectangle;
 
@@ -529,7 +530,7 @@ namespace EmEn::Overlay
 			setPosition (float xPosition, float yPosition) noexcept
 			{
 				{
-					const std::scoped_lock lock{m_geometryAccess};
+					const Base::MutexLock lock{m_geometryAccess};
 
 					m_rectangle.setLeft(xPosition);
 					m_rectangle.setTop(yPosition);
@@ -550,7 +551,7 @@ namespace EmEn::Overlay
 			setSize (float width, float height) noexcept
 			{
 				{
-					const std::scoped_lock lock{m_geometryAccess};
+					const Base::MutexLock lock{m_geometryAccess};
 
 					m_rectangle.setWidth(width);
 					m_rectangle.setHeight(height);
@@ -572,7 +573,7 @@ namespace EmEn::Overlay
 			move (float deltaX, float deltaY) noexcept
 			{
 				{
-					const std::scoped_lock lock{m_geometryAccess};
+					const Base::MutexLock lock{m_geometryAccess};
 
 					m_rectangle.move(deltaX, deltaY);
 
@@ -1366,7 +1367,7 @@ namespace EmEn::Overlay
 			void
 			syncPropertiesLatch () noexcept
 			{
-				const std::scoped_lock lock{m_geometryAccess};
+				const Base::MutexLock lock{m_geometryAccess};
 
 				m_latchedProperties = m_framebufferProperties;
 			}
@@ -1434,7 +1435,7 @@ namespace EmEn::Overlay
 			{
 				constexpr auto StackDepthStep = 0.001F;
 
-				const std::scoped_lock lock{m_geometryAccess};
+				const Base::MutexLock lock{m_geometryAccess};
 
 				m_depth = static_cast< float >(stackIndex) * StackDepthStep;
 
@@ -1470,7 +1471,7 @@ namespace EmEn::Overlay
 			 * @brief Updates the model matrix to place the surface on screen.
 			 * @pre The caller holds m_geometryAccess (it reads m_rectangle and m_depth, writes m_modelMatrix).
 			 */
-			void updateModelMatrix () noexcept;
+			void updateModelMatrix () noexcept EMEN_REQUIRES(m_geometryAccess);
 
 			/**
 			 * @brief Updates the physical representation of the surface in video memory.
@@ -1604,9 +1605,12 @@ namespace EmEn::Overlay
 			 * a web view), read by the render thread, the input thread and a content provider's thread. A LEAF lock: never
 			 * held while taking another lock or calling out (owner decision 2026-10-13; docs/caution-points.md
 			 * § "Overlay::Surface visibility is atomic"). */
-			FramebufferProperties m_latchedProperties; ///< Provider-facing latched snapshot — see latchedProperties()/syncPropertiesLatch().
-			Base::Math::Space2D::AARectangle< float > m_rectangle{0.0F, 0.0F, 1.0F, 1.0F};
-			Base::Math::Matrix< 4, float > m_modelMatrix;
+			FramebufferProperties m_latchedProperties EMEN_GUARDED_BY(m_geometryAccess); ///< Provider-facing latched snapshot — see latchedProperties()/syncPropertiesLatch().
+			Base::Math::Space2D::AARectangle< float > m_rectangle EMEN_GUARDED_BY(m_geometryAccess){0.0F, 0.0F, 1.0F, 1.0F};
+			Base::Math::Matrix< 4, float > m_modelMatrix EMEN_GUARDED_BY(m_geometryAccess);
+			/* NOTE: Under m_framebufferAccess, by contract: the content providers write them from their overrides
+			 * (onActiveBufferReady(), onTransitionBufferReady()) through activePixmap() / transitionPixmap(), called with the
+			 * lock held. Not annotated: the annotation would reach every downstream override. */
 			Framebuffer m_activeBuffer;
 			Framebuffer m_transitionBuffer;
 			std::shared_ptr< Vulkan::Sampler > m_sampler;
@@ -1622,17 +1626,17 @@ namespace EmEn::Overlay
 			int32_t m_acceleratedPopupX{0};
 			int32_t m_acceleratedPopupY{0};
 			bool m_acceleratedPopupVisible{false};
-			mutable std::mutex m_framebufferAccess;
-			mutable std::mutex m_geometryAccess;
-			mutable std::mutex m_requestedTransitionSizeMutex;
-			uint32_t m_requestedTransitionWidth{0};
-			uint32_t m_requestedTransitionHeight{0};
-			float m_depth{0.0F}; ///< Under m_geometryAccess.
+			mutable Base::Mutex m_framebufferAccess;
+			mutable Base::Mutex m_geometryAccess;
+			mutable Base::Mutex m_requestedTransitionSizeMutex;
+			uint32_t m_requestedTransitionWidth EMEN_GUARDED_BY(m_requestedTransitionSizeMutex){0};
+			uint32_t m_requestedTransitionHeight EMEN_GUARDED_BY(m_requestedTransitionSizeMutex){0};
+			float m_depth EMEN_GUARDED_BY(m_geometryAccess){0.0F}; ///< Under m_geometryAccess.
 			float m_alphaThreshold{0.1F};
 			TransitionBufferStatus m_transitionBufferStatus{TransitionBufferStatus::Ready};
 			MemoryMappingMode m_memoryMappingMode{MemoryMappingMode::Staging};
 			std::function< void () > m_redrawRequester; ///< Invoked on any visual mutation to request a redraw (on-demand rendering). Empty in continuous rendering. @see setRedrawRequester()
-			bool m_transitionResizeRequested{false};
+			bool m_transitionResizeRequested EMEN_GUARDED_BY(m_requestedTransitionSizeMutex){false};
 			bool m_providerTransitionPending{false}; ///< Under m_framebufferAccess: the provider was told about a transition size (onTransitionBufferReady()) not committed yet.
 			bool m_acceleratedSourceEnabled{false};
 			/* NOTE: Atomic: any thread invalidates (a resize, setSize(), setGeometry()), the render thread validates after

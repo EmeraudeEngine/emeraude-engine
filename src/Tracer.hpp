@@ -34,7 +34,6 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <source_location>
 #include <string>
 #include <string_view>
@@ -46,6 +45,7 @@
 
 /* Local inclusions for usages. */
 #include "CoreTypes.hpp"
+#include "Mutex.hpp"
 
 namespace EmEn
 {
@@ -734,7 +734,8 @@ namespace EmEn
 			std::string m_loggerForcingSettingKey;
 			std::vector< std::string > m_filters;
 			std::unique_ptr< TracerLogger > m_logger;
-			mutable std::mutex m_consoleAccess;
+			/* NOTE: Serializes the console output (no member guarded). */
+			mutable Base::Mutex m_consoleAccess;
 			int m_parentProcessID{-1};
 			int m_processID{-1};
 #if IS_WINDOWS
