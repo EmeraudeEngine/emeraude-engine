@@ -95,7 +95,7 @@ namespace EmEn::Graphics::RenderTarget
 			return false;
 		}
 
-		const std::scoped_lock lock{m_jobsAccess};
+		const Base::MutexLock lock{m_jobsAccess};
 
 		m_jobs.emplace_back(Job{.subject = subject, .subjectAddress = subject.get(), .atlas = atlas, .warmUpRenders = WarmUpRenders});
 
@@ -114,7 +114,7 @@ namespace EmEn::Graphics::RenderTarget
 	std::vector< std::shared_ptr< ImposterAtlas > >
 	ImposterBake::bakedAtlases () const noexcept
 	{
-		const std::scoped_lock lock{m_jobsAccess};
+		const Base::MutexLock lock{m_jobsAccess};
 
 		std::vector< std::shared_ptr< ImposterAtlas > > atlases;
 		atlases.reserve(m_bakedAtlases.size());
@@ -133,7 +133,7 @@ namespace EmEn::Graphics::RenderTarget
 	size_t
 	ImposterBake::pendingJobs () const noexcept
 	{
-		const std::scoped_lock lock{m_jobsAccess};
+		const Base::MutexLock lock{m_jobsAccess};
 
 		return m_jobs.size();
 	}
@@ -191,7 +191,7 @@ namespace EmEn::Graphics::RenderTarget
 	void
 	ImposterBake::recordPostRenderCompute (const Vulkan::CommandBuffer & commandBuffer) noexcept
 	{
-		const std::scoped_lock lock{m_jobsAccess};
+		const Base::MutexLock lock{m_jobsAccess};
 
 		if ( m_jobs.empty() )
 		{
@@ -369,7 +369,7 @@ namespace EmEn::Graphics::RenderTarget
 		m_isCreated = false;
 
 		{
-			const std::scoped_lock lock{m_jobsAccess};
+			const Base::MutexLock lock{m_jobsAccess};
 
 			m_jobs.clear();
 			m_hasJobs.store(false, std::memory_order_release);

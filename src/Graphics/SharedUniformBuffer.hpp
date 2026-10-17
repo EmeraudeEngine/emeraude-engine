@@ -30,14 +30,15 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <vector>
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "ScopedRegistration.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
@@ -91,7 +92,7 @@ namespace EmEn::Graphics
 			bool
 			usable () const noexcept
 			{
-				return !m_uniformBufferObjects.empty();
+				return m_bankCount.load(std::memory_order_acquire) > 0;
 			}
 
 			/**
@@ -102,7 +103,8 @@ namespace EmEn::Graphics
 			bool
 			isDynamic () const noexcept
 			{
-				return !m_descriptorSets.empty();
+				/* NOTE: Only the dynamic flavour's constructor keeps the renderer (set once, never changed). */
+				return m_renderer != nullptr;
 			}
 
 			/**
@@ -233,7 +235,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool addBuffer () noexcept;
+			bool addBuffer () noexcept EMEN_REQUIRES(m_elementsAccess);
 
 			/**
 			 * @brief Adds a buffer to the UBO list.
@@ -242,7 +244,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool addBuffer (Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator) noexcept;
+			bool addBuffer (Renderer & renderer, const descriptor_set_creator_t & descriptorSetCreator) noexcept EMEN_REQUIRES(m_elementsAccess);
 
 			/**
 			 * @brief The byte size of one bank.
@@ -263,7 +265,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool growOneBank () noexcept;
+			bool growOneBank () noexcept EMEN_REQUIRES(m_elementsAccess);
 
 			/**
 			 * @brief The highest number of banks a shared uniform buffer will ever allocate.
@@ -306,8 +308,14 @@ namespace EmEn::Graphics
 			uint32_t m_frameCount{1};
 			/** @brief Byte distance between two frame regions of the same bank. */
 			uint32_t m_frameStride{0};
+			/* NOTE: Grown under m_elementsAccess (or in the constructor) and never reallocated (reserved for MaxBankCount),
+			 * read WITHOUT the lock by the hot paths (uniformBufferObject(), descriptorSet(), writeElementData()): a reader
+			 * bounds its index with m_bankCount, never with size(), which a growth writes concurrently. */
 			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_uniformBufferObjects;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
+			/** @brief The banks fully built (the buffer created, the descriptor set of the dynamic flavour too), published
+			 * (release) once a bank is complete: below it, every slot of the two vectors is safe to read (acquire). */
+			std::atomic< uint32_t > m_bankCount{0};
 			/**
 			 * @brief Returns the token of a seat just taken.
 			 * @param offset The seat index.
@@ -324,12 +332,12 @@ namespace EmEn::Graphics
 			 */
 			void releaseSeat (uint32_t offset, const void * element) noexcept;
 
-			std::vector< const void * > m_elements;
+			std::vector< const void * > m_elements EMEN_GUARDED_BY(m_elementsAccess);
 			/* NOTE: Guards the seat table only. Owners are registered concurrently from the resource
 			 * thread pool, and claiming a seat is a scan followed by a write: without this lock two
 			 * owners can claim the same seat, hence the same UBO offset, and then silently overwrite
 			 * each other's uniform block. It does NOT guard writeElementData(): once a seat is granted
 			 * its owner holds it exclusively and writes to a byte range that belongs to no one else. */
-			mutable std::mutex m_elementsAccess;
+			mutable Base::Mutex m_elementsAccess;
 	};
 }

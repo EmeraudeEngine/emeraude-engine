@@ -33,13 +33,13 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <vector>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "VertexBufferFormat.hpp"
 
 namespace EmEn
@@ -139,20 +139,20 @@ namespace EmEn::Graphics
 			 * @param binding The binding point.
 			 * @return bool
 			 */
-			bool beginBinding (uint32_t binding) noexcept;
+			bool beginBinding (uint32_t binding) noexcept EMEN_REQUIRES(m_listAccess);
 
 			/**
 			 * @brief Declares a vertex attribute.
 			 * @param attribute The vertex attribute type.
 			 * @return bool
 			 */
-			bool declareAttribute (VertexAttributeType attribute) noexcept;
+			bool declareAttribute (VertexAttributeType attribute) noexcept EMEN_REQUIRES(m_listAccess);
 
 			/**
 			 * @brief Declares a jump over an existing vertex attribute.
 			 * @param attribute The vertex attribute type.
 			 */
-			void declareJump (VertexAttributeType attribute) noexcept;
+			void declareJump (VertexAttributeType attribute) noexcept EMEN_REQUIRES(m_listAccess);
 
 			/**
 			 * @brief Finishes the new vertex buffer format creation.
@@ -161,13 +161,13 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]] 
-			bool endBinding (Topology topology, uint32_t bufferFlags) const noexcept;
+			bool endBinding (Topology topology, uint32_t bufferFlags) const noexcept EMEN_REQUIRES(m_listAccess);
 
 			/**
 			 * @brief Resets the members that build a new vertex buffer format.
 			 */
 			void
-			resetBuildingParameters () noexcept
+			resetBuildingParameters () noexcept EMEN_REQUIRES(m_listAccess)
 			{
 				m_stagingVertexBufferFormat.reset();
 				m_currentBinding = 0;
@@ -175,13 +175,13 @@ namespace EmEn::Graphics
 				m_bindingElementCount = 0;
 			}
 
-			std::vector< std::shared_ptr< VertexBufferFormat > > m_vertexBufferFormats;
+			Base::Mutex m_listAccess;
+			std::vector< std::shared_ptr< VertexBufferFormat > > m_vertexBufferFormats EMEN_GUARDED_BY(m_listAccess);
 			/* Building parameters */
-			std::mutex m_listAccess;
-			std::shared_ptr< VertexBufferFormat > m_stagingVertexBufferFormat;
-			uint32_t m_currentBinding{0};
-			uint32_t m_bindingOffset{0};
-			size_t m_bindingElementCount{0};
+			std::shared_ptr< VertexBufferFormat > m_stagingVertexBufferFormat EMEN_GUARDED_BY(m_listAccess);
+			uint32_t m_currentBinding EMEN_GUARDED_BY(m_listAccess){0};
+			uint32_t m_bindingOffset EMEN_GUARDED_BY(m_listAccess){0};
+			size_t m_bindingElementCount EMEN_GUARDED_BY(m_listAccess){0};
 			bool m_printGeneratedFormat{false};
 	};
 }

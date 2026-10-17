@@ -32,13 +32,13 @@
 /* STL inclusions. */
 #include <map>
 #include <memory>
-#include <mutex>
 #include <string>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Mutex.hpp"
 #include "SharedUniformBuffer.hpp"
 
 namespace EmEn::Graphics
@@ -150,10 +150,10 @@ namespace EmEn::Graphics
 
 			Renderer & m_renderer;
 			std::shared_ptr< Vulkan::Device > m_device;
-			std::map< std::string, std::shared_ptr< SharedUniformBuffer > > m_sharedUniformBuffers;
 			/* NOTE: Resources are loaded concurrently from the resource thread pool, so every access to
 			 * the buffer registry is guarded. Without it, two concurrent emplace() on this map are a
 			 * plain data race, not merely a lost insertion. */
-			mutable std::mutex m_access;
+			mutable Base::Mutex m_access;
+			std::map< std::string, std::shared_ptr< SharedUniformBuffer > > m_sharedUniformBuffers EMEN_GUARDED_BY(m_access);
 	};
 }

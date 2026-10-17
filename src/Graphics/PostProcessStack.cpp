@@ -1407,7 +1407,7 @@ namespace EmEn::Graphics
 	void
 	PostProcessStack::publishFrameDiagnostics (const FrameDiagnostics & diagnostics) noexcept
 	{
-		const std::scoped_lock lock{m_frameDiagnosticsAccess};
+		const Base::MutexLock lock{m_frameDiagnosticsAccess};
 
 		m_frameDiagnostics = diagnostics;
 	}
@@ -1415,7 +1415,7 @@ namespace EmEn::Graphics
 	FrameDiagnostics
 	PostProcessStack::frameDiagnostics () const noexcept
 	{
-		const std::scoped_lock lock{m_frameDiagnosticsAccess};
+		const Base::MutexLock lock{m_frameDiagnosticsAccess};
 
 		return m_frameDiagnostics;
 	}

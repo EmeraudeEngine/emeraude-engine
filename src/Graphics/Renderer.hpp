@@ -38,7 +38,6 @@
 #include <functional>
 #include <memory>
 #include <optional>
-#include <mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -57,6 +56,7 @@
 #include "BindlessTextureManager.hpp"
 #include "ExternalInput.hpp"
 #include "PixelFactory/Color.hpp"
+#include "Mutex.hpp"
 #include "PixelFactory/Pixmap.hpp"
 #include "StaticVector.hpp"
 #include "Thread.hpp"
@@ -1985,9 +1985,9 @@ namespace EmEn::Graphics
 			std::unique_ptr< Vulkan::GPUProfiler > m_GPUProfiler;
 			FrameCapture m_frameCapture;
 			/** @brief Guards m_frameDiagnostics (the render thread publishes once per frame, the console reads). */
-			mutable std::mutex m_frameDiagnosticsAccess;
+			mutable Base::Mutex m_frameDiagnosticsAccess;
 			/** @brief The diagnostics of the last rendered frame (see publishFrameDiagnostics()). */
-			FrameDiagnostics m_frameDiagnostics;
+			FrameDiagnostics m_frameDiagnostics EMEN_GUARDED_BY(m_frameDiagnosticsAccess);
 			/** @brief Frames recorded by renderFrame() since the start: the frame serial of a capture's metadata. */
 			uint64_t m_renderedFrameSerial{0};
 			/** @brief The asynchronous restore of the stored pipeline cache (loadPipelineCache()). Its job captures
@@ -2040,12 +2040,12 @@ namespace EmEn::Graphics
 			 */
 			void publishFrameDiagnostics (Scenes::Scene * scene) noexcept;
 
-			std::mutex m_materialUpdatesAccess; ///< Guards m_pendingMaterialUpdates (logic/loading threads register, the render thread flushes).
-			std::vector< std::weak_ptr< Material::Interface > > m_pendingMaterialUpdates; ///< Materials that changed a dynamic property since the last flush.
-			std::mutex m_geometryUpdatesAccess; ///< Guards m_pendingGeometryUpdates (worker threads register, the render thread flushes).
-			std::vector< std::weak_ptr< Geometry::Interface > > m_pendingGeometryUpdates; ///< Geometries that staged new vertex data since the last flush.
-			std::mutex m_surfaceGeometriesAccess; ///< Guards m_surfaceGeometries (loading threads register, the render thread updates).
-			std::vector< std::weak_ptr< Geometry::Interface > > m_surfaceGeometries; ///< Geometries whose surface follows the camera every frame.
+			Base::Mutex m_materialUpdatesAccess; ///< Guards m_pendingMaterialUpdates (logic/loading threads register, the render thread flushes).
+			std::vector< std::weak_ptr< Material::Interface > > m_pendingMaterialUpdates EMEN_GUARDED_BY(m_materialUpdatesAccess); ///< Materials that changed a dynamic property since the last flush.
+			Base::Mutex m_geometryUpdatesAccess; ///< Guards m_pendingGeometryUpdates (worker threads register, the render thread flushes).
+			std::vector< std::weak_ptr< Geometry::Interface > > m_pendingGeometryUpdates EMEN_GUARDED_BY(m_geometryUpdatesAccess); ///< Geometries that staged new vertex data since the last flush.
+			Base::Mutex m_surfaceGeometriesAccess; ///< Guards m_surfaceGeometries (loading threads register, the render thread updates).
+			std::vector< std::weak_ptr< Geometry::Interface > > m_surfaceGeometries EMEN_GUARDED_BY(m_surfaceGeometriesAccess); ///< Geometries whose surface follows the camera every frame.
 			bool m_motionBlurAllowed{false};
 			bool m_shadowMapsEnabled{true};
 			bool m_renderToTexturesEnabled{true};

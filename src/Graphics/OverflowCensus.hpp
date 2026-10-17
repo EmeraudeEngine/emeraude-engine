@@ -30,10 +30,8 @@
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <span>
 #include <vector>
 
@@ -41,8 +39,10 @@
 #include "volk.h"
 
 /* Local inclusions for usages. */
+#include "ConditionVariable.hpp"
 #include "FrameDiagnostics.hpp"
 #include "IndirectPostProcessEffect.hpp"
+#include "Mutex.hpp"
 #include "StaticVector.hpp"
 
 /* Forward declarations. */
@@ -349,7 +349,7 @@ namespace EmEn::Graphics
 			 * @brief Folds a counted frame into the statistics window. The statistics lock must be held.
 			 * @param report The frame's report.
 			 */
-			void accumulateWindow (const OverflowCensusReport & report) noexcept;
+			void accumulateWindow (const OverflowCensusReport & report) noexcept EMEN_REQUIRES(m_statisticsAccess);
 
 			std::shared_ptr< Vulkan::Device > m_device;
 			std::vector< Slot > m_slots;
@@ -369,11 +369,11 @@ namespace EmEn::Graphics
 			/** @brief The self-test request this frame serves, 0 for none (latched by prepareFrame()). */
 			uint64_t m_frameSelfTestGeneration{0};
 			/* ---- Shared, under m_statisticsAccess. ---- */
-			mutable std::mutex m_statisticsAccess;
-			std::condition_variable m_selfTestCompletion;
-			OverflowCensusReport m_latest{};
-			OverflowCensusWindow m_window{};
-			OverflowCensusSelfTest m_selfTest{};
+			mutable Base::Mutex m_statisticsAccess;
+			Base::ConditionVariable m_selfTestCompletion;
+			OverflowCensusReport m_latest EMEN_GUARDED_BY(m_statisticsAccess){};
+			OverflowCensusWindow m_window EMEN_GUARDED_BY(m_statisticsAccess){};
+			OverflowCensusSelfTest m_selfTest EMEN_GUARDED_BY(m_statisticsAccess){};
 			/* ---- Atomics. ---- */
 			/** @brief The latest serial prepareFrame() saw: where a reset window starts. */
 			std::atomic< uint64_t > m_lastPreparedSerial{0};

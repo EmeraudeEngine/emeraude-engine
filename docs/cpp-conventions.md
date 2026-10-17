@@ -438,6 +438,27 @@ unlocked access at compile time. Base `docs/subsystems/source-tree/26-thread-saf
     `enableScene()` checks for an active scene under its exclusive access (check and change atomic),
     `disableActiveScene()` re-checks under it. Lock order: `m_sceneListAccess`, then `m_activeSceneSharedAccess`.
   - Three lists erased under one `std::scoped_lock{a, b, c}`: one lock at a time now (no path holds two).
+- Lot Graphics A (2026-10-17): the managers and registries — `Renderer` (the frame diagnostics, the pending material /
+  geometry updates, the surface geometries), `BindlessTextureManager` (its mutex guards no member: it serializes every
+  descriptor-set write, so the two write helpers are `EMEN_REQUIRES`), `SharedUBOManager`, `SharedUniformBuffer` (the
+  seat table; the bank growth `EMEN_REQUIRES`), `VertexBufferFormatManager` (the list and the format-building state;
+  the builder helpers `EMEN_REQUIRES`), `PostProcessStack`, `OverflowCensus` and `FrameCapture`
+  (`Base::ConditionVariable`), `ImposterBake`, `Recorder` (the sessions; each session's queue under its own
+  `Base::Mutex`, its `std::condition_variable_any` kept for the stop token). Restructured for the analysis:
+  - `FrameCapture::writeFiles()` (a pool task) read the capture unlocked while `Writing`, safe by its state protocol: it
+    now takes the frames out and copies the parameters under the lock, then works on its own copies.
+  - `Recorder::onTerminate()` walked and cleared the finishing sessions after releasing the lock: they are taken out
+    under it and joined outside it. The hardware encoding thread read `m_hardwareSession`: it receives its session at
+    its start (created before the thread, destroyed after its join). `EncodingSession::finalize()` empties its queues
+    under its lock.
+  - The readback / snapshot slots are NOT guarded by the recorder's lock as a whole: each slot's atomic state hands it
+    over (the rendering thread records and retires under the lock, the encoding thread reads the slot it was handed).
+  - `SharedUniformBuffer` grows its banks under the seat lock, while `uniformBufferObject()`, `descriptorSet()` and
+    `writeElementData()` (hot: every instance, every frame) read the bank vectors' `size()` unlocked —
+    `reserve(MaxBankCount)` prevented the reallocation, not the concurrent read of the size. Owner decision: an atomic
+    bank count, published (release) once a bank is complete; the readers bound their index with it (acquire), no lock.
+    Found with it: a bank whose buffer failed to create stayed in the vector (`usable()` counted it), and the dynamic
+    flavour dereferenced a descriptor set without checking it — a failed bank is now removed.
   - The octree pointers were tested OUTSIDE their lock, then used under it (statistics, removal, the per-frame
     refiling, the collision step, the two render-list gathers) while `rebuild*Octree()` / `destroyOctrees()` replace
     them under it, and `buildOctrees()` created them unlocked: every test is now inside the lock; the render paths

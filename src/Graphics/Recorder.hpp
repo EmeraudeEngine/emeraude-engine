@@ -50,6 +50,7 @@
 
 /* Local inclusions for usages. */
 #include "vpx/vpx_encoder.h"
+#include "Mutex.hpp"
 #include "VideoFrameConverter.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -324,7 +325,7 @@ namespace EmEn::Graphics
 			 * @brief Joins and removes finished background encoding sessions.
 			 * @post m_finishingSessions contains only sessions still encoding.
 			 */
-			void cleanupFinishedSessions () noexcept;
+			void cleanupFinishedSessions () noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/**
 			 * @brief Creates the software path's readback resources (staging buffers, transfer-queue DMA resources).
@@ -336,7 +337,7 @@ namespace EmEn::Graphics
 			 * @return True if all resources created successfully, false otherwise.
 			 * @post m_asyncSlots are fully initialized.
 			 */
-			bool createAsyncResources () noexcept;
+			bool createAsyncResources () noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/**
 			 * @brief Destroys the software path's readback resources.
@@ -347,7 +348,7 @@ namespace EmEn::Graphics
 			 * @pre No copy is recorded or submitted with a frame (copiesInFlight() is false).
 			 * @post All async resources are released.
 			 */
-			void destroyAsyncResources () noexcept;
+			void destroyAsyncResources () noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/**
 			 * @brief Records the software path's copy: swap-chain image to the staging buffer, or to the
@@ -358,7 +359,7 @@ namespace EmEn::Graphics
 			 * @return size_t The slot index, NoSlot when none is free or the grab buffer is full (backpressure).
 			 */
 			[[nodiscard]]
-			size_t recordReadbackCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout) noexcept;
+			size_t recordReadbackCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout) noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/**
 			 * @brief Records the hardware path's copy: swap-chain image to a free snapshot slot.
@@ -368,26 +369,26 @@ namespace EmEn::Graphics
 			 * @return size_t The slot index, NoSlot when the encoder still holds every slot.
 			 */
 			[[nodiscard]]
-			size_t recordHardwareCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout) noexcept;
+			size_t recordHardwareCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout) noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/**
 			 * @brief Completes the copies submitted with a frame slot whose fence was waited.
 			 * @param frameSlot The renderer's frame slot.
 			 * @param everyFrameSlot True to complete every submitted copy whatever its slot (the device is idle).
 			 */
-			void retireCopies (uint32_t frameSlot, bool everyFrameSlot) noexcept;
+			void retireCopies (uint32_t frameSlot, bool everyFrameSlot) noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/**
 			 * @brief Harvests the software path's DMA transfers that completed (non-blocking fence checks).
 			 * @param wait True to wait each transfer instead (the session is closing).
 			 */
-			void harvestTransfers (bool wait) noexcept;
+			void harvestTransfers (bool wait) noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/**
 			 * @brief Reads a completed software readback back into the grab buffer for the encoding thread.
 			 * @param slotIndex Index of the async readback slot, whose staging buffer holds the frame.
 			 */
-			void harvestReadback (size_t slotIndex) noexcept;
+			void harvestReadback (size_t slotIndex) noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/**
 			 * @brief Returns whether a copy is still recorded in a frame or on the GPU.
@@ -395,19 +396,19 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool copiesInFlight () const noexcept;
+			bool copiesInFlight () const noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/**
 			 * @brief Closes the session once no copy is in flight any more (finalizes the file, releases the resources).
 			 * @pre m_captureAccess is held and copiesInFlight() is false.
 			 */
-			void closeSession () noexcept;
+			void closeSession () noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/**
 			 * @brief Stops the recording: closes the session now, or once the copies in flight have landed.
 			 * @pre m_captureAccess is held and a recording is running.
 			 */
-			void stopRecordingLocked () noexcept;
+			void stopRecordingLocked () noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/**
 			 * @brief Returns whether the open session failed to write its output file (it is then stopped).
@@ -415,7 +416,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool outputWriteFailed () const noexcept;
+			bool outputWriteFailed () const noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/** @brief Closes a C stream (the output files' deleter). */
 			struct FileCloser
@@ -439,17 +440,22 @@ namespace EmEn::Graphics
 			 * @return bool True on success.
 			 */
 			[[nodiscard]]
-			bool startHardwareRecording (const std::filesystem::path & outputPath) noexcept;
+			bool startHardwareRecording (const std::filesystem::path & outputPath) noexcept EMEN_REQUIRES(m_captureAccess);
+
+			struct HardwareSession;
 
 			/**
 			 * @brief Hardware encoding thread: converts and encodes captured slots at the
 			 * silicon's pace, filling missing CFR slots by re-encoding the previous frame.
+			 * @note The session is handed to the thread at its start: it is created before the thread and destroyed after
+			 * its join (stopHardwareRecording()), so the thread never reads m_hardwareSession.
+			 * @param hardwareSession The session this thread encodes.
 			 * @param stopToken The session thread's stop token: once requested, the queue is drained, then the loop ends.
 			 */
-			void hardwareEncodingLoop (const std::stop_token & stopToken) noexcept;
+			void hardwareEncodingLoop (HardwareSession & hardwareSession, const std::stop_token & stopToken) noexcept;
 
 			/** @brief Stops the hardware session (drains, joins, finalizes the file). */
-			void stopHardwareRecording () noexcept;
+			void stopHardwareRecording () noexcept EMEN_REQUIRES(m_captureAccess);
 
 			/** @brief Number of async GPU readback slots for double-buffering. */
 			static constexpr size_t AsyncBufferCount{4};
@@ -479,8 +485,8 @@ namespace EmEn::Graphics
 				OutputFile outputFile;
 				std::atomic< bool > writeFailed{false}; ///< Set by the encoding thread on the first failed write: the session stops.
 				std::filesystem::path outputPath;
-				std::deque< size_t > readySlots;
-				std::mutex queueMutex;
+				Base::Mutex queueMutex;
+				std::deque< size_t > readySlots EMEN_GUARDED_BY(queueMutex);
 				/* NOTE: _any: its wait takes the thread's stop token (a stop request wakes it). */
 				std::condition_variable_any queueCV;
 				uint64_t frameCount{0};
@@ -540,9 +546,9 @@ namespace EmEn::Graphics
 				std::filesystem::path outputPath;
 
 				/* Frame queue (producer-consumer). */
-				std::deque< FrameSlot > frameQueue;
-				std::deque< FrameSlot > freeFrames;
-				std::mutex queueMutex;
+				Base::Mutex queueMutex;
+				std::deque< FrameSlot > frameQueue EMEN_GUARDED_BY(queueMutex);
+				std::deque< FrameSlot > freeFrames EMEN_GUARDED_BY(queueMutex);
 				/* NOTE: _any: its wait takes the thread's stop token (a stop request wakes it). */
 				std::condition_variable_any queueCV;
 
@@ -624,24 +630,26 @@ namespace EmEn::Graphics
 
 			/* Capture state shared by the rendering thread (record, submit, retire) and the thread that starts
 			 * and stops the rush. */
-			mutable std::mutex m_captureAccess; ///< Guards the slots, the sessions and the stop.
-			size_t m_recordedSlot{NoSlot}; ///< The slot recorded in the frame being built, until confirmSubmit().
+			mutable Base::Mutex m_captureAccess; ///< Guards the slots, the sessions and the stop.
+			size_t m_recordedSlot EMEN_GUARDED_BY(m_captureAccess){NoSlot}; ///< The slot recorded in the frame being built, until confirmSubmit().
 
 			/* Async GPU readback resources. */
 			std::shared_ptr< Vulkan::CommandPool > m_transferCommandPool; ///< Command pool for transfer queue operations.
+			/* NOTE: The slots are not guarded by m_captureAccess as a whole: each slot's state hands it over (the rendering
+			 * thread records and retires under the lock, the thread the slot was handed to reads it alone). */
 			std::array< AsyncReadbackSlot, AsyncBufferCount > m_asyncSlots{}; ///< Async readback slots.
 			uint32_t m_graphicsFamilyIndex{0}; ///< Graphics queue family index for ownership transfers.
 			uint32_t m_transferFamilyIndex{0}; ///< Transfer queue family index for ownership transfers.
 
 			/* Detachable encoding sessions. */
-			std::unique_ptr< EncodingSession > m_currentSession; ///< Active encoding session (null when not recording).
-			std::vector< std::unique_ptr< EncodingSession > > m_finishingSessions; ///< Sessions still encoding in background.
+			std::unique_ptr< EncodingSession > m_currentSession EMEN_GUARDED_BY(m_captureAccess); ///< Active encoding session (null when not recording).
+			std::vector< std::unique_ptr< EncodingSession > > m_finishingSessions EMEN_GUARDED_BY(m_captureAccess); ///< Sessions still encoding in background.
 
 			/* Hardware (Vulkan Video H.265) path. */
 			std::unique_ptr< VideoFrameConverter > m_frameConverter; ///< GPU BGRA->NV12 converter.
 			std::unique_ptr< Vulkan::VideoEncoderH265 > m_hardwareEncoder; ///< Hardware H.265 encoder.
-			std::array< HardwareSlot, HardwareSlotCount > m_hardwareSlots{}; ///< GPU snapshot slots.
-			std::unique_ptr< HardwareSession > m_hardwareSession; ///< Active hardware session (null on the software path).
+			std::array< HardwareSlot, HardwareSlotCount > m_hardwareSlots{}; ///< GPU snapshot slots (handed over by their state, as m_asyncSlots).
+			std::unique_ptr< HardwareSession > m_hardwareSession EMEN_GUARDED_BY(m_captureAccess); ///< Active hardware session (null on the software path).
 
 			/* Recording state. */
 			std::atomic< bool > m_isRecording{false}; ///< True while frames are captured (cleared by stopRecording()).
@@ -658,7 +666,7 @@ namespace EmEn::Graphics
 			uint32_t m_recordWidth{0}; ///< Recording width in pixels (even, locked at start).
 			uint32_t m_recordHeight{0}; ///< Recording height in pixels (even, locked at start).
 			/* State flags. */
-			bool m_stopPending{false}; ///< stopRecording() came while copies were in flight: the last one closes the session.
+			bool m_stopPending EMEN_GUARDED_BY(m_captureAccess){false}; ///< stopRecording() came while copies were in flight: the last one closes the session.
 			bool m_extentMismatchTraced{false}; ///< The swap-chain no longer matches the recording size (traced once per rush).
 			bool m_useTransferQueue{false}; ///< True when dedicated transfer queue is available and in use.
 			bool m_showStatistics{false}; ///< True to log periodic encoding statistics.

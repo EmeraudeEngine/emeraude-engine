@@ -793,7 +793,7 @@ namespace EmEn::Graphics
 		{
 			slot.pending = false;
 
-			const std::scoped_lock lock{m_statisticsAccess};
+			const Base::MutexLock lock{m_statisticsAccess};
 
 			m_window.staleSlots++;
 		}
@@ -1046,7 +1046,7 @@ namespace EmEn::Graphics
 		 * frame's counts. Dropped, never counted as this frame. */
 		if ( header != slot.expectedSerial )
 		{
-			const std::scoped_lock lock{m_statisticsAccess};
+			const Base::MutexLock lock{m_statisticsAccess};
 
 			m_window.staleSlots++;
 
@@ -1105,7 +1105,7 @@ namespace EmEn::Graphics
 		}
 
 		{
-			const std::scoped_lock lock{m_statisticsAccess};
+			const Base::MutexLock lock{m_statisticsAccess};
 
 			/* A batch recorded for the self-test alone (census disarmed) is not a counted frame. */
 			if ( slot.countsFrame )
@@ -1131,7 +1131,7 @@ namespace EmEn::Graphics
 
 		if ( selfTest.has_value() )
 		{
-			m_selfTestCompletion.notify_all();
+			m_selfTestCompletion.notifyAll();
 
 			const auto & measured = selfTest->measured;
 
@@ -1246,7 +1246,7 @@ namespace EmEn::Graphics
 	{
 		const auto startsAfter = m_lastPreparedSerial.load(std::memory_order_acquire);
 
-		const std::scoped_lock lock{m_statisticsAccess};
+		const Base::MutexLock lock{m_statisticsAccess};
 
 		m_window = {};
 		m_window.startsAfterFrame = startsAfter;
@@ -1261,7 +1261,7 @@ namespace EmEn::Graphics
 		snapshot.available = this->available();
 		snapshot.armed = this->armed();
 
-		const std::scoped_lock lock{m_statisticsAccess};
+		const Base::MutexLock lock{m_statisticsAccess};
 
 		snapshot.latest = m_latest;
 		snapshot.window = m_window;
@@ -1282,9 +1282,9 @@ namespace EmEn::Graphics
 
 		m_selfTestRequested.store(generation, std::memory_order_release);
 
-		std::unique_lock< std::mutex > lock{m_statisticsAccess};
+		Base::MutexLock lock{m_statisticsAccess};
 
-		const auto answered = m_selfTestCompletion.wait_for(lock, timeout, [this, generation] {
+		const auto answered = m_selfTestCompletion.waitFor(lock, timeout, [this, generation] {
 			return m_selfTestPublished.load(std::memory_order_acquire) >= generation;
 		});
 

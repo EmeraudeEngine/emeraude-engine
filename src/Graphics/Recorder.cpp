@@ -320,23 +320,28 @@ namespace EmEn::Graphics
 		 * every copy submitted with a frame is complete, and none is left half recorded. */
 		this->onDeviceIdle();
 
+		std::vector< std::unique_ptr< EncodingSession > > finishingSessions;
+
 		{
-			const std::scoped_lock lock{m_captureAccess};
+			const Base::MutexLock lock{m_captureAccess};
 
 			if ( m_sessionOpen.load(std::memory_order_acquire) )
 			{
 				this->harvestTransfers(true);
 				this->closeSession();
 			}
+
+			finishingSessions = std::move(m_finishingSessions);
+			m_finishingSessions.clear();
 		}
 
-		/* Force-join all background encoding sessions at shutdown. */
-		for ( auto & session : m_finishingSessions )
+		/* Force-join all background encoding sessions at shutdown, outside the lock: they were taken out under it. */
+		for ( auto & session : finishingSessions )
 		{
 			session->encodingThread.join();
 		}
 
-		m_finishingSessions.clear();
+		finishingSessions.clear();
 
 		return true;
 	}
@@ -424,7 +429,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		const std::scoped_lock lock{m_captureAccess};
+		const Base::MutexLock lock{m_captureAccess};
 
 		if ( m_isRecording )
 		{
@@ -631,7 +636,7 @@ namespace EmEn::Graphics
 	bool
 	Recorder::stopRecording () noexcept
 	{
-		const std::scoped_lock lock{m_captureAccess};
+		const Base::MutexLock lock{m_captureAccess};
 
 		if ( !m_isRecording )
 		{
@@ -725,7 +730,7 @@ namespace EmEn::Graphics
 	bool
 	Recorder::recordFrameCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout, uint32_t frameSlot) noexcept
 	{
-		const std::scoped_lock lock{m_captureAccess};
+		const Base::MutexLock lock{m_captureAccess};
 
 		if ( !m_isRecording || m_recordedSlot != NoSlot )
 		{
@@ -791,7 +796,7 @@ namespace EmEn::Graphics
 	void
 	Recorder::confirmSubmit (bool submitted) noexcept
 	{
-		const std::scoped_lock lock{m_captureAccess};
+		const Base::MutexLock lock{m_captureAccess};
 
 		if ( m_recordedSlot == NoSlot )
 		{
@@ -831,7 +836,7 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		const std::scoped_lock lock{m_captureAccess};
+		const Base::MutexLock lock{m_captureAccess};
 
 		if ( !m_sessionOpen.load(std::memory_order_acquire) )
 		{
@@ -855,7 +860,7 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		const std::scoped_lock lock{m_captureAccess};
+		const Base::MutexLock lock{m_captureAccess};
 
 		if ( !m_sessionOpen.load(std::memory_order_acquire) )
 		{
@@ -890,7 +895,7 @@ namespace EmEn::Graphics
 				slot.state.store(CopyState::Queued, std::memory_order_release);
 
 				{
-					const std::scoped_lock queueLock{m_hardwareSession->queueMutex};
+					const Base::MutexLock queueLock{m_hardwareSession->queueMutex};
 
 					m_hardwareSession->readySlots.push_back(index);
 				}
@@ -985,7 +990,7 @@ namespace EmEn::Graphics
 		/* Backpressure: when the encoder falls behind, stop capturing so the grab buffer stays bounded. The skipped
 		 * slots become duplicated frames in the CFR output — the timeline never drifts. */
 		{
-			const std::scoped_lock lock{m_currentSession->queueMutex};
+			const Base::MutexLock lock{m_currentSession->queueMutex};
 
 			if ( m_currentSession->frameQueue.size() >= m_maxQueuedFrames )
 			{
@@ -1138,11 +1143,11 @@ namespace EmEn::Graphics
 		{
 			/* Wait for a frame to be available or thread stop signal. */
 			{
-				std::unique_lock lock{queueMutex};
+				Base::MutexLock lock{queueMutex};
 
 				/* NOTE: False only when the stop is requested AND the queue is empty: the frames queued before the stop are
 				 * still encoded. */
-				if ( !queueCV.wait(lock, stopToken, [this] {
+				if ( !queueCV.wait(lock, stopToken, [this] () EMEN_REQUIRES(queueMutex) {
 					return !frameQueue.empty();
 				}) )
 				{
@@ -1233,7 +1238,7 @@ namespace EmEn::Graphics
 
 			/* Recycle the frame buffer back to the free pool. */
 			{
-				const std::scoped_lock lock{queueMutex};
+				const Base::MutexLock lock{queueMutex};
 
 				freeFrames.push_back(std::move(localFrame));
 			}
@@ -1257,7 +1262,7 @@ namespace EmEn::Graphics
 					size_t queueDepth = 0;
 
 					{
-						const std::scoped_lock lock{queueMutex};
+						const Base::MutexLock lock{queueMutex};
 
 						queueDepth = frameQueue.size();
 					}
@@ -1385,8 +1390,12 @@ namespace EmEn::Graphics
 		}
 
 		/* Release frame buffers. */
-		frameQueue.clear();
-		freeFrames.clear();
+		{
+			const Base::MutexLock lock{queueMutex};
+
+			frameQueue.clear();
+			freeFrames.clear();
+		}
 
 		if ( writeFailed.load(std::memory_order_acquire) )
 		{
@@ -1807,7 +1816,7 @@ namespace EmEn::Graphics
 		m_recordedSlot = NoSlot;
 		m_stopPending = false;
 		m_extentMismatchTraced = false;
-		if ( !m_hardwareSession->encodingThread.start([this] (const std::stop_token & stopToken) { this->hardwareEncodingLoop(stopToken); }) )
+		if ( !m_hardwareSession->encodingThread.start([this, session = m_hardwareSession.get()] (const std::stop_token & stopToken) { this->hardwareEncodingLoop(*session, stopToken); }) )
 		{
 			/* The system refused the thread (Base::Thread traced why): the recording is refused (owner policy, 2026-10-07). */
 			TraceError{ClassId} << "Unable to start the hardware encoding thread: the recording is refused !";
@@ -1826,9 +1835,9 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Recorder::hardwareEncodingLoop (const std::stop_token & stopToken) noexcept
+	Recorder::hardwareEncodingLoop (HardwareSession & hardwareSession, const std::stop_token & stopToken) noexcept
 	{
-		auto * session = m_hardwareSession.get();
+		auto * session = &hardwareSession;
 		std::vector< uint8_t > packet;
 
 		const auto writePacket = [session, &packet] () {
@@ -1843,10 +1852,10 @@ namespace EmEn::Graphics
 			size_t slotIndex = 0;
 
 			{
-				std::unique_lock lock{session->queueMutex};
+				Base::MutexLock lock{session->queueMutex};
 
 				/* NOTE: False only when the stop is requested AND no slot is ready: the queued slots are still encoded. */
-				if ( !session->queueCV.wait(lock, stopToken, [session] {
+				if ( !session->queueCV.wait(lock, stopToken, [session] () EMEN_REQUIRES(session->queueMutex) {
 					return !session->readySlots.empty();
 				}) )
 				{
@@ -1966,7 +1975,7 @@ namespace EmEn::Graphics
 		FrameSlot frame;
 
 		{
-			const std::scoped_lock lock{m_currentSession->queueMutex};
+			const Base::MutexLock lock{m_currentSession->queueMutex};
 
 			if ( !m_currentSession->freeFrames.empty() )
 			{
@@ -1988,7 +1997,7 @@ namespace EmEn::Graphics
 		frame.pts = static_cast< vpx_codec_pts_t >(slot.cfrSlot);
 
 		{
-			const std::scoped_lock lock{m_currentSession->queueMutex};
+			const Base::MutexLock lock{m_currentSession->queueMutex};
 
 			m_currentSession->frameQueue.push_back(std::move(frame));
 		}

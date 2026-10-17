@@ -29,7 +29,6 @@
 #include <algorithm>
 
 /* STL inclusions. */
-#include <mutex>
 #include <ranges>
 
 /* Local inclusions. */
@@ -128,7 +127,7 @@ namespace EmEn::Graphics
 	{
 		const auto bufferIndex = this->bufferIndex(index);
 
-		if ( bufferIndex >= m_uniformBufferObjects.size() )
+		if ( bufferIndex >= m_bankCount.load(std::memory_order_acquire) )
 		{
 			TraceError{ClassId} << "There is no uniform buffer object #" << bufferIndex << " !";
 
@@ -143,7 +142,7 @@ namespace EmEn::Graphics
 	{
 		const auto bufferIndex = this->bufferIndex(index);
 
-		if ( bufferIndex >= m_uniformBufferObjects.size() )
+		if ( bufferIndex >= m_bankCount.load(std::memory_order_acquire) )
 		{
 			TraceError{ClassId} << "There is no uniform buffer object #" << bufferIndex << " !";
 
@@ -165,7 +164,7 @@ namespace EmEn::Graphics
 
 		const auto bufferIndex = this->bufferIndex(index);
 
-		if ( bufferIndex >= m_descriptorSets.size() )
+		if ( bufferIndex >= m_bankCount.load(std::memory_order_acquire) )
 		{
 			TraceError{ClassId} << "There is no descriptor set #" << bufferIndex << " !";
 
@@ -189,7 +188,7 @@ namespace EmEn::Graphics
 	bool
 	SharedUniformBuffer::growOneBank () noexcept
 	{
-		if ( m_uniformBufferObjects.size() >= MaxBankCount )
+		if ( m_bankCount.load(std::memory_order_relaxed) >= MaxBankCount )
 		{
 			return false;
 		}
@@ -209,7 +208,7 @@ namespace EmEn::Graphics
 		 * owners both see the same seat as free and both take it, ending up sharing a single UBO
 		 * offset. The corruption is silent: no error is reported, the two owners simply overwrite
 		 * each other's uniform block. */
-		const std::scoped_lock lock{m_elementsAccess};
+		const Base::MutexLock lock{m_elementsAccess};
 
 		offset = 0;
 
@@ -264,7 +263,7 @@ namespace EmEn::Graphics
 	void
 	SharedUniformBuffer::releaseSeat (uint32_t offset, const void * element) noexcept
 	{
-		const std::scoped_lock lock{m_elementsAccess};
+		const Base::MutexLock lock{m_elementsAccess};
 
 		if ( offset < m_elements.size() && m_elements[offset] == element )
 		{
@@ -275,7 +274,7 @@ namespace EmEn::Graphics
 	uint32_t
 	SharedUniformBuffer::elementCount () const noexcept
 	{
-		const std::scoped_lock lock{m_elementsAccess};
+		const Base::MutexLock lock{m_elementsAccess};
 
 		uint32_t count = 0;
 
@@ -295,7 +294,7 @@ namespace EmEn::Graphics
 	{
 		const auto bufferIndex = this->bufferIndex(index);
 
-		if ( bufferIndex >= m_uniformBufferObjects.size() )
+		if ( bufferIndex >= m_bankCount.load(std::memory_order_acquire) )
 		{
 			TraceError{ClassId} << "There is no uniform buffer object #" << bufferIndex << " !";
 
@@ -345,10 +344,15 @@ namespace EmEn::Graphics
 		{
 			TraceError{ClassId} << "Unable to create an UBO of " << UBOMaxSize << " bytes !";
 
+			/* NOTE: A bank that failed is not kept: it was counted by usable() and could have been read. */
+			m_uniformBufferObjects.pop_back();
+
 			return false;
 		}
 
 		m_elements.resize(m_uniformBufferObjects.size() * m_maxElementCountPerUBO, nullptr);
+
+		m_bankCount.store(static_cast< uint32_t >(m_uniformBufferObjects.size()), std::memory_order_release);
 
 		return true;
 	}
@@ -367,13 +371,30 @@ namespace EmEn::Graphics
 		{
 			TraceError{ClassId} << "Unable to create an UBO of " << UBOMaxSize << " bytes !";
 
+			/* NOTE: A bank that failed is not kept: it was counted by usable() and could have been read. */
+			m_uniformBufferObjects.pop_back();
+
 			return false;
 		}
 
-		auto * descriptorSet = m_descriptorSets.emplace_back(descriptorSetCreator(renderer, *uniformBufferObject)).get();
+		auto descriptorSet = descriptorSetCreator(renderer, *uniformBufferObject);
+
+		if ( descriptorSet == nullptr )
+		{
+			TraceError{ClassId} << "Unable to create the descriptor set of the bank '" << chunkId << "' !";
+
+			m_uniformBufferObjects.pop_back();
+
+			return false;
+		}
+
 		descriptorSet->setIdentifier(ClassId, chunkId, "DescriptorSet");
 
+		m_descriptorSets.emplace_back(std::move(descriptorSet));
+
 		m_elements.resize(m_uniformBufferObjects.size() * m_maxElementCountPerUBO, nullptr);
+
+		m_bankCount.store(static_cast< uint32_t >(m_uniformBufferObjects.size()), std::memory_order_release);
 
 		return true;
 	}

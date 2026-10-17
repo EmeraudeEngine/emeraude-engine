@@ -34,7 +34,6 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -46,6 +45,7 @@
 #include "DirectPostProcessEffect.hpp"
 #include "EffectSlot.hpp"
 #include "FrameDiagnostics.hpp"
+#include "Mutex.hpp"
 
 namespace EmEn::Graphics
 {
@@ -837,8 +837,8 @@ namespace EmEn::Graphics
 			std::shared_ptr< IndirectPostProcessEffect > m_cameraToneMapping;
 			/* The diagnostics of the last frame this stack was rendered in: written by the render thread, read by the
 			 * console (getStatus). Guarded by m_frameDiagnosticsAccess. */
-			mutable std::mutex m_frameDiagnosticsAccess;
-			FrameDiagnostics m_frameDiagnostics;
+			mutable Base::Mutex m_frameDiagnosticsAccess;
+			FrameDiagnostics m_frameDiagnostics EMEN_GUARDED_BY(m_frameDiagnosticsAccess);
 			/* The members of the multi-occupant Custom slot the scene-effects bypass switched off, to
 			 * switch exactly those back on when it is lifted. RENDER THREAD (syncSlotSelection()). */
 			std::vector< std::shared_ptr< IndirectPostProcessEffect > > m_bypassedMultiOccupants;

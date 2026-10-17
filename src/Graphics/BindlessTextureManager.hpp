@@ -32,13 +32,15 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
-#include <mutex>
 
 /* Third-party inclusions. */
 #include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+
+/* Local inclusions for usages. */
+#include "Mutex.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -461,7 +463,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool writeTextureToDescriptorSet (uint32_t binding, uint32_t arrayIndex, const Vulkan::TextureInterface & texture) const noexcept;
+			bool writeTextureToDescriptorSet (uint32_t binding, uint32_t arrayIndex, const Vulkan::TextureInterface & texture) const noexcept EMEN_REQUIRES(m_indexMutex);
 
 			/**
 			 * @brief Writes a raw descriptor info to the descriptor set at a specific binding and array index.
@@ -471,7 +473,7 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool writeRawToDescriptorSet (uint32_t binding, uint32_t arrayIndex, const VkDescriptorImageInfo & descriptorInfo) const noexcept;
+			bool writeRawToDescriptorSet (uint32_t binding, uint32_t arrayIndex, const VkDescriptorImageInfo & descriptorInfo) const noexcept EMEN_REQUIRES(m_indexMutex);
 
 			Renderer & m_renderer;
 			/* Effective capacities, resolved at initialization from the device budget. They default
@@ -487,7 +489,8 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
 
-			/* Thread safety for reserved-slot updates and active-scene set synchronization. */
-			mutable std::mutex m_indexMutex;
+			/* Serializes every write into the bindless descriptor set: the reserved-slot updates and the active-scene
+			 * set synchronization (the write helpers require it). */
+			mutable Base::Mutex m_indexMutex;
 	};
 }

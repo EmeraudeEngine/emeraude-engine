@@ -131,7 +131,7 @@ namespace EmEn::Graphics
 		}
 
 		{
-			const std::scoped_lock lock{m_access};
+			const Base::MutexLock lock{m_access};
 
 			if ( m_state != State::Idle )
 			{
@@ -158,7 +158,7 @@ namespace EmEn::Graphics
 			{
 				error = "Unable to allocate the capture staging buffers.";
 
-				const std::scoped_lock lock{m_access};
+				const Base::MutexLock lock{m_access};
 
 				m_state = State::Idle;
 
@@ -166,7 +166,7 @@ namespace EmEn::Graphics
 			}
 		}
 
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		m_frames = std::move(frames);
 		m_threadPool = threadPool;
@@ -202,9 +202,9 @@ namespace EmEn::Graphics
 	FrameCapture::Result
 	FrameCapture::waitForCompletion (std::chrono::milliseconds timeout) noexcept
 	{
-		std::unique_lock lock{m_access};
+		Base::MutexLock lock{m_access};
 
-		if ( !m_completion.wait_for(lock, timeout, [this] {
+		if ( !m_completion.waitFor(lock, timeout, [this] () EMEN_REQUIRES(m_access) {
 			return m_resultReady;
 		}) )
 		{
@@ -240,7 +240,7 @@ namespace EmEn::Graphics
 	bool
 	FrameCapture::busy () const noexcept
 	{
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		return m_state != State::Idle;
 	}
@@ -248,7 +248,7 @@ namespace EmEn::Graphics
 	bool
 	FrameCapture::recordCopy (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Image & image, VkImageLayout finalLayout, uint32_t frameSlot, const FrameMetadata & metadata) noexcept
 	{
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		if ( m_state != State::Armed || m_nextFrame >= m_frames.size() || !m_result.error.empty() )
 		{
@@ -325,7 +325,7 @@ namespace EmEn::Graphics
 	void
 	FrameCapture::confirmSubmit (bool submitted) noexcept
 	{
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		if ( m_state != State::Armed || m_nextFrame >= m_frames.size() || !m_frames[m_nextFrame].recorded )
 		{
@@ -379,7 +379,7 @@ namespace EmEn::Graphics
 		bool write = false;
 
 		{
-			const std::scoped_lock lock{m_access};
+			const Base::MutexLock lock{m_access};
 
 			if ( m_state != State::Armed )
 			{
@@ -446,7 +446,7 @@ namespace EmEn::Graphics
 	void
 	FrameCapture::abandon (const std::string & reason) noexcept
 	{
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		if ( m_state != State::Armed )
 		{
@@ -461,27 +461,49 @@ namespace EmEn::Graphics
 	void
 	FrameCapture::writeFiles () noexcept
 	{
-		/* The frames are this capture's alone while it is Writing: no lock for the read-back and the encoding. */
-		const auto frameCount = m_frames.size();
-		const auto frameBytes = static_cast< size_t >(m_width) * m_height * 4;
+		/* The capture is taken out under the lock, then read back and encoded without it: while it is Writing, every
+		 * other path refuses (arm() wants Idle, abandon() wants Armed), and the copies make that provable. */
+		std::vector< CapturedFrame > frames;
+		std::filesystem::path directory;
+		int64_t stem{0};
+		uint32_t width{0};
+		uint32_t height{0};
+		bool temporal{false};
+		bool swapRedBlue{false};
+
+		{
+			const Base::MutexLock lock{m_access};
+
+			frames = std::move(m_frames);
+			m_frames.clear();
+			directory = m_directory;
+			stem = m_stem;
+			width = m_width;
+			height = m_height;
+			temporal = m_temporal;
+			swapRedBlue = m_swapRedBlue;
+		}
+
+		const auto frameCount = frames.size();
+		const auto frameBytes = static_cast< size_t >(width) * height * 4;
 
 		std::vector< std::filesystem::path > files(frameCount);
 		std::vector< uint8_t > written(frameCount, 0);
 
 		const auto encode = [&] (size_t index) {
-			auto & frame = m_frames[index];
+			auto & frame = frames[index];
 
 			std::stringstream filename;
-			filename << m_stem;
+			filename << stem;
 
-			if ( m_temporal )
+			if ( temporal )
 			{
 				filename << '-' << index;
 			}
 
 			filename << ".png";
 
-			files[index] = m_directory / IO::u8path(filename.str());
+			files[index] = directory / IO::u8path(filename.str());
 
 			const auto * pointer = frame.stagingBuffer->mapMemoryAs< uint8_t >();
 
@@ -491,7 +513,7 @@ namespace EmEn::Graphics
 			}
 
 			Pixmap< uint8_t > pixmap;
-			const bool copied = pixmap.initialize(m_width, m_height, ChannelMode::RGBA, std::span< const uint8_t >{pointer, frameBytes});
+			const bool copied = pixmap.initialize(width, height, ChannelMode::RGBA, std::span< const uint8_t >{pointer, frameBytes});
 
 			frame.stagingBuffer->unmapMemory();
 
@@ -500,7 +522,7 @@ namespace EmEn::Graphics
 				return;
 			}
 
-			if ( m_swapRedBlue )
+			if ( swapRedBlue )
 			{
 				pixmap = Processor< uint8_t >::swapChannels(pixmap, false);
 			}
@@ -525,9 +547,9 @@ namespace EmEn::Graphics
 		}
 
 		/* The metadata of a temporal capture: everything that moves a pixel from one frame to the next. */
-		if ( result.error.empty() && m_temporal )
+		if ( result.error.empty() && temporal )
 		{
-			const auto jsonPath = m_directory / IO::u8path(std::to_string(m_stem) + ".json");
+			const auto jsonPath = directory / IO::u8path(std::to_string(stem) + ".json");
 			std::ofstream json{jsonPath};
 
 			if ( !json.is_open() )
@@ -538,18 +560,18 @@ namespace EmEn::Graphics
 			{
 				json << std::setprecision(9);
 				json << "{\n";
-				json << "\t\"stem\": " << m_stem << ",\n";
+				json << "\t\"stem\": " << stem << ",\n";
 				json << "\t\"frameCount\": " << frameCount << ",\n";
-				json << "\t\"width\": " << m_width << ",\n";
-				json << "\t\"height\": " << m_height << ",\n";
+				json << "\t\"width\": " << width << ",\n";
+				json << "\t\"height\": " << height << ",\n";
 				json << "\t\"frames\": [\n";
 
-				const auto origin = m_frames.front().recordTime;
+				const auto origin = frames.front().recordTime;
 				auto previous = origin;
 
 				for ( size_t index = 0; index < frameCount; ++index )
 				{
-					const auto & frame = m_frames[index];
+					const auto & frame = frames[index];
 					const auto & meta = frame.metadata;
 					const auto timeMS = std::chrono::duration< double, std::milli >(frame.recordTime - origin).count();
 					const auto deltaMS = std::chrono::duration< double, std::milli >(frame.recordTime - previous).count();
@@ -565,7 +587,7 @@ namespace EmEn::Graphics
 					json << "\t\t\t\"jitterNDC\": ";
 					writeArray(json, meta.jitterNDC);
 					json << ",\n";
-					json << "\t\t\t\"jitterPixels\": [" << meta.jitterNDC[0] * 0.5F * static_cast< float >(m_width) << ", " << meta.jitterNDC[1] * 0.5F * static_cast< float >(m_height) << "],\n";
+					json << "\t\t\t\"jitterPixels\": [" << meta.jitterNDC[0] * 0.5F * static_cast< float >(width) << ", " << meta.jitterNDC[1] * 0.5F * static_cast< float >(height) << "],\n";
 					json << "\t\t\t\"cameraPosition\": ";
 					writeArray(json, meta.cameraPosition);
 					json << ",\n";
@@ -598,9 +620,10 @@ namespace EmEn::Graphics
 			result.success = true;
 		}
 
-		const std::scoped_lock lock{m_access};
+		/* The staging buffers are released before the result is published, as the capture's last act. */
+		frames.clear();
 
-		m_frames.clear();
+		const Base::MutexLock lock{m_access};
 
 		this->publish(std::move(result));
 	}
@@ -614,7 +637,7 @@ namespace EmEn::Graphics
 		m_cancelled = false;
 		m_wantsFrames.store(false, std::memory_order_release);
 
-		m_completion.notify_all();
+		m_completion.notifyAll();
 	}
 
 	bool

@@ -31,7 +31,6 @@
 #include <cstdint>
 #include <deque>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
@@ -41,6 +40,7 @@
 /* Local inclusions for usages. */
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Math/CartesianFrame.hpp"
+#include "Mutex.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -240,7 +240,7 @@ namespace EmEn::Graphics::RenderTarget
 			 * @brief Removes the front job (its atlas retired behind the frames in flight) and makes the next one the bake
 			 * subject. Call it under m_jobsAccess, on the render thread, with a job queued.
 			 */
-			void retireFrontJob () noexcept;
+			void retireFrontJob () noexcept EMEN_REQUIRES(m_jobsAccess);
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateVideoDeviceProperties() */
 			void updateVideoDeviceProperties (float fovOrNear, float distanceOrFar, bool isOrthographicProjection) noexcept override;
@@ -293,11 +293,11 @@ namespace EmEn::Graphics::RenderTarget
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;
 			ViewMatrices2DUBO m_viewMatrices;
 			Base::Math::CartesianFrame< float > m_worldCoordinates;
-			std::deque< Job > m_jobs;
-			std::vector< std::weak_ptr< ImposterAtlas > > m_bakedAtlases;
+			mutable Base::Mutex m_jobsAccess;
+			std::deque< Job > m_jobs EMEN_GUARDED_BY(m_jobsAccess);
+			std::vector< std::weak_ptr< ImposterAtlas > > m_bakedAtlases EMEN_GUARDED_BY(m_jobsAccess);
 			/** @brief The renderer's (set by onCreate(), non-owning: the renderer outlives its targets). */
 			Vulkan::DeferredDestructor * m_deferredDestructor{nullptr};
-			mutable std::mutex m_jobsAccess;
 			std::atomic_bool m_hasJobs{false};
 			bool m_isCreated{false};
 	};

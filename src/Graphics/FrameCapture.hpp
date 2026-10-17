@@ -30,11 +30,9 @@
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <vector>
 
@@ -42,6 +40,8 @@
 #include "volk.h"
 
 /* Local inclusions for usages. */
+#include "ConditionVariable.hpp"
+#include "Mutex.hpp"
 #include "ThreadPool.hpp"
 
 /* Forward declarations. */
@@ -266,7 +266,7 @@ namespace EmEn::Graphics
 			 * @brief Publishes the result and wakes the waiter. The lock must be held.
 			 * @param result The result.
 			 */
-			void publish (Result && result) noexcept;
+			void publish (Result && result) noexcept EMEN_REQUIRES(m_access);
 
 			/**
 			 * @brief Returns whether no recorded copy of the capture can still be read or written by the GPU. The lock
@@ -275,34 +275,34 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool framesDrained () const noexcept;
+			bool framesDrained () const noexcept EMEN_REQUIRES(m_access);
 
 			/**
 			 * @brief Finishes a cancelled capture once its frames are drained. The lock must be held.
 			 * @return bool True when the capture was released.
 			 */
-			bool releaseIfCancelledAndDrained () noexcept;
+			bool releaseIfCancelledAndDrained () noexcept EMEN_REQUIRES(m_access);
 
-			std::vector< CapturedFrame > m_frames;
+			mutable Base::Mutex m_access;
+			Base::ConditionVariable m_completion;
+			std::vector< CapturedFrame > m_frames EMEN_GUARDED_BY(m_access);
 			std::shared_ptr< Base::ThreadPool > m_threadPool;
-			std::filesystem::path m_directory;
-			Result m_result;
-			mutable std::mutex m_access;
-			std::condition_variable m_completion;
-			int64_t m_stem{0};
+			std::filesystem::path m_directory EMEN_GUARDED_BY(m_access);
+			Result m_result EMEN_GUARDED_BY(m_access);
+			int64_t m_stem EMEN_GUARDED_BY(m_access){0};
 			/* The last stem handed out: a stem is never reused within a process. */
-			int64_t m_lastStem{0};
-			uint32_t m_width{0};
-			uint32_t m_height{0};
-			uint32_t m_nextFrame{0};
+			int64_t m_lastStem EMEN_GUARDED_BY(m_access){0};
+			uint32_t m_width EMEN_GUARDED_BY(m_access){0};
+			uint32_t m_height EMEN_GUARDED_BY(m_access){0};
+			uint32_t m_nextFrame EMEN_GUARDED_BY(m_access){0};
 			/* Written under m_access; atomic only so needsFrames() can read it lock-free from the rendering thread. */
 			std::atomic< State > m_state{State::Idle};
 			std::atomic_bool m_wantsFrames{false};
-			bool m_swapRedBlue{false};
-			bool m_temporal{false};
-			bool m_resultReady{false};
+			bool m_swapRedBlue EMEN_GUARDED_BY(m_access){false};
+			bool m_temporal EMEN_GUARDED_BY(m_access){false};
+			bool m_resultReady EMEN_GUARDED_BY(m_access){false};
 			/* The waiter gave up: release the frames once the GPU is done with them, write nothing, publish nothing. */
-			bool m_cancelled{false};
+			bool m_cancelled EMEN_GUARDED_BY(m_access){false};
 			/* NOTE: LAST (Ave Robustus II): the file writer reads the members above through `this`; destroyed first, its
 			 * handle waits for it (writing is not interrupted: the files of a capture are written whole). */
 			Base::TaskHandle m_writer;

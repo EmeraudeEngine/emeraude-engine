@@ -27,7 +27,6 @@
 #include "SharedUBOManager.hpp"
 
 /* STL inclusions. */
-#include <mutex>
 
 /* Local inclusions. */
 #include "Tracer.hpp"
@@ -47,7 +46,7 @@ namespace EmEn::Graphics
 		 * its whole material, which silently removes the sub-meshes using it from the scene.
 		 * The hardware buffer creation is serialized as a consequence: this is accepted, it happens
 		 * once per distinct identifier at load time and never in the rendering path. */
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		if ( const auto sharedUniformBufferIt = m_sharedUniformBuffers.find(name); sharedUniformBufferIt != m_sharedUniformBuffers.cend() )
 		{
@@ -70,7 +69,7 @@ namespace EmEn::Graphics
 	std::shared_ptr< SharedUniformBuffer >
 	SharedUBOManager::createSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount, uint32_t frameCount) noexcept
 	{
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		if ( m_sharedUniformBuffers.contains(name) )
 		{
@@ -94,7 +93,7 @@ namespace EmEn::Graphics
 	std::shared_ptr< SharedUniformBuffer >
 	SharedUBOManager::createSharedUniformBuffer (const std::string & name, const SharedUniformBuffer::descriptor_set_creator_t & descriptorSetCreator, uint32_t uniformBlockSize, uint32_t maxElementCount, uint32_t frameCount) noexcept
 	{
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		if ( m_sharedUniformBuffers.contains(name) )
 		{
@@ -118,7 +117,7 @@ namespace EmEn::Graphics
 	std::shared_ptr< SharedUniformBuffer >
 	SharedUBOManager::getSharedUniformBuffer (const std::string & name) const noexcept
 	{
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		const auto sharedUniformBufferIt = m_sharedUniformBuffers.find(name);
 
@@ -137,7 +136,7 @@ namespace EmEn::Graphics
 	{
 		/* NOTE: The erasure is performed here instead of delegating to the overload taking a name: the
 		 * lock is not recursive, so delegating under it would deadlock. */
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		for ( auto sharedUniformBufferIt = m_sharedUniformBuffers.begin(); sharedUniformBufferIt != m_sharedUniformBuffers.end(); ++sharedUniformBufferIt )
 		{
@@ -155,7 +154,7 @@ namespace EmEn::Graphics
 	bool
 	SharedUBOManager::destroySharedUniformBuffer (const std::string & name) noexcept
 	{
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		const auto sharedUniformBufferIt = m_sharedUniformBuffers.find(name);
 
@@ -187,7 +186,7 @@ namespace EmEn::Graphics
 	bool
 	SharedUBOManager::onTerminate () noexcept
 	{
-		const std::scoped_lock lock{m_access};
+		const Base::MutexLock lock{m_access};
 
 		m_sharedUniformBuffers.clear();
 
