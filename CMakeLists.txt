@@ -438,7 +438,8 @@ if ( EMERAUDE_ENABLE_TSAN )
 	)
 endif ()
 
-if ( ( EMERAUDE_ENABLE_ASAN OR EMERAUDE_ENABLE_LSAN ) AND NOT MSVC )
+# Leak detection exists on Linux only (AppleClang has no LeakSanitizer, MSVC neither): emeraude-base README.md § Options.
+if ( ( EMERAUDE_ENABLE_ASAN OR EMERAUDE_ENABLE_LSAN ) AND NOT MSVC AND NOT APPLE )
 	message("[EmeraudeEngine] Use env variable : LSAN_OPTIONS=\"suppressions=lsan_suppressions.txt\"")
 
 	file(

@@ -387,6 +387,15 @@ namespace EmEn::Console
 			bool onTerminate () noexcept override;
 
 			/**
+			 * @brief Forgets every registered object, and clears the console back-pointer of each one this console holds.
+			 * @note ⚠️ Both onTerminate() and the destructor go through it. onTerminate() used to clear the map alone: an
+			 * object registered here kept its back-pointer, and destroyed after the console (Core: its console is a
+			 * member, its ControllableTrait a base) called remove() on the dead console — a heap-use-after-free on
+			 * MSVC, whose std::map keeps its head node on the heap (found by AddressSanitizer on Windows, 2026-10-17).
+			 */
+			void detachAll () noexcept;
+
+			/**
 			 * @brief Checks and execute built-in console commands such as "help".
 			 * @param command A reference to a string holding the raw command.
 			 * @param outputs A writable reference to a vector of console outputs.

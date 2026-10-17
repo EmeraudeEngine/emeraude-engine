@@ -24,4 +24,11 @@
 - **asio error codes: the out-parameter only (`ASIO_NO_DEPRECATED`, 2026-09-30)** — the synchronous asio calls return
   `void`; every setup step reads its `ec` (a failed `reuse_address`, `SO_SNDTIMEO` or `TCP_NODELAY` is a warning, no
   longer overwritten or dropped); a best-effort teardown close says so in a comment
+- **The console clears every back-pointer it holds, on BOTH ends of its life (2026-10-17)** — `Controller::onTerminate()`
+  and `~Controller()` go through one `detachAll()`: it sets `m_console = nullptr` on each registered object this console
+  holds, then empties the map. `onTerminate()` used to clear the map alone: `Core` (a `ControllableTrait` by a private
+  base, registered with its own member `m_consoleController`) kept its back-pointer; the member died first, then the
+  base's destructor called `remove()` on the dead controller. MSVC's `std::map` keeps its head node on the heap: a
+  heap-use-after-free under ASan (Windows, `--load-demo default`, at exit); libstdc++ / libc++ embed the header in the
+  object, so Linux and macOS stayed silent — undefined behaviour on the three OS all the same.
 - **AI Runtime Control** — See [`docs/ai-runtime-control.md`](../../ai-runtime-control.md) for the complete AI operator reference

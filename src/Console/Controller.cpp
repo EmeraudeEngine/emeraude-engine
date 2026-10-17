@@ -255,12 +255,18 @@ namespace EmEn::Console
 			m_remoteListener.reset();
 		}
 
-		m_consoleObjects.clear();
+		this->detachAll();
 
 		return true;
 	}
 
 	Controller::~Controller ()
+	{
+		this->detachAll();
+	}
+
+	void
+	Controller::detachAll () noexcept
 	{
 		for ( auto * controllable : m_consoleObjects | std::views::values )
 		{
@@ -269,6 +275,8 @@ namespace EmEn::Console
 				controllable->m_console = nullptr;
 			}
 		}
+
+		m_consoleObjects.clear();
 	}
 
 	bool
