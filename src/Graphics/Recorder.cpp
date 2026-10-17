@@ -335,10 +335,35 @@ namespace EmEn::Graphics
 			m_finishingSessions.clear();
 		}
 
-		/* Force-join all background encoding sessions at shutdown, outside the lock: they were taken out under it. */
+		/* Force-join all background encoding sessions at shutdown, outside the lock: they were taken out under it.
+		 * NOTE: A rush is always completed, never cut (owner decision, 2026-10-17): a quit right after a software rush
+		 * waits for its encode (12.7 s measured on an Apple M6 at 2560x1440). The wait is announced, then timed. */
 		for ( auto & session : finishingSessions )
 		{
+			if ( session->finished.load(std::memory_order_acquire) )
+			{
+				session->encodingThread.join();
+
+				continue;
+			}
+
+			size_t framesLeft = 0;
+
+			{
+				const Base::MutexLock lock{session->queueMutex};
+
+				framesLeft = session->frameQueue.size();
+			}
+
+			TraceInfo{ClassId} << "The shutdown waits for the rush " << IO::toU8String(session->outputPath) << " to finish encoding: " << framesLeft << " captured frame(s) still queued (the file is completed, never cut).";
+
+			const auto waitStart = std::chrono::steady_clock::now();
+
 			session->encodingThread.join();
+
+			const auto waited = std::chrono::duration< double >(std::chrono::steady_clock::now() - waitStart).count();
+
+			TraceInfo{ClassId} << "The rush " << IO::toU8String(session->outputPath) << " finished encoding after " << waited << " s of shutdown wait.";
 		}
 
 		finishingSessions.clear();

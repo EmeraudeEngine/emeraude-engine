@@ -86,6 +86,13 @@ the flush) and keeps draining in background after the recording stops. Never rei
 `VPX_DL_REALTIME` (a libvpx deadline constant, not a recorder mode — the realtime notion was
 removed from this recorder entirely).
 
+**A quit waits for the rush (owner decision, 2026-10-17): the file is completed, never cut.** The recorder's
+`onTerminate()` takes the sessions still encoding out under its lock and joins them outside it; an unfinished one is
+announced first — `The shutdown waits for the rush <file> to finish encoding: N captured frame(s) still queued` —
+then timed (`finished encoding after X s of shutdown wait`). Measured: 12.7 s on an Apple M6 for a 5 s software rush
+at 2560x1440 (~7 FPS of encode); 0.23 s on the Linux workstation (its CPU keeps pace, the wait is the flush). The
+hardware H.265 path is joined at the stop, it never reaches this wait.
+
 ### Adaptive encoder speed (real frames beat encoding effort)
 Software VP9 at maximum effort cannot hold 30 FPS at high resolution (measured Aug 2026:
 cpuUsed=1 at 2880×1620 ≈ 6 real FPS → 4 frames out of 5 were CFR duplicates — unusable rush).
