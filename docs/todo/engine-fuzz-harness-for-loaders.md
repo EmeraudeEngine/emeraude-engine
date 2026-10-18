@@ -22,7 +22,10 @@ malformed input during the 2026 Ave robustus plan, then clean multi-million-run 
 - 2026-10-18, owner decisions: split each loader into an ANALYSIS (bytes → plain data, no resource) and a
   materialization, and fuzz the analysis. WAD done: `WAD::parse()` (`WADParser.hpp/.cpp`), `src/Fuzzing/fuzz_wad.cpp`,
   `src/Fuzzing/build-fuzzers.sh` (see `docs/subsystems/scenes-loaders/03-implemented-loaders/04-wadloader.md`).
-  Next: FBX, USD, glTF (the largest), one per lot, each verified identical on its demos.
+  FBX done the same day: `FBX::analyse()` / `FBX::analyseClipsOnly()` (`FBXParser.hpp/.cpp`), `src/Fuzzing/fuzz_fbx.cpp`;
+  three campaigns (140 M executions), two causes fixed — the ufbx memory ceiling and the animation keyframe budget
+  (see `docs/subsystems/scenes-loaders/03-implemented-loaders/03-fbxloader.md`).
+  Next: USD, glTF (the largest), one per lot, each verified identical on its demos.
 
 ## What remains
 

@@ -155,6 +155,12 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   with it, unchanged — `pro-bounds-constant-array-index` ×5 (the grey palette fill, the palette lookups and a corner index,
   bounded as above) and `pro-type-reinterpret-cast` ×1 (`readName8()`, a WAD name). `WADLoader.cpp` keeps the file
   read's cast.
+- **FBX split (2026-10-18)** — the FBX analysis moved verbatim to `FBXParser.cpp` (`FBX::analyse()`,
+  `FBX::analyseClipsOnly()`): its findings moved with it — `FBXLoader.cpp` had 195 `pro-type-union-access` and 7
+  `pro-bounds-constant-array-index`; `FBXParser.cpp` + `FBXLoader.cpp` now have 188 (185 + 3: ufbx's vector, matrix and
+  string types are unions, read member by member — 4 of them in the two new animation-stack warnings) and 7 (4 + 3: the joint / weight arrays of a vertex and the two colour-space
+  slots of a texture, indexed by bounded loop counters), plus the loader's `Resources::Manager &` member. The one new
+  finding (an `operator+` chain building a clip's resource name) was fixed with `String::concatenate()`.
 
 ### `src/Net` (2026-09-30)
 

@@ -22,6 +22,7 @@
  * https://github.com/EmeraudeEngine/emeraude-engine
  *
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
+ */
 
 /*
  * libFuzzer target for the WAD loader's analysis (Ave Robustus II P-W, gap 7, 2026-10-18): the whole parse of a WAD —

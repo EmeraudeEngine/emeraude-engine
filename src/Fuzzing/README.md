@@ -8,8 +8,9 @@ with every validation it carries.
 | Target | Analysis | Since |
 |---|---|---|
 | `fuzz_wad` | `Scenes/Loaders/WADParser.cpp`, `WAD::parse()` | 2026-10-18 |
+| `fuzz_fbx` | `Scenes/Loaders/FBXParser.cpp`, `FBX::analyse()` + `FBX::analyseClipsOnly()` (ufbx linked from the external dependencies) | 2026-10-18 |
 
-FBX, USD and glTF follow, one per lot (engine item `engine-fuzz-harness-for-loaders`).
+USD and glTF follow, one per lot (engine item `engine-fuzz-harness-for-loaders`).
 
 ## Build
 
@@ -28,6 +29,9 @@ NEVER enter this public repository (`src/Fuzzing/*.corpus/` is git-ignored). Der
 (or use Freedoom's): one map's 11 lumps with `PLAYPAL`, `PNAMES`, `TEXTURE1` and a few flats between `F_START` /
 `F_END` — about 100 KB, fast per execution (a whole 12 MB IWAD is not).
 
+FBX: the test files of the ufbx repository (`data/*.fbx` under 64 KB: 567 files, binary and ASCII, skins, animations,
+materials) make a good local corpus. A Mixamo export (the Paladin) is not ours to publish either: local seeds only.
+
 ## Run
 
 ```bash
@@ -35,7 +39,7 @@ src/Fuzzing/build/fuzz_wad src/Fuzzing/fuzz_wad.corpus -fork=16 -max_total_time=
 	-rss_limit_mb=2048 -timeout=10 -close_fd_mask=3 -artifact_prefix=src/Fuzzing/build/
 ```
 
-`-close_fd_mask=3` silences the Tracer (every refusal is traced).
+`-close_fd_mask=3` silences the Tracer (every refusal is traced). `fuzz_fbx` runs the same way with `-max_len=131072`.
 
 ## Campaigns
 
@@ -43,3 +47,12 @@ src/Fuzzing/build/fuzz_wad src/Fuzzing/fuzz_wad.corpus -fork=16 -max_total_time=
   2 OOM + 1 timeout, ONE cause — `TEXTURE1` widths and heights used as declared (32 768 x 32 768 in a 108 KB file: 4 GB
   of indexes, then 16 GB of RGBA; 21 248 x 12 887 took 17 s to compose). Fixed (owner decision): 4096 per side and 64 M
   composed pixels per map, a refused texture skipped like a missing one; the three reproducers run in 37 ms, 75 MB.
+- 2026-10-18, `fuzz_wad`, second campaign (10 min, 16 forks): 690 k executions, 0 finding.
+- 2026-10-18, `fuzz_fbx`, first campaign (10 min, 16 forks, 567 ufbx test files): 39.7 M executions, 332 OOM
+  reproducers, ONE cause in ufbx — a binary array allocated at its declared size (50 KB asking for 14 GB). Fixed (owner
+  decision): each ufbx allocator capped at max(256 MiB, 16 x the file size).
+- 2026-10-18, `fuzz_fbx`, second campaign: 49.2 M executions, 12 OOM, ONE cause in the analysis — the 30 Hz animation
+  sampling sized on the declared stack duration (up to 10^12 samples; a non-finite duration was undefined behaviour).
+  Fixed (owner decision): a stack beyond 4 M keyframes or of a non-finite range is skipped. The 344 reproducers run at
+  180 MB peak.
+- 2026-10-18, `fuzz_fbx`, third campaign: 51.1 M executions, 0 finding.

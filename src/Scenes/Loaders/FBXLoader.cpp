@@ -27,19 +27,17 @@
 #include "FBXLoader.hpp"
 
 /* STL inclusions. */
-#include <algorithm>
-#include <cmath>
-#include <cstring>
+#include <array>
 #include <memory>
-#include <ranges>
+#include <optional>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 /* Third-party inclusions. */
 #include <ufbx/ufbx.h>
 
 /* Local inclusions. */
+#include "FBXParser.hpp"
 #include "Animations/AnimationClipResource.hpp"
 #include "Animations/SkeletonResource.hpp"
 #include "SceneData.hpp"
@@ -53,240 +51,23 @@
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "IO/IO.hpp"
-#include "Animation/AnimationChannel.hpp"
-#include "Animation/AnimationClip.hpp"
-#include "Animation/Joint.hpp"
-#include "Animation/Skeleton.hpp"
-#include "Animation/Skin.hpp"
-#include "Math/CartesianFrame.hpp"
-#include "Math/Matrix.hpp"
-#include "Math/Quaternion.hpp"
-#include "Math/Vector.hpp"
-#include "PixelFactory/Color.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/StreamIO.hpp"
 #include "VertexFactory/Shape.hpp"
 #include "Tracer.hpp"
 
-namespace
-{
-	using namespace EmEn;
-	using namespace EmEn::Base::Math;
-	using namespace EmEn::Base::PixelFactory;
-
-	/* Convert a ufbx 3x4 affine matrix (column-major) into the engine's
-     * 4x4 column-major Matrix. The implicit last row is (0, 0, 0, 1). */
-	Matrix< 4, float >
-	convertUfbxMatrix (const ufbx_matrix & m) noexcept
-	{
-		Matrix< 4, float > result;
-
-		result[0]  = static_cast< float >(m.m00);
-		result[1]  = static_cast< float >(m.m10);
-		result[2]  = static_cast< float >(m.m20);
-		result[3]  = 0.0F;
-
-		result[4]  = static_cast< float >(m.m01);
-		result[5]  = static_cast< float >(m.m11);
-		result[6]  = static_cast< float >(m.m21);
-		result[7]  = 0.0F;
-
-		result[8]  = static_cast< float >(m.m02);
-		result[9]  = static_cast< float >(m.m12);
-		result[10] = static_cast< float >(m.m22);
-		result[11] = 0.0F;
-
-		result[12] = static_cast< float >(m.m03);
-		result[13] = static_cast< float >(m.m13);
-		result[14] = static_cast< float >(m.m23);
-		result[15] = 1.0F;
-
-		return result;
-	}
-
-	/* Detect a pixmap format from a texture filename. ufbx doesn't provide a MIME
-	 * type like glTF does, so we dispatch on the file extension. Supports the same
-	 * formats as the engine's PixelFactory (Targa, PNG, JPEG). */
-	Pixmap< uint8_t >::Format
-	filenameToPixmapFormat (std::string_view filename) noexcept
-	{
-		if ( filename.size() < 4 )
-		{
-			return Pixmap< uint8_t >::Format::None;
-		}
-
-		auto endsWith = [filename] (std::string_view suffix) noexcept {
-			if ( filename.size() < suffix.size() )
-			{
-				return false;
-			}
-
-			for ( size_t i = 0; i < suffix.size(); ++i )
-			{
-				const auto a = filename[filename.size() - suffix.size() + i];
-				const auto b = suffix[i];
-				const auto lowerA = (a >= 'A' && a <= 'Z') ? static_cast< char >(a + 32) : a;
-
-				if ( lowerA != b )
-				{
-					return false;
-				}
-			}
-
-			return true;
-		};
-
-		if ( endsWith(".png") )
-		{
-			return Pixmap< uint8_t >::Format::PNG;
-		}
-
-		if ( endsWith(".jpg") || endsWith(".jpeg") )
-		{
-			return Pixmap< uint8_t >::Format::Jpeg;
-		}
-
-		if ( endsWith(".tga") )
-		{
-			return Pixmap< uint8_t >::Format::Targa;
-		}
-
-		return Pixmap< uint8_t >::Format::None;
-	}
-
-	/* Helper: extract a CartesianFrame from a ufbx_node's local transform.
-	 * ufbx already applied target_axes / target_unit_meters conversions when
-	 * the scene was loaded, so the local_transform is expressed in engine
-	 * conventions (right-handed Y-up, meters). */
-	CartesianFrame< float >
-	extractFrameFromNode (const ufbx_node & node) noexcept
-	{
-		const auto & trs = node.local_transform;
-
-		/* Rotation: quaternion (x, y, z, w) → rotation matrix (column-major). */
-		const auto qx = static_cast< float >(trs.rotation.x);
-		const auto qy = static_cast< float >(trs.rotation.y);
-		const auto qz = static_cast< float >(trs.rotation.z);
-		const auto qw = static_cast< float >(trs.rotation.w);
-
-		const auto xx = qx * qx;
-		const auto yy = qy * qy;
-		const auto zz = qz * qz;
-		const auto xy = qx * qy;
-		const auto xz = qx * qz;
-		const auto yz = qy * qz;
-		const auto wx = qw * qx;
-		const auto wy = qw * qy;
-		const auto wz = qw * qz;
-
-		Matrix< 4, float > rotMatrix;
-		rotMatrix[0]  = 1.0F - (2.0F * (yy + zz));
-		rotMatrix[1]  = 2.0F * (xy + wz);
-		rotMatrix[2]  = 2.0F * (xz - wy);
-		rotMatrix[3]  = 0.0F;
-		rotMatrix[4]  = 2.0F * (xy - wz);
-		rotMatrix[5]  = 1.0F - (2.0F * (xx + zz));
-		rotMatrix[6]  = 2.0F * (yz + wx);
-		rotMatrix[7]  = 0.0F;
-		rotMatrix[8]  = 2.0F * (xz + wy);
-		rotMatrix[9]  = 2.0F * (yz - wx);
-		rotMatrix[10] = 1.0F - (2.0F * (xx + yy));
-		rotMatrix[11] = 0.0F;
-		rotMatrix[12] = 0.0F;
-		rotMatrix[13] = 0.0F;
-		rotMatrix[14] = 0.0F;
-		rotMatrix[15] = 1.0F;
-
-		CartesianFrame< float > frame(rotMatrix, {
-			static_cast< float >(trs.scale.x),
-			static_cast< float >(trs.scale.y),
-			static_cast< float >(trs.scale.z)
-		});
-
-		frame.setPosition({
-			static_cast< float >(trs.translation.x),
-			static_cast< float >(trs.translation.y),
-			static_cast< float >(trs.translation.z)
-		});
-
-		return frame;
-	}
-
-	/* Helper: build a sanitized node name with fallback to the node's element id. */
-	std::string
-	buildNodeName (const std::string & prefix, const ufbx_node & node) noexcept
-	{
-		std::string name;
-		name.reserve(prefix.size() + 6 + node.name.length);
-		name = prefix;
-		name += "Node/";
-
-		if ( node.name.length == 0 )
-		{
-			name += std::to_string(node.element_id);
-		}
-		else
-		{
-			name.append(node.name.data, node.name.length);
-		}
-
-		return name;
-	}
-}
-
 namespace EmEn::Scenes::Loaders
 {
-	using namespace Base::Animation;
-	using namespace Base::Math;
 	using namespace Base::PixelFactory;
-	using namespace Base::VertexFactory;
 	using namespace Graphics;
 	using namespace Graphics::Geometry;
 
 	bool
 	FBXLoader::load (const std::filesystem::path & filepath, SceneData & output) noexcept
 	{
-		m_resourcePrefix = "FBX:" + Base::IO::toU8String(filepath.stem()) + "/";
-
-		/* Reset the per-asset state: a loader instance is reusable across files, and every
-		 * one of these collections is indexed against the CURRENT scene. Carrying them over
-		 * mixes two assets' index spaces. */
-		m_images.clear();
-		m_textures.clear();
-		m_materials.clear();
-		m_meshes.clear();
-		m_shapes.clear();
-		m_skeletons.clear();
-		m_skins.clear();
-		m_meshToSkinIndex.clear();
-		m_animationClips.clear();
-		m_skinJointNodes.clear();
-		m_skinJointNodeIndices.clear();
-
 		/* ufbx load options: bring the scene directly into engine conventions
-		 * so no axis/unit post-processing is needed downstream. */
-		ufbx_load_opts opts{};
-		opts.target_axes = ufbx_axes_right_handed_y_up;
-		opts.target_unit_meters = 1.0;
-		/* MODIFY_GEOMETRY bakes the axis conversion into vertex positions and
-		 * into `cluster->geometry_to_bone`. Static meshes and bind-pose skinning
-		 * are correct. Animated skinning currently exhibits a residual
-		 * coord-space mismatch between the bone local_transform (FBX-native,
-		 * adjust_pre-compensated) and the evaluated animation curves — see
-		 * AGENTS.md for the known limitation. */
-		opts.space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
-		/* An FBX node can carry a "geometry transform" that affects its attached mesh
-		 * but not its children. Left at the default PRESERVE, that transform lives only
-		 * in `ufbx_node.geometry_transform` and a loader reading `local_transform` alone
-		 * places the mesh WRONG, silently. 3ds Max and Maya emit them routinely.
-		 * MODIFY_GEOMETRY bakes it into the vertices — the same strategy already used
-		 * for the axis conversion above — and falls back to helper nodes only when the
-		 * same mesh is instanced several times with different geometry transforms. */
-		opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY;
-		opts.load_external_files = true;
-		opts.generate_missing_normals = true;
-
+		 * so no axis/unit post-processing is needed downstream (FBX::setLoadOptions()). */
 		/* NOTE: ufbx opens the path itself: a FIFO blocked that open forever (2026-10-18). */
 		if ( !Base::IO::isReadableRegularFile(filepath) )
 		{
@@ -294,6 +75,9 @@ namespace EmEn::Scenes::Loaders
 
 			return false;
 		}
+
+		ufbx_load_opts opts{};
+		FBX::setLoadOptions(opts, true, Base::IO::filesize(filepath));
 
 		ufbx_error error{};
 		ufbx_scene * scene = ufbx_load_file(Base::IO::toU8String(filepath).c_str(), &opts, &error);
@@ -311,406 +95,166 @@ namespace EmEn::Scenes::Loaders
 		/* RAII cleanup for the ufbx scene. */
 		const std::unique_ptr< ufbx_scene, decltype(&ufbx_free_scene) > sceneGuard{scene, ufbx_free_scene};
 
-		const auto parentPath = filepath.parent_path();
+		/* ---- Analysis: the whole conversion, without any resource (fuzz_fbx covers it). ---- */
+		auto asset = FBX::analyse(*scene, "FBX:" + Base::IO::toU8String(filepath.stem()) + "/", filepath.parent_path(), m_options);
 
-		/* Loading pipeline: Images → Materials → Meshes → Skins → Animations → Node descriptors.
-		 * Step 1 scope: meshes + node descriptors only. Images, materials, skins
-		 * and animations are stubbed — meshes get the default PBR material. */
+		/* ---- Images: one per FBX texture, by index (the default image when it cannot be made). ---- */
+		std::vector< std::shared_ptr< ImageResource > > images;
+		images.reserve(asset.images.size());
 
-		if ( !this->loadImages(*scene, filepath, parentPath) )
+		bool allImages = true;
+
+		for ( size_t textureIndex = 0; textureIndex < asset.images.size(); ++textureIndex )
 		{
-			Tracer::warning(ClassId, "Some images failed to load, continuing with defaults.");
-		}
-
-		if ( !this->loadMaterials(*scene) )
-		{
-			Tracer::warning(ClassId, "Some materials failed to load, continuing with defaults.");
-		}
-
-		if ( !this->loadMeshes(*scene, output) )
-		{
-			Tracer::error(ClassId, "Failed to load meshes !");
-
-			return false;
-		}
-
-		if ( !m_options.skipSkinning )
-		{
-			if ( scene->skin_deformers.count > 0 )
-			{
-				this->loadSkins(*scene, output);
-			}
-
-			if ( scene->anim_stacks.count > 0 )
-			{
-				this->loadAnimations(*scene, output);
-			}
-
-			/* Attach skeletal data to every renderable whose mesh was skinned
-			 * (recorded during loadMeshes in m_meshToSkinIndex). The trait
-			 * handles all runtime skinning — joint matrix upload, blending,
-			 * clip evaluation — so all we need is a single setter. */
-			for ( const auto & [meshElementId, skinIdx] : m_meshToSkinIndex )
-			{
-				const auto meshIt = m_meshes.find(meshElementId);
-
-				if ( meshIt == m_meshes.end() || meshIt->second == nullptr )
-				{
-					continue;
-				}
-
-				if ( skinIdx >= m_skeletons.size() || m_skeletons[skinIdx] == nullptr )
-				{
-					continue;
-				}
-
-				if ( auto * skeletalData = dynamic_cast< Renderable::SkeletalDataTrait * >(meshIt->second.get()) )
-				{
-					skeletalData->setSkeletalData(m_skeletons[skinIdx], m_skins[skinIdx], m_animationClips);
-				}
-			}
-		}
-
-		this->buildNodeDescriptors(*scene, output);
-
-		output.skeletons = m_skeletons;
-		output.animationClips = m_animationClips;
-		output.skinJointNodeIndices = m_skinJointNodeIndices;
-
-		return true;
-	}
-
-	bool
-	FBXLoader::loadImages (const ufbx_scene & scene, const std::filesystem::path & filepath, const std::filesystem::path & basePath) noexcept
-	{
-		m_images.resize(scene.textures.count);
-
-		bool allSuccess = true;
-
-		for ( size_t textureIndex = 0; textureIndex < scene.textures.count; ++textureIndex )
-		{
-			const ufbx_texture & tex = *scene.textures.data[textureIndex];
-
-			/* Skip non-file textures (layered, procedural, shader...) — they'd need custom resolution. */
-			if ( tex.type != UFBX_TEXTURE_FILE )
-			{
-				m_images[textureIndex] = m_resources.container< ImageResource >()->getDefaultResource();
-
-				continue;
-			}
-
-			/* ⚠️ Keyed on the INDEX, not on the name — an FBX name is not an identity, and
-			 * duplicate node/material names are the norm in that format. See buildResourceKey(). */
-			const auto name = buildResourceKey(m_resourcePrefix, "Image/", {tex.name.data, tex.name.length}, textureIndex);
+			const auto & description = asset.images[textureIndex];
 
 			std::shared_ptr< ImageResource > image;
 
-			if ( tex.content.size > 0 )
+			switch ( description.kind )
 			{
-				/* Embedded content inside the FBX binary. ufbx gives us the raw
-				 * file bytes (e.g. a PNG stream). Detect the format from the
-				 * texture filename extension, fall back to PNG if unknown. */
-				const std::string_view fname{tex.filename.data, tex.filename.length};
-				auto format = filenameToPixmapFormat(fname);
-
-				if ( format == Pixmap< uint8_t >::Format::None )
-				{
-					format = Pixmap< uint8_t >::Format::PNG;
-				}
-
-				const auto * dataPtr = static_cast< const std::byte * >(tex.content.data);
-				auto bytes = std::make_shared< std::vector< std::byte > >(dataPtr, dataPtr + tex.content.size);
-
-				/* NOTE: ufbx gives no file offset for embedded content: a released CPU copy comes back by re-parsing the
-				 * FBX for this texture (readEmbeddedTexture()), its size checked. */
-				auto source = EncodedSource::embedded(filepath, static_cast< uint32_t >(textureIndex), tex.content.size, format, &FBXLoader::readEmbeddedTexture);
-
-				image = m_resources.container< ImageResource >()
-					->getOrCreateResource(name, [bytes, format, encodedSource = std::move(source)] (auto & imageResource) {
-						Pixmap< uint8_t > pixmap;
-
-						constexpr ReadOptions options{
-							.targetChannelMode = TargetChannelMode::RGBA
-						};
-
-						if ( !StreamIO::read(*bytes, format, pixmap, options) )
-						{
-							return false;
-						}
-
-						imageResource.setEncodedSource(encodedSource);
-
-						return imageResource.load(std::move(pixmap));
-					});
-			}
-			else
-			{
-				/* External file. ufbx exposes the path relative to the loaded FBX
-				 * in `filename`; that is what the engine should resolve first.
-				 * If the FBX referenced a far-away drive, ufbx may have filled
-				 * `absolute_filename` instead — use it as a fallback.
-				 * NOTE: ufbx strings are UTF-8: IO::u8path(), never the narrow path constructor (the ANSI
-				 * code page on Windows). */
-				std::filesystem::path fullPath;
-
-				if ( tex.filename.length > 0 )
-				{
-					fullPath = basePath / Base::IO::u8path(std::string{tex.filename.data, tex.filename.length});
-				}
-				else if ( tex.absolute_filename.length > 0 )
-				{
-					fullPath = Base::IO::u8path(std::string{tex.absolute_filename.data, tex.absolute_filename.length});
-				}
-				else if ( tex.relative_filename.length > 0 )
-				{
-					fullPath = basePath / Base::IO::u8path(std::string{tex.relative_filename.data, tex.relative_filename.length});
-				}
-
-				if ( fullPath.empty() )
-				{
-					TraceWarning{ClassId} << "Texture '" << name << "' has no resolvable path, using default.";
-
-					m_images[textureIndex] = m_resources.container< ImageResource >()->getDefaultResource();
-
-					allSuccess = false;
+				case FBX::ImageKind::None :
+					images.push_back(m_resources.container< ImageResource >()->getDefaultResource());
 
 					continue;
+
+				case FBX::ImageKind::Unresolved :
+					images.push_back(m_resources.container< ImageResource >()->getDefaultResource());
+					allImages = false;
+
+					continue;
+
+				case FBX::ImageKind::Embedded :
+				{
+					/* NOTE: ufbx gives no file offset for embedded content: a released CPU copy comes back by re-parsing the
+					 * FBX for this texture (readEmbeddedTexture()), its size checked. */
+					auto source = EncodedSource::embedded(filepath, static_cast< uint32_t >(textureIndex), description.contentSize, description.format, &FBXLoader::readEmbeddedTexture);
+
+					image = m_resources.container< ImageResource >()
+						->getOrCreateResource(description.resourceName, [bytes = description.bytes, format = description.format, encodedSource = std::move(source)] (auto & imageResource) {
+							Pixmap< uint8_t > pixmap;
+
+							constexpr ReadOptions options{
+								.targetChannelMode = TargetChannelMode::RGBA
+							};
+
+							if ( !StreamIO::read(*bytes, format, pixmap, options) )
+							{
+								return false;
+							}
+
+							imageResource.setEncodedSource(encodedSource);
+
+							return imageResource.load(std::move(pixmap));
+						});
 				}
+					break;
 
-				image = m_resources.container< ImageResource >()
-					->getOrCreateResource(name, [fullPath] (auto & imageResource) {
-						Pixmap< uint8_t > pixmap;
+				case FBX::ImageKind::File :
+					image = m_resources.container< ImageResource >()
+						->getOrCreateResource(description.resourceName, [fullPath = description.path] (auto & imageResource) {
+							Pixmap< uint8_t > pixmap;
 
-						constexpr ReadOptions options{
-							.targetChannelMode = TargetChannelMode::RGBA
-						};
+							constexpr ReadOptions options{
+								.targetChannelMode = TargetChannelMode::RGBA
+							};
 
-						if ( !FileIO::read(fullPath, pixmap, options) )
-						{
-							return false;
-						}
+							if ( !FileIO::read(fullPath, pixmap, options) )
+							{
+								return false;
+							}
 
-						/* NOTE: The file itself: a released CPU copy comes back from it. */
-						imageResource.setEncodedSource(EncodedSource::file(fullPath));
+							/* NOTE: The file itself: a released CPU copy comes back from it. */
+							imageResource.setEncodedSource(EncodedSource::file(fullPath));
 
-						return imageResource.load(std::move(pixmap));
-					});
+							return imageResource.load(std::move(pixmap));
+						});
+					break;
 			}
 
 			if ( image == nullptr )
 			{
-				TraceWarning{ClassId} << "Image " << textureIndex << " ('" << name << "') failed to load, using default.";
+				TraceWarning{ClassId} << "Image " << textureIndex << " ('" << description.resourceName << "') failed to load, using default.";
 
-				m_images[textureIndex] = m_resources.container< ImageResource >()->getDefaultResource();
-				allSuccess = false;
+				image = m_resources.container< ImageResource >()->getDefaultResource();
+				allImages = false;
 			}
-			else
-			{
-				m_images[textureIndex] = std::move(image);
-			}
+
+			images.push_back(std::move(image));
 		}
 
-		return allSuccess;
-	}
-
-	bool
-	FBXLoader::loadMaterials (const ufbx_scene & scene) noexcept
-	{
-		m_materials.resize(scene.materials.count);
-		m_textures.resize(scene.textures.count);
-
-		bool allSuccess = true;
-
-		for ( size_t materialIndex = 0; materialIndex < scene.materials.count; ++materialIndex )
+		if ( !allImages )
 		{
-			const ufbx_material & fbxMaterial = *scene.materials.data[materialIndex];
+			Tracer::warning(ClassId, "Some images failed to load, continuing with defaults.");
+		}
 
-			/* ⚠️ Keyed on the INDEX, not on the name. See buildResourceKey(). */
-			const auto name = buildResourceKey(m_resourcePrefix, "Material/", {fbxMaterial.name.data, fbxMaterial.name.length}, materialIndex);
+		/* ---- Textures: created on demand, TWO slots per FBX texture selected by the colour space. ----
+		 * ⚠️ The sRGB flag is baked into the resource at creation and comes from the USAGE, not from
+		 * the asset: the same image legitimately serves as an sRGB albedo for one material and as a
+		 * linear data map for another. Caching on the texture index alone let whichever usage
+		 * resolved FIRST impose its colour space on the other. */
+		std::vector< std::array< std::shared_ptr< TextureResource::Texture2D >, 2 > > textures(asset.images.size());
 
-			/* Resolve a ufbx_texture to a Texture2D resource, creating it on demand.
-			 * Cached in m_textures by the texture's typed_id so each engine texture
-			 * is instantiated at most once, even when shared across many materials. */
-			const auto resolveTexture = [&] (const ufbx_texture * tex, bool sRGB = false) -> std::shared_ptr< TextureResource::Texture2D > {
-				if ( tex == nullptr )
-				{
-					return nullptr;
-				}
-
-				const auto texIdx = static_cast< size_t >(tex->typed_id);
-
-				if ( texIdx >= m_textures.size() )
-				{
-					return nullptr;
-				}
-
-				/* ⚠️ TWO slots per FBX texture, selected by the colour space. The sRGB flag is
-				 * baked into the resource at creation and comes from the USAGE, not from the
-				 * asset: the same image legitimately serves as an sRGB albedo for one material
-				 * and as a linear data map for another. Caching on the texture index alone let
-				 * whichever usage resolved FIRST impose its colour space on the other. */
-				const auto colourSpaceSlot = sRGB ? 1U : 0U;
-
-				if ( m_textures[texIdx][colourSpaceSlot] != nullptr )
-				{
-					return m_textures[texIdx][colourSpaceSlot];
-				}
-
-				if ( texIdx >= m_images.size() || m_images[texIdx] == nullptr )
-				{
-					return nullptr;
-				}
-
-				/* The index makes the key unique per FBX texture; the colour space stays part of
-				 * it because one texture legitimately yields two engine resources. Same
-				 * convention as the glTF and USD loaders. */
-				std::string texName = buildResourceKey(m_resourcePrefix, "Texture/", {tex->name.data, tex->name.length}, texIdx);
-				texName += sRGB ? "-srgb" : "-data";
-
-				/* NOTE: Created SYNCHRONOUSLY (the function only links the source): the colour space is set when this returns,
-				 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
-				 * docs/caution-points.md). */
-				auto texture = m_resources.container< TextureResource::Texture2D >()
-					->getOrCreateResourceSync(texName, [image = m_images[texIdx], sRGB] (auto & textureResource) {
-						if ( !textureResource.enableSRGB(sRGB) )
-						{
-							return false;
-						}
-
-						return textureResource.load(image);
-					});
-
-				m_textures[texIdx][colourSpaceSlot] = texture;
-
-				return texture;
-			};
-
-			const auto & pbr = fbxMaterial.pbr;
-
-			/* Albedo / base color (sRGB). ufbx stores the linear factor in value_real
-			 * and the tint in value_vec4; combine them into the engine's albedo. */
-			auto albedoTex = resolveTexture(pbr.base_color.texture, true);
-
-			Color< float > albedoColor{
-				static_cast< float >(pbr.base_color.value_vec4.x),
-				static_cast< float >(pbr.base_color.value_vec4.y),
-				static_cast< float >(pbr.base_color.value_vec4.z),
-				static_cast< float >(pbr.base_color.value_vec4.w > 0.0 ? pbr.base_color.value_vec4.w : 1.0)
-			};
-
-			if ( !pbr.base_color.has_value )
+		const auto resolveTexture = [&] (const std::optional< FBX::TextureSlot > & slot) -> std::shared_ptr< TextureResource::Texture2D > {
+			if ( !slot.has_value() || slot->texture >= textures.size() )
 			{
-				albedoColor = Color< float >{1.0F, 1.0F, 1.0F, 1.0F};
+				return nullptr;
 			}
 
-			/* Roughness and Metalness (linear, UNORM). */
-			auto roughnessTex = resolveTexture(pbr.roughness.texture);
+			const auto texIdx = slot->texture;
+			const auto sRGB = slot->sRGB;
+			const auto colourSpaceSlot = sRGB ? 1U : 0U;
 
-			const auto roughnessFactor = pbr.roughness.has_value
-				? static_cast< float >(pbr.roughness.value_real) : 0.5F;
-
-			auto metalnessTex = resolveTexture(pbr.metalness.texture);
-
-			const auto metalnessFactor = pbr.metalness.has_value
-				? static_cast< float >(pbr.metalness.value_real) : 0.0F;
-
-			/* Normal map (linear). */
-			auto normalTex = resolveTexture(pbr.normal_map.texture);
-
-			/* Ambient occlusion (linear). */
-			auto aoTex = resolveTexture(pbr.ambient_occlusion.texture);
-
-			/* Emission (sRGB color + linear factor). */
-			auto emissiveTex = resolveTexture(pbr.emission_color.texture, true);
-
-			Color< float > emissiveColor{
-				static_cast< float >(pbr.emission_color.value_vec3.x),
-				static_cast< float >(pbr.emission_color.value_vec3.y),
-				static_cast< float >(pbr.emission_color.value_vec3.z),
-				1.0F
-			};
-
-			const auto emissiveStrength = pbr.emission_factor.has_value
-				? static_cast< float >(pbr.emission_factor.value_real) : 0.0F;
-
-			const bool hasEmissiveColor = pbr.emission_color.has_value
-				&& (pbr.emission_color.value_vec3.x > 0.0
-					|| pbr.emission_color.value_vec3.y > 0.0
-					|| pbr.emission_color.value_vec3.z > 0.0);
-
-			/* Specular (KHR_materials_specular semantics) — read ONLY on a PBR shading model.
-			 *
-			 * ⚠️⚠️ `pbr.specular_factor` / `pbr.specular_color` are a VIEW ufbx builds over whatever
-			 * the file declares, and the SAME two fields carry two incompatible meanings:
-			 *   - on a Standard-Surface / OpenPBR / physical material they are the **dielectric
-			 *     specular weight and tint**, i.e. exactly what KHR_materials_specular scales and
-			 *     tints in the engine's F0;
-			 *   - on a legacy `FbxSurfacePhong` they are the **Phong specular highlight**, whose
-			 *     engine counterpart is the glossiness path, not F0.
-			 * Reading them blind would push an old asset's Phong highlight colour into the
-			 * dielectric F0 of every surface it touches, and nothing would report it.
-			 *
-			 * `ufbx_material::shader_type` is always defined, so the file tells us which meaning
-			 * applies. Anything ufbx cannot name — and `3DS_MAX_PBR_SPEC_GLOSS`, which is a
-			 * specular/glossiness workflow rather than an F0 scale — is left alone on purpose: the
-			 * identity is what a material that declares nothing must keep. */
-			bool specularIsDielectricF0 = false;
-
-			switch ( fbxMaterial.shader_type )
+			if ( textures[texIdx][colourSpaceSlot] != nullptr )
 			{
-				case UFBX_SHADER_OSL_STANDARD_SURFACE :
-				case UFBX_SHADER_ARNOLD_STANDARD_SURFACE :
-				case UFBX_SHADER_3DS_MAX_PHYSICAL_MATERIAL :
-				case UFBX_SHADER_3DS_MAX_PBR_METAL_ROUGH :
-				case UFBX_SHADER_GLTF_MATERIAL :
-				case UFBX_SHADER_OPENPBR_MATERIAL :
-					specularIsDielectricF0 = true;
-					break;
-
-				default :
-					break;
+				return textures[texIdx][colourSpaceSlot];
 			}
 
-			float specularFactor = 1.0F;
-			/* ⚠️ A Vector, not a Color: the factor is a MULTIPLIER and may legitimately exceed 1,
-			 * which `PixelFactory::Color` would clamp away. Same reasoning as the glTF loader. */
-			Base::Math::Vector< 3, float > specularColor{1.0F, 1.0F, 1.0F};
+			/* NOTE: Created SYNCHRONOUSLY (the function only links the source): the colour space is set when this returns,
+			 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
+			 * docs/caution-points.md). */
+			auto texture = m_resources.container< TextureResource::Texture2D >()
+				->getOrCreateResourceSync(asset.images[texIdx].textureName + (sRGB ? "-srgb" : "-data"), [image = images[texIdx], sRGB] (auto & textureResource) {
+					if ( !textureResource.enableSRGB(sRGB) )
+					{
+						return false;
+					}
 
-			if ( specularIsDielectricF0 )
-			{
-				if ( pbr.specular_factor.has_value )
-				{
-					specularFactor = static_cast< float >(pbr.specular_factor.value_real);
-				}
+					return textureResource.load(image);
+				});
 
-				if ( pbr.specular_color.has_value )
-				{
-					specularColor = Base::Math::Vector< 3, float >{
-						static_cast< float >(pbr.specular_color.value_vec3.x),
-						static_cast< float >(pbr.specular_color.value_vec3.y),
-						static_cast< float >(pbr.specular_color.value_vec3.z)
-					};
-				}
-			}
+			textures[texIdx][colourSpaceSlot] = texture;
 
-			/* Opacity (engine opacity contract). ufbx.pbr.opacity is 1.0 (fully opaque) by
-			 * default. FBX has no cutout notion: a texture-driven opacity is a grayscale
-			 * per-pixel alpha scale (rule 3), a scalar < 1 a uniform transparency (rule 1) —
-			 * both blend. The map is DATA (linear, red channel). */
-			auto opacityTex = resolveTexture(pbr.opacity.texture);
+			return texture;
+		};
 
-			const auto opacityValue = pbr.opacity.has_value
-				? static_cast< float >(pbr.opacity.value_real) : 1.0F;
+		/* ---- Materials: one per FBX material, by index (the default material when it cannot be made). ---- */
+		std::vector< std::shared_ptr< Material::Interface > > materials;
+		materials.reserve(asset.materials.size());
+
+		bool allMaterials = true;
+
+		for ( size_t materialIndex = 0; materialIndex < asset.materials.size(); ++materialIndex )
+		{
+			const auto & description = asset.materials[materialIndex];
+
+			/* NOTE: Resolved here, in this order: the members of a closure are initialized in an unspecified order. */
+			auto albedoTex = resolveTexture(description.albedoTexture);
+			auto roughnessTex = resolveTexture(description.roughnessTexture);
+			auto metalnessTex = resolveTexture(description.metalnessTexture);
+			auto normalTex = resolveTexture(description.normalTexture);
+			auto aoTex = resolveTexture(description.ambientOcclusionTexture);
+			auto emissiveTex = resolveTexture(description.emissiveTexture);
+			auto opacityTex = resolveTexture(description.opacityTexture);
 
 			auto configure = [
-				albedoTexture = std::move(albedoTex), albedoColor,
-				roughnessTexture = std::move(roughnessTex), roughnessFactor,
-				metalnessTexture = std::move(metalnessTex), metalnessFactor,
+				albedoTexture = std::move(albedoTex), albedoColor = description.albedoColor,
+				roughnessTexture = std::move(roughnessTex), roughnessFactor = description.roughnessFactor,
+				metalnessTexture = std::move(metalnessTex), metalnessFactor = description.metalnessFactor,
 				normalTexture = std::move(normalTex),
 				ambientOcclusionTexture = std::move(aoTex),
-				emissiveTexture = std::move(emissiveTex), emissiveColor, emissiveStrength, hasEmissiveColor,
-				opacityTexture = std::move(opacityTex), opacityValue,
-				specularIsDielectricF0, specularFactor, specularColor
+				emissiveTexture = std::move(emissiveTex), emissiveColor = description.emissiveColor, emissiveStrength = description.emissiveStrength, hasEmissiveColor = description.hasEmissiveColor,
+				opacityTexture = std::move(opacityTex), opacityValue = description.opacityValue,
+				specularIsDielectricF0 = description.specularIsDielectricF0, specularFactor = description.specularFactor, specularColor = description.specularColor
 			] (auto & materialResource) {
 				/* A base-colour texture and a base-colour factor MULTIPLY — that is what both
 				 * glTF (baseColorFactor) and FBX (base_color) specify. Setting the component to
@@ -796,88 +340,44 @@ namespace EmEn::Scenes::Loaders
 			};
 
 			auto material = std::static_pointer_cast< Material::Interface >(
-				m_resources.container< Material::StandardResource >()->getOrCreateResource(name, configure)
+				m_resources.container< Material::StandardResource >()->getOrCreateResource(description.resourceName, configure)
 			);
 
 			if ( material == nullptr )
 			{
-				TraceWarning{ClassId} << "Material " << materialIndex << " ('" << name << "') failed to create, using default.";
+				TraceWarning{ClassId} << "Material " << materialIndex << " ('" << description.resourceName << "') failed to create, using default.";
 
-				m_materials[materialIndex] = m_resources.container< Material::StandardResource >()->getDefaultResource();
-				allSuccess = false;
+				material = m_resources.container< Material::StandardResource >()->getDefaultResource();
+				allMaterials = false;
 			}
-			else
-			{
-				m_materials[materialIndex] = std::move(material);
-			}
+
+			materials.push_back(std::move(material));
 		}
 
-		return allSuccess;
-	}
+		if ( !allMaterials )
+		{
+			Tracer::warning(ClassId, "Some materials failed to load, continuing with defaults.");
+		}
 
-	bool
-	FBXLoader::loadMeshes (const ufbx_scene & scene, SceneData & output) noexcept
-	{
-		output.meshes.reserve(scene.meshes.count);
-
-		bool allSuccess = true;
-
-		/* ⚠️ The axis conversion is baked into the VERTEX DATA (positions and normals). A normal
-		 * needs no special case: the inverse-transpose of a diagonal ±1 matrix is the matrix itself.
-		 * The triangle winding is kept exactly as authored: the unconditional swap that used to be
-		 * declared here only compensated the engine's ORIENTATION-REVERSING projection, and that
-		 * mirror went away with the Y-up convention flip. */
-
-		/* ⚠️ Geometry and mesh resources are cached BY NAME and their content depends on the flip,
-		 * so the flip is part of the key: without it, loading the same asset twice with different
-		 * flags would serve the first variant to the second caller, silently. */
-		const auto flipKey = std::string{};
-
+		/* ---- Meshes: one renderable per FBX mesh, in scene order (NodeDescriptor::meshIndex). ---- */
 		const auto defaultMaterial = [this] () -> std::shared_ptr< Material::Interface > {
 			return m_resources.container< Material::StandardResource >()->getDefaultResource();
 		};
 
-		for ( size_t meshIndex = 0; meshIndex < scene.meshes.count; ++meshIndex )
+		/* The renderables whose geometry carries a skin, with that skin's index, for the skeletal attachment. */
+		std::vector< std::pair< std::shared_ptr< Renderable::Abstract >, size_t > > skinnedRenderables;
+
+		output.meshes.reserve(asset.meshes.size());
+
+		bool allMeshes = true;
+
+		for ( const auto & description : asset.meshes )
 		{
-			const ufbx_mesh & mesh = *scene.meshes.data[meshIndex];
+			const auto & meshName = description.meshName;
 
-			/* ⚠️⚠️ Keyed on the INDEX, not on the name. Duplicate mesh names are ordinary in FBX
-			 * (every instance of the same authored object carries it), and a key built on the name
-			 * alone hands the FIRST homonym's geometry AND material to every later one, silently.
-			 * Measured on the glTF side of the same defect: ClearCoatTest's eighteen meshes named
-			 * 'ClearCoatSampleMesh' all rendered material 0. See buildResourceKey().
-			 * NOTE: mesh.element_id — unique but unrelated to the loop order — was the previous
-			 * fallback for an unnamed mesh; the loop index is what identifies it here. */
-			const std::string_view baseName{mesh.name.data, mesh.name.length};
-
-			const auto geoName = buildResourceKey(m_resourcePrefix + flipKey, "Geometry/", baseName, meshIndex);
-			const auto meshName = buildResourceKey(m_resourcePrefix + flipKey, "Mesh/", baseName, meshIndex);
-
-			/* Count total triangles (fan triangulation: polygon with N vertices → N-2 triangles).
-			 * Vertex count = triangleCount * 3 because we emit per-corner (attribute layers
-			 * may differ per corner). A dedupe pass via ufbx_generate_indices can be added
-			 * later if the overhead becomes measurable. */
-			uint32_t totalTriangleCount = 0;
-
-			for ( size_t faceIdx = 0; faceIdx < mesh.faces.count; ++faceIdx )
-			{
-				const auto & face = mesh.faces.data[faceIdx];
-
-				if ( face.num_indices >= 3 )
-				{
-					totalTriangleCount += face.num_indices - 2;
-				}
-			}
-
-			if ( totalTriangleCount == 0 )
-			{
-				TraceWarning{ClassId} << "Mesh '" << meshName << "' has no valid triangle faces, using default.";
-
-				auto defaultMesh = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
-				m_meshes[static_cast< uint32_t >(mesh.element_id)] = defaultMesh;
-
+			const auto pushDefault = [&] () {
 				MeshDescriptor descriptor;
-				descriptor.renderable = defaultMesh;
+				descriptor.renderable = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
 				descriptor.materials = {defaultMaterial()};
 				output.meshes.push_back(std::move(descriptor));
 
@@ -886,220 +386,15 @@ namespace EmEn::Scenes::Loaders
 					m_options.onMeshLoaded(output.meshes.back());
 				}
 
-				allSuccess = false;
+				allMeshes = false;
+			};
+
+			/* No valid triangle, or an invalid shape: the analysis reported it. */
+			if ( description.shape == nullptr )
+			{
+				pushDefault();
 
 				continue;
-			}
-
-			const uint32_t totalVertexCount = totalTriangleCount * 3;
-
-			/* Material parts: each part is a subset of faces sharing the same material slot.
-			 * A single part (no split) is the common case; multi-material meshes produce
-			 * multiple parts which map to sub-geometry groups in the engine's Shape. */
-			const bool hasMaterialSplit = mesh.material_parts.count > 1;
-			const bool hasNormals = mesh.vertex_normal.exists;
-			const bool hasUV = mesh.vertex_uv.exists;
-
-			/* Skinning: use the first skin_deformer on the mesh when available.
-			 * cluster_index inside ufbx_skin_weight corresponds directly to the
-			 * joint index in the future Skeleton (loadSkins builds joints in
-			 * cluster order), so no remapping is required here. */
-			const ufbx_skin_deformer * skin = (!m_options.skipSkinning && mesh.skin_deformers.count > 0)
-				? mesh.skin_deformers.data[0] : nullptr;
-			const bool hasSkin = skin != nullptr;
-
-			auto shape = std::make_shared< Shape< float > >();
-
-			/* Allocate a per-thread triangulation buffer sized for the largest face. */
-			std::vector< uint32_t > triangulationBuffer(mesh.max_face_triangles * 3);
-
-			const bool buildSuccess = shape->build([&] (auto & groups, auto & vertices, auto & triangles) {
-				vertices.resize(totalVertexCount);
-				triangles.reserve(totalTriangleCount);
-
-				uint32_t globalVertexOffset = 0;
-
-				const size_t partCount = (mesh.material_parts.count == 0) ? 1 : mesh.material_parts.count;
-
-				for ( size_t partIdx = 0; partIdx < partCount; ++partIdx )
-				{
-					const auto groupTriangleStart = static_cast< uint32_t >(triangles.size());
-
-					/* Each material part after the first starts a new sub-geometry group. */
-					if ( hasMaterialSplit && partIdx > 0 )
-					{
-						groups.emplace_back(groupTriangleStart, 0);
-					}
-
-					/* Iterate the faces for this part (or all faces if no split). */
-					const auto iterateFaces = [&] (auto && faceVisitor) {
-						if ( mesh.material_parts.count == 0 )
-						{
-							for ( size_t faceIdx = 0; faceIdx < mesh.faces.count; ++faceIdx )
-							{
-								faceVisitor(mesh.faces.data[faceIdx]);
-							}
-						}
-						else
-						{
-							const auto & part = mesh.material_parts.data[partIdx];
-
-							for ( size_t i = 0; i < part.face_indices.count; ++i )
-							{
-								const auto fi = part.face_indices.data[i];
-								faceVisitor(mesh.faces.data[fi]);
-							}
-						}
-					};
-
-					uint32_t groupTriangleCount = 0;
-
-					iterateFaces([&] (const ufbx_face & face) {
-						if ( face.num_indices < 3 )
-						{
-							return;
-						}
-
-						const uint32_t numTris = ufbx_triangulate_face(
-							triangulationBuffer.data(),
-							triangulationBuffer.size(),
-							&mesh,
-							face
-						);
-
-						for ( uint32_t triangleIndex = 0; triangleIndex < numTris; ++triangleIndex )
-						{
-							const uint32_t c0 = triangulationBuffer[(triangleIndex * 3) + 0];
-							const uint32_t c1 = triangulationBuffer[(triangleIndex * 3) + 1];
-							const uint32_t c2 = triangulationBuffer[(triangleIndex * 3) + 2];
-
-							std::array< uint32_t, 3 > cornerIndices{c0, c1, c2};
-
-							for ( auto k = 0U; k < 3U; ++k )
-							{
-								const uint32_t corner = cornerIndices[k];
-								const auto pos = ufbx_get_vertex_vec3(&mesh.vertex_position, corner);
-
-								vertices[globalVertexOffset + k].setPosition(Vector< 3, float >{static_cast< float >(pos.x) * m_options.uniformScale, static_cast< float >(pos.y) * m_options.uniformScale, static_cast< float >(pos.z) * m_options.uniformScale});
-
-								if ( hasNormals )
-								{
-									const auto n = ufbx_get_vertex_vec3(&mesh.vertex_normal, corner);
-									vertices[globalVertexOffset + k].setNormal(Vector< 3, float >{static_cast< float >(n.x), static_cast< float >(n.y), static_cast< float >(n.z)});
-								}
-
-								if ( hasUV )
-								{
-									/* FBX stores UVs with V=0 at the bottom (OpenGL convention).
-									 * The engine and Vulkan use V=0 at the top, matching glTF. Flip V
-									 * here so embedded textures sample the correct region. */
-									const auto uv = ufbx_get_vertex_vec2(&mesh.vertex_uv, corner);
-
-									vertices[globalVertexOffset + k].setTextureCoordinates(Vector< 3, float >{
-										static_cast< float >(uv.x),
-										1.0F - static_cast< float >(uv.y),
-										0.0F
-									});
-								}
-
-								if ( hasSkin )
-								{
-									/* Look up the unique-vertex index for this corner to index
-									 * into the skin's per-vertex weight range. ufbx sorts weights
-									 * by decreasing magnitude, so the first four entries are the
-									 * four most influential bones — matching the engine's 4-bone
-									 * vertex layout directly. */
-									const uint32_t uniqueVertex = mesh.vertex_indices.data[corner];
-									const ufbx_skin_vertex & sv = skin->vertices.data[uniqueVertex];
-
-									std::array< int32_t, 4 > joints{-1, -1, -1, -1};
-									std::array< float, 4 > weights{0.0F, 0.0F, 0.0F, 0.0F};
-
-									const size_t take = (sv.num_weights < 4U) ? sv.num_weights : 4U;
-
-									float weightSum = 0.0F;
-
-									for ( size_t wi = 0; wi < take; ++wi )
-									{
-										const ufbx_skin_weight & sw = skin->weights.data[sv.weight_begin + wi];
-										joints[wi] = static_cast< int32_t >(sw.cluster_index);
-										weights[wi] = static_cast< float >(sw.weight);
-										weightSum += weights[wi];
-									}
-
-									/* Normalize weights so that their sum equals 1.0 — a requirement
-									 * for linear blend skinning. ufbx does not guarantee this. */
-									if ( weightSum > 1e-6F )
-									{
-										const float invSum = 1.0F / weightSum;
-										weights[0] *= invSum;
-										weights[1] *= invSum;
-										weights[2] *= invSum;
-										weights[3] *= invSum;
-									}
-
-									vertices[globalVertexOffset + k].setInfluences(joints[0], joints[1], joints[2], joints[3]);
-									vertices[globalVertexOffset + k].setWeights(weights[0], weights[1], weights[2], weights[3]);
-								}
-							}
-
-							/* The winding is kept as authored — the swap of indices 1 and 2 that used to
-							 * sit here compensated the engine's ORIENTATION-REVERSING projection, gone
-							 * with the Y-up convention flip. */
-							triangles.emplace_back(
-								globalVertexOffset + 0,
-								globalVertexOffset + 1,
-								globalVertexOffset + 2
-							);
-
-							globalVertexOffset += 3;
-							groupTriangleCount++;
-						}
-					});
-
-					if ( hasMaterialSplit && !groups.empty() )
-					{
-						groups.back().second = groupTriangleCount;
-					}
-				}
-
-				return true;
-			}, hasUV);
-
-			if ( !buildSuccess || !shape->isValid() )
-			{
-				TraceWarning{ClassId} << "Generated shape is invalid for mesh '" << meshName << "', using default.";
-
-				auto defaultMesh = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
-				m_meshes[static_cast< uint32_t >(mesh.element_id)] = defaultMesh;
-
-				MeshDescriptor descriptor;
-				descriptor.renderable = defaultMesh;
-				descriptor.materials = {defaultMaterial()};
-				output.meshes.push_back(std::move(descriptor));
-
-				if ( m_options.onMeshLoaded )
-				{
-					m_options.onMeshLoaded(output.meshes.back());
-				}
-
-				allSuccess = false;
-
-				continue;
-			}
-
-			if ( hasNormals )
-			{
-				shape->declareNormalsAvailable();
-			}
-			else
-			{
-				/* No inversion: nothing reflects the vertex data any more (the winding swap that
-				 * used to force it is gone with the orientation-reversing projection). */
-				shape->computeTriangleNormal(false);
-				shape->computeVertexNormal();
-
-				TraceInfo{ClassId} << "Generated smooth normals for mesh '" << meshName << "' (not provided by FBX).";
 			}
 
 			uint32_t geometryFlags = EnableTangentSpace | EnablePrimaryTextureCoordinates;
@@ -1110,20 +405,13 @@ namespace EmEn::Scenes::Loaders
 			 * skin_deformers without populating every mesh's vertices[0] with
 			 * valid influences, so the character ended up filtered out of the
 			 * skinning path even though it has a rig). */
-			if ( hasSkin )
+			if ( description.skin.has_value() )
 			{
 				geometryFlags |= EnableInfluence | EnableWeight;
-
-				/* Track this mesh → skin relationship for the later
-				 * SkeletalDataTrait attachment pass. The actual SkeletonResource /
-				 * Skin are built by loadSkins() using the same cluster ordering
-				 * that was written into the vertex influences. */
-				m_meshToSkinIndex[static_cast< uint32_t >(mesh.element_id)]
-					= static_cast< size_t >(skin->typed_id);
 			}
 
 			auto geometry = m_resources.container< IndexedVertexResource >()
-				->getOrCreateResource(geoName, [shape] (auto & geometryResource) {
+				->getOrCreateResource(description.geometryName, [shape = description.shape] (auto & geometryResource) {
 					shape->computeTriangleTangent();
 					shape->computeVertexTangent();
 
@@ -1134,60 +422,27 @@ namespace EmEn::Scenes::Loaders
 			{
 				TraceWarning{ClassId} << "Failed to create geometry for mesh '" << meshName << "', using default.";
 
-				auto defaultMesh = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
-				m_meshes[static_cast< uint32_t >(mesh.element_id)] = defaultMesh;
-
-				MeshDescriptor descriptor;
-				descriptor.renderable = defaultMesh;
-				descriptor.materials = {defaultMaterial()};
-				output.meshes.push_back(std::move(descriptor));
-
-				if ( m_options.onMeshLoaded )
-				{
-					m_options.onMeshLoaded(output.meshes.back());
-				}
-
-				allSuccess = false;
+				pushDefault();
 
 				continue;
 			}
 
-			/* Collect materials: one per material_part. Parallel to mesh.materials[]
-			 * — `material_parts[i]` uses `mesh.materials.data[i]` (same ordering).
-			 * Fall back to the default PBR resource when the mesh has no material
-			 * or the referenced material failed to load. */
+			/* Collect materials: one per material part. Fall back to the default PBR resource
+			 * when the part has no material or the referenced material failed to load. */
 			std::vector< std::shared_ptr< Material::Interface > > materialList;
 			std::vector< RasterizationOptions > rasterizationList;
 
-			const size_t partCount = (mesh.material_parts.count == 0) ? 1 : mesh.material_parts.count;
-			materialList.reserve(partCount);
-			rasterizationList.reserve(partCount);
+			materialList.reserve(description.parts.size());
+			rasterizationList.reserve(description.parts.size());
 
-			for ( size_t partIdx = 0; partIdx < partCount; ++partIdx )
+			for ( const auto & part : description.parts )
 			{
 				std::shared_ptr< Material::Interface > material;
 				RasterizationOptions rasterization{};
 
-				if ( partIdx < mesh.materials.count )
+				if ( part.material.has_value() && *part.material < materials.size() )
 				{
-					const ufbx_material * fbxMat = mesh.materials.data[partIdx];
-
-					if ( fbxMat != nullptr )
-					{
-						const auto matTypedId = static_cast< size_t >(fbxMat->typed_id);
-
-						if ( matTypedId < m_materials.size() && m_materials[matTypedId] != nullptr )
-						{
-							material = m_materials[matTypedId];
-						}
-
-						/* Honour the FBX material's double-sided feature (ufbx): disable back-face
-						 * culling so both faces rasterize (cloth, inner armour surfaces, …). */
-						if ( fbxMat->features.double_sided.enabled )
-						{
-							rasterization.setCullingMode(CullingMode::None);
-						}
-					}
+					material = materials[*part.material];
 				}
 
 				if ( material == nullptr )
@@ -1195,11 +450,12 @@ namespace EmEn::Scenes::Loaders
 					material = defaultMaterial();
 				}
 
-				/* Caller-forced double-sided (LoaderOptions::forceDoubleSided): OR with
-				 * the asset flag above. Covers formats/exporters (Mixamo FBX Phong) that
-				 * carry no double-sided material property ufbx can surface. Applies to
-				 * default-material parts too. */
-				if ( m_options.forceDoubleSided )
+				/* Honour the FBX material's double-sided feature (ufbx), OR'd with the caller-forced
+				 * double-sided (LoaderOptions::forceDoubleSided): disable back-face culling so both
+				 * faces rasterize. The option covers formats/exporters (Mixamo FBX Phong) that carry
+				 * no double-sided material property ufbx can surface, and applies to default-material
+				 * parts too. */
+				if ( part.doubleSided || m_options.forceDoubleSided )
 				{
 					rasterization.setCullingMode(CullingMode::None);
 				}
@@ -1208,13 +464,13 @@ namespace EmEn::Scenes::Loaders
 				rasterizationList.push_back(rasterization);
 			}
 
-			/* Create the renderable. Single-material meshes use SimpleMeshResource
-			 * (cheaper), multi-material use MeshResource. */
+			/* Create the renderable. Single-material meshes use MeshResource
+			 * (cheaper), multi-material use MultiLayerMeshResource. */
 			std::shared_ptr< Renderable::Abstract > renderable;
 
 			if ( materialList.size() <= 1 )
 			{
-				auto singleMaterial = materialList[0];
+				auto singleMaterial = materialList.empty() ? defaultMaterial() : materialList[0];
 				const RasterizationOptions singleRasterization = rasterizationList.empty() ? RasterizationOptions{} : rasterizationList[0];
 
 				renderable = m_resources.container< Renderable::MeshResource >()
@@ -1235,11 +491,13 @@ namespace EmEn::Scenes::Loaders
 				TraceWarning{ClassId} << "Failed to create renderable for mesh '" << meshName << "', using default.";
 
 				renderable = m_resources.container< Renderable::MeshResource >()->getDefaultResource();
-				allSuccess = false;
+				allMeshes = false;
 			}
-
-			m_meshes[static_cast< uint32_t >(mesh.element_id)] = renderable;
-			m_shapes[static_cast< uint32_t >(mesh.element_id)] = shape;
+			else if ( description.skin.has_value() )
+			{
+				/* NOTE: Only this mesh's own renderable: the default one is shared by every caller. */
+				skinnedRenderables.emplace_back(renderable, *description.skin);
+			}
 
 			MeshDescriptor descriptor;
 			descriptor.renderable = renderable;
@@ -1254,354 +512,71 @@ namespace EmEn::Scenes::Loaders
 			}
 		}
 
-		return allSuccess;
-	}
-
-	void
-	FBXLoader::loadSkins (const ufbx_scene & scene, SceneData & /*output*/) noexcept
-	{
-		if ( scene.skin_deformers.count == 0 )
+		if ( !allMeshes )
 		{
-			return;
+			Tracer::error(ClassId, "Failed to load meshes !");
+
+			return false;
 		}
 
-		m_skeletons.reserve(scene.skin_deformers.count);
-		m_skins.reserve(scene.skin_deformers.count);
+		/* ---- Skeletons and clips (left empty by the analysis when LoaderOptions::skipSkinning is set). ---- */
+		std::vector< std::shared_ptr< Animations::SkeletonResource > > skeletons(asset.skins.size());
 
-		/* ⚠️ The rig is mirrored exactly like the mesh it deforms — bind-pose translations,
-		 * bind-pose ROTATIONS and inverse bind matrices — or the skin slides off the geometry. */
-
-		/* Skin deformers are indexed by typed_id (which equals their position
-		 * in scene.skin_deformers.data[]). loadMeshes wrote this typed_id into
-		 * m_meshToSkinIndex, so m_skeletons / m_skins must be filled at the
-		 * same positions — we resize to count and leave gaps as nullptr. */
-		m_skeletons.resize(scene.skin_deformers.count);
-		m_skins.resize(scene.skin_deformers.count);
-
-		for ( size_t skinIndex = 0; skinIndex < scene.skin_deformers.count; ++skinIndex )
+		for ( size_t skinIndex = 0; skinIndex < asset.skins.size(); ++skinIndex )
 		{
-			const ufbx_skin_deformer & skin = *scene.skin_deformers.data[skinIndex];
-			const size_t jointCount = skin.clusters.count;
+			auto & skin = asset.skins[skinIndex];
 
-			if ( jointCount == 0 )
+			if ( !skin.has_value() )
 			{
 				continue;
 			}
 
-			/* Build the bone-node → joint-index lookup used for parent resolution. */
-			std::unordered_map< const ufbx_node *, int32_t > boneNodeToJointIndex;
-			boneNodeToJointIndex.reserve(jointCount);
-
-			for ( size_t ci = 0; ci < jointCount; ++ci )
-			{
-				const ufbx_skin_cluster * cluster = skin.clusters.data[ci];
-
-				if ( cluster != nullptr && cluster->bone_node != nullptr )
-				{
-					boneNodeToJointIndex[cluster->bone_node] = static_cast< int32_t >(ci);
-				}
-			}
-
-			std::vector< Joint< float > > joints(jointCount);
-			std::vector< Matrix< 4, float > > inverseBindMatrices(jointCount);
-
-			for ( size_t ci = 0; ci < jointCount; ++ci )
-			{
-				const ufbx_skin_cluster * cluster = skin.clusters.data[ci];
-
-				if ( cluster == nullptr || cluster->bone_node == nullptr )
-				{
-					joints[ci].name = "missing_bone_" + std::to_string(ci);
-					joints[ci].parentIndex = NoParent;
-					inverseBindMatrices[ci] = Matrix< 4, float >{};
-
-					continue;
-				}
-
-				const ufbx_node & bone = *cluster->bone_node;
-
-				joints[ci].name = (bone.name.length == 0)
-					? "bone_" + std::to_string(ci)
-					: std::string{bone.name.data, bone.name.length};
-
-				/* geometry_to_bone is ufbx's inverse bind matrix in Vulkan-friendly
-				 * form (local vertex → bone space). Perfect match for the engine. */
-				inverseBindMatrices[ci] = convertUfbxMatrix(cluster->geometry_to_bone);
-
-				/* Scale the translation column of the inverse bind matrix to keep
-				 * the binding math coherent with scaled vertex positions and
-				 * scaled joint TRS translations. Linear part (rotation + uniform
-				 * 1x1 scale) is unaffected by uniform scaling around origin. */
-				inverseBindMatrices[ci][M4x4Col3Row0] *= m_options.uniformScale;
-				inverseBindMatrices[ci][M4x4Col3Row1] *= m_options.uniformScale;
-				inverseBindMatrices[ci][M4x4Col3Row2] *= m_options.uniformScale;
-
-				/* ⚠️ Conjugate the WHOLE matrix (M·IBM·M), linear part included — unlike the uniform
-				 * scale above, which only touches the translation column. Skinning stays coherent
-				 * because the joint world matrices are conjugated identically and the two M cancel. */
-				inverseBindMatrices[ci] = inverseBindMatrices[ci];
-				joints[ci].inverseBindMatrix = inverseBindMatrices[ci];
-
-				/* Walk up the bone's parent chain until we hit another bone
-				 * belonging to this skin; that is this joint's parent joint. */
-				joints[ci].parentIndex = NoParent;
-
-				const ufbx_node * parent = bone.parent;
-
-				while ( parent != nullptr && !parent->is_root )
-				{
-					const auto it = boneNodeToJointIndex.find(parent);
-
-					if ( it != boneNodeToJointIndex.end() )
-					{
-						joints[ci].parentIndex = it->second;
-						break;
-					}
-
-					parent = parent->parent;
-				}
-
-				/* Rest-pose TRS taken from the bone's static local_transform —
-				 * this matches what scene-node descriptors use for non-skinned
-				 * transforms and what the SkeletalAnimator expects as the bind
-				 * baseline. Animations override this at runtime via the clips
-				 * built in loadAnimations. */
-				const auto & trs = bone.local_transform;
-
-				joints[ci].translation = Vector< 3, float >{static_cast< float >(trs.translation.x) * m_options.uniformScale, static_cast< float >(trs.translation.y) * m_options.uniformScale, static_cast< float >(trs.translation.z) * m_options.uniformScale};
-
-				/* ⚠️ The conjugation carries the det(M) angle inversion: without
-				 * it the bind pose looks right and the animation plays backwards. */
-				joints[ci].rotation = Quaternion< float >{
-					static_cast< float >(trs.rotation.x),
-					static_cast< float >(trs.rotation.y),
-					static_cast< float >(trs.rotation.z),
-					static_cast< float >(trs.rotation.w)
-				};
-
-				/* NOTE: A scale is invariant under the flip — M·diag(s)·M = diag(s). */
-				joints[ci].scale = {
-					static_cast< float >(trs.scale.x),
-					static_cast< float >(trs.scale.y),
-					static_cast< float >(trs.scale.z)
-				};
-			}
-
-			Skeleton< float > skeleton{std::move(joints)};
-
-			/* Skin joint indices are simply 0..jointCount-1 because our
-			 * skeleton is built in the same order as the clusters. */
-			std::vector< int32_t > skinJointIndices(jointCount);
-
-			for ( size_t j = 0; j < jointCount; ++j )
-			{
-				skinJointIndices[j] = static_cast< int32_t >(j);
-			}
-
-			Skin< float > engineSkin{std::move(skinJointIndices), inverseBindMatrices};
-
-			const std::string skeletonName = m_resourcePrefix + std::string{} + "Skeleton/"
-				+ (skin.name.length == 0 ? std::to_string(skinIndex) : std::string{skin.name.data, skin.name.length});
-
-			auto skeletonResource = m_resources.container< Animations::SkeletonResource >()
-				->getOrCreateResourceSync(skeletonName, [&skeleton] (auto & resource) {
-					return resource.load(std::move(skeleton));
+			skeletons[skinIndex] = m_resources.container< Animations::SkeletonResource >()
+				->getOrCreateResourceSync(skin->resourceName, [&skin] (auto & resource) {
+					return resource.load(std::move(skin->skeleton));
 				});
-
-			m_skeletons[skinIndex] = std::move(skeletonResource);
-			m_skins[skinIndex] = std::move(engineSkin);
-
-			/* Collect bone nodes so the scene consumer can skip instantiating
-			 * them as regular scene nodes — bone transforms are owned by the
-			 * SkeletalAnimator, not by the scene graph.
-			 * The NODE POINTER is what gets stored: the descriptor index it maps to is
-			 * only known once buildNodeDescriptors() has compacted the node table. */
-			for ( size_t ci = 0; ci < jointCount; ++ci )
-			{
-				const ufbx_skin_cluster * cluster = skin.clusters.data[ci];
-
-				if ( cluster != nullptr && cluster->bone_node != nullptr )
-				{
-					m_skinJointNodes.insert(cluster->bone_node);
-				}
-			}
-		}
-	}
-
-	void
-	FBXLoader::loadAnimations (const ufbx_scene & scene, SceneData & /*output*/) noexcept
-	{
-		if ( scene.anim_stacks.count == 0 || scene.skin_deformers.count == 0 )
-		{
-			return;
 		}
 
-		/* All clips are sampled against the bones of the FIRST skin deformer.
-		 * Mixamo and most production pipelines keep the bone ordering identical
-		 * across every skin referencing the same rig, so one clip set attaches
-		 * cleanly to every mesh. If a future asset breaks this assumption, we
-		 * will need per-skin clip lists. */
-		const ufbx_skin_deformer & refSkin = *scene.skin_deformers.data[0];
-		const size_t jointCount = refSkin.clusters.count;
+		std::vector< std::shared_ptr< Animations::AnimationClipResource > > clips;
+		clips.reserve(asset.clips.size());
 
-		std::vector< const ufbx_node * > jointToNode(jointCount, nullptr);
-
-		for ( size_t ci = 0; ci < jointCount; ++ci )
+		for ( auto & clip : asset.clips )
 		{
-			const ufbx_skin_cluster * cluster = refSkin.clusters.data[ci];
-
-			if ( cluster != nullptr )
-			{
-				jointToNode[ci] = cluster->bone_node;
-			}
-		}
-
-		m_animationClips.reserve(scene.anim_stacks.count);
-
-		for ( size_t si = 0; si < scene.anim_stacks.count; ++si )
-		{
-			const ufbx_anim_stack & stack = *scene.anim_stacks.data[si];
-
-			auto channels = sampleAnimStack(stack, jointToNode, m_options.uniformScale);
-
-			if ( channels.empty() )
-			{
-				continue;
-			}
-
-			const std::string clipName =
-				stack.name.length == 0 ?
-				"clip_" + std::to_string(si) :
-				std::string{stack.name.data, stack.name.length};
-
-			AnimationClip< float > clip{clipName, std::move(channels)};
-
 			auto clipResource = m_resources.container< Animations::AnimationClipResource >()
-				->getOrCreateResourceSync(
-					m_resourcePrefix + "Animation/" + clipName,
-					[&clip] (auto & resource) {
-						return resource.load(std::move(clip));
-					}
-				);
+				->getOrCreateResourceSync(clip.resourceName, [&clip] (auto & resource) {
+					return resource.load(std::move(clip.clip));
+				});
 
 			if ( clipResource != nullptr )
 			{
-				m_animationClips.push_back(std::move(clipResource));
+				clips.push_back(std::move(clipResource));
 			}
 		}
 
-		if ( !m_animationClips.empty() )
+		/* Attach skeletal data to every renderable whose mesh was skinned. The trait
+		 * handles all runtime skinning — joint matrix upload, blending,
+		 * clip evaluation — so all we need is a single setter. */
+		for ( const auto & [renderable, skinIndex] : skinnedRenderables )
 		{
-			TraceDebug{ClassId} << "Loaded " << m_animationClips.size() << " animation clips.";
-		}
-	}
-
-	std::vector< AnimationChannel< float > >
-	FBXLoader::sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode, float uniformScale) noexcept
-	{
-		std::vector< AnimationChannel< float > > channels;
-
-		if ( stack.anim == nullptr )
-		{
-			return channels;
-		}
-
-		const double t0 = stack.time_begin;
-		const double t1 = stack.time_end;
-		const double duration = t1 - t0;
-
-		if ( duration <= 0.0 )
-		{
-			return channels;
-		}
-
-		/* 30 Hz matches Mixamo's default export and is the game-engine canonical
-		 * rate. Low-frequency curves are oversampled (harmless); high-frequency
-		 * ones (>30 Hz) are aliased — acceptable for skeletal anim but not for
-		 * procedural VFX. */
-		constexpr double sampleRate = 30.0;
-		constexpr double sampleStep = 1.0 / sampleRate;
-
-		const size_t numFrames = static_cast< size_t >(std::ceil(duration * sampleRate)) + 1;
-		const size_t jointCount = jointToNode.size();
-
-		channels.reserve(jointCount * 3);
-
-		for ( size_t ji = 0; ji < jointCount; ++ji )
-		{
-			const ufbx_node * bone = jointToNode[ji];
-
-			if ( bone == nullptr )
+			if ( skinIndex >= skeletons.size() || skeletons[skinIndex] == nullptr )
 			{
 				continue;
 			}
 
-			AnimationChannel< float > translation;
-			translation.targetIndex = static_cast< int32_t >(ji);
-			translation.target = ChannelTarget::Translation;
-			translation.interpolation = ChannelInterpolation::Linear;
-			translation.vectorKeyFrames.reserve(numFrames);
-
-			AnimationChannel< float > rotation;
-			rotation.targetIndex = static_cast< int32_t >(ji);
-			rotation.target = ChannelTarget::Rotation;
-			rotation.interpolation = ChannelInterpolation::Linear;
-			rotation.quaternionKeyFrames.reserve(numFrames);
-
-			AnimationChannel< float > scaleChannel;
-			scaleChannel.targetIndex = static_cast< int32_t >(ji);
-			scaleChannel.target = ChannelTarget::Scale;
-			scaleChannel.interpolation = ChannelInterpolation::Linear;
-			scaleChannel.vectorKeyFrames.reserve(numFrames);
-
-			for ( size_t f = 0; f < numFrames; ++f )
+			if ( auto * skeletalData = dynamic_cast< Renderable::SkeletalDataTrait * >(renderable.get()) )
 			{
-				double t = t0 + (static_cast< double >(f) * sampleStep);
-
-				t = std::min(t, t1);
-
-				const ufbx_transform xf = ufbx_evaluate_transform(stack.anim, bone, t);
-
-				const auto relTime = static_cast< float >(t - t0);
-
-				/* ⚠️ A translation is mirrored, a rotation is CONJUGATED (with its det(M) angle
-				 * inversion), a scale is invariant. A clip mirrored inconsistently with the bind
-				 * pose it drives makes the rig snap on the first animated frame. */
-				translation.vectorKeyFrames.push_back({
-					.time = relTime,
-					.value = Vector< 3, float >{
-						static_cast< float >(xf.translation.x) * uniformScale,
-						static_cast< float >(xf.translation.y) * uniformScale,
-						static_cast< float >(xf.translation.z) * uniformScale
-					}
-				});
-
-				rotation.quaternionKeyFrames.push_back({
-					.time = relTime,
-					.value = Quaternion< float >{
-						static_cast< float >(xf.rotation.x),
-						static_cast< float >(xf.rotation.y),
-						static_cast< float >(xf.rotation.z),
-						static_cast< float >(xf.rotation.w)
-					}
-				});
-
-				scaleChannel.vectorKeyFrames.push_back({
-					.time = relTime,
-					.value = Vector< 3, float >{
-						static_cast< float >(xf.scale.x),
-						static_cast< float >(xf.scale.y),
-						static_cast< float >(xf.scale.z)
-					}
-				});
+				skeletalData->setSkeletalData(skeletons[skinIndex], asset.skins[skinIndex]->skin, clips);
 			}
-
-			channels.push_back(std::move(translation));
-			channels.push_back(std::move(rotation));
-			channels.push_back(std::move(scaleChannel));
 		}
 
-		return channels;
+		/* ---- Scene graph. ---- */
+		output.nodes = std::move(asset.nodes);
+		output.rootNodeIndices = std::move(asset.rootNodeIndices);
+		output.skeletons = std::move(skeletons);
+		output.animationClips = std::move(clips);
+		output.skinJointNodeIndices = std::move(asset.skinJointNodeIndices);
+
+		return true;
 	}
 
 	bool
@@ -1618,14 +593,6 @@ namespace EmEn::Scenes::Loaders
 
 		/* Same conversion settings as load() so animation curves live in the same
 		 * coord space as the bind pose baked into the target skeleton. */
-		ufbx_load_opts opts{};
-		opts.target_axes = ufbx_axes_right_handed_y_up;
-		opts.target_unit_meters = 1.0;
-		opts.space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY;
-		opts.geometry_transform_handling = UFBX_GEOMETRY_TRANSFORM_HANDLING_MODIFY_GEOMETRY;
-		opts.load_external_files = false;
-		opts.generate_missing_normals = false;
-
 		/* NOTE: ufbx opens the path itself: a FIFO blocked that open forever (2026-10-18). */
 		if ( !Base::IO::isReadableRegularFile(filepath) )
 		{
@@ -1633,6 +600,9 @@ namespace EmEn::Scenes::Loaders
 
 			return false;
 		}
+
+		ufbx_load_opts opts{};
+		FBX::setLoadOptions(opts, false, Base::IO::filesize(filepath));
 
 		ufbx_error error{};
 		ufbx_scene * scene = ufbx_load_file(Base::IO::toU8String(filepath).c_str(), &opts, &error);
@@ -1656,130 +626,19 @@ namespace EmEn::Scenes::Loaders
 			return false;
 		}
 
-		/* Resolve each skeleton joint to its driving ufbx_node by name. Joints
-		 * that have no counterpart in this file get a null entry and are
-		 * silently dropped during sampling. */
-		const size_t jointCount = skeleton.jointCount();
-		std::vector< const ufbx_node * > jointToNode(jointCount, nullptr);
-		size_t resolvedJoints = 0;
+		/* ---- Analysis: the joints matched by name, every stack sampled (fuzz_fbx covers it). ---- */
+		auto clips = FBX::analyseClipsOnly(*scene, skeleton, Base::IO::toU8String(filepath.stem()), m_options);
 
-		for ( size_t ji = 0; ji < jointCount; ++ji )
-		{
-			const auto & jointName = skeleton.joint(ji).name;
-
-			if ( jointName.empty() )
-			{
-				continue;
-			}
-
-			const ufbx_node * node = ufbx_find_node_len(scene, jointName.data(), jointName.length());
-
-			if ( node != nullptr )
-			{
-				jointToNode[ji] = node;
-				++resolvedJoints;
-			}
-		}
-
-		if ( resolvedJoints == 0 )
-		{
-			TraceError{ClassId} << "Animation file '" << filepath
-				<< "' shares no joint names with skeleton '" << targetSkeleton.name()
-				<< "'. Aborting.";
-
-			return false;
-		}
-
-		if ( resolvedJoints < jointCount )
-		{
-			TraceInfo{ClassId} << "Resolved " << resolvedJoints << " / " << jointCount
-				<< " joints by name in '" << Base::IO::toU8String(filepath) << "'. Missing joints will hold their bind-pose value.";
-		}
-
-		const std::string fileStem = Base::IO::toU8String(filepath.stem());
-		/* ⚠️ The flip is part of the cache key: a clip mirrored one way must never be served to a
-		 * rig loaded with a different flip. */
-		const std::string resourcePrefix = "FBX:" + fileStem + "/Animation/";
 		const size_t producedBefore = output.size();
 
-		/* When stripRootMotion is enabled, collect the indices of every root
-		 * joint once — they're the only ones whose translation track will be
-		 * zeroed after sampling. Computed outside the per-stack loop so a
-		 * multi-stack file pays the cost only once. */
-		std::vector< size_t > rootJointIndices;
+		output.reserve(output.size() + clips.size());
 
-		if ( m_options.stripRootMotion )
+		for ( auto & clip : clips )
 		{
-			rootJointIndices = skeleton.rootJoints();
-		}
-
-		output.reserve(output.size() + scene->anim_stacks.count);
-
-		for ( size_t si = 0; si < scene->anim_stacks.count; ++si )
-		{
-			const ufbx_anim_stack & stack = *scene->anim_stacks.data[si];
-
-			auto channels = sampleAnimStack(stack, jointToNode, m_options.uniformScale);
-
-			if ( channels.empty() )
-			{
-				continue;
-			}
-
-			/* Strip the HORIZONTAL components (X, Z) of root-bone translation
-			 * tracks if requested. Mixamo locomotion clips (walk_*, run_*,
-			 * strafe_*) bake forward displacement into the root joint —
-			 * keeping it would stack with gameplay-driven motion (addForce,
-			 * navmesh, etc.) and produce a yo-yo at each clip loop.
-			 *
-			 * The vertical (Y) component is preserved on purpose: it carries
-			 * both the bind-pose hip-height offset (~0.85 m on a Mixamo
-			 * humanoid — wiping it would sink the model halfway into the
-			 * ground) and the natural up/down bounce of walking, jumping or
-			 * crouching, which is part of the visual we want to keep.
-			 * Rotation + scale of the root and every channel of every other
-			 * joint stay intact. Idiomatic "convert to in-place clip" pass at
-			 * load time. */
-			if ( m_options.stripRootMotion && !rootJointIndices.empty() )
-			{
-				for ( auto & channel : channels )
-				{
-					if ( channel.target != ChannelTarget::Translation )
-					{
-						continue;
-					}
-
-					const auto isRoot = std::ranges::find(
-						rootJointIndices,
-						static_cast< size_t >(channel.targetIndex)
-					) != rootJointIndices.end();
-
-					if ( !isRoot )
-					{
-						continue;
-					}
-
-					for ( auto & keyFrame : channel.vectorKeyFrames )
-					{
-						keyFrame.value[X] = 0.0F;
-						keyFrame.value[Z] = 0.0F;
-					}
-				}
-			}
-
-			/* Mixamo names every stack `mixamo.com` (or similar) — useless. The
-			 * filename is the actual semantic name in this multi-file workflow. */
-			const std::string clipName = scene->anim_stacks.count == 1 ? fileStem : fileStem + "_" + std::to_string(si);
-
-			AnimationClip< float > clip{clipName, std::move(channels)};
-
 			auto clipResource = m_resources.container< Animations::AnimationClipResource >()
-				->getOrCreateResourceSync(
-					resourcePrefix + clipName,
-					[&clip] (auto & resource) {
-						return resource.load(std::move(clip));
-					}
-				);
+				->getOrCreateResourceSync(clip.resourceName, [&clip] (auto & resource) {
+					return resource.load(std::move(clip.clip));
+				});
 
 			if ( clipResource != nullptr )
 			{
@@ -1795,141 +654,6 @@ namespace EmEn::Scenes::Loaders
 		}
 
 		return true;
-	}
-
-	void
-	FBXLoader::buildNodeDescriptors (const ufbx_scene & scene, SceneData & output) noexcept
-	{
-		/* Build a lookup from ufbx_node to its index in the ufbx scene,
-		 * which becomes the corresponding index in SceneData::nodes. */
-		std::unordered_map< const ufbx_node *, size_t > nodeIndexMap;
-		nodeIndexMap.reserve(scene.nodes.count);
-
-		output.nodes.clear();
-		output.nodes.reserve(scene.nodes.count);
-
-		/* Build a mapping from ufbx mesh element_id to its index in output.meshes. */
-		std::unordered_map< uint32_t, size_t > meshElementToIndex;
-		meshElementToIndex.reserve(scene.meshes.count);
-
-		for ( size_t index = 0; index < scene.meshes.count; ++index )
-		{
-			meshElementToIndex[scene.meshes.data[index]->element_id] = index;
-		}
-
-		/* Exclusion helper: a node is filtered out if its own name or any
-		 * ancestor's name appears in LoaderOptions::excludedNodeNames.
-		 * Skipping a parent transparently skips the entire subtree. */
-		const auto isExcluded = [this] (const ufbx_node * node) noexcept {
-			if ( m_options.excludedNodeNames.empty() )
-			{
-				return false;
-			}
-
-			while ( node != nullptr && !node->is_root )
-			{
-				if ( node->name.length > 0 )
-				{
-					const std::string name{node->name.data, node->name.length};
-
-					if ( m_options.excludedNodeNames.contains(name) )
-					{
-						return true;
-					}
-				}
-
-				node = node->parent;
-			}
-
-			return false;
-		};
-
-		/* First pass: allocate a NodeDescriptor slot for every ufbx node (skipping the
-		 * root node itself, whose transform is identity by ufbx convention). */
-		for ( size_t index = 0; index < scene.nodes.count; ++index )
-		{
-			const ufbx_node * node = scene.nodes.data[index];
-
-			if ( node == nullptr || node->is_root )
-			{
-				continue;
-			}
-
-			if ( isExcluded(node) )
-			{
-				continue;
-			}
-
-			const auto descriptorIndex = output.nodes.size();
-
-			nodeIndexMap[node] = descriptorIndex;
-
-			/* Resolve the bone nodes collected by loadSkins() to their COMPACTED descriptor
-			 * index. Doing it here is the whole point: this is the only place where the
-			 * mapping exists. A bone that is excluded never gets an index, and therefore
-			 * never makes the consumer skip an unrelated node. */
-			if ( m_skinJointNodes.contains(node) )
-			{
-				m_skinJointNodeIndices.insert(descriptorIndex);
-			}
-
-			NodeDescriptor descriptor;
-			descriptor.name = buildNodeName(m_resourcePrefix, *node);
-			descriptor.localFrame = extractFrameFromNode(*node);
-
-			if ( node->mesh != nullptr )
-			{
-				const auto it = meshElementToIndex.find(node->mesh->element_id);
-
-				if ( it != meshElementToIndex.end() )
-				{
-					descriptor.meshIndex = it->second;
-				}
-			}
-
-			output.nodes.push_back(std::move(descriptor));
-		}
-
-		/* Second pass: wire children and collect roots (children of the ufbx root).
-		 * NOTE: in the FILE order (scene.nodes), never by iterating nodeIndexMap: an unordered_map keyed by pointer
-		 * yields a different order on every run — the order of the roots and children, and therefore which duplicate
-		 * name the scene keeps verbatim (SceneDataConsumer renames the later ones), changed from run to run. */
-		output.rootNodeIndices.clear();
-
-		for ( size_t index = 0; index < scene.nodes.count; ++index )
-		{
-			const ufbx_node * nodePtr = scene.nodes.data[index];
-
-			if ( nodePtr == nullptr )
-			{
-				continue;
-			}
-
-			const auto nodeIt = nodeIndexMap.find(nodePtr);
-
-			if ( nodeIt == nodeIndexMap.end() )
-			{
-				/* The ufbx root or an excluded node: no descriptor. */
-				continue;
-			}
-
-			const auto descriptorIdx = nodeIt->second;
-			const ufbx_node * parent = nodePtr->parent;
-
-			if ( parent == nullptr || parent->is_root )
-			{
-				output.rootNodeIndices.push_back(descriptorIdx);
-			}
-			else
-			{
-				const auto parentIt = nodeIndexMap.find(parent);
-
-				if ( parentIt != nodeIndexMap.end() )
-				{
-					output.nodes[parentIt->second].childIndices.push_back(descriptorIdx);
-				}
-			}
-		}
 	}
 
 	bool
@@ -1949,6 +673,8 @@ namespace EmEn::Scenes::Loaders
 
 			return false;
 		}
+
+		FBX::setMemoryLimits(opts, Base::IO::filesize(filepath));
 
 		ufbx_error error{};
 		ufbx_scene * scene = ufbx_load_file(Base::IO::toU8String(filepath).c_str(), &opts, &error);

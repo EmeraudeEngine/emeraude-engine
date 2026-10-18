@@ -5,7 +5,8 @@
 # Each target compiles the ANALYSIS half of a loader (the parse, split from its resource creation) together with its
 # fuzz entry point, with clang, libFuzzer, ASan and UBSan; the rest comes from the engine and base libraries of a
 # regular build. The compile flags of the analysis TU are taken from that build's compile_commands.json (its include
-# paths and definitions), the GCC-only flags removed.
+# paths and definitions), the GCC-only flags removed. A third-party library the analysis calls directly, hidden inside
+# libEmeraude.so, links from the external dependencies of that build (EXTERNAL below).
 #
 # Prerequisites: a built engine (libEmeraude.so) and base (libEmeraudeBase.a) and a compile_commands.json, in the build
 # directory given by BUILD_DIR (a projet-alpha build: .claude-build-release).
@@ -29,6 +30,12 @@ fi
 # The analysis TU of each target: its flags come from the regular build.
 declare -A ANALYSIS=(
 	[fuzz_wad]="src/Scenes/Loaders/WADParser.cpp"
+	[fuzz_fbx]="src/Scenes/Loaders/FBXParser.cpp"
+)
+
+# The external static libraries of each target (found beside the include directory holding <name>/<name>.h).
+declare -A EXTERNAL=(
+	[fuzz_fbx]="ufbx"
 )
 
 flagsOf ()
@@ -60,11 +67,31 @@ for target in "${!ANALYSIS[@]}"; do
 	source="${ANALYSIS[${target}]}"
 	eval "flags=($(flagsOf "${source}"))"
 
+	externals=()
+
+	for name in ${EXTERNAL[${target}]:-}; do
+		library=""
+
+		for (( i = 0; i < ${#flags[@]} - 1; ++i )); do
+			if [ "${flags[i]}" = "-isystem" ] && [ -f "${flags[i + 1]}/${name}/${name}.h" ] && [ -f "${flags[i + 1]}/../lib/lib${name}.a" ]; then
+				library="${flags[i + 1]}/../lib/lib${name}.a"
+				break
+			fi
+		done
+
+		if [ -z "${library}" ]; then
+			echo "error: lib${name}.a not found beside the include paths of ${source}." >&2
+			exit 1
+		fi
+
+		externals+=("${library}")
+	done
+
 	echo "building ${target} (${source})"
 
 	"${CXX}" "${flags[@]}" -fno-exceptions -g -O1 -fsanitize=fuzzer,address,undefined \
 		"${ROOT}/${source}" "${ROOT}/src/Fuzzing/${target}.cpp" \
-		-L"${LIBRARY_DIR}" -lEmeraude -Wl,-rpath,"${LIBRARY_DIR}" "${BASE_LIBRARY}" \
+		-L"${LIBRARY_DIR}" -lEmeraude -Wl,-rpath,"${LIBRARY_DIR}" "${BASE_LIBRARY}" "${externals[@]}" \
 		-o "${OUT_DIR}/${target}"
 done
 

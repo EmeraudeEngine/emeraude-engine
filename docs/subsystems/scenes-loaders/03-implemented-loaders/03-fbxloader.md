@@ -26,14 +26,52 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 > numbering schemes do not coincide, and the consumer's early `return` on a match **drops the
 > matched node together with its entire subtree**. It survived because a node carrying a mesh is
 > protected by the `!nodeDesc.meshIndex.has_value()` guard and Mixamo rigs put their meshes
-> directly under the root — pure luck, not design. `loadSkins()` now collects **`ufbx_node`
-> pointers** (`m_skinJointNodes`) and `buildNodeDescriptors()` resolves them to real descriptor
-> indices, which is the only place where the compaction is known. `GLTFLoader` was always correct
-> here; the two loaders now agree.
+> directly under the root — pure luck, not design. The skin analysis (`describeSkins()`) now
+> collects **`ufbx_node` pointers** and the node analysis (`describeNodes()`) resolves them to real
+> descriptor indices, which is the only place where the compaction is known. `GLTFLoader` was always
+> correct here; the two loaders now agree.
 >
-> Related: `load()` now **resets its per-asset state** at entry. Every one of those collections is
-> indexed against the current scene, and a loader instance is reusable across files — `GLTFLoader`
-> already cleared its own.
+> Related: since the split below, `FBXLoader` keeps **no per-asset state** at all (only the resource
+> manager): every collection is a local of one `load()`, so nothing can leak from one file to the next.
+
+**Two halves (2026-10-18, owner decision: analysis / materialization):** `FBX::analyse()`
+(`FBXParser.hpp/.cpp`) turns a ufbx scene into an `FBX::Asset` of plain data — per texture its image (embedded bytes,
+external path, or none), per material its factors and texture slots (index + colour space), per mesh its `Shape`
+(triangulated, scaled, skin influences and weights, normals generated when absent), material parts and skin, per skin
+deformer its skeleton and skin, the 30 Hz clips, the node descriptors and the bone-node indices — with NO engine
+resource, service or device; `FBX::analyseClipsOnly()` does the same for a split-animation file against a target
+skeleton, and `FBX::setLoadOptions()` holds the ufbx options both paths share. `FBXLoader` opens the file
+(`ufbx_load_file()`, external files included), calls the analysis, then MATERIALIZES it: images, the two colour-space
+textures on demand, materials, geometries (tangents computed on the loading thread, as before), meshes, skeletons,
+clips, the skeletal attachment, the `SceneData`. The split exists so the whole analysis can be fuzzed:
+`src/Fuzzing/fuzz_fbx.cpp` parses bytes with `ufbx_load_memory()` (no external file) and runs both analyses and the
+tangent computation. Verified identical (2026-10-18): a dump of everything `load()` and `loadAnimationClipsOnly()`
+deliver — every shape's vertices, triangles and groups hashed bit for bit, the mesh / geometry / material names, the
+nodes (name, frame, mesh, children), roots, bone nodes, skeletons (joints, TRS, inverse bind matrices) and clips
+(every key) — is byte-identical before and after on the animation-debug Paladin (4 meshes, 73 nodes, 4 skeletons, the
+rig's 50 clips through `loadAnimationClipsOnly()`) and on Knight_USD_002.fbx + NewSponza_CypressTree_FBX_YUp.fbx through
+`Core.openFiles()` (7 meshes, 967 nodes, 3 skeletons); 0 VUID.
+
+Two behaviour changes came with the split, both on failure paths only: a mesh whose triangle count overflows the
+32-bit vertex count (more than 1 431 655 765 triangles) is refused like a mesh without a valid triangle (the default
+mesh, a warning) — the old 32-bit sum wrapped into a short vertex array the build then overran; and the skeletal data
+is attached only to a mesh's OWN renderable, never to the shared default mesh a failed geometry or renderable falls back
+to (the old element-id map attached it there too).
+
+**Limits (2026-10-18, found by `fuzz_fbx`, owner decisions):**
+- **ufbx memory** — a binary FBX declares the size of its arrays (often compressed) and ufbx allocated them as
+  declared: a 50 KB file asked for 14 GB (332 reproducers, one cause). `FBX::setMemoryLimits()` caps each ufbx
+  allocator (temporary and scene) at max(`MinimumMemoryLimit` 256 MiB, `MemoryLimitPerFileByte` 16 x the file size);
+  beyond, ufbx fails with `UFBX_ERROR_MEMORY_LIMIT` and the load is refused with its message. Measured on the real
+  assets: the temporary allocator peaks at 1x the file size, the scene at 6.5x (Knight_USD_002, 7.7 MB -> 50 MB; the
+  1.7 GB IvyGrowth needs 1.36 GB). Applied to `load()`, `loadAnimationClipsOnly()` and the embedded-texture re-read.
+- **Animation sampling** — the 30 Hz sampling sized itself on the stack duration the file declares (up to 10^12
+  samples asked; a non-finite duration reached a `size_t` conversion, undefined behaviour). A stack of a non-finite
+  time range, or whose frames x animated joints x 3 exceed `FBX::MaxClipKeyFrames` (4 M keyframes, ~200 MB — 10.7 min
+  for 69 joints), is skipped with a warning; the model and the other clips load. Real data: 12.5 s and 69 joints at
+  most (the Paladin's longest clip is 54 k keyframes).
+
+Both verified identical on the dumps above (the same bytes with the limits on).
 
 **Axis/unit conversion is delegated to ufbx at load time** via `ufbx_load_opts`:
 - `target_axes = ufbx_axes_right_handed_y_up` — output is Y-up right-handed like glTF.
@@ -41,16 +79,17 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 - `space_conversion = UFBX_SPACE_CONVERSION_MODIFY_GEOMETRY` — conversion baked into geometry, keeping node transforms clean.
 - `generate_missing_normals = true` — ufbx provides smooth normals when the FBX lacks them.
 
-**6-Phase Pipeline (same contract as GLTFLoader):**
+**6-Phase Pipeline (same contract as GLTFLoader)** — each phase is an analysis step of `FBXParser.cpp` (anonymous
+namespace) materialized by `FBXLoader::load()`:
 
-| Phase | Method | Status | Output |
+| Phase | Analysis | Status | Output (materialized) |
 |-------|--------|--------|--------|
-| 1 | `loadImages()` | **implemented** | `ImageResource` |
-| 2 | `loadMaterials()` | **implemented** | `Material::StandardResource` + `Texture2D` on-demand |
-| 3 | `loadMeshes()` | **implemented** (+ skin influences/weights) | `IndexedVertexResource` + `SimpleMeshResource`/`MeshResource` |
-| 4 | `loadSkins()` | **implemented** | `SkeletonResource` + `Skin` |
-| 5 | `loadAnimations()` | **implemented** (⚠ coord-space bug — see note below) | `AnimationClipResource` |
-| 6 | `buildNodeDescriptors()` | **implemented** | `NodeDescriptor` hierarchy in `SceneData` |
+| 1 | `describeImages()` | **implemented** | `ImageResource` |
+| 2 | `describeMaterials()` | **implemented** | `Material::StandardResource` + `Texture2D` on-demand |
+| 3 | `describeMeshes()` | **implemented** (+ skin influences/weights) | `IndexedVertexResource` + `MeshResource`/`MultiLayerMeshResource` |
+| 4 | `describeSkins()` | **implemented** | `SkeletonResource` + `Skin` |
+| 5 | `describeAnimations()` | **implemented** (⚠ coord-space bug — see note below) | `AnimationClipResource` |
+| 6 | `describeNodes()` | **implemented** | `NodeDescriptor` hierarchy in `SceneData` |
 
 **Mesh loading specifics:**
 
@@ -59,12 +98,12 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
 - Per-corner vertex emission (position/normal/UV via `ufbx_get_vertex_vec3`/`vec2`) — the same vertex is written 3 times per triangle. A deduplication pass via `ufbx_generate_indices` can be added later if the overhead becomes measurable.
 - **UV V-flip on read** — FBX stores UVs with V=0 at the bottom (OpenGL convention) ; the engine and Vulkan use V=0 at the top, matching glTF. The loader stores `(u, 1.0F - v)` in the vertex stream so embedded textures sample the correct region. **Without this flip, FBX models render with shuffled / black-region UVs** (regression marker — see `Paladin` recette below).
 - Winding pre-compensates for the 180° X rotation applied by `SceneDataConsumer` (indices 1 and 2 swapped), identical to GLTFLoader.
-- Materials are resolved per-part via `mesh.materials.data[partIdx]->typed_id` → `m_materials[...]`, falling back to the default `StandardResource` when the FBX has no material connected.
+- Materials are resolved per-part via `mesh.materials.data[partIdx]->typed_id` → the materialized material, falling back to the default `StandardResource` when the FBX has no material connected.
 
 **Image/material loading specifics:**
 
-- `loadImages()` supports both **embedded content** (`ufbx_texture.content`) and **external file references** (tries `texture.filename`, `absolute_filename`, `relative_filename` in order). Format detected from filename extension (PNG/JPEG/Targa).
-- `loadMaterials()` maps `ufbx_material.pbr` (`ufbx_material_pbr_maps`) to `StandardResource` components:
+- `describeImages()` supports both **embedded content** (`ufbx_texture.content`) and **external file references** (tries `texture.filename`, `absolute_filename`, `relative_filename` in order). Format detected from filename extension (PNG/JPEG/Targa).
+- `describeMaterials()` maps `ufbx_material.pbr` (`ufbx_material_pbr_maps`) to `StandardResource` components:
   - `base_color` → `setAlbedoComponent` (sRGB)
   - `roughness` → `setRoughnessComponent`
   - `metalness` → `setMetalnessComponent`
@@ -72,30 +111,30 @@ Loads FBX files. Uses `ufbx` library (vendored as a git submodule at `dependenci
   - `ambient_occlusion` → `setAmbientOcclusionComponent`
   - `emission_color` + `emission_factor` → `setAutoIlluminationComponent` (sRGB)
   - `opacity` < 1.0 or `opacity.texture != nullptr` → alpha blending enabled
-- Texture resolution is **cached on demand** inside `loadMaterials()`: each `ufbx_texture*` is turned into a `Texture2D` exactly once, indexed by `typed_id`. Multiple materials sharing a texture reuse the same engine resource.
+- Texture resolution is **cached on demand** while the materials are materialized: each (texture `typed_id`, colour space) is turned into a `Texture2D` exactly once. Multiple materials sharing a texture reuse the same engine resource.
 
 **Skinning specifics:**
 
 - A single skin deformer per mesh is supported (`mesh.skin_deformers.data[0]`). Multiple deformers stacked on the same mesh fall back to the first one.
 - **cluster_index equals joint_index in the Skeleton** — the skeleton is built in the exact same order as `skin.clusters[]`, so no remapping layer is needed between vertex influences and joint matrices.
-- Per-vertex influences/weights are emitted during `loadMeshes`: up to **4 bones per vertex**, sourced from ufbx's weight-sorted `skin_vertex.weights[]` (ufbx guarantees descending sort). Weights are normalised to sum to 1.0 since ufbx does not guarantee it.
+- Per-vertex influences/weights are emitted during `describeMeshes()`: up to **4 bones per vertex**, sourced from ufbx's weight-sorted `skin_vertex.weights[]` (ufbx guarantees descending sort). Weights are normalised to sum to 1.0 since ufbx does not guarantee it.
 - Parent joint resolution walks `bone_node->parent` until another cluster's bone is hit; isolated clusters map to `NoParent` (skeleton root).
 - `cluster->geometry_to_bone` is used as the inverse bind matrix (local vertex → bone space), converted from ufbx's 3×4 affine into the engine's 4×4 column-major `Matrix<4, float>` via `convertUfbxMatrix`.
-- Skinned meshes are tracked in `m_meshToSkinIndex` at emission time; at the end of `load()`, each skinned renderable gets `setSkeletalData(skeleton, skin, clips)` via `Renderable::SkeletalDataTrait`, exactly like GLTFLoader.
-- Bone element ids are added to `SceneData::skinJointNodeIndices` so the scene consumer does not instantiate them as regular scene nodes — joint transforms are owned by the `SkeletalAnimator`.
+- A skinned mesh carries its skin deformer's index (`FBX::Mesh::skin`); at the end of `load()`, each skinned renderable gets `setSkeletalData(skeleton, skin, clips)` via `Renderable::SkeletalDataTrait`, exactly like GLTFLoader.
+- The bone nodes' DESCRIPTOR indices are added to `SceneData::skinJointNodeIndices` so the scene consumer does not instantiate them as regular scene nodes — joint transforms are owned by the `SkeletalAnimator`.
 
 **LoaderOptions support:**
 
-- `skipSkinning` — bypasses `loadSkins()`, `loadAnimations()` and per-vertex influence emission in `loadMeshes()`. A mesh that would otherwise have been skinned is loaded as a static pose.
-- `excludedNodeNames` — matched against `ufbx_node.name` during `buildNodeDescriptors()`. Any node whose own name **or any ancestor's name** is in the set is dropped from `SceneData::nodes` along with its entire subtree. Handy for stripping rig helpers, dummies, LOD levels or debug locators.
+- `skipSkinning` — bypasses `describeSkins()`, `describeAnimations()` and per-vertex influence emission in `describeMeshes()`. A mesh that would otherwise have been skinned is loaded as a static pose.
+- `excludedNodeNames` — matched against `ufbx_node.name` during `describeNodes()`. Any node whose own name **or any ancestor's name** is in the set is dropped from `SceneData::nodes` along with its entire subtree. Handy for stripping rig helpers, dummies, LOD levels or debug locators.
 
 **Animation specifics (étape 4):**
 
 - One `AnimationClip<float>` is generated per `ufbx_anim_stack`, named after the stack.
 - Keyframes are resampled at **30 Hz** via `ufbx_evaluate_transform(stack.anim, bone, time)` — game-engine canonical rate, matches Mixamo's default. High-frequency curves (> 30 Hz) alias, acceptable for skeletal motion.
 - Every joint produces three channels (Translation / Rotation / Scale), with `jointIndex` = `cluster_index` inside the **first** skin deformer (`scene.skin_deformers.data[0]`). Mixamo and most pipelines keep bone ordering consistent across every skin of the same rig, so one clip set attaches cleanly to every skinned mesh.
-- Clips are stored flat in `m_animationClips` and handed in bulk to every `SkeletalDataTrait::setSkeletalData(...)` call — identical to GLTFLoader's pattern.
-- Per-stack sampling lives in the static helper `FBXLoader::sampleAnimStack(stack, jointToNode)`. `loadAnimations()` builds `jointToNode` from the reference skin's clusters; `loadAnimationClipsOnly()` builds it by name lookup against an external skeleton. Both call paths share the helper to guarantee identical 30 Hz / `ufbx_evaluate_transform` semantics.
+- Clips are materialized flat and handed in bulk to every `SkeletalDataTrait::setSkeletalData(...)` call — identical to GLTFLoader's pattern.
+- Per-stack sampling lives in the helper `sampleAnimStack(stack, jointToNode, uniformScale)` (`FBXParser.cpp`). `describeAnimations()` builds `jointToNode` from the reference skin's clusters; `FBX::analyseClipsOnly()` (behind `loadAnimationClipsOnly()`) builds it by name lookup against an external skeleton. Both call paths share the helper to guarantee identical 30 Hz / `ufbx_evaluate_transform` semantics.
 
 **Multi-file animation pipeline (`loadAnimationClipsOnly`):**
 

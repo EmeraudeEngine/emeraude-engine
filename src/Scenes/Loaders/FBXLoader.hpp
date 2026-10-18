@@ -30,53 +30,24 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
-#include <array>
-#include <memory>
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
 #include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <string_view>
 #include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "Animation/AnimationChannel.hpp"
-#include "Animation/Skin.hpp"
-#include "VertexFactory/Shape.hpp"
 #include "Resources/Manager.hpp"
 
 /* Forward declarations. */
-struct ufbx_scene;
-struct ufbx_node;
-struct ufbx_anim_stack;
-
 namespace EmEn::Animations
 {
 	class SkeletonResource;
 	class AnimationClipResource;
-}
-
-namespace EmEn::Graphics
-{
-	class ImageResource;
-
-	namespace TextureResource
-	{
-		class Texture2D;
-	}
-
-	namespace Material
-	{
-		class Interface;
-	}
-
-	namespace Renderable
-	{
-		class Abstract;
-	}
 }
 
 namespace EmEn::Scenes::Loaders
@@ -85,6 +56,8 @@ namespace EmEn::Scenes::Loaders
 	 * @brief Loads FBX composite assets into engine resource containers.
 	 * @note Produces an SceneData with format-agnostic node descriptors.
 	 * Uses ufbx (vendored) for parsing. No dependency on Scenes/ types.
+	 * The conversion itself is FBX::analyse() (FBXParser.hpp, fuzzed): this class opens the file and
+	 * materializes the analysed asset into engine resources.
 	 */
 	class EMEN_API FBXLoader final : public Interface
 	{
@@ -133,9 +106,6 @@ namespace EmEn::Scenes::Loaders
 
 		private:
 
-			[[nodiscard]]
-			bool loadImages (const ufbx_scene & scene, const std::filesystem::path & filepath, const std::filesystem::path & basePath) noexcept;
-
 			/**
 			 * @brief Re-reads the encoded bytes of a texture embedded in an FBX (an image's EncodedSource: ufbx gives no
 			 * file offset for embedded content), the FBX parsed without geometry, animation or external files.
@@ -147,56 +117,6 @@ namespace EmEn::Scenes::Loaders
 			[[nodiscard]]
 			static bool readEmbeddedTexture (const std::filesystem::path & filepath, uint32_t index, std::vector< std::byte > & bytes) noexcept;
 
-			[[nodiscard]]
-			bool loadMaterials (const ufbx_scene & scene) noexcept;
-
-			[[nodiscard]]
-			bool loadMeshes (const ufbx_scene & scene, SceneData & output) noexcept;
-
-			void loadSkins (const ufbx_scene & scene, SceneData & output) noexcept;
-
-			void loadAnimations (const ufbx_scene & scene, SceneData & output) noexcept;
-
-			void buildNodeDescriptors (const ufbx_scene & scene, SceneData & output) noexcept;
-
-			/**
-			 * @brief Resamples one anim_stack into per-joint T/R/S channels.
-			 * @note jointToNode[i] is the ufbx_node driving joint i, or nullptr to skip
-			 * the joint. Sample rate is 30 Hz (Mixamo canonical).
-			 * @param stack The FBX animation stack to evaluate.
-			 * @param jointToNode Per-joint ufbx_node mapping. Entries can be null.
-			 * @param uniformScale The uniform scale applied to translation keyframes.
-			 * @return std::vector< Base::Animation::AnimationChannel< float > >
-			 */
-			[[nodiscard]]
-			static std::vector< Base::Animation::AnimationChannel< float > > sampleAnimStack (const ufbx_anim_stack & stack, const std::vector< const ufbx_node * > & jointToNode, float uniformScale) noexcept;
-
 			Resources::Manager & m_resources;
-			std::string m_resourcePrefix;
-			std::vector< std::shared_ptr< Graphics::ImageResource > > m_images;
-			/* ⚠️ TWO slots per FBX texture, indexed by colour space (0 = linear data, 1 = sRGB).
-			 * The sRGB flag is baked into the resource when it is created and comes from the
-			 * USAGE, not from the asset: one image may serve as an sRGB albedo for one material
-			 * and as a linear roughness map for another. A cache keyed on the texture index alone
-			 * let the first usage impose its colour space on every other one. */
-			std::vector< std::array< std::shared_ptr< Graphics::TextureResource::Texture2D >, 2 > > m_textures;
-			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materials;
-			/* Meshes are indexed by ufbx mesh_element_id (stable across the scene). */
-			std::unordered_map< uint32_t, std::shared_ptr< Graphics::Renderable::Abstract > > m_meshes;
-			std::unordered_map< uint32_t, std::shared_ptr< Base::VertexFactory::Shape< float > > > m_shapes;
-			/* Skeletal animation data. */
-			std::vector< std::shared_ptr< Animations::SkeletonResource > > m_skeletons;
-			std::vector< Base::Animation::Skin< float > > m_skins;
-			std::unordered_map< uint32_t, size_t > m_meshToSkinIndex;
-			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_animationClips;
-			/* Bone nodes collected by loadSkins(). They are stored as ufbx POINTERS, never as
-			 * element ids: SceneData::skinJointNodeIndices is consumed as an index into
-			 * SceneData::nodes, which buildNodeDescriptors() COMPACTS (the root and every
-			 * excluded subtree are skipped). The two numbering schemes do not coincide, and
-			 * feeding an element id to the consumer makes it drop an unrelated node together
-			 * with its whole subtree. buildNodeDescriptors() resolves these pointers to real
-			 * node indices once the compaction is known. */
-			std::unordered_set< const ufbx_node * > m_skinJointNodes;
-			std::unordered_set< size_t > m_skinJointNodeIndices;
 	};
 }
