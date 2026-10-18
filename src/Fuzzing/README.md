@@ -11,7 +11,10 @@ with every validation it carries.
 | `fuzz_fbx` | `Scenes/Loaders/FBXParser.cpp`, `FBX::analyse()` + `FBX::analyseClipsOnly()` (ufbx linked from the external dependencies) | 2026-10-18 |
 | `fuzz_usd` | `Scenes/Loaders/USDParser.cpp` + `USDZArchive.cpp`: `USD::composeStage()`, `USD::analyse()`, `USD::forEachMesh()` (lightusd linked from the external dependencies, UBSan's `vptr` check off: lightusd has no RTTI) | 2026-10-18 |
 
-glTF follows (engine item `engine-fuzz-harness-for-loaders`).
+| `fuzz_gltf` | `Scenes/Loaders/GLTFParser.cpp`: `GLTF::parse()` + `GLTF::analyse()` (fastgltf, simdjson, meshoptimizer and Draco linked from the external dependencies) | 2026-10-18 |
+
+The four scene loaders are covered (WAD, FBX, USD, glTF): the former engine item `engine-fuzz-harness-for-loaders`
+is done.
 
 ## Build
 
@@ -35,6 +38,10 @@ materials) make a good local corpus. A Mixamo export (the Paladin) is not ours t
 
 USD: the test files of the tinyusdz repository (USDA, USDC, USD and USDZ under 64 KB: 1 166 files). The harness is
 hermetic: a USDZ resolves against its own table, a plain layer's resolver refuses every asset.
+
+glTF: the self-contained models of projet-alpha's `glTF-Sample-Assets` submodule (`.glb` and `glTF-Embedded` under
+256 KB), plus the small Draco, meshopt and quantized variants with their `.bin` folded into `data:` uris (a seed with
+an external file reads nothing: every uri is confined to an empty directory). 90 seeds.
 
 ## Seeing inside a third-party library
 
@@ -76,3 +83,16 @@ src/Fuzzing/build/fuzz_wad src/Fuzzing/fuzz_wad.corpus -fork=16 -max_total_time=
   budgets a root layer at max(256 MiB, 16 x the file).
 - 2026-10-18, `fuzz_usd`, second campaign, lightusd instrumented (patched): 3.7 M executions, 93 342 edges, 0 finding.
 - 2026-10-18, `fuzz_usd`, third campaign, the same: 2.5 M executions, 95 085 edges, 0 finding.
+- 2026-10-18, `fuzz_gltf`, first campaign (90 seeds): stopped on 13 crashes, two causes — an index past its
+  primitive's vertices reaching emeraude-base's tangent computation (out-of-bounds reads and writes), and fastgltf
+  decoding a `data:` uri whose base64 length is not a multiple of 4 (a heap overflow). Fixed (owner decisions): the
+  analysis checks every index against its own primitive, base's seven normal / tangent computations refuse an
+  inconsistent shape, and `patches/fastgltf.patch` (ext-deps-generator) refuses such a uri.
+- 2026-10-18, `fuzz_gltf`, second campaign (`-ignore_crashes`): 6.0 M executions, 86 crashes, two more causes —
+  fastgltf's `GenerateMeshIndices` running during the parse, before `validate()` (an unchecked accessor index, an
+  unbounded allocation; 50), and the Draco extension's bufferView read without a bounds check (26; the 10 others did
+  not reproduce alone). Fixed (owner decision): the option is dropped, the analysis draws a non-indexed primitive three
+  by three; the Draco view is bounds-checked. The 99 reproducers run clean.
+- 2026-10-18, `fuzz_gltf`, third campaign: 4.6 M executions, 0 finding. ⚠️ A first run of it is void: `libEmeraude.so`
+  was rebuilt while it ran and every later fork job died at start-up (631 "crashes" without an artifact) — never
+  rebuild the engine library a running fuzzer links.

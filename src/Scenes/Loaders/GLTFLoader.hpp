@@ -53,6 +53,11 @@ namespace fastgltf
 	class Asset;
 }
 
+namespace EmEn::Scenes::Loaders::GLTF
+{
+	struct Asset;
+}
+
 namespace EmEn::Animations
 {
 	class SkeletonResource;
@@ -82,10 +87,6 @@ namespace EmEn::Graphics
 
 namespace EmEn::Scenes::Loaders
 {
-	/* Decoder for EXT_meshopt_compression buffer views. Defined in GLTFLoader.cpp : its interface
-	 * speaks fastgltf types, which must not leak into a public engine header. */
-	class MeshoptBufferCache;
-
 	/**
 	 * @brief Loads glTF/glb composite assets into engine resource containers.
 	 * @note Produces an SceneData with format-agnostic node descriptors.
@@ -160,51 +161,23 @@ namespace EmEn::Scenes::Loaders
 		private:
 
 			[[nodiscard]]
-			bool loadImages (const fastgltf::Asset & asset, const std::filesystem::path & filepath, const std::filesystem::path & basePath) noexcept;
+			bool loadImages (GLTF::Asset & analysed, const std::filesystem::path & filepath, const std::filesystem::path & basePath) noexcept;
 
 			[[nodiscard]]
 			bool loadMaterials (const fastgltf::Asset & asset) noexcept;
 
+			/**
+			 * @brief Materializes the analysed meshes: geometries, the per-primitive materials (the vertex-colour and
+			 * primary-set-only variants included), meshes and descriptors.
+			 * @param analysed The analysed asset (GLTF::analyse()).
+			 * @param output A reference to the scene data to populate.
+			 * @return bool False when a mesh fell back to the default one.
+			 */
 			[[nodiscard]]
-			bool loadMeshes (const fastgltf::Asset & asset, SceneData & output) noexcept;
-
-			void loadSkins (const fastgltf::Asset & asset, SceneData & output) noexcept;
-
-			void loadAnimations (const fastgltf::Asset & asset, SceneData & output) noexcept;
-
-			/**
-			 * @brief Turns a finished channel set into a clip resource and appends it to a list.
-			 * @param clipName The clip's own name, which the animators index on.
-			 * @param keySpace The resource key space telling the two halves of a split animation
-			 * apart ("/animation/" for the skeletal half, "/node-animation/" for the node half).
-			 * @param channels The channels, consumed.
-			 * @param output A reference to the list to append to.
-			 */
-			void registerClip (const std::string & clipName, const std::string & keySpace, std::vector< Base::Animation::AnimationChannel< float > > channels, std::vector< std::shared_ptr< Animations::AnimationClipResource > > & output) const noexcept;
-
-			/**
-			 * @brief Collects the punctual lights declared by the asset, in photometric units.
-			 * @note Must run BEFORE buildNodeDescriptors(), which indexes into output.lights.
-			 * @param asset A reference to the parsed glTF asset.
-			 * @param output A reference to the scene data to populate.
-			 */
-			static void loadLights (const fastgltf::Asset & asset, SceneData & output) noexcept;
-
-			/**
-			 * @brief Collects the authored camera viewpoints declared by the asset.
-			 * @note Must run BEFORE buildNodeDescriptors(), which indexes into output.cameras.
-			 * @param asset A reference to the parsed glTF asset.
-			 * @param output A reference to the scene data to populate.
-			 */
-			static void loadCameras (const fastgltf::Asset & asset, SceneData & output) noexcept;
-
-			void buildNodeDescriptors (const fastgltf::Asset & asset, SceneData & output) const noexcept;
+			bool buildMeshes (const GLTF::Asset & analysed, SceneData & output) noexcept;
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;
-			/* EXT_meshopt_compression working set. Built at the start of a load, released as soon
-			 * as the geometry is out : on a compressed scene it is the load's memory high-water mark. */
-			std::unique_ptr< MeshoptBufferCache > m_bufferCache;
 			/* Images, indexed by glTF image index. An image lands in exactly one of the two tables :
 			 * m_compressedImages for a KTX2 payload (KHR_texture_basisu) kept block-compressed all the
 			 * way to the GPU, m_images for anything the engine has to decode to pixels. */
@@ -233,18 +206,9 @@ namespace EmEn::Scenes::Loaders
 			std::vector< uint8_t > m_materialSamplesSecondarySet;
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materialsPrimarySetOnly;
 			std::vector< std::shared_ptr< Graphics::Renderable::Abstract > > m_meshes;
-			std::vector< std::shared_ptr< Base::VertexFactory::Shape< float > > > m_shapes;
 			/* Skeletal animation data — indexed by glTF skin index. */
 			std::vector< std::shared_ptr< Animations::SkeletonResource > > m_skeletons;
-			std::vector< Base::Animation::Skin< float > > m_skins;
-			std::unordered_map< size_t, size_t > m_meshToSkinIndex;
-			/* The root transform of each skinned mesh (Skin::setRootTransform()), from its node and the skeleton's
-			 * common ancestor. */
-			std::unordered_map< size_t, Base::Math::Matrix< 4, float > > m_meshSkinRootTransform;
-			/* The largest JOINTS_0 value of each mesh, checked against its skin's joint count. */
-			std::unordered_map< size_t, size_t > m_meshMaxJointIndex;
 			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_animationClips;
 			std::vector< std::shared_ptr< Animations::AnimationClipResource > > m_nodeAnimationClips;
-			std::unordered_set< size_t > m_skinJointNodeIndices;
 	};
 }

@@ -5789,6 +5789,16 @@ removed by `SetTimer()` on the window's own thread (`DestroyWindow()` fails from
 cleanup thread leaked every message-only window), one id per notification (a fixed `uID = 1` failed `NIM_ADD` for a
 second notification within 6 s). **Rule:** never `std::thread` in the engine.
 
+### ⚠️ A glTF uri is DATA: it is confined to the asset's directory (2026-10-18, owner decision)
+
+fastgltf's `LoadExternalBuffers` followed a buffer uri as written and the loader joined an image uri as
+`basePath / uri`: an absolute uri (`std::filesystem::path::append()` REPLACES the base) or a `../../..` made the engine
+read any local file as geometry or texture. `GLTF::parse()` no longer passes `LoadExternalBuffers`: it confines every
+buffer and image uri (`IO::confinedPath()`, a scheme refused too) and reads the buffers itself (`IO::fileGetRange()`).
+Red: fastgltf with the old options loaded `../../Box0.bin` and an absolute path; green: the engine refuses both, a
+control loads, the 26 A/B models are byte-identical. **Rule:** every path written in a loaded file goes through
+`IO::confinedPath()`, as the Ave Robustus rule says — a library's "external file" option is not a confinement.
+
 ### ⚠️ lightusd's StreamReader::read() succeeded on a SHORT read (2026-10-18, found by fuzz_usd)
 
 `StreamReader::read(n, …)` returned the number of bytes it COULD copy — non-zero on a truncated stream — and the

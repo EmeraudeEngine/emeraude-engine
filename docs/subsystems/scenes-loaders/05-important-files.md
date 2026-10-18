@@ -2,7 +2,10 @@
 
 - `Scenes/Loaders/SceneData.hpp` — Common intermediate format (NodeDescriptor, MeshDescriptor, SceneData)
 - `Scenes/Loaders/Interface.hpp` — Loader interface + LoaderOptions
-- `Scenes/Loaders/GLTFLoader.hpp/.cpp` — glTF/GLB implementation. Also hosts `MeshoptBufferCache` +
+- `Scenes/Loaders/GLTFParser.hpp/.cpp` — the glTF loader's analysis half since 2026-10-18 (`GLTF::parse()`,
+  `GLTF::analyse()`, fuzzed by `src/Fuzzing/fuzz_gltf.cpp`): it now hosts the caches and readers described in the next
+  entry; its header forward-declares fastgltf.
+- `Scenes/Loaders/GLTFLoader.hpp/.cpp` — glTF/GLB implementation (the materialization since 2026-10-18). Hosted `MeshoptBufferCache` +
   `MeshoptBufferAdapter` (`EXT_meshopt_compression` and its ratified successor `KHR_meshopt_compression`, the same
   bitstream plus the Color filter; fastgltf fills `BufferView::meshoptCompression` for both), defined in the **.cpp** because their interface
   speaks fastgltf types, which must never leak into a public engine header — hence the forward

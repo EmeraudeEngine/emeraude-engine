@@ -36,6 +36,14 @@ is budgeted at max(`USD::MinimumMemoryLimit` 256 MiB, `USD::MemoryLimitPerFileBy
 `USDLoadOptions::max_memory_limit_in_mb` (`USD::setLoadOptions()`; lightusd's own default is 512 MiB) — a 15 KB USDC
 asked for 400 MB. The composition options' `max_memory_limit_mb` is advisory: `composition.cc` never reads it.
 
+**Validated on macOS and Windows (2026-10-18, engine b810222b, the USD data fetched from the Linux machine over the
+LAN by the engine's resource sharing — 8.9 GB, every file SHA-256-checked):** every count matches Linux —
+WorldLobby with composition (942 meshes, 141 materials, 348 textures, 30 lights), JungleRuins option 1 (84 meshes,
+87 materials, 778 point instancers) and option 2 (6 instance sets, 138 instances); 0 VUID; AppleClang PARANOID and
+MSVC 0 warning. JungleRuins option 1's untextured terrain (1 103 warnings, 196 texture paths) is the same on the three
+systems and before the split: item `usd-texture-paths-relative-to-authoring-layer`. Windows' grid of lines over that
+scene is SSGI at 1280x720: item `ssgi-five-pixel-column-grid`.
+
 > [!CAUTION]
 > **`lightusd::LoadUSDFromFile()` composes NOTHING.** It reads the root layer, parses the
 > `subLayers` metadata, and returns success — a 19-sublayer stage comes back holding 2 prims.

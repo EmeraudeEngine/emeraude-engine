@@ -218,8 +218,9 @@ through all 49 clips, and the watch's second hand snaps back to 12.
 
 **Shape no longer carries skeletal data.** The `ShapeLoadResult<V,I>` struct bundles `Shape` + `optional<Skeleton>` + `optional<Skin>`. All file format interfaces (`FileFormatInterface::readStream()`) use this struct.
 
-**GLTF** (`Scenes/Loaders/GLTFLoader.cpp`) and **FBX** (`Scenes/Loaders/FBXLoader.cpp`; its skins and clips are built
-by `FBXParser.cpp`'s `describeSkins()` / `describeAnimations()`, the resources created by the loader):
+**GLTF** (`Scenes/Loaders/GLTFLoader.cpp`) and **FBX** (`Scenes/Loaders/FBXLoader.cpp`); since 2026-10-18 their skins
+and clips are built by `GLTFParser.cpp` / `FBXParser.cpp` (`describeSkins()` / `describeAnimations()`), the resources
+created by the loaders:
 - `loadSkins()` builds Skeleton, creates `SkeletonResource` via resource manager, stores `Skin` per skin index
 - `loadAnimations()` reads channels/samplers (glTF) or resamples `anim_stack` at 30 Hz (FBX), creates `AnimationClipResource` via resource manager
 - After loading: attaches skeletal data to renderables via `SkeletalDataTrait::setSkeletalData()`

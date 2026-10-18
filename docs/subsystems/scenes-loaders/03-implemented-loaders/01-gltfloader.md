@@ -4,16 +4,50 @@
 
 Loads glTF 2.0 / GLB files. Uses `fastgltf` library (vendored, static).
 
+**Two halves (2026-10-18, owner decisions: analysis / materialization, the MATERIALS on the materialization side):**
+`GLTF::parse()` / `GLTF::analyse()` (`GLTFParser.hpp/.cpp`) parse the bytes, confine every external uri, run every
+validation, decode the meshopt / Draco buffers, build one `Shape` per mesh, the skins, the clips, the lights, the
+cameras and the node tree — plain data, no resource, service or device. `GLTFLoader` reads the file, hands the bytes to
+the analysis, then MATERIALIZES: images (their buffer views through the analysis's still-decoded cache,
+`GLTF::bufferView()`), materials (read from the validated `fastgltf::Asset` the analysis hands over — a material is
+only fields of that asset), geometries, meshes, skeletons and clips, the skeletal attachment, the `SceneData`;
+`GLTF::releaseBuffers()` then drops the decoded views. `GLTFParser.hpp` forward-declares fastgltf (the types stay out
+of the engine headers). Fuzzed by `src/Fuzzing/fuzz_gltf.cpp`, hermetic (its uris confined to an empty directory).
+Verified identical (2026-10-18): everything `load()` delivers — every shape hashed bit for bit (positions, normals,
+both UV sets, tangents, influences, weights, vertex colours and their indices, triangles, groups), the mesh /
+geometry / material names, nodes (frame, mesh, light, camera), lights, cameras, skeletons, skeletal and node clips
+(every key) — byte-identical before and after, and the sorted [GLTFLoader] traces identical, on 26 Khronos models
+(Fox, CesiumMan + its Draco variant, RiggedFigure, BrainStem + Draco + meshopt, BoxAnimated, InterpolationTest,
+DamagedHelmet, LightsPunctualLamp, Cameras, MultiUVTest, VertexColorTest, TextureTransformTest, ClearCoatTest,
+NormalTangentMirrorTest, SimpleSkin, RecursiveSkeletons, AnimatedCube, MorphPrimitivesTest, Avocado Draco,
+MeshoptCubeTest, DragonAttenuation meshopt, FlightHelmet KTX2, Sponza); 0 VUID.
+
+**Hardened by the fuzzing (2026-10-18, owner decisions):**
+- **A uri is CONFINED to the asset's directory** — buffers AND images: an absolute uri, a scheme or a `..` leaving
+  the directory is refused with an explicit error (`IO::confinedPath()`). fastgltf's `LoadExternalBuffers` (no longer
+  passed) followed the uri as written, and the image path was `basePath / uri`: a glTF could make the engine read any
+  local file. The analysis reads the external buffers itself (`IO::fileGetRange()`, the declared `byteLength`).
+  None of the 150 Khronos models uses either form.
+- **No `GenerateMeshIndices`**: fastgltf ran it DURING the parse, before `validate()` — an unchecked POSITION accessor
+  index, an unbounded allocation, a count that did not match the generated data. A non-indexed TRIANGLES primitive is
+  drawn three by three by the analysis itself (Fox is one: identical).
+- **An index refers to a vertex of its OWN primitive**: past them the triangle pointed elsewhere or out of the shape,
+  and the tangent computation read and wrote out of bounds; the primitive is unreadable (default mesh, the asset
+  refused, as for a failed decode). emeraude-base's normal / tangent computations also refuse an inconsistent shape.
+- **The Draco extension's bufferView is bounds-checked** (index and range: not covered by `validate()`).
+- **fastgltf** (ext-deps-generator `patches/fastgltf.patch`): a `data:` uri whose base64 length is not a non-zero
+  multiple of 4 overflowed the decoder's output — refused (`Error::InvalidURI`).
+
 **6-Phase Pipeline:**
 
-| Phase | Method | Output |
+| Phase | Analysis / materialization | Output |
 |-------|--------|--------|
-| 1 | `loadImages()` | `ImageResource` **or** `CompressedImageResource` (KTX2) |
-| 2 | `loadMaterials()` | `Material::StandardResource` + `Texture2D` on-demand |
-| 3 | `loadMeshes()` | `IndexedVertexResource` + `SimpleMeshResource`/`MeshResource` |
-| 4 | `loadSkins()` | `SkeletonResource` + `Skin` |
-| 5 | `loadAnimations()` | `AnimationClipResource` |
-| 6 | `buildNodeDescriptors()` | `NodeDescriptor` hierarchy in `SceneData` |
+| 1 | `loadImages()` (materialization) | `ImageResource` **or** `CompressedImageResource` (KTX2) |
+| 2 | `loadMaterials()` (materialization) | `Material::StandardResource` + `Texture2D` on-demand |
+| 3 | `describeMeshes()` → `buildMeshes()` | `IndexedVertexResource` + `SimpleMeshResource`/`MeshResource` |
+| 4 | `describeSkins()` → `load()` | `SkeletonResource` + `Skin` |
+| 5 | `describeAnimations()` → `load()` | `AnimationClipResource` |
+| 6 | `describeNodes()` | `NodeDescriptor` hierarchy in `SceneData` |
 
 Phases 4-5 skipped when `skipSkinning = true`.
 
@@ -111,7 +145,8 @@ several attributes into one view, so a dozen accessors read the same block and d
 accessor would redo the same work over and over. Every accessor read takes the
 `MeshoptBufferAdapter` as its fourth argument: six `fastgltf::iterateAccessor` calls — two inside
 `readDracoAwareAttribute()` / `readDracoAwareIndices()`, which carry the ten vertex/index read sites of
-`loadMeshes()`, one in `loadSkins()`, three in `loadAnimations()` (2026-10-13).
+`describeMeshes()`, one in `describeSkins()`, three in `describeAnimations()` (2026-10-13; `GLTFParser.cpp` since the
+2026-10-18 split).
 
 > [!WARNING]
 > **A missed call site does not error — it reads the encoded bytes as if they were vertices.**
@@ -120,13 +155,13 @@ accessor would redo the same work over and over. Every accessor read takes the
 
 > [!NOTE]
 > The cache is the load's memory high-water mark (~300 MiB decoded on Sponza, from ~99 MiB
-> encoded). `load()` releases it right after the geometry is built and logs how much it dropped.
+> encoded). `load()` releases it (`GLTF::releaseBuffers()`) once the images are read and logs how much it dropped.
 
 > [!CAUTION]
 > **The adapter holds a RAW pointer to the cache: every accessor read must run BEFORE `load()` calls
-> `m_bufferCache.reset()`.** Verified 2026-10-13: all the reads live in `loadMeshes()`, `loadSkins()` and
-> `loadAnimations()` (and `loadImages()` reads image views through the cache), all before the reset;
-> `loadLights()`, `loadCameras()` and `buildNodeDescriptors()` run after it and read no accessor. An accessor
+> `GLTF::releaseBuffers()`.** Verified 2026-10-18: all the reads live in the analysis (`describeMeshes()`,
+> `describeSkins()`, `describeAnimations()`) and `loadImages()` reads image views through `GLTF::bufferView()`, all
+> before the release; the lights, cameras and nodes read no accessor. An accessor
 > read added to one of those three, or anywhere after the reset, is a use-after-free through
 > `MeshoptBufferAdapter::cache`. (First checked for an unattributed 2026-08-11 SIGILL at idle on the compressed
 > Sponza: nothing tied it to the loader; it most likely was the CEF `MemoryInfra` trap that projet-alpha's board

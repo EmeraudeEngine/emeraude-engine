@@ -32,6 +32,7 @@ declare -A ANALYSIS=(
 	[fuzz_wad]="src/Scenes/Loaders/WADParser.cpp"
 	[fuzz_fbx]="src/Scenes/Loaders/FBXParser.cpp"
 	[fuzz_usd]="src/Scenes/Loaders/USDParser.cpp src/Scenes/Loaders/USDZArchive.cpp"
+	[fuzz_gltf]="src/Scenes/Loaders/GLTFParser.cpp"
 )
 
 # The external static libraries of each target, as <header>:<library>: lib<library>.a is found in the lib directory
@@ -40,6 +41,7 @@ declare -A ANALYSIS=(
 declare -A EXTERNAL=(
 	[fuzz_fbx]="ufbx/ufbx.h:ufbx"
 	[fuzz_usd]="lightusd/lightusd.hh:lightusd_static"
+	[fuzz_gltf]="fastgltf/core.hpp:fastgltf simdjson.h:simdjson meshoptimizer.h:meshoptimizer draco/compression/decode.h:draco"
 )
 
 # Extra flags of a target. lightusd is built WITHOUT RTTI (its LIGHTUSD_CXX_RTTI option, off): UBSan's vptr check needs

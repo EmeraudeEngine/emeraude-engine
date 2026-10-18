@@ -161,6 +161,11 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   string types are unions, read member by member — 4 of them in the two new animation-stack warnings) and 7 (4 + 3: the joint / weight arrays of a vertex and the two colour-space
   slots of a texture, indexed by bounded loop counters), plus the loader's `Resources::Manager &` member. The one new
   finding (an `operator+` chain building a clip's resource name) was fixed with `String::concatenate()`.
+- **glTF split (2026-10-18)** — `GLTFLoader.cpp` split into `GLTFParser.cpp` (the analysis) and the materializing
+  `GLTFLoader.cpp`: the same findings as before, moved — `pro-bounds-constant-array-index` ×5 (2 + 3),
+  `pro-type-reinterpret-cast` ×2 (the Draco decoder's byte buffer, the GLB header bytes), the `optin.performance.Padding`
+  of a material closure. Three new `performance-inefficient-string-concatenation` of the split (skeleton and clip
+  resource names) were fixed with `String::concatenate()`.
 - **USD split (2026-10-18)** — `USDLoader.cpp` split into `USDParser.cpp` (the analysis), `USDZArchive.cpp` (the
   archive) and the materializing `USDLoader.cpp`: the same findings as before, moved — `pro-bounds-constant-array-index`
   ×2 and `pro-type-reinterpret-cast` ×3 (lightusd's raw byte buffers and the archive's entry bytes), plus the loader's
