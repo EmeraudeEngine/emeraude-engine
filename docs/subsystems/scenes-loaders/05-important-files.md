@@ -15,6 +15,9 @@
 - `Graphics/KTX2Decoder.hpp/.cpp` — KTX2 container + Basis transcoder (`KHR_texture_basisu`)
 - `Graphics/CompressedImageResource.hpp/.cpp` — the block-compressed counterpart of `ImageResource`
 - `Scenes/Loaders/FBXLoader.hpp/.cpp` — FBX implementation (ufbx): opens the file, materializes the analysis
+- `Scenes/Loaders/USDParser.hpp/.cpp` — the USD loader's analysis half: `USD::composeStage()`, `USD::analyse()`,
+  `USD::forEachMesh()` (plain data, fuzzed by `src/Fuzzing/fuzz_usd.cpp`)
+- `Scenes/Loaders/USDZArchive.hpp/.cpp` — a USDZ mapped (or held in memory) and its asset resolution
 - `Scenes/Loaders/FBXParser.hpp/.cpp` — its analysis half, `FBX::analyse()` → `FBX::Asset` and `FBX::analyseClipsOnly()`
   (plain data, fuzzed by `src/Fuzzing/fuzz_fbx.cpp`)
 - `Scenes/Loaders/WADLoader.hpp/.cpp` — Doom WAD level materializer (`FullBrightLuminance` lives in the header)

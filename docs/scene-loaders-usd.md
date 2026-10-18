@@ -380,7 +380,7 @@ dormant MDI infrastructure (`Core/Graphics/MDI/Enabled`, default false, one know
 
 **Tydra is no help here and never will be.** `PointInstancer` appears **zero times** in the whole
 of `src/tydra/`. Instances are therefore read straight from the prims, by
-`USDLoader::collectInstancers()`. Tydra does, however, *descend* into a prototype and convert its
+`collectInstancers()` (the `USD::` analysis, `USDParser.cpp`). Tydra does, however, *descend* into a prototype and convert its
 meshes like any other, handing back `RenderMesh::abs_path` — which is exactly what ties an
 instancer to the renderable its instances draw, without patching Tydra.
 
@@ -795,7 +795,7 @@ holding 353 entries, 38 USD layers and 285 images. Demo: `projet-alpha --load-de
 
 ### 11.1 The archive is MAPPED, never extracted
 
-`USDZArchive` (defined in `USDLoader.cpp`) memory-maps the file and reads the asset table with
+`USDZArchive` (`USDZArchive.hpp/.cpp`) memory-maps the file and reads the asset table with
 `assetOnMemory = true`, so the table holds **pointers into the mapping** instead of copying the
 archive. Layers are parsed and images decoded in place — a 1.6 GB archive costs its table (21 MB),
 not its bytes. The archive is held through a `shared_ptr` because image factories run on the

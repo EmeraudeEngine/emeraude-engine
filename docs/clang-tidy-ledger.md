@@ -161,6 +161,12 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   string types are unions, read member by member — 4 of them in the two new animation-stack warnings) and 7 (4 + 3: the joint / weight arrays of a vertex and the two colour-space
   slots of a texture, indexed by bounded loop counters), plus the loader's `Resources::Manager &` member. The one new
   finding (an `operator+` chain building a clip's resource name) was fixed with `String::concatenate()`.
+- **USD split (2026-10-18)** — `USDLoader.cpp` split into `USDParser.cpp` (the analysis), `USDZArchive.cpp` (the
+  archive) and the materializing `USDLoader.cpp`: the same findings as before, moved — `pro-bounds-constant-array-index`
+  ×2 and `pro-type-reinterpret-cast` ×3 (lightusd's raw byte buffers and the archive's entry bytes), plus the loader's
+  `Resources::Manager &` member. Four new ones of the split itself were fixed: a moved-from string read (the dome
+  image path, now `std::exchange`d), an rvalue `USD::Mesh` never moved (the consumer takes it by value) and two
+  indexed copies of a USD matrix (`toArray()` spells the sixteen elements).
 
 ### `src/Net` (2026-09-30)
 
@@ -508,10 +514,10 @@ False positives (8), kept with their reason:
 - `Graphics/Renderer.cpp:2472` `cplusplus.Move` — `m_sceneTarget` moved into a deferred retirement: the call is
   reached only through `m_sceneTarget != nullptr` (`renderFrame()`), a moved-from `shared_ptr` is null; the checker
   does not take the comparison as a re-initialisation.
-- `Scenes/Loaders/USDLoader.cpp:855 / 933 / 943 / 948 / 955` `cplusplus.NewDeleteLeaks` — the allocation is
+- `Scenes/Loaders/USDLoader.cpp:855 / 933 / 943 / 948 / 955` (in `USDParser.cpp` since the 2026-10-18 split) `cplusplus.NewDeleteLeaks` — the allocation is
   lightusd's `Animatable` copy constructor (`_ts.reset(new TimeSamples(...))`) inside the `std::optional` returned by
   `get_value()`: owned by a `unique_ptr`, freed with the copy.
-- `Scenes/Loaders/USDLoader.cpp:1961` `core.NullDereference` — the vertex loop reads `points[index]` under
+- `Scenes/Loaders/USDLoader.cpp:1961` (`USD::forEachMesh()` in `USDParser.cpp` since the 2026-10-18 split) `core.NullDereference` — the vertex loop reads `points[index]` under
   `index < points.size()` and a structured binding captured by reference, alive for the iteration.
 - projet-alpha `src/UI/WebView.CefRenderHandler.cpp:383` `core.NullDereference` — `srcBuffer`, a local captured by
   reference in a lambda that `writeActiveBufferWithMapping()` runs synchronously (through a `std::function` the

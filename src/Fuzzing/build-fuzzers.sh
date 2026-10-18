@@ -27,15 +27,25 @@ if [ -z "${LIBRARY_DIR}" ] || [ -z "${BASE_LIBRARY}" ] || [ ! -f "${BUILD_DIR}/c
 	exit 1
 fi
 
-# The analysis TU of each target: its flags come from the regular build.
+# The analysis TUs of each target: their flags come from the regular build (the first one's).
 declare -A ANALYSIS=(
 	[fuzz_wad]="src/Scenes/Loaders/WADParser.cpp"
 	[fuzz_fbx]="src/Scenes/Loaders/FBXParser.cpp"
+	[fuzz_usd]="src/Scenes/Loaders/USDParser.cpp src/Scenes/Loaders/USDZArchive.cpp"
 )
 
-# The external static libraries of each target (found beside the include directory holding <name>/<name>.h).
+# The external static libraries of each target, as <header>:<library>: lib<library>.a is found in the lib directory
+# beside the include directory holding <header>. LIB_<library>=/path/lib<library>.a in the environment links that one
+# instead (an instrumented build of the library, so the fuzzer sees inside it: README.md).
 declare -A EXTERNAL=(
-	[fuzz_fbx]="ufbx"
+	[fuzz_fbx]="ufbx/ufbx.h:ufbx"
+	[fuzz_usd]="lightusd/lightusd.hh:lightusd_static"
+)
+
+# Extra flags of a target. lightusd is built WITHOUT RTTI (its LIGHTUSD_CXX_RTTI option, off): UBSan's vptr check needs
+# RTTI in every object it inspects and reports each lightusd shared_ptr as an "invalid vptr" — a false positive.
+declare -A EXTRA_FLAGS=(
+	[fuzz_usd]="-fno-sanitize=vptr"
 )
 
 flagsOf ()
@@ -64,16 +74,25 @@ PYEOF
 mkdir -p "${OUT_DIR}"
 
 for target in "${!ANALYSIS[@]}"; do
-	source="${ANALYSIS[${target}]}"
+	read -r -a sources <<< "${ANALYSIS[${target}]}"
+	source="${sources[0]}"
 	eval "flags=($(flagsOf "${source}"))"
 
 	externals=()
 
-	for name in ${EXTERNAL[${target}]:-}; do
-		library=""
+	for external in ${EXTERNAL[${target}]:-}; do
+		header="${external%%:*}"
+		name="${external##*:}"
+		override="LIB_${name}"
+		library="${!override:-}"
+
+		if [ -n "${library}" ]; then
+			externals+=("${library}")
+			continue
+		fi
 
 		for (( i = 0; i < ${#flags[@]} - 1; ++i )); do
-			if [ "${flags[i]}" = "-isystem" ] && [ -f "${flags[i + 1]}/${name}/${name}.h" ] && [ -f "${flags[i + 1]}/../lib/lib${name}.a" ]; then
+			if [ "${flags[i]}" = "-isystem" ] && [ -f "${flags[i + 1]}/${header}" ] && [ -f "${flags[i + 1]}/../lib/lib${name}.a" ]; then
 				library="${flags[i + 1]}/../lib/lib${name}.a"
 				break
 			fi
@@ -87,10 +106,12 @@ for target in "${!ANALYSIS[@]}"; do
 		externals+=("${library}")
 	done
 
-	echo "building ${target} (${source})"
+	echo "building ${target} (${sources[*]})"
 
-	"${CXX}" "${flags[@]}" -fno-exceptions -g -O1 -fsanitize=fuzzer,address,undefined \
-		"${ROOT}/${source}" "${ROOT}/src/Fuzzing/${target}.cpp" \
+	read -r -a extraFlags <<< "${EXTRA_FLAGS[${target}]:-}"
+
+	"${CXX}" "${flags[@]}" -fno-exceptions -g -O1 -fsanitize=fuzzer,address,undefined "${extraFlags[@]}" \
+		"${sources[@]/#/${ROOT}/}" "${ROOT}/src/Fuzzing/${target}.cpp" \
 		-L"${LIBRARY_DIR}" -lEmeraude -Wl,-rpath,"${LIBRARY_DIR}" "${BASE_LIBRARY}" "${externals[@]}" \
 		-o "${OUT_DIR}/${target}"
 done

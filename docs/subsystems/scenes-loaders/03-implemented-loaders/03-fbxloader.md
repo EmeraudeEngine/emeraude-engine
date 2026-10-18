@@ -71,7 +71,10 @@ to (the old element-id map attached it there too).
   for 69 joints), is skipped with a warning; the model and the other clips load. Real data: 12.5 s and 69 joints at
   most (the Paladin's longest clip is 54 k keyframes).
 
-Both verified identical on the dumps above (the same bytes with the limits on).
+Both verified identical on the dumps above (the same bytes with the limits on). Validated on macOS (M6: PARANOID 0 warning, `-Wdocumentation` clean;
+animation-debug's 68 FBX resources identical by name to the pre-split run, the Paladins animating, the viewer's
+Paladin identical; 0 VUID) and Windows (MSVC Release + Debug 0 warning; the 53 clips identical by name, the viewer on
+the Paladin and on a copy under a non-ASCII path `Ω-日/Paladin-Ω.fbx`; 0 VUID).
 
 **Axis/unit conversion is delegated to ufbx at load time** via `ufbx_load_opts`:
 - `target_axes = ufbx_axes_right_handed_y_up` — output is Y-up right-handed like glTF.

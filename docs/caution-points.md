@@ -5789,6 +5789,16 @@ removed by `SetTimer()` on the window's own thread (`DestroyWindow()` fails from
 cleanup thread leaked every message-only window), one id per notification (a fixed `uID = 1` failed `NIM_ADD` for a
 second notification within 6 s). **Rule:** never `std::thread` in the engine.
 
+### ⚠️ lightusd's StreamReader::read() succeeded on a SHORT read (2026-10-18, found by fuzz_usd)
+
+`StreamReader::read(n, …)` returned the number of bytes it COULD copy — non-zero on a truncated stream — and the
+crate reader tests it as a boolean (`if (!sr()->read(...))`, 87 call sites): a truncated USDC array was taken for a
+complete one and parsing went on with zeros (a 1 KB file then declared 67 M paths and asked for 4.8 GB). Fixed in
+ext-deps-generator `patches/tinyusdz.patch` (all or nothing), together with internal references to an ANCESTOR prim
+(a composition cycle upstream did not refuse: exponential expansion). **Rule:** a third-party reader's "success" is
+not evidence the data was complete — fuzz it through the engine's analysis (`src/Fuzzing/`), with an instrumented
+build of the library (`LIB_<name>=` in `build-fuzzers.sh`) to see inside it.
+
 ### macOS DEFINES `TARGET_OS_IPHONE` (as 0): test its VALUE, never `defined()` (2026-10-04)
 
 Apple's `TargetConditionals.h` defines `TARGET_OS_IPHONE` and `TARGET_IPHONE_SIMULATOR` on EVERY Apple platform, 0 on

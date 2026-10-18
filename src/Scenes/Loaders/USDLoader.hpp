@@ -40,24 +40,17 @@
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "Math/CartesianFrame.hpp"
-#include "Math/Vector.hpp"
 #include "VertexFactory/Shape.hpp"
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
 /* Forward declarations. */
-namespace lightusd
+namespace EmEn::Scenes::Loaders::USD
 {
-	class Stage;
-	class Prim;
-
-	namespace tydra
-	{
-		class RenderScene;
-		struct XformNode;
-	}
+	struct Asset;
+	struct Instancer;
+	struct Material;
 }
 
 namespace EmEn::Resources
@@ -83,33 +76,12 @@ namespace EmEn::Graphics::TextureResource
 namespace EmEn::Scenes::Loaders
 {
 	/**
-	 * @brief A memory-mapped USDZ archive and its asset table, defined in USDLoader.cpp.
+	 * @brief A memory-mapped USDZ archive and its asset table, defined in USDZArchive.hpp.
 	 * @note Held through a shared pointer on purpose: the image resource factories run on the
 	 * THREAD POOL and outlive load(), so the mapping must be owned by whoever still needs it.
-	 * See USDLoader.cpp for the resolution rules — they carry the traps.
+	 * See USDZArchive.cpp for the resolution rules — they carry the traps.
 	 */
 	class USDZArchive;
-
-	/**
-	 * @brief Where a light sits and where it aims, in RAW USD units and USD axes.
-	 *
-	 * @note ⚠️ THIS EXISTS BECAUSE TYDRA NEVER FILLS `RenderLight::position` OR
-	 * `RenderLight::direction`. `render-light-converter.cc` writes seventeen fields and contains not
-	 * one occurrence of `transform`, `position` or `direction`, so those members always hold the
-	 * struct's defaults — (0,0,0) and (0,-1,0). Reading them yields a stage whose every light is
-	 * stacked at the world origin, correctly valued and illuminating nothing.
-	 *
-	 * @note NOT baked into engine space: the bake belongs to buildLights(), next to the one the
-	 * geometry goes through, so the two conventions stay written in the same place.
-	 */
-	struct LightPlacement
-	{
-		/** @brief World position, in stage units. */
-		Base::Math::Vector< 3, float > position;
-
-		/** @brief World emission direction — a UsdLux light emits along its LOCAL -Z. */
-		Base::Math::Vector< 3, float > direction;
-	};
 
 	/**
 	 * @brief OpenUSD scene loader, backed by tinyusdz — LightUSD since v1.0.0-rc4 (USDA, USDC crate, USDZ).
@@ -117,6 +89,8 @@ namespace EmEn::Scenes::Loaders
 	 * translated into native engine scene logic and dropped. Where the scene layer cannot
 	 * express a USD concept, the capability is added to Scenes — never a USD construct kept
 	 * alive, never a workaround here. See docs/scene-loaders-usd.md.
+	 * @note The translation itself is the USD:: analysis (USDParser.hpp, fuzzed): this class reads the root layer, has it
+	 * composed and analysed, then materializes the result.
 	 * @extends EmEn::Scenes::Loaders::Interface
 	 */
 	class EMEN_API USDLoader final : public Interface
@@ -160,19 +134,6 @@ namespace EmEn::Scenes::Loaders
 		private:
 
 			/**
-			 * @brief Counters gathered while walking a composed stage.
-			 */
-			struct Inventory
-			{
-				std::map< std::string, size_t > primTypeCounts;
-				size_t primCount{0};
-				size_t maxDepth{0};
-				size_t pointInstancerCount{0};
-				size_t materialCount{0};
-				size_t meshCount{0};
-			};
-
-			/**
 			 * @brief Retries a missing path by matching its filename WITHOUT case.
 			 * @note Assets authored on Windows or macOS carry whatever spelling the DCC recorded, on
 			 * a filesystem that does not care. On Linux the file is simply not found, and a missing
@@ -195,17 +156,28 @@ namespace EmEn::Scenes::Loaders
 			std::shared_ptr< Graphics::TextureResource::Abstract > archiveTexture (const std::string & assetIdentifier, bool sRGB) noexcept;
 
 			/**
+			 * @brief Turns a texture asset identifier into an engine texture: out of the archive, or next to the stage
+			 * (a case-insensitive retry included).
+			 * @param assetIdentifier The asset path Tydra reported for the image (empty: none).
+			 * @param sRGB Whether the texture holds colour rather than data.
+			 * @param stageDirectory The directory the stage was read from.
+			 * @return std::shared_ptr< Graphics::TextureResource::Abstract > Null when unusable.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Graphics::TextureResource::Abstract > resolveTexture (const std::string & assetIdentifier, bool sRGB, const std::filesystem::path & stageDirectory) noexcept;
+
+			/**
 			 * @brief Translates the render scene's materials into engine PBR materials.
 			 * @note UsdPreviewSurface IS a metallic-roughness model, so the mapping is term for
 			 * term. Texture paths are resolved HERE, relative to the stage: tinyusdz refuses any
 			 * asset path containing "..", which every one of this asset's textures uses, so its
 			 * own image loading never runs — only the paths survive, and the engine reads them.
-			 * @param renderScene A reference to the Tydra render scene.
+			 * @param descriptions The analysed materials (USD::analyse()).
 			 * @param stageDirectory The directory the stage was read from.
 			 * @return std::vector< std::shared_ptr< Graphics::Material::Interface > > Indexed by RenderMaterial index.
 			 */
 			[[nodiscard]]
-			std::vector< std::shared_ptr< Graphics::Material::Interface > > buildMaterials (const lightusd::tydra::RenderScene & renderScene, const std::filesystem::path & stageDirectory) noexcept;
+			std::vector< std::shared_ptr< Graphics::Material::Interface > > buildMaterials (const std::vector< USD::Material > & descriptions, const std::filesystem::path & stageDirectory) noexcept;
 
 			/**
 			 * @brief Builds the coarser levels of a heavy mesh (LoaderOptions::generateLevelsOfDetail).
@@ -219,47 +191,16 @@ namespace EmEn::Scenes::Loaders
 			std::vector< std::shared_ptr< Graphics::Geometry::Interface > > buildLevelsOfDetail (const Base::VertexFactory::Shape< float, uint32_t > & finest, const std::string & resourceName) const noexcept;
 
 			/**
-			 * @brief Translates the render scene's meshes into engine resources and descriptors.
-			 * @note Axis and unit conversion is BAKED here, into positions, normals and tangents
-			 * alike — the engine then sees nothing but its own convention.
-			 * @param renderScene A reference to the Tydra render scene.
-			 * @param metersPerUnit The stage's linear unit.
-			 * @param prototypePaths The prim paths whose meshes are instanced rather than drawn.
+			 * @brief Materializes the analysed meshes, one at a time as USD::forEachMesh() builds them: geometries
+			 * (deduplicated by content, with their levels of detail), meshes, descriptors and nodes.
+			 * @param asset The analysed stage.
 			 * @param materials The translated materials, indexed by RenderMaterial index.
 			 * @param output A reference to the scene data to populate.
 			 * @param builtMeshesByPath Receives, for every mesh built, its USD prim path.
 			 * @return size_t The number of meshes actually built.
 			 */
 			[[nodiscard]]
-			size_t buildMeshes (const lightusd::tydra::RenderScene & renderScene, float metersPerUnit, const std::vector< std::string > & prototypePaths, const std::vector< std::shared_ptr< Graphics::Material::Interface > > & materials, SceneData & output, std::map< std::string, size_t > & builtMeshesByPath) noexcept;
-
-			/**
-			 * @brief Describes one PointInstancer read straight from the stage.
-			 * @note Tydra knows NOTHING about PointInstancer — zero occurrence in its whole
-			 * source — so this is read from the prims, not from the render scene. It is also why
-			 * the prototypes must be kept off the ordinary draw path by hand: Tydra happily
-			 * converts them into meshes like any other, and they would then be drawn once more,
-			 * alone, wherever the asset happens to store them.
-			 */
-			struct Instancer
-			{
-				std::string path;
-				std::vector< std::string > prototypePaths;
-				std::vector< Base::Math::CartesianFrame< float > > instances;
-				std::vector< int32_t > prototypeIndices;
-			};
-
-			/**
-			 * @brief Walks a prim subtree and reads every PointInstancer it holds.
-			 * @note Positions, orientations and scales are converted into the engine's own space
-			 * HERE, by the same bake the vertices go through, so a set of instances and the mesh
-			 * it instances always agree.
-			 * @param root A reference to the root prim of the walk.
-			 * @param rootPath The absolute path of the root prim.
-			 * @param metersPerUnit The stage's linear unit.
-			 * @param instancers The list being filled.
-			 */
-			static void collectInstancers (const lightusd::Prim & root, const std::string & rootPath, float metersPerUnit, std::vector< Instancer > & instancers) noexcept;
+			size_t buildMeshes (const USD::Asset & asset, const std::vector< std::shared_ptr< Graphics::Material::Interface > > & materials, SceneData & output, std::map< std::string, size_t > & builtMeshesByPath) noexcept;
 
 			/**
 			 * @brief Turns the collected instancers into instance sets referencing built meshes.
@@ -268,104 +209,7 @@ namespace EmEn::Scenes::Loaders
 			 * @param output A reference to the scene data to populate.
 			 * @return size_t The total number of instances declared.
 			 */
-			static size_t buildInstanceSets (const std::vector< Instancer > & instancers, const std::map< std::string, size_t > & builtMeshesByPath, SceneData & output) noexcept;
-
-			/**
-			 * @brief Translates the render scene's punctual lights into engine light descriptors.
-			 *
-			 * @note ⚠️ THE PHOTOMETRIC ANCHOR LIVES HERE, and it is a CALIBRATION, not a formula.
-			 * USD's `inputs:intensity` is DIMENSIONLESS while the engine works in candela, so a
-			 * conversion factor has to be chosen. The one in force (owner decision, 2026-08-10)
-			 * reads `intensity` as a LUMINANCE in cd/m², multiplies by the emitter's AREA — which
-			 * is what `normalize = false` means — and normalizes by 4π:
-			 *
-			 *     candela = intensity * 2^exposure * area / (4 * pi)
-			 *
-			 * Measured on the World Lobby's 25 ceiling DiskLights (intensity 60000, radius 0.5 m,
-			 * 4 m above the floor): 3751 cd, so 234 lux at the floor — the real range of a building
-			 * lobby (200-500 lux). The two rejected readings gave 2945 and 3750 lux, outdoor levels.
-			 *
-			 * @warning ⚠️ An emitter's AREA is part of the conversion, so a light's radius is NOT
-			 * decoration: two fixtures of the same intensity and different size do not light alike.
-			 *
-			 * @note Dome lights are deliberately skipped — they carry an image and no position, and
-			 * are collected by collectEnvironmentLights() as `LightType::Environment`.
-			 *
-			 * @warning ⚠️⚠️ THE PLACEMENT DOES NOT COME FROM `RenderLight`, and must never be taken
-			 * from it: Tydra leaves `position` and `direction` at their struct defaults in every code
-			 * path, so reading them stacks the whole lighting rig on the world origin. It comes from
-			 * @a placements, keyed on `RenderLight::abs_path` — the element name is not usable, all
-			 * 25 ceiling fixtures of the reference asset being named "LightBloomDisc". A light with no
-			 * entry there is DROPPED and reported, never placed at the origin.
-			 *
-			 * @param renderScene A reference to the Tydra render scene.
-			 * @param metersPerUnit The stage's linear unit.
-			 * @param placements A reference to the placements collected by collectLightPlacements().
-			 * @param output A reference to the scene data to populate.
-			 * @return size_t The number of lights translated.
-			 */
-			[[nodiscard]]
-			static size_t buildLights (const lightusd::tydra::RenderScene & renderScene, float metersPerUnit, const std::map< std::string, LightPlacement > & placements, SceneData & output) noexcept;
-
-			/**
-			 * @brief Walks a stage's xform hierarchy and records every prim's world placement.
-			 *
-			 * @note Built from `lightusd::tydra::BuildXformNodeFromStage()`, which is the library's own
-			 * equivalent of pxrUSD's GetLocalToWorldMatrix: the parent chain is composed by tinyusdz,
-			 * not by hand here.
-			 *
-			 * @note Every node is recorded, not only the lights. Filtering by prim type would be a
-			 * second place to keep in sync with UsdLux, for a map that costs a few thousand entries on
-			 * a whole stage.
-			 *
-			 * @warning ⚠️ USD is a ROW-VECTOR convention — translation in the matrix's LAST ROW, basis
-			 * vectors as ROWS. Reading it column-major transposes the rotation, which does not fail: it
-			 * aims every light somewhere plausible and wrong.
-			 *
-			 * @param root A reference to the root xform node of the walk.
-			 * @param placements A reference to the map to populate, keyed by absolute prim path.
-			 */
-			static void collectLightPlacements (const lightusd::tydra::XformNode & root, std::map< std::string, LightPlacement > & placements) noexcept;
-
-			/**
-			 * @brief Walks a prim subtree and collects environment (dome) lights.
-			 * @note Tydra's RenderLight does not carry the dome's image path, so the prim is read
-			 * directly. Dropping it silently loses the asset's own sky.
-			 * @param root A reference to the root prim of the walk.
-			 * @param stageDirectory The directory the stage was read from.
-			 * @param output A reference to the scene data to populate.
-			 */
-			static void collectEnvironmentLights (const lightusd::Prim & root, const std::filesystem::path & stageDirectory, SceneData & output) noexcept;
-
-			/**
-			 * @brief Walks a prim subtree and accumulates the inventory.
-			 * @param root A reference to the root prim of the walk.
-			 * @param rootDepth The depth of the root in the hierarchy.
-			 * @param inventory A reference to the inventory being filled.
-			 */
-			static void collectInventory (const lightusd::Prim & root, size_t rootDepth, Inventory & inventory) noexcept;
-
-			/**
-			 * @brief Reports what the composed stage actually contains.
-			 * @note This is the loader's FIRST functional output on purpose. Without it, "the
-			 * scene is empty" cannot be told from "the asset uses a construct we ignore", and
-			 * every diagnosis starts blind. Byte-scanning a USDC crate cannot answer it either:
-			 * crate files compress their token table.
-			 * @param filepath The file the stage came from.
-			 * @param stage A reference to the composed stage.
-			 */
-			static void reportInventory (const std::filesystem::path & filepath, const lightusd::Stage & stage) noexcept;
-
-			/**
-			 * @brief Prints the prim tree, path and type, bounded.
-			 * @note A type histogram says WHAT a stage contains; it cannot say where, nor under
-			 * what. When a prim is expected and missing, the tree is the only thing that tells
-			 * "it was dropped" from "it is there under another type".
-			 * @param root A reference to the root prim of the walk.
-			 * @param rootDepth The depth of the root.
-			 * @param remaining Lines left in the budget, decremented as they are printed.
-			 */
-			static void reportPrimTree (const lightusd::Prim & root, size_t rootDepth, size_t & remaining) noexcept;
+			static size_t buildInstanceSets (const std::vector< USD::Instancer > & instancers, const std::map< std::string, size_t > & builtMeshesByPath, SceneData & output) noexcept;
 
 			Resources::Manager & m_resources;
 			std::string m_resourcePrefix;

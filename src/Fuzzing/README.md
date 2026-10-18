@@ -9,8 +9,9 @@ with every validation it carries.
 |---|---|---|
 | `fuzz_wad` | `Scenes/Loaders/WADParser.cpp`, `WAD::parse()` | 2026-10-18 |
 | `fuzz_fbx` | `Scenes/Loaders/FBXParser.cpp`, `FBX::analyse()` + `FBX::analyseClipsOnly()` (ufbx linked from the external dependencies) | 2026-10-18 |
+| `fuzz_usd` | `Scenes/Loaders/USDParser.cpp` + `USDZArchive.cpp`: `USD::composeStage()`, `USD::analyse()`, `USD::forEachMesh()` (lightusd linked from the external dependencies, UBSan's `vptr` check off: lightusd has no RTTI) | 2026-10-18 |
 
-USD and glTF follow, one per lot (engine item `engine-fuzz-harness-for-loaders`).
+glTF follows (engine item `engine-fuzz-harness-for-loaders`).
 
 ## Build
 
@@ -31,6 +32,17 @@ NEVER enter this public repository (`src/Fuzzing/*.corpus/` is git-ignored). Der
 
 FBX: the test files of the ufbx repository (`data/*.fbx` under 64 KB: 567 files, binary and ASCII, skins, animations,
 materials) make a good local corpus. A Mixamo export (the Paladin) is not ours to publish either: local seeds only.
+
+USD: the test files of the tinyusdz repository (USDA, USDC, USD and USDZ under 64 KB: 1 166 files). The harness is
+hermetic: a USDZ resolves against its own table, a plain layer's resolver refuses every asset.
+
+## Seeing inside a third-party library
+
+`LIB_<library>=/path/lib<library>.a` links that archive instead of the release one — an instrumented build of the
+library (clang, `-fsanitize=address,undefined,fuzzer-no-link`, `-g`), so the fuzzer gets coverage feedback and ASan
+inside it. lightusd, for example: a copy of the submodule with `patches/tinyusdz.patch` applied, configured with the
+options of `libraries/tinyusdz.yaml` plus those flags (and `-fno-sanitize=vptr`), target `lightusd_static`. Measured
+2026-10-18: `fuzz_usd` reaches 4 382 edges on the release library, 93 342 on the instrumented one.
 
 ## Run
 
@@ -56,3 +68,11 @@ src/Fuzzing/build/fuzz_wad src/Fuzzing/fuzz_wad.corpus -fork=16 -max_total_time=
   Fixed (owner decision): a stack beyond 4 M keyframes or of a non-finite range is skipped. The 344 reproducers run at
   180 MB peak.
 - 2026-10-18, `fuzz_fbx`, third campaign: 51.1 M executions, 0 finding.
+- 2026-10-18, `fuzz_usd`, first campaign (10 min, 16 forks, 1 166 tinyusdz test files, release lightusd): 6.7 M
+  executions, 6 OOM, NONE in the engine — lightusd's `StreamReader::read()` took a short read for a success (a 1 KB
+  USDC asked for 4.8 GB), an internal reference to an ancestor expanded exponentially (4 KB of USDA → 16.7 GB), a
+  compressed array decompressed at its declared size (15 KB → 400 MB), and two that do not reproduce alone (memory
+  accumulated in a fork job). Fixed (owner decision): `patches/tinyusdz.patch` in ext-deps-generator, and the engine
+  budgets a root layer at max(256 MiB, 16 x the file).
+- 2026-10-18, `fuzz_usd`, second campaign, lightusd instrumented (patched): 3.7 M executions, 93 342 edges, 0 finding.
+- 2026-10-18, `fuzz_usd`, third campaign, the same: 2.5 M executions, 95 085 edges, 0 finding.

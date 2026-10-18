@@ -25,7 +25,10 @@ malformed input during the 2026 Ave robustus plan, then clean multi-million-run 
   FBX done the same day: `FBX::analyse()` / `FBX::analyseClipsOnly()` (`FBXParser.hpp/.cpp`), `src/Fuzzing/fuzz_fbx.cpp`;
   three campaigns (140 M executions), two causes fixed — the ufbx memory ceiling and the animation keyframe budget
   (see `docs/subsystems/scenes-loaders/03-implemented-loaders/03-fbxloader.md`).
-  Next: USD, glTF (the largest), one per lot, each verified identical on its demos.
+  USD done the same day: `USD::composeStage()` / `USD::analyse()` / `USD::forEachMesh()` (`USDParser.hpp/.cpp`),
+  `USDZArchive.hpp/.cpp`, `src/Fuzzing/fuzz_usd.cpp`; every finding was in lightusd, fixed in ext-deps-generator's
+  `patches/tinyusdz.patch` (see `docs/subsystems/scenes-loaders/03-implemented-loaders/02-usdloader.md`).
+  Next: glTF (the largest), verified identical on its demos.
 
 ## What remains
 
