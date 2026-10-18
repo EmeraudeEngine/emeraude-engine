@@ -116,7 +116,7 @@ namespace EmEn::Audio
 
 		if ( !WaveFactory::FileIO::read(m_pendingMidiPath, m_localData, midiOptions) )
 		{
-			TraceError{ClassId} << "Unable to render MIDI file '" << m_pendingMidiPath << "' !";
+			TraceError{ClassId} << "Unable to render MIDI file '" << Base::IO::toU8String(m_pendingMidiPath) << "' !";
 
 			return false;
 		}
@@ -130,9 +130,10 @@ namespace EmEn::Audio
 	{
 		const TagLib::FileRef file{filepath.c_str()};
 
+		/* NOTE: The tags are optional metadata: a file TagLib does not read is no error (it was one, 2026-10-18). */
 		if ( file.isNull() )
 		{
-			TraceError{ClassId} << "Unable to read file '" << filepath << "' for audio tag extraction.";
+			TraceInfo{ClassId} << "No audio tag read from '" << Base::IO::toU8String(filepath) << "'.";
 
 			return;
 		}
@@ -141,7 +142,7 @@ namespace EmEn::Audio
 
 		if ( tag == nullptr )
 		{
-			TraceWarning{ClassId} << "Unable to read audio metadata from '" << filepath << "' !";
+			TraceWarning{ClassId} << "Unable to read audio metadata from '" << Base::IO::toU8String(filepath) << "' !";
 
 			return;
 		}
@@ -400,7 +401,7 @@ namespace EmEn::Audio
 			/* No soundfont configured or available - use additive synthesis. */
 			if ( !WaveFactory::FileIO::read(filepath, m_localData) )
 			{
-				TraceError{ClassId} << "Unable to load the MIDI file '" << filepath << "' with additive synthesis !";
+				TraceError{ClassId} << "Unable to load the MIDI file '" << Base::IO::toU8String(filepath) << "' with additive synthesis !";
 
 				return this->setLoadSuccess(false);
 			}
@@ -410,13 +411,17 @@ namespace EmEn::Audio
 			/* Standard audio file loading (WAV, MP3, OGG, etc.). */
 			if ( !WaveFactory::FileIO::read(filepath, m_localData) )
 			{
-				TraceError{ClassId} << "Unable to load the music file '" << filepath << "' !";
+				TraceError{ClassId} << "Unable to load the music file '" << Base::IO::toU8String(filepath) << "' !";
 
 				return this->setLoadSuccess(false);
 			}
 
-			/* Read optional metadata from the soundtrack. */
-			this->readMetaData(filepath);
+			/* Read optional metadata from the soundtrack. A procedural music (a JSON SFX script) carries none: TagLib was
+			 * asked anyway and every script music logged an error (Windows peer, 2026-10-18). */
+			if ( Base::IO::getFileExtension(filepath, true) != "json" )
+			{
+				this->readMetaData(filepath);
+			}
 		}
 
 		/* Check frequency for playback within the audio engine. */

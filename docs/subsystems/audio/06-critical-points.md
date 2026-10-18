@@ -25,3 +25,14 @@
     movable since Ave Robustus II P5 (2026-10-16) — the defaulted move did not clear the name either.
 - **Microphone privacy**: `Core/Audio/Capture/Enable` must be explicitly `true` before any microphone access. Default is `false`. Voice-over (`Core/RushMaker/EnableVoiceOver`) depends on this gate.
 - **Available devices in settings**: Both playback (`Core/Audio/AvailableDevices`) and capture (`Core/Audio/Capture/AvailableDevices`) device lists are written to settings on each startup for easy device switching via settings file editing
+
+### MusicResource reads audio tags from audio containers only (2026-10-18)
+
+`MusicResource::load(filepath)` reads the title and artist with TagLib (`readMetaData()`) — never from a procedural
+music (a JSON SFX script: it carries no tag; TagLib was asked anyway and every script music, BaroqueSonata,
+IndustrialNoise, logged `[Error] Unable to read file … for audio tag extraction`, Windows peer). The tags are optional
+metadata: a file TagLib does not read is an Info line, no error. A MIDI music has no tags either (its title is the
+resource name, the artist "Unknown"). The traces print their paths through `Base::IO::toU8String()`: streaming the
+`std::filesystem::path` itself goes through `BlobTrait`'s `std::quoted` (UTF-8, safe) and doubles the quotes of a
+message that adds its own — cosmetic, about 125 engine traces still do it.
+
