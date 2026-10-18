@@ -126,6 +126,14 @@ namespace EmEn::Scenes::Loaders
 			bool
 			open (const std::filesystem::path & filepath) noexcept
 			{
+				/* NOTE: The mapping opens the path itself: a FIFO blocked that open forever (2026-10-18). */
+				if ( !Base::IO::isReadableRegularFile(filepath) )
+				{
+					TraceError{USDLoader::ClassId} << "The archive '" << Base::IO::toU8String(filepath) << "' is not a readable file !";
+
+					return false;
+				}
+
 				std::string error;
 
 				if ( lightusd::io::MMapFile(Base::IO::toU8String(filepath), &m_handle, false, &error) )

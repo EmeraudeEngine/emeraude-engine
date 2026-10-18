@@ -156,6 +156,12 @@ namespace EmEn::Graphics
 	std::FILE *
 	openOutputFile (const std::filesystem::path & path) noexcept
 	{
+		/* NOTE: Opening a FIFO for writing blocked forever (2026-10-18): only a missing path or a regular file. */
+		if ( !Base::IO::isWritableTarget(path) )
+		{
+			return nullptr;
+		}
+
 #ifdef _WIN32
 		std::FILE * file = nullptr;
 

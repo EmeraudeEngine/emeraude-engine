@@ -2271,6 +2271,21 @@ because the exposure no longer had to absorb a 22 000-nit ground.
 
 ## Resources / Loaders
 
+### Every file reader goes through Base::IO; the loaders check a path before their library opens it (2026-10-18)
+
+A FIFO without a writer blocks an open forever (base `caution-points.md` § IO, 58d232e / f712604): a path that comes
+from data (a scene, a store, a resource index) could freeze a loading thread and then the shutdown. The engine's own
+readers open through `Base::IO::openInputFile()`: `PlaylistResource`, `SoundfontResource`, `TextureCache`,
+`WADLoader`, `SharingServer::fileSHA256()`. The loaders whose library opens the path itself check it first with
+`Base::IO::isReadableRegularFile()`: FBX (`ufbx_load_file`, three calls), glTF (`fastgltf::GltfDataBuffer::FromPath`),
+USD (`lightusd::io::MMapFile` — the `open()` before the `mmap()` blocks); the video `Recorder` checks its target with
+`isWritableTarget()`. Found on the way: `WADLoader` resized its buffer to `tellg()` — -1 for an unknown size, a 2^64 - 1
+allocation and an abort — and never checked its read; `TextureCache` turned the same -1 into 2^64 - 1 bytes, defeating
+its bounds: both through `Base::IO::fileSizeFromStream()` now. The fixed system paths (/proc, /sys, /etc, pci.ids:
+`SystemInfo`, `StorageInfo`, `SerialPort`) stay direct opens, said at each site. `Core.openFiles()` (and a drop) only
+ever passes regular files (`IO::fileExists()`). Verified 2026-10-18: doom-loader (WAD), world-lobby (USDZ),
+animation-debug (FBX), sponza (glTF), the MIDI playlist through its SoundFont — loaded, 0 refusal, 0 VUID.
+
 ### A failed dependency leaked its whole chain — fixed 2026-10-01 (triad 7a)
 
 > [!CAUTION]

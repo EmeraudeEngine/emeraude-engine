@@ -31,6 +31,7 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "IO/IO.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio
@@ -57,9 +58,10 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		std::ifstream file{filepath};
+		/* NOTE: Through Base::IO::openInputFile(): a FIFO blocked the open forever (2026-10-18). */
+		std::ifstream file;
 
-		if ( !file.is_open() )
+		if ( !Base::IO::openInputFile(filepath, file, std::ios::in) )
 		{
 			TraceError{ClassId} << "Unable to open playlist manifest '" << filepath << "' !";
 

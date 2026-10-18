@@ -177,17 +177,24 @@ namespace EmEn::Graphics
 	{
 		const auto path = this->cacheFilePath(key);
 
-		std::ifstream file{Base::IO::systemPath(path), std::ios::binary | std::ios::ate};
+		/* NOTE: Through Base::IO::openInputFile(): a FIFO blocked the open forever (2026-10-18). */
+		std::ifstream file;
 
-		if ( !file.is_open() )
+		if ( !Base::IO::openInputFile(path, file) )
 		{
 			return {};
 		}
 
-		/* The bytes the file holds: no level may claim more than what is left to read. */
-		const auto fileSize = static_cast< uint64_t >(file.tellg());
+		/* The bytes the file holds: no level may claim more than what is left to read. -1 (a size unknown) used to
+		 * become 2^64 - 1 here, defeating every bound below. */
+		const auto streamSize = Base::IO::fileSizeFromStream(file);
 
-		file.seekg(0, std::ios::beg);
+		if ( streamSize < 0 )
+		{
+			return {};
+		}
+
+		const auto fileSize = static_cast< uint64_t >(streamSize);
 
 		/* Read and validate header. */
 		uint32_t magic = 0;

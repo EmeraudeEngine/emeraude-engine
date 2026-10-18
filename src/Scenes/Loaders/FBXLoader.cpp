@@ -287,6 +287,14 @@ namespace EmEn::Scenes::Loaders
 		opts.load_external_files = true;
 		opts.generate_missing_normals = true;
 
+		/* NOTE: ufbx opens the path itself: a FIFO blocked that open forever (2026-10-18). */
+		if ( !Base::IO::isReadableRegularFile(filepath) )
+		{
+			TraceError{ClassId} << "The FBX '" << Base::IO::toU8String(filepath) << "' is not a readable file !";
+
+			return false;
+		}
+
 		ufbx_error error{};
 		ufbx_scene * scene = ufbx_load_file(Base::IO::toU8String(filepath).c_str(), &opts, &error);
 
@@ -1618,6 +1626,14 @@ namespace EmEn::Scenes::Loaders
 		opts.load_external_files = false;
 		opts.generate_missing_normals = false;
 
+		/* NOTE: ufbx opens the path itself: a FIFO blocked that open forever (2026-10-18). */
+		if ( !Base::IO::isReadableRegularFile(filepath) )
+		{
+			TraceError{ClassId} << "The FBX '" << Base::IO::toU8String(filepath) << "' is not a readable file !";
+
+			return false;
+		}
+
 		ufbx_error error{};
 		ufbx_scene * scene = ufbx_load_file(Base::IO::toU8String(filepath).c_str(), &opts, &error);
 
@@ -1925,6 +1941,14 @@ namespace EmEn::Scenes::Loaders
 		opts.ignore_geometry = true;
 		opts.ignore_animation = true;
 		opts.load_external_files = false;
+
+		/* NOTE: ufbx opens the path itself: a FIFO blocked that open forever (2026-10-18). */
+		if ( !Base::IO::isReadableRegularFile(filepath) )
+		{
+			TraceError{ClassId} << "The FBX '" << Base::IO::toU8String(filepath) << "' is not a readable file !";
+
+			return false;
+		}
 
 		ufbx_error error{};
 		ufbx_scene * scene = ufbx_load_file(Base::IO::toU8String(filepath).c_str(), &opts, &error);

@@ -39,6 +39,7 @@
 /* Local inclusions. */
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
+#include "IO/IO.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 #include "Tracer.hpp"
@@ -124,16 +125,18 @@ namespace EmEn::Audio
 	{
 		/* Read the entire file into memory.
 		 * TSF needs the data to remain valid for the lifetime of the tsf handle. */
-		std::ifstream file(filepath, std::ios::binary | std::ios::ate);
+		/* NOTE: Through Base::IO::openInputFile(): a FIFO blocked the open forever (2026-10-18). */
+		std::ifstream file;
 
-		if ( !file.is_open() )
+		if ( !Base::IO::openInputFile(filepath, file) )
 		{
-			TraceError{ClassId} << "Unable to open soundfont file '" << filepath << "' !";
+			TraceError{ClassId} << "Unable to open soundfont file '" << Base::IO::toU8String(filepath) << "' !";
 
 			return false;
 		}
 
-		const auto fileSize = file.tellg();
+		/* NOTE: -1 when the size is unknown (a pseudo-file): refused below like an empty file. */
+		const auto fileSize = Base::IO::fileSizeFromStream(file);
 
 		if ( fileSize <= 0 )
 		{
@@ -149,8 +152,6 @@ namespace EmEn::Audio
 
 			return false;
 		}
-
-		file.seekg(0, std::ios::beg);
 
 		m_fileData.resize(static_cast< size_t >(fileSize));
 

@@ -183,9 +183,10 @@ namespace EmEn::Resources
 	std::optional< std::string >
 	SharingServer::fileSHA256 (const std::filesystem::path & filepath, const std::atomic< bool > * cancel) noexcept
 	{
-		std::ifstream file{filepath, std::ios::binary};
+		/* NOTE: Through Base::IO::openInputFile(): a FIFO blocked the open forever (2026-10-18). */
+		std::ifstream file;
 
-		if ( !file.is_open() )
+		if ( !Base::IO::openInputFile(filepath, file) )
 		{
 			return std::nullopt;
 		}

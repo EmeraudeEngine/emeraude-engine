@@ -65,6 +65,7 @@ namespace EmEn::PlatformSpecific::StorageInfo
 
 			const auto removablePath = std::filesystem::path("/sys/block") / devName / "removable";
 
+			/* NOTE: A fixed system path (/proc, /sys, /etc, the pci.ids database), never data: opened directly, without Base::IO::openInputFile() (engine item readers-through-io-open-input-file, 2026-10-18). */
 			std::ifstream file(removablePath);
 
 			if ( !file.is_open() )

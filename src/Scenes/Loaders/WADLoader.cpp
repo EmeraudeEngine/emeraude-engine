@@ -462,18 +462,35 @@ namespace EmEn::Scenes::Loaders
 		std::vector< uint8_t > wad;
 
 		{
-			std::ifstream file{filepath, std::ios::binary | std::ios::ate};
+			/* NOTE: Through Base::IO::openInputFile(): a FIFO blocked the open forever (2026-10-18). */
+			std::ifstream file;
 
-			if ( !file.is_open() )
+			if ( !Base::IO::openInputFile(filepath, file) )
 			{
 				TraceError{TracerTag} << "Unable to open the WAD file " << filepath << " !";
 
 				return false;
 			}
 
-			wad.resize(static_cast< size_t >(file.tellg()));
-			file.seekg(0);
-			file.read(reinterpret_cast< char * >(wad.data()), static_cast< std::streamsize >(wad.size()));
+			/* NOTE: tellg() answers -1 when the size is unknown: resized to it, the vector asked for 2^64 - 1 bytes (an
+			 * abort under -fno-exceptions); and a short read was never checked (zeros parsed as a WAD). */
+			const auto bytes = Base::IO::fileSizeFromStream(file);
+
+			if ( bytes < 0 )
+			{
+				TraceError{TracerTag} << "The size of the WAD file " << filepath << " is unknown !";
+
+				return false;
+			}
+
+			wad.resize(static_cast< size_t >(bytes));
+
+			if ( !file.read(reinterpret_cast< char * >(wad.data()), static_cast< std::streamsize >(wad.size())) )
+			{
+				TraceError{TracerTag} << "Unable to read the WAD file " << filepath << " whole !";
+
+				return false;
+			}
 		}
 
 		if ( wad.size() < 12 || (std::memcmp(wad.data(), "IWAD", 4) != 0 && std::memcmp(wad.data(), "PWAD", 4) != 0) )

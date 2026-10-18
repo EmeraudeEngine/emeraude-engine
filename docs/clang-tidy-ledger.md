@@ -145,7 +145,7 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **pro-bounds-constant-array-index ×18** — each one checked bounded: FBX (`texIdx` checked, `k < 3`, `wi < take ≤ 4`,
   ufbx indices consistent by construction), glTF (texture index checked, literal loops), USD (literal 4×4 loops), WAD
   (counts derived from the lump size; cross-references checked).
-- **pro-type-reinterpret-cast ×7** — binary buffers (a WAD name, the file read, meshopt / Draco input — its offset is
+- **pro-type-reinterpret-cast ×7** — binary buffers (a WAD name, the file read — checked since 2026-10-18 —, meshopt / Draco input — its offset is
   bounded upstream —, the USDZ asset map, Tydra's raw normal / UV buffers — sized by the vertex count check).
 - **avoid-const-or-ref-data-members ×3** — each loader holds the `Resources::Manager &` it was built with: a
   short-lived, non-copyable object by design.

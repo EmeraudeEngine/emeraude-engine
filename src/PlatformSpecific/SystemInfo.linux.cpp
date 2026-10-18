@@ -81,6 +81,7 @@ namespace EmEn::PlatformSpecific
 		std::string
 		readFirstLine (const std::filesystem::path & path) noexcept
 		{
+			/* NOTE: A fixed system path (/proc, /sys, /etc, the pci.ids database), never data: opened directly, without Base::IO::openInputFile() (engine item readers-through-io-open-input-file, 2026-10-18). */
 			std::ifstream file{path};
 			std::string line;
 

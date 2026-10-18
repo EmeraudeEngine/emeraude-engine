@@ -1999,6 +1999,14 @@ namespace EmEn::Scenes::Loaders
 			}
 		}
 
+		/* NOTE: fastgltf opens the path itself: a FIFO blocked that open forever (2026-10-18). */
+		if ( !Base::IO::isReadableRegularFile(filepath) )
+		{
+			TraceError{ClassId} << "The glTF '" << Base::IO::toU8String(filepath) << "' is not a readable file !";
+
+			return false;
+		}
+
 		/* Parse the glTF/glb asset. */
 		auto gltfFile = fastgltf::GltfDataBuffer::FromPath(filepath);
 
