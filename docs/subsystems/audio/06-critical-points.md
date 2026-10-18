@@ -35,4 +35,6 @@ metadata: a file TagLib does not read is an Info line, no error. A MIDI music ha
 resource name, the artist "Unknown"). The traces print their paths through `Base::IO::toU8String()`: streaming the
 `std::filesystem::path` itself goes through `BlobTrait`'s `std::quoted` (UTF-8, safe) and doubles the quotes of a
 message that adds its own — cosmetic, about 125 engine traces still do it.
+Validated 2026-10-18 on macOS and Windows (no tag error for BaroqueSonata, the tags of `Kyrandia/Medley.mp3` read,
+0 VUID).
 
