@@ -142,7 +142,9 @@ namespace EmEn
 
 					if ( !IO::fileExists(filepath) )
 					{
-						outputs.emplace_back(Severity::Warning, "The file '" + path + "' doesn't exists! Skipping ...");
+						/* NOTE: IO::fileExists() is false for a missing path AND for an existing one that is not a regular file
+						 * (a directory, a FIFO): the message says both (macOS peer, 2026-10-18). */
+						outputs.emplace_back(Severity::Warning, "The file '" + path + "' does not exist or is not a regular file! Skipping ...");
 
 						continue;
 					}

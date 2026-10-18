@@ -18,6 +18,12 @@ out of range, a `children` cycle, a 200 000-node chain; WADs with a lump outside
 table, a BSP cycle. Fuzzing finds what nobody thinks of: emeraude-base proved it (`src/Fuzzing/`, 11 real crashes on
 malformed input during the 2026 Ave robustus plan, then clean multi-million-run campaigns).
 
+## Progress
+- 2026-10-18, owner decisions: split each loader into an ANALYSIS (bytes → plain data, no resource) and a
+  materialization, and fuzz the analysis. WAD done: `WAD::parse()` (`WADParser.hpp/.cpp`), `src/Fuzzing/fuzz_wad.cpp`,
+  `src/Fuzzing/build-fuzzers.sh` (see `docs/subsystems/scenes-loaders/03-implemented-loaders/04-wadloader.md`).
+  Next: FBX, USD, glTF (the largest), one per lot, each verified identical on its demos.
+
 ## What remains
 
 - A clang libFuzzer target per loader, on the base model (`emeraude-base/src/Fuzzing/build-fuzzers.sh`: a

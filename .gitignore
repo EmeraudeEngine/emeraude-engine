@@ -23,3 +23,7 @@ cmake-build-*
 __pycache__/
 *.py[cod]
 gltf-bench-captures/
+
+# Fuzzing: built targets and local corpora (a corpus derived from a commercial IWAD must never be committed)
+src/Fuzzing/build/
+src/Fuzzing/*.corpus/

@@ -151,6 +151,10 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   short-lived, non-copyable object by design.
 - **clang-analyzer-optin.performance.Padding ×1** — a lambda CLOSURE's layout (GLTFLoader).
 - **use-enum-class + enum-size** — `LoaderCapabilityBits`: a bit-flag set combined with `|`, `uint32_t` on purpose.
+- **WAD split (2026-10-18)** — the WAD analysis moved verbatim to `WADParser.cpp` (`WAD::parse()`): its findings moved
+  with it, unchanged — `pro-bounds-constant-array-index` ×5 (the grey palette fill, the palette lookups and a corner index,
+  bounded as above) and `pro-type-reinterpret-cast` ×1 (`readName8()`, a WAD name). `WADLoader.cpp` keeps the file
+  read's cast.
 
 ### `src/Net` (2026-09-30)
 

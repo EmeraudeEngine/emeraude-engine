@@ -670,7 +670,7 @@ namespace EmEn::Input
 			}
 			else
 			{
-				TraceWarning{ClassId} << "The file '" << IO::toU8String(fsPath) << "' doesn't exists! Skipping ...";
+				TraceWarning{ClassId} << "The file '" << IO::toU8String(fsPath) << "' does not exist or is not a regular file! Skipping ...";
 			}
 		}
 

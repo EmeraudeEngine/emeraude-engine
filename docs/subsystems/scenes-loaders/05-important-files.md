@@ -16,4 +16,7 @@
 - `Graphics/CompressedImageResource.hpp/.cpp` — the block-compressed counterpart of `ImageResource`
 - `Scenes/Loaders/FBXLoader.hpp/.cpp` — FBX implementation (ufbx)
 - `Scenes/Loaders/WADLoader.hpp/.cpp` — Doom WAD level materializer (`FullBrightLuminance` lives in the header)
+- `Scenes/Loaders/WADParser.hpp/.cpp` — its analysis half, `WAD::parse()` → `WAD::Level` (plain data, fuzzed by
+  `src/Fuzzing/fuzz_wad.cpp`)
+- `src/Fuzzing/build-fuzzers.sh` — the engine's libFuzzer targets (one per loader analysis)
 - `Scenes/SceneDataConsumer.hpp/.cpp` — Scene-side consumer (Node/StaticEntity builder, honors `lightingEnabled`)

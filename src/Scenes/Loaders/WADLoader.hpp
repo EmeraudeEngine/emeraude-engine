@@ -38,6 +38,7 @@
 
 /* Local inclusions for usages. */
 #include "Math/Vector.hpp"
+#include "WADParser.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -67,7 +68,7 @@ namespace EmEn::Scenes::Loaders
 			static constexpr auto ClassId{"WADLoader"};
 
 			/** @brief Doom map unit scale: 32 map units per meter (player height 56 u ≈ 1.75 m). */
-			static constexpr auto MapUnitsPerMeter{32.0F};
+			static constexpr auto MapUnitsPerMeter{WAD::MapUnitsPerMeter};
 
 			/**
 			 * @brief Luminance of a FULLY-LIT map surface, in nits (cd/m2).

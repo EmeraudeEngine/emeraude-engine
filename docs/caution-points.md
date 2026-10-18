@@ -2283,8 +2283,12 @@ USD (`lightusd::io::MMapFile` — the `open()` before the `mmap()` blocks); the 
 allocation and an abort — and never checked its read; `TextureCache` turned the same -1 into 2^64 - 1 bytes, defeating
 its bounds: both through `Base::IO::fileSizeFromStream()` now. The fixed system paths (/proc, /sys, /etc, pci.ids:
 `SystemInfo`, `StorageInfo`, `SerialPort`) stay direct opens, said at each site. `Core.openFiles()` (and a drop) only
-ever passes regular files (`IO::fileExists()`). Verified 2026-10-18: doom-loader (WAD), world-lobby (USDZ),
-animation-debug (FBX), sponza (glTF), the MIDI playlist through its SoundFont — loaded, 0 refusal, 0 VUID.
+ever passes regular files (`IO::fileExists()`; its message says "does not exist or is not a regular file" since
+2026-10-18). Verified 2026-10-18: doom-loader (WAD), world-lobby (USDZ), animation-debug (FBX), sponza (glTF), the MIDI
+playlist through its SoundFont — loaded, 0 refusal, 0 VUID. Validated on macOS (PARANOID 0 warning; Sponza, the Paladin
+FBX, the tinyusdz cube.usdz mmap path and a .usda, 0 VUID) and Windows (MSVC 0 warning; FBX, glTF, the SoundFont, a
+download, a screenshot and a RushMaker recording through the new checks, 0 VUID); WorldLobby.usdz is absent on both
+(data, not deployed there).
 
 ### A failed dependency leaked its whole chain — fixed 2026-10-01 (triad 7a)
 

@@ -12,6 +12,24 @@ ExMy and MAPxx) or `setMapName("E1M1")`. After `load()`: `loadedMapName()`,
 post-consumer), at the sector floor (eye height up to the caller). Scale: 32 map units per
 meter (`MapUnitsPerMeter`), multiplied by `LoaderOptions::uniformScale`.
 
+**Two halves (2026-10-18, owner decision: analysis / materialization):** `WAD::parse()`
+(`WADParser.hpp/.cpp`) turns the bytes into a `WAD::Level` of plain data — the composed RGBA of every resolved texture
+or flat, the animated ranges and their frames, the level `Shape`, its surfaces (texture name, masked) in sub-geometry
+order, the map name, the player start — with NO engine resource, service or device; every validation below lives
+there. `WADLoader::load()` reads the file, calls `WAD::parse()`, then MATERIALIZES the level (images, sRGB textures,
+movies and animated textures, the geometry, the materials, the multi-layer mesh, the `SceneData`). The split exists
+so the whole analysis can be fuzzed: `src/Fuzzing/fuzz_wad.cpp`, built by `src/Fuzzing/build-fuzzers.sh` (clang,
+libFuzzer, ASan + UBSan; the analysis TU compiled instrumented, the rest from the engine and base libraries of a
+regular build). Verified identical on doom.wad E1M1: the same trace lines, "55 textures, 8 light levels", 96.8 % of
+the pixels bit-identical and none off by more than 8 levels (the animation). `MapUnitsPerMeter` and the frame duration
+live in `WAD::` (`WADLoader::MapUnitsPerMeter` aliases it).
+
+**Texture limits (2026-10-18, found by `fuzz_wad`, owner decision):** `TEXTURE1/2` declare a texture's size in 16 bits
+and the composition allocated it as declared — 32 768 x 32 768 in a 108 KB file asked for 4 GB of indexes, then 16 GB
+of RGBA. A texture larger than `WAD::MaxTextureSide` (4096) on a side is skipped, and a map composes at most
+`WAD::MaxComposedPixels` (64 M pixels — doom.wad's 287 textures total 3.6 M, the largest 256 x 128); a skipped texture
+is treated like a missing one (a grey material, a warning) and the map still loads.
+
 **Pipeline:**
 1. Whole-file read → directory (name/offset/size per lump), map marker lookup (`ExMy`/`MAPxx`
    followed by `THINGS`). Every 8-char name is produced by `readName8()`, which **UPPERCASES** —
