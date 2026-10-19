@@ -33,6 +33,7 @@
 #include <cstring>
 #include <limits>
 #include <system_error>
+#include <utility>
 
 /* Third-party inclusions. */
 #include "vpx/vp8cx.h"
@@ -337,8 +338,7 @@ namespace EmEn::Graphics
 				this->closeSession();
 			}
 
-			finishingSessions = std::move(m_finishingSessions);
-			m_finishingSessions.clear();
+			finishingSessions = std::exchange(m_finishingSessions, {});
 		}
 
 		/* Force-join all background encoding sessions at shutdown, outside the lock: they were taken out under it.

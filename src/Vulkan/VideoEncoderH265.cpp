@@ -272,6 +272,7 @@ namespace EmEn::Vulkan
 		std::vector< VkBindVideoSessionMemoryInfoKHR > bindInfos;
 		bindInfos.reserve(requirementCount);
 
+		/* cppcheck-suppress knownEmptyContainer ; enumerate() above fills it through its reference parameter. */
 		for ( const auto & requirement : requirements )
 		{
 			uint32_t memoryTypeIndex = memoryProperties.memoryTypeCount;

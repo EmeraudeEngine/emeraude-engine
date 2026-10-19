@@ -521,8 +521,7 @@ namespace EmEn::Scenes
 				m_activeScene->postProcessStack()->unregisterFromParent();
 			}
 
-			disabledScene = std::move(m_activeScene);
-			m_activeScene.reset();
+			disabledScene = std::exchange(m_activeScene, nullptr);
 		}
 
 		/* Send out a message that the scene has been deactivated, once the exclusive access is released (see

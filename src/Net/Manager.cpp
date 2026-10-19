@@ -600,6 +600,7 @@ namespace EmEn::Net
 			 * URL on every request. */
 			if ( const auto known = m_ticketByURL.find(urlString); known != m_ticketByURL.end() )
 			{
+				/* cppcheck-suppress redundantInitialization ; every variable is initialized (Ave Robustus II): 'ticket' starts at InvalidTicket. */
 				ticket = known->second;
 
 				auto & item = m_items[static_cast< size_t >(ticket) - 1];

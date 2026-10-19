@@ -40,8 +40,7 @@ namespace EmEn::Vulkan
 			{
 				Tracer::error("VulkanDeviceDependentObject", "Device is null !");
 			}
-
-			if ( !m_device->isCreated() )
+			else if ( !m_device->isCreated() )
 			{
 				Tracer::warning("VulkanDeviceDependentObject", "Device is not yet usable !");
 			}

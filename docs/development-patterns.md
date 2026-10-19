@@ -58,6 +58,9 @@ terrain->loadDiamondSquare(16384.0F, 16384, material, {.factor = 2000.0F, .rough
 
 - JSON keys (`TerrainResource::load(const Json::Value &)`): `GridSize`, `GridDivision`, `GridDetailDistance`,
   `GridPatchQuads`, `GridClipTexels`, plus the material and displacement keys.
+- A `detailDistance` beyond what the clip levels cover is clamped to that coverage (a warning); clip levels that cannot
+  hold a patch at ANY distance (`GridClipTexels` too small for `GridPatchQuads` and the update strip) refuse the terrain
+  (an error) — they used to clamp to a distance ≤ 0 and load a terrain with no valid level of detail (2026-10-19).
 - A ground of a few hundred metres takes `BasicGroundResource`: nothing streams at that size.
 - Bench a terrain with its sun frozen (`terrain --demo-options 100000,25`); the wireframe option 2 shows
   the level rings, not a crack — judge seams solid.
@@ -214,6 +217,11 @@ Materials can be loaded from JSON files with a unified format supporting Basic a
 | `"Diffuse"` | `"Albedo"` | Tried only when `"Albedo"` is absent |
 | `"Specular"` | `"Roughness"` | Tried only when `"Roughness"` is absent; a `Value`/`Texture` is INVERTED (high specular = low roughness) |
 | `"Shininess"` (on `"Specular"`) | `roughness = 1 - glossiness` | ⚠️ `"Shininess"` is an authored **GLOSSINESS in [0,1]**, never a Phong exponent |
+
+**`"Specular"` also carries KHR_materials_specular** (`docs/material-json-format.md` § Layers): `{ "Type": "Value",
+"Data": <factor>, "Color": [...] }`. An absent component keeps the defaults (1, white); a component of the wrong shape
+refuses the material with an error (2026-10-19 — a non-object used to reach jsoncpp's `isMember()` assertion and abort
+the process, and the factor was read from a `"Factor"` key no file wrote: `Data` had never been applied).
 
 > **Note:** There is no `"Ambient"` component any more — ambient occlusion (`"AmbientOcclusion"`)
 > plus IBL replace it. The scene manifest material `"Type"` accepts `"Standard"` and `"PBR"`

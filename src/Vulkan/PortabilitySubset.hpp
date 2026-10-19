@@ -59,22 +59,22 @@ namespace EmEn::Vulkan::PortabilitySubset
 	 */
 	struct Features
 	{
-		VkStructureType sType;
-		void * pNext;
-		VkBool32 constantAlphaColorBlendFactors;
-		VkBool32 events;
-		VkBool32 imageViewFormatReinterpretation;
-		VkBool32 imageViewFormatSwizzle;
-		VkBool32 imageView2DOn3DImage;
-		VkBool32 multisampleArrayImage;
-		VkBool32 mutableComparisonSamplers;
-		VkBool32 pointPolygons;
-		VkBool32 samplerMipLodBias;
-		VkBool32 separateStencilMaskRef;
-		VkBool32 shaderSampleRateInterpolationFunctions;
-		VkBool32 tessellationIsolines;
-		VkBool32 tessellationPointMode;
-		VkBool32 triangleFans;
-		VkBool32 vertexAttributeAccessBeyondStride;
+		VkStructureType sType{FeaturesType};
+		void * pNext{nullptr};
+		VkBool32 constantAlphaColorBlendFactors{VK_FALSE};
+		VkBool32 events{VK_FALSE};
+		VkBool32 imageViewFormatReinterpretation{VK_FALSE};
+		VkBool32 imageViewFormatSwizzle{VK_FALSE};
+		VkBool32 imageView2DOn3DImage{VK_FALSE};
+		VkBool32 multisampleArrayImage{VK_FALSE};
+		VkBool32 mutableComparisonSamplers{VK_FALSE};
+		VkBool32 pointPolygons{VK_FALSE};
+		VkBool32 samplerMipLodBias{VK_FALSE};
+		VkBool32 separateStencilMaskRef{VK_FALSE};
+		VkBool32 shaderSampleRateInterpolationFunctions{VK_FALSE};
+		VkBool32 tessellationIsolines{VK_FALSE};
+		VkBool32 tessellationPointMode{VK_FALSE};
+		VkBool32 triangleFans{VK_FALSE};
+		VkBool32 vertexAttributeAccessBeyondStride{VK_FALSE};
 	};
 }

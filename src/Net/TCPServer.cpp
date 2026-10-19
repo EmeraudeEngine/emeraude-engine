@@ -59,7 +59,8 @@ namespace EmEn::Net
 
 	TCPServer::TCPServer (TCPServer && other) noexcept
 		: m_impl{std::move(other.m_impl)},
-		m_lastError{std::exchange(other.m_lastError, std::error_code{})}
+		m_lastError{std::exchange(other.m_lastError, std::error_code{})},
+		m_lastAcceptTimedOut{std::exchange(other.m_lastAcceptTimedOut, false)}
 	{
 
 	}
@@ -73,6 +74,7 @@ namespace EmEn::Net
 
 			m_impl = std::move(other.m_impl);
 			m_lastError = std::exchange(other.m_lastError, std::error_code{});
+			m_lastAcceptTimedOut = std::exchange(other.m_lastAcceptTimedOut, false);
 		}
 
 		return *this;

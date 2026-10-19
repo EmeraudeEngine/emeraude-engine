@@ -486,6 +486,7 @@ namespace EmEn::Animations
 		}
 
 		Variant result;
+		/* cppcheck-suppress duplicateAssignExpression ; both bounds start at "not found", on purpose. */
 		auto itStart = m_keyFrames.cend();
 		auto itEnd = m_keyFrames.cend();
 

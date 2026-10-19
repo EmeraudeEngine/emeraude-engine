@@ -214,6 +214,7 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
+		/* cppcheck-suppress duplicateCondition ; one block per GLSL function, on purpose. */
 		if ( fragmentStage )
 		{
 			/* ⚠️ The foam is read through a cubic B-spline, not the sampler's bilinear filter: the 512 m cascade stores it at
@@ -245,6 +246,7 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
+		/* cppcheck-suppress duplicateCondition ; one block per GLSL function, on purpose. */
 		if ( fragmentStage )
 		{
 			/* The whitecap coverage: each cascade's accumulated foam (Graphics::OceanWaves), faded like its waves where the

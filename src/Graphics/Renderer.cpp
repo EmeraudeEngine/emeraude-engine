@@ -2056,6 +2056,7 @@ namespace EmEn::Graphics
 			 * Unconditional and idempotent by design — the state it mirrors (which occupant of
 			 * a slot is enabled, whether it is created) changes without going through
 			 * addEffect()/removeEffect(), so there is no change event to hang it on. */
+			/* cppcheck-suppress duplicateCondition ; a separate step, ordered AFTER syncCameraEffects() (see the comment above). */
 			if ( stack != nullptr )
 			{
 				scene->postProcessStack()->syncSlotPairings(sceneCloudSet(scene.get()));
@@ -2339,28 +2340,21 @@ namespace EmEn::Graphics
 			/* Set the current TLAS and update RT descriptor set for post-process effects.
 			 * Capture the read state index so post-process effects (RTR) use view matrices
 			 * consistent with the depth buffer rendered this frame. */
-			if ( scenePtr != nullptr )
+			m_currentTLAS = scenePtr->TLAS();
+			m_currentReadStateIndex = scenePtr->preparedReadStateIndex();
+
+			if ( m_currentTLAS != nullptr )
 			{
-				m_currentTLAS = scenePtr->TLAS();
-				m_currentReadStateIndex = scenePtr->preparedReadStateIndex();
+				this->updateRTDescriptorSet(scenePtr->sceneMetaData(), scenePtr->lightSet());
+			}
 
-				if ( m_currentTLAS != nullptr )
-				{
-					this->updateRTDescriptorSet(scenePtr->sceneMetaData(), scenePtr->lightSet());
-				}
-
-				/* The radiance cache is refreshed HERE: after the TLAS build and the RT set of the
-				 * frame, before any traced effect reads it. */
-				m_postProcessor.setSkyStarMask(sceneStarMask(scenePtr));
+			/* The radiance cache is refreshed HERE: after the TLAS build and the RT set of the
+			 * frame, before any traced effect reads it. */
+			m_postProcessor.setSkyStarMask(sceneStarMask(scenePtr));
 			this->recordIrradianceProbeUpdate(commandBuffer, scenePtr);
-			}
-			else
-			{
-				m_currentTLAS = nullptr;
-			}
 
 			/* Process scene effects (multi-pass). */
-			if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
+			if ( scenePtr->hasPostProcessStack() )
 			{
 				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr));
 			}
@@ -2372,10 +2366,10 @@ namespace EmEn::Graphics
 			 * The snapshot is RETAINED in this frame's slot: it only drops when the slot is
 			 * reused (fence passed), so effects removed meanwhile survive until the GPU is
 			 * done with them. */
-			const auto camera = scenePtr != nullptr ? scenePtr->activeCamera() : nullptr;
+			const auto camera = scenePtr->activeCamera();
 
 			auto & lensEffectsSnapshot = m_lensEffectsSnapshots[this->currentFrameIndex()];
-			lensEffectsSnapshot = composeFinalPassEffects(scenePtr != nullptr ? scenePtr->postProcessStack() : nullptr, camera.get());
+			lensEffectsSnapshot = composeFinalPassEffects(scenePtr->postProcessStack(), camera.get());
 
 			if ( !m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects) )
 			{

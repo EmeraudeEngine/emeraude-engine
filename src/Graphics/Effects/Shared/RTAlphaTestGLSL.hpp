@@ -107,16 +107,10 @@ uint rtHitMaterialIndex (uint instanceIndex, uint geomIdx)
 )GLSL"
 
 /**
- * @brief GLSL: the scene data the alpha-test rule reads, for an effect that does not declare it itself.
- * @note RTGI and RTR carry their own (richer) copies of these declarations — they read normals,
- * emission, roughness at hits. An occlusion-only effect (RTAO, ContactShadows) needs exactly this
- * much: the mesh/material SSBOs of the Renderer's RT set (set 0, bindings 1-3, next to the TLAS
- * at binding 0), the bindless 2D textures, and the UV fetch. `bindlessSet` is the descriptor set
- * index the effect binds the BindlessTextureManager's set at.
- * @warning Requires the extensions GL_EXT_buffer_reference2, GL_EXT_buffer_reference_uvec2,
- * GL_EXT_scalar_block_layout and GL_EXT_nonuniform_qualifier in the host shader.
+ * @brief GLSL: the buffer-reference types and the mesh/material SSBOs of the Renderer's RT set (set 0,
+ * bindings 1-2) — the first piece of EMEN_RT_SCENE_DATA_GLSL.
  */
-#define EMEN_RT_SCENE_DATA_GLSL(bindlessSet) R"GLSL(
+#define EMEN_RT_SCENE_BUFFERS_GLSL R"GLSL(
 /* Buffer reference types for vertex/index data access via device addresses. */
 layout(buffer_reference, scalar) readonly buffer VertexBuffer { float v[]; };
 layout(buffer_reference, scalar) readonly buffer IndexBuffer { uint i[]; };
@@ -124,10 +118,22 @@ layout(buffer_reference, scalar) readonly buffer IndexBuffer { uint i[]; };
 /* RT scene data (set 0, the Renderer's set — the TLAS sits at binding 0). */
 layout(set = 0, binding = 1) readonly buffer MeshMetaData { uvec4 meshEntries[]; } meshSSBO;
 layout(set = 0, binding = 2) readonly buffer MaterialData { vec4 materials[]; } materialSSBO;
-)GLSL" EMEN_RT_SUBGEOMETRY_GLSL R"GLSL(
+)GLSL"
+
+/**
+ * @brief GLSL: the bindless 2D texture declaration up to its set index — EMEN_RT_SCENE_DATA_GLSL splices
+ * the index after it.
+ */
+#define EMEN_RT_SCENE_BINDLESS_OPEN_GLSL R"GLSL(
 
 /* Bindless 2D textures (BindlessTextureManager::Texture2DBinding). */
-layout(set = )GLSL" #bindlessSet R"GLSL(, binding = 1) uniform sampler2D textures2D[];
+layout(set = )GLSL"
+
+/**
+ * @brief GLSL: the rest of the bindless declaration, the material flags and the UV fetch — the last piece of
+ * EMEN_RT_SCENE_DATA_GLSL.
+ */
+#define EMEN_RT_SCENE_ACCESSORS_GLSL R"GLSL(, binding = 1) uniform sampler2D textures2D[];
 
 /* Material flag bits (must match GPURTMaterialData). */
 const uint HasAlbedoTexture = 1u << 0;
@@ -180,6 +186,25 @@ vec2 getHitUV (MeshAccessor m, vec2 bary)
 	return uv0 * (1.0 - bary.x - bary.y) + uv1 * bary.x + uv2 * bary.y;
 }
 )GLSL"
+
+/**
+ * @brief GLSL: the scene data the alpha-test rule reads, for an effect that does not declare it itself.
+ * @note RTGI and RTR carry their own (richer) copies of these declarations — they read normals,
+ * emission, roughness at hits. An occlusion-only effect (RTAO, ContactShadows) needs exactly this
+ * much: the mesh/material SSBOs of the Renderer's RT set (set 0, bindings 1-3, next to the TLAS
+ * at binding 0), the bindless 2D textures, and the UV fetch. `bindlessSet` is the descriptor set
+ * index the effect binds the BindlessTextureManager's set at.
+ * @warning Requires the extensions GL_EXT_buffer_reference2, GL_EXT_buffer_reference_uvec2,
+ * GL_EXT_scalar_block_layout and GL_EXT_nonuniform_qualifier in the host shader.
+ * @note ⚠️ This macro only CHAINS the pieces above; each piece holds exactly one raw string, closing its
+ * macro. cppcheck 2.22 (simplecpp) abandons a TU whose macro continues after a multi-line raw string
+ * with a literal or a macro name (`)GLSL" EMEN_RT_SUBGEOMETRY_GLSL R"GLSL(`) once it expands at namespace
+ * scope — a `syntaxError` that left RTAO, RTGI, RTR, RTContactShadows and IrradianceProbeVolume unchecked
+ * (2026-10-19). A `#param` after a raw string is fine.
+ */
+#define EMEN_RT_SCENE_DATA_GLSL(bindlessSet) \
+	EMEN_RT_SCENE_BUFFERS_GLSL EMEN_RT_SUBGEOMETRY_GLSL \
+	EMEN_RT_SCENE_BINDLESS_OPEN_GLSL #bindlessSet EMEN_RT_SCENE_ACCESSORS_GLSL
 
 /** @brief GLSL: the function deciding whether a candidate triangle is solid at the hit texel. */
 #define EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS R"GLSL(

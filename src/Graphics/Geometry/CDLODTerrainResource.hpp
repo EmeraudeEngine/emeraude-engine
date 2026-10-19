@@ -520,7 +520,8 @@ namespace EmEn::Graphics::Geometry
 
 			/**
 			 * @brief Builds the level-of-detail distance and morph tables.
-			 * @return bool False if the parameters cannot keep a node within its clip level.
+			 * @note A detail distance beyond the clip levels' coverage is clamped to it (a warning).
+			 * @return bool False if the parameters cannot keep a node within its clip level at any distance.
 			 */
 			[[nodiscard]]
 			bool buildLevelOfDetailTables () noexcept;

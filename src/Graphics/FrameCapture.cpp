@@ -32,6 +32,7 @@
 #include <iomanip>
 #include <span>
 #include <sstream>
+#include <utility>
 
 /* Local inclusions. */
 #include "IO/IO.hpp"
@@ -376,8 +377,6 @@ namespace EmEn::Graphics
 	void
 	FrameCapture::onFrameSlotRetired (uint32_t frameSlot) noexcept
 	{
-		bool write = false;
-
 		{
 			const Base::MutexLock lock{m_access};
 
@@ -425,21 +424,17 @@ namespace EmEn::Graphics
 			}
 
 			m_state = State::Writing;
-			write = true;
 		}
 
 		/* Outside the lock: the pool may run the task at once. The capture owns its writer (m_writer): `this` is safe.
-		 * A refused task (the pool stopping) writes here. */
-		if ( write )
-		{
-			m_writer = m_threadPool->submit([this] (const std::stop_token &) {
-				this->writeFiles();
-			});
+		 * A refused task (the pool stopping) writes here. Every path that does not write returned under the lock. */
+		m_writer = m_threadPool->submit([this] (const std::stop_token &) {
+			this->writeFiles();
+		});
 
-			if ( !m_writer.valid() )
-			{
-				this->writeFiles();
-			}
+		if ( !m_writer.valid() )
+		{
+			this->writeFiles();
 		}
 	}
 
@@ -474,8 +469,7 @@ namespace EmEn::Graphics
 		{
 			const Base::MutexLock lock{m_access};
 
-			frames = std::move(m_frames);
-			m_frames.clear();
+			frames = std::exchange(m_frames, {});
 			directory = m_directory;
 			stem = m_stem;
 			width = m_width;

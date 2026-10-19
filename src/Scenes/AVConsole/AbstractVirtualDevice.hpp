@@ -144,7 +144,7 @@ namespace EmEn::Scenes::AVConsole
 			/**
 			 * @brief Executes a function over each input.
 			 * @tparam function_t The type of function. Signature: void (const std::shared_ptr< AbstractVirtualDevice > &)
-			 * @param processInput The function to execute [std::forward].
+			 * @param processInput The function to execute, called once per input (never forwarded: it is called again).
 			 */
 			template< typename function_t >
 			void
@@ -155,14 +155,14 @@ namespace EmEn::Scenes::AVConsole
 
 				for ( const auto & input : m_inputDevicesConnected )
 				{
-					std::forward< function_t >(processInput)(input.lock());
+					processInput(input.lock());
 				}
 			}
 
 			/**
 			 * @brief Executes a function over each output.
 			 * @tparam function_t The type of function. Signature: void (const std::shared_ptr< AbstractVirtualDevice > &)
-			 * @param processOutput The function to execute [std::forward].
+			 * @param processOutput The function to execute, called once per output (never forwarded: it is called again).
 			 */
 			template< typename function_t >
 			void
@@ -173,7 +173,7 @@ namespace EmEn::Scenes::AVConsole
 
 				for ( const auto & output : m_outputDevicesConnected )
 				{
-					std::forward< function_t >(processOutput)(output.lock());
+					processOutput(output.lock());
 				}
 			}
 

@@ -145,16 +145,6 @@ namespace EmEn::Animations
 				return m_skeleton;
 			}
 
-		protected:
-
-			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
-			[[nodiscard]]
-			bool
-			onDependenciesLoaded () noexcept override
-			{
-				return true;
-			}
-
 		private:
 
 			Base::Animation::Skeleton< float > m_skeleton;

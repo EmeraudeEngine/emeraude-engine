@@ -61,7 +61,7 @@ namespace EmEn::Graphics::Material
 	 */
 	struct EMEN_API RTTextureSlot
 	{
-		RTTextureRole role;
+		RTTextureRole role{RTTextureRole::Albedo};
 		/** @brief Texel color channel a scalar role (roughness/metalness) reads — mirrors
 		 * the raster component's source channel (glTF packed metallic-roughness: G/B). */
 		Base::PixelFactory::Channel channel{Base::PixelFactory::Channel::Red};

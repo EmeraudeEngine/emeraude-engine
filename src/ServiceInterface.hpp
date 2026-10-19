@@ -112,6 +112,7 @@ namespace EmEn
 				 * caller's failure path is what is tested (FaultInjection.hpp; compiled out otherwise). */
 				if constexpr ( FaultInjectionEnabled )
 				{
+					/* cppcheck-suppress knownConditionTrueFalse ; false in every build but a fault-injection test build (the stub). */
 					if ( FaultInjection::startupFailureInjected(this->name()) )
 					{
 						return false;

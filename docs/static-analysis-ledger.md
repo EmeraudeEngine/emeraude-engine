@@ -348,6 +348,9 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   by adjacent-literal concatenation at compile time, which a `constexpr` pointer cannot do. Same reason, added
   2026-10-05: `EMEN_STAR_MASK_GLSL` (`Effects/Shared/StarMaskGLSL.hpp`, the in-texture body mask; the only finding on
   the lines that change touched in `IBLBaker`, `RTGI`, the probe volume, `GIDenoiser`, `PostProcessor`, `Renderer`).
+  Same reason, added 2026-10-19: `EMEN_RT_SCENE_BUFFERS_GLSL`, `EMEN_RT_SCENE_BINDLESS_OPEN_GLSL`,
+  `EMEN_RT_SCENE_ACCESSORS_GLSL` (`Effects/Shared/RTAlphaTestGLSL.hpp`: `EMEN_RT_SCENE_DATA_GLSL` split so that each macro
+  holds one raw string — § cppcheck).
 - **use-enum-class ×1** — `OverflowCensus::CounterIndex` (indices into the counter array, now on `uint8_t`).
 
 ### `src/Graphics` 7g — lighting and atmosphere (2026-10-01)
@@ -562,3 +565,61 @@ without it, and the guard instantiates its `Container`. Verified on a test insta
 `loadResource(Texture3DResource, <name>)` is Loaded, both containers report one loaded resource (the generated default
 volume: volumetric files are not read yet).
 
+
+## cppcheck (owner decision 2026-10-19, Ave Robustus II P-W (2))
+
+**Version: cppcheck 2.22.0** — installation, the per-OS defines and the general traps: emeraude-base's
+`docs/static-analysis-ledger.md` § cppcheck. **Configuration**: `cppcheck-suppressions.txt` at the repository root — the
+base's list, plus `duplInheritedMember` (owner: the `ClassId` / `getClassUID()` naming pattern; `-Woverloaded-virtual`
+catches the dangerous case), `funcArgNamesDifferent` (gated by clang-tidy's
+`readability-inconsistent-declaration-parameter-name`), `constParameterCallback` (a third-party C callback's
+`void * userdata`) and the engine's third-party directories. **Gate**: zero finding on the touched TUs (error, warning,
+style, performance, portability; `information` lines are not findings). The command (Linux, about 10 minutes for the
+whole engine with `-j 30`):
+
+```bash
+cppcheck --project=<projet-alpha build>/compile_commands.json --file-filter='*/emeraude-engine/src/*' \
+	--library=posix --platform=unix64 -D__x86_64__ -D__linux__ -D__GNUC__=14 --std=c++20 \
+	--check-level=exhaustive --enable=all --inconclusive --inline-suppr \
+	--suppressions-list=cppcheck-suppressions.txt --cppcheck-build-dir=<scratch dir> -j $(nproc) \
+	--template='{file}:{line}:{column}: {severity}: {message} [{id}]' > cppcheck.out 2> cppcheck.txt
+```
+
+⚠️ **Three ways to a false zero or a skipped TU**, all met on the first sweep:
+- the base's former `*/dependencies/*` third-party pattern matched the engine's own path to emeraude-base: EVERY engine
+  finding suppressed (sweep 1: 0). The patterns name each third-party directory;
+- `template< … > requires (…) using X = …;` (base `Space2D::Point`, `Space3D::Point`, `OBJTriangle`) is a `syntaxError`
+  that abandons every TU including it; now type-constraints;
+- **a macro that continues after a multi-line raw string** with a literal or a macro name
+  (`)GLSL" EMEN_RT_SUBGEOMETRY_GLSL R"GLSL(`), expanded at namespace scope: `syntaxError` reported at an unrelated
+  namespace line (`FNV1a.hpp:33`, `NameableTrait.hpp:32`), 5 TUs abandoned (RTAO, RTGI, RTR, RTContactShadows,
+  IrradianceProbeVolume). Reduced to four lines; 2.23-dev too. `EMEN_RT_SCENE_DATA_GLSL` now only chains macros that each
+  hold ONE raw string (the GLSL is byte-identical, 6265 bytes compared). A `#param` after a raw string is fine. Rule: a
+  GLSL macro holds exactly one raw string, closing the macro; a composite macro chains names.
+
+**First full sweep (2026-10-19)**: 111 findings and 7 `syntaxError` → 99 and 3 → 13 and 0 → **0** after the lot. Fixed:
+- a null dereference in Debug (`AbstractDeviceDependentObject`: "Device is null", then `m_device->isCreated()`);
+- `TCPServer`'s moves dropped `m_lastAcceptTimedOut`;
+- an unchecked material in `SceneRendering::onGraphicsPipelineConfiguration()` — a renderable without a material (which
+  the generator supports: neutral output) dereferenced null; `configureColorBlendState()` takes a `const
+  Material::Interface *`, `nullptr` = opaque (owner decision);
+- `parseSpecularComponent()`: a non-object `"Specular"` aborted in jsoncpp, and the factor was read from a `"Factor"` key
+  no file wrote — every `Data` ignored since 0.7.1 (owner: read the documented `Type`/`Data`, refuse a wrong shape;
+  `docs/material-json-format.md`, verified at runtime there);
+- `generateGrabPassTransmissionFragmentShader()` hid two `declare()` failures; `buildLevelOfDetailTables()` clamped to a
+  distance ≤ 0 instead of refusing (owner: false when no distance fits);
+- functions that cannot fail return `void` (owner): `prepareMDIModelMatrix()` / `prepareInstanceModelMatrix()` (12 dead
+  branches), `Core::openImageViewer()` / `openAudioTrack()`;
+- `accessMoved` ×10 (`std::exchange`, or a moved-from smart pointer left as the standard leaves it), the FBX loader's
+  self-assignment left by the Y-up migration (and its three stale flip comments), USD's `erase(unique)` idiom, the
+  `ssdpDiscover()` socket by RAII (`ScopedSocket`), 5 records with uninitialized members, an unsigned `<= 0`, two
+  write-only variables (GLTF cycle check, FrameCapture), redundant conditions (Renderer post-process block, ShadowMap /
+  Texture, SpotLight, CommandBuffer, FileSystem ×3, Scene), two overrides identical to the base, an `std::forward` in a
+  loop (`AbstractVirtualDevice`).
+
+Kept ON PURPOSE (inline, each with its reason): `knownEmptyContainer` (`VideoEncoderH265`: `enumerate()` fills it),
+`knownConditionTrueFalse` ×7 (a const member's default read instead of the constructor's value ×2, flags set by a
+by-reference lambda or another method ×2, the RenderDoc and fault-injection stubs ×3), `duplicateAssignExpression`
+(`Sequence`), `redundantInitialization` (`Net::Manager`: every variable initialized), `duplicateCondition` ×5 (two
+documented generation phases or concerns), `unreadVariable` ×2 (ShadowMap / Texture `capture()`: the download ignores
+the layer — engine item `render-target-capture-ignores-the-layer-index`).

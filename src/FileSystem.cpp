@@ -253,7 +253,7 @@ namespace EmEn
 
 		for ( auto it = paths.cbegin(); it != paths.cend(); ++it )
 		{
-			const bool last = (it != paths.cend() && std::next(it) == paths.cend());
+			const bool last = std::next(it) == paths.cend();
 
 			if ( registerDirectory(*it, last, true, m_configDirectory) )
 			{
@@ -320,7 +320,7 @@ namespace EmEn
 
 		for ( auto it = paths.cbegin(); it != paths.cend(); ++it )
 		{
-			const bool last = (it != paths.cend() && std::next(it) == paths.cend());
+			const bool last = std::next(it) == paths.cend();
 
 			if ( registerDirectory(*it, last, true, m_cacheDirectory) )
 			{
@@ -451,7 +451,7 @@ namespace EmEn
 		{
 			const std::filesystem::path & tempDirectory{*it};
 
-			const bool last = (it != paths.cend() && std::next(it) == paths.cend());
+			const bool last = std::next(it) == paths.cend();
 
 			if ( this->checkDirectoryRequirements(tempDirectory, last, false) )
 			{

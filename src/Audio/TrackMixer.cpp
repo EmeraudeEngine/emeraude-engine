@@ -33,6 +33,7 @@
 #include <numeric>
 #include <set>
 #include <sstream>
+#include <utility>
 
 /* Local inclusions. */
 #include "String.hpp"
@@ -579,8 +580,8 @@ namespace EmEn::Audio
 				return;
 			}
 
+			/* NOTE: A moved-from std::shared_ptr is empty (guaranteed): the claim is released here. */
 			pending = std::move(m_loadingTrack);
-			m_loadingTrack.reset();
 
 			/* NOTE: The user state and the index were set by play() when it asked for this track; a stop() since then
 			 * dropped the claim above. Started here, never through play(): no recursion. */

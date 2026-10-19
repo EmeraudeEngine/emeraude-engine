@@ -138,7 +138,13 @@ of the refraction ray whose exit point offsets the grab-pass sample. Beer only c
 | `Specular` | Value | `Color` |
 
 ⚠️ `Specular`'s value is `KHR_materials_specular`'s factor and the spec bounds it to **[0, 1]**;
-`setSpecularFactor()` does not currently enforce that.
+`setSpecularFactor()` does not currently enforce that. Only the type `Value` is accepted; another type, a non-finite
+`Data` or a non-array `Color` refuses the material. ⚠️ Until 2026-10-19 the parser read the factor from a `"Factor"` key
+no file wrote: every `Data` was ignored and the factor stayed 1 (`SpecularDisabled.json` was not disabled). Measured
+after the fix (`parametric-geometry-generator --demo-options 8,<material>,2`, the sphere under the studio rig, X11,
+validation layer ON, 0 `VUID-`): `SpecularDisabled` (`Data` 0) against a twin at `Data` 1.0 — the base layer's lobe
+(roughness 0.15) is gone, only the clear coat's pinpoint stays: 10 pixels ≥ 200 against 224, object p99.5 71 against
+175, the rest of the sphere within 2 % (mean 48.4 against 49.3).
 
 ⚠️ `Iridescence`'s `ThicknessMin`/`ThicknessMax` are **nanometres**, on both sides — no conversion.
 Without `IridescenceThickness` below, the film thickness is the **MAXIMUM**, which is the spec's

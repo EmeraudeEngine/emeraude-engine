@@ -239,7 +239,7 @@ namespace EmEn::Vulkan
 	bool
 	GraphicsPipeline::configureViewportState (uint32_t width, uint32_t height, VkPipelineViewportStateCreateFlags flags) noexcept
 	{
-		if ( width <= 0 || height <= 0 )
+		if ( width == 0 || height == 0 )
 		{
 			Tracer::error(ClassId, "Invalid view dimensions !");
 
@@ -649,10 +649,13 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	GraphicsPipeline::configureColorBlendState (RenderPassType renderPassType, const Material::Interface & material, const PixelFactory::Color< float > & blendColor, VkPipelineColorBlendStateCreateFlags flags) noexcept
+	GraphicsPipeline::configureColorBlendState (RenderPassType renderPassType, const Material::Interface * material, const PixelFactory::Color< float > & blendColor, VkPipelineColorBlendStateCreateFlags flags) noexcept
 	{
 		if ( m_colorBlendAttachments.empty() )
 		{
+			/* NOTE: A renderable without a material is drawn opaque (Saphir writes a neutral output for it). */
+			const bool opaque = material == nullptr || material->isOpaque();
+
 			m_colorBlendAttachments.resize(1);
 
 			switch ( renderPassType )
@@ -677,7 +680,7 @@ namespace EmEn::Vulkan
 				case RenderPassType::LineLightPass:
 					m_colorBlendAttachments[0].blendEnable = VK_TRUE;
 
-					if ( material.isOpaque() )
+					if ( opaque )
 					{
 						/* Opaque materials: simple additive blending for light accumulation. */
 						m_colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;
@@ -702,7 +705,7 @@ namespace EmEn::Vulkan
 					break;
 
 				default:
-					if ( material.isOpaque() )
+					if ( opaque )
 					{
 						m_colorBlendAttachments[0].blendEnable = VK_FALSE;
 
@@ -718,7 +721,7 @@ namespace EmEn::Vulkan
 					{
 						m_colorBlendAttachments[0].blendEnable = VK_TRUE;
 
-						switch ( material.blendingMode() )
+						switch ( material->blendingMode() )
 						{
 							case BlendingMode::Add:
 								m_colorBlendAttachments[0].srcColorBlendFactor = VK_BLEND_FACTOR_ONE;

@@ -494,6 +494,15 @@ namespace EmEn::Graphics::Geometry
 		 * 2^k, the condition no longer depends on k. */
 		const auto coverageLimit = (halfTexels - slackTexels - (patchQuads * std::numbers::sqrt2_v< float >)) * m_cellSize;
 
+		/* No positive distance fits: the clip levels are too small for the patches (clipTexels against patchQuads and
+		 * clipUpdateTexels). Clamping would leave every level range at or below zero. */
+		if ( !(coverageLimit > 0.0F) )
+		{
+			TraceError{ClassId} << "Terrain '" << this->name() << "': clip levels of " << m_parameters.clipTexels << " texels cannot hold patches of " << m_parameters.patchQuads << " quads (" << m_parameters.clipUpdateTexels << " update texels) — no detail distance fits.";
+
+			return false;
+		}
+
 		if ( m_parameters.detailDistance > coverageLimit )
 		{
 			TraceWarning{ClassId} << "Terrain '" << this->name() << "': a detail distance of " << m_parameters.detailDistance << " m would outrun the clip levels, clamped to " << coverageLimit << " m.";

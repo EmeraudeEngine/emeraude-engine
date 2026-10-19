@@ -959,6 +959,7 @@ namespace EmEn::Scenes
 		 * primary view target (motion vectors). Render-to-texture/cubemap targets must not
 		 * write it — they are prepared BEFORE the main view, but the gate keeps the header
 		 * semantics independent from the renderer's target ordering. */
+		/* cppcheck-suppress duplicateCondition ; the frame statistics, then the instance transforms header: two concerns, on purpose. */
 		if ( renderTarget->renderType() == RenderTargetType::View )
 		{
 			const auto & viewMatrices = renderTarget->viewMatrices();

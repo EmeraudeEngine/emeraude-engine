@@ -779,6 +779,7 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* Generates the fragment output. */
+		/* cppcheck-suppress duplicateCondition ; the lighting code, then the fragment output: two generation phases, on purpose. */
 		if ( lightingRequested )
 		{
 			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << " = " << m_lightGenerator.fragmentColor() << ';';
@@ -1134,7 +1135,7 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		if ( !graphicsPipeline.configureColorBlendState(m_renderPassType, *renderable->material(this->layerIndex())) )
+		if ( !graphicsPipeline.configureColorBlendState(m_renderPassType, renderable->material(this->layerIndex())) )
 		{
 			Tracer::error(ClassId, "Unable to configure the graphics pipeline color blend state !");
 

@@ -778,6 +778,7 @@ namespace EmEn::Scenes
 
 		/* Deferred move (a component moved its entity during the dispatch): dispatched here, so the siblings see the new
 		 * frame in the same cycle. */
+		/* cppcheck-suppress knownConditionTrueFalse ; m_containerMoveDeferred is set by onContainerMove() during the dispatch. */
 		if ( moveDeferred )
 		{
 			this->onContainerMove(deferredMoveCoordinates);

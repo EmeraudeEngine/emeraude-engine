@@ -1083,7 +1083,10 @@ namespace EmEn::Scenes::Loaders::USD
 		}
 
 		std::ranges::sort(prototypePaths);
-		prototypePaths.erase(std::ranges::unique(prototypePaths).begin(), prototypePaths.end());
+
+		const auto [duplicatesBegin, duplicatesEnd] = std::ranges::unique(prototypePaths);
+
+		prototypePaths.erase(duplicatesBegin, duplicatesEnd);
 
 		/* Tydra hands back renderer-ready data: triangulated faces, indexed vertices, resolved
 		 * material bindings. Re-deriving that from raw prims would be duplicated work — the

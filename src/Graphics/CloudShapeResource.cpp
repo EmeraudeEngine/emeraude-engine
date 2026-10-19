@@ -50,7 +50,7 @@ namespace
 	struct Puff
 	{
 		Vector< 3, float > center;
-		float radius;
+		float radius{0.0F};
 	};
 
 	/**

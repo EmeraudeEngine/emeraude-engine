@@ -2045,13 +2045,17 @@ namespace EmEn
 				continue;
 			}
 
-			if ( std::ranges::find(imageFileExtensions, extension) != imageFileExtensions.cend() && this->openImageViewer(filepath) )
+			if ( std::ranges::find(imageFileExtensions, extension) != imageFileExtensions.cend() )
 			{
+				this->openImageViewer(filepath);
+
 				continue;
 			}
 
-			if ( std::ranges::find(audioFileExtensions, extension) != audioFileExtensions.cend() && this->openAudioTrack(filepath) )
+			if ( std::ranges::find(audioFileExtensions, extension) != audioFileExtensions.cend() )
 			{
+				this->openAudioTrack(filepath);
+
 				continue;
 			}
 
@@ -2160,7 +2164,7 @@ namespace EmEn
 		return true;
 	}
 
-	bool
+	void
 	Core::openAudioTrack (const std::filesystem::path & filepath) noexcept
 	{
 		auto & trackMixer = m_audioManager.trackMixer();
@@ -2171,7 +2175,7 @@ namespace EmEn
 
 			this->notifyUser("The audio system is unavailable to play the file.");
 
-			return true;
+			return;
 		}
 
 		const auto track = std::make_shared< Audio::MusicResource >(m_resourceManager, "+" + IO::toU8String(filepath.stem()));
@@ -2182,7 +2186,7 @@ namespace EmEn
 
 			this->notifyUser(BlobTrait{} << "Unable to read the audio file '" << IO::toU8String(filepath.filename()) << "'.");
 
-			return true;
+			return;
 		}
 
 		/* NOTE: The playback starts immediately. A track still loading
@@ -2195,12 +2199,10 @@ namespace EmEn
 
 			this->notifyUser(BlobTrait{} << "Unable to play the audio file '" << IO::toU8String(filepath.filename()) << "'.");
 
-			return true;
+			return;
 		}
 
 		this->notifyUser(BlobTrait{} << "Playing '" << track->title() << "' ...");
-
-		return true;
 	}
 
 	bool
@@ -2229,12 +2231,12 @@ namespace EmEn
 		return m_sceneManager.deleteScene(activeSceneName);
 	}
 
-	bool
+	void
 	Core::openImageViewer (const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->clearStageForViewerScene() )
 		{
-			return true;
+			return;
 		}
 
 		Viewers::ImageViewer viewer{m_resourceManager, m_sceneManager};
@@ -2245,7 +2247,7 @@ namespace EmEn
 		{
 			this->notifyUser(BlobTrait{} << "Unable to display the image '" << IO::toU8String(filepath.filename()) << "'.");
 
-			return true;
+			return;
 		}
 
 		if ( !m_sceneManager.enableScene(scene) )
@@ -2256,12 +2258,10 @@ namespace EmEn
 
 			m_sceneManager.deleteScene(Viewers::ImageViewer::SceneName);
 
-			return true;
+			return;
 		}
 
 		this->notifyUser(BlobTrait{} << "Viewing '" << IO::toU8String(filepath.filename()) << "'.");
-
-		return true;
 	}
 
 	bool
@@ -2597,6 +2597,7 @@ namespace EmEn
 					return true;
 
 				case KeyC :
+					/* cppcheck-suppress knownConditionTrueFalse ; false only in a build without RenderDoc support (the stub). */
 					if ( auto & renderDoc = m_vulkanInstance.renderDocCapture(); renderDoc.isAvailable() )
 					{
 						renderDoc.triggerCapture();

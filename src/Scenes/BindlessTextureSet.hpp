@@ -74,7 +74,7 @@ namespace EmEn::Scenes
 			struct EMEN_API Entry
 			{
 				std::shared_ptr< Vulkan::TextureInterface > texture;
-				uint32_t globalIndex;
+				uint32_t globalIndex{0};
 			};
 
 			/**

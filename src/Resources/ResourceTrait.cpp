@@ -33,9 +33,10 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
-#include <optional>
 #include <mutex>
+#include <optional>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 /* Local inclusions. */
@@ -429,8 +430,7 @@ namespace EmEn::Resources
 		{
 			const Base::MutexLock lock{m_dependenciesAccess};
 
-			parents = std::move(m_parentsToNotify);
-			m_parentsToNotify.clear();
+			parents = std::exchange(m_parentsToNotify, {});
 
 			/* NOTE: The children still loading keep a pointer to this resource until they end (their parent lists):
 			 * this one no longer holds them, so nothing cycles. */
@@ -555,8 +555,7 @@ namespace EmEn::Resources
 					if ( !m_parentsToNotify.empty() )
 					{
 						/* Copy parents list to notify outside lock. */
-						parentsToNotifyCopy = std::move(m_parentsToNotify);
-						m_parentsToNotify.clear();
+						parentsToNotifyCopy = std::exchange(m_parentsToNotify, {});
 					}
 				}
 				else

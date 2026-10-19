@@ -875,6 +875,7 @@ namespace EmEn::Scenes
 			{
 				staticEntity->forEachComponent(inspect);
 
+				/* cppcheck-suppress knownConditionTrueFalse ; 'inspect' sets both flags through its by-reference capture. */
 				if ( hasCamera && hasMicrophone )
 				{
 					break;
@@ -996,10 +997,7 @@ namespace EmEn::Scenes
 		{
 			const Base::MutexLock lock{m_physicsOctreeAccess};
 
-			if ( m_physicsOctree != nullptr )
-			{
-				m_physicsOctree = nullptr;
-			}
+			m_physicsOctree = nullptr;
 		}
 	}
 }

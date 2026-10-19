@@ -946,7 +946,6 @@ namespace EmEn::Scenes::Loaders::GLTF
 				}
 			}
 
-			std::vector< uint8_t > reached(nodeCount, 0);
 			std::vector< size_t > pending;
 			pending.reserve(nodeCount);
 
@@ -965,7 +964,6 @@ namespace EmEn::Scenes::Loaders::GLTF
 				const auto nodeIndex = pending.back();
 				pending.pop_back();
 
-				reached[nodeIndex] = 1;
 				++reachedCount;
 
 				for ( const auto childIndex : asset.nodes[nodeIndex].children )

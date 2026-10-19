@@ -601,9 +601,12 @@ namespace EmEn::Scenes
 				m_deferredDestructor->retireObject(std::move(m_pendingTLASBuild));
 				m_deferredDestructor->retireObject(std::move(m_TLAS));
 			}
+			else
+			{
+				m_pendingTLASBuild.reset();
+				m_TLAS.reset();
+			}
 
-			m_pendingTLASBuild.reset();
-			m_TLAS.reset();
 			m_instanceCount = 0;
 			m_materialCount = 0;
 
@@ -753,7 +756,9 @@ namespace EmEn::Scenes
 		{
 			m_deferredDestructor->retireObject(std::move(m_pendingTLASBuild));
 		}
-
-		m_pendingTLASBuild.reset();
+		else
+		{
+			m_pendingTLASBuild.reset();
+		}
 	}
 }

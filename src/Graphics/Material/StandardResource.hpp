@@ -1614,8 +1614,11 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Parses the specular component (KHR_materials_specular) from JSON data.
+			 * @note { "Type": "Value", "Data": <factor>, "Color": [...] } (docs/material-json-format.md). An absent component
+			 * keeps the defaults; a present one of the wrong shape is refused.
 			 * @param data A reference to the JSON data.
-			 * @return bool
+			 * @return bool False when the component is not an object, its type not 'Value', its factor not a finite number
+			 * or its color not an array.
 			 */
 			[[nodiscard]]
 			bool parseSpecularComponent (const Json::Value & data) noexcept;

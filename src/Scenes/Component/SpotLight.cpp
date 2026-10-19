@@ -456,10 +456,9 @@ namespace EmEn::Scenes::Component
 			return false;
 		}
 
-		/* Write binding 1: Shadow map sampler. */
-		if ( m_shadowMap == nullptr || !m_shadowMap->writeCombinedImageSampler(*m_shadowDescriptorSet, 1) )
+		if ( !m_shadowMap->writeCombinedImageSampler(*m_shadowDescriptorSet, 1) )
 		{
-			TraceError{ClassId} << "Shadow map is null, cannot bind to descriptor set !";
+			TraceError{ClassId} << "Unable to write the shadow map sampler into the descriptor set !";
 
 			m_shadowDescriptorSet.reset();
 

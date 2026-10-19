@@ -694,6 +694,7 @@ namespace EmEn::Graphics
 
 				auto & renderDoc = m_vulkanInstance.renderDocCapture();
 
+				/* cppcheck-suppress knownConditionTrueFalse ; true only in a build without RenderDoc support (the stub). */
 				if ( !renderDoc.isAvailable() )
 				{
 					return Console::CommandResult::error("RenderDoc is not available (launch the app under renderdoccmd to inject it).");

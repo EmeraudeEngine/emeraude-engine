@@ -48,6 +48,7 @@ namespace EmEn::Graphics::RenderableInstance
 		m_instanceCount{static_cast< uint32_t >(instanceLocations.size())},
 		m_activeInstanceCount{m_instanceCount}
 	{
+		/* cppcheck-suppress knownConditionTrueFalse ; cppcheck reads the const member's default {0}, not this constructor's initializer. */
 		if ( m_instanceCount == 0 )
 		{
 			this->setBroken("The instance location list is empty !");
@@ -99,6 +100,7 @@ namespace EmEn::Graphics::RenderableInstance
 		: Abstract{renderable, flagBits},
 		m_instanceCount{instanceCount}
 	{
+		/* cppcheck-suppress knownConditionTrueFalse ; cppcheck reads the const member's default {0}, not this constructor's initializer. */
 		if ( m_instanceCount == 0 )
 		{
 			this->setBroken("The location count is zero !");

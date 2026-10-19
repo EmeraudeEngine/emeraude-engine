@@ -871,18 +871,16 @@ namespace EmEn::Saphir
 			 * BDA SSBO (PerDrawDataRef), indexed by gl_DrawID.
 			 * @note MDI-only path; the caller must have enabled MDI (enableMDI()) so the
 			 * buffer_reference GLSL extensions and the PerDrawDataRef struct are emitted.
-			 * @return bool
+			 * Never fails: it only appends GLSL (once).
 			 */
-			[[nodiscard]]
-			bool prepareMDIModelMatrix () noexcept;
+			void prepareMDIModelMatrix () noexcept;
 
 			/**
 			 * @brief Creates a local variable for the model matrix read from the InstanceTransforms SSBO.
 			 * @note Indexed by gl_InstanceIndex (instanceCount is always 1 on this path).
-			 * @return bool
+			 * Never fails: it only appends GLSL (once).
 			 */
-			[[nodiscard]]
-			bool prepareInstanceModelMatrix () noexcept;
+			void prepareInstanceModelMatrix () noexcept;
 
 		public:
 

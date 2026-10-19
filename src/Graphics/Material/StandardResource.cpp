@@ -3756,8 +3756,8 @@ namespace EmEn::Graphics::Material
 		/* Enable the nonuniform qualifier extension. */
 		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
 
-		/* Declare the bindless 2D texture array if not already declared.
-		 * NOTE: Check if any other path already declared this binding. */
+		/* Declare the bindless 2D texture array. NOTE: Another path may have declared it already: a re-declaration of
+		 * the unbounded array is ignored and succeeds, so a failure here is an invalid declaration (already traced). */
 		if ( !fragmentShader.declare(Declaration::Sampler{
 			bindlessSetIndex,
 			BindlessTextureManager::Texture2DBinding,
@@ -3765,7 +3765,7 @@ namespace EmEn::Graphics::Material
 			Bindless::Textures2D,
 			Declaration::Sampler::UnboundedArray}) )
 		{
-			/* Declaration may fail if already declared — this is acceptable. */
+			return false;
 		}
 
 		/* ⚠️ FROSTED GLASS: a rough transmissive surface must read a BLURRED copy of the scene
@@ -3858,7 +3858,10 @@ namespace EmEn::Graphics::Material
 					" translation carried by both terms. */" << Line::End <<
 					"return (clipExit.xy / clipExit.w - clipHere.xy / clipHere.w) * 0.5;";
 
-				fragmentShader.declare(grabPassRefractionOffset);
+				if ( !fragmentShader.declare(grabPassRefractionOffset) )
+				{
+					return false;
+				}
 
 				/* The perturbed normal in VIEW space. ViewTBNMatrix maps view -> tangent (it is
 				 * built as transpose(mat3(viewT, viewB, viewN))), so its transpose brings the
@@ -6929,23 +6932,55 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::parseSpecularComponent (const Json::Value & data) noexcept
 	{
-		if ( !data.isMember(SpecularKHRString) )
+		/* NOTE: A trust boundary (a material file). The component reads like every other one (docs/material-json-format.md):
+		 * { "Type": "Value", "Data": <factor>, "Color": [r, g, b(, a)] }. An absent component keeps the defaults (factor 1,
+		 * white); anything present of the wrong shape refuses the material. parseComponentBase() checks the objects first:
+		 * jsoncpp's isMember() aborts on another type. */
+		FillingType fillingType{};
+		Json::Value componentData{};
+
+		if ( !parseComponentBase(data, SpecularKHRString, fillingType, componentData, true) )
 		{
-			/* Specular is optional - not present means defaults (factor=1.0, color=white). */
+			return false;
+		}
+
+		if ( fillingType == FillingType::None )
+		{
 			return true;
 		}
 
-		const auto & specularData = data[SpecularKHRString];
+		if ( fillingType != FillingType::Value )
+		{
+			TraceError{ClassId} << "The '" << SpecularKHRString << "' component only takes the type 'Value' (KHR_materials_specular's factor) !";
 
-		const auto factor = FastJSON::getValue< float >(specularData, "Factor").value_or(DefaultSpecularFactor);
-		this->setSpecularFactor(factor);
+			return false;
+		}
+
+		const auto factor = FastJSON::asValue< float >(componentData);
+
+		if ( !factor )
+		{
+			TraceError{ClassId} << "The '" << SpecularKHRString << "' factor must be a finite number !";
+
+			return false;
+		}
+
+		this->setSpecularFactor(*factor);
+
+		const auto & specularData = data[SpecularKHRString];
 
 		if ( specularData.isMember(JKColor) )
 		{
 			const auto & colorData = specularData[JKColor];
-			const auto color = colorData.isArray() ? parseColorComponent(colorData) : DefaultSpecularColor;
 
-			this->setSpecularColor(color);
+			if ( !colorData.isArray() )
+			{
+				TraceError{ClassId} << "The '" << SpecularKHRString << "' color must be a JSON array !";
+
+				return false;
+			}
+
+			this->setSpecularColor(parseColorComponent(colorData));
 		}
 
 		return true;

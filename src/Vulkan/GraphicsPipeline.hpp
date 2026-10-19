@@ -298,13 +298,14 @@ namespace EmEn::Vulkan
 			/**
 			 * @brief Generates color blend state into the graphics pipeline createInfo.
 			 * @param renderPassType The render pass type.
-			 * @param material A reference to the material.
+			 * @param material A pointer to the material, nullptr for a renderable without one (drawn opaque, like the
+			 * neutral output Saphir generates for it).
 			 * @param blendColor A reference to a color for the blend operation. Default Black.
 			 * @param flags Flags value for this stage. Default 0.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool configureColorBlendState (Graphics::RenderPassType renderPassType, const Graphics::Material::Interface & material, const Base::PixelFactory::Color< float > & blendColor = Base::PixelFactory::Black, VkPipelineColorBlendStateCreateFlags flags = 0) noexcept;
+			bool configureColorBlendState (Graphics::RenderPassType renderPassType, const Graphics::Material::Interface * material, const Base::PixelFactory::Color< float > & blendColor = Base::PixelFactory::Black, VkPipelineColorBlendStateCreateFlags flags = 0) noexcept;
 
 			/**
 			 * @brief Sets a custom color blend state;

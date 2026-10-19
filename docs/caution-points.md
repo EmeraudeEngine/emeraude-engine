@@ -5651,6 +5651,19 @@ misleading.
   the other RTR shaders (`RTRBlurFragmentShader`, `RTRCompositeFragmentShader`) are still small but any
   shader that keeps growing will re-trigger this on the next Windows build.
 
+### A GLSL MACRO holds exactly ONE raw string — cppcheck abandons the TU otherwise (2026-10-19)
+
+The split above is fine in a VARIABLE. In a `#define`, it is not: a macro that continues after a multi-line raw string
+with a literal or another macro name (`#define M R"GLSL( … )GLSL" OTHER R"GLSL( … )GLSL"`), expanded at namespace
+scope, makes cppcheck 2.22 (simplecpp; 2.23-dev too) report a `syntaxError` at an unrelated line of another header and
+skip the whole translation unit. GCC, clang and MSVC accept it — the standard lexes the raw string before the
+directive. `EMEN_RT_SCENE_DATA_GLSL` (`Graphics/Effects/Shared/RTAlphaTestGLSL.hpp`) had that shape: RTAO, RTGI, RTR,
+RTContactShadows and IrradianceProbeVolume were never analysed.
+
+- **Rule:** each GLSL macro holds ONE raw string and ends with it; a composite macro only CHAINS macro names (a
+  `#param` between them is fine). Check the concatenation is byte-identical (print both expansions and `cmp`).
+- Details and the reduced case: `docs/static-analysis-ledger.md` § cppcheck.
+
 ### ⚠️ An `EMEN_API` class defined ENTIRELY inline in a header no engine TU includes does not link on MSVC (Sep 2026)
 
 - **Symptom (MSVC only):** the CONSUMER fails to link — `LNK2019` / `LNK2001` on `__imp_` symbols of the class

@@ -266,8 +266,7 @@ namespace EmEn::Overlay
 		{
 			const Base::MutexLock lock{m_screensAccess};
 
-			screens = std::move(m_screens);
-			m_screens.clear();
+			screens = std::exchange(m_screens, {});
 		}
 
 		screens.clear();
@@ -568,7 +567,9 @@ namespace EmEn::Overlay
 	Manager::disableAllScreens () noexcept
 	{
 		/* NOTE: A copy, acted on with m_screensAccess released (each change requests a redraw). */
-		for ( const auto & screen : this->inputTargets().screens )
+		const auto targets = this->inputTargets();
+
+		for ( const auto & screen : targets.screens )
 		{
 			screen->setVisibility(false);
 		}

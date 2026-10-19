@@ -283,12 +283,12 @@ namespace EmEn::Saphir
 		return true;
 	}
 
-	bool
+	void
 	AbstractVertexStage::prepareMDIModelMatrix () noexcept
 	{
 		if ( this->preparationAlreadyDone(ShaderVariable::MDIModelMatrix) )
 		{
-			return true;
+			return;
 		}
 
 		/* NOTE: Extensions are registered in onSourceCodeGeneration() to ensure
@@ -301,16 +301,14 @@ namespace EmEn::Saphir
 			"\t" "const mat4 " << ShaderVariable::MDIModelMatrix << " = mat4(PerDrawDataRef(perDrawAddr)[gl_DrawID].modelMatrix);" "\n\n";
 
 		m_uniquePreparations.emplace_back(ShaderVariable::MDIModelMatrix, code.str());
-
-		return true;
 	}
 
-	bool
+	void
 	AbstractVertexStage::prepareInstanceModelMatrix () noexcept
 	{
 		if ( this->preparationAlreadyDone(ShaderVariable::InstanceModelMatrix) )
 		{
-			return true;
+			return;
 		}
 
 		std::stringstream code;
@@ -322,8 +320,6 @@ namespace EmEn::Saphir
 		code << "\t" "const mat4 " << ShaderVariable::InstanceModelMatrix << " = ubInstanceTransforms.instanceMatrices[" << m_instanceIndexExpression << " * 2];" "\n\n";
 
 		m_uniquePreparations.emplace_back(ShaderVariable::InstanceModelMatrix, code.str());
-
-		return true;
 	}
 
 	bool
@@ -538,10 +534,7 @@ namespace EmEn::Saphir
 		}
 		else if ( this->isMDIEnabled() )
 		{
-			if ( !this->prepareMDIModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareMDIModelMatrix();
 
 			code << "\t" "const mat4 " << ShaderVariable::ModelViewMatrix << " = "
 				<< ViewUB(Keys::UniformBlock::Component::ViewMatrix, false) << " * "
@@ -551,10 +544,7 @@ namespace EmEn::Saphir
 		{
 			/* NOTE: Advanced path on the InstanceTransforms SSBO: the view matrix is
 			 * pushed, the model matrix comes from the per-instance entry. */
-			if ( !this->prepareInstanceModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareInstanceModelMatrix();
 
 			code << "\t" "const mat4 " << ShaderVariable::ModelViewMatrix << " = " << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << ShaderVariable::InstanceModelMatrix << ";" "\n";
 		}
@@ -585,10 +575,7 @@ namespace EmEn::Saphir
 			 * VP), so there is no separate view matrix available. The MDI vertex shader works
 			 * entirely in world space (world-space position and tangent-to-world outputs), so the
 			 * normal matrix is derived from the world model matrix, not from a model-view matrix. */
-			if ( !this->prepareMDIModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareMDIModelMatrix();
 
 			code << "\t" "const mat3 " << ShaderVariable::NormalMatrix << " = transpose(mat3(inverse(" << ShaderVariable::MDIModelMatrix << ")));" "\n";
 		}
@@ -731,10 +718,7 @@ namespace EmEn::Saphir
 		}
 		else if ( this->isMDIEnabled() )
 		{
-			if ( !this->prepareMDIModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareMDIModelMatrix();
 
 			code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << MatrixPC(PushConstant::Component::ViewProjectionMatrix) << " * " << ShaderVariable::MDIModelMatrix << ";" "\n";
 		}
@@ -742,10 +726,7 @@ namespace EmEn::Saphir
 		{
 			/* NOTE: Classic path on the InstanceTransforms SSBO: the view-projection matrix
 			 * is pushed (MDI precedent), the model matrix comes from the per-instance entry. */
-			if ( !this->prepareInstanceModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareInstanceModelMatrix();
 
 			code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << MatrixPC(PushConstant::Component::ViewProjectionMatrix) << " * " << ShaderVariable::InstanceModelMatrix << ";" "\n";
 		}
@@ -754,10 +735,7 @@ namespace EmEn::Saphir
 			/* NOTE: Advanced path on the InstanceTransforms SSBO: the projection comes
 			 * from the view UBO, the view matrix is pushed, the model matrix comes from
 			 * the per-instance entry. */
-			if ( !this->prepareInstanceModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareInstanceModelMatrix();
 
 			code << "\t" "const mat4 " << ShaderVariable::ModelViewProjectionMatrix << " = " << ViewUB(Keys::UniformBlock::Component::ProjectionMatrix, false) << " * " << MatrixPC(PushConstant::Component::ViewMatrix) << " * " << ShaderVariable::InstanceModelMatrix << ";" "\n";
 		}
@@ -824,10 +802,7 @@ namespace EmEn::Saphir
 
 		if ( this->isMDIEnabled() )
 		{
-			if ( !this->prepareMDIModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareMDIModelMatrix();
 
 			const auto * const posExpr = this->vertexPositionExpression();
 
@@ -846,10 +821,7 @@ namespace EmEn::Saphir
 		}
 		else if ( this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled() )
 		{
-			if ( !this->prepareInstanceModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareInstanceModelMatrix();
 
 			const auto * const posExpr = this->vertexPositionExpression();
 
@@ -890,10 +862,7 @@ namespace EmEn::Saphir
 
 		if ( this->isMDIEnabled() )
 		{
-			if ( !this->prepareMDIModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareMDIModelMatrix();
 
 			matrixExpression = ShaderVariable::MDIModelMatrix;
 		}
@@ -908,10 +877,7 @@ namespace EmEn::Saphir
 		}
 		else if ( this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled() )
 		{
-			if ( !this->prepareInstanceModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareInstanceModelMatrix();
 
 			matrixExpression = ShaderVariable::InstanceModelMatrix;
 		}
@@ -1846,10 +1812,7 @@ namespace EmEn::Saphir
 	{
 		if ( this->isMDIEnabled() )
 		{
-			if ( !this->prepareMDIModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareMDIModelMatrix();
 
 			expression = ShaderVariable::MDIModelMatrix;
 		}
@@ -1864,10 +1827,7 @@ namespace EmEn::Saphir
 		}
 		else if ( this->isInstanceTransformsEnabled() && !this->isCubemapModeEnabled() && !this->isCSMModeEnabled() )
 		{
-			if ( !this->prepareInstanceModelMatrix() )
-			{
-				return false;
-			}
+			this->prepareInstanceModelMatrix();
 
 			expression = ShaderVariable::InstanceModelMatrix;
 		}

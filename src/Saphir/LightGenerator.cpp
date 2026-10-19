@@ -409,10 +409,6 @@ namespace EmEn::Saphir
 				if ( useShadowMap || useColorProjection )
 				{
 					block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::ViewProjectionMatrix);
-				}
-
-				if ( useShadowMap || useColorProjection )
-				{
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::PCFRadius);
 					block.addMember(Declaration::VariableType::Float, UniformBlock::Component::ShadowBias);
 				}

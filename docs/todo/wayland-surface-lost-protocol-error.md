@@ -94,6 +94,12 @@ its load); the same build passed both demos 2 / 2 right after, and the previous 
 process answered the console afterwards (the call timed out) and both had to be killed: the hang above, again.
 
 
+**Occurrence, 2026-10-19 (Linux, Release, validation layer ON, `parametric-geometry-generator` with the studio rig,
+two test instances one after the other, the owner working on the desktop):** 2 of 2 runs lost the surface
+(`wp_linux_drm_syncobj_surface_v1#100: error 3`) seconds after the demo loaded, 0 `VUID-`; both hung as above (the
+console accepted, never executed; SIGINT and SIGTERM ignored, 198 % CPU) and needed SIGKILL. The measurement was then
+taken under X11 (`Core/Video/Window/GLFW/UsePlatform = "X11"` in a settings copy).
+
 - [ ] **(1) Capture the protocol trace on the owner's session** (only a real compositor will do —
   X11/Xvfb has no libdecor and no explicit sync):
   `python3 tools/wayland-protocol-trace.py --capture -- ./projet-alpha --load-demo game-logic --disable-cef`

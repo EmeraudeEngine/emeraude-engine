@@ -1633,11 +1633,10 @@ namespace EmEn
 			 * @details Creates an ad-hoc music resource from the file, appends it to the
 			 * playlist and starts the playback immediately.
 			 * @param filepath A reference to a filesystem path.
-			 * @return bool true when the file was taken by the audio system, even if unreadable.
+			 * @note The audio system takes the file whatever happens (a failure is reported to the user where it occurs).
 			 * @see openFiles()
 			 */
-			[[nodiscard]]
-			bool openAudioTrack (const std::filesystem::path & filepath) noexcept;
+			void openAudioTrack (const std::filesystem::path & filepath) noexcept;
 
 			/**
 			 * @brief Clears the stage for a viewer scene, respecting the running application.
@@ -1653,12 +1652,11 @@ namespace EmEn
 			/**
 			 * @brief Default behavior for an opened image file : display it in the image viewer scene.
 			 * @param filepath A reference to a filesystem path.
-			 * @return bool true when the file was taken by the image viewer, even on failure.
+			 * @note The image viewer takes the file whatever happens (a failure is reported to the user where it occurs).
 			 * @see Scenes::Viewers::ImageViewer
 			 * @see openFiles()
 			 */
-			[[nodiscard]]
-			bool openImageViewer (const std::filesystem::path & filepath) noexcept;
+			void openImageViewer (const std::filesystem::path & filepath) noexcept;
 
 			/**
 			 * @brief Default behavior for an opened composite asset file : display it in the model viewer scene.

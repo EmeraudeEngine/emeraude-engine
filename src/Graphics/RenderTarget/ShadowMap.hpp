@@ -477,10 +477,11 @@ namespace EmEn::Graphics::RenderTarget
 
 				if ( layerIndex >= maxLayers )
 				{
-					if ( maxLayers == 1 && layerIndex > 0 )
+					if ( maxLayers == 1 )
 					{
 						TraceWarning{ClassId} << "Single-layer shadow map does not support layer " << layerIndex << ". Using layer 0 instead for shadow map '" << this->id() << "'.";
 
+						/* cppcheck-suppress unreadVariable ; the download ignores the layer: engine item render-target-capture-ignores-the-layer-index. */
 						layerIndex = 0;
 					}
 					else

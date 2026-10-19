@@ -845,10 +845,6 @@ namespace EmEn::Scenes::Loaders::FBX
 					inverseBindMatrices[ci][M4x4Col3Row1] *= options.uniformScale;
 					inverseBindMatrices[ci][M4x4Col3Row2] *= options.uniformScale;
 
-					/* ⚠️ Conjugate the WHOLE matrix (M·IBM·M), linear part included — unlike the uniform
-					 * scale above, which only touches the translation column. Skinning stays coherent
-					 * because the joint world matrices are conjugated identically and the two M cancel. */
-					inverseBindMatrices[ci] = inverseBindMatrices[ci];
 					joints[ci].inverseBindMatrix = inverseBindMatrices[ci];
 
 					/* Walk up the bone's parent chain until we hit another bone
@@ -879,8 +875,6 @@ namespace EmEn::Scenes::Loaders::FBX
 
 					joints[ci].translation = Vector< 3, float >{static_cast< float >(trs.translation.x) * options.uniformScale, static_cast< float >(trs.translation.y) * options.uniformScale, static_cast< float >(trs.translation.z) * options.uniformScale};
 
-					/* ⚠️ The conjugation carries the det(M) angle inversion: without
-					 * it the bind pose looks right and the animation plays backwards. */
 					joints[ci].rotation = Quaternion< float >{
 						static_cast< float >(trs.rotation.x),
 						static_cast< float >(trs.rotation.y),
@@ -888,7 +882,6 @@ namespace EmEn::Scenes::Loaders::FBX
 						static_cast< float >(trs.rotation.w)
 					};
 
-					/* NOTE: A scale is invariant under the flip — M·diag(s)·M = diag(s). */
 					joints[ci].scale = {
 						static_cast< float >(trs.scale.x),
 						static_cast< float >(trs.scale.y),
@@ -1038,8 +1031,8 @@ namespace EmEn::Scenes::Loaders::FBX
 
 					const auto relTime = static_cast< float >(t - t0);
 
-					/* ⚠️ A translation is mirrored, a rotation is CONJUGATED (with its det(M) angle
-					 * inversion), a scale is invariant. A clip mirrored inconsistently with the bind
+					/* ⚠️ The keys are taken as ufbx returns them, exactly like the bind pose (no axis
+					 * conversion since the Y-up migration). A clip converted inconsistently with the bind
 					 * pose it drives makes the rig snap on the first animated frame. */
 					translation.vectorKeyFrames.push_back({
 						.time = relTime,

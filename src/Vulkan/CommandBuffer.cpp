@@ -1040,13 +1040,6 @@ namespace EmEn::Vulkan
 
 				return;
 			}
-
-			if ( events.empty() && memoryBarriers.empty() && bufferMemoryBarriers.empty() && imageMemoryBarriers.empty() )
-			{
-				Tracer::warning(ClassId, "There is no memory barrier in the list !");
-
-				return;
-			}
 		}
 
 		vkCmdWaitEvents(

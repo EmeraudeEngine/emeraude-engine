@@ -87,6 +87,58 @@ namespace EmEn::Net
 			close(sock);
 #endif
 		}
+
+		/**
+		 * @brief Owns one raw socket for a scope and closes it on every return path.
+		 * @note For the static discovery, which has no UDPClient to own its socket. On Windows it is declared AFTER
+		 * the WinsockReference, so the socket closes before the Winsock reference is given back.
+		 */
+		class ScopedSocket final
+		{
+			public:
+
+				/**
+				 * @brief Takes the ownership of a socket.
+				 * @param handle The socket, InvalidSocket accepted (then nothing is closed).
+				 */
+				explicit
+				ScopedSocket (SocketType handle) noexcept
+					: m_handle{handle}
+				{
+
+				}
+
+				ScopedSocket (const ScopedSocket & copy) noexcept = delete;
+				ScopedSocket (ScopedSocket && copy) noexcept = delete;
+				ScopedSocket & operator= (const ScopedSocket & copy) noexcept = delete;
+				ScopedSocket & operator= (ScopedSocket && copy) noexcept = delete;
+
+				~ScopedSocket ()
+				{
+					if ( m_handle != InvalidSocket )
+					{
+						platformCloseSocket(m_handle);
+					}
+				}
+
+				[[nodiscard]]
+				bool
+				isValid () const noexcept
+				{
+					return m_handle != InvalidSocket;
+				}
+
+				[[nodiscard]]
+				SocketType
+				handle () const noexcept
+				{
+					return m_handle;
+				}
+
+			private:
+
+				SocketType m_handle;
+		};
 	}
 
 #ifdef _WIN32
@@ -1280,13 +1332,15 @@ namespace EmEn::Net
 		}
 #endif
 
-		/* Create a temporary UDP socket for multicast. */
-		const auto sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+		/* Create a temporary UDP socket for multicast, closed on every return path. */
+		const ScopedSocket socketGuard{socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)};
 
-		if ( sock == InvalidSocket )
+		if ( !socketGuard.isValid() )
 		{
 			return devices;
 		}
+
+		const auto sock = socketGuard.handle();
 
 		/* Allow address reuse. */
 		int reuse = 1;
@@ -1310,8 +1364,6 @@ namespace EmEn::Net
 
 		if ( ::bind(sock, reinterpret_cast< const struct sockaddr * >(&bindAddr), sizeof(bindAddr)) < 0 )
 		{
-			platformCloseSocket(sock);
-
 			return devices;
 		}
 
@@ -1366,8 +1418,6 @@ namespace EmEn::Net
 				}
 			}
 		}
-
-		platformCloseSocket(sock);
 
 		return devices;
 	}

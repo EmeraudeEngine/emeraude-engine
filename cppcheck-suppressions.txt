@@ -1,0 +1,56 @@
+# cppcheck configuration of emeraude-engine — the checks NOT gated (owner decision 2026-10-19, plan Ave Robustus II
+# P-W (2): "like clang-tidy", the style checks limited to the bug-prone and performance ones). Version: cppcheck 2.22.0.
+# The command line and the triage live in docs/static-analysis-ledger.md. A suppression of ONE site is inline, next to
+# the code, with its reason: // cppcheck-suppress <id> ; <reason>
+
+# Covered by clang-tidy (.clang-tidy) or by the paranoid compiler warnings: one gate per defect.
+functionStatic
+functionConst
+passedByValue
+constParameterReference
+constParameterPointer
+constVariableReference
+constVariablePointer
+shadowFunction
+shadowVariable
+funcArgNamesDifferentUnnamed
+funcArgNamesDifferent
+
+# Taste, not defects (owner).
+useStlAlgorithm
+variableScope
+# A third-party C callback's 'void * userdata' (the USD asset-resolution handlers): a const pointee would need a cast of
+# the function pointer.
+constParameterCallback
+
+# The engine's naming pattern (owner decision 2026-10-19): every resource / buffer / shader class declares its own
+# 'static constexpr auto ClassId' and getClassUID(), hiding its parent's on purpose (each class names itself in the logs
+# and the resource registry). A hidden non-virtual function, the real danger, is caught by -Woverloaded-virtual.
+duplInheritedMember
+
+# A library: its public functions have no caller inside it (the applications call them).
+unusedFunction
+
+# Tooling noise: the system headers are not analysed, the checkers report is informational.
+missingInclude
+missingIncludeSystem
+checkersReport
+
+# Third-party code (FetchContent, submodules, the ext-deps archive). ⚠️ Never '*/dependencies/*': a consumer reaches this
+# repository through its own dependencies/ directory (projet-alpha/dependencies/emeraude-engine/dependencies/emeraude-base),
+# which then suppressed EVERY finding — an engine sweep reported a false zero (2026-10-19).
+*:*/_deps/*
+*:*/dependencies/asio/*
+*:*/dependencies/json/*
+*:*/dependencies/tinysoundfont/*
+*:*/dependencies/*-Release*/*
+*:*/dependencies/*-Debug*/*
+*:*/dependencies/ardy/*
+*:*/dependencies/glfw/*
+*:*/dependencies/imgui/*
+*:*/dependencies/kimodo.cpp/*
+*:*/dependencies/magic_enum/*
+*:*/dependencies/motion-bricks.cpp/*
+*:*/dependencies/renderdoc/*
+*:*/dependencies/volk/*
+*:*/dependencies/VulkanMemoryAllocator/*
