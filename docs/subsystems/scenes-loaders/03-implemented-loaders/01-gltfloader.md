@@ -20,7 +20,13 @@ geometry / material names, nodes (frame, mesh, light, camera), lights, cameras, 
 (Fox, CesiumMan + its Draco variant, RiggedFigure, BrainStem + Draco + meshopt, BoxAnimated, InterpolationTest,
 DamagedHelmet, LightsPunctualLamp, Cameras, MultiUVTest, VertexColorTest, TextureTransformTest, ClearCoatTest,
 NormalTangentMirrorTest, SimpleSkin, RecursiveSkeletons, AnimatedCube, MorphPrimitivesTest, Avocado Draco,
-MeshoptCubeTest, DragonAttenuation meshopt, FlightHelmet KTX2, Sponza); 0 VUID.
+MeshoptCubeTest, DragonAttenuation meshopt, FlightHelmet KTX2, Sponza); 0 VUID. Validated on the other two OS
+(2026-10-19, engine 130624e6 / base 7cad391): macOS (M6) — the paranoid warnings and `-Wdocumentation` clean, the base
+suite green in Release and ASan + UBSan, 176 glTF resources identical by name before / after (Fox, Draco, meshopt,
+KTX2, Cameras), Sponza and animation-debug identical, pixel differences ≤ 0.02 %; Windows (MSVC Release + Debug, 0
+warning) — the base suite green, a same-machine A/B through `Core.openFiles`: Fox.glb, Cameras.gltf and a copy of
+Fox under a non-ASCII path pixel-identical, Draco / meshopt / KTX2 within 0.08 % of the pixels (the animation timing),
+the same mean luminance.
 
 **Hardened by the fuzzing (2026-10-18, owner decisions):**
 - **A uri is CONFINED to the asset's directory** — buffers AND images: an absolute uri, a scheme or a `..` leaving
