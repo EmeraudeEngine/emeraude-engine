@@ -365,11 +365,14 @@ namespace EmEn::PlatformSpecific
 	 * when the executable carries no such manifest (not bundled, or a bundle without its own driver).
 	 * The variable is inherited by child processes, which is harmless for the CEF helpers: they create no
 	 * Vulkan instance.
+	 * @param binaryDirectory The RESOLVED directory of the executable (SystemInfo::getRealApplicationDir()): the manifest
+	 * is searched beside it, then in the bundle's Contents/Resources — never from CFBundleGetMainBundle(), which keeps
+	 * a symbolic link unresolved.
 	 * @return std::string The manifest path VK_DRIVER_FILES now points at, or an empty string when
 	 * nothing was changed.
 	 */
 	[[nodiscard]]
-	std::string pinVulkanLoaderToBundledDriver () noexcept;
+	std::string pinVulkanLoaderToBundledDriver (const std::filesystem::path & binaryDirectory) noexcept;
 
 	/**
 	 * @brief Opts the application out of AppKit's window state restoration (ApplePersistenceIgnoreState = YES in the

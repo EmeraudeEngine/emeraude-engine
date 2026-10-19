@@ -257,7 +257,7 @@ namespace EmEn
 #if IS_MACOS
 		/* NOTE: The first loader call scans every driver manifest, and a MoltenVK loaded from a second manifest (the
 		 * LunarG SDK one) can never be unloaded. See pinVulkanLoaderToBundledDriver(). */
-		static_cast< void >(PlatformSpecific::pinVulkanLoaderToBundledDriver());
+		static_cast< void >(PlatformSpecific::pinVulkanLoaderToBundledDriver(binaryDirectory));
 #endif
 
 		return prepared;
