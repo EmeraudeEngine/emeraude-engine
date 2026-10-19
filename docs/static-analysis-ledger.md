@@ -744,7 +744,11 @@ the 465 others are Linux's too. No `bugprone-*`, `performance-*` or `pro-type-me
 `NullablePassedToNonnull` reported, a fourth site alike) — through `PlatformSpecific::toStdString()` now, the helper
 the 2026-10-01 triad wrote for exactly this; `PlatformSpecific/SystemInfo.mac.cpp`'s `realpath()` result freed by hand
 — owned by a `unique_ptr` now. Kept ON PURPOSE: `Window.mac.mm` `cppcoreguidelines-owning-memory` ×2 (the Apple Event
-handler is owned by a `unique_ptr` whose custom deleter deletes it — RAII, the check wants `gsl::owner<>`). The rest is
+handler is owned by a `unique_ptr` whose custom deleter deletes it — RAII, the check wants `gsl::owner<>`), and
+`SystemInfo.mac.cpp`'s `owning-memory` + `no-malloc` on the deleter's `std::free()` (memory `realpath()` allocates
+with `malloc()` is released by `free()` only; the call sits in the RAII owner's deleter — verified by the macOS peer,
+engine 92b0f965: the nullability findings gone, nothing new on the changed lines, `getRealApplicationDir()` resolving
+a symbolic link to the real bundle). The rest is
 the macOS BASELINE, brought clean file by file when a lot touches it (owner, § D11's rule): 71
 `misc-const-correctness`, 15 `pro-bounds-array-to-pointer-decay`, 11 `use-designated-initializers`, 9
 `use-anonymous-namespace`, 9 `init-variables`, 8 `optin.osx.cocoa.localizability` (the engine has no localization
