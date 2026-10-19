@@ -33,21 +33,26 @@
 #include "emeraude_platform.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <cmath>
 #include <memory>
 #include <span>
+#include <type_traits>
 
 /* Third-party forward declarations (see Device.hpp note). */
 using VmaAllocation = struct VmaAllocation_T *;
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
 #include "DeviceMemory.hpp"
-#include "ExternalImageDescriptor.hpp"
+#include "ExternalImageDescriptor.hpp" // IWYU pragma: keep (the IS_WINDOWS / IS_MACOS import factories)
 #include "PendingSubmissions.hpp"
 #include "PixelFactory/Pixmap.hpp"
 
@@ -68,8 +73,10 @@ namespace EmEn
 
 	namespace Vulkan
 	{
-		class TransferManager;
+		class Device;
 		class MemoryRegion;
+		class Queue;
+		class TransferManager;
 	}
 }
 
@@ -263,6 +270,21 @@ namespace EmEn::Vulkan
 			depth () const noexcept
 			{
 				return m_createInfo.extent.depth;
+			}
+
+			/**
+			 * @brief Returns the size of the device memory this image holds, as the allocator gave it (alignment and
+			 * mip chain included).
+			 * @note 0 before the creation, after the destruction, and for a swap-chain or imported image (the memory
+			 * is not ours). Written by createOnHardware() on the creating thread: read it from another thread only
+			 * after a happens-before edge (e.g. the owning resource's loaded status).
+			 * @return VkDeviceSize
+			 */
+			[[nodiscard]]
+			VkDeviceSize
+			deviceMemoryBytes () const noexcept
+			{
+				return m_deviceMemoryBytes;
 			}
 
 			/**
@@ -786,6 +808,7 @@ namespace EmEn::Vulkan
 			VkImageCreateInfo m_createInfo{};
 			std::unique_ptr< DeviceMemory > m_deviceMemory;
 			VmaAllocation m_memoryAllocation{VK_NULL_HANDLE};
+			VkDeviceSize m_deviceMemoryBytes{0};
 			VkImageLayout m_currentImageLayout{VK_IMAGE_LAYOUT_UNDEFINED};
 			PendingSubmissions m_pendingSubmissions;
 			bool m_isSwapChainImage{false};

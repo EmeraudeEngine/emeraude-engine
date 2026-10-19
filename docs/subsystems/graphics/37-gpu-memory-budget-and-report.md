@@ -12,6 +12,8 @@ Before this, a scene that outgrew the GPU looked like a GPU hang with nothing in
 | `Renderer::checkMemoryBudget()` | every 2 s after a frame fence | A WARNING when a device-local heap reaches **98 %** of its budget, with the 12 largest allocation groups; an info when it is back under 90 % |
 | `Core.RendererService.getGPUMemory(top)` | console / MCP | Heaps (budget, usage, `atBudget`) and the allocations grouped by heap, kind (BUFFER / IMAGE) and usage flags, largest first |
 | `Core.RendererService.writeGPUMemoryReport()` | console / MCP | VMA's full JSON into the captures directory; answers its path |
+| `Vulkan::Image::deviceMemoryBytes()` | VMA `VmaAllocationInfo::size` (or the memory requirement on the manual path), kept at creation | The real footprint of one image, mips and alignment included (0 for a swap-chain or imported image) |
+| `Core.RendererService.getTextureMemory(top)` (2026-10-20) | console / MCP | Every LOADED texture resource (name, class, format, extent, layers, mips, MiB, largest first), the total counting each image once; per loaded `StandardResource`: texture components, distinct textures, bindings, MiB of its distinct images, and each component's texture / channel / binding (graphics § 39) |
 
 ## ⚠️ "At the budget", not "over it"
 

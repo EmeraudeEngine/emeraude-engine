@@ -37,6 +37,7 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "json/json.h"
@@ -289,6 +290,28 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::collectRTTextures() */
 			void collectRTTextures (std::vector< RTTextureSlot > & outSlots) const noexcept override;
+
+			/**
+			 * @brief One texture component of the material, as the raster pass binds and samples it.
+			 */
+			struct TextureUsage
+			{
+				std::shared_ptr< TextureResource::Abstract > texture;
+				ComponentType componentType{ComponentType::Albedo};
+				uint32_t binding{0};
+				Base::PixelFactory::Channel sourceChannel{Base::PixelFactory::Channel::Red};
+			};
+
+			/**
+			 * @brief Returns every texture component of the material, ordered by binding.
+			 * @note Today each texture component owns one binding and one fetch, even when two components show the same
+			 * texture (graphics § 39). Used by the texture memory report (Renderer console `getTextureMemory`).
+			 * @pre The material is loaded: its components no longer change (the setters refuse once it is created), so a
+			 * thread that observed `isLoaded()` reads them without a lock.
+			 * @return std::vector< TextureUsage >
+			 */
+			[[nodiscard]]
+			std::vector< TextureUsage > textureUsages () const noexcept;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::emissionMultiplier() */
 			[[nodiscard]]

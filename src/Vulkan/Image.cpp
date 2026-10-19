@@ -27,7 +27,11 @@
 #include "Image.hpp"
 
 /* STL inclusions. */
+#include <functional>
 #include <numeric>
+#include <string>
+#include <utility>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "vk_mem_alloc.h"
@@ -47,15 +51,21 @@
 #endif
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Device.hpp"
 #include "Graphics/CubemapMovieResource.hpp"
 #include "Graphics/CubemapResource.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/MovieResource.hpp"
+#include "Graphics/Types.hpp"
 #include "MemoryRegion.hpp"
 #include "Tracer.hpp"
 #include "TransferManager.hpp"
 #include "Utility.hpp"
+#include "Vulkan/Buffer.hpp"
+#include "Vulkan/DeviceMemory.hpp"
+#include "Vulkan/PendingSubmissions.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -401,6 +411,8 @@ namespace EmEn::Vulkan
 		 * device's deferred path instead of being destroyed under the GPU (VUID-vkDestroyImage-image-01000). */
 		if ( this->hasDevice() && this->destroyAfterPendingSubmissions() )
 		{
+			m_deviceMemoryBytes = 0;
+
 			this->setDestroyed();
 
 			return true;
@@ -416,6 +428,8 @@ namespace EmEn::Vulkan
 		{
 			return false;
 		}
+
+		m_deviceMemoryBytes = 0;
 
 		this->setDestroyed();
 
@@ -473,6 +487,8 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		m_deviceMemoryBytes = memoryRequirement.memoryRequirements.size;
+
 		return true;
 	}
 
@@ -518,12 +534,16 @@ namespace EmEn::Vulkan
 		//allocInfo.priority = 0.5F;
 
 		/* Bind the buffer to the device memory */
-		if ( const auto result = vmaCreateImage(this->device()->memoryAllocatorHandle(), &m_createInfo, &allocInfo, &m_handle, &m_memoryAllocation, nullptr); result != VK_SUCCESS )
+		VmaAllocationInfo allocationInfo{};
+
+		if ( const auto result = vmaCreateImage(this->device()->memoryAllocatorHandle(), &m_createInfo, &allocInfo, &m_handle, &m_memoryAllocation, &allocationInfo); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to create an image with VMA : " << vkResultToCString(result) << " !";
 
 			return false;
 		}
+
+		m_deviceMemoryBytes = allocationInfo.size;
 
 		if ( m_hostVisible )
 		{

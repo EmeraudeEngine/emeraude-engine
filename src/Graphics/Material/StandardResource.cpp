@@ -2225,6 +2225,30 @@ namespace EmEn::Graphics::Material
 		}
 	}
 
+	std::vector< StandardResource::TextureUsage >
+	StandardResource::textureUsages () const noexcept
+	{
+		std::vector< TextureUsage > usages;
+		usages.reserve(m_components.size());
+
+		for ( const auto & [componentType, component] : m_components )
+		{
+			if ( component == nullptr || component->type() != Component::Type::Texture )
+			{
+				continue;
+			}
+
+			const auto * textureComponent = static_cast< const Texture * >(component.get());
+
+			usages.push_back({textureComponent->textureResource(), componentType, textureComponent->binding(), textureComponent->sourceChannel()});
+		}
+
+		/* NOTE: m_components is an unordered_map: sort for a stable report. */
+		std::ranges::sort(usages, std::ranges::less{}, &TextureUsage::binding);
+
+		return usages;
+	}
+
 	std::string
 	StandardResource::albedoExpression () const noexcept
 	{

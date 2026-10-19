@@ -1505,6 +1505,20 @@ namespace EmEn::Graphics
 			Json::Value gpuAllocationGroups (size_t top) const noexcept;
 
 			/**
+			 * @brief Reports the device memory of every loaded texture resource and, per loaded material, its texture
+			 * components, distinct textures, bindings and the memory of its distinct images (graphics § 39, the
+			 * reference before the texture packing).
+			 * @note [MAIN THREAD] (console). Reads only loaded resources: their image and their material components are
+			 * published by the loaded status and no longer change. A material's memory counts each distinct image once;
+			 * the total counts each image once over the whole report.
+			 * @param top How many textures and materials to list, largest first (the totals cover everything).
+			 * @return Json::Value An object {textureCount, textureMiB, textures[], materialCount, texturedMaterialCount,
+			 * textureComponentCount, bindingCount, materials[]}.
+			 */
+			[[nodiscard]]
+			Json::Value textureMemoryReport (size_t top) const noexcept;
+
+			/**
 			 * @brief Waits for the next frame slot and acquires the swap-chain image it will render to [RENDER THREAD].
 			 * @note ⚠️⚠️ Called OUTSIDE the active scene lock (Core::renderingTask()), and that is the point of it:
 			 * vkAcquireNextImageKHR waits on the PRESENTATION ENGINE, without any bound but its 60 s timeout. Done

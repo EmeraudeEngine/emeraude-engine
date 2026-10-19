@@ -47,6 +47,7 @@
 #include <string_view>
 #include <system_error>
 #include <tuple>
+#include <unordered_set>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -65,17 +66,30 @@
 #include "Graphics/DeferredLightResolve.hpp"
 #include "Graphics/FrameCapture.hpp"
 #include "Graphics/FrameDiagnostics.hpp"
+#include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/PostProcessor.hpp"
 #include "Graphics/RenderDocCapture.hpp"
+#include "Graphics/TextureResource/Abstract.hpp"
+#include "Graphics/TextureResource/AnimatedTexture2D.hpp"
+#include "Graphics/TextureResource/AnimatedTextureCubemap.hpp"
+#include "Graphics/TextureResource/Texture1D.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
+#include "Graphics/TextureResource/Texture3D.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Graphics/Types.hpp"
 #include "IO/IO.hpp"
 #include "MDI/BatchBuilder.hpp"
 #include "OceanWaves.hpp"
 #include "OverflowCensus.hpp"
+#include "PixelFactory/Types.hpp"
 #include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
+#include "Resources/Manager.hpp"
 #include "Time/Statistics/RealTime.hpp"
 #include "VideoFrameConverter.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/GPUProfiler.hpp"
+#include "Vulkan/Image.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/VideoEncoderH265.hpp"
@@ -86,6 +100,334 @@ namespace EmEn::Graphics
 
 	namespace
 	{
+		/**
+		 * @brief Names the formats a texture resource is created with (the uploads, the KTX2 pass-through).
+		 * @param format The format.
+		 * @return std::string
+		 */
+		[[nodiscard]]
+		std::string
+		textureFormatName (VkFormat format) noexcept
+		{
+			switch ( format )
+			{
+				case VK_FORMAT_R8_UNORM : return "R8_UNORM";
+				case VK_FORMAT_R8G8_UNORM : return "R8G8_UNORM";
+				case VK_FORMAT_R8G8B8A8_UNORM : return "R8G8B8A8_UNORM";
+				case VK_FORMAT_R8G8B8A8_SRGB : return "R8G8B8A8_SRGB";
+				case VK_FORMAT_B8G8R8A8_UNORM : return "B8G8R8A8_UNORM";
+				case VK_FORMAT_B8G8R8A8_SRGB : return "B8G8R8A8_SRGB";
+				case VK_FORMAT_R16G16B16A16_SFLOAT : return "R16G16B16A16_SFLOAT";
+				case VK_FORMAT_R32G32B32A32_SFLOAT : return "R32G32B32A32_SFLOAT";
+				case VK_FORMAT_BC1_RGB_UNORM_BLOCK : return "BC1_RGB_UNORM";
+				case VK_FORMAT_BC1_RGB_SRGB_BLOCK : return "BC1_RGB_SRGB";
+				case VK_FORMAT_BC1_RGBA_UNORM_BLOCK : return "BC1_RGBA_UNORM";
+				case VK_FORMAT_BC1_RGBA_SRGB_BLOCK : return "BC1_RGBA_SRGB";
+				case VK_FORMAT_BC2_UNORM_BLOCK : return "BC2_UNORM";
+				case VK_FORMAT_BC2_SRGB_BLOCK : return "BC2_SRGB";
+				case VK_FORMAT_BC3_UNORM_BLOCK : return "BC3_UNORM";
+				case VK_FORMAT_BC3_SRGB_BLOCK : return "BC3_SRGB";
+				case VK_FORMAT_BC4_UNORM_BLOCK : return "BC4_UNORM";
+				case VK_FORMAT_BC5_UNORM_BLOCK : return "BC5_UNORM";
+				case VK_FORMAT_BC6H_UFLOAT_BLOCK : return "BC6H_UFLOAT";
+				case VK_FORMAT_BC7_UNORM_BLOCK : return "BC7_UNORM";
+				case VK_FORMAT_BC7_SRGB_BLOCK : return "BC7_SRGB";
+				case VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK : return "ETC2_RGBA8_UNORM";
+				case VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK : return "ETC2_RGBA8_SRGB";
+				case VK_FORMAT_ASTC_4x4_UNORM_BLOCK : return "ASTC_4x4_UNORM";
+				case VK_FORMAT_ASTC_4x4_SRGB_BLOCK : return "ASTC_4x4_SRGB";
+				/* NOTE: VkFormat is a large external enum: only the texture formats are named. */
+				default : return "VkFormat(" + std::to_string(static_cast< int64_t >(format)) + ")";
+			}
+		}
+
+		/**
+		 * @brief Names the texel channel a material component reads, as its GLSL swizzle.
+		 * @param channel The channel.
+		 * @return const char *
+		 */
+		[[nodiscard]]
+		const char *
+		channelSwizzle (PixelFactory::Channel channel) noexcept
+		{
+			switch ( channel )
+			{
+				case PixelFactory::Channel::Red : return "r";
+				case PixelFactory::Channel::Green : return "g";
+				case PixelFactory::Channel::Blue : return "b";
+				case PixelFactory::Channel::Alpha : return "a";
+			}
+
+			return "?";
+		}
+
+		/**
+		 * @brief Appends the resources of one texture container to a list.
+		 * @tparam texture_t The texture resource type.
+		 * @param manager The resource manager.
+		 * @param textures The list to append to.
+		 */
+		template< typename texture_t >
+		void
+		appendTextures (const Resources::Manager & manager, std::vector< std::shared_ptr< TextureResource::Abstract > > & textures) noexcept
+		{
+			const auto * container = manager.container< texture_t >();
+
+			if ( container == nullptr )
+			{
+				return;
+			}
+
+			for ( auto & texture : container->resourcesSnapshot() )
+			{
+				textures.emplace_back(std::move(texture));
+			}
+		}
+
+		/**
+		 * @brief Returns the GPU image of a loaded texture, or nullptr.
+		 * @param texture The texture resource (may be nullptr).
+		 * @return std::shared_ptr< Vulkan::Image >
+		 */
+		[[nodiscard]]
+		std::shared_ptr< Vulkan::Image >
+		loadedImage (const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
+		{
+			if ( texture == nullptr || !texture->isLoaded() )
+			{
+				return nullptr;
+			}
+
+			return texture->image();
+		}
+
+		/**
+		 * @brief Converts bytes to mebibytes for a report.
+		 * @param bytes The byte count.
+		 * @return double
+		 */
+		[[nodiscard]]
+		double
+		toMiB (VkDeviceSize bytes) noexcept
+		{
+			return static_cast< double >(bytes) / 1048576.0;
+		}
+
+		/** @brief A loaded texture and the device memory of its image. */
+		struct TextureMemoryEntry
+		{
+			std::shared_ptr< TextureResource::Abstract > texture;
+			std::shared_ptr< Vulkan::Image > image;
+			VkDeviceSize bytes{0};
+		};
+
+		/** @brief A loaded material: its texture components and the device memory of its distinct images. */
+		struct MaterialMemoryEntry
+		{
+			std::shared_ptr< Material::StandardResource > material;
+			std::vector< Material::StandardResource::TextureUsage > usages;
+			size_t distinctTextures{0};
+			size_t bindings{0};
+			VkDeviceSize bytes{0};
+		};
+
+		/**
+		 * @brief Measures one material from its texture components.
+		 * @param material The loaded material.
+		 * @return MaterialMemoryEntry Without usage when the material samples no texture.
+		 */
+		[[nodiscard]]
+		MaterialMemoryEntry
+		measureMaterial (std::shared_ptr< Material::StandardResource > material) noexcept
+		{
+			MaterialMemoryEntry entry{};
+			entry.usages = material->textureUsages();
+			entry.material = std::move(material);
+
+			std::unordered_set< const TextureResource::Abstract * > distinctTextures;
+			std::unordered_set< uint32_t > distinctBindings;
+			std::unordered_set< const Vulkan::Image * > images;
+
+			for ( const auto & usage : entry.usages )
+			{
+				distinctTextures.insert(usage.texture.get());
+				distinctBindings.insert(usage.binding);
+
+				/* NOTE: Two components showing one image count it once. */
+				if ( const auto image = loadedImage(usage.texture); image != nullptr && images.insert(image.get()).second )
+				{
+					entry.bytes += image->deviceMemoryBytes();
+				}
+			}
+
+			entry.distinctTextures = distinctTextures.size();
+			entry.bindings = distinctBindings.size();
+
+			return entry;
+		}
+
+		/**
+		 * @brief Describes one material of the report.
+		 * @param entry The measured material.
+		 * @return Json::Value
+		 */
+		[[nodiscard]]
+		Json::Value
+		materialJSON (const MaterialMemoryEntry & entry) noexcept
+		{
+			Json::Value components{Json::arrayValue};
+
+			for ( const auto & usage : entry.usages )
+			{
+				Json::Value component{Json::objectValue};
+				component["component"] = to_cstring(usage.componentType);
+				component["texture"] = usage.texture != nullptr ? usage.texture->name() : std::string{"(none)"};
+				component["channel"] = channelSwizzle(usage.sourceChannel);
+				component["binding"] = usage.binding;
+
+				components.append(std::move(component));
+			}
+
+			Json::Value item{Json::objectValue};
+			item["name"] = entry.material->name();
+			item["textureComponents"] = static_cast< Json::UInt64 >(entry.usages.size());
+			item["distinctTextures"] = static_cast< Json::UInt64 >(entry.distinctTextures);
+			item["bindings"] = static_cast< Json::UInt64 >(entry.bindings);
+			item["MiB"] = toMiB(entry.bytes);
+			item["components"] = std::move(components);
+
+			return item;
+		}
+
+		/**
+		 * @brief Writes the texture section of the texture memory report: every loaded texture resource, largest first.
+		 * @param manager The resource manager.
+		 * @param top How many textures to list.
+		 * @param report The report object to fill (textureCount, textureMiB, textures).
+		 */
+		void
+		reportTextures (const Resources::Manager & manager, size_t top, Json::Value & report) noexcept
+		{
+			std::vector< std::shared_ptr< TextureResource::Abstract > > textures;
+
+			appendTextures< TextureResource::Texture1D >(manager, textures);
+			appendTextures< TextureResource::Texture2D >(manager, textures);
+			appendTextures< TextureResource::Texture3D >(manager, textures);
+			appendTextures< TextureResource::TextureCubemap >(manager, textures);
+			appendTextures< TextureResource::AnimatedTexture2D >(manager, textures);
+			appendTextures< TextureResource::AnimatedTextureCubemap >(manager, textures);
+
+			std::vector< TextureMemoryEntry > entries;
+			entries.reserve(textures.size());
+
+			std::unordered_set< const Vulkan::Image * > countedImages;
+			VkDeviceSize totalBytes = 0;
+
+			for ( auto & texture : textures )
+			{
+				auto image = loadedImage(texture);
+
+				if ( image == nullptr )
+				{
+					continue;
+				}
+
+				const auto bytes = image->deviceMemoryBytes();
+
+				/* NOTE: Two resources may show one image: the total counts it once. */
+				if ( countedImages.insert(image.get()).second )
+				{
+					totalBytes += bytes;
+				}
+
+				entries.push_back({std::move(texture), std::move(image), bytes});
+			}
+
+			std::ranges::sort(entries, std::ranges::greater{}, &TextureMemoryEntry::bytes);
+
+			Json::Value list{Json::arrayValue};
+
+			for ( size_t index = 0; index < entries.size() && index < top; ++index )
+			{
+				const auto & entry = entries[index];
+				const auto & createInfo = entry.image->createInfo();
+
+				Json::Value item{Json::objectValue};
+				item["name"] = entry.texture->name();
+				item["class"] = entry.texture->classLabel();
+				item["format"] = textureFormatName(createInfo.format);
+				item["width"] = createInfo.extent.width;
+				item["height"] = createInfo.extent.height;
+				item["depth"] = createInfo.extent.depth;
+				item["layers"] = createInfo.arrayLayers;
+				item["mips"] = createInfo.mipLevels;
+				item["MiB"] = toMiB(entry.bytes);
+
+				list.append(std::move(item));
+			}
+
+			report["textureCount"] = static_cast< Json::UInt64 >(entries.size());
+			report["textureMiB"] = toMiB(totalBytes);
+			report["textures"] = std::move(list);
+		}
+
+		/**
+		 * @brief Writes the material section of the texture memory report: every loaded material that samples a
+		 * texture, largest first.
+		 * @param manager The resource manager.
+		 * @param top How many materials to list.
+		 * @param report The report object to fill (materialCount, texturedMaterialCount, textureComponentCount,
+		 * bindingCount, materials).
+		 */
+		void
+		reportMaterials (const Resources::Manager & manager, size_t top, Json::Value & report) noexcept
+		{
+			std::vector< MaterialMemoryEntry > entries;
+			size_t materialCount = 0;
+			size_t componentCount = 0;
+			size_t bindingCount = 0;
+
+			if ( const auto * container = manager.container< Material::StandardResource >(); container != nullptr )
+			{
+				for ( auto & material : container->resourcesSnapshot() )
+				{
+					if ( material == nullptr || !material->isLoaded() )
+					{
+						continue;
+					}
+
+					++materialCount;
+
+					auto entry = measureMaterial(std::move(material));
+
+					if ( entry.usages.empty() )
+					{
+						continue;
+					}
+
+					componentCount += entry.usages.size();
+					bindingCount += entry.bindings;
+
+					entries.push_back(std::move(entry));
+				}
+			}
+
+			std::ranges::sort(entries, std::ranges::greater{}, &MaterialMemoryEntry::bytes);
+
+			Json::Value list{Json::arrayValue};
+
+			for ( size_t index = 0; index < entries.size() && index < top; ++index )
+			{
+				list.append(materialJSON(entries[index]));
+			}
+
+			report["materialCount"] = static_cast< Json::UInt64 >(materialCount);
+			report["texturedMaterialCount"] = static_cast< Json::UInt64 >(entries.size());
+			report["textureComponentCount"] = static_cast< Json::UInt64 >(componentCount);
+			report["bindingCount"] = static_cast< Json::UInt64 >(bindingCount);
+			report["materials"] = std::move(list);
+		}
+
 		/**
 		 * @brief Names the usage flags of a buffer or an image (the bits that tell resources apart).
 		 * @param image Whether the flags are image usage flags.
@@ -802,6 +1144,21 @@ namespace EmEn::Graphics
 				return Console::CommandResult::json(FastJSON::stringify(report));
 			}, Console::CommandHint::ReadOnly);
 
+		this->bindCommand("getTextureMemory", "Returns the device memory of the loaded textures as JSON (largest first, at most 'top'), and per loaded material its texture components, distinct textures, bindings and the memory of its distinct images (largest first, at most 'top'). The totals cover everything.",
+			{
+				{"top", "How many textures and materials to list (default 20)."}
+			},
+			[this] (std::optional< int > top) {
+				if ( m_device == nullptr )
+				{
+					return Console::CommandResult::error("No device.");
+				}
+
+				const auto limit = static_cast< size_t >(std::clamp(top.value_or(20), 1, 10000));
+
+				return Console::CommandResult::json(FastJSON::stringify(this->textureMemoryReport(limit)));
+			}, Console::CommandHint::ReadOnly);
+
 		this->bindCommand("writeGPUMemoryReport", "Writes VMA's detailed statistics (every block and allocation) as JSON into the captures directory and answers its path.", [this] () {
 			if ( m_device == nullptr )
 			{
@@ -897,5 +1254,16 @@ namespace EmEn::Graphics
 		}
 
 		return list;
+	}
+
+	Json::Value
+	Renderer::textureMemoryReport (size_t top) const noexcept
+	{
+		Json::Value report{Json::objectValue};
+
+		reportTextures(m_resourcesManager, top, report);
+		reportMaterials(m_resourcesManager, top, report);
+
+		return report;
 	}
 }

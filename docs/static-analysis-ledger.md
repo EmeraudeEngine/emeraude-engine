@@ -101,6 +101,7 @@ those whose file is inside the module (the header filter also reports every incl
 | `src/Console/RemoteListener.cpp` (graceful disconnect through base `GracefulCloser`) | 2026-10-06 | clang-tidy 21.1.6: 0 on the changed lines. | Graceful close |
 | Bug hunt 2026-10-12, lots 1-2: the peers' fixes (`Core.cpp`, `Vulkan/Instance.cpp`, `Device.cpp`, `GPUProfiler.cpp`, `Graphics/Renderer.cpp`, `RenderableInstance/Abstract.cpp`, `Window.cpp`), the TBN refusal, sample counts, KHR meshopt, `ResourceTrait.cpp`, `FileSystem.cpp`, `Texture2D.cpp`, `ParticlesEmitter.cpp`, the tick clocks (`Sequence`, `AmbienceChannel`, `Particle`, `Scene`, `Node`, `Core`), `DirectionalLight.cpp` / `LightSet.cpp`, `Console/JSONNumber.hpp`, the 17 `.at()` sites, rule C steps 1-2 | 2026-10-12 | clang-tidy 21.1.6, changed lines: 6 fixed (pro-bounds-constant-array-index in `ViewMatrices3DUBO.cpp` and `CubemapResource.cpp`: `std::next`, the view copy as `std::ranges::copy_n`). 0 left. | Bug hunt |
 | `src/Vulkan/Device.cpp` / `.hpp` (`createPipelineCache()`, `restorePipelineCache()`, `getPipelineCacheData()` merging into a temporary cache, the published handle), `src/Graphics/Renderer.cpp` / `.hpp` (`loadPipelineCache()` on a `Base::Thread`, the join before the save) | 2026-10-12 | clang-tidy 21.1.6: 4 on the changed lines, ON PURPOSE: readability-qualified-auto ×4 on `VkPipelineCache` handles (`const auto` kept: a non-dispatchable handle is a pointer on some platforms only; `const VkPipelineCache` trades it for misc-misplaced-const). | Asynchronous pipeline cache restore (P2) |
+| `Vulkan/Image` (`deviceMemoryBytes()`), `Graphics/Material/StandardResource` (`textureUsages()`), `Graphics/Renderer.console.cpp` (`getTextureMemory`, the texture memory report) | 2026-10-20 | clang-tidy 21.1.6, changed lines: 1 fixed (readability-function-cognitive-complexity: the report split into `reportTextures()` / `reportMaterials()` / `measureMaterial()` / `materialJSON()`); kept ON PURPOSE in the 7b category: 1 pro-type-static-cast-downcast (`textureUsages()`, a component cast to `Texture` after its `type()` check). cppcheck 0. include-what-you-use: the three touched files brought clean (`Image.hpp` keeps `ExternalImageDescriptor.hpp`, needed by the `IS_WINDOWS` / `IS_MACOS` import factories only). | Texture packing L0 |
 
 ## Findings kept ON PURPOSE
 
@@ -276,7 +277,7 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 
 - **pro-bounds-constant-array-index ×23** — `StandardResource`'s UVW transform / rotation tables (`slot <
   MaxUVWSlots`, the slot allocated by the component) and `Helpers::parseColorComponent()` (`index < min(4, size)`).
-- **pro-type-static-cast-downcast ×7** — a material component cast to `Component::Texture` right after a
+- **pro-type-static-cast-downcast ×8** — a material component cast to `Component::Texture` right after a
   `type() == Type::Texture` check or right after its own `emplace()` of a `Texture` (RTTI avoided).
 - **use-enum-class ×1** — `MaterialFlagBits` (a bit set, the flag convention).
 

@@ -625,6 +625,9 @@ deduplicates by URL and retries. `Core.NetAPIClientService.*` does none of those
 `getGPUMemory(20)` answers each heap's budget and usage and the allocations grouped by heap, kind and usage flags;
 `writeGPUMemoryReport()` writes VMA's full report. A heap at 98 % of its budget is also WARNED in the log, with its
 largest groups. How to read them: [`docs/subsystems/graphics/37-gpu-memory-budget-and-report.md`](subsystems/graphics/37-gpu-memory-budget-and-report.md).
+`getTextureMemory(20)` (2026-10-20) answers the device memory of every loaded texture (name, class, format, extent,
+mips, MiB) and, per loaded material, its texture components, distinct textures, bindings and MiB — the reference of
+the texture packing ([`docs/subsystems/graphics/39-material-texture-packing.md`](subsystems/graphics/39-material-texture-packing.md)).
 
 ### Sharing resources between machines (`Core.ResourcesManagerService.*`, 2026-10-04)
 
