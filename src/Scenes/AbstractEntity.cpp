@@ -29,16 +29,19 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <optional>
+#include <ranges>
+#include <typeinfo>
 #include <utility>
 
 /* Local inclusions. */
+#include "Any.hpp"
+#include "BlobTrait.hpp"
 #include "Component/Camera.hpp"
 #include "Component/CharacterController.hpp"
-#include "Component/Vehicle.hpp"
-#include "Scene.hpp"
 #include "Component/CloudVolume.hpp"
 #include "Component/DirectionalLight.hpp"
 #include "Component/DirectionalPushModifier.hpp"
+#include "Component/LineLight.hpp"
 #include "Component/Microphone.hpp"
 #include "Component/MultipleVisuals.hpp"
 #include "Component/ParticlesEmitter.hpp"
@@ -46,12 +49,19 @@
 #include "Component/SoundEmitter.hpp"
 #include "Component/SphericalPushModifier.hpp"
 #include "Component/SpotLight.hpp"
-#include "Component/LineLight.hpp"
+#include "Component/Vehicle.hpp"
 #include "Component/Visual.hpp"
 #include "Component/Weight.hpp"
+#include "Math/Base.hpp"
+#include "Math/Matrix.hpp"
 #include "Physics/BoxCollisionModel.hpp"
 #include "Physics/CapsuleCollisionModel.hpp"
+#include "Physics/CharacterController.hpp"
 #include "Physics/CollisionModelInterface.hpp"
+#include "Scene.hpp"
+#include "Scenes/Component/Abstract.hpp"
+#include "Scenes/Component/AbstractModifier.hpp"
+#include "Scenes/LocatableInterface.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes

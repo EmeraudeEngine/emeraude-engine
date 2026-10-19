@@ -191,6 +191,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 				return true;
 			}
 
+			/* cppcheck-suppress danglingLifetime ; a std::filesystem::path copies the characters, nothing points into fileBuffer after. */
 			filepath = ofn.lpstrFile;
 
 			return true;
@@ -377,6 +378,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 					return false;
 				}
 
+				/* cppcheck-suppress danglingLifetime ; a std::filesystem::path copies the characters before the CoTaskMem string is freed. */
 				m_filepath = filepath.get();
 			}
 		}

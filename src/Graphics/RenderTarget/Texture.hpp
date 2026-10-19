@@ -31,25 +31,50 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <type_traits>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "Vulkan/TextureInterface.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "BlobTrait.hpp"
 #include "Graphics/Compute/ProbeConvolver.hpp"
 #include "Graphics/IBLTexture.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/ViewMatrices2DUBO.hpp"
-#include "Graphics/ViewMatrices3DUBO.hpp"
+#include "Graphics/Types.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/Processor.hpp"
 #include "Resources/Types.hpp"
+#include "Scenes/AVConsole/Types.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/Image.hpp"
+#include "Vulkan/ImageView.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/RenderPass.hpp"
+#include "Vulkan/RenderSubPass.hpp"
+#include "Vulkan/Sampler.hpp"
+#include "Vulkan/TransferManager.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class ViewMatrices2DUBO;
+	class ViewMatrices3DUBO;
+	class ViewMatricesInterface;
+}
 
 namespace EmEn::Graphics::RenderTarget
 {

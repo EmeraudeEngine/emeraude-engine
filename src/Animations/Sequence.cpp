@@ -29,13 +29,20 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
-#include <ostream>
+#include <iterator>
+#include <map>
+#include <sstream>
 #include <tuple>
 #include <utility>
 
 /* Local inclusions. */
+#include "Animations/KeyFrame.hpp"
+#include "BaseUtility.hpp"
+#include "BlobTrait.hpp"
 #include "Constants.hpp"
 #include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 #include "PixelFactory/Color.hpp"
 #include "Tracer.hpp"
 

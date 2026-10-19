@@ -26,9 +26,34 @@
 
 #include "SceneRendering.hpp"
 
+/* STL inclusions. */
+#include <array>
+
 /* Local inclusions. */
-#include "MeshShadingSurfaceHelper.hpp"
+#include "BlobTrait.hpp"
 #include "Graphics/Geometry/MeshShadingSurface.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
+#include "MeshShadingSurfaceHelper.hpp"
+#include "Saphir/AbstractVertexStage.hpp"
+#include "Saphir/Declaration/InputAttribute.hpp"
+#include "Saphir/Declaration/OutputFragment.hpp"
+#include "Saphir/Declaration/ShaderStorageBlock.hpp"
+#include "Saphir/Declaration/Types.hpp"
+#include "Saphir/FragmentShader.hpp"
+#include "Saphir/Generator/Abstract.hpp"
+#include "Saphir/Keys.hpp"
+#include "Saphir/MeshShader.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/SetIndexes.hpp"
+#include "Saphir/TaskShader.hpp"
+#include "Saphir/VertexShader.hpp"
+#include "Scenes/LightSet.hpp"
+#include "Scenes/SceneInstanceTransforms.hpp"
+#include "StaticVector.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/GraphicsPipeline.hpp"
 
 /* Local inclusions. */
 #include "Graphics/BindlessTextureManager.hpp"
@@ -40,7 +65,6 @@
 #include "OceanSurfaceHelper.hpp"
 #include "Saphir/Code.hpp"
 #include "Scenes/Scene.hpp"
-#include "SkinningLayoutHelper.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/RenderPass.hpp"
 

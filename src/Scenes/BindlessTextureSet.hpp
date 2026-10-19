@@ -32,14 +32,14 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
-#include <mutex>
 #include <queue>
 #include <unordered_map>
 #include <vector>
 
 /* Local inclusions for usages. */
-#include "Mutex.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Mutex.hpp"
+#include "ThreadSafety.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan

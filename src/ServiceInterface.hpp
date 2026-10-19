@@ -33,6 +33,7 @@
 /* STL inclusions. */
 #include <iostream>
 #include <string>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for inheritances. */

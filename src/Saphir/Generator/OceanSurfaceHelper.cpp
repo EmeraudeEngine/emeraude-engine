@@ -29,16 +29,19 @@
 /* STL inclusions. */
 #include <string>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
 #include "Graphics/Geometry/OceanSurface.hpp"
 #include "Graphics/OceanWaves.hpp"
 #include "Saphir/AbstractShader.hpp"
 #include "Saphir/Declaration/Function.hpp"
 #include "Saphir/Declaration/Sampler.hpp"
+#include "Saphir/Declaration/Types.hpp"
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/Keys.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/Device.hpp"
 #include "Vulkan/LayoutManager.hpp"
 
 namespace EmEn::Saphir::Generator

@@ -558,6 +558,50 @@ CodeChecker parse reports -i skip.txt
 The other CodeChecker analyzers are run on their own (clang-tidy, cppcheck: their sections). `gcc` (GCC's
 `-fanalyzer`, C++ support experimental in GCC 14) has not been run: an owner decision pending.
 
+## include-what-you-use (owner decision 2026-10-19, Ave Robustus II P-W (2))
+
+**Version: include-what-you-use 0.23**, the rules of emeraude-base's ledger § include-what-you-use (the files a lot
+touches come out IWYU-clean; forward declarations allowed, each verified by compiling; never IWYU's
+`fix_includes.py`). **Configuration**: `iwyu-mapping.imp` at the repository root — it `ref`s the base's mapping, then:
+Vulkan through `"volk.h"` only (`VK_NO_PROTOTYPES`), jsoncpp through `"json/json.h"`, lightusd through `"lightusd.hh"`
+/ `"tydra/render-data.hh"`, fastgltf's math / util through `"fastgltf/types.hpp"`, Draco through its decoder header,
+libvpx through `"vpx/vpx_encoder.h"`, OpenAL quoted as the engine writes it, the x86 intrinsics through
+`<immintrin.h>`, the generated `emeraude_*.hpp` quoted, and emeraude-base's configuration through
+`"emeraude_config.hpp"`.
+
+**The command** (Linux; projet-alpha's database cleaned for clang — the clang-tidy runner's; the touched `.cpp` files as
+TUs, the touched headers through the template guard, which includes every header):
+
+```bash
+iwyu_tool -p <clean db> <touched .cpp files> -- -Wno-unknown-warning-option \
+	-Xiwyu --mapping_file=iwyu-mapping.imp -Xiwyu --cxx17ns > pass.txt
+iwyu_tool -p <clean db> tools/template-guard/TemplateInstantiation.cpp -- -Wno-unknown-warning-option \
+	-Xiwyu --mapping_file=iwyu-mapping.imp -Xiwyu --cxx17ns -Xiwyu --check_also=<each touched header> > guard.txt
+python3 <projet-alpha>/tools/iwyu-apply.py . <touched list> pass.txt guard.txt
+```
+
+Then the forward declarations it prints (in the file's `/* Forward declarations. */` block), a build of the three
+cascades (GCC Release and Debug, clang with `-Wdocumentation`), and a second IWYU pass: it must converge.
+
+⚠️ **Traps met on the first lot (2026-10-19):**
+- `vpx/vpx_integer.h` only includes `<stdint.h>`: mapped to `"vpx/vpx_encoder.h"`, it sent EVERY integer type to
+  libvpx (`AnimationClipResource.hpp` asked for the video encoder). Mapped to `<cstdint>`.
+- emeraude-base's `Network/asio_throw_exception.hpp` defines asio's `throw_exception()` under `-fno-exceptions`;
+  nothing names its symbols, IWYU removed it from `Net/Manager.cpp` and `Net/TCPServer.cpp` and the LINK failed. The
+  header carries `// IWYU pragma: always_keep` now (base), and it stays FIRST in its section (it sets the ASIO macros).
+- IWYU on Linux sees neither the `#ifdef _WIN32` nor the macOS branches: a POSIX header it asks for (`<sys/select.h>`
+  in `Net/UDPClient.cpp`) goes BY HAND inside the file's POSIX block, never into the unconditional STL section; a
+  removed include is checked against the platform branches before it goes (none were used there).
+- A header that used a type through another header's include breaks when that include becomes a forward declaration
+  (`Scenes/AbstractEntity.hpp` used `Resources::Manager`): it declares what it uses itself.
+- `tools/iwyu-apply.py` (projet-alpha): an emeraude-base header is LOCAL for the engine; a section it creates goes in
+  the cascade's order; a section title followed by a preprocessor conditional is kept.
+
+**First lot (2026-10-19)**: the 49 files of the engine's cppcheck lot (34 `.cpp`, 15 headers): about 800 includes added
+and 115 removed, 41 forward declarations, converged at the second pass (three residual lines applied); the three
+cascades 0 error, 0 warning. Section layouts that predate the pass were left as they are (`GLTFParser.cpp`'s leading
+fastgltf block, `SceneRendering.cpp`'s two local blocks, `UDPClient.cpp`'s third-party block after the local one).
+
 ## The template guard (owner decision 2026-10-19, Ave Robustus II P-W (2))
 
 A member of a class template is compiled only when something calls it, a header only when a translation unit includes
@@ -650,3 +694,9 @@ by-reference lambda or another method ×2, the RenderDoc and fault-injection stu
 (`Sequence`), `redundantInitialization` (`Net::Manager`: every variable initialized), `duplicateCondition` ×5 (two
 documented generation phases or concerns), `unreadVariable` ×2 (ShadowMap / Texture `capture()`: the download ignores
 the layer — engine item `render-target-capture-ignores-the-layer-index`).
+
+**Windows (Windows peer, 2026-10-19, the corrected defines of the base ledger):** 0 finding outside the
+`*.windows.cpp` (which Linux never analyses), 8 in them, fixed: `createConsole()` / `attachToParentConsole()` ignored
+six `freopen_s()` results (a console its streams cannot reach is reported unusable now), `WorkerContext`'s members
+initialized (`Helpers.windows.cpp`); two `danglingLifetime` in `SaveFile.windows.cpp` kept inline — a
+`std::filesystem::path` assigned from a `wchar_t *` copies the characters. macOS (`-D__attribute__(x)=`): 0.

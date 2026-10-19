@@ -33,14 +33,15 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <compare>
 #include <iterator>
-#include <mutex>
 #include <ranges>
 #include <string>
 #include <utility>
 #include <vector>
 
 /* Third-party inclusions. */
+#include "volk.h"
 #ifdef IMGUI_ENABLED
 #include "imgui.h"
 #include "backends/imgui_impl_vulkan.h"
@@ -57,18 +58,31 @@
 #endif
 
 /* Local inclusions. */
-#include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Graphics/Renderer.hpp"
-#include "VertexFactory/ShapeGenerator.hpp"
+#include "Any.hpp"
+#include "BlobTrait.hpp"
 #include "FileSystem.hpp"
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Geometry/Types.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Input/Manager.hpp"
+#include "Math/Base.hpp"
+#include "Overlay/FramebufferProperties.hpp"
+#include "Overlay/Surface.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 #include "Saphir/Generator/OverlayRendering.hpp"
-#include "Settings.hpp"
+#include "Saphir/Program.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Tracer.hpp"
 #include "UIScreen.hpp"
+#include "VertexFactory/ShapeGenerator.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/LayoutManager.hpp"
+#include "Vulkan/RenderPass.hpp"
+#include "Vulkan/Types.hpp"
 #include "Window.hpp"
 
 namespace EmEn::Overlay

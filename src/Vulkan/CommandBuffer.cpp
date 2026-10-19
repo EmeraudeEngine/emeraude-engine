@@ -27,12 +27,14 @@
 #include "CommandBuffer.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <memory>
 #include <span>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Buffer.hpp"
 #include "ComputePipeline.hpp"
 #include "DescriptorSet.hpp"
@@ -49,6 +51,8 @@
 #include "Tracer.hpp"
 #include "Utility.hpp"
 #include "VertexBufferObject.hpp"
+#include "Vulkan/CommandPool.hpp"
+#include "Vulkan/Device.hpp"
 
 namespace EmEn::Vulkan
 {

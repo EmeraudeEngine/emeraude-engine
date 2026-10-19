@@ -26,25 +26,111 @@
 
 #include "Scene.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <chrono>
 #include <cmath>
+#include <cstdint>
+#include <functional>
+#include <initializer_list>
+#include <map>
+#include <memory>
 #include <optional>
 #include <ranges>
+#include <ratio>
+#include <set>
+#include <span>
+#include <sstream>
+#include <string>
+#include <utility>
 #include <vector>
 
 /* Local inclusions. */
 #include "AnyValue.hpp"
+#include "BlobTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Frustum.hpp"
+#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/MDI/BatchBuilder.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/Renderable/AbstractBackground.hpp"
+#include "Graphics/Renderable/Types.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/RenderableInstance/RenderStateTracker.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/Renderable/Types.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/RenderTarget/ImposterBake.hpp"
+#include "Graphics/RenderTarget/ShadowMap.hpp"
+#include "Graphics/RenderTarget/Texture.hpp"
+#include "Graphics/RenderTarget/View.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Graphics/Types.hpp"
+#include "Graphics/ViewMatrices2DUBO.hpp"
+#include "Graphics/ViewMatrices3DUBO.hpp"
+#include "Graphics/ViewMatricesCascadedUBO.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Plane.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Collisions/SphereCuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
+#include "Mutex.hpp"
 #include "NodeCrawler.hpp"
+#include "Scenes/AbstractEntity.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
+#include "Scenes/BindlessTextureSet.hpp"
+#include "Scenes/Component/Abstract.hpp"
+#include "Scenes/Component/DirectionalLight.hpp"
+#include "Scenes/Component/LineLight.hpp"
+#include "Scenes/Component/PointLight.hpp"
+#include "Scenes/Component/SpotLight.hpp"
+#include "Scenes/Component/Visual.hpp"
+#include "Scenes/GroundLevelInterface.hpp"
+#include "Scenes/LightSet.hpp"
+#include "Scenes/Node.hpp"
+#include "Scenes/RenderBatch.hpp"
+#include "Scenes/SceneInstanceTransforms.hpp"
+#include "Scenes/SceneMetaData.hpp"
+#include "Scenes/StaticEntity.hpp"
+#include "StaticVector.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/TextureInterface.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Base
+{
+	class Any;
+}
+
+namespace EmEn::Graphics
+{
+	class FramebufferPrecisions;
+}
+
+namespace EmEn::Scenes::AVConsole
+{
+	class AbstractVirtualDevice;
+}
+
+namespace EmEn::Scenes::Component
+{
+	class AbstractLightEmitter;
+}
+
+namespace EmEn::Vulkan
+{
+	class CommandBuffer;
+	class DescriptorSet;
+}
 
 namespace EmEn::Scenes
 {

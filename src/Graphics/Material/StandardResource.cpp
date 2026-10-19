@@ -30,30 +30,46 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstdlib>
+#include <initializer_list>
+#include <iterator>
+#include <optional>
 #include <ranges>
 #include <sstream>
-#include <string_view>
 #include <tuple>
+#include <utility>
+#include <variant>
+#include <vector>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Component/Color.hpp"
 #include "Component/Interface.hpp"
 #include "Component/Texture.hpp"
 #include "Component/Value.hpp"
+#include "FastJSON.hpp"
 #include "GPURTMaterialData.hpp"
-#include "Graphics/Geometry/HeightfieldSurface.hpp"
-#include "Graphics/Geometry/OceanSurface.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Geometry/HeightfieldSurface.hpp"
+#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Geometry/OceanSurface.hpp"
 #include "Graphics/IBLTexture.hpp"
 #include "Graphics/ImposterAtlas.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/SharedUniformBuffer.hpp"
+#include "Graphics/TextureResource/Abstract.hpp"
 #include "Graphics/Types.hpp"
 #include "Helpers.hpp"
-#include "FastJSON.hpp"
 #include "Math/Base.hpp"
 #include "PixelFactory/Color.hpp"
+#include "PrimaryServices.hpp"
+#include "Saphir/AbstractVertexStage.hpp"
 #include "Saphir/Code.hpp"
+#include "Saphir/Declaration/Function.hpp"
 #include "Saphir/Declaration/Sampler.hpp"
 #include "Saphir/Declaration/StageOutput.hpp"
 #include "Saphir/Declaration/Types.hpp"
@@ -63,11 +79,14 @@
 #include "Saphir/ImposterGLSL.hpp"
 #include "Saphir/Keys.hpp"
 #include "Saphir/LightGenerator.hpp"
-#include "Saphir/VertexShader.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/SetIndexes.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/TextureInterface.hpp"
 
@@ -5406,7 +5425,6 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* NOTE: No addDependency() for TextureInterface - it's not a loadable resource. */
-
 
 		/* Absolute luminance source — see the reflection variant above. */
 		m_refractionSourceIsAbsolute = true;

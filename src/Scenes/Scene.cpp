@@ -29,18 +29,48 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <ranges>
+#include <sstream>
 
 /* Local inclusions. */
 #include "AnyValue.hpp"
+#include "Audio/Ambience.hpp"
 #include "Audio/HardwareOutput.hpp"
+#include "Audio/Manager.hpp"
+#include "BlobTrait.hpp"
 #include "Component/CharacterController.hpp"
-#include "Graphics/Compute/IBLBaker.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Input/Manager.hpp"
+#include "ObservableTrait.hpp"
+#include "Physics/MovableTrait.hpp"
+#include "PrimaryServices.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/BindlessTextureSet.hpp"
+#include "Scenes/Component/Abstract.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/Microphone.hpp"
+#include "Scenes/Component/Visual.hpp"
+#include "Scenes/GroundLevelInterface.hpp"
+#include "Scenes/LightSet.hpp"
+#include "Scenes/Node.hpp"
+#include "Scenes/NodeController.hpp"
 #include "Scenes/NodeCrawler.hpp"
+#include "Scenes/OctreeSector.hpp"
+#include "Scenes/OrbitController.hpp"
+#include "Scenes/PhysicsRecorder.hpp"
+#include "Scenes/SceneInstanceTransforms.hpp"
+#include "Scenes/SceneMetaData.hpp"
+#include "Scenes/SeaLevelInterface.hpp"
+#include "Scenes/StaticEntity.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Resources
+{
+	class Manager;
+}
 
 namespace EmEn::Scenes
 {
@@ -87,7 +117,6 @@ namespace EmEn::Scenes
 
 		/* An asynchronously loading background pushes its photometry (luminance) once
 		 * loaded — see the polling block at the top of processLogics(). */
-
 
 		auto & settings = graphicsRenderer.primaryServices().settings();
 

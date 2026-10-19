@@ -28,15 +28,21 @@
 
 /* STL inclusions. */
 #include <cstring>
+#include <ios>
+#include <string>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "StaticVector.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/Image.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/Queue.hpp"
+#include "Vulkan/Types.hpp"
 #include "Vulkan/Utility.hpp"
 
 namespace EmEn::Vulkan

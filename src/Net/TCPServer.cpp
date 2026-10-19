@@ -28,11 +28,16 @@
 
 /* STL inclusions. */
 #include <chrono>
+#include <compare>
+#include <new>
 #include <utility>
 
 /* Third-party inclusions. */
 #include "Network/asio_throw_exception.hpp"
 #include "asio.hpp"
+
+/* Local inclusions. */
+#include "Net/TCPClient.hpp"
 
 namespace EmEn::Net
 {

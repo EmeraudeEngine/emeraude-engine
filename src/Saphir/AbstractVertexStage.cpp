@@ -37,9 +37,8 @@
 #include <vector>
 
 /* Local inclusions. */
-#include "AbstractShader.hpp"
 #include "BeamGLSL.hpp"
-#include "PathGLSL.hpp"
+#include "BlobTrait.hpp"
 #include "Code.hpp"
 #include "Declaration/InputAttribute.hpp"
 #include "Declaration/OutputBlock.hpp"
@@ -50,6 +49,7 @@
 #include "Graphics/Types.hpp"
 #include "ImposterGLSL.hpp"
 #include "Keys.hpp"
+#include "PathGLSL.hpp"
 #include "Tracer.hpp"
 #include "Types.hpp"
 
@@ -1685,7 +1685,6 @@ namespace EmEn::Saphir
 
 				continue;
 			}
-
 
 			if ( std::strcmp(variableType, ShaderVariable::TangentToWorldMatrix) == 0 )
 			{

@@ -26,23 +26,42 @@
 
 #include "TrackMixer.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <algorithm>
 #include <array>
+#include <chrono>
 #include <limits>
 #include <numeric>
+#include <ranges>
 #include <set>
 #include <sstream>
+#include <thread>
 #include <utility>
 
+/* Third-party inclusions. */
+#include "AL/alc.h"
+#include "AL/alext.h"
+
 /* Local inclusions. */
-#include "String.hpp"
-#include "Manager.hpp"
+#include "Any.hpp"
+#include "Audio/MusicResource.hpp"
+#include "Audio/PlaylistResource.hpp"
+#include "Audio/Source.hpp"
+#include "Audio/Types.hpp"
+#include "BlobTrait.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Base.hpp"
 #include "OpenALExtensions.hpp"
 #include "PortableRandom.hpp"
+#include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
+#include "Resources/ResourceTrait.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
+#include "String.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio

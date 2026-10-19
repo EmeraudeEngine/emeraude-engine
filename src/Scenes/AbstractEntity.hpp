@@ -65,6 +65,11 @@ namespace EmEn
 		class MovableTrait;
 	}
 
+	namespace Resources
+	{
+		class Manager;
+	}
+
 	namespace Scenes
 	{
 		class AbstractEntity;

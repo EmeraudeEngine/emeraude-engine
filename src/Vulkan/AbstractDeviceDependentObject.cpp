@@ -26,7 +26,14 @@
 
 #include "AbstractDeviceDependentObject.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
 
 namespace EmEn::Vulkan

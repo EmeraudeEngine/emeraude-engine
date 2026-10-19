@@ -30,6 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
+#include <string>
 #include <utility>
 
 /* Local inclusions for inheritances. */
@@ -37,6 +39,8 @@
 
 /* Local inclusions for usages. */
 #include "Animation/AnimationClip.hpp"
+#include "Hash/FNV1a.hpp"
+#include "Resources/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources

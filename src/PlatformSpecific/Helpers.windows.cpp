@@ -265,9 +265,11 @@ namespace EmEn::PlatformSpecific
 		// std::cout, std::clog, std::cerr, std::cin
 		FILE * fDummy = nullptr;
 
-		freopen_s(&fDummy, "CONOUT$", "w", stdout);
-		freopen_s(&fDummy, "CONOUT$", "w", stderr);
-		freopen_s(&fDummy, "CONIN$", "r", stdin);
+		/* NOTE: A console whose standard streams cannot be redirected to it is not usable: reported. */
+		if ( freopen_s(&fDummy, "CONOUT$", "w", stdout) != 0 || freopen_s(&fDummy, "CONOUT$", "w", stderr) != 0 || freopen_s(&fDummy, "CONIN$", "r", stdin) != 0 )
+		{
+			return false;
+		}
 
 		std::cout.clear();
 		std::clog.clear();
@@ -292,11 +294,14 @@ namespace EmEn::PlatformSpecific
 			return false;
 		}
 
-		/* Redirect std streams to the attached console. */
+		/* Redirect std streams to the attached console (a console they cannot reach is not usable: reported). */
 		FILE * fDummy = nullptr;
-		freopen_s(&fDummy, "CONOUT$", "w", stdout);
-		freopen_s(&fDummy, "CONOUT$", "w", stderr);
-		freopen_s(&fDummy, "CONIN$", "r", stdin);
+
+		if ( freopen_s(&fDummy, "CONOUT$", "w", stdout) != 0 || freopen_s(&fDummy, "CONOUT$", "w", stderr) != 0 || freopen_s(&fDummy, "CONIN$", "r", stdin) != 0 )
+		{
+			return false;
+		}
+
 		std::cout.clear();
 		std::clog.clear();
 		std::cerr.clear();
@@ -488,9 +493,9 @@ namespace EmEn::PlatformSpecific
 		 * before the thread has been waited out (see below). */
 		struct WorkerContext
 		{
-			const decltype(runDialog) * runDialog;
-			bool * result;
-			DPI_AWARENESS_CONTEXT dpiContext;
+			const decltype(runDialog) * runDialog{nullptr};
+			bool * result{nullptr};
+			DPI_AWARENESS_CONTEXT dpiContext{nullptr};
 		};
 
 		WorkerContext workerContext{&runDialog, &result, dpiContext};

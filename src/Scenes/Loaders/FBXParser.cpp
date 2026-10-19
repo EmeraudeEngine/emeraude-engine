@@ -30,26 +30,30 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstring>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <ranges>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 /* Third-party inclusions. */
 #include <ufbx/ufbx.h>
 
 /* Local inclusions. */
-#include "Interface.hpp"
 #include "Animation/AnimationChannel.hpp"
 #include "Animation/Joint.hpp"
+#include "BlobTrait.hpp"
+#include "Interface.hpp"
 #include "IO/IO.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Quaternion.hpp"
+#include "Scenes/Loaders/LoaderOptions.hpp"
+#include "Scenes/Loaders/SceneData.hpp"
 #include "String.hpp"
 #include "Tracer.hpp"
 

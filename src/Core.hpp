@@ -113,18 +113,21 @@
 #pragma once
 
 /* Project configuration. */
-#include "emeraude_platform.hpp"
+#include "emeraude_config.hpp"
 #include "emeraude_export.hpp"
+#include "emeraude_platform.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
 #include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstdint>
+#include <filesystem>
 #include <limits>
+#include <memory>
 #include <optional>
+#include <queue>
 #include <stop_token>
 #include <string>
 #include <vector>
@@ -136,29 +139,61 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Constants.hpp"
 #include "Audio/Manager.hpp"
+#include "BlobTrait.hpp"
 #include "Console/Controller.hpp"
+#include "Constants.hpp"
 #include "CursorAtlas.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Help/Lexicon.hpp"
 #include "Identification.hpp"
 #include "Input/Manager.hpp"
 #include "Mutex.hpp"
-#include "ScopedRegistration.hpp"
 #include "Notifier.hpp"
 #include "Overlay/Manager.hpp"
 #include "Physics/Manager.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "PlatformManager.hpp"
 #include "PlatformSpecific/Helpers.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Manager.hpp"
 #include "Scenes/Manager.hpp"
+#include "ScopedRegistration.hpp"
 #include "SettingsKeyRestoration.hpp"
 #include "SystemNotification.hpp"
 #include "User.hpp"
+#include "Version.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Window.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Arguments;
+	class ServiceInterface;
+	class Settings;
+	enum class CursorType : uint8_t;
+}
+
+namespace EmEn::Base
+{
+	class Any;
+}
+
+namespace EmEn::Graphics
+{
+	class ImageResource;
+}
+
+namespace EmEn::Overlay
+{
+	class ImGUIScreen;
+}
+
+namespace EmEn::Scenes
+{
+	class Scene;
+}
 
 namespace EmEn
 {

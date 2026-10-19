@@ -29,17 +29,29 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
-#include <limits>
+#include <functional>
+#include <optional>
 #include <sstream>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
 #include "Algorithms/WorleyNoise.hpp"
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/MemoryRegion.hpp"
+#include "Vulkan/Sampler.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Settings;
+}
 
 namespace
 {

@@ -27,24 +27,33 @@
 #include "SceneMetaData.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <ranges>
 #include <unordered_map>
 #include <utility>
 
 /* Local inclusions. */
-#include "GPUMeshMetaData.hpp"
 #include "BindlessTextureSet.hpp"
+#include "GPUMeshMetaData.hpp"
 #include "Graphics/Geometry/Interface.hpp"
-#include "Graphics/RenderableInstance/Abstract.hpp"
-#include "Graphics/SkinnedGeometryProcessor.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Material/GPURTMaterialData.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Graphics/SkinnedGeometryProcessor.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
+#include "Scenes/RenderBatch.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/AccelerationStructure.hpp"
+#include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/DeferredDestructor.hpp"
-#include "Vulkan/Device.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/IndexBufferObject.hpp"
+#include "Vulkan/ShaderStorageBufferObject.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Scenes
@@ -489,7 +498,6 @@ namespace EmEn::Scenes
 			/* Known alternate value: keep the pair ordered (most recent first), silently. */
 			std::swap(m_lastTLASInstanceCounts[0], m_lastTLASInstanceCounts[1]);
 		}
-
 
 		/* --- Resolve bindless texture indices for RT materials --- */
 		if ( bindlessTextureSet != nullptr && !materialMap.empty() )

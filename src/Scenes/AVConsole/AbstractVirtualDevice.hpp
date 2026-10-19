@@ -30,16 +30,26 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cassert>
+#include <cstdint>
 #include <memory>
-#include <mutex>
 #include <set>
+#include <sstream>
 #include <string>
+#include <type_traits>
 
 /* Local inclusions for usages. */
-#include "Mutex.hpp"
 #include "Math/CartesianFrame.hpp"
-#include "CoreTypes.hpp"
+#include "Math/Vector.hpp"
+#include "Mutex.hpp"
+#include "ThreadSafety.hpp"
 #include "Types.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	struct EngineContext;
+}
 
 namespace EmEn::Scenes::AVConsole
 {

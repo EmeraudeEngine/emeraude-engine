@@ -27,14 +27,25 @@
 #include "LightGenerator.hpp"
 
 /* STL inclusions. */
+#include <memory>
 #include <optional>
+#include <sstream>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Code.hpp"
 #include "Declaration/Function.hpp"
 #include "Declaration/Sampler.hpp"
 #include "Generator/Abstract.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Math/Base.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Saphir/AbstractVertexStage.hpp"
+#include "Saphir/Declaration/Types.hpp"
+#include "Saphir/Declaration/UniformBlock.hpp"
+#include "Saphir/FragmentShader.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/SetIndexes.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Saphir
@@ -618,7 +629,6 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-
 		/* One lighting model: Cook-Torrance, shaded per fragment. The vertex stage only prepares
 		 * the interpolated inputs (light direction, distance, tangent space). */
 		return this->generatePBRVertexShader(generator, vertexShader, *lightType, enableShadowMap, enableColorProjection);
@@ -753,7 +763,6 @@ namespace EmEn::Saphir
 		{
 			return false;
 		}
-
 
 		return this->generatePBRFragmentShader(generator, fragmentShader, lightType, enableShadowMap, enableColorProjection);
 	}

@@ -26,32 +26,46 @@
 
 #include "Recorder.hpp"
 
+/* Project configuration. */
+#include "emeraude_platform.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <cerrno>
 #include <cmath>
+#include <compare>
 #include <cstring>
 #include <limits>
+#include <span>
+#include <string>
 #include <system_error>
+#include <thread>
 #include <utility>
 
 /* Third-party inclusions. */
 #include "vpx/vp8cx.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/VideoFrameConverter.hpp"
 #include "IO/IO.hpp"
-#include "String.hpp"
 #include "PrimaryServices.hpp"
 #include "Renderer.hpp"
-#include "Settings.hpp"
 #include "RenderTarget/Abstract.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "String.hpp"
 #include "Tracer.hpp"
 #include "VideoColorConversion.hpp"
+#include "Vulkan/CommandPool.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/Image.hpp"
+#include "Vulkan/ImageView.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/Sync/BufferMemoryBarrier.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
+#include "Vulkan/Types.hpp"
 #if IS_X86_ARCH
 #include "cpu_features/cpuinfo_x86.h"
 #include <immintrin.h>

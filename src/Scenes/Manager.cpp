@@ -29,29 +29,60 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
-#include <cstddef>
 #include <filesystem>
 #include <map>
 #include <memory>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "Any.hpp"
+#include "BlobTrait.hpp"
+#include "CoreTypes.hpp"
 #include "DefinitionResource.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/Renderer.hpp"
-#include "Vulkan/Device.hpp"
-#include "Vulkan/Instance.hpp"
 #include "FastJSON.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/PostProcessStack.hpp"
+#include "Graphics/Renderer.hpp"
 #include "IO/IO.hpp"
+#include "Logging/Severity.hpp"
 #include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
+#include "Scenes/Editor/Manager.hpp"
 #include "Scenes/Loaders/FBXLoader.hpp"
 #include "Scenes/Loaders/GLTFLoader.hpp"
+#include "Scenes/Loaders/Interface.hpp"
 #include "Scenes/Loaders/USDLoader.hpp"
 #include "Scenes/Loaders/WADLoader.hpp"
-#include "Settings.hpp"
+#include "Scenes/Scene.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/Instance.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class ViewMatricesInterface;
+}
+
+namespace EmEn::Graphics::Renderable
+{
+	class AbstractBackground;
+}
+
+namespace EmEn::Scenes
+{
+	class GroundLevelInterface;
+	class SeaLevelInterface;
+}
 
 namespace EmEn::Scenes
 {

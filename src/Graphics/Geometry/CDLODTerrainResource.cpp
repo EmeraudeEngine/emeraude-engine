@@ -27,19 +27,29 @@
 #include "CDLODTerrainResource.hpp"
 
 /* STL inclusions. */
-#include <numbers>
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <functional>
 #include <limits>
+#include <numbers>
+#include <stop_token>
+#include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/Frustum.hpp"
+#include "Graphics/Geometry/HeightfieldSurface.hpp"
+#include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Math/Base.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/Generator/HeightfieldSurfaceHelper.hpp"
+#include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
-#include "ThreadPool.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -52,6 +62,7 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
+#include "Vulkan/MemoryRegion.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/Queue.hpp"

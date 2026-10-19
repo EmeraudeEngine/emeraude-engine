@@ -29,18 +29,52 @@
 /* Project configuration. */
 #include "emeraude_config.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <array>
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <type_traits>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "Vulkan/TextureInterface.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/ViewMatrices2DUBO.hpp"
-#include "Graphics/ViewMatrices3DUBO.hpp"
+#include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesCascadedUBO.hpp"
-#include "PixelFactory/Processor.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
+#include "Scenes/AVConsole/Types.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/Image.hpp"
+#include "Vulkan/ImageView.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/RenderPass.hpp"
+#include "Vulkan/RenderSubPass.hpp"
+#include "Vulkan/Sampler.hpp"
+#include "Vulkan/TransferManager.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Settings;
+}
+
+namespace EmEn::Graphics
+{
+	class ViewMatrices2DUBO;
+	class ViewMatrices3DUBO;
+	class ViewMatricesInterface;
+}
 
 namespace EmEn::Graphics::RenderTarget
 {

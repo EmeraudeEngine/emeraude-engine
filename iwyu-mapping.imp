@@ -1,0 +1,44 @@
+# include-what-you-use mapping of emeraude-engine (owner decision 2026-10-19, plan Ave Robustus II P-W (2)): the files a
+# lot touches come out IWYU-clean. The command lives in docs/static-analysis-ledger.md § include-what-you-use.
+[
+	# emeraude-base's mapping (the STL homes, FreeType, libjpeg / libpng / libtiff, asio).
+	{ "ref": "dependencies/emeraude-base/iwyu-mapping.imp" },
+	# The engine reaches Vulkan through volk only (VK_NO_PROTOTYPES): never the Khronos headers directly.
+	{ "include": ["@<vulkan/.*>", "private", "\"volk.h\"", "public"] },
+	{ "include": ["@<vk_video/.*>", "private", "\"volk.h\"", "public"] },
+	{ "include": ["<volk.h>", "private", "\"volk.h\"", "public"] },
+	# jsoncpp through its umbrella header.
+	{ "include": ["@<json/.*>", "private", "\"json/json.h\"", "public"] },
+	# lightusd (tinyusdz) through its umbrella headers; tydra's internals through render-data.hh.
+	{ "include": ["@<core/.*\\.hh>", "private", "\"lightusd.hh\"", "public"] },
+	{ "include": ["<layer.hh>", "private", "\"lightusd.hh\"", "public"] },
+	{ "include": ["<stage.hh>", "private", "\"lightusd.hh\"", "public"] },
+	{ "include": ["<value-types.hh>", "private", "\"lightusd.hh\"", "public"] },
+	{ "include": ["<tiny-string.hh>", "private", "\"lightusd.hh\"", "public"] },
+	{ "include": ["@<nonstd/.*>", "private", "\"lightusd.hh\"", "public"] },
+	{ "include": ["@<tydra/render-data-shader\\.hh>", "private", "\"tydra/render-data.hh\"", "public"] },
+	# fastgltf: its math and util headers come through types.hpp.
+	{ "include": ["<fastgltf/math.hpp>", "private", "\"fastgltf/types.hpp\"", "public"] },
+	{ "include": ["<fastgltf/util.hpp>", "private", "\"fastgltf/types.hpp\"", "public"] },
+	# Draco through its decoder header.
+	{ "include": ["@<draco/(attributes|core)/.*>", "private", "<draco/compression/decode.h>", "public"] },
+	# libvpx through its public encoder headers.
+	# vpx_integer.h only includes <stdint.h>: IWYU would otherwise send every integer type to libvpx.
+	{ "include": ["<vpx/vpx_integer.h>", "private", "<cstdint>", "public"] },
+	{ "include": ["<vpx/vpx_image.h>", "private", "\"vpx/vpx_encoder.h\"", "public"] },
+	{ "include": ["<vpx/vpx_encoder.h>", "private", "\"vpx/vpx_encoder.h\"", "public"] },
+	# OpenAL, as the engine writes it.
+	{ "include": ["<AL/al.h>", "private", "\"AL/al.h\"", "public"] },
+	{ "include": ["<AL/alc.h>", "private", "\"AL/alc.h\"", "public"] },
+	{ "include": ["<AL/alext.h>", "private", "\"AL/alext.h\"", "public"] },
+	{ "include": ["<AL/efx.h>", "private", "\"AL/efx.h\"", "public"] },
+	# x86 intrinsics through the umbrella header.
+	{ "include": ["@<[a-z]*mmintrin\\.h>", "private", "<immintrin.h>", "public"] },
+	# The generated configuration headers, as the engine writes them.
+	{ "include": ["<emeraude_config.hpp>", "private", "\"emeraude_config.hpp\"", "public"] },
+	{ "include": ["<emeraude_platform.hpp>", "private", "\"emeraude_platform.hpp\"", "public"] },
+	{ "include": ["<emeraude_export.hpp>", "private", "\"emeraude_export.hpp\"", "public"] },
+	# emeraude-base's configuration (IsDebug, the platform constants) comes through the engine's own.
+	{ "include": ["\"emeraude_base_config.hpp\"", "private", "\"emeraude_config.hpp\"", "public"] },
+	{ "include": ["<emeraude_base_config.hpp>", "private", "\"emeraude_config.hpp\"", "public"] }
+]

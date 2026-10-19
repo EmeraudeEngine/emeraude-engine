@@ -28,30 +28,54 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <vector>
-#include <tuple>
-#include <optional>
-#include <map>
-#include <charconv>
 #include <array>
+#include <atomic>
+#include <charconv>
 #include <chrono>
-#include <cmath>
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <functional>
 #include <iomanip>
+#include <iterator>
+#include <map>
+#include <memory>
+#include <optional>
+#include <ratio>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <system_error>
+#include <tuple>
+#include <utility>
+#include <variant>
+#include <vector>
+
+/* Third-party inclusions. */
+#include "json/json.h"
+#include "volk.h"
 
 /* Local inclusions. */
+#include "Console/CommandResult.hpp"
 #include "Console/JSONNumber.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
+#include "Graphics/DeferredLightResolve.hpp"
+#include "Graphics/FrameCapture.hpp"
+#include "Graphics/FrameDiagnostics.hpp"
+#include "Graphics/PostProcessor.hpp"
+#include "Graphics/RenderDocCapture.hpp"
 #include "IO/IO.hpp"
-#include "PixelFactory/FileIO.hpp"
 #include "MDI/BatchBuilder.hpp"
 #include "OceanWaves.hpp"
 #include "OverflowCensus.hpp"
 #include "PrimaryServices.hpp"
+#include "Time/Statistics/RealTime.hpp"
 #include "VideoFrameConverter.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/GPUProfiler.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/VideoEncoderH265.hpp"

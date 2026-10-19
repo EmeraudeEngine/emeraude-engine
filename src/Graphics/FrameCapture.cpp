@@ -28,21 +28,28 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cstddef>
 #include <fstream>
+#include <initializer_list>
 #include <iomanip>
+#include <ratio>
 #include <span>
 #include <sstream>
+#include <stop_token>
+#include <system_error>
 #include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "IO/IO.hpp"
 #include "PixelFactory/FileIO.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/Processor.hpp"
+#include "PixelFactory/Types.hpp"
 #include "ThreadPool.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
-#include "Vulkan/Device.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/Sync/BufferMemoryBarrier.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"

@@ -26,16 +26,31 @@
 
 #include "Multiple.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <cstring>
+#include <string>
 
 /* Local inclusions. */
-#include "Graphics/Renderer.hpp"
+#include "BlobTrait.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Graphics/RenderableInstance/RenderContext.hpp"
+#include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Vector.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/TransferManager.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class Device;
+}
 
 namespace EmEn::Graphics::RenderableInstance
 {

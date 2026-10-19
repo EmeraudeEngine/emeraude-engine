@@ -30,23 +30,36 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <string>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/Types.hpp"
 #include "PixelFactory/Color.hpp"
 #include "StaticVector.hpp"
-#include "PipelineLayout.hpp"
-#include "RenderPass.hpp"
 #include "ShaderModule.hpp"
 
 /* Forward declarations */
+namespace EmEn::Graphics
+{
+	enum class RenderPassType : uint8_t;
+}
+
+namespace EmEn::Vulkan
+{
+	class Device;
+	class PipelineLayout;
+	class RenderPass;
+}
+
 namespace EmEn::Graphics
 {
 	namespace Material

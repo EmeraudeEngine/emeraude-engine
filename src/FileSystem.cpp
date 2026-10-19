@@ -26,10 +26,19 @@
 
 #include "FileSystem.hpp"
 
+/* Project configuration. */
+#include "emeraude_platform.hpp"
+
+/* STL inclusions. */
+#include <iterator>
+#include <optional>
+
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "BlobTrait.hpp"
 #include "IO/IO.hpp"
 #include "PlatformSpecific/SystemInfo.hpp"
+#include "PlatformSpecific/UserInfo.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn

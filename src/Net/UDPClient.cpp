@@ -27,14 +27,14 @@
 #include "UDPClient.hpp"
 
 /* STL inclusions. */
-#include <mutex>
-#include <shared_mutex>
-
-/* STL inclusions. */
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <compare>
 #include <cstring>
+#include <mutex>
+#include <ranges>
+#include <shared_mutex>
 #include <sstream>
 #include <utility>
 
@@ -58,7 +58,10 @@
 	using SocketType = SOCKET;
 	static constexpr SocketType InvalidSocket = INVALID_SOCKET;
 #else
+	#include <sys/select.h>
 	#include <sys/socket.h>
+	#include <sys/time.h>
+	#include <sys/uio.h>
 	#include <netinet/in.h>
 	#include <arpa/inet.h>
 	#include <unistd.h>

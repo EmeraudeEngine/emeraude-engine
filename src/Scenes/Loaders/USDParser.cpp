@@ -30,9 +30,12 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <iterator>
 #include <limits>
 #include <map>
+#include <numbers>
 #include <ranges>
+#include <unordered_map>
 #include <utility>
 
 /* Third-party inclusions. */
@@ -46,6 +49,10 @@
 #include "tydra/scene-access.hh"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Math/Quaternion.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Scenes/Loaders/SceneData.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes::Loaders::USD
@@ -994,7 +1001,6 @@ namespace EmEn::Scenes::Loaders::USD
 				++pass;
 			}
 
-
 			if ( hasUnresolvedArcs(current) )
 			{
 				TraceWarning{ClassId} << "'" << sourceName << "' still has unresolved arcs after " << pass << " composition passes (a missing asset, or a deeper nesting).";
@@ -1190,7 +1196,6 @@ namespace EmEn::Scenes::Loaders::USD
 		const auto bakeDirection = [] (const auto & d) {
 			return Vector< 3, float >{static_cast< float >(d[0]), static_cast< float >(d[2]), -static_cast< float >(d[1])};
 		};
-
 
 		const auto isPrototype = [&prototypePaths] (const std::string & path) {
 			return std::ranges::any_of(prototypePaths, [&path] (const auto & prototypePath) {

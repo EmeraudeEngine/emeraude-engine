@@ -24,31 +24,41 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-
 #include "Manager.hpp"
+
+/* Project configuration. */
+#include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <iomanip>
 #include <optional>
 #include <ranges>
 #include <sstream>
+#include <stop_token>
 #include <system_error>
 
 /* Third-party inclusions. */
 #include "Network/asio_throw_exception.hpp"
 #include "asio/ssl.hpp"
+#include "json/json.h"
 
 /* Local inclusions. */
-#include "emeraude_base_config.hpp"
+#include "Any.hpp"
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
+#include "Net/DownloadItem.hpp"
+#include "Network/Hostname.hpp"
 #include "Network/HTTPSClient.hpp"
 #include "Network/TrustStore.hpp"
-#include "Settings.hpp"
+#include "Network/URI.hpp"
+#include "Network/URIDomain.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "String.hpp"
 #include "Tracer.hpp"
 

@@ -35,18 +35,28 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <compare>
 #include <cstdint>
+#include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
+#include <functional>
+#include <iomanip>
 #include <iostream>
+#include <iterator>
+#include <map>
 #include <ranges>
+#include <ratio>
 #include <sstream>
 #include <string_view>
 #include <system_error>
 #include <thread>
+#include <utility>
 
 /* Third-party inclusions. */
 #include "GLFW/glfw3.h"
+#include "json/json.h"
 #ifdef IMGUI_ENABLED
 #include "imgui.h"
 #include "Overlay/ImGUIScreen.hpp"
@@ -54,7 +64,11 @@
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "Audio/ExternalInput.hpp"
 #include "Audio/MusicResource.hpp"
+#include "Audio/Recorder.hpp"
+#include "Audio/TrackMixer.hpp"
+#include "Console/Output.hpp"
 #include "Constants.hpp"
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
@@ -62,26 +76,41 @@
 #include "Graphics/Effects/Camera/ToneMapping.hpp"
 #include "Graphics/Photometry.hpp"
 #include "Graphics/PostProcessStack.hpp"
-#include "Scenes/Component/Camera.hpp"
-#include "Scenes/Loaders/Interface.hpp"
-#include "Scenes/Viewers/ImageViewer.hpp"
-#include "Scenes/Viewers/ModelViewer.hpp"
+#include "Graphics/Recorder.hpp"
+#include "Graphics/RenderDocCapture.hpp"
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Input/Types.hpp"
 #include "IO/IO.hpp"
 #include "Locale.hpp"
 #include "Net/APIClient.hpp"
 #include "Net/Manager.hpp"
-#include "Time/Elapsed/PrintScopeRealTime.hpp"
-#include "Time/Time.hpp"
-#include "Version.hpp"
 #include "PlatformSpecific/Desktop/Commands.hpp"
 #include "PlatformSpecific/Desktop/Dialog/CustomMessage.hpp"
 #include "PlatformSpecific/Desktop/Dialog/Message.hpp"
 #include "PlatformSpecific/Desktop/Dialog/TextInput.hpp"
+#include "PlatformSpecific/Desktop/Dialog/Types.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Saphir/ShaderManager.hpp"
+#include "Scenes/Component/Camera.hpp"
+#include "Scenes/DefinitionResource.hpp"
+#include "Scenes/Editor/Manager.hpp"
+#include "Scenes/LightSet.hpp"
+#include "Scenes/Scene.hpp"
+#include "Scenes/Viewers/ImageViewer.hpp"
+#include "Scenes/Viewers/ModelViewer.hpp"
+#include "ServiceInterface.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
+#include "Time/Elapsed/PrintScopeRealTime.hpp"
+#include "Time/Statistics/RealTime.hpp"
+#include "Time/Time.hpp"
 #include "Tool/GeometryDataPrinter.hpp"
 #include "Tool/ShowVulkanInformation.hpp"
+#include "Tracer.hpp"
+#include "Version.hpp"
+#include "Vulkan/AbstractObject.hpp"
+#include "Vulkan/Device.hpp"
 
 namespace EmEn
 {

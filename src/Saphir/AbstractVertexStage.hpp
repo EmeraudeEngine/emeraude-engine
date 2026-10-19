@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <iosfwd>
 #include <set>
 #include <string>
 #include <utility>
@@ -40,8 +41,18 @@
 #include "Declaration/InputAttribute.hpp"
 #include "Declaration/OutputBlock.hpp"
 #include "Declaration/StageOutput.hpp"
-#include "Graphics/Types.hpp"
-#include "Types.hpp"
+#include "Saphir/Declaration/Function.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	enum class VertexAttributeType : std::uint8_t;
+}
+
+namespace EmEn::Saphir::Generator
+{
+	class Abstract;
+}
 
 namespace EmEn::Saphir
 {

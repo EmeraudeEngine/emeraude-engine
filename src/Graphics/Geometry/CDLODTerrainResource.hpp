@@ -35,17 +35,37 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/Frustum.hpp"
+#include "Graphics/Geometry/Types.hpp"
+#include "Graphics/Types.hpp"
+#include "Hash/FNV1a.hpp"
 #include "HeightfieldSurface.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
 #include "Mutex.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
+#include "ThreadSafety.hpp"
+#include "VertexFactory/Grid.hpp"
+#include "Vulkan/IndexBufferObject.hpp"
+#include "Vulkan/VertexBufferObject.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Frustum;
+}
+
 namespace EmEn
 {
 	namespace Resources

@@ -27,22 +27,28 @@
 #include "GraphicsPipeline.hpp"
 
 /* STL inclusions. */
-#include <chrono>
 #include <algorithm>
+#include <chrono>
 #include <functional>
+#include <vector>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Device.hpp"
 #include "Framebuffer.hpp"
+#include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/RasterizationOptions.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Types.hpp"
+#include "Graphics/VertexBufferBinding.hpp"
 #include "Graphics/VertexBufferFormat.hpp"
 #include "PipelineLayout.hpp"
 #include "ShaderModule.hpp"
 #include "Tracer.hpp"
 #include "Utility.hpp"
+#include "Vulkan/RenderPass.hpp"
 
 namespace EmEn::Vulkan
 {

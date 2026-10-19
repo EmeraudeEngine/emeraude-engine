@@ -33,9 +33,11 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <functional>
 #include <limits>
-#include <numbers>
 #include <ranges>
+#include <string_view>
 #include <unordered_set>
 #include <utility>
 #include <variant>
@@ -47,14 +49,19 @@
 #include <draco/mesh/mesh.h>
 
 /* Local inclusions. */
-#include "Interface.hpp"
+#include "Animation/AnimationChannel.hpp"
 #include "Animation/Joint.hpp"
+#include "BlobTrait.hpp"
+#include "Interface.hpp"
+#include "IO/IO.hpp"
+#include "Math/Base.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Math/Quaternion.hpp"
 #include "Math/TransformUtils.hpp"
 #include "Math/Vector.hpp"
-#include "Graphics/Geometry/Types.hpp"
-#include "IO/IO.hpp"
+#include "PixelFactory/Color.hpp"
+#include "Scenes/Loaders/LoaderOptions.hpp"
+#include "Scenes/Loaders/SceneData.hpp"
 #include "String.hpp"
 #include "Tracer.hpp"
 

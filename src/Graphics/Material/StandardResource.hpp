@@ -32,19 +32,57 @@
 /* STL inclusions. */
 #include <array>
 #include <atomic>
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <string>
 #include <unordered_map>
+
+/* Third-party inclusions. */
+#include "json/json.h"
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 #include "Component/Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "ScopedRegistration.hpp"
-#include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Graphics/Types.hpp"
+#include "Hash/FNV1a.hpp"
+#include "Math/Vector.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
+#include "PixelFactory/Color.hpp"
 #include "PixelFactory/Types.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
+#include "ScopedRegistration.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Graphics::TextureResource
+{
+	class Abstract;
+}
+
+namespace EmEn::Saphir
+{
+	class FragmentShader;
+}
+
+namespace EmEn::Saphir::Generator
+{
+	class Abstract;
+}
+
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
+
 namespace EmEn::Resources
 {
 	template< typename resource_t >
@@ -71,7 +109,6 @@ namespace EmEn
 
 	namespace Resources
 	{
-		class Manager;
 	}
 }
 
