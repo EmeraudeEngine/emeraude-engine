@@ -432,6 +432,21 @@ namespace EmEn::Graphics::Material::Component
 				return m_samplerName;
 			}
 
+			/**
+			 * @brief Makes this component read its texture through another component's sampler: the same binding and
+			 * the same sampler name, the leader showing the SAME texture (a material binds each distinct texture once,
+			 * graphics § 39).
+			 * @note The sampler names are static literals (`Saphir::Keys` `Uniform::*Sampler`): the shader declarations
+			 * keep the pointer.
+			 * @param leader The component that leads the binding.
+			 */
+			void
+			shareSamplerOf (const Texture & leader) noexcept
+			{
+				m_samplerName = leader.m_samplerName;
+				m_binding = leader.m_binding;
+			}
+
 		private:
 
 			/**

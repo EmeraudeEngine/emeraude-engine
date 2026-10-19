@@ -28,12 +28,22 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <functional>
+#include <ranges>
+#include <string_view>
 
 /* Local inclusions. */
-#include "Generator/Abstract.hpp"
-#include "Keys.hpp"
+#include "BlobTrait.hpp"
 #include "IO/IO.hpp"
+#include "Keys.hpp"
+#include "Saphir/Declaration/Function.hpp"
+#include "Saphir/Declaration/PushConstantBlock.hpp"
+#include "Saphir/Declaration/Sampler.hpp"
+#include "Saphir/Declaration/ShaderStorageBlock.hpp"
+#include "Saphir/Declaration/SpecializationConstant.hpp"
+#include "Saphir/Declaration/Structure.hpp"
+#include "Saphir/Declaration/TexelBuffer.hpp"
+#include "Saphir/Declaration/UniformBlock.hpp"
+#include "Saphir/Types.hpp"
 #include "SourceCodeParser.hpp"
 #include "TokenFormatter.hpp"
 #include "Tracer.hpp"
@@ -177,18 +187,19 @@ namespace EmEn::Saphir
 			return false;
 		}
 
-		if ( std::ranges::any_of(m_samplers, [&declaration] (const auto & existing) {return existing.name() == declaration.name();}) )
+		if ( const auto existing = std::ranges::find_if(m_samplers, [&declaration] (const auto & sampler) {return std::string_view{sampler.name()} == std::string_view{declaration.name()};}); existing != m_samplers.end() )
 		{
-			/* Unbounded arrays are global bindless arrays: a fixed name maps to a fixed
-			 * set/binding/type (e.g. uBindlessTexturesCube → cube binding on PerBindless).
-			 * Several composable generators (materials, LightGenerator, color projection)
-			 * declare them independently into the same shader, so a re-declaration is
-			 * byte-identical and safely ignored — silent de-dup, no warning. Named samplers
-			 * can genuinely collide (same name, different binding/type = a real bug), so
-			 * those still warn. */
-			if ( !declaration.isUnbounded() )
+			/* A re-declaration of the SAME sampler (same set, binding, type, array size) is ignored silently:
+			 * the bindless arrays, declared independently by several composable generators (materials,
+			 * LightGenerator, color projection), and the material components that share one texture's binding
+			 * (graphics § 39). The same name on another binding or type is a real collision: it warns. */
+			const bool identical =
+				existing->set() == declaration.set() && existing->binding() == declaration.binding() &&
+				std::string_view{existing->type()} == std::string_view{declaration.type()} && existing->arraySize() == declaration.arraySize();
+
+			if ( !identical )
 			{
-				TraceWarning{TracerTag} << "A sampler declaration named '" << declaration.name() << "' already exists !";
+				TraceWarning{TracerTag} << "A sampler declaration named '" << declaration.name() << "' already exists with another binding or type !";
 			}
 
 			return true;

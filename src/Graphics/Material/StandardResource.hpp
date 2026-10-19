@@ -56,6 +56,7 @@
 #include "Resources/ResourceTrait.hpp"
 #include "Resources/Types.hpp"
 #include "ScopedRegistration.hpp"
+#include "StaticVector.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
 /* Forward declarations. */
@@ -1537,6 +1538,24 @@ namespace EmEn::Graphics::Material
 			bool createDescriptorSet (Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept override;
 
 			/**
+			 * @brief Creates the texture components and gives ONE binding to each DISTINCT texture: the first component
+			 * (in ComponentType order) showing a texture leads its binding, every other component showing the same
+			 * texture shares that binding and that sampler (graphics § 39, D1).
+			 * @note Fills m_textureBindings in binding order (binding 0 is the UBO, the textures start at 1).
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createTextureComponents (Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Returns the number of distinct textures the material's texture components show.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t distinctTextureCount () const noexcept;
+
+			/**
 			 * @brief Parses the albedo component from JSON data.
 			 * @param data A reference to the JSON data.
 			 * @return bool
@@ -2055,8 +2074,22 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultFogResponse{1.0F}; /* Fully affected by the atmospheric fog. */
 			static constexpr auto DefaultDoFMask{1.0F}; /* Fully affected by the depth of field. */
 
+			/**
+			 * @brief One combined image sampler of the material's descriptor set: the component that leads it, and
+			 * whether a component read through it is sampled by the mesh stage too (the height map).
+			 */
+			struct TextureBinding
+			{
+				const Component::Texture * leader{nullptr};
+				bool readByMeshStage{false};
+			};
+
+			/** @brief At most one texture binding per component type (m_components holds one component per type). */
+			static constexpr size_t MaxTextureBindings{static_cast< size_t >(ComponentType::SheenRoughness) + 1};
+
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components;
+			Base::StaticVector< TextureBinding, MaxTextureBindings > m_textureBindings;
 			BlendingMode m_blendingMode{BlendingMode::None};
 			/**
 			 * @brief Returns the neutral material properties.

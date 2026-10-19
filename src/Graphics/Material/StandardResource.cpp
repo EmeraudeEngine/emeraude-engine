@@ -1430,31 +1430,9 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Component creation (optional). */
-		if ( this->usingTexture() )
+		if ( this->usingTexture() && !this->createTextureComponents(renderer) )
 		{
-			/* NOTE: Starts at 1 because there is the UBO in the first place. */
-			uint32_t binding = 1;
-
-			for ( const auto & [componentType, component] : m_components )
-			{
-				if ( component->type() != Type::Texture )
-				{
-					continue;
-				}
-
-				if ( !component->create(renderer, binding))
-				{
-					TraceError{ClassId} << "Unable to create component '" << to_cstring(componentType) << "' of PBR material resource '" << this->name() << "' !";
-
-					return false;
-				}
-
-				/* Check if this texture component is animated. */
-				if ( component->texture() != nullptr && component->texture()->duration() > 0 )
-				{
-					this->enableFlag(IsAnimated);
-				}
-			}
+			return false;
 		}
 
 		/* A height map the material did not configure takes the engine-wide layer count, resolved
@@ -1737,20 +1715,108 @@ namespace EmEn::Graphics::Material
 		return true;
 	}
 
+	bool
+	StandardResource::createTextureComponents (Renderer & renderer) noexcept
+	{
+		m_textureBindings.clear();
+
+		/* NOTE: Starts at 1 because there is the UBO in the first place. */
+		uint32_t nextBinding = 1;
+
+		/* NOTE: Walked in ComponentType order, never in the unordered_map's: the bindings, the layout and the
+		 * generated code must not depend on the hash table's iteration order. */
+		for ( size_t typeIndex = 0; typeIndex < MaxTextureBindings; ++typeIndex )
+		{
+			const auto componentType = static_cast< ComponentType >(typeIndex);
+			const auto componentIt = m_components.find(componentType);
+
+			if ( componentIt == m_components.cend() || componentIt->second == nullptr || componentIt->second->type() != Type::Texture )
+			{
+				continue;
+			}
+
+			auto * component = static_cast< Texture * >(componentIt->second.get());
+			const auto * texture = component->texture().get();
+			auto * sharedBinding = m_textureBindings.end();
+
+			if ( texture != nullptr )
+			{
+				sharedBinding = std::ranges::find_if(m_textureBindings, [texture] (const TextureBinding & binding) {
+					return binding.leader->texture().get() == texture;
+				});
+			}
+
+			if ( sharedBinding == m_textureBindings.end() )
+			{
+				if ( !component->create(renderer, nextBinding) )
+				{
+					TraceError{ClassId} << "Unable to create component '" << to_cstring(componentType) << "' of PBR material resource '" << this->name() << "' !";
+
+					return false;
+				}
+
+				/* NOTE: In capacity: one entry at most per component type, MaxTextureBindings types. */
+				m_textureBindings.push_back({.leader = component, .readByMeshStage = componentType == ComponentType::Displacement});
+			}
+			else
+			{
+				/* NOTE: create() assigns the binding it receives: the leader's (the copy's increment is dropped). */
+				auto leaderBinding = sharedBinding->leader->binding();
+
+				if ( !component->create(renderer, leaderBinding) )
+				{
+					TraceError{ClassId} << "Unable to create component '" << to_cstring(componentType) << "' of PBR material resource '" << this->name() << "' !";
+
+					return false;
+				}
+
+				component->shareSamplerOf(*sharedBinding->leader);
+
+				if ( componentType == ComponentType::Displacement )
+				{
+					sharedBinding->readByMeshStage = true;
+				}
+			}
+
+			/* Check if this texture component is animated. */
+			if ( texture != nullptr && texture->duration() > 0 )
+			{
+				this->enableFlag(IsAnimated);
+			}
+		}
+
+		return true;
+	}
+
+	size_t
+	StandardResource::distinctTextureCount () const noexcept
+	{
+		Base::StaticVector< const Vulkan::TextureInterface *, MaxTextureBindings > textures;
+
+		for ( const auto & component : std::ranges::views::values(m_components) )
+		{
+			if ( component == nullptr || component->type() != Type::Texture )
+			{
+				continue;
+			}
+
+			/* NOTE: In capacity: m_components holds one component per type, at most MaxTextureBindings. */
+			if ( const auto * texture = component->texture().get(); std::ranges::find(textures, texture) == textures.end() )
+			{
+				textures.push_back(texture);
+			}
+		}
+
+		return textures.size();
+	}
+
 	std::string
 	StandardResource::getSharedUniformBufferIdentifier () const noexcept
 	{
 		std::stringstream identifier{};
 
-		uint32_t textureCount = 0;
-
-		for ( const auto & component : std::ranges::views::values(m_components) )
-		{
-			if ( component->type() == Type::Texture )
-			{
-				textureCount++;
-			}
-		}
+		/* NOTE: The count of DISTINCT textures: components sharing a texture share one binding (graphics § 39). */
+		const auto textureCount = this->distinctTextureCount();
 
 		identifier << ClassId;
 
@@ -1791,8 +1857,28 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::createDescriptorSetLayout (LayoutManager & layoutManager, const std::string & identifier) noexcept
+	StandardResource::createDescriptorSetLayout (LayoutManager & layoutManager, const std::string & uniformBufferIdentifier) noexcept
 	{
+		/* NOTE: A mesh-shading surface displaces its vertices by the material's height map (heightScale,
+		 * UV transforms in this UBO), so the UBO and the height sampler are read by the mesh stage too. */
+		const auto meshStages = layoutManager.device()->meshShadingStages();
+
+		/* NOTE: The layout is shared by every material with the same bindings: the UBO bucket's identifier (the
+		 * distinct texture count) says how many, and WHICH binding the mesh stage reads must be part of the key too —
+		 * keyed on the count alone, the first material to build the layout decided the stage flags of all the others. */
+		std::string identifier{uniformBufferIdentifier};
+
+		if ( meshStages != 0 )
+		{
+			for ( size_t index = 0; index < m_textureBindings.size(); ++index )
+			{
+				if ( m_textureBindings[index].readByMeshStage )
+				{
+					identifier += "MeshBinding" + std::to_string(index + 1);
+				}
+			}
+		}
+
 		m_descriptorSetLayout = layoutManager.getDescriptorSetLayout(identifier);
 
 		if ( m_descriptorSetLayout == nullptr )
@@ -1803,19 +1889,13 @@ namespace EmEn::Graphics::Material
 			newLayout->setIdentifier(ClassId, identifier, "DescriptorSetLayout");
 
 			/* Declare the UBO for the material properties. */
-			/* NOTE: A mesh-shading surface displaces its vertices by the material's height map (heightScale,
-			 * UV transforms in this UBO), so the UBO and the height sampler are read by the mesh stage too. */
-			const auto meshStages = layoutManager.device()->meshShadingStages();
 
 			newLayout->declareUniformBuffer(bindingPoint++, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | meshStages);
 
-			/* Declare every sampler used by the material. */
-			for ( const auto & [componentType, component] : m_components )
+			/* Declare one sampler per DISTINCT texture, in binding order (createTextureComponents()). */
+			for ( const auto & textureBinding : m_textureBindings )
 			{
-				if ( component->type() == Type::Texture )
-				{
-					newLayout->declareCombinedImageSampler(bindingPoint++, componentType == ComponentType::Displacement ? VK_SHADER_STAGE_FRAGMENT_BIT | meshStages : static_cast< VkShaderStageFlags >(VK_SHADER_STAGE_FRAGMENT_BIT));
-				}
+				newLayout->declareCombinedImageSampler(bindingPoint++, textureBinding.readByMeshStage ? VK_SHADER_STAGE_FRAGMENT_BIT | meshStages : static_cast< VkShaderStageFlags >(VK_SHADER_STAGE_FRAGMENT_BIT));
 			}
 
 			if ( !layoutManager.createDescriptorSetLayout(newLayout) )
@@ -1860,14 +1940,10 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		for ( const auto & component : std::ranges::views::values(m_components) )
+		/* One write per DISTINCT texture, in binding order (createTextureComponents()). */
+		for ( const auto & textureBinding : m_textureBindings )
 		{
-			if ( component->type() != Type::Texture )
-			{
-				continue;
-			}
-
-			if ( !m_descriptorSet->writeCombinedImageSampler(bindingPoint++, *component->texture()) )
+			if ( !m_descriptorSet->writeCombinedImageSampler(bindingPoint++, *textureBinding.leader->texture()) )
 			{
 				TraceError{ClassId} << "Unable to write the texture to the descriptor set of PBR material '" << this->name() << "' !";
 
@@ -2004,6 +2080,8 @@ namespace EmEn::Graphics::Material
 
 		/* Reset member variables. */
 		m_physicalSurfaceProperties.reset();
+		/* NOTE: Before the components: the bindings point at them. */
+		m_textureBindings.clear();
 		m_components.clear();
 		m_blendingMode = BlendingMode::None;
 		m_materialProperties = neutralMaterialProperties();

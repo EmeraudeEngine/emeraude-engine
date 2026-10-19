@@ -25,8 +25,10 @@ Each `StandardResource` has:
 > [!CRITICAL]
 > **Materials are loaded concurrently from the resource thread pool, and they SHARE their buffer
 > identifier by design.** `getSharedUniformBufferIdentifier()` encodes only the material kind and its
-> texture count (`MaterialStandardResource2Textures`, `MaterialStandardResource4Textures`, …), so two
-> unrelated materials routinely request the very same buffer from different threads.
+> DISTINCT texture count (`MaterialStandardResource2Textures`, `MaterialStandardResource4Textures`, …; since
+> 2026-10-20 components showing one texture count once, graphics § 39), so two unrelated materials routinely
+> request the very same buffer from different threads. The descriptor-set layout's identifier adds which binding
+> the mesh stage reads (`…MeshBinding<n>`, on a mesh-shading device only).
 >
 > **Two invariants follow, both enforced in the engine — do not undo them:**
 >

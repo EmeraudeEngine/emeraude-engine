@@ -20,9 +20,13 @@ and never reaches the coverage-preserving mips.
 
 ## What remains
 
+- D9 (owner, 2026-10-20): the repack is a GENERATED `ImageResource` holding `std::array< ChannelSource, 4 >`
+  (source image, channel, default value); `Texture2D` keeps uploading one image.
 - The repack (emeraude-base `Pixmap::fillChannel()` exists): from the material's components, wherever they come
   from (store JSON, glTF, FBX, USD, Toolkit foliage), build the canonical images; an asset already in the layout
   (glTF ORM, albedo with alpha) is used as is.
+- D10: ONE `texture()` per canonical texture (one UV transform by construction), its components reading their
+  channels from that fetch — with the frame-time A/B at a pinned pose (Ave Performus: ≥ 5 %, median of ≥ 5 runs).
 - D4: a channel without a source is 1.0 and the component's value moves into its UBO factor.
 - Identity: a repacked texture is named by its recipe (sources, channel map, ratio) so two materials with the same
   recipe share one GPU texture; two with different opacity sources do not.

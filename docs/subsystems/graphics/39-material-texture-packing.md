@@ -60,6 +60,15 @@ OUT of the canonical layout in this first pass; they only gain a working `Source
     `VkComponentMapping` broadcasts R so the shader is unchanged. The CPU must keep one channel instead of forcing
     RGBA (`Abstract::validatePixmap()`).
   - The encoder: `rgbcx` (BC1/BC3/BC4/BC5), shipped in the same bc7enc_rdo library the engine already links.
+- **D9 — The sources of a packed texture live in a GENERATED `ImageResource`** (owner, 2026-10-20), not in the
+  texture classes: a "packed image" holds `std::array< ChannelSource, 4 >` (per output channel: the source image, its
+  channel, a default value — D4), its sources are `ResourceTrait` dependencies, marked releasable once composed; it is
+  rebuilt from that recipe when its CPU copy comes back (`reloadLocalDataFromOwnSource()`); the recipe's name is its
+  identity (two materials with the same recipe share it). `Texture2D`, the BC7 cache and the mip chain stay as they
+  are: a texture still uploads ONE image. Rejected: the four sources inside `Texture2D` and every texture class.
+- **D10 — The fetch is shared only for the repack's canonical textures** (owner, 2026-10-20): one `texture()` per
+  canonical texture, its components reading their channels from it; elsewhere one fetch per component (each
+  component type keeps its own UV-transform slot). Details: § One binding per distinct texture.
 - **Start**: measure first (per-texture VRAM accounting, reference scenes), then the lots in order.
 
 ## State of the engine before the work (survey, 2026-10-20)
@@ -88,6 +97,31 @@ OUT of the canonical layout in this first pass; they only gain a working `Source
   pixels and mark its sources releasable.
 - projet-alpha's store: 3,779 of 3,933 materials carry one texture, about a hundred carry 2 to 5. The gain is in the
   scene loaders (glTF, FBX, USD) and those multi-map materials.
+
+## One binding per distinct texture (2026-10-20, D1 part 1)
+
+`StandardResource::createTextureComponents()` walks the texture components in `ComponentType` order (never the
+`unordered_map`'s) and gives each DISTINCT texture (`Vulkan::TextureInterface`) one binding: the first component
+leads it, the others call `Component::Texture::shareSamplerOf(leader)` — same binding, same sampler NAME (a static
+`Uniform::*Sampler` literal: `Declaration::Sampler` keeps the pointer). `m_textureBindings`
+(`StaticVector< TextureBinding, 27 >`, one entry at most per component type) drives the layout and the descriptor
+writes, in binding order. `AbstractShader::declare(Sampler)` ignores an IDENTICAL re-declaration silently (same
+set, binding, type, array size) and warns only on a real collision. The layout identifier adds the binding the mesh
+stage reads (`…MeshBinding<n>`): keyed on the texture count alone, the first material to build a layout decided the
+stage flags of every other material with that count.
+
+Measured (Linux, validation on): `sponza` 207 → **162** bindings for the same 207 components (the 45 glTF ORM
+materials: 4 components, 3 bindings), 0 `VUID-`, 0 sampler warning; the packed `Sand002` of the L1 proof: 5
+components on **3** bindings (AO, height, roughness on one), the image within the launch-to-launch noise (mean |d|
+0.89 vs the separate-binding capture; noise 0.99).
+
+**Not done — the fetches.** Each component still calls `texture()` itself: one sampler, but as many fetches as
+components. Sharing the fetch needs the components to read the SAME coordinates, and each component type has its own
+UV-transform slot in the UBO (a VALUE, changeable at run time, never baked into a shared program). An owner rule is
+needed first — **D10 (owner, 2026-10-20): the fetch is shared ONLY for the canonical textures the repack builds**
+(one transform by construction); an asset already packed (a glTF ORM) keeps one fetch per component until the repack
+takes it over. Rejected: a general "one transform per shared texture" rule (it would change the
+KHR_texture_transform contract), and no fetch sharing at all.
 
 ## Reference measurement (2026-10-20, before any packing)
 

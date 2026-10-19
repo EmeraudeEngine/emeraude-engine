@@ -1,7 +1,7 @@
 ---
 id: material-one-binding-per-distinct-texture
 title: A material binds one descriptor per DISTINCT texture — components share sampler and fetch
-status: open
+status: in-progress
 priority: unranked
 scope: Graphics/Material (StandardResource), Saphir
 opened: 2026-10-20
@@ -19,14 +19,12 @@ fetched three times, and the layout / UBO bucket is keyed by the component count
 
 ## What remains
 
-- Group the texture components by texture identity (the same `TextureResource` and the same UV transform / UV set);
-  one binding, one sampler name and ONE `texture()` per group in the generated fragment code, each component taking
-  its channel from the shared fetch.
-- The descriptor-set layout identifier must describe the bindings that really exist (count AND stage flags:
-  Displacement adds the mesh stage under the same identifier today); the binding order must be deterministic (it
-  follows `unordered_map` iteration today).
-- The shared UBO bucket changes with the binding count (`shared-material-buffer-capacity`).
-- Measure the gain against the reference of `texture-vram-accounting-per-texture` (bindings, frame time).
+- DONE on Linux (2026-10-20, uncommitted): one binding and one sampler per distinct texture, deterministic binding
+  order, the layout identifier carrying the mesh-stage binding, `declare(Sampler)` silent on an identical
+  re-declaration — graphics § 39 § One binding per distinct texture (sponza 207 → 162 bindings, 0 VUID).
+- The fetches: owner decision D10 (2026-10-20) — shared only for the repack's canonical textures, so that part
+  moved to `material-texture-canonical-repack`; nothing left here but the peers.
+- Validation by the peers (macOS, Windows) after the push.
 
 ## ⚠️ Traps
 
