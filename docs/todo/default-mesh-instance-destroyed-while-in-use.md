@@ -25,6 +25,11 @@ stays latent for any missing resource name. Reproduced on the build without the 
 
 - [ ] Reproduce without projet-alpha's typo: an entity built from `getResource("<missing name>")`, removed after a few
       frames, validation ON (a console-driven demo or a tiny scene).
+      **A deterministic reproduction without any missing name (2026-10-20, Linux, RTX 3070 Ti, Release, X11):**
+      `--load-demo relief`, then `Core.SceneManagerService.setGround("Grounds/Sand002")` — replacing the scene's ground
+      (`Scene::setGroundLevel()`, the console's `ConsoleGround`) gives 2 × `VUID-vkDestroyBuffer-buffer-00922` right
+      after the new ground is created, and the same two `VkBuffer` in the `VUID-vkDestroyDevice-device-05137` at exit.
+      So the defect is not tied to the DEFAULT mesh: any renderable instance torn down while a frame still draws it.
 - [ ] Find which buffer goes: the default resource's own geometry (shared, should never be destroyed per entity), or a
       per-instance buffer whose teardown bypasses `Renderer::deferredDestructor()` on this path
       (`docs/subsystems/vulkan/12-critical-deferred-destruction-contract.md`).

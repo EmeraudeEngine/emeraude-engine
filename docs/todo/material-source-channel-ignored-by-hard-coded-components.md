@@ -1,7 +1,7 @@
 ---
 id: material-source-channel-ignored-by-hard-coded-components
 title: SourceChannel is parsed then silently ignored by AO, opacity, height and other components
-status: open
+status: in-progress
 priority: high
 scope: Graphics/Material (StandardResource codegen), shadow pass, RT alpha test
 opened: 2026-10-20
@@ -19,12 +19,17 @@ word. The texture packing (graphics § 39, decision D3) needs every component to
 
 ## What remains
 
-- `StandardResource::generateFragmentShaderCode()`: use `sourceChannelSwizzle()` for AO (`.r`), opacity (`.r`),
-  height / displacement (`.r`, also the mesh stage), subsurface, subsurface thickness, transmission, iridescence,
-  reflectivity map (`.r`), iridescence thickness and volume thickness (`.g` — keep that as the glTF default).
-- The shadow pass hard-codes `r` (opacity) / `a` (albedo fallback): follow the alpha-source component's channel.
-- The RT alpha test (`RTAlphaTestGLSL.hpp`) reads opacity `.r`: carried by `rt-material-packed-channels`.
-- Runtime proof: a material reading AO / opacity / height from a non-red channel renders like the unpacked one.
+- DONE on Linux (2026-10-20, uncommitted): every scalar component of the code generation reads
+  `sourceChannelSwizzle()` (AO, opacity, height in the fragment parallax and the mesh stage, reflectivity, subsurface,
+  subsurface thickness, transmission, iridescence, the two thickness maps); the shadow pass reads the opacity
+  component's channel; a component that names no channel reads `StandardResource::defaultSourceChannel()` (green for
+  the two thickness maps — the setters and the JSON path, through the new `Texture` JSON-constructor argument).
+  Proof in graphics § 08-8 (relief, per pixel: packed 0.72 / 1.07 vs the 0.99 launch-to-launch noise; without the
+  key 8.73). Gate: builds GCC + clang 0 / 0, cppcheck 0, IWYU clean, clang-tidy 0 new (the `Texture` JSON
+  constructor split, cognitive complexity 43 → under 25).
+- The RT alpha test (`RTAlphaTestGLSL.hpp`, opacity `.r`): carried by `rt-material-packed-channels`.
+- Validation by the peers (macOS, Windows) after the push; MSVC sees the new forward declaration
+  `enum class FillingType : uint32_t;` in `Component/Texture.hpp` (the definition carries `EMEN_API`).
 
 ## References
 

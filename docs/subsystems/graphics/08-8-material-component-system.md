@@ -49,6 +49,19 @@ Packed textures select theirs: glTF metallic-roughness packs **roughness in GREE
 Khronos glTF-Sample-Renderer `material_info.glsl`, `getMetallicRoughnessInfo()`). JSON materials
 may set the optional `"SourceChannel"` key (numeric, 0:R 1:G 2:B 3:A) on a texture component.
 
+**Every scalar component honours it (2026-10-20, texture packing L1).** Until then only roughness, metalness,
+specular, clear coat, clear-coat roughness and sheen roughness did: ambient occlusion, opacity (colour AND shadow
+pass), height (parallax AND the mesh-stage displacement), reflectivity, subsurface, subsurface thickness,
+transmission and iridescence read `.r` in hard, the two thickness maps `.g` — the JSON key was parsed and silently
+dropped. Without a key, a component reads `StandardResource::defaultSourceChannel()`: red, green for the volume and
+iridescence thickness maps (KHR_materials_volume / _iridescence), so nothing changed for an asset that names none.
+Proof (Linux, `relief` with its ground replaced, pinned exposure, per pixel against `Grounds/Sand002`): the same maps
+packed into one image (AO in G, height in B, roughness in A, noise in R) read through `SourceChannel` — mean |d| 0.72,
+below the 0.99 of a second reference launch; the same image WITHOUT the key (everything reads the noise) — mean |d|
+8.73, 42.9 % of the pixels off by more than 8. The RT alpha test still reads opacity `.r` (item
+`rt-material-packed-channels`), and the binary-mask detection still measures the image's ALPHA channel whatever
+channel the opacity reads (item `material-texture-canonical-repack`).
+
 > [!WARNING]
 > **Reading the wrong channel does not fail — it flattens.** The RED channel of a packed glTF
 > metallic-roughness texture is typically EMPTY (measured mean 0.9/255 on DamagedHelmet, while

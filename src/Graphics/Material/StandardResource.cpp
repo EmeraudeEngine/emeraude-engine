@@ -2509,9 +2509,9 @@ namespace EmEn::Graphics::Material
 			? ShaderVariable::Primary3DTextureCoordinates
 			: ShaderVariable::Primary2DTextureCoordinates;
 
-		/* Sample the alpha source: the opacity component reads its red channel, the albedo
+		/* Sample the alpha source: the opacity component reads its source channel, the albedo
 		 * fallback reads its alpha channel — the same sources the colour pass tests. */
-		const char * channel = this->isComponentPresent(ComponentType::Opacity) ? "r" : "a";
+		const char * channel = this->isComponentPresent(ComponentType::Opacity) ? component->sourceChannelSwizzle() : "a";
 
 		Code{fragmentShader, Location::Top} << "const float " << SurfaceOpacityAmount << " = texture(" << component->samplerName() << ", " << texCoordVariable << ")." << channel << ";";
 
@@ -3453,7 +3453,7 @@ namespace EmEn::Graphics::Material
 		glsl <<
 			"const float " << depthVariable << "Handover = " << handover << ".y > " << handover << ".x ? 1.0 - smoothstep(" << handover << ".x, " << handover << ".y, " << distanceVariable << ") : 1.0;" "\n\t"
 			"const float " << depthVariable << "Lod = max(log2(max(" << uvStepVariable << " * float(textureSize(" << sampler << ", 0).x), 1.0)), 0.0);" "\n\t"
-			"const float " << depthVariable << " = (1.0 - textureLod(" << sampler << ", " << this->transformedTexCoords(ComponentType::Displacement, component, uvVariable) << ", " << depthVariable << "Lod).r)"
+			"const float " << depthVariable << " = (1.0 - textureLod(" << sampler << ", " << this->transformedTexCoords(ComponentType::Displacement, component, uvVariable) << ", " << depthVariable << "Lod)." << component->sourceChannelSwizzle() << ")"
 				" * " << MaterialUB(UniformBlock::Component::HeightScale) << " * " << metresPerUVVariable << " * " << depthVariable << "Handover;";
 
 		code = glsl.str();
@@ -4076,7 +4076,7 @@ namespace EmEn::Graphics::Material
 					"	const vec2 pomDelta = vec2(pomView.x, -pomView.y) / max(pomView.z, 0.2) * (" << MaterialUB(UniformBlock::Component::HeightScale) << " * pomFade) * pomLayerDepth;" << Line::End <<
 					"	vec2 pomCurrent = " << ShaderVariable::Primary2DTextureCoordinates << ";" << Line::End <<
 					"	float pomCurrentLayer = 0.0;" << Line::End <<
-					"	float pomCurrentDepth = 1.0 - textureGrad(" << component->samplerName() << ", " << heightCoordinates("pomCurrent") << ", pomHeightDx, pomHeightDy).r;" << Line::End <<
+					"	float pomCurrentDepth = 1.0 - textureGrad(" << component->samplerName() << ", " << heightCoordinates("pomCurrent") << ", pomHeightDx, pomHeightDy)." << component->sourceChannelSwizzle() << ";" << Line::End <<
 					"	vec2 pomPrevious = pomCurrent;" << Line::End <<
 					"	float pomPreviousDepth = pomCurrentDepth;" << Line::End <<
 					"	for ( int pomIndex = 0; pomIndex < " << MaxParallaxIterations << "; ++pomIndex ) {" << Line::End <<
@@ -4085,7 +4085,7 @@ namespace EmEn::Graphics::Material
 					"		pomPreviousDepth = pomCurrentDepth;" << Line::End <<
 					"		pomCurrent -= pomDelta;" << Line::End <<
 					"		pomCurrentLayer += pomLayerDepth;" << Line::End <<
-					"		pomCurrentDepth = 1.0 - textureGrad(" << component->samplerName() << ", " << heightCoordinates("pomCurrent") << ", pomHeightDx, pomHeightDy).r;" << Line::End <<
+					"		pomCurrentDepth = 1.0 - textureGrad(" << component->samplerName() << ", " << heightCoordinates("pomCurrent") << ", pomHeightDx, pomHeightDy)." << component->sourceChannelSwizzle() << ";" << Line::End <<
 					"	}" << Line::End <<
 					"	/* The surface crosses the ray between the two last layers. Bisect that interval first (relief" << Line::End <<
 					"	 * mapping, Policarpo et al., I3D 2005): one linear step alone leaves the layers visible as" << Line::End <<
@@ -4094,7 +4094,7 @@ namespace EmEn::Graphics::Material
 					"	for ( int pomStep = 0; pomStep < " << ParallaxRefinementSteps << "; ++pomStep ) {" << Line::End <<
 					"		const vec2 pomMiddle = 0.5 * (pomPrevious + pomCurrent);" << Line::End <<
 					"		const float pomMiddleLayer = 0.5 * (pomPreviousLayer + pomCurrentLayer);" << Line::End <<
-					"		const float pomMiddleDepth = 1.0 - textureGrad(" << component->samplerName() << ", " << heightCoordinates("pomMiddle") << ", pomHeightDx, pomHeightDy).r;" << Line::End <<
+					"		const float pomMiddleDepth = 1.0 - textureGrad(" << component->samplerName() << ", " << heightCoordinates("pomMiddle") << ", pomHeightDx, pomHeightDy)." << component->sourceChannelSwizzle() << ";" << Line::End <<
 					"		if ( pomMiddleLayer >= pomMiddleDepth ) { pomCurrent = pomMiddle; pomCurrentLayer = pomMiddleLayer; pomCurrentDepth = pomMiddleDepth; }" << Line::End <<
 					"		else { pomPrevious = pomMiddle; pomPreviousLayer = pomMiddleLayer; pomPreviousDepth = pomMiddleDepth; }" << Line::End <<
 					"	}" << Line::End <<
@@ -4415,7 +4415,7 @@ namespace EmEn::Graphics::Material
 		 * literal (program-cache contract); rule 3 (grayscale) emits no test and the alpha
 		 * lands in fragmentColor() for blending. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Opacity, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Opacity, component) << ").r * " << MaterialUB(UniformBlock::Component::Opacity) << ";";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Opacity, component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::Opacity) << ";";
 
 			if ( this->isFlagEnabled(AlphaTestEnabled) )
 			{
@@ -4440,7 +4440,7 @@ namespace EmEn::Graphics::Material
 		/* Ambient Occlusion component (baked texture). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::AmbientOcclusion, [this] (FragmentShader & shader, const Texture * component) {
 			/* NOTE: AO is typically stored in a grayscale texture (red channel). */
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::AmbientOcclusion, component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::AmbientOcclusion, component) << ")." << component->sourceChannelSwizzle() << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -4453,7 +4453,7 @@ namespace EmEn::Graphics::Material
 		/* Reflectivity Map component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::ReflectivityMap, [this] (FragmentShader & shader, const Texture * component) {
 			/* NOTE: Reflectivity is typically stored in a grayscale texture (red channel). */
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::ReflectivityMap, component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::ReflectivityMap, component) << ")." << component->sourceChannelSwizzle() << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -4547,7 +4547,7 @@ namespace EmEn::Graphics::Material
 
 		/* Subsurface intensity component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Subsurface, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Subsurface, component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Subsurface, component) << ")." << component->sourceChannelSwizzle() << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -4559,7 +4559,7 @@ namespace EmEn::Graphics::Material
 
 		/* Subsurface thickness component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::SubsurfaceThickness, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::SubsurfaceThickness, component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::SubsurfaceThickness, component) << ")." << component->sourceChannelSwizzle() << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -4620,7 +4620,7 @@ namespace EmEn::Graphics::Material
 		 * ray length. Generated after, it produced `'SurfaceVolumeThickness' : undeclared
 		 * identifier` at runtime — the C++ compiles either way, only the launched engine says so. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::VolumeThickness, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::VolumeThickness, component) << ").g;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::VolumeThickness, component) << ")." << component->sourceChannelSwizzle() << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -4667,7 +4667,7 @@ namespace EmEn::Graphics::Material
 
 		/* Transmission factor component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Transmission, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Transmission, component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Transmission, component) << ")." << component->sourceChannelSwizzle() << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -4679,7 +4679,7 @@ namespace EmEn::Graphics::Material
 
 		/* Iridescence factor component (texture-based). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Iridescence, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Iridescence, component) << ").r;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Iridescence, component) << ")." << component->sourceChannelSwizzle() << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -4694,7 +4694,7 @@ namespace EmEn::Graphics::Material
 		 * this very texture is often the factor map packed alongside. Reading .r here would work
 		 * on a single-purpose map and silently produce the wrong film on a packed one. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::IridescenceThickness, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::IridescenceThickness, component) << ").g;";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::IridescenceThickness, component) << ")." << component->sourceChannelSwizzle() << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -6660,7 +6660,10 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::VolumeThickness, std::make_unique< Texture >(Uniform::VolumeThicknessSampler, SurfaceVolumeThickness, texture));
+		auto component = std::make_unique< Texture >(Uniform::VolumeThicknessSampler, SurfaceVolumeThickness, texture);
+		component->setSourceChannel(defaultSourceChannel(ComponentType::VolumeThickness));
+
+		const auto result = m_components.emplace(ComponentType::VolumeThickness, std::move(component));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
@@ -6697,7 +6700,10 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::IridescenceThickness, std::make_unique< Texture >(Uniform::IridescenceThicknessSampler, SurfaceIridescenceThickness, texture));
+		auto component = std::make_unique< Texture >(Uniform::IridescenceThicknessSampler, SurfaceIridescenceThickness, texture);
+		component->setSourceChannel(defaultSourceChannel(ComponentType::IridescenceThickness));
+
+		const auto result = m_components.emplace(ComponentType::IridescenceThickness, std::move(component));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
@@ -6956,7 +6962,8 @@ namespace EmEn::Graphics::Material
 			return true;
 		}
 
-		const auto result = m_components.emplace(componentType, std::make_unique< Texture >(samplerName, variableName, componentData, fillingType, serviceProvider));
+		/* NOTE: Without an explicit 'SourceChannel', the map reads its type's channel (glTF: the thickness maps in G). */
+		const auto result = m_components.emplace(componentType, std::make_unique< Texture >(samplerName, variableName, componentData, fillingType, serviceProvider, defaultSourceChannel(componentType)));
 
 		if ( !result.second || result.first->second == nullptr )
 		{

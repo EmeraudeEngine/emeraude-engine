@@ -313,6 +313,25 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			std::vector< TextureUsage > textureUsages () const noexcept;
 
+			/**
+			 * @brief Returns the texel channel a scalar component reads when nothing names one: green for the volume
+			 * and iridescence thickness maps (glTF KHR_materials_volume / KHR_materials_iridescence), red otherwise.
+			 * @param componentType The component type.
+			 * @return Base::PixelFactory::Channel
+			 */
+			[[nodiscard]]
+			static constexpr
+			Base::PixelFactory::Channel
+			defaultSourceChannel (ComponentType componentType) noexcept
+			{
+				if ( componentType == ComponentType::VolumeThickness || componentType == ComponentType::IridescenceThickness )
+				{
+					return Base::PixelFactory::Channel::Green;
+				}
+
+				return Base::PixelFactory::Channel::Red;
+			}
+
 			/** @copydoc EmEn::Graphics::Material::Interface::emissionMultiplier() */
 			[[nodiscard]]
 			std::string emissionMultiplier () const noexcept override;

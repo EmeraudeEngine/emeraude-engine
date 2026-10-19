@@ -34,18 +34,39 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <iosfwd>
 #include <memory>
+#include <optional>
 #include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "json/json.h"
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
+#include "BlobTrait.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
-#include "Graphics/Types.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
 #include "Math/Vector.hpp"
 #include "PixelFactory/Types.hpp"
+#include "Saphir/Declaration/Sampler.hpp"
 #include "Saphir/Keys.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/TextureInterface.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	enum class FillingType : uint32_t;
+}
+
+namespace EmEn::Resources
+{
+	class AbstractServiceProvider;
+}
 
 namespace EmEn::Graphics::Material::Component
 {
@@ -124,8 +145,10 @@ namespace EmEn::Graphics::Material::Component
 			 * @param data A reference to a JSON value.
 			 * @param fillingType A reference to a texture filling type.
 			 * @param serviceProvider A reference to the resource manager through a service provider.
+			 * @param defaultSourceChannel The channel read when the data names none ('SourceChannel'): the component
+			 * type's own (glTF: the thickness maps in G). Default red.
 			 */
-			Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::AbstractServiceProvider & serviceProvider) noexcept;
+			Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::AbstractServiceProvider & serviceProvider, Base::PixelFactory::Channel defaultSourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::create() */
 			[[nodiscard]]
@@ -410,6 +433,40 @@ namespace EmEn::Graphics::Material::Component
 			}
 
 		private:
+
+			/**
+			 * @brief Reads the texture's identity a usage asks for: the colour space (from the variable name) and the
+			 * optional 'FlipNormalMapY'.
+			 * @param data The texture object (`Data`), checked as an object by the caller.
+			 * @return std::optional< TextureResource::Usage > Empty when 'FlipNormalMapY' is not a boolean.
+			 */
+			[[nodiscard]]
+			std::optional< TextureResource::Usage > parseUsage (const Json::Value & data) const noexcept;
+
+			/**
+			 * @brief Returns the store texture (the variant of the usage) a filling type names.
+			 * @param fillingType The filling type.
+			 * @param resourceName The store resource name.
+			 * @param usage The identity the usage asks for.
+			 * @param serviceProvider A reference to the resource manager through a service provider.
+			 * @return std::shared_ptr< TextureResource::Abstract > nullptr for a filling type that is not a texture.
+			 */
+			[[nodiscard]]
+			static std::shared_ptr< TextureResource::Abstract > findStoreTexture (FillingType fillingType, const std::string & resourceName, const TextureResource::Usage & usage, Resources::AbstractServiceProvider & serviceProvider) noexcept;
+
+			/**
+			 * @brief Reads an optional array of three finite numbers into a vector; a wrong value stops the read and is logged.
+			 * @param data The texture object (`Data`).
+			 * @param key The JSON key.
+			 * @param target The vector to fill, left as is for an absent key.
+			 */
+			static void parseVector3 (const Json::Value & data, const char * key, Base::Math::Vector< 3, float > & target) noexcept;
+
+			/**
+			 * @brief Reads the optional sampling keys: 'Channel', 'SourceChannel', 'UVW', 'UVWOffset', 'EnableAlpha'.
+			 * @param data The texture object (`Data`).
+			 */
+			void parseSamplingOptions (const Json::Value & data) noexcept;
 
 			/**
 			 * @brief STL streams printable object.

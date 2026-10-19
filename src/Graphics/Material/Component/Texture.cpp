@@ -27,17 +27,24 @@
 #include "Texture.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
+#include <optional>
+#include <sstream>
+#include <string>
 #include <utility>
 
 /* Local inclusions. */
+#include "FastJSON.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/StoreTexture.hpp"
 #include "Graphics/TextureResource/Texture1D.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/TextureResource/Texture3D.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
-#include "FastJSON.hpp"
-#include "Resources/Container.hpp"
+#include "Graphics/Types.hpp"
+#include "Logging/Severity.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Material::Component
@@ -76,9 +83,10 @@ namespace EmEn::Graphics::Material::Component
 		return false;
 	}
 
-	Texture::Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	Texture::Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::AbstractServiceProvider & serviceProvider, Base::PixelFactory::Channel defaultSourceChannel) noexcept
 		: m_samplerName{samplerName},
-		m_variableName{std::move(variableName)}
+		m_variableName{std::move(variableName)},
+		m_sourceChannel{defaultSourceChannel}
 	{
 		if ( !data.isObject() || !data.isMember(JKResourceName) )
 		{
@@ -96,8 +104,31 @@ namespace EmEn::Graphics::Material::Component
 			return;
 		}
 
-		const auto & textureResourceName = *resourceName;
+		const auto usage = this->parseUsage(data);
 
+		if ( !usage.has_value() )
+		{
+			return;
+		}
+
+		m_textureResource = findStoreTexture(fillingType, *resourceName, *usage, serviceProvider);
+
+		if ( m_textureResource == nullptr )
+		{
+			TraceError{ClassId} << "Unable to find " << to_cstring(fillingType) << " '" << *resourceName << "' !";
+
+			return;
+		}
+
+		/* NOTE: Make a copy for the texture interface smart-point. */
+		m_texture = m_textureResource;
+
+		this->parseSamplingOptions(data);
+	}
+
+	std::optional< TextureResource::Usage >
+	Texture::parseUsage (const Json::Value & data) const noexcept
+	{
 		/* NOTE: The colour space and the normal map flip are part of the texture's IDENTITY (owner decision
 		 * 2026-10-14): they are requested here, from the usage, and getStoreTexture() hands out the variant created
 		 * with them — never written on the shared store texture, where a second material would change them for the
@@ -116,55 +147,83 @@ namespace EmEn::Graphics::Material::Component
 			{
 				TraceError{ClassId} << "The key '" << JKFlipNormalMapY << "' in Json structure must be a boolean !";
 
-				return;
+				return std::nullopt;
 			}
 
 			usage.flipNormalMapY = *flip;
 		}
 
-		/* Check the texture type. */
+		return usage;
+	}
+
+	std::shared_ptr< TextureResource::Abstract >
+	Texture::findStoreTexture (FillingType fillingType, const std::string & resourceName, const TextureResource::Usage & usage, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
 		switch ( fillingType )
 		{
 			case FillingType::Gradient :
-				m_textureResource = TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::Texture1D >(), textureResourceName, usage);
-				break;
+				return TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::Texture1D >(), resourceName, usage);
 
 			case FillingType::Texture :
-				m_textureResource = TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::Texture2D >(), textureResourceName, usage);
-				break;
+				return TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::Texture2D >(), resourceName, usage);
 
 			case FillingType::VolumeTexture :
-				m_textureResource = TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::Texture3D >(), textureResourceName, usage);
-				break;
+				return TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::Texture3D >(), resourceName, usage);
 
 			case FillingType::Cubemap :
-				m_textureResource = TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::TextureCubemap >(), textureResourceName, usage);
-				break;
+				return TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::TextureCubemap >(), resourceName, usage);
 
 			case FillingType::AnimatedTexture :
-				m_textureResource = TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::AnimatedTexture2D >(), textureResourceName, usage);
-				break;
+				return TextureResource::getStoreTexture(*serviceProvider.container< TextureResource::AnimatedTexture2D >(), resourceName, usage);
 
 			case FillingType::Value :
 			case FillingType::Color :
 			case FillingType::None :
 			case FillingType::AlphaChannelAsValue :
 			case FillingType::Automatic :
-				Tracer::error(ClassId, "Invalid texture type !");
-
-				return;
+				break;
 		}
 
-		if ( m_textureResource == nullptr )
+		Tracer::error(ClassId, "Invalid texture type !");
+
+		return nullptr;
+	}
+
+	void
+	Texture::parseVector3 (const Json::Value & data, const char * key, Vector< 3, float > & target) noexcept
+	{
+		if ( !data.isMember(key) )
 		{
-			TraceError{ClassId} << "Unable to find " << to_cstring(fillingType) << " '" << textureResourceName << "' !";
+			return;
+		}
+
+		const auto & jsonNode = data[key];
+
+		if ( !jsonNode.isArray() )
+		{
+			TraceError{ClassId} << "The '" << key << "' key must be a numeric value array ! ";
 
 			return;
 		}
 
-		/* NOTE: Make a copy for the texture interface smart-point. */
-		m_texture = m_textureResource;
+		for ( uint32_t index = 0; index < 3; index++ )
+		{
+			const auto value = FastJSON::asValue< float >(jsonNode[index]);
 
+			if ( !value.has_value() )
+			{
+				TraceError{ClassId} << "Json array #" << index << " value is not a finite number !";
+
+				return;
+			}
+
+			target[index] = *value;
+		}
+	}
+
+	void
+	Texture::parseSamplingOptions (const Json::Value & data) noexcept
+	{
 		/* Check the optional UVW channel. */
 		if ( data.isMember(JKChannel) )
 		{
@@ -191,59 +250,13 @@ namespace EmEn::Graphics::Material::Component
 			{
 				TraceWarning{ClassId} <<
 					"The '" << JKSourceChannel << "' key in Json structure is not numeric (0:R, 1:G, 2:B, 3:A) ! "
-					"Leaving source channel to Red ...";
+					"Leaving the component's default source channel ...";
 			}
 		}
 
-		/* Check the optional UVW scale. */
-		if ( data.isMember(JKUVWScale) )
-		{
-			if ( const auto & jsonNode = data[JKUVWScale]; jsonNode.isArray() )
-			{
-				for ( uint32_t index = 0; index < 3; index++ )
-				{
-					const auto value = FastJSON::asValue< float >(jsonNode[index]);
-
-					if ( !value.has_value() )
-					{
-						TraceError{ClassId} << "Json array #" << index << " value is not a finite number !";
-
-						break;
-					}
-
-					m_UVWScale[index] = *value;
-				}
-			}
-			else
-			{
-				TraceError{ClassId} << "The '" << JKUVWScale << "' key must be a numeric value array ! ";
-			}
-		}
-
-		/* Check the optional UVW offset (uv * scale + offset). */
-		if ( data.isMember(JKUVWOffset) )
-		{
-			if ( const auto & jsonNode = data[JKUVWOffset]; jsonNode.isArray() )
-			{
-				for ( uint32_t index = 0; index < 3; index++ )
-				{
-					const auto value = FastJSON::asValue< float >(jsonNode[index]);
-
-					if ( !value.has_value() )
-					{
-						TraceError{ClassId} << "Json array #" << index << " value is not a finite number !";
-
-						break;
-					}
-
-					m_UVWOffset[index] = *value;
-				}
-			}
-			else
-			{
-				TraceError{ClassId} << "The '" << JKUVWOffset << "' key must be a numeric value array ! ";
-			}
-		}
+		/* Check the optional UVW scale, then the offset (uv * scale + offset). */
+		parseVector3(data, JKUVWScale, m_UVWScale);
+		parseVector3(data, JKUVWOffset, m_UVWOffset);
 
 		if ( data.isMember(JKEnableAlpha) )
 		{

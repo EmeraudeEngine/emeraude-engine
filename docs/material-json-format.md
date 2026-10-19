@@ -40,7 +40,8 @@ Every component block carries a `Type` and, for most types, a `Data`:
 ⚠️ `Automatic` is the one type that has **no** `Data`: its parameters sit beside `Type`.
 
 The **texture object** (`Data` of the texture types) names the store texture and how it is sampled: `Name`
-(mandatory), `Channel` (the UV set), `SourceChannel` (0-3, the colour channel a scalar component reads), `UVW` (a
+(mandatory), `Channel` (the UV set), `SourceChannel` (0-3, the colour channel a scalar component reads — honoured by EVERY scalar component since
+2026-10-20; absent: red, green for `IridescenceThickness` / `VolumeThickness`), `UVW` (a
 scale), and `FlipNormalMapY` (a boolean: a Direct3D-style normal map, +Y down, converted to the Khronos convention by
 a pixel flip at upload — `docs/coordinate-system.md`).
 
