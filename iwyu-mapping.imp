@@ -32,6 +32,8 @@
 	{ "include": ["<AL/alc.h>", "private", "\"AL/alc.h\"", "public"] },
 	{ "include": ["<AL/alext.h>", "private", "\"AL/alext.h\"", "public"] },
 	{ "include": ["<AL/efx.h>", "private", "\"AL/efx.h\"", "public"] },
+	# magic_enum, as the cascade writes it.
+	{ "include": ["<magic_enum/magic_enum.hpp>", "private", "\"magic_enum/magic_enum.hpp\"", "public"] },
 	# x86 intrinsics through the umbrella header.
 	{ "include": ["@<[a-z]*mmintrin\\.h>", "private", "<immintrin.h>", "public"] },
 	# The generated configuration headers, as the engine writes them.

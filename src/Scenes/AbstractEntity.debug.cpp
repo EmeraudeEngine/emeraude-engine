@@ -26,21 +26,38 @@
 
 #include "AbstractEntity.hpp"
 
+/* STL inclusions. */
+#include <functional>
+#include <memory>
+#include <string>
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Component/Visual.hpp"
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Graphics/Types.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Capsule.hpp"
+#include "Math/Vector.hpp"
 #include "Physics/CapsuleCollisionModel.hpp"
 #include "Physics/CollisionModelInterface.hpp"
-#include "Component/Visual.hpp"
+#include "PixelFactory/Color.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
+#include "Scenes/Component/Abstract.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes
 {
 	namespace Component
 	{
-		class Visual;
 	}
 	using namespace Base;
 	using namespace Base::Math;
@@ -126,7 +143,8 @@ namespace EmEn::Scenes
 				break;
 		}
 
-		if ( meshResource == nullptr )
+		/* NOTE: An out-of-range type (an enum cast from an integer) matches no case: refused here, label included. */
+		if ( meshResource == nullptr || label == nullptr )
 		{
 			TraceError{TracerTag} << "Unable to get the visual debug mesh !";
 

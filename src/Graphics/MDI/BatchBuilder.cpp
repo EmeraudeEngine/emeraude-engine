@@ -27,17 +27,24 @@
 #include "BatchBuilder.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstring>
 #include <ranges>
+#include <utility>
 
 /* Local inclusions. */
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Material/Interface.hpp"
+#include "Graphics/MDI/PerDrawData.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/RenderableInstance/RenderStateTracker.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
 #include "Saphir/Program.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Buffer.hpp"
@@ -274,10 +281,13 @@ namespace EmEn::Graphics::MDI
 			if ( batch.drawCount > 1 && bdaAddress != 0 )
 			{
 				const auto program = instance->resolveMDIProgram(renderTarget, layerIndex);
+				/* NOTE: buildBatches() refused a null geometry, but nothing guarantees it here (the renderable may change it
+				 * between the build and this dispatch): without one, the batch takes the individual path below, which checks
+				 * it (MSVC /analyze C6011, 2026-10-19). */
+				const auto * geometry = program != nullptr ? instance->renderable()->geometry(0) : nullptr;
 
-				if ( program != nullptr )
+				if ( program != nullptr && geometry != nullptr )
 				{
-					const auto * geometry = instance->renderable()->geometry(0);
 					const auto pipelineLayout = program->pipelineLayout();
 					const auto pipelineHandle = program->graphicsPipeline()->handle();
 

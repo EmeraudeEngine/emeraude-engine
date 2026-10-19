@@ -38,6 +38,7 @@
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "BlobTrait.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
 #include "PlatformSpecific/Helpers.hpp"

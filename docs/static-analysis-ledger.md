@@ -753,3 +753,25 @@ the macOS BASELINE, brought clean file by file when a lot touches it (owner, § 
 `misc-const-correctness`, 15 `pro-bounds-array-to-pointer-decay`, 11 `use-designated-initializers`, 9
 `use-anonymous-namespace`, 9 `init-variables`, 8 `optin.osx.cocoa.localizability` (the engine has no localization
 system: a product decision, not a defect), and 65 more findings of 22 style checks.
+
+## MSVC /analyze (owner decision 2026-10-19, Ave Robustus II P-W (6))
+
+The Windows peer ran MSVC 19.44's `/analyze` with Microsoft's `NativeRecommendedRules` rule set over the cascade's own
+sources (emeraude-base `src/`, the engine `src/` with every `*.windows.cpp`, projet-alpha `src/`), in a separate build
+tree: `CMAKE_CXX_FLAGS` gets `/analyze /analyze:external- /analyze:WX- /analyze:ruleset NativeRecommendedRules.ruleset`
+(CMake already passes the SYSTEM includes as `/external:I`, so `/analyze:external-` skips the third-party headers;
+`/analyze:WX-` keeps the C6xxx warnings non-fatal under `/WX`). About 11 minutes; the normal build is untouched. The rule
+set has no Core Guidelines check (C26xxx): clang-tidy gates those.
+
+**First run (2026-10-19)**: 13 unique findings — emeraude-base 11, the engine 2, projet-alpha 0. Fixed:
+- engine `Graphics/MDI/BatchBuilder.cpp` C6011: `dispatch()` dereferenced the batch's geometry on the strength of a
+  check made by `buildBatches()` only — a batch without geometry takes the individual path now, which checks it;
+- engine `Scenes/AbstractEntity.debug.cpp` C6387: an out-of-range `VisualDebugType` (an enum cast from an integer)
+  left `label` null — refused with the mesh;
+- base `StaticVector.hpp` C6031 ×2 (`swap()`): the moved-from element destroyed through `operator[]` — through `data()`,
+  as the file's other destructions;
+- base `Hash/CRC32.cpp` C28020: the table loop bounded by `table.size()` instead of the literal 256.
+Kept ON PURPOSE: C6262 ×5 (a frame above 16 KiB: `LZMA::Compressor::compress()`, `Decompressor::decompress()`,
+`HTTPSClient::performHop()`, `Font`'s glyph-array emplace, `Synthesizer::generateSinTable()`) — the smallest thread
+stack of the cascade is macOS's 512 KiB for a secondary thread, the frames stay well under it; C6993 ×3 (`Shape.hpp`,
+"OpenMP constructs ignored": informational).
