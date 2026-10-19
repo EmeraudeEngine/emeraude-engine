@@ -700,3 +700,29 @@ the layer — engine item `render-target-capture-ignores-the-layer-index`).
 six `freopen_s()` results (a console its streams cannot reach is reported unusable now), `WorkerContext`'s members
 initialized (`Helpers.windows.cpp`); two `danglingLifetime` in `SaveFile.windows.cpp` kept inline — a
 `std::filesystem::path` assigned from a `wchar_t *` copies the characters. macOS (`-D__attribute__(x)=`): 0.
+
+## D11 — the disabled checks ruled (owner decision 2026-10-19, Ave Robustus II P-W (5))
+
+The `.clang-tidy` (identical in the three repositories) switches ON `cppcoreguidelines-pro-bounds-pointer-arithmetic`,
+`cppcoreguidelines-pro-bounds-avoid-unchecked-container-access` (0 finding in the cascade: free), `bugprone-easily-swappable-parameters`
+and `readability-function-cognitive-complexity` (default threshold 25), and sets `WarningsAsErrors: '*'` (a finding is
+an error when the tool runs: the check names carry `,-warnings-as-errors`). **Gate**: zero NEW finding on the changed
+lines, as for every check; the code already there is the BASELINE below, brought clean file by file when a lot touches
+it — no mass campaign (owner).
+
+Baseline (2026-10-19, clang-tidy 21.1.6, the cascade's own TUs, findings deduplicated across TUs):
+
+| Check | emeraude-base (55 TUs) | emeraude-engine (471) | projet-alpha (106) |
+|---|---|---|---|
+| `pro-bounds-pointer-arithmetic` | 170 | 804 | 219 |
+| `easily-swappable-parameters` | 81 | 422 | 253 |
+| `function-cognitive-complexity` | 37 | 281 | 82 |
+| `pro-bounds-avoid-unchecked-container-access` | 0 | 0 | 0 |
+
+Still OFF: `cppcoreguidelines-avoid-magic-numbers` / `readability-magic-numbers` and `readability-identifier-length`
+(style, not defects — D11). The others predate the base's extraction from the engine with no written reason (the
+history says nothing); the reasons below are INFERRED, not ruled by the owner yet: `misc-include-cleaner`
+(include-what-you-use is the gate), `misc-multiple-inheritance` (the trait design), `modernize-use-trailing-return-type`,
+`readability-trailing-comma`, `portability-avoid-pragma-once` (the cascade's written style),
+`readability-suspicious-call-argument` (names compared, not defects), `clang-diagnostic-unreachable-code` (presumably
+the `if constexpr` platform branches).
