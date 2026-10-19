@@ -531,6 +531,33 @@ False positives (8), kept with their reason:
   reference in a lambda that `writeActiveBufferWithMapping()` runs synchronously (through a `std::function` the
   analyzer does not follow); the popup buffer and its size are stored together (`width × height × 4`).
 
+## CodeChecker — cross-TU analysis (2026-10-19, Ave Robustus II P-W (2))
+
+**CodeChecker 6.29.1** (pipx), its `clangsa` analyzer (clang 19.1.7) with `--ctu`: the call graph is followed ACROSS
+translation units, which the first run above (one TU at a time) could not. The database: projet-alpha's GCC database
+cleaned for clang (the clang-tidy runner's), filtered to the cascade's OWN sources — 632 TUs (emeraude-base `src/`, the
+engine `src/`, projet-alpha `src/`), a skip file keeping the reports inside them:
+
+```bash
+cat > skip.txt <<'SKIP'
++*/projet-alpha/src/*
++*/emeraude-engine/src/*
++*/emeraude-base/src/*
+-*
+SKIP
+CodeChecker analyze <filtered db>/compile_commands.json --analyzers clangsa --ctu -j 16 -i skip.txt -o reports
+CodeChecker parse reports -i skip.txt
+```
+
+17 minutes on Linux (`-j 16`: the CTU phase is memory-hungry, 2.8 GB peak per process). **15 reports**:
+- 7 already triaged above as false positives (the `Renderer` move, the five lightusd `NewDeleteLeaks` in `USDParser`,
+  projet-alpha's popup copy) — cross-TU found NO new defect in them;
+- 8 `security.FloatLoopCounter` (a checker of CodeChecker's default profile, off in `analyze-build`), all in projet-alpha
+  demos: fixed there (its ledger), the three TUs at 0 report after.
+
+The other CodeChecker analyzers are run on their own (clang-tidy, cppcheck: their sections). `gcc` (GCC's
+`-fanalyzer`, C++ support experimental in GCC 14) has not been run: an owner decision pending.
+
 ## The template guard (owner decision 2026-10-19, Ave Robustus II P-W (2))
 
 A member of a class template is compiled only when something calls it, a header only when a translation unit includes
