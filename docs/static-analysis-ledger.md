@@ -539,7 +539,9 @@ and its crawler, `NodeCrawler`, `ConsoleAdapter` / `ComponentBuilder` for the co
 helpers).
 
 It is the OBJECT target `EmeraudeTemplateGuard` (owner's choice: always built, never linked — the library gains
-nothing). It links the engine and the engine's own link libraries (their include directories stay SYSTEM, as in the
+nothing). On macOS its source is `TemplateInstantiation.mac.mm`, which includes the `.cpp` and is compiled as
+Objective-C++ with ARC like the engine's `.mm` files: `PlatformSpecific/StringConversion.mac.hpp` refuses plain C++
+(`#error`, `#import`), which broke the first macOS build of the guard (macOS peer, 78ce1936). It links the engine and the engine's own link libraries (their include directories stay SYSTEM, as in the
 engine's translation units). The engine is an `EXCLUDE_FROM_ALL` subproject and the guard links it, so the engine
 cannot depend on it (a cycle): an APPLICATION adds `add_dependencies(<its target> EmeraudeTemplateGuard)` — projet-alpha
 does.

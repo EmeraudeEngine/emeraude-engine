@@ -508,7 +508,13 @@ else ()
 endif ()
 
 ## Template guard (owner decision 2026-10-19): every header and every class template compiled, never linked
-add_library(EmeraudeTemplateGuard OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/tools/template-guard/TemplateInstantiation.cpp)
+if ( APPLE )
+	# NOTE: Objective-C++ with ARC (the .mm includes the .cpp): an engine header is Objective-C++ only.
+	add_library(EmeraudeTemplateGuard OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/tools/template-guard/TemplateInstantiation.mac.mm)
+	set_source_files_properties(${CMAKE_CURRENT_SOURCE_DIR}/tools/template-guard/TemplateInstantiation.mac.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+else ()
+	add_library(EmeraudeTemplateGuard OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/tools/template-guard/TemplateInstantiation.cpp)
+endif ()
 target_link_libraries(EmeraudeTemplateGuard PRIVATE ${PROJECT_NAME})
 # NOTE: The engine's PRIVATE dependencies and definitions too: some headers reach a dependency's header (lightusd). Linked
 # as targets, their include directories stay SYSTEM, as in the engine's own translation units.

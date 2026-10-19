@@ -31,7 +31,8 @@
  *      PARANOID warnings of GCC, clang and MSVC;
  *   2. explicitly instantiates every class template with the arguments the cascade uses, which compiles EVERY member
  *      not excluded by its own 'requires' clause.
- * It is the OBJECT target EmeraudeTemplateGuard, part of ALL and never linked: the library gains nothing from it.
+ * It is the OBJECT target EmeraudeTemplateGuard, never linked: the library gains nothing from it. On macOS it is compiled
+ * through TemplateInstantiation.mac.mm (Objective-C++ with ARC), because an engine header is Objective-C++ only.
  * A new header goes in the list, a new class template gets its instantiation(s). A specialization a .cpp instantiates
  * is declared 'extern template' in its header and NOT repeated here (an explicit instantiation definition may appear
  * once in a program; MSVC refuses the repeat, C4661).
