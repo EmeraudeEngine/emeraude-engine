@@ -218,7 +218,17 @@ namespace EmEn::Graphics::TextureResource
 			return false;
 		}
 
-		m_localData = this->serviceProvider().container< VolumetricImageResource >()->getDefaultResource();
+		auto * volumetricImages = this->serviceProvider().container< VolumetricImageResource >();
+
+		/* NOTE: A service provider without that container (a downstream one) refuses the load: never a null dereference. */
+		if ( volumetricImages == nullptr )
+		{
+			TraceError{ClassId} << "No volumetric image container is registered, the 3D texture '" << this->name() << "' cannot load !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		m_localData = volumetricImages->getDefaultResource();
 
 		if ( !this->addDependency(m_localData) )
 		{
@@ -231,10 +241,16 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture3D::load (const std::filesystem::path & filepath) noexcept
 	{
-		return this->load(this->serviceProvider().container< VolumetricImageResource >()->getResource(
-			ResourceTrait::getResourceNameFromFilepath(filepath, "VolumetricImages"),
-			true)
-		);
+		auto * volumetricImages = this->serviceProvider().container< VolumetricImageResource >();
+
+		if ( volumetricImages == nullptr )
+		{
+			TraceError{ClassId} << "No volumetric image container is registered, the 3D texture '" << this->name() << "' cannot load " << filepath << " !";
+
+			return false;
+		}
+
+		return this->load(volumetricImages->getResource(ResourceTrait::getResourceNameFromFilepath(filepath, "VolumetricImages"), true));
 	}
 
 	bool

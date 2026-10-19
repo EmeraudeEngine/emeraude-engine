@@ -561,9 +561,18 @@ namespace EmEn::Scenes
 			{
 				auto currentSector = this->shared_from_this();
 
+				/* NOTE: parentSector() is a weak_ptr (a child never owns its parent). It had never compiled: nothing called this
+				 * member (engine guard tools/template-guard, 2026-10-19). */
 				while ( !currentSector->isRoot() )
 				{
-					currentSector = currentSector->parentSector();
+					auto parent = currentSector->parentSector().lock();
+
+					if ( parent == nullptr )
+					{
+						break;
+					}
+
+					currentSector = std::move(parent);
 				}
 
 				return currentSector;
@@ -586,9 +595,18 @@ namespace EmEn::Scenes
 			{
 				auto currentSector = this->shared_from_this();
 
+				/* NOTE: parentSector() is a weak_ptr (a child never owns its parent). It had never compiled: nothing called this
+				 * member (engine guard tools/template-guard, 2026-10-19). */
 				while ( !currentSector->isRoot() )
 				{
-					currentSector = currentSector->parentSector();
+					auto parent = currentSector->parentSector().lock();
+
+					if ( parent == nullptr )
+					{
+						break;
+					}
+
+					currentSector = std::move(parent);
 				}
 
 				return currentSector;
@@ -1284,7 +1302,7 @@ namespace EmEn::Scenes
 				}
 
 				/* Calculate the slot directly from position relative to sector center. */
-				const auto center = this->center();
+				const auto center = this->centroid();
 				const size_t slot = computeSlotForPosition(position, center);
 
 				return m_subSectors[slot]->getDeepestSubSectorForPosition(position);

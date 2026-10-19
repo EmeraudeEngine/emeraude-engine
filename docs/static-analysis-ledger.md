@@ -527,3 +527,36 @@ False positives (8), kept with their reason:
 - projet-alpha `src/UI/WebView.CefRenderHandler.cpp:383` `core.NullDereference` — `srcBuffer`, a local captured by
   reference in a lambda that `writeActiveBufferWithMapping()` runs synchronously (through a `std::function` the
   analyzer does not follow); the popup buffer and its size are stored together (`width × height × 4`).
+
+## The template guard (owner decision 2026-10-19, Ave Robustus II P-W (2))
+
+A member of a class template is compiled only when something calls it, a header only when a translation unit includes
+it (emeraude-base found 19 never-compiled members this way, its caution points § Templates).
+`tools/template-guard/TemplateInstantiation.cpp` includes EVERY engine header (an OS-suffixed one on its OS only) and
+explicitly instantiates the 12 class templates with every argument the cascade uses (the three RenderTarget templates
+for their view-matrix UBOs, `Resources::Container` for the 33 containers `Resources::Manager` registers, `OctreeSector`
+and its crawler, `NodeCrawler`, `ConsoleAdapter` / `ComponentBuilder` for the components, `BuiltEntity`, the Tracer
+helpers).
+
+It is the OBJECT target `EmeraudeTemplateGuard` (owner's choice: always built, never linked — the library gains
+nothing). It links the engine and the engine's own link libraries (their include directories stay SYSTEM, as in the
+engine's translation units). The engine is an `EXCLUDE_FROM_ALL` subproject and the guard links it, so the engine
+cannot depend on it (a cycle): an APPLICATION adds `add_dependencies(<its target> EmeraudeTemplateGuard)` — projet-alpha
+does.
+
+Rules: a new header joins the list, a new class template its instantiation(s); a member valid for some arguments only
+takes a `requires` clause; a specialization a `.cpp` instantiates is `extern template` in its header, never repeated
+in the guard (MSVC C4661). A `Container` is instantiated only for a REGISTERED resource type.
+
+First run: the 546 headers compiled together (GCC, clang with `-Wdocumentation`), 4 of them included by no translation
+unit before (`Audio/Speaker.hpp`, `Physics/PointCollisionModel.hpp`, `Scenes/OctreeSectorCrawler.hpp`,
+`Graphics/RenderTarget/AbstractFilter.hpp`). Two `OctreeSector` members had never compiled, fixed:
+`getRootSector()` (both) assigned the parent's `weak_ptr` to a `shared_ptr` (now `lock()`, stopping at an expired
+parent), `getDeepestSubSectorForPosition()` called a `center()` that does not exist (`centroid()`; its slot formula
+matches the subsector layout). Read on the way, a defect fixed the same day (owner decision: register the container):
+`Texture3D::load()` dereferenced the null `container< VolumetricImageResource >()` — no such container was registered.
+`Resources::Manager` registers the "Volumetric image manager" (store `VolumetricImages`), `Texture3D` refuses a provider
+without it, and the guard instantiates its `Container`. Verified on a test instance (validation layer loaded, 0 VUID):
+`loadResource(Texture3DResource, <name>)` is Loaded, both containers report one loaded resource (the generated default
+volume: volumetric files are not read yet).
+

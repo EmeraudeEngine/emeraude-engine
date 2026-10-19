@@ -78,6 +78,7 @@
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/TextureResource/Texture3D.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Graphics/VolumetricImageResource.hpp"
 #include "Arguments.hpp"
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
@@ -808,6 +809,10 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Graphics::TextureResource::Texture1D), std::make_unique< Texture1Ds >("Texture 1D manager", m_primaryServices, *this, this->getLocalStore("Images")));
 			m_containers.emplace(typeid(Graphics::TextureResource::Texture2D), std::make_unique< Texture2Ds >("Texture 2D manager", m_primaryServices, *this, this->getLocalStore("Images")));
 			m_containers.emplace(typeid(Graphics::TextureResource::Texture3D), std::make_unique< Texture3Ds >("Texture 3D manager", m_primaryServices, *this, this->getLocalStore("Images")));
+			/* NOTE: Texture3D reads its data from this container: without it, container() was null and every Texture3D load
+			 * dereferenced it (2026-10-19, docs/caution-points.md § Resources). File formats are not read yet:
+			 * the default volume is generated. */
+			m_containers.emplace(typeid(Graphics::VolumetricImageResource), std::make_unique< VolumetricImages >("Volumetric image manager", m_primaryServices, *this, this->getLocalStore("VolumetricImages")));
 			m_containers.emplace(typeid(Graphics::TextureResource::TextureCubemap), std::make_unique< TextureCubemaps >("Texture cubemap manager", m_primaryServices, *this, this->getLocalStore("Cubemaps")));
 			m_containers.emplace(typeid(Graphics::TextureResource::AnimatedTexture2D), std::make_unique< AnimatedTexture2Ds >("Animated texture 2D manager", m_primaryServices, *this, this->getLocalStore("Movies")));
 			m_containers.emplace(typeid(Graphics::CubemapMovieResource), std::make_unique< CubemapMovies >("Cubemap movie manager", m_primaryServices, *this, this->getLocalStore("CubemapMovies")));

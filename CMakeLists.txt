@@ -507,6 +507,16 @@ else ()
 	message(STATUS "[EmeraudeEngine] EMERAUDE_COMPILATION_DIR is not set, the compilation directory won't have all files for development ! This is a sub-project warning !")
 endif ()
 
+## Template guard (owner decision 2026-10-19): every header and every class template compiled, never linked
+add_library(EmeraudeTemplateGuard OBJECT ${CMAKE_CURRENT_SOURCE_DIR}/tools/template-guard/TemplateInstantiation.cpp)
+target_link_libraries(EmeraudeTemplateGuard PRIVATE ${PROJECT_NAME})
+# NOTE: The engine's PRIVATE dependencies and definitions too: some headers reach a dependency's header (lightusd). Linked
+# as targets, their include directories stay SYSTEM, as in the engine's own translation units.
+target_link_libraries(EmeraudeTemplateGuard PRIVATE $<TARGET_PROPERTY:${PROJECT_NAME},LINK_LIBRARIES>)
+target_compile_definitions(EmeraudeTemplateGuard PRIVATE $<TARGET_PROPERTY:${PROJECT_NAME},COMPILE_DEFINITIONS>)
+# NOTE: The engine is an EXCLUDE_FROM_ALL subproject of its applications: an application makes its own target depend on
+# EmeraudeTemplateGuard so its builds compile it (the guard links the engine for its flags: the engine cannot depend on it).
+
 ## Startup fault injection executable (EMERAUDE_FAULT_INJECTION, Ave Robustus II P3)
 if ( EMERAUDE_FAULT_INJECTION )
 	add_executable(EmeraudeStartupFaultInjection ${CMAKE_CURRENT_SOURCE_DIR}/tools/stress/StartupFaultInjection.cpp)

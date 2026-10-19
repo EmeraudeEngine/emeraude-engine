@@ -8540,3 +8540,14 @@ threads trace (a pool worker loading a resource traces through `TraceInfo`) race
 not. **Rule:** while the engine runs, print through the Tracer (`TraceInfo{ClassId} << …`), never a raw stream; a raw
 stream is fine only before `Core` starts its threads or after `run()` returned. The three stress executables were
 fixed the same day.
+
+## Resources — `container< T >()` is null for an unregistered type (2026-10-19)
+
+`ResourceTrait::container< T >()` returns `nullptr` when `Resources::Manager` registers no container for `T` (the
+`m_containers.emplace(typeid(...))` list in `Manager.cpp`). `Texture3D::load()` called it for `VolumetricImageResource`,
+which was never registered: every 3D texture load was a null dereference (found by reading while writing the template
+guard; registered now, `Texture3D` checks the pointer). A new resource type is registered in that list, and a
+`container< T >()` call site either checks the pointer or targets a registered type. `ColorBackgroundResource`,
+`OceanResource` and `CDLODTerrainResource` have a `Container` alias or friend but no registered container (nothing asks
+for them; the first two cannot even be built by the container's generic members).
+
