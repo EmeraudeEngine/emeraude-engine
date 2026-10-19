@@ -726,3 +726,26 @@ history says nothing); the reasons below are INFERRED, not ruled by the owner ye
 `readability-trailing-comma`, `portability-avoid-pragma-once` (the cascade's written style),
 `readability-suspicious-call-argument` (names compared, not defects), `clang-diagnostic-unreachable-code` (presumably
 the `if constexpr` platform branches).
+
+## clang-tidy on macOS (owner decision 2026-10-19, Ave Robustus II P-W (6))
+
+The macOS peer ran clang-tidy 21.1.6 (pipx, the same version as on Linux) with the repository's `.clang-tidy` over the
+code Linux never analyses: the 14 engine `.mm`, the `.mac.cpp`, the other `PlatformSpecific/` TUs, and every shared
+TU with a macOS branch — 41 TUs, the AppleClang compile database of a Claude build tree.
+
+⚠️ **Add `--extra-arg=-resource-dir=$(/usr/bin/c++ -print-resource-dir)`**: with clang-tidy's own builtin headers, five
+TUs (Core, RendererFrameScope, Overlay/Surface, Vulkan/Image, SwapChain) stop on the SDK's libc++
+(`__random/clamp_to_integral.h: use of undeclared identifier 'INFINITY'`) and are only partly analysed; AppleClang's
+resource directory matches the SDK.
+
+**Result (2026-10-19)**: 659 findings; 194 only macOS sees (a `.mac.` / `.mm` file, or a macOS branch of a shared file),
+the 465 others are Linux's too. No `bugprone-*`, `performance-*` or `pro-type-member-init` in the macOS code. Fixed:
+`Net/WiFiScanner.mac.mm` built `std::string`s from `-UTF8String` (NULL for a string without a UTF-8 form: UB; 3
+`NullablePassedToNonnull` reported, a fourth site alike) — through `PlatformSpecific::toStdString()` now, the helper
+the 2026-10-01 triad wrote for exactly this; `PlatformSpecific/SystemInfo.mac.cpp`'s `realpath()` result freed by hand
+— owned by a `unique_ptr` now. Kept ON PURPOSE: `Window.mac.mm` `cppcoreguidelines-owning-memory` ×2 (the Apple Event
+handler is owned by a `unique_ptr` whose custom deleter deletes it — RAII, the check wants `gsl::owner<>`). The rest is
+the macOS BASELINE, brought clean file by file when a lot touches it (owner, § D11's rule): 71
+`misc-const-correctness`, 15 `pro-bounds-array-to-pointer-decay`, 11 `use-designated-initializers`, 9
+`use-anonymous-namespace`, 9 `init-variables`, 8 `optin.osx.cocoa.localizability` (the engine has no localization
+system: a product decision, not a defect), and 65 more findings of 22 style checks.

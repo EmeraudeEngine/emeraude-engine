@@ -34,6 +34,9 @@
 /* macOS framework. */
 #import <CoreWLAN/CoreWLAN.h>
 
+/* Local inclusions. */
+#include "PlatformSpecific/StringConversion.mac.hpp"
+
 namespace EmEn::Net::WiFiScanner
 {
 	/**
@@ -81,12 +84,12 @@ namespace EmEn::Net::WiFiScanner
 
 		if ( cwNetwork.ssid != nil )
 		{
-			network.ssid = [cwNetwork.ssid UTF8String];
+			network.ssid = PlatformSpecific::toStdString(cwNetwork.ssid);
 		}
 
 		if ( cwNetwork.bssid != nil )
 		{
-			network.bssid = [cwNetwork.bssid UTF8String];
+			network.bssid = PlatformSpecific::toStdString(cwNetwork.bssid);
 		}
 
 		network.signalLevel = static_cast< int32_t >(cwNetwork.rssiValue);
@@ -159,11 +162,11 @@ namespace EmEn::Net::WiFiScanner
 			}
 
 			Network network;
-			network.ssid = [interface.ssid UTF8String];
+			network.ssid = PlatformSpecific::toStdString(interface.ssid);
 
 			if ( interface.bssid != nil )
 			{
-				network.bssid = [interface.bssid UTF8String];
+				network.bssid = PlatformSpecific::toStdString(interface.bssid);
 			}
 
 			network.signalLevel = static_cast< int32_t >(interface.rssiValue);

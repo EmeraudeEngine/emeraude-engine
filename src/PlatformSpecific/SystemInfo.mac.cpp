@@ -31,6 +31,8 @@
 #include <array>
 #include <cstdint>
 #include <cstdio> // FIXME: Remove this
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <optional>
@@ -610,13 +612,17 @@ namespace EmEn::PlatformSpecific
 		}
 		else
 		{
-			// resolve symlinks, ... if possible
-			char * canonicalPath = realpath(exePath, nullptr);
+			/* Resolve the symbolic links, if possible. NOTE: realpath() allocates with malloc(): owned until std::free(),
+			 * by RAII (a lambda deleter: std::free is not an addressable function in C++20). Its result is shorter
+			 * than PATH_MAX, so the copy stays terminated. */
+			const auto freeDeleter = [] (char * pointer) noexcept {
+				std::free(pointer);
+			};
+			const std::unique_ptr< char, decltype(freeDeleter) > canonicalPath{realpath(exePath, nullptr), freeDeleter};
 
 			if ( canonicalPath != nullptr )
 			{
-				strncpy(exePath,canonicalPath,len);
-				free(canonicalPath);
+				std::strncpy(exePath, canonicalPath.get(), len);
 			}
 		}
 
