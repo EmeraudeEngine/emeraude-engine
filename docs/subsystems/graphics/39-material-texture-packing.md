@@ -352,6 +352,31 @@ workers for tens of seconds — the ocean's 120 frames ~40 s — and a capture 6
 whose temporal state had not converged: 20 levels darker, the relief "stronger". The same capture 40 s later equals
 the warm one (2.39 vs 2.33). Measure on a warm cache, or wait for the encodes to end.
 
+**A reconstructed Z flattens FILTERED normals — accepted (owner, 2026-10-21).** Grid003 renders brighter on the three
+OS (mean +2.02 Linux, +1.4 macOS, +2.15 Windows; Sand002 +0.43). Not BC5: the same build with the normal maps forced
+BC7 and Z still reconstructed gives +2.44 (noise 0.00). The stored levels are right (each one renormalized); the
+sampler's bilinear / trilinear / anisotropic filtering averages the X and Y of neighbouring texels into a SHORTER
+vector, and `sqrt(1 - x² - y²)` then stands the normal up, where the former `normalize(xyz)` kept the mean direction:
+a high-frequency map (the grating) loses a little slope contrast with distance. It is the behaviour of every
+two-channel normal map (Godot, Unreal). A compensation would turn the lost length into roughness (Toksvig-style
+specular anti-aliasing) — not opened.
+
+**The BC5 encoder stays the HQ one (owner, 2026-10-21).** Offline, the engine's renormalized input: Sand002 BC7 3.02° /
+BC5 HQ 0.92° / BC5 fast 1.09°; Grid003 4.48° / 1.97° / 2.34°; Pavement006 1.52° / 0.77° / 0.90°; the fast encoder is
+~90× faster. HQ costs only the first, cold run (the cache serves afterwards): the ocean's 120 frames take 202 s cold on
+Windows (49.8 s in BC7), 83.5 s on macOS (with the whole scene re-encoded after the cache version bump), 0.77 s / 3.09 s
+warm.
+
+**Validated on the three OS (2026-10-20/21, ext-deps v019):**
+- **macOS** (M6, MoltenVK 1.4.2): cascade 0 warning (Apple clang paranoid), base 2701 / 0 failed, `-Wdocumentation`
+  clean on the 10 touched TUs; Sand002 / Grid003 normals BC5, Grid003 height BC4 (0.167 MiB), only the known `setGround`
+  VUIDs; the ocean BC5 161.25 MiB, 0 VUID; DamagedHelmet BC5, 0.075 (noise 0.055); `normal-map-debug` lit lip below /
+  above as expected; no MoltenVK complaint on BC4 / BC5 or the (r, r, r, 1) view.
+- **Windows** (RTX 3500 Ada, MSVC 19.44 /W4 /WX): Release and Debug 0 warning, no C4201 from `rgbcx.h` (an external
+  include); base 2702 / 0 failed in both; the same formats and sizes; the ocean BC5 160.31 MiB with the RT lane, 0 VUID;
+  DamagedHelmet 0.20 (noise 0.08–0.15); `normal-map-debug` as expected.
+- **Linux glibc 2.43** (RTX 3050 Ti): cascade 0 warning, base 2702 / 0 failed, Sand002 normal BC5.
+
 ## Reference measurement (2026-10-20, before any packing)
 
 Linux, RTX 3070 Ti (8 GB), Release, `Core.RendererService.getTextureMemory()` once the demo was built, validation

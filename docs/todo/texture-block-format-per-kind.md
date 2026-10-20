@@ -1,7 +1,7 @@
 ---
 id: texture-block-format-per-kind
 title: Choose the block format per texture kind — BC5 for a normal without height, BC4 for a lone grey-scale map
-status: in-progress
+status: open
 priority: unranked
 scope: Graphics/TextureResource, TextureCompressor, TextureCache, Vulkan/ImageView, Saphir (normal Z)
 opened: 2026-10-20
@@ -17,7 +17,7 @@ Decision D8 (graphics § 39): every 2D texture was BC7 (`Texture2D::createFromPi
 whatever its channels. Albedo, emission and Data (AO / roughness / metalness / height) stay BC7; the normal map — alone
 since D6 was revised — becomes BC5 (better precision, same cost) and a lone grey-scale map BC4 (half the cost).
 
-## Done (2026-10-20, Linux — the GPU side)
+## Done (2026-10-20/21 — the GPU side, validated on the three OS with ext-deps v019)
 
 BC5 for a declared normal map, BC4 for an opaque grey linear texture, the view swizzle, Z reconstructed in every
 decode, the cache version 4, rgbcx in the ext-deps library: graphics § 39 § Block format per kind (decisions,
@@ -25,11 +25,6 @@ mechanism, measurements). Owner sub-decisions recorded under D8.
 
 ## What remains
 
-- **Publish the ext-deps archives with rgbcx** (ext-deps-generator `patches/bc7enc_rdo.patch`) for the three OS and
-  bump `EXTERNAL_DEPENDENCIES_VERSION` (emeraude-base `cmake/InstallDependencies.cmake`): until then macOS and Windows
-  cannot link the engine (`rgbcx::` symbols). Owner's consent for the release.
-- **The peers' validation** (macOS: BC5 / BC4 on MoltenVK, the swizzled view; Windows: MSVC on `rgbcx.h`, whose
-  anonymous struct in a union is C4201 at /W4 unless the header is external).
 - **The CPU copy on one channel** (owner: the next step): `Abstract::validatePixmap()` forces RGBA (its TODO); a grey
   map could stay one channel through the mip chain and the encoder (`encode_bc4_hq` takes a stride of 1), halving its
   CPU copy — and an uncompressed fallback in R8 already gets the broadcast swizzle.
