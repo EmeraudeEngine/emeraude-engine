@@ -3742,6 +3742,75 @@ namespace EmEn::Graphics::Material
 		return ShaderVariable::Primary2DTextureCoordinates;
 	}
 
+	bool
+	StandardResource::sharesFetch (uint32_t binding) const noexcept
+	{
+		const auto * const textureBinding = std::ranges::find_if(m_textureBindings, [binding] (const TextureBinding & entry) {
+			return entry.leader->binding() == binding;
+		});
+
+		if ( textureBinding == m_textureBindings.end() || textureBinding->leader->isVolumetricTexture() )
+		{
+			return false;
+		}
+
+		/* NOTE: D10, a CANONICAL texture only: its readers share one UV transform by construction (D11). */
+		const auto texture = textureBinding->leader->textureResource();
+
+		if ( texture == nullptr || !texture->name().starts_with(PackRecipe::NamePrefix) )
+		{
+			return false;
+		}
+
+		const auto readers = std::ranges::count_if(m_components, [binding] (const auto & entry) {
+			return entry.first != ComponentType::Displacement && entry.second != nullptr && entry.second->type() == Type::Texture && static_cast< const Texture * >(entry.second.get())->binding() == binding;
+		});
+
+		return readers >= 2;
+	}
+
+	std::string
+	StandardResource::texelExpression (ComponentType componentType, const Texture * component) const noexcept
+	{
+		if ( this->sharesFetch(component->binding()) )
+		{
+			return "materialTexel" + std::to_string(component->binding());
+		}
+
+		return "texture(" + std::string{component->samplerName()} + ", " + this->transformedTexCoords(componentType, component) + ")";
+	}
+
+	bool
+	StandardResource::declareSharedFetches (FragmentShader & fragmentShader, uint32_t materialSet) const noexcept
+	{
+		for ( const auto & [componentType, component] : m_components )
+		{
+			if ( component == nullptr || component->type() != Type::Texture )
+			{
+				continue;
+			}
+
+			const auto * texture = static_cast< const Texture * >(component.get());
+
+			/* NOTE: Declared by the binding's leader only (the first component in ComponentType order). */
+			const bool isLeader = std::ranges::any_of(m_textureBindings, [texture] (const TextureBinding & entry) { return entry.leader == texture; });
+
+			if ( !isLeader || !this->sharesFetch(texture->binding()) )
+			{
+				continue;
+			}
+
+			if ( !fragmentShader.declare(Declaration::Sampler{materialSet, texture->binding(), texture->textureType(), texture->samplerName()}) )
+			{
+				return false;
+			}
+
+			Code{fragmentShader, Location::Top} << "const vec4 materialTexel" << texture->binding() << " = texture(" << texture->samplerName() << ", " << this->transformedTexCoords(componentType, texture) << ");";
+		}
+
+		return true;
+	}
+
 	std::string
 	StandardResource::transformedTexCoords (ComponentType componentType, const Texture * component, const std::string & coordinates) const noexcept
 	{
@@ -4353,6 +4422,14 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
+		/* D10: the shared fetches of the canonical textures, after the parallax set the coordinates. */
+		if ( !this->declareSharedFetches(fragmentShader, materialSet) )
+		{
+			TraceError{ClassId} << "Unable to declare the shared texture fetches of PBR material '" << this->name() << "' !";
+
+			return false;
+		}
+
 		/* Normal component.
 		 * NOTE: Get a sample from a texture in range [0,1], convert it to a normalized range of [-1, 1].
 		 * Always generated (including ambient pass) because the MRT needs the perturbed normal
@@ -4419,7 +4496,7 @@ namespace EmEn::Graphics::Material
 				return true;
 			}
 
-			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Albedo, component) << ") * " << MaterialUB(UniformBlock::Component::AlbedoColor) << ";";
+			Code{shader, Location::Top} << "const vec4 " << component->variableName() << " = " << this->texelExpression(ComponentType::Albedo, component) << " * " << MaterialUB(UniformBlock::Component::AlbedoColor) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -4468,7 +4545,7 @@ namespace EmEn::Graphics::Material
 		 * Inversion (smoothness/gloss source) applies to the texel BEFORE the factor, so every
 		 * consumer (BRDF, IBL LOD, G-buffer) reads the final value from this single variable. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Roughness, [this] (FragmentShader & shader, const Texture * component) {
-			const std::string texel = "texture(" + std::string{component->samplerName()} + ", " + transformedTexCoords(ComponentType::Roughness, component) + ")." + component->sourceChannelSwizzle();
+			const std::string texel = this->texelExpression(ComponentType::Roughness, component) + "." + component->sourceChannelSwizzle();
 
 			Code{shader, Location::Top} << "const float " << component->variableName() << " = " << ( m_invertRoughness ? "(1.0 - " + texel + ")" : texel ) << " * " << MaterialUB(UniformBlock::Component::Roughness) << ";";
 
@@ -4484,7 +4561,7 @@ namespace EmEn::Graphics::Material
 		 * Same contracts as roughness: source channel from the component (glTF packed
 		 * metallic-roughness: Blue), material scalar as multiplying factor ('metallicFactor * texel'). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Metalness, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Metalness, component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::Metalness) << ";";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = " << this->texelExpression(ComponentType::Metalness, component) << "." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::Metalness) << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -4654,7 +4731,7 @@ namespace EmEn::Graphics::Material
 		 * literal (program-cache contract); rule 3 (grayscale) emits no test and the alpha
 		 * lands in fragmentColor() for blending. */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::Opacity, [this] (FragmentShader & shader, const Texture * component) {
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::Opacity, component) << ")." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::Opacity) << ";";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = " << this->texelExpression(ComponentType::Opacity, component) << "." << component->sourceChannelSwizzle() << " * " << MaterialUB(UniformBlock::Component::Opacity) << ";";
 
 			if ( this->isFlagEnabled(AlphaTestEnabled) )
 			{
@@ -4679,7 +4756,7 @@ namespace EmEn::Graphics::Material
 		/* Ambient Occlusion component (baked texture). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::AmbientOcclusion, [this] (FragmentShader & shader, const Texture * component) {
 			/* NOTE: AO is typically stored in a grayscale texture (red channel). */
-			Code{shader, Location::Top} << "const float " << component->variableName() << " = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::AmbientOcclusion, component) << ")." << component->sourceChannelSwizzle() << ";";
+			Code{shader, Location::Top} << "const float " << component->variableName() << " = " << this->texelExpression(ComponentType::AmbientOcclusion, component) << "." << component->sourceChannelSwizzle() << ";";
 
 			return true;
 		}, fragmentShader, materialSet) )

@@ -218,6 +218,27 @@ equal to the previous lot within the noise; MCP 1902 / 0; 0 VUID beyond the know
   texture (random Perlin noise in Release, different at every launch) and are never packed. A data defect, not the
   engine's.
 
+## One fetch per canonical texture (D10, 2026-10-20)
+
+`StandardResource::declareSharedFetches()` declares, right after the parallax computed the coordinates, one
+`const vec4 materialTexel<binding>` per binding that `sharesFetch()`: a PACKED canonical texture read by two components
+or more at the base UVs (the height is excluded: the parallax marches it at its own UVs). It reads at the UVs of the
+component leading the binding (D11 guarantees every reader the same values). `texelExpression()` answers that variable,
+else the component's own `texture()`: the albedo, opacity, roughness, metalness and ambient-occlusion code goes through
+it. Verified in the dumped GLSL: Grid003's albedo and opacity read `materialTexel1`; Sand002's roughness and AO read
+`materialTexel3` at `pomTexCoords`; the images equal the previous lot within the noise (1.10 / 1.09).
+
+**A/B (Ave Performus, Linux RTX 3070 Ti, `relief` + `setGround()`, pinned exposure, `ScenePass` GPU time, median of 5
+interleaved launches each, validation off):**
+
+| Material | Shared fetch | One fetch per component | Gain |
+|---|---|---|---|
+| `Metals/Grid003` (albedo + opacity: 2 → 1 fetch) | 1.085 ms (1.068–1.093) | 1.122 ms (1.113–1.131) | **+3.3 %**, outside the noise |
+| `Grounds/Sand002` (AO + roughness: 2 → 1; the height stays in the parallax loop) | 1.598 ms (1.560–1.621) | 1.578 ms (1.542–1.622) | −1.3 %, inside the noise |
+
+Below the plan's 5 % bar; **kept by the owner (2026-10-20)**: a small code, no regression measured, a real gain where the
+shared reads dominate, and more to come with the glTF ORM (up to 3 fetches → 1, L2d).
+
 ## Animated textures in BC7 (2026-10-20)
 
 `AnimatedTexture2D::createCompressedImage()`: on a BC-capable GPU every frame goes through the texture cache (BC7, its
@@ -228,7 +249,12 @@ BC7 now, BC5 for every normal map with D8; the ocean keeps its 120 × 1024² fra
 Measured (Linux, `water-world`, validation on, 0 `VUID-`): the ocean normal map 640.3 → **160.3 MiB** (120 layers, 11
 mips); the scene's textures 734.1 → **242.2 MiB** (the explosion / fire / smoke sprites are animated textures too);
 the first load compresses the 120 frames in ~40 s, a warm cache loads them in ~4 s. The water looks as before; a per-pixel
-A/B is not possible (the normal map animates with time).
+A/B is not possible (the normal map animates with time). **macOS peer** (M6, MoltenVK): the ocean 646.27 → 161.25 MiB, the scene
+742.11 → 244.01 MiB, the sprites BC7_SRGB; ocean ready in 20.5 s cold, 2.95 s warm (the RGBA8 build: 2.78 s); 0 VUID, no
+MoltenVK complaint on the BC7 array or its per-layer views; the same sea (open-sea patch mean ± σ within the animation
+spread); MCP 1902 / 0. **Windows peer** (MSVC Release + Debug 0 warning, RTX 3500 Ada): 160.31 MiB, the scene 242.22
+MiB; 49.8 s cold, 0.71 s warm; the RT lane (the per-layer 2D views in the bindless table) 0 VUID in water-world and
+terrain; MCP 1902 / 0. `AnimatedTextureCubemap` keeps its uncompressed upload (no measured need yet).
 
 ## Reference measurement (2026-10-20, before any packing)
 
@@ -247,7 +273,7 @@ layer on (0 `VUID-`). MiB = the device memory of the loaded textures, each image
 - **Sand002** (`water-world`): 5 maps × 5.3354 MiB = 26.7 MiB, 5 bindings; the canonical layout makes it 3 textures
   (albedo, normal, data AO + roughness + height) = 16.0 MiB, 3 bindings, before any ratio — measured so since L2b.
 - **The ocean normal map** (`BuiltinOceanNormalMap`, `AnimatedTexture2D`): 120 layers × 1024², 11 mips, RGBA8
-  UNORM UNCOMPRESSED = 640.3 MiB, 86 % of the scene's textures (item `animated-texture-frames-uncompressed`).
+  UNORM UNCOMPRESSED = 640.3 MiB, 86 % of the scene's textures (BC7 since 2026-10-20: § Animated textures in BC7).
 
 ## The lots (`docs/todo/`)
 

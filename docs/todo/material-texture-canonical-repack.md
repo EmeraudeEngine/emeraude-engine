@@ -30,8 +30,8 @@ Graphics § 39: whatever the source files, the engine builds at most three textu
 - The albedo + opacity BC7 cost (macOS: 0.66 against a 0.21 noise on Grid003's panels): KEPT by the owner
   (2026-10-20); the encoder tuning is item `bc7-quality-for-textures-with-alpha`.
 - L2d: glTF (an occlusion image separate from the ORM; the albedo alpha is already in place).
-- D10: ONE `texture()` per canonical texture, its components reading their channels from that fetch — then the
-  frame-time A/B at a pinned pose (Ave Performus: ≥ 5 %, median of ≥ 5 runs).
+- D10 DONE on Linux (2026-10-20, uncommitted): one fetch per canonical texture; A/B +3.3 % on Grid003, neutral on
+  Sand002 (below the 5 % bar), kept by the owner — graphics § 39 § One fetch per canonical texture.
 - D7: the `TextureCache` key = hash of the final pixels + the package descriptor, `TextureCache::Version` bumped
   (today the pixel hash alone already tells a packed image apart).
 - Validation by the peers (macOS, Windows).

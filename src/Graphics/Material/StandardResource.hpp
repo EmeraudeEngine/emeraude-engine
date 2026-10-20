@@ -1817,6 +1817,36 @@ namespace EmEn::Graphics::Material
 			std::string transformedTexCoords (ComponentType componentType, const Component::Texture * component, const std::string & coordinates = {}) const noexcept;
 
 			/**
+			 * @brief Returns whether a texture binding is read through ONE shared fetch (graphics § 39, D10): a packed
+			 * canonical texture read by two components or more at the base UVs (the height is not: the parallax marches
+			 * it at its own UVs).
+			 * @param binding The binding.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool sharesFetch (uint32_t binding) const noexcept;
+
+			/**
+			 * @brief Returns the GLSL texel of a component: the shared fetch of its binding (sharesFetch()), else its own
+			 * `texture()` at its transformed coordinates.
+			 * @param componentType The component type.
+			 * @param component A pointer to the texture component.
+			 * @return std::string A vec4 expression.
+			 */
+			[[nodiscard]]
+			std::string texelExpression (ComponentType componentType, const Component::Texture * component) const noexcept;
+
+			/**
+			 * @brief Declares the shared fetches (D10), once each, after the parallax computed the coordinates: one vec4
+			 * per shared binding, read at the UVs of the component leading the binding (D11: every reader has the same).
+			 * @param fragmentShader A reference to the fragment shader.
+			 * @param materialSet The material descriptor set index.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool declareSharedFetches (Saphir::FragmentShader & fragmentShader, uint32_t materialSet) const noexcept;
+
+			/**
 			 * @brief Returns the GLSL name of the material's roughness BEFORE the shore foam: the roughness component's
 			 * variable, or the UBO value.
 			 * @return std::string
