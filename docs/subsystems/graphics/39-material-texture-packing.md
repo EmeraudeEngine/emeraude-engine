@@ -239,6 +239,14 @@ interleaved launches each, validation off):**
 Below the plan's 5 % bar; **kept by the owner (2026-10-20)**: a small code, no regression measured, a real gain where the
 shared reads dominate, and more to come with the glTF ORM (up to 3 fetches → 1, L2d).
 
+**macOS peer** (M6, MoltenVK 1.4.2, the unshared side built from d4a67484, NOT interleaved — all unshared runs first):
+`ScenePass` Grid003 6.519 → 6.249 ms (**+4.1 %**, the ranges do not overlap), Sand002 7.787 → 7.668 ms (+1.5 %, inside
+the noise); the frame (~33 ms of post-processing there) −0.5 %. Images identical within the noise, the dumped GLSL as on
+Linux (15 passes × 2 materials), no SPIRV-Cross / MSL complaint, 0 VUID beyond the known `setGround` ones.
+**Windows peer** (RTX 3500 Ada, MSVC Release + Debug 0 warning, interleaved against d4a67484): images identical within
+the noise (Grid003 1.33 vs 1.32–1.35, Sand002 1.25 vs 1.24–1.25); `ScenePass` median 0.998 → 0.968 ms (+3.0 %) but the
+launch-to-launch spread there (0.8–1.1 ms) is larger than the effect: consistent with the gain, no regression.
+
 ## glTF (L2d, 2026-10-20)
 
 The glTF loader hands the shared packer its data maps BEFORE resolving their textures: the metallic-roughness image's
@@ -251,7 +259,12 @@ place in glTF: nothing to pack there.
 Measured (Linux, `asset-loader --demo-options 7,0,1,0,0,0`, DamagedHelmet, pinned exposure, validation on): its
 `Material_MR` 5 → 4 textures, 5 → 4 bindings, 26.68 → 21.34 MiB, ambient occlusion / roughness / metalness through ONE
 fetch (D10); the image equals the unpacked one (mean |d| 0.07 against a 0.05 noise); 0 VUID. Sponza unchanged (KTX2):
-162 bindings, 0 VUID.
+162 bindings, 0 VUID. **macOS peer** (M6): the same numbers (21.335 vs 26.669 MiB, 4 vs 5
+bindings), 0 VUID; on/off 0.055 against a 0.026 noise — equal to the eye, measurable (the three data maps now share BC7
+blocks, the same family as the albedo + opacity cost, much smaller); Sponza 162 bindings, never packed. **Windows
+peer**: the same numbers, 0 VUID with the RT lane; inside the helmet 0.24–0.28 against a 0.08–0.11 noise, a fine speckle
+following the texture detail, no shifted feature — the same BC7 shared-block cost (item
+`bc7-quality-for-textures-with-alpha` now covers the packed data textures too).
 
 ## Animated textures in BC7 (2026-10-20)
 

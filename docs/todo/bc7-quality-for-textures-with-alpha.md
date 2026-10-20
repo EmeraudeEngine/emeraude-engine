@@ -1,6 +1,6 @@
 ---
 id: bc7-quality-for-textures-with-alpha
-title: A finer BC7 for the textures with alpha (the packed albedo + opacity)
+title: A finer BC7 for the packed textures (albedo + opacity, the packed data maps)
 status: open
 priority: unranked
 scope: Graphics/TextureCompressor
@@ -20,8 +20,10 @@ and 16 partitions (the "fast" preset, `TextureCompressor.cpp`), the same for eve
 
 ## What remains
 
-- Measure a finer preset (higher uber level, 64 partitions) on the textures that HAVE an alpha only, against the
-  same Grid003 capture: the image difference and the encode time (cold cache), the cache making it a one-time cost.
+- The packed data textures pay the same (2026-10-20): DamagedHelmet's AO / roughness / metalness in one BC7, on vs off
+  0.055 against a 0.026 noise (macOS), 0.24–0.28 against 0.08–0.11 inside the helmet (Windows) — a fine speckle.
+- Measure a finer preset (higher uber level, 64 partitions) on the PACKED textures only, against the same Grid003 and
+  DamagedHelmet captures: the image difference and the encode time (cold cache), the cache making it a one-time cost.
 - The preset enters the `TextureCache` key (D7: the encoder settings are part of the package descriptor).
 
 ## References

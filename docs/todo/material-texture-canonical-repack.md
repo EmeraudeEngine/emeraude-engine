@@ -29,9 +29,9 @@ Graphics § 39: whatever the source files, the engine builds at most three textu
   vegetation with a `-alpha` image to be proven.
 - The albedo + opacity BC7 cost (macOS: 0.66 against a 0.21 noise on Grid003's panels): KEPT by the owner
   (2026-10-20); the encoder tuning is item `bc7-quality-for-textures-with-alpha`.
-- L2d DONE on Linux (2026-10-20, uncommitted): the glTF data maps through the packer (decoded images, repeat
+- L2d and D10 validated on the 3 OS (2026-10-20): the glTF data maps through the packer (decoded images, repeat
   addressing, same UVs) — DamagedHelmet 5 → 4 textures, 26.7 → 21.3 MiB, one fetch for AO / roughness / metalness.
-- D10 DONE on Linux (2026-10-20, uncommitted): one fetch per canonical texture; A/B +3.3 % on Grid003, neutral on
+- D10 DONE and validated on the 3 OS (2026-10-20): one fetch per canonical texture; A/B +3.3 % on Grid003, neutral on
   Sand002 (below the 5 % bar), kept by the owner — graphics § 39 § One fetch per canonical texture.
 - D7: the `TextureCache` key = hash of the final pixels + the package descriptor, `TextureCache::Version` bumped
   (today the pixel hash alone already tells a packed image apart).
