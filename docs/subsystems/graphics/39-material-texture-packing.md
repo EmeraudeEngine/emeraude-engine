@@ -197,6 +197,16 @@ lane, water-world 734.11 MiB / 24 bindings, Grid003 packed vs not 1.46–1.59 ag
 under RT (the opacity channel works), MCP conformance 1902 / 0. Console conformance counts depend on the loaded scene
 (4935 water-world Linux, 4923 water-world macOS, 4899 relief Windows): compare MCP counts across machines.
 
+**L2c + the cache fix (engine d35ca2f4), macOS peer, 2026-10-20**: AppleClang PARANOID 0 warning, `-Wdocumentation`
+clean; water-world with the cache ON now serves full chains again (742.11 MiB, Sand002 16.0 MiB, every texture 12
+mips; 733.44 MiB with the poisoned cache before), a settings copy asking one level gets one level (562.06 MiB), and a
+default run right after still gets 12 — the mip count separates the entries. Grid003 still packed (0.635 against the
+same unpacked render, as the previous lot); MCP 1902 / 0; no MoltenVK layout complaint. **Windows peer** (MSVC 19.44 Release +
+Debug /W4 /WX 0 warning — the `StaticVector` pointer iterator and the `std::array` loop included): water-world 12 mips
+everywhere, 734.11 MiB; a settings copy asking one level in the SAME scratch cache got one level and the cache grew
+197 → 214 files (new keys, not served from the full chains); sponza 162 bindings with the RT lane; Grid003 packed,
+equal to the previous lot within the noise; MCP 1902 / 0; 0 VUID beyond the known `setGround` 4+2.
+
 **⚠️ Traps met on the way.**
 - `Processor::resize()` is a DISPLAY resize (corners mapped, Black past the border): upscaling Grid003's 512² mask
   with it shifted the mask by half a texel and darkened every tile edge (15.3 % of the pixels off). The texture

@@ -17,13 +17,14 @@ Graphics § 39: whatever the source files, the engine builds at most three textu
 
 ## What remains
 
-- DONE on Linux (2026-10-20, uncommitted): L2a (`PackRecipe`, `ImageResource::load(PackRecipe)`, base
+- DONE and validated on the 3 OS (2026-10-20): L2a (`PackRecipe`, `ImageResource::load(PackRecipe)`, base
   `Pixmap::copyChannel()` and `Processor::resampleTexture()`) and L2b (the store JSON planner,
   `Core/Graphics/Texture/Packing`), the RT opacity channel — graphics § 39 § The repack (Sand002 26.7 → 16.0 MiB,
   Grid003 4 → 3 textures, both within the noise against the unpacked render).
 - The CPU-copy release and the recomposition: the packed image declares `releasesLocalData()` and recomposes in
   `reloadLocalDataFromOwnSource()`; NOT exercised yet (a reload of a released packed image, e.g. by a readback).
-- L2c DONE on Linux (2026-10-20, uncommitted) through the shared `TexturePacker` (D14): FBX loader, Toolkit foliage.
+- L2c DONE (engine d35ca2f4, built and run on the 3 OS 2026-10-20) through the shared `TexturePacker` (D14): FBX
+  loader, Toolkit foliage.
   NOT exercised at runtime: no store asset reaches those paths (graphics § 39) — needs an FBX with separate maps or a
   vegetation with a `-alpha` image to be proven.
 - The albedo + opacity BC7 cost (macOS: 0.66 against a 0.21 noise on Grid003's panels): KEPT by the owner
