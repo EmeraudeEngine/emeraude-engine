@@ -54,6 +54,7 @@ OUT of the canonical layout in this first pass; they only gain a working `Source
   channel map, ratio / target size, mip policy, block format, encoder version and settings), with a
   `TextureCache::Version` bump.
   Keying on the recipe was rejected: it would still have to hash the decoded sources to detect a change.
+  (2026-10-20: the mip levels asked are in the key now — a defect fix, caution-points § The BC7 texture cache.)
 - **D8 — The block format follows the texture kind** (today every 2D texture is BC7):
   - Albedo (with or without opacity) and emission: **BC7 always** (sRGB) — quality first, the saving comes from the
     ratios (D5); BC1 was rejected.
@@ -85,6 +86,10 @@ OUT of the canonical layout in this first pass; they only gain a working `Source
 - **D12 — A recipe takes its LARGEST source resolution**, the others upscaled with a quality filter; the ratios (D5)
   reduce afterwards.
 - **D13 — `Core/Graphics/Texture/Packing`**, true by default: the A/B switch and a diagnosis aid.
+- **D14 — One shared packer** (owner, 2026-10-20): `Graphics/TexturePacker` takes a material's canonical maps as
+  IMAGES (`PackSource`: image, role, channel, sampling key) and answers, per packed role, the packed texture and its
+  channel. The store JSON planner, the FBX loader and the Toolkit foliage all use it — one grouping logic. Rejected:
+  image-source setters inside the material.
 - **Start**: measure first (per-texture VRAM accounting, reference scenes), then the lots in order.
 
 ## State of the engine before the work (survey, 2026-10-20)
@@ -163,6 +168,12 @@ KHR_texture_transform contract), and no fetch sharing at all.
   out +2.7 brighter (bias growing towards the camera); with the screen-space lane the packed and unpacked renders
   were already identical (0.71) — that is how it was attributed.
 
+- **L2c — the setter-built materials** go through the same packer: the FBX loader (albedo, opacity, AO, roughness,
+  metalness of a material; FBX maps carry no UV transform) and `Toolkit::vegetationMaterial()` (a foliage `-albedo` +
+  `-alpha`); the opacity / AO / height setters take the channel, and `Component::Texture::hasExpectedColorSpace()`
+  accepts either colour space for an ALPHA read. ⚠️ Not exercised by the current data: the store's only FBX (Paladin)
+  has an albedo and a normal, and every vegetation of the store is a JSON material whose albedo carries its own alpha.
+
 **Measured** (Linux, RTX 3070 Ti, `relief` with its ground replaced through `setGround()`, the camera exposure pinned,
 per pixel against the same material with `Packing` off, launch-to-launch noise ~1.0–1.1):
 
@@ -172,6 +183,19 @@ per pixel against the same material with `Packing` off, launch-to-launch noise ~
 | `Metals/Grid003` (colour 1024², opacity 512², normal, height) | 4 → 3 | 4 → 3 | 3.34 → 3.01 | 1.13 | 0.95 % |
 
 `water-world`: 28 → 26 textures, 744.8 → 734.1 MiB, 26 → 24 bindings; `sponza` unchanged (glTF: L2d), 0 `VUID-`.
+
+**The macOS peer (Apple M6, 2026-10-20)** confirmed every number (sponza 162 bindings, Sand002 packed, 0 VUID, MCP and
+console conformance) and, with a noise floor of 0.21 there, measured the albedo + opacity packing of Grid003 at 0.66
+(p99.9 8/255, all of it on the grate's slatted panels): a small, systematic change — the albedo RGB and the mask now
+share BC7 blocks. Linux sees it at 1.42 against a ~1.1 noise. **Owner decision (2026-10-20): KEPT** — the normal cost
+of an RGBA albedo in BC7 (a glTF albedo with alpha pays it natively), and the mask gains the coverage-preserving mips;
+a finer BC7 for the textures with alpha is item `bc7-quality-for-textures-with-alpha`.
+
+**The Windows peer (RTX 3500 Ada, MSVC 19.44, 2026-10-20)**: Release and Debug 0 warning (the `FillingType` and
+`StaticVector` forward declarations included), base suite 2702 / 0 failed, sponza 162 bindings / 1899.3 MiB with the RT
+lane, water-world 734.11 MiB / 24 bindings, Grid003 packed vs not 1.46–1.59 against a 0.69 noise with NO brightness bias
+under RT (the opacity channel works), MCP conformance 1902 / 0. Console conformance counts depend on the loaded scene
+(4935 water-world Linux, 4923 water-world macOS, 4899 relief Windows): compare MCP counts across machines.
 
 **⚠️ Traps met on the way.**
 - `Processor::resize()` is a DISPLAY resize (corners mapped, Black past the border): upscaling Grid003's 512² mask
@@ -197,7 +221,7 @@ layer on (0 `VUID-`). MiB = the device memory of the loaded textures, each image
 
 - **Sponza**: 45 materials bind one glTF ORM image twice (roughness `.g`, metalness `.b`) — 4 components, 3 distinct
   textures, 4 bindings each; no ambient-occlusion component is created. The 1:1 component/binding ratio is what
-  `material-one-binding-per-distinct-texture` lowers (207 → 162 bindings with nothing else changed).
+  one-binding-per-distinct-texture lot lowered (207 → 162 bindings with nothing else changed).
 - **Sand002** (`water-world`): 5 maps × 5.3354 MiB = 26.7 MiB, 5 bindings; the canonical layout makes it 3 textures
   (albedo, normal, data AO + roughness + height) = 16.0 MiB, 3 bindings, before any ratio — measured so since L2b.
 - **The ocean normal map** (`BuiltinOceanNormalMap`, `AnimatedTexture2D`): 120 layers × 1024², 11 mips, RGBA8
@@ -205,9 +229,10 @@ layer on (0 `VUID-`). MiB = the device memory of the loaded textures, each image
 
 ## The lots (`docs/todo/`)
 
-1. `texture-vram-accounting-per-texture` — measure first.
-2. `material-source-channel-ignored-by-hard-coded-components` — the defect.
-3. `material-one-binding-per-distinct-texture` — D1.
+1. ~~Measure first~~ — DONE, validated on the 3 OS 2026-10-20 (`getTextureMemory`; `jungle-ruins` to measure once its
+   USD textures load).
+2. ~~SourceChannel ignored by most components~~ — DONE, validated on the 3 OS 2026-10-20 (graphics § 08-8).
+3. ~~One binding per distinct texture~~ — DONE, validated on the 3 OS 2026-10-20 (§ One binding per distinct texture).
 4. `material-texture-canonical-repack` — D2, D4, D6, D7, recipe release.
 5. `texture-footprint-ratios-per-kind` — D5, per-kind mip chains.
 6. `rt-material-packed-channels` — the RT parity.

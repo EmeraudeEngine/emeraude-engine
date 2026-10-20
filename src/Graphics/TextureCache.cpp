@@ -27,18 +27,21 @@
 #include "TextureCache.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
 #include <fstream>
-#include <ios>
 #include <string_view>
+#include <system_error>
+#include <utility>
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "BlobTrait.hpp"
 #include "FileSystem.hpp"
 #include "Hash/FNV1a.hpp"
+#include "IO/IO.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
-#include "IO/IO.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics
@@ -134,7 +137,7 @@ namespace EmEn::Graphics
 	}
 
 	size_t
-	TextureCache::cacheKey (const Pixmap< uint8_t > & pixmap) noexcept
+	TextureCache::cacheKey (const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) noexcept
 	{
 		/* NOTE: Content-addressed on purpose. Anything derived from the resource NAME alone lets an
 		 * edited texture keep serving its stale blob; hashing the decoded pixels cannot. The
@@ -150,6 +153,8 @@ namespace EmEn::Graphics
 		fold(static_cast< size_t >(pixmap.width()));
 		fold(static_cast< size_t >(pixmap.height()));
 		fold(static_cast< size_t >(pixmap.colorCount()));
+		/* NOTE: The chain asked is part of the entry: the same pixels compressed with one level are another blob. */
+		fold(static_cast< size_t >(maxMipLevels));
 
 		return key;
 	}
@@ -312,7 +317,7 @@ namespace EmEn::Graphics
 	TextureCache::getOrCompress (const std::string & resourceName, const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) const noexcept
 	{
 		const auto cacheEnabled = !m_cacheDirectory.empty();
-		const auto key = cacheEnabled ? TextureCache::cacheKey(pixmap) : 0;
+		const auto key = cacheEnabled ? TextureCache::cacheKey(pixmap, maxMipLevels) : 0;
 
 		if ( cacheEnabled )
 		{

@@ -56,7 +56,7 @@ namespace EmEn::Graphics::Material::Component
 	using namespace Saphir;
 
 	bool
-	Texture::hasExpectedColorSpace (const std::string & variableName, const std::shared_ptr< TextureResource::Abstract > & texture) noexcept
+	Texture::hasExpectedColorSpace (const std::string & variableName, const std::shared_ptr< TextureResource::Abstract > & texture, PixelFactory::Channel sourceChannel) noexcept
 	{
 		if ( texture == nullptr )
 		{
@@ -65,7 +65,8 @@ namespace EmEn::Graphics::Material::Component
 			return false;
 		}
 
-		if ( texture->name() == Resources::Default )
+		/* NOTE: The default stand-in, and an alpha read (linear in every format), fit either colour space. */
+		if ( texture->name() == Resources::Default || sourceChannel == PixelFactory::Channel::Alpha )
 		{
 			return true;
 		}

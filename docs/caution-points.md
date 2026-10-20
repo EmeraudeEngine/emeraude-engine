@@ -367,6 +367,16 @@ packed channel. Debugging a store material, read the log line "maps … packed i
 - Normal + height in one BC7 cost the normal its fine grain (mean |d| 2.63): the normal stays alone, the height
   lives in the Data texture's A.
 
+### The BC7 texture cache keyed an entry on its pixels only, not on the mip chain asked (fixed 2026-10-20)
+
+`TextureCache::cacheKey()` folded the pixels, the size and the channel count — not the mip levels asked of the
+compression. A run with `Core/Graphics/Texture/MipMappingLevels` = 1 (any consumer with that setting) wrote one-level
+entries that every later full-chain run was served, and the reverse. Found by the macOS peer (124 of 306 entries on
+the Mac held one level; Sand002's colour and normal came back without mips, 4.0 MiB instead of 5.34); reproduced on
+Linux with a settings copy asking one level: 12 levels served before the fix, 1 after; the default run keeps 12. The
+mip count is in the key now. ⚠️ A key change ORPHANS the old entries (they stay on disk, unreachable): clearing the
+directory (`--clear-renderer-cache`) is the owner's call.
+
 ### Material Types Registration
 
 > [!CRITICAL]

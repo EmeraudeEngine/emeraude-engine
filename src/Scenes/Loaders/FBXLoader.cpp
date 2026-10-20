@@ -28,34 +28,61 @@
 
 /* STL inclusions. */
 #include <array>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <ranges>
+#include <span>
 #include <string>
+#include <type_traits>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 /* Third-party inclusions. */
 #include <ufbx/ufbx.h>
 
 /* Local inclusions. */
-#include "FBXParser.hpp"
+#include "Animation/Skeleton.hpp"
+#include "Animation/Skin.hpp"
 #include "Animations/AnimationClipResource.hpp"
 #include "Animations/SkeletonResource.hpp"
-#include "SceneData.hpp"
-#include "Graphics/Geometry/Types.hpp"
+#include "BlobTrait.hpp"
+#include "FBXParser.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/ImageResource.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/RasterizationOptions.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
-#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
+#include "Graphics/TexturePacker.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
+#include "Graphics/Types.hpp"
 #include "IO/IO.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/StreamIO.hpp"
-#include "VertexFactory/Shape.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Resources/Container.hpp"
+#include "Resources/Manager.hpp"
+#include "SceneData.hpp"
+#include "Scenes/Loaders/LoaderOptions.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
+#include "VertexFactory/Shape.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics::Geometry
+{
+	class Interface;
+}
 
 namespace EmEn::Scenes::Loaders
 {
@@ -233,27 +260,71 @@ namespace EmEn::Scenes::Loaders
 
 		bool allMaterials = true;
 
+		/* NOTE: The texture packing (graphics § 39) works on the IMAGES, before any texture of a material is requested. */
+		const TexturePacker packer{m_resources};
+
 		for ( size_t materialIndex = 0; materialIndex < asset.materials.size(); ++materialIndex )
 		{
 			const auto & description = asset.materials[materialIndex];
 
+			/* NOTE: FBX maps carry no UV transform: every map of a material reads the same UVs. */
+			Base::StaticVector< PackSource, TexturePacker::MaxRoles > packSources;
+
+			for ( const auto & [role, slot] : std::array< std::pair< ComponentType, const std::optional< FBX::TextureSlot > * >, 5 >{{
+				{ComponentType::Albedo, &description.albedoTexture},
+				{ComponentType::Opacity, &description.opacityTexture},
+				{ComponentType::AmbientOcclusion, &description.ambientOcclusionTexture},
+				{ComponentType::Roughness, &description.roughnessTexture},
+				{ComponentType::Metalness, &description.metalnessTexture}
+			}} )
+			{
+				/* NOTE: In capacity: five roles. */
+				if ( slot->has_value() && (*slot)->texture < images.size() )
+				{
+					packSources.push_back({.image = images[(*slot)->texture], .samplingKey = {}, .role = role, .channel = Channel::Red});
+				}
+			}
+
+			const auto packedRoles = packer.pack({packSources.data(), packSources.size()}, description.resourceName);
+
+			/* NOTE: A packed role reads its packed texture through its channel; the others resolve their own texture. */
+			const auto mapTexture = [&packedRoles, &resolveTexture] (ComponentType role, const std::optional< FBX::TextureSlot > & slot, Channel & channel) -> std::shared_ptr< TextureResource::Texture2D > {
+				const auto * const packedRole = std::ranges::find_if(packedRoles, [role] (const PackedRole & entry) { return entry.role == role; });
+
+				if ( packedRole != packedRoles.end() )
+				{
+					channel = packedRole->channel;
+
+					return packedRole->texture;
+				}
+
+				channel = Channel::Red;
+
+				return resolveTexture(slot);
+			};
+
 			/* NOTE: Resolved here, in this order: the members of a closure are initialized in an unspecified order. */
-			auto albedoTex = resolveTexture(description.albedoTexture);
-			auto roughnessTex = resolveTexture(description.roughnessTexture);
-			auto metalnessTex = resolveTexture(description.metalnessTexture);
+			auto albedoChannel = Channel::Red;
+			auto roughnessChannel = Channel::Red;
+			auto metalnessChannel = Channel::Red;
+			auto aoChannel = Channel::Red;
+			auto opacityChannel = Channel::Red;
+			auto albedoTex = mapTexture(ComponentType::Albedo, description.albedoTexture, albedoChannel);
+			auto roughnessTex = mapTexture(ComponentType::Roughness, description.roughnessTexture, roughnessChannel);
+			auto metalnessTex = mapTexture(ComponentType::Metalness, description.metalnessTexture, metalnessChannel);
 			auto normalTex = resolveTexture(description.normalTexture);
-			auto aoTex = resolveTexture(description.ambientOcclusionTexture);
+			auto aoTex = mapTexture(ComponentType::AmbientOcclusion, description.ambientOcclusionTexture, aoChannel);
 			auto emissiveTex = resolveTexture(description.emissiveTexture);
-			auto opacityTex = resolveTexture(description.opacityTexture);
+			auto opacityTex = mapTexture(ComponentType::Opacity, description.opacityTexture, opacityChannel);
 
 			auto configure = [
 				albedoTexture = std::move(albedoTex), albedoColor = description.albedoColor,
-				roughnessTexture = std::move(roughnessTex), roughnessFactor = description.roughnessFactor,
-				metalnessTexture = std::move(metalnessTex), metalnessFactor = description.metalnessFactor,
+				roughnessTexture = std::move(roughnessTex), roughnessFactor = description.roughnessFactor, roughnessChannel,
+				metalnessTexture = std::move(metalnessTex), metalnessFactor = description.metalnessFactor, metalnessChannel,
 				normalTexture = std::move(normalTex),
-				ambientOcclusionTexture = std::move(aoTex),
+				ambientOcclusionTexture = std::move(aoTex), aoChannel,
 				emissiveTexture = std::move(emissiveTex), emissiveColor = description.emissiveColor, emissiveStrength = description.emissiveStrength, hasEmissiveColor = description.hasEmissiveColor,
-				opacityTexture = std::move(opacityTex), opacityValue = description.opacityValue,
+				opacityTexture = std::move(opacityTex), opacityValue = description.opacityValue, opacityChannel,
 				specularIsDielectricF0 = description.specularIsDielectricF0, specularFactor = description.specularFactor, specularColor = description.specularColor
 			] (auto & materialResource) {
 				/* A base-colour texture and a base-colour factor MULTIPLY — that is what both
@@ -277,7 +348,8 @@ namespace EmEn::Scenes::Loaders
 				 * scalar of 0 — the FBX default — would ZERO the metalness map out). */
 				if ( roughnessTexture != nullptr )
 				{
-					materialResource.setRoughnessComponent(roughnessTexture);
+					/* NOTE: 1.0, the neutral factor (the setter's default); the channel is the packed one. */
+					materialResource.setRoughnessComponent(roughnessTexture, 1.0F, false, roughnessChannel);
 				}
 				else
 				{
@@ -286,7 +358,7 @@ namespace EmEn::Scenes::Loaders
 
 				if ( metalnessTexture != nullptr )
 				{
-					materialResource.setMetalnessComponent(metalnessTexture);
+					materialResource.setMetalnessComponent(metalnessTexture, 1.0F, metalnessChannel);
 				}
 				else
 				{
@@ -300,7 +372,7 @@ namespace EmEn::Scenes::Loaders
 
 				if ( ambientOcclusionTexture != nullptr )
 				{
-					materialResource.setAmbientOcclusionComponent(ambientOcclusionTexture);
+					materialResource.setAmbientOcclusionComponent(ambientOcclusionTexture, 1.0F, aoChannel);
 				}
 
 				if ( emissiveTexture != nullptr )
@@ -317,7 +389,7 @@ namespace EmEn::Scenes::Loaders
 				 * (its component setter does not raise the blending flag itself). */
 				if ( opacityTexture != nullptr )
 				{
-					materialResource.setOpacityComponent(opacityTexture, opacityValue);
+					materialResource.setOpacityComponent(opacityTexture, opacityValue, opacityChannel);
 					materialResource.enableBlending(BlendingMode::Normal);
 				}
 				else if ( opacityValue < 0.999F )

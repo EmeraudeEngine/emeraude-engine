@@ -119,12 +119,15 @@ namespace EmEn::Graphics::Material::Component
 			 * decision 2026-10-14): a material setter refuses a mismatch instead of rewriting the shared resource. A
 			 * store texture is requested in the right colour space through TextureResource::getStoreTexture().
 			 * @note The default resource (a missing texture's stand-in) is accepted in either colour space.
+			 * @note A component reading the ALPHA channel accepts either colour space: alpha is linear in every format (the
+			 * opacity read from a packed sRGB albedo, graphics § 39).
 			 * @param variableName The material variable name.
 			 * @param texture A reference to the texture resource smart pointer.
+			 * @param sourceChannel The channel the component reads. Default red.
 			 * @return bool False, with an error naming both, on a null texture or a mismatch.
 			 */
 			[[nodiscard]]
-			static bool hasExpectedColorSpace (const std::string & variableName, const std::shared_ptr< TextureResource::Abstract > & texture) noexcept;
+			static bool hasExpectedColorSpace (const std::string & variableName, const std::shared_ptr< TextureResource::Abstract > & texture, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
 			 * @brief Constructs a texture component from a texture interface (lower-level).

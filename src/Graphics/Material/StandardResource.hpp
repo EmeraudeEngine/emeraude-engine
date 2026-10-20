@@ -565,9 +565,10 @@ namespace EmEn::Graphics::Material
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a height map texture smart pointer.
 			 * @param scale The height scale (depth of parallax effect). Default 0.05.
+			 * @param sourceChannel The channel of the texture holding the height (a packed data texture: alpha). Default red.
 			 * @return bool
 			 */
-			bool setHeightComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale = DefaultHeightScale) noexcept;
+			bool setHeightComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale = DefaultHeightScale, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
 			 * @brief Changes the height scale for parallax occlusion mapping.
@@ -743,9 +744,10 @@ namespace EmEn::Graphics::Material
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a texture smart pointer (grayscale opacity map, red channel).
 			 * @param amount The opacity multiplier applied to the sampled texel. Default 1.0.
+			 * @param sourceChannel The channel of the texture holding the opacity (alpha: a packed albedo). Default red.
 			 * @return bool
 			 */
-			bool setOpacityComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount = DefaultOpacity) noexcept;
+			bool setOpacityComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount = DefaultOpacity, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
 			 * @brief Updates the global opacity amount (dynamic property).
@@ -841,9 +843,10 @@ namespace EmEn::Graphics::Material
 			 * @warning This function is available before creation time.
 			 * @param texture A reference to a texture smart pointer (grayscale AO map).
 			 * @param intensity The AO intensity (0.0 = no AO, 1.0 = full AO). Default 1.0.
+			 * @param sourceChannel The channel of the texture holding the AO (a packed data texture: red). Default red.
 			 * @return bool
 			 */
-			bool setAmbientOcclusionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float intensity = DefaultAOIntensity) noexcept;
+			bool setAmbientOcclusionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float intensity = DefaultAOIntensity, Base::PixelFactory::Channel sourceChannel = Base::PixelFactory::Channel::Red) noexcept;
 
 			/**
 			 * @brief Sets the reflectivity map component as a texture.

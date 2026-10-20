@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <string>
@@ -40,6 +41,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/TextureCompressor.hpp"
+#include "PixelFactory/Pixmap.hpp"
 
 namespace EmEn
 {
@@ -63,8 +65,8 @@ namespace EmEn::Graphics
 	 * stays up with an empty directory: every lookup misses and every texture is re-encoded, which
 	 * is what you want to measure the encoding cost.
 	 *
-	 * @note Invalidation is keyed on a FNV-1a hash of the DECODED PIXELS plus the dimensions and
-	 * the channel count. Hashing the content is what makes it correct: the previous key mixed the
+	 * @note Invalidation is keyed on a FNV-1a hash of the DECODED PIXELS plus the dimensions,
+	 * the channel count and the mip levels asked (since 2026-10-20). Hashing the content is what makes it correct: the previous key mixed the
 	 * resource name with a "file size" that was the decoded byte count and a "modification time"
 	 * that was width * 1000000 + height, so it reduced to name + dimensions. Repainting a texture
 	 * without resizing it served the stale BC7 blob forever.
@@ -122,12 +124,16 @@ namespace EmEn::Graphics
 			bool onTerminate () noexcept override;
 
 			/**
-			 * @brief Computes the content-addressed cache key for a pixmap.
+			 * @brief Computes the content-addressed cache key for a pixmap and the mip chain asked of it.
+			 * @note The mip count is part of the key (2026-10-20): keyed on the pixels alone, an entry written with
+			 * one mip level (a run with `Core/Graphics/Texture/MipMappingLevels` = 1) served every later run that asked
+			 * for a full chain, and a full chain served a run that asked for one level.
 			 * @param pixmap A reference to the decoded RGBA8 source pixels.
+			 * @param maxMipLevels The mip levels asked of the compression.
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static size_t cacheKey (const Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
+			static size_t cacheKey (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) noexcept;
 
 			/**
 			 * @brief Returns the cache file path for a key.

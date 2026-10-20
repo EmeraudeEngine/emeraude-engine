@@ -27,18 +27,35 @@
 #include "Toolkit.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cmath>
+#include <memory>
+#include <span>
 #include <vector>
 
 /* Local inclusions. */
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/ImposterAtlas.hpp"
 #include "Graphics/Material/StandardResource.hpp"
-#include "Graphics/TextureResource/Texture2D.hpp"
+#include "Graphics/RenderTarget/ImposterBake.hpp"
+#include "Graphics/TexturePacker.hpp"
 #include "Graphics/TextureResource/StoreTexture.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
 #include "Math/OctahedralMapping.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/Component/MultipleVisuals.hpp"
+#include "Scenes/DirectionalShadowOptions.hpp"
+#include "Settings.hpp"
+#include "VertexFactory/ShapeBuilderOptions.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics::Renderable
+{
+	class Abstract;
+}
 
 namespace EmEn::Scenes
 {
@@ -81,22 +98,58 @@ namespace EmEn::Scenes
 		}
 
 		auto * textures = m_resourceManager.container< TextureResource::Texture2D >();
-		const auto albedo = TextureResource::getStoreTexture(*textures, name + "-albedo", {.sRGB = true}, false);
-		const auto normal = hasImage("-normal") ? textures->getResource(name + "-normal", false) : nullptr;
 		const bool foliage = surface == VegetationSurface::Foliage;
-		const auto alphaMask = foliage && hasImage("-alpha") ? textures->getResource(name + "-alpha", false) : nullptr;
+		std::shared_ptr< TextureResource::Texture2D > albedo;
+		std::shared_ptr< TextureResource::Texture2D > alphaMask;
+		auto alphaChannel = PixelFactory::Channel::Red;
+
+		/* NOTE: The texture packing (graphics § 39): the foliage mask goes into its albedo's A — one texture, and the
+		 * mask reaches the coverage-preserving mips, which only read an alpha channel — before any texture is requested. */
+		if ( foliage && hasImage("-alpha") )
+		{
+			auto * imageContainer = m_resourceManager.container< ImageResource >();
+			const std::array< PackSource, 2 > sources{{
+				{.image = imageContainer->getResource(name + "-albedo", false), .samplingKey = {}, .role = ComponentType::Albedo, .channel = PixelFactory::Channel::Red},
+				{.image = imageContainer->getResource(name + "-alpha", false), .samplingKey = {}, .role = ComponentType::Opacity, .channel = PixelFactory::Channel::Red}
+			}};
+
+			for ( const auto & packedRole : TexturePacker{m_resourceManager}.pack(sources, name) )
+			{
+				if ( packedRole.role == ComponentType::Albedo )
+				{
+					albedo = packedRole.texture;
+				}
+				else if ( packedRole.role == ComponentType::Opacity )
+				{
+					alphaMask = packedRole.texture;
+					alphaChannel = packedRole.channel;
+				}
+			}
+		}
+
+		if ( albedo == nullptr )
+		{
+			albedo = TextureResource::getStoreTexture(*textures, name + "-albedo", {.sRGB = true}, false);
+		}
+
+		if ( alphaMask == nullptr && foliage && hasImage("-alpha") )
+		{
+			alphaMask = textures->getResource(name + "-alpha", false);
+		}
+
+		const auto normal = hasImage("-normal") ? textures->getResource(name + "-normal", false) : nullptr;
 		const auto roughness = !foliage && hasImage("-roughness") ? textures->getResource(name + "-roughness", false) : nullptr;
 		const std::string materialName = std::string{foliage ? "Vegetation/Foliage/" : "Vegetation/Bark/"} + name;
 
-		return materials->getOrCreateResourceSync(materialName, [&albedo, &normal, &alphaMask, &roughness, foliage] (Material::StandardResource & material) {
+		return materials->getOrCreateResourceSync(materialName, [&albedo, &normal, &alphaMask, &roughness, foliage, alphaChannel] (Material::StandardResource & material) {
 			if ( foliage )
 			{
-				/* The cut-out: a separate mask (red channel) or the colour image's own alpha. The alpha test keeps the
-				 * card OPAQUE (depth write, no sorting): a leaf is either there or not. */
+				/* The cut-out: the mask (packed in the albedo's A, else a separate red channel) or the colour image's own
+				 * alpha. The alpha test keeps the card OPAQUE (depth write, no sorting): a leaf is either there or not. */
 				if ( alphaMask != nullptr )
 				{
 					material.setAlbedoComponent(albedo);
-					material.setOpacityComponent(alphaMask);
+					material.setOpacityComponent(alphaMask, 1.0F, alphaChannel);
 				}
 				else
 				{

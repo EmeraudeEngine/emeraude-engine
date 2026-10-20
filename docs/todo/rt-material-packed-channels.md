@@ -29,4 +29,4 @@ lives in the albedo's A and the data maps share one texture (graphics § 39), RT
 
 ## References
 
-- `docs/subsystems/graphics/39-material-texture-packing.md`, `material-source-channel-ignored-by-hard-coded-components`.
+- `docs/subsystems/graphics/39-material-texture-packing.md`.

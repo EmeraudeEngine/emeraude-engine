@@ -34,9 +34,9 @@
 #include <iterator>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <sstream>
 #include <string>
-#include <string_view>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -64,8 +64,8 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
+#include "Graphics/TexturePacker.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
-#include "Graphics/TextureResource/StoreTexture.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/Types.hpp"
 #include "Helpers.hpp"
@@ -109,60 +109,35 @@ namespace EmEn::Graphics::Material
 
 	namespace
 	{
-		/** @brief A canonical map of a material definition that reads a store texture. */
-		struct PackedMap
-		{
-			Json::Value sampling{Json::objectValue};
-			std::string imageName;
-			const char * key{nullptr};
-			std::optional< PixelFactory::Channel > output;
-			PixelFactory::Channel channel{PixelFactory::Channel::Red};
-			bool flipNormalMapY{false};
-		};
-
-		/** @brief One map of a canonical texture: its key, and the output channel it fills (none: R, G and B). */
-		struct PackMember
-		{
-			const char * key{nullptr};
-			std::optional< PixelFactory::Channel > output;
-		};
-
-		/** @brief A canonical texture of the layout (graphics § 39). */
-		struct PackGroup
-		{
-			std::string_view layout;
-			std::array< PackMember, 4 > members{};
-			size_t memberCount{0};
-			size_t minimumMembers{0};
-			bool sRGB{false};
-			bool normalMap{false};
-		};
-
-		/* NOTE: The normal map stays alone (owner decision D6, revised 2026-10-20 on a measurement): packed with the
-		 * height in its A, the shared BC7 blocks cost the normal its fine grain (relief, per pixel: mean |d| 2.63, 5.6 %
-		 * of the pixels off by more than 8); the height goes into the free A of the data texture instead (1.15, the
-		 * noise) — the same footprint. */
-		constexpr std::array< PackGroup, 2 > PackGroups{{
-			{.layout = "Albedo", .members = {{{.key = AlbedoString, .output = std::nullopt}, {.key = OpacityString, .output = PixelFactory::Channel::Alpha}, {}, {}}}, .memberCount = 2, .minimumMembers = 2, .sRGB = true, .normalMap = false},
-			{.layout = "Data", .members = {{{.key = AmbientOcclusionString, .output = PixelFactory::Channel::Red}, {.key = RoughnessString, .output = PixelFactory::Channel::Green}, {.key = MetalnessString, .output = PixelFactory::Channel::Blue}, {.key = HeightString, .output = PixelFactory::Channel::Alpha}}}, .memberCount = 4, .minimumMembers = 2, .sRGB = false, .normalMap = false}
+		/** @brief The maps of a definition the texture packer may take, and the role each one plays. */
+		constexpr std::array< std::pair< const char *, ComponentType >, 6 > PackableMaps{{
+			{AlbedoString, ComponentType::Albedo},
+			{OpacityString, ComponentType::Opacity},
+			{AmbientOcclusionString, ComponentType::AmbientOcclusion},
+			{RoughnessString, ComponentType::Roughness},
+			{MetalnessString, ComponentType::Metalness},
+			{HeightString, ComponentType::Displacement}
 		}};
 
 		/**
-		 * @brief Reads a map of a material definition that a canonical texture may take: a 2D store texture, not packed yet.
+		 * @brief Reads a map of a material definition the texture packer may take: a 2D store texture, not packed yet,
+		 * without a normal flip.
 		 * @param source The material definition.
-		 * @param member The map.
-		 * @return std::optional< PackedMap >
+		 * @param key The map's key.
+		 * @param role The role it plays.
+		 * @param images The image container.
+		 * @return std::optional< PackSource >
 		 */
 		[[nodiscard]]
-		std::optional< PackedMap >
-		readPackedMap (const Json::Value & source, const PackMember & member) noexcept
+		std::optional< PackSource >
+		readPackSource (const Json::Value & source, const char * key, ComponentType role, Resources::Container< ImageResource > & images) noexcept
 		{
-			if ( !source.isObject() || !source.isMember(member.key) )
+			if ( !source.isObject() || !source.isMember(key) )
 			{
 				return std::nullopt;
 			}
 
-			const auto & block = source[member.key];
+			const auto & block = source[key];
 
 			if ( !block.isObject() || !block.isMember(JKType) || !block.isMember(JKData) || FastJSON::getValue< std::string >(block, JKType).value_or(std::string{}) != TextureString )
 			{
@@ -171,31 +146,20 @@ namespace EmEn::Graphics::Material
 
 			const auto & data = block[JKData];
 
-			if ( !data.isObject() )
+			if ( !data.isObject() || FastJSON::getValue< bool >(data, Texture::JKFlipNormalMapY).value_or(false) )
 			{
 				return std::nullopt;
 			}
 
 			const auto name = FastJSON::getValue< std::string >(data, Texture::JKResourceName);
 
-			if ( !name.has_value() || name->starts_with(PackRecipe::NamePrefix) )
+			if ( !name.has_value() || name->starts_with(PackRecipe::NamePrefix) || !images.isResourceExists(*name) )
 			{
 				return std::nullopt;
 			}
 
-			PackedMap map{};
-			map.key = member.key;
-			map.output = member.output;
-			map.imageName = *name;
-
-			/* NOTE: What decides where the map is read (D11): the UV set, the UV scale and the UV offset. */
-			for ( const auto * samplingKey : {Texture::JKChannel, Texture::JKUVWScale, Texture::JKUVWOffset} )
-			{
-				if ( data.isMember(samplingKey) )
-				{
-					map.sampling[samplingKey] = data[samplingKey];
-				}
-			}
+			PackSource packSource{};
+			packSource.role = role;
 
 			if ( data.isMember(Texture::JKSourceChannel) )
 			{
@@ -206,159 +170,24 @@ namespace EmEn::Graphics::Material
 					return std::nullopt;
 				}
 
-				map.channel = static_cast< PixelFactory::Channel >(*channel);
+				packSource.channel = static_cast< PixelFactory::Channel >(*channel);
 			}
 
-			if ( data.isMember(Texture::JKFlipNormalMapY) )
+			/* NOTE: What decides where the map is read (D11): the UV set, the UV scale and the UV offset. */
+			Json::Value sampling{Json::objectValue};
+
+			for ( const auto * samplingKey : {Texture::JKChannel, Texture::JKUVWScale, Texture::JKUVWOffset} )
 			{
-				const auto flip = FastJSON::getValue< bool >(data, Texture::JKFlipNormalMapY);
-
-				if ( !flip.has_value() )
+				if ( data.isMember(samplingKey) )
 				{
-					return std::nullopt;
-				}
-
-				map.flipNormalMapY = *flip;
-			}
-
-			return map;
-		}
-
-		/** @brief The maps of one canonical texture a definition holds (at most one per member). */
-		using PackedMaps = Base::StaticVector< PackedMap, 4 >;
-
-		/**
-		 * @brief Gathers the maps of a definition one canonical texture may take: 2D store textures whose image exists.
-		 * @param source The material definition.
-		 * @param group The canonical texture.
-		 * @param images The image container.
-		 * @return PackedMaps
-		 */
-		[[nodiscard]]
-		PackedMaps
-		gatherPackedMaps (const Json::Value & source, const PackGroup & group, const Resources::Container< ImageResource > & images) noexcept
-		{
-			PackedMaps maps;
-
-			/* NOTE: In capacity: memberCount ≤ 4, the capacity. */
-			for ( const auto & member : group.members | std::views::take(group.memberCount) )
-			{
-				if ( auto map = readPackedMap(source, member); map.has_value() && images.isResourceExists(map->imageName) )
-				{
-					maps.push_back(std::move(*map));
+					sampling[samplingKey] = data[samplingKey];
 				}
 			}
 
-			return maps;
-		}
+			packSource.samplingKey = FastJSON::stringify(sampling);
+			packSource.image = images.getResource(*name);
 
-		/**
-		 * @brief Returns whether the maps can share a texture (D11): read at the same UVs, and no scalar map carries a
-		 * normal flip.
-		 * @param maps The maps, not empty.
-		 * @return bool
-		 */
-		[[nodiscard]]
-		bool
-		arePackable (const PackedMaps & maps) noexcept
-		{
-			const auto & sampling = maps.front().sampling;
-
-			return std::ranges::all_of(maps, [&sampling] (const PackedMap & map) {
-				return map.sampling == sampling && !(map.output.has_value() && map.flipNormalMapY);
-			});
-		}
-
-		/**
-		 * @brief Creates the packed image and its texture for the maps of a canonical texture.
-		 * @param maps The maps.
-		 * @param group The canonical texture.
-		 * @param images The image container.
-		 * @param textures The 2D texture container.
-		 * @return std::optional< std::string > The texture's name, nothing when a creation failed.
-		 */
-		[[nodiscard]]
-		std::optional< std::string >
-		createPackedTexture (const PackedMaps & maps, const PackGroup & group, Resources::Container< ImageResource > & images, Resources::Container< TextureResource::Texture2D > & textures) noexcept
-		{
-			PackRecipe recipe;
-			TextureResource::Usage usage{};
-			usage.sRGB = group.sRGB;
-
-			for ( const auto output : {PixelFactory::Channel::Red, PixelFactory::Channel::Green, PixelFactory::Channel::Blue, PixelFactory::Channel::Alpha} )
-			{
-				/* D4: a channel without a source is 1.0. */
-				recipe.setConstant(output, 255);
-			}
-
-			for ( const auto & map : maps )
-			{
-				auto image = images.getResource(map.imageName);
-
-				if ( map.output.has_value() )
-				{
-					recipe.setChannel(*map.output, std::move(image), map.channel);
-
-					continue;
-				}
-
-				/* NOTE: A colour map (the albedo) fills R, G and B with its own. */
-				recipe.setChannel(PixelFactory::Channel::Red, image, PixelFactory::Channel::Red);
-				recipe.setChannel(PixelFactory::Channel::Green, image, PixelFactory::Channel::Green);
-				recipe.setChannel(PixelFactory::Channel::Blue, std::move(image), PixelFactory::Channel::Blue);
-
-				usage.flipNormalMapY = group.normalMap && map.flipNormalMapY;
-			}
-
-			const auto imageName = recipe.name(group.layout);
-			auto textureName = TextureResource::variantName(imageName, usage);
-
-			const auto packedImage = images.getOrCreateResourceSync(imageName, [recipe] (ImageResource & image) {
-				return image.load(recipe);
-			});
-
-			const auto texture = textures.getOrCreateResourceSync(textureName, [packedImage, usage] (TextureResource::Texture2D & packedTexture) {
-				return packedTexture.enableSRGB(usage.sRGB) && packedTexture.enableFlipNormalMapY(usage.flipNormalMapY) && packedTexture.load(packedImage);
-			});
-
-			/* NOTE: A failed creation answers the default resource. */
-			if ( packedImage == nullptr || packedImage->name() != imageName || texture == nullptr || texture->name() != textureName )
-			{
-				return std::nullopt;
-			}
-
-			return textureName;
-		}
-
-		/**
-		 * @brief Rewrites the maps of a definition to read their packed texture: its name, their output channel.
-		 * @param packed The definition to rewrite.
-		 * @param maps The maps.
-		 * @param textureName The packed texture's name.
-		 * @return std::string The rewritten keys, for the log.
-		 */
-		[[nodiscard]]
-		std::string
-		rewritePackedMaps (Json::Value & packed, const PackedMaps & maps, const std::string & textureName) noexcept
-		{
-			std::string keys;
-
-			for ( const auto & map : maps )
-			{
-				auto & data = packed[map.key][JKData];
-				data[Texture::JKResourceName] = textureName;
-				data.removeMember(Texture::JKFlipNormalMapY);
-
-				if ( map.output.has_value() )
-				{
-					data[Texture::JKSourceChannel] = static_cast< Json::UInt >(*map.output);
-				}
-
-				keys += ' ';
-				keys += map.key;
-			}
-
-			return keys;
+			return packSource;
 		}
 	}
 
@@ -2069,56 +1898,55 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::planPackedTextures (const Json::Value & source, Json::Value & packed, Resources::AbstractServiceProvider & serviceProvider) const noexcept
 	{
-		if ( !serviceProvider.primaryServices().settings().getOrSetDefault< bool >(GraphicsTexturePackingKey, DefaultGraphicsTexturePacking) )
-		{
-			return false;
-		}
-
+		const TexturePacker packer{serviceProvider};
 		auto * images = serviceProvider.container< ImageResource >();
-		auto * textures = serviceProvider.container< TextureResource::Texture2D >();
 
-		if ( images == nullptr || textures == nullptr )
+		if ( !packer.isEnabled() || images == nullptr )
 		{
 			return false;
 		}
 
-		bool rewritten = false;
+		Base::StaticVector< PackSource, PackableMaps.size() > sources;
 
-		for ( const auto & group : PackGroups )
+		for ( const auto & [key, role] : PackableMaps )
 		{
-			const auto maps = gatherPackedMaps(source, group, *images);
-
-			if ( maps.size() < group.minimumMembers )
+			/* NOTE: In capacity: one source per packable map. */
+			if ( auto packSource = readPackSource(source, key, role, *images); packSource.has_value() )
 			{
-				continue;
+				sources.push_back(std::move(*packSource));
 			}
-
-			if ( !arePackable(maps) )
-			{
-				TraceInfo{ClassId} << "PBR material '" << this->name() << "': its " << group.layout << " maps are read at different UVs, they stay separate textures.";
-
-				continue;
-			}
-
-			const auto textureName = createPackedTexture(maps, group, *images, *textures);
-
-			if ( !textureName.has_value() )
-			{
-				TraceError{ClassId} << "PBR material '" << this->name() << "': unable to pack its " << group.layout << " maps, they stay separate textures !";
-
-				continue;
-			}
-
-			if ( !rewritten )
-			{
-				packed = source;
-				rewritten = true;
-			}
-
-			TraceInfo{ClassId} << "PBR material '" << this->name() << "': maps" << rewritePackedMaps(packed, maps, *textureName) << " packed into '" << *textureName << "'.";
 		}
 
-		return rewritten;
+		const auto packedRoles = packer.pack({sources.data(), sources.size()}, this->name());
+
+		if ( packedRoles.empty() )
+		{
+			return false;
+		}
+
+		/* NOTE: The definition the parsers read: each packed map reads its packed texture through its channel. */
+		packed = source;
+
+		for ( const auto & packedRole : packedRoles )
+		{
+			for ( const auto & [key, role] : PackableMaps )
+			{
+				if ( role != packedRole.role )
+				{
+					continue;
+				}
+
+				auto & data = packed[key][JKData];
+				data[Texture::JKResourceName] = packedRole.texture->name();
+
+				if ( role != ComponentType::Albedo )
+				{
+					data[Texture::JKSourceChannel] = static_cast< Json::UInt >(packedRole.channel);
+				}
+			}
+		}
+
+		return true;
 	}
 
 	size_t
@@ -5546,7 +5374,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::setHeightComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale) noexcept
+	StandardResource::setHeightComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float scale, PixelFactory::Channel sourceChannel) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -5557,12 +5385,15 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !Texture::hasExpectedColorSpace(SurfaceHeightValue, texture) )
+		if ( !Texture::hasExpectedColorSpace(SurfaceHeightValue, texture, sourceChannel) )
 		{
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::Displacement, std::make_unique< Texture >(Uniform::HeightSampler, SurfaceHeightValue, texture));
+		auto component = std::make_unique< Texture >(Uniform::HeightSampler, SurfaceHeightValue, texture);
+		component->setSourceChannel(sourceChannel);
+
+		const auto result = m_components.emplace(ComponentType::Displacement, std::move(component));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
@@ -5987,7 +5818,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::setOpacityComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount) noexcept
+	StandardResource::setOpacityComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float amount, PixelFactory::Channel sourceChannel) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -5998,12 +5829,15 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !Texture::hasExpectedColorSpace(SurfaceOpacityAmount, texture) )
+		if ( !Texture::hasExpectedColorSpace(SurfaceOpacityAmount, texture, sourceChannel) )
 		{
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::Opacity, std::make_unique< Texture >(Uniform::OpacitySampler, SurfaceOpacityAmount, texture));
+		auto component = std::make_unique< Texture >(Uniform::OpacitySampler, SurfaceOpacityAmount, texture);
+		component->setSourceChannel(sourceChannel);
+
+		const auto result = m_components.emplace(ComponentType::Opacity, std::move(component));
 
 		if ( !result.second || result.first->second == nullptr )
 		{
@@ -6103,7 +5937,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::setAmbientOcclusionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float intensity) noexcept
+	StandardResource::setAmbientOcclusionComponent (const std::shared_ptr< TextureResource::Abstract > & texture, float intensity, PixelFactory::Channel sourceChannel) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -6114,12 +5948,15 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !Texture::hasExpectedColorSpace(SurfaceAmbientOcclusion, texture) )
+		if ( !Texture::hasExpectedColorSpace(SurfaceAmbientOcclusion, texture, sourceChannel) )
 		{
 			return false;
 		}
 
-		const auto result = m_components.emplace(ComponentType::AmbientOcclusion, std::make_unique< Texture >(Uniform::AmbientOcclusionSampler, SurfaceAmbientOcclusion, texture));
+		auto component = std::make_unique< Texture >(Uniform::AmbientOcclusionSampler, SurfaceAmbientOcclusion, texture);
+		component->setSourceChannel(sourceChannel);
+
+		const auto result = m_components.emplace(ComponentType::AmbientOcclusion, std::move(component));
 
 		if ( !result.second || result.first->second == nullptr )
 		{

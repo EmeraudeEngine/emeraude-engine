@@ -23,8 +23,11 @@ Graphics § 39: whatever the source files, the engine builds at most three textu
   Grid003 4 → 3 textures, both within the noise against the unpacked render).
 - The CPU-copy release and the recomposition: the packed image declares `releasesLocalData()` and recomposes in
   `reloadLocalDataFromOwnSource()`; NOT exercised yet (a reload of a released packed image, e.g. by a readback).
-- L2c: FBX (albedo + opacity, separate roughness / metalness / AO) and the Toolkit foliage (`-albedo` + `-alpha`) —
-  they build materials through setters, not JSON: the planner needs a setter-side entry.
+- L2c DONE on Linux (2026-10-20, uncommitted) through the shared `TexturePacker` (D14): FBX loader, Toolkit foliage.
+  NOT exercised at runtime: no store asset reaches those paths (graphics § 39) — needs an FBX with separate maps or a
+  vegetation with a `-alpha` image to be proven.
+- The albedo + opacity BC7 cost (macOS: 0.66 against a 0.21 noise on Grid003's panels): KEPT by the owner
+  (2026-10-20); the encoder tuning is item `bc7-quality-for-textures-with-alpha`.
 - L2d: glTF (an occlusion image separate from the ORM; the albedo alpha is already in place).
 - D10: ONE `texture()` per canonical texture, its components reading their channels from that fetch — then the
   frame-time A/B at a pinned pose (Ave Performus: ≥ 5 %, median of ≥ 5 runs).
