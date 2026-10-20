@@ -8372,8 +8372,11 @@ The published v018 was **upgraded in place**: it was re-published with `vulkan-s
 removed from the three machines (2026-10-11 validation campaign, rounds 7-8: projet-alpha builds and runs from the v018
 downloads on Linux, macOS and Windows).
 
-⚠️ `InstallDependencies.cmake` does not download when `dependencies/<dir>` or `<dir>.v018.zip` already exists. A
-machine that extracted a tag before it was re-published silently keeps the old content: delete both to fetch it again.
+⚠️ `InstallDependencies.cmake` does not download when `dependencies/<dir>` is stamped with the current version (or when
+`<dir>.<version>.zip` is cached). A tag RE-PUBLISHED in place keeps the same version, so a machine that extracted it
+before keeps the old content: delete both to fetch it again. A version BUMP is handled since 2026-10-20 (the
+`<dir>.version` stamp, base `docs/integration.md` § The version stamp) — before it, an older extraction was kept after a
+bump too.
 
 ### A descriptor set larger than maxPerSetDescriptors must be confirmed by vkGetDescriptorSetLayoutSupport (Oct 2026)
 
