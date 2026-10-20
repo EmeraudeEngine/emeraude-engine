@@ -239,6 +239,20 @@ interleaved launches each, validation off):**
 Below the plan's 5 % bar; **kept by the owner (2026-10-20)**: a small code, no regression measured, a real gain where the
 shared reads dominate, and more to come with the glTF ORM (up to 3 fetches → 1, L2d).
 
+## glTF (L2d, 2026-10-20)
+
+The glTF loader hands the shared packer its data maps BEFORE resolving their textures: the metallic-roughness image's
+G (roughness) and B (metalness) and the occlusion image's R. Only DECODED images (a KTX2 / Basis image is BC blocks
+already: Sponza.ktx2 is never packed), with REPEAT addressing on both axes (the packed texture repeats), read at the
+same UVs (the sampling key: the texture coordinate set and the `KHR_texture_transform` scale / offset / rotation, D11).
+A packed metallic-roughness image is not created as a texture at all (no duplicate). The albedo's alpha is already in
+place in glTF: nothing to pack there.
+
+Measured (Linux, `asset-loader --demo-options 7,0,1,0,0,0`, DamagedHelmet, pinned exposure, validation on): its
+`Material_MR` 5 → 4 textures, 5 → 4 bindings, 26.68 → 21.34 MiB, ambient occlusion / roughness / metalness through ONE
+fetch (D10); the image equals the unpacked one (mean |d| 0.07 against a 0.05 noise); 0 VUID. Sponza unchanged (KTX2):
+162 bindings, 0 VUID.
+
 ## Animated textures in BC7 (2026-10-20)
 
 `AnimatedTexture2D::createCompressedImage()`: on a BC-capable GPU every frame goes through the texture cache (BC7, its

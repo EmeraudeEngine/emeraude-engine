@@ -24,7 +24,6 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-
 #include "GLTFLoader.hpp"
 
 /* STL inclusions. */
@@ -33,56 +32,69 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <limits>
 #include <numbers>
 #include <optional>
 #include <span>
+#include <sstream>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <variant>
 #include <vector>
 
 /* Third-party inclusions. */
 #include "fastgltf/core.hpp"
-#include "fastgltf/tools.hpp"
 #include "fastgltf/types.hpp"
+#include "json/json.h"
+#include "volk.h"
 
 /* Local inclusions. */
-#include "GLTFParser.hpp"
+#include "Animation/Skin.hpp"
 #include "Animations/AnimationClipResource.hpp"
 #include "Animations/SkeletonResource.hpp"
-#include "SceneData.hpp"
+#include "BlobTrait.hpp"
+#include "FastJSON.hpp"
+#include "GLTFParser.hpp"
 #include "Graphics/CompressedImageResource.hpp"
-#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/KTX2Decoder.hpp"
-#include "Graphics/Renderer.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/RasterizationOptions.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
-#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Graphics/TexturePacker.hpp"
+#include "Graphics/TextureResource/Abstract.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
-#include "Animation/AnimationClip.hpp"
-#include "Animation/Joint.hpp"
-#include "Animation/Skeleton.hpp"
-#include "Animation/Skin.hpp"
-#include "Math/CartesianFrame.hpp"
-#include "Math/Quaternion.hpp"
-#include "Math/TransformUtils.hpp"
+#include "Graphics/Types.hpp"
+#include "IO/IO.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
+#include "Network/PercentEncoding.hpp"
+#include "PixelFactory/Color.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/StreamIO.hpp"
-#include "VertexFactory/Shape.hpp"
-#include "FastJSON.hpp"
-#include "IO/IO.hpp"
-#include "Network/PercentEncoding.hpp"
-#include "String.hpp"
+#include "PixelFactory/Types.hpp"
 #include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
+#include "Resources/Manager.hpp"
+#include "SceneData.hpp"
+#include "Scenes/Loaders/Interface.hpp"
+#include "Scenes/Loaders/LoaderOptions.hpp"
+#include "String.hpp"
 #include "Tracer.hpp"
+#include "VertexFactory/Shape.hpp"
+#include "VertexFactory/ShapeVertex.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 
@@ -336,6 +348,12 @@ namespace
 			static_cast< void >(material.setComponentUVWChannel(componentType, 1));
 		}
 	}
+}
+
+/* Forward declarations. */
+namespace EmEn::Graphics::Geometry
+{
+	class Interface;
 }
 
 namespace EmEn::Scenes::Loaders
@@ -1054,9 +1072,91 @@ namespace EmEn::Scenes::Loaders
 				static_cast< float >(bc[3])
 			};
 
+			/* L2d: the data maps go through the shared texture packer (graphics § 39) BEFORE any of their textures is
+			 * requested: the roughness (G) and metalness (B) of the metallic-roughness image and the occlusion (R) land in
+			 * one packed Data texture, read through one fetch (D10). Only decoded images (a KTX2 image is BC blocks
+			 * already), with repeat addressing (the packed texture repeats), read at the same UVs (D11). */
+			const auto packableImage = [&] (const auto & textureInfoOpt) -> std::shared_ptr< ImageResource > {
+				if ( !textureInfoOpt.has_value() || textureInfoOpt->textureIndex >= asset.textures.size() )
+				{
+					return nullptr;
+				}
+
+				const auto & glTFTexture = asset.textures[textureInfoOpt->textureIndex];
+
+				if ( !glTFTexture.imageIndex.has_value() || *glTFTexture.imageIndex >= m_images.size() || m_compressedImages[*glTFTexture.imageIndex] != nullptr )
+				{
+					return nullptr;
+				}
+
+				if ( glTFTexture.samplerIndex.has_value() && *glTFTexture.samplerIndex < asset.samplers.size() )
+				{
+					const auto & glTFSampler = asset.samplers[*glTFTexture.samplerIndex];
+
+					if ( toWrapMode(glTFSampler.wrapS) != TextureResource::WrapMode::Repeat || toWrapMode(glTFSampler.wrapT) != TextureResource::WrapMode::Repeat )
+					{
+						return nullptr;
+					}
+				}
+
+				return m_images[*glTFTexture.imageIndex];
+			};
+
+			const auto samplingKey = [] (const UVTransform & transform) {
+				std::stringstream key;
+				key << transform.set << '/' << transform.scale[X] << ',' << transform.scale[Y] << '/' << transform.offset[X] << ',' << transform.offset[Y] << '/' << transform.rotation;
+
+				return key.str();
+			};
+
+			const auto metallicRoughnessImage = packableImage(PBRData.metallicRoughnessTexture);
+			const auto occlusionImage = packableImage(glTFMaterial.occlusionTexture);
+			const std::array< PackSource, 3 > packSources{{
+				{.image = metallicRoughnessImage, .samplingKey = samplingKey(metallicRoughnessUVTransform), .role = ComponentType::Roughness, .channel = Base::PixelFactory::Channel::Green},
+				{.image = metallicRoughnessImage, .samplingKey = samplingKey(metallicRoughnessUVTransform), .role = ComponentType::Metalness, .channel = Base::PixelFactory::Channel::Blue},
+				{.image = occlusionImage, .samplingKey = samplingKey(aoUVTransform), .role = ComponentType::AmbientOcclusion, .channel = Base::PixelFactory::Channel::Red}
+			}};
+
+			std::shared_ptr< TextureResource::Texture2D > packedData;
+			auto roughnessChannel = Base::PixelFactory::Channel::Green;
+			auto metalnessChannel = Base::PixelFactory::Channel::Blue;
+			auto aoChannel = Base::PixelFactory::Channel::Red;
+			bool metallicRoughnessPacked = false;
+			bool occlusionPacked = false;
+
+			for ( const auto & packedRole : TexturePacker{m_resources}.pack(packSources, glTFMaterial.name) )
+			{
+				packedData = packedRole.texture;
+
+				switch ( packedRole.role )
+				{
+					case ComponentType::Roughness :
+						roughnessChannel = packedRole.channel;
+						metallicRoughnessPacked = true;
+						break;
+
+					case ComponentType::Metalness :
+						metalnessChannel = packedRole.channel;
+						metallicRoughnessPacked = true;
+						break;
+
+					case ComponentType::AmbientOcclusion :
+						aoChannel = packedRole.channel;
+						occlusionPacked = true;
+						break;
+
+					default :
+						break;
+				}
+			}
+
 			/* Metallic-Roughness. */
-			auto metallicRoughnessTex = PBRData.metallicRoughnessTexture.has_value()
-				? resolveTexture(PBRData.metallicRoughnessTexture->textureIndex) : nullptr;
+			auto metallicRoughnessTex = metallicRoughnessPacked ? packedData : nullptr;
+
+			if ( !metallicRoughnessPacked && PBRData.metallicRoughnessTexture.has_value() )
+			{
+				metallicRoughnessTex = resolveTexture(PBRData.metallicRoughnessTexture->textureIndex);
+			}
 
 			const auto roughnessFactor = static_cast< float >(PBRData.roughnessFactor);
 			const auto metallicFactor = static_cast< float >(PBRData.metallicFactor);
@@ -1069,8 +1169,12 @@ namespace EmEn::Scenes::Loaders
 				? static_cast< float >(glTFMaterial.normalTexture->scale) : 0.0F;
 
 			/* Ambient occlusion. */
-			auto aoTex = glTFMaterial.occlusionTexture.has_value()
-				? resolveTexture(glTFMaterial.occlusionTexture->textureIndex) : nullptr;
+			auto aoTex = occlusionPacked ? packedData : nullptr;
+
+			if ( !occlusionPacked && glTFMaterial.occlusionTexture.has_value() )
+			{
+				aoTex = resolveTexture(glTFMaterial.occlusionTexture->textureIndex);
+			}
 
 			const auto aoStrength = glTFMaterial.occlusionTexture.has_value()
 				? static_cast< float >(glTFMaterial.occlusionTexture->strength) : 0.0F;
@@ -1393,9 +1497,9 @@ namespace EmEn::Scenes::Loaders
 			 * convert PBR factors to Phong/Blinn parameters when targeting Standard). */
 			auto configure = [
 					albedoTexture = std::move(albedoTex), albedoColor,
-					metallicRoughnessTexture = std::move(metallicRoughnessTex), roughnessFactor, metallicFactor,
+					metallicRoughnessTexture = std::move(metallicRoughnessTex), roughnessFactor, metallicFactor, roughnessChannel, metalnessChannel,
 					normalTexture = std::move(normalTex), normalScale,
-					aoTexture = std::move(aoTex), aoStrength,
+					aoTexture = std::move(aoTex), aoStrength, aoChannel,
 					albedoUVTransform, metallicRoughnessUVTransform, normalUVTransform, aoUVTransform, emissiveUVTransform,
 					emissiveTexture = std::move(emissiveTex), emissiveStrength, emissiveColor, hasEmissiveColor,
 					clearcoatFactor, clearcoatRoughness, clearcoatNormalScale,
@@ -1445,8 +1549,8 @@ namespace EmEn::Scenes::Loaders
 					 * DamagedHelmet) — which flattens both properties to 0 over the whole surface. */
 					if ( metallicRoughnessTexture != nullptr )
 					{
-						materialResource.setRoughnessComponent(metallicRoughnessTexture, roughnessFactor, false, Base::PixelFactory::Channel::Green);
-						materialResource.setMetalnessComponent(metallicRoughnessTexture, metallicFactor, Base::PixelFactory::Channel::Blue);
+						materialResource.setRoughnessComponent(metallicRoughnessTexture, roughnessFactor, false, roughnessChannel);
+						materialResource.setMetalnessComponent(metallicRoughnessTexture, metallicFactor, metalnessChannel);
 
 						/* ONE glTF texture info, TWO engine components: same transform on both. */
 						if ( metallicRoughnessUVTransform.present )
@@ -1489,7 +1593,7 @@ namespace EmEn::Scenes::Loaders
 					/* Ambient occlusion. */
 					if ( aoTexture != nullptr )
 					{
-						materialResource.setAmbientOcclusionComponent(aoTexture, aoStrength);
+						materialResource.setAmbientOcclusionComponent(aoTexture, aoStrength, aoChannel);
 
 						if ( aoUVTransform.present )
 						{
