@@ -1,6 +1,6 @@
 # Material texture packing and the GPU footprint policy (design, Oct 2026)
 
-> Status: DESIGN — owner decisions D1-D8 of 2026-10-20, work not started. The lots are the `docs/todo/` items listed at
+> Status: owner decisions D1-D13 of 2026-10-20; L0, L1, one binding per distinct texture, L2a and L2b DONE on Linux, work not started. The lots are the `docs/todo/` items listed at
 > the end; this file keeps the design and the decisions, the items keep what remains.
 
 ## Goal
@@ -25,8 +25,8 @@ sources (any layout, any loader)
 | Texture | RGB | A | Colour space |
 |---|---|---|---|
 | Albedo | albedo colour | opacity (coverage) | sRGB (Vulkan keeps A linear in an sRGB format) |
-| Normal | normal XYZ | height (parallax / displacement) | UNORM |
-| Data | R = ambient occlusion, G = roughness, B = metalness (glTF ORM order) | free (unused for now) | UNORM |
+| Normal | normal XYZ | — (the normal stays ALONE, D6 revised) | UNORM |
+| Data | R = ambient occlusion, G = roughness, B = metalness (glTF ORM order) | height (parallax / displacement) | UNORM |
 
 Emission, specular colour and sheen colour stay separate textures (sRGB colour data cannot share a texture with
 linear data). The other grey-scale components (clear coat, subsurface, transmission, thickness, iridescence…) stay
@@ -40,12 +40,16 @@ OUT of the canonical layout in this first pass; they only gain a working `Source
   can evolve without touching the code generation.
 - **D2 — Data = glTF ORM order** (R AO, G roughness, B metalness), A left free for now.
 - **D3 — Other grey-scale components** stay out of the layout; `SourceChannel` is honoured for every component.
-- **D4 — A channel without a source** is filled with 1.0 (255) and the component's value goes into its UBO factor
-  (the shader already computes `texture × factor`), so it stays changeable at run time. AO 1.0 = no occlusion.
+- **D4 — A channel without a source** is filled with 1.0 (255). As implemented and accepted (owner, 2026-10-20): a
+  component the definition gives as a VALUE stays a value component — no texture read at all, still changeable at
+  run time — so nothing has to move into a UBO factor. AO 1.0 = no occlusion.
 - **D5 — Ratios are global settings per texture kind** (albedo, normal, data), the same strategy for every loader;
   a per-material override may come later.
-- **D6 — Normal = RGB normal + A height.** BC7 modes 4/5 encode A apart from RGB; the quality is measured before the
-  layout is sealed.
+- **D6 — REVISED on the measurement (owner, 2026-10-20): the normal map stays alone, the height goes into the A of
+  the Data texture.** Normal RGB + height A in one BC7 cost the normal its fine grain (relief, per pixel against the
+  unpacked render: mean |d| 2.63, 5.6 % of the pixels off by more than 8, no bias); the height in Data A costs nothing
+  measurable (1.15, the launch-to-launch noise being ~1) for the SAME footprint (Sand002: 3 textures, 16.0 MiB either
+  way). The normal alone can become BC5 (D8).
 - **D7 — The BC7 cache key = hash of the FINAL pixels (after repack and reduction) + a package descriptor** (layout,
   channel map, ratio / target size, mip policy, block format, encoder version and settings), with a
   `TextureCache::Version` bump.
@@ -53,9 +57,9 @@ OUT of the canonical layout in this first pass; they only gain a working `Source
 - **D8 — The block format follows the texture kind** (today every 2D texture is BC7):
   - Albedo (with or without opacity) and emission: **BC7 always** (sRGB) — quality first, the saving comes from the
     ratios (D5); BC1 was rejected.
-  - Normal + height: BC7 (four channels). **Normal WITHOUT height: BC5** (X, Y; Z reconstructed in the shader — a
-    code-generation variant chosen by the format), same cost as BC7, much better normal precision.
-  - Data ORM: BC7 (BC1 couples the channels too much for independent data).
+  - **The normal map: BC5** (X, Y; Z reconstructed in the shader — a code-generation variant chosen by the format),
+    same cost as BC7, much better normal precision. Since D6 was revised the normal is always alone.
+  - Data (AO / roughness / metalness / height): BC7 (BC1 couples the channels too much for independent data).
   - **A lone grey-scale map** (the components outside the layout, D3): **BC4**, half the cost; the `ImageView`'s
     `VkComponentMapping` broadcasts R so the shader is unchanged. The CPU must keep one channel instead of forcing
     RGBA (`Abstract::validatePixmap()`).
@@ -69,6 +73,18 @@ OUT of the canonical layout in this first pass; they only gain a working `Source
 - **D10 — The fetch is shared only for the repack's canonical textures** (owner, 2026-10-20): one `texture()` per
   canonical texture, its components reading their channels from it; elsewhere one fetch per component (each
   component type keeps its own UV-transform slot). Details: § One binding per distinct texture.
+- **L2 skeleton (owner, 2026-10-20).** The repack works on IMAGES, before any texture is requested (requesting a
+  texture starts its load and upload at once): the recipe is one more SOURCE of `ImageResource` (`PackRecipe`, beside
+  the loaders' `EncodedSource`): composed at load from its source images (each marked releasable once read), composed
+  again when its CPU copy comes back, its name is its identity. `StandardResource` plans: it gathers the SOURCES of
+  its canonical maps, builds the recipes, and only then requests the `Texture2D` (packed, or separate for what does not
+  group). Order: L2a the recipe, L2b the store JSON materials (two-phase parse), L2c FBX and the Toolkit foliage,
+  L2d glTF.
+- **D11 — Only maps read at the same UVs group**: a map whose UV transform, UV set or normal flip differs stays a
+  separate texture (an Info log once). Rejected: baking the transform into the pixels.
+- **D12 — A recipe takes its LARGEST source resolution**, the others upscaled with a quality filter; the ratios (D5)
+  reduce afterwards.
+- **D13 — `Core/Graphics/Texture/Packing`**, true by default: the A/B switch and a diagnosis aid.
 - **Start**: measure first (per-texture VRAM accounting, reference scenes), then the lots in order.
 
 ## State of the engine before the work (survey, 2026-10-20)
@@ -123,6 +139,51 @@ needed first — **D10 (owner, 2026-10-20): the fetch is shared ONLY for the can
 takes it over. Rejected: a general "one transform per shared texture" rule (it would change the
 KHR_texture_transform contract), and no fetch sharing at all.
 
+## The repack (L2a + L2b, 2026-10-20)
+
+- **L2a — `PackRecipe`** (`Graphics/ImageResource.hpp`): per output channel a source image and its channel, or a
+  constant. `ImageResource::load(PackRecipe)` makes the sources dependencies and composes the pixels in
+  `onDependenciesLoaded()` (outside the resource lock): each source leased (`acquireLocalData()`), the packed size the
+  largest source's (D12), a smaller one upscaled by `Processor::resampleTexture()` (centres aligned, wrapping —
+  NEVER `resize()`, below), the channels copied by `Pixmap::copyChannel()`, each source marked releasable once read.
+  `releasesLocalData()` is true for a packed image: `reloadLocalDataFromOwnSource()` composes again.
+- **L2b — the store JSON materials**: `StandardResource::load(json)` calls `planPackedTextures()` BEFORE parsing
+  (a requested texture is loaded and uploaded at once). Two canonical textures: Albedo (albedo RGB + opacity →
+  A, sRGB) and Data (AO → R, roughness → G, metalness → B, height → A). A group needs ≥ 2 of its maps as 2D store
+  textures whose image exists, read at the same UVs (D11; else an Info log, the maps stay separate). The planner
+  creates `Packed/<layout>/<source>.<swizzle>|…` (the image) and its texture (the usage suffixes `#sRGB` / `#flipY`),
+  then REWRITES the definition: each grouped map reads that texture (`Name`) through its channel
+  (`SourceChannel`); everything else of the definition (scales, thresholds, amounts) is untouched.
+  `Component::Texture::findStoreTexture()` takes a `Packed/` name as is (the planner fixed its identity; the opacity
+  reads the A of an sRGB albedo, linear in every format). `Core/Graphics/Texture/Packing` (D13, default true)
+  switches the planner off.
+- **RT parity for the opacity** (part of `rt-material-packed-channels`): `GPURTMaterialData::OpacityChannelShift`
+  (flags bits 20-21), filled by `SceneMetaData`, read by the shared alpha test (`RTAlphaTestGLSL.hpp`,
+  `RTOpacityChannelShift`). Without it the RT alpha test read the packed albedo's RED as the opacity: Grid003 came
+  out +2.7 brighter (bias growing towards the camera); with the screen-space lane the packed and unpacked renders
+  were already identical (0.71) — that is how it was attributed.
+
+**Measured** (Linux, RTX 3070 Ti, `relief` with its ground replaced through `setGround()`, the camera exposure pinned,
+per pixel against the same material with `Packing` off, launch-to-launch noise ~1.0–1.1):
+
+| Material | Textures | Bindings | MiB | mean \|d\| | > 8 |
+|---|---|---|---|---|---|
+| `Grounds/Sand002` (colour, normal, AO, roughness, height) | 5 → 3 | 5 → 3 | 26.7 → 16.0 | 1.05 | 0.07 % |
+| `Metals/Grid003` (colour 1024², opacity 512², normal, height) | 4 → 3 | 4 → 3 | 3.34 → 3.01 | 1.13 | 0.95 % |
+
+`water-world`: 28 → 26 textures, 744.8 → 734.1 MiB, 26 → 24 bindings; `sponza` unchanged (glTF: L2d), 0 `VUID-`.
+
+**⚠️ Traps met on the way.**
+- `Processor::resize()` is a DISPLAY resize (corners mapped, Black past the border): upscaling Grid003's 512² mask
+  with it shifted the mask by half a texel and darkened every tile edge (15.3 % of the pixels off). The texture
+  resample is `Processor::resampleTexture()` (emeraude-base).
+- A packed opacity is invisible to RT until the RT data carries its channel (above). Any new packed role read by RT
+  needs its channel field first.
+- Six store materials name an albedo image that does not exist (`Metals/Grid001`, `Biologicals/Bones001`,
+  `Liquids/WaterCaustic001` / `002`, `Miscellaneous/Clouds001`, `Miscellaneous/Flash001`): they render the default
+  texture (random Perlin noise in Release, different at every launch) and are never packed. A data defect, not the
+  engine's.
+
 ## Reference measurement (2026-10-20, before any packing)
 
 Linux, RTX 3070 Ti (8 GB), Release, `Core.RendererService.getTextureMemory()` once the demo was built, validation
@@ -138,7 +199,7 @@ layer on (0 `VUID-`). MiB = the device memory of the loaded textures, each image
   textures, 4 bindings each; no ambient-occlusion component is created. The 1:1 component/binding ratio is what
   `material-one-binding-per-distinct-texture` lowers (207 → 162 bindings with nothing else changed).
 - **Sand002** (`water-world`): 5 maps × 5.3354 MiB = 26.7 MiB, 5 bindings; the canonical layout makes it 3 textures
-  (albedo, normal + height, data AO + roughness) = 16.0 MiB, 3 bindings, before any ratio.
+  (albedo, normal, data AO + roughness + height) = 16.0 MiB, 3 bindings, before any ratio — measured so since L2b.
 - **The ocean normal map** (`BuiltinOceanNormalMap`, `AnimatedTexture2D`): 120 layers × 1024², 11 mips, RGBA8
   UNORM UNCOMPRESSED = 640.3 MiB, 86 % of the scene's textures (item `animated-texture-frames-uncompressed`).
 

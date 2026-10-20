@@ -578,6 +578,9 @@ namespace EmEn::Scenes
 						case Material::RTTextureRole::Opacity :
 							rtMat.opacityTextureIndex = static_cast< int32_t >(bindlessIndex);
 							rtMat.flags |= Material::GPURTMaterialData::HasOpacityTexture;
+							/* Pack the texel source channel (2 bits) — the shared RT alpha test reads it back (a packed
+							 * albedo carries the opacity in its A). */
+							rtMat.flags |= (static_cast< uint32_t >(channel) & Material::GPURTMaterialData::ChannelMask) << Material::GPURTMaterialData::OpacityChannelShift;
 							break;
 					}
 				}

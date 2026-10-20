@@ -45,6 +45,11 @@ The **texture object** (`Data` of the texture types) names the store texture and
 scale), and `FlipNormalMapY` (a boolean: a Direct3D-style normal map, +Y down, converted to the Khronos convention by
 a pixel flip at upload — `docs/coordinate-system.md`).
 
+**Texture packing (2026-10-20).** The engine packs a material's canonical maps read at the same UVs into at most
+three textures (albedo + `Opacity` in A; `AmbientOcclusion` / `Roughness` / `Metalness` / `Height` in R / G / B / A),
+rewriting the definition it parses (`Packed/…` names, the matching `SourceChannel`) — nothing to write in the JSON.
+`Core/Graphics/Texture/Packing` = false turns it off. Graphics § 39.
+
 ⚠️ **`FlipNormalMapY` belongs INSIDE `Data`**, next to `Name`. Beside `Type` it is never read, silently (measured
 2026-10-14 on the store's `ID/cyberdemon` material, whose flag sat next to `Scale`). A non-boolean value refuses the
 component.

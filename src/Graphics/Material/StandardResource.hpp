@@ -1549,6 +1549,30 @@ namespace EmEn::Graphics::Material
 			bool createTextureComponents (Renderer & renderer) noexcept;
 
 			/**
+			 * @brief Parses the components of a material definition, from the albedo to the iridescence; each failure
+			 * is logged.
+			 * @param data The material definition.
+			 * @param serviceProvider A reference to the service provider.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool parseComponents (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept;
+
+			/**
+			 * @brief Plans the texture packing of a material definition (graphics § 39, L2): the canonical maps read at
+			 * the same UVs (D11) are packed — albedo + opacity, AO / roughness / metalness / height — into
+			 * generated images and textures, and the definition is rewritten so those maps read them (their name, their
+			 * SourceChannel). Everything else of the definition is kept.
+			 * @note Before any texture is requested: a requested texture is loaded and uploaded at once.
+			 * @param source The material definition.
+			 * @param packed The rewritten definition, written only when something was packed.
+			 * @param serviceProvider A reference to the service provider.
+			 * @return bool True when the definition was rewritten.
+			 */
+			[[nodiscard]]
+			bool planPackedTextures (const Json::Value & source, Json::Value & packed, Resources::AbstractServiceProvider & serviceProvider) const noexcept;
+
+			/**
 			 * @brief Returns the number of distinct textures the material's texture components show.
 			 * @return size_t
 			 */

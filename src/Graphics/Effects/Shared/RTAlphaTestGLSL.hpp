@@ -208,6 +208,10 @@ vec2 getHitUV (MeshAccessor m, vec2 bary)
 
 /** @brief GLSL: the function deciding whether a candidate triangle is solid at the hit texel. */
 #define EMEN_RT_ALPHA_TEST_GLSL_FUNCTIONS R"GLSL(
+/* The opacity texel's source channel, 2 bits (0:R, 1:G, 2:B, 3:A). Mirrors GPURTMaterialData::OpacityChannelShift
+ * (texture packing: the opacity read from a packed albedo's A). */
+const uint RTOpacityChannelShift = 20u;
+
 /* THE non-opaque rule: does this candidate triangle exist at the hit texel ?
  * Opaque materials are solid (the BLAS default). An alpha-TESTED one is sampled at the
  * candidate's UV — opacity texture first, albedo alpha next, scalar albedo alpha last — and
@@ -241,7 +245,7 @@ bool rtCandidateIsSolid (uint instanceIndex, uint geomIdx, uint primitiveIndex, 
 
 		if (texIndex >= 0)
 		{
-			alpha = texture(textures2D[nonuniformEXT(texIndex)], uv).r;
+			alpha = texture(textures2D[nonuniformEXT(texIndex)], uv)[(flags >> RTOpacityChannelShift) & 3u];
 		}
 	}
 	else if ((flags & HasAlbedoTexture) != 0u)

@@ -147,6 +147,9 @@ namespace EmEn::Graphics::Material
 		 * shifts in sync (see Graphics/Effects/Framebuffer/RTR.cpp). */
 		static constexpr uint32_t RoughnessChannelShift  = 16U;
 		static constexpr uint32_t MetalnessChannelShift  = 18U;
+		/** @brief The opacity texel's source channel (texture packing, graphics § 39: the opacity read from a packed
+		 * albedo's A). ⚠️ Its GLSL side lives in the shared alpha test (Effects/Shared/RTAlphaTestGLSL.hpp). */
+		static constexpr uint32_t OpacityChannelShift	= 20U;
 		static constexpr uint32_t ChannelMask			 = 0x3U;
 	};
 

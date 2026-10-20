@@ -30,11 +30,14 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -42,9 +45,19 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Hash/FNV1a.hpp"
+#include "PixelFactory/Color.hpp"
 #include "PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Resources/Types.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Base
+{
+	template< typename data_t, std::size_t max_capacity >
+	class StaticVector;
+}
+
 namespace EmEn::Resources
 {
 	template< typename resource_t >
@@ -165,6 +178,120 @@ namespace EmEn::Graphics
 			EmbeddedReader m_reader{nullptr};
 			Base::PixelFactory::Pixmap< uint8_t >::Format m_format{Base::PixelFactory::Pixmap< uint8_t >::Format::None};
 			Kind m_kind{Kind::File};
+	};
+
+	class ImageResource;
+
+	/**
+	 * @brief The recipe of a PACKED image (graphics § 39, D9): per output channel (R, G, B, A), one channel of a source
+	 * image, or a constant.
+	 * @note The image it builds is as large as its largest source (D12): a smaller source is upscaled (bicubic). The
+	 * recipe's name is the packed image's identity: the same recipe, the same image.
+	 */
+	class EMEN_API PackRecipe final
+	{
+		public:
+
+			/** @brief The number of output channels (RGBA). */
+			static constexpr size_t ChannelCount{4};
+
+			/** @brief Every packed image and packed texture name starts with it (name()). */
+			static constexpr std::string_view NamePrefix{"Packed/"};
+
+			/** @brief What one output channel reads. */
+			struct ChannelSource
+			{
+				std::shared_ptr< ImageResource > image;
+				Base::PixelFactory::Channel channel{Base::PixelFactory::Channel::Red};
+				uint8_t constant{255};
+			};
+
+			/**
+			 * @brief Fills an output channel from one channel of a source image.
+			 * @param output The output channel.
+			 * @param image The source image. Not null.
+			 * @param channel The channel of the source to read.
+			 */
+			void
+			setChannel (Base::PixelFactory::Channel output, std::shared_ptr< ImageResource > image, Base::PixelFactory::Channel channel) noexcept
+			{
+				auto & source = this->channelSource(output);
+				source.image = std::move(image);
+				source.channel = channel;
+			}
+
+			/**
+			 * @brief Fills an output channel with a constant (a channel without a source, D4: 255 = 1.0).
+			 * @param output The output channel.
+			 * @param value The constant.
+			 */
+			void
+			setConstant (Base::PixelFactory::Channel output, uint8_t value) noexcept
+			{
+				auto & source = this->channelSource(output);
+				source.image.reset();
+				source.constant = value;
+			}
+
+			/**
+			 * @brief Returns the output channels.
+			 * @return const std::array< ChannelSource, ChannelCount > &
+			 */
+			[[nodiscard]]
+			const std::array< ChannelSource, ChannelCount > &
+			channels () const noexcept
+			{
+				return m_channels;
+			}
+
+			/**
+			 * @brief Returns whether at least one output channel reads a source image.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hasSource () const noexcept;
+
+			/**
+			 * @brief Returns the packed image's name: the layout, then each output channel ("<source>.<swizzle>" or
+			 * "#<constant>"), e.g. "Packed/Data/Grounds/Sand002-ao.r|Grounds/Sand002-roughness.r|#255|#255".
+			 * @param layout The canonical layout ("Albedo", "Normal", "Data").
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string name (std::string_view layout) const noexcept;
+
+			/**
+			 * @brief Composes the packed pixels from the sources, each leased (a released copy comes back) and marked
+			 * releasable once read.
+			 * @note Load-time work (a pool or loader thread): never on the render thread.
+			 * @param pixmap The RGBA pixmap to fill, as large as the largest source.
+			 * @return bool False when a source has no pixels or the composition fails.
+			 */
+			[[nodiscard]]
+			bool compose (Base::PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept;
+
+		private:
+
+			/**
+			 * @brief Returns what an output channel reads.
+			 * @param output The output channel.
+			 * @return ChannelSource &
+			 */
+			[[nodiscard]]
+			ChannelSource & channelSource (Base::PixelFactory::Channel output) noexcept;
+
+			/**
+			 * @brief Leases every source image's pixels (a released copy comes back) and measures the packed size: the
+			 * largest source (D12).
+			 * @param leases The leases, held for the whole composition.
+			 * @param width The packed width.
+			 * @param height The packed height.
+			 * @return bool False when a source has no pixels.
+			 */
+			[[nodiscard]]
+			bool leaseSources (Base::StaticVector< Resources::ResourceTrait::LocalDataLease, ChannelCount > & leases, uint32_t & width, uint32_t & height) const noexcept;
+
+			std::array< ChannelSource, ChannelCount > m_channels{};
 	};
 
 	/**
@@ -500,7 +627,30 @@ namespace EmEn::Graphics
 				return this->setManualLoadSuccess(true);
 			}
 
+			/**
+			 * @brief Loads a PACKED image (graphics § 39, D9): the recipe's source images become dependencies, and the
+			 * pixels are composed once they are loaded; a released CPU copy is composed again from them.
+			 * @param recipe The recipe, with at least one source image.
+			 * @return bool
+			 */
+			bool load (PackRecipe recipe) noexcept;
+
+			/**
+			 * @brief Returns whether the image is packed from a recipe.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isPacked () const noexcept
+			{
+				return m_packRecipe.has_value();
+			}
+
 		private:
+
+			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
+			[[nodiscard]]
+			bool onDependenciesLoaded () noexcept override;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::releasesLocalData() const noexcept */
 			[[nodiscard]]
@@ -511,7 +661,7 @@ namespace EmEn::Graphics
 				 * then declare them releasable. A scene loader's image comes back from its EncodedSource; an image
 				 * without either (a generated one, a base64 data: URI) stays resident: its texture is BC7 on every
 				 * BC-capable GPU, a lossy copy that cannot give the pixels back (owner decisions 2026-10-04). */
-				return this->hasLocalDataSource() || m_encodedSource.has_value();
+				return this->hasLocalDataSource() || m_encodedSource.has_value() || m_packRecipe.has_value();
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::reloadLocalDataFromOwnSource() */
@@ -540,9 +690,9 @@ namespace EmEn::Graphics
 				m_pixmap = {};
 			}
 
-
 			Base::PixelFactory::Pixmap< uint8_t > m_pixmap;
 			std::optional< EncodedSource > m_encodedSource;
+			std::optional< PackRecipe > m_packRecipe;
 			Base::PixelFactory::Color< float > m_averageColor;
 			uint32_t m_width{0};
 			uint32_t m_height{0};

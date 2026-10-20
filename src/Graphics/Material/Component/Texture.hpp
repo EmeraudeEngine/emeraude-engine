@@ -80,6 +80,15 @@ namespace EmEn::Graphics::Material::Component
 
 			static constexpr auto ClassId{"Texture"};
 
+			/* JSON keys of the texture object (`Data`). */
+			static constexpr auto JKResourceName{"Name"};
+			static constexpr auto JKChannel{"Channel"};
+			static constexpr auto JKSourceChannel{"SourceChannel"};
+			static constexpr auto JKUVWScale{"UVW"};
+			static constexpr auto JKUVWOffset{"UVWOffset"};
+			static constexpr auto JKEnableAlpha{"EnableAlpha"};
+			static constexpr auto JKFlipNormalMapY{"FlipNormalMapY"};
+
 			/**
 			 * @brief Constructs a texture component from a resource.
 			 * @param samplerName A C-string for the name of the sampler uniform.
@@ -490,15 +499,6 @@ namespace EmEn::Graphics::Material::Component
 			 * @return std::ostream &
 			 */
 			friend EMEN_API std::ostream & operator<< (std::ostream & out, const Texture & obj);
-
-			/* JSON key. */
-			static constexpr auto JKResourceName{"Name"};
-			static constexpr auto JKChannel{"Channel"};
-			static constexpr auto JKSourceChannel{"SourceChannel"};
-			static constexpr auto JKUVWScale{"UVW"};
-			static constexpr auto JKUVWOffset{"UVWOffset"};
-			static constexpr auto JKEnableAlpha{"EnableAlpha"};
-			static constexpr auto JKFlipNormalMapY{"FlipNormalMapY"};
 
 			const char * m_samplerName;
 			std::string m_variableName;

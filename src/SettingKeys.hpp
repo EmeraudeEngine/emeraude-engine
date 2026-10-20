@@ -530,6 +530,12 @@ namespace EmEn
 			constexpr auto GraphicsTextureCacheEnabledKey{"Core/Graphics/Texture/EnableTextureCache"};
 			constexpr auto DefaultGraphicsTextureCacheEnabled{true};
 
+			/* Texture packing (graphics § 39, D13): a material's canonical maps read at the same UVs are packed into
+			 * at most three textures (albedo + opacity, normal + height, AO / roughness / metalness). Turn it OFF for
+			 * an A/B measurement or to diagnose an asset. */
+			constexpr auto GraphicsTexturePackingKey{"Core/Graphics/Texture/Packing"};
+			constexpr auto DefaultGraphicsTexturePacking{true};
+
 			/* GPU Profiler (Vulkan timestamp queries).
 			 * Per-pass GPU timings of the main frame command buffer, harvested without
 			 * stall (one query pool per frame in flight) and served by the remote console

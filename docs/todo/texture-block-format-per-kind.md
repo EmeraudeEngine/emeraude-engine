@@ -14,8 +14,8 @@ tags: [textures, memory, compression, texture-packing]
 ## Why
 
 Decision D8 (graphics § 39): every 2D texture is BC7 today (`Texture2D::createFromPixelData()`), one byte per texel
-whatever its channels. Albedo, emission, Data ORM and normal + height stay BC7; a normal WITHOUT height becomes BC5
-(better precision, same cost) and a lone grey-scale map BC4 (half the cost).
+whatever its channels. Albedo, emission and Data (AO / roughness / metalness / height) stay BC7; the normal map — alone
+since D6 was revised — becomes BC5 (better precision, same cost) and a lone grey-scale map BC4 (half the cost).
 
 ## What remains
 

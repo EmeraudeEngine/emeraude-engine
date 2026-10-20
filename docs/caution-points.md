@@ -353,6 +353,20 @@ When both reflection AND refraction components are present:
 3. The lighting code in `LightGenerator.cpp` uses it to blend between reflected and refracted colors
 4. **`ior`** (offset 8) **is clamped** to [1.0, 3.0] - values below 1.0 (like 0.33) become 1.0
 
+### A packed texture: the planner rewrites the JSON, RT needs the channel, upscales are texture resamples (2026-10-20)
+
+`StandardResource::load(json)` packs the canonical maps BEFORE parsing (graphics § 39 § The repack): the definition
+the parsers read is a REWRITTEN copy — a grouped map's `Name` is a `Packed/…` texture and its `SourceChannel` the
+packed channel. Debugging a store material, read the log line "maps … packed into '…'" first, or switch
+`Core/Graphics/Texture/Packing` off. Three traps met:
+- A packed role read by ray tracing needs its channel in `GPURTMaterialData` (the opacity: `OpacityChannelShift`):
+  without it the RT alpha test read a packed albedo's RED as the opacity (Grid003 +2.7 brighter under RT only —
+  attributed by switching the lane to screen space, where the packed render was already identical).
+- An upscale of a source goes through `Processor::resampleTexture()` (centres aligned, wrapping), never
+  `Processor::resize()` (corners mapped, Black past the border: half a texel off, darkened tile edges).
+- Normal + height in one BC7 cost the normal its fine grain (mean |d| 2.63): the normal stays alone, the height
+  lives in the Data texture's A.
+
 ### Material Types Registration
 
 > [!CRITICAL]

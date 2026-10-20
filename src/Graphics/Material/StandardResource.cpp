@@ -35,6 +35,8 @@
 #include <optional>
 #include <ranges>
 #include <sstream>
+#include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -56,17 +58,22 @@
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Geometry/OceanSurface.hpp"
 #include "Graphics/IBLTexture.hpp"
+#include "Graphics/ImageResource.hpp"
 #include "Graphics/ImposterAtlas.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/Types.hpp"
 #include "Helpers.hpp"
+#include "Logging/Severity.hpp"
 #include "Math/Base.hpp"
 #include "PixelFactory/Color.hpp"
 #include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
 #include "Saphir/AbstractVertexStage.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/Declaration/Function.hpp"
@@ -83,6 +90,7 @@
 #include "Saphir/SetIndexes.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
@@ -98,6 +106,261 @@ namespace EmEn::Graphics::Material
 	using namespace Saphir::Keys;
 	using namespace Graphics::Material::Component;
 	using namespace Vulkan;
+
+	namespace
+	{
+		/** @brief A canonical map of a material definition that reads a store texture. */
+		struct PackedMap
+		{
+			Json::Value sampling{Json::objectValue};
+			std::string imageName;
+			const char * key{nullptr};
+			std::optional< PixelFactory::Channel > output;
+			PixelFactory::Channel channel{PixelFactory::Channel::Red};
+			bool flipNormalMapY{false};
+		};
+
+		/** @brief One map of a canonical texture: its key, and the output channel it fills (none: R, G and B). */
+		struct PackMember
+		{
+			const char * key{nullptr};
+			std::optional< PixelFactory::Channel > output;
+		};
+
+		/** @brief A canonical texture of the layout (graphics § 39). */
+		struct PackGroup
+		{
+			std::string_view layout;
+			std::array< PackMember, 4 > members{};
+			size_t memberCount{0};
+			size_t minimumMembers{0};
+			bool sRGB{false};
+			bool normalMap{false};
+		};
+
+		/* NOTE: The normal map stays alone (owner decision D6, revised 2026-10-20 on a measurement): packed with the
+		 * height in its A, the shared BC7 blocks cost the normal its fine grain (relief, per pixel: mean |d| 2.63, 5.6 %
+		 * of the pixels off by more than 8); the height goes into the free A of the data texture instead (1.15, the
+		 * noise) — the same footprint. */
+		constexpr std::array< PackGroup, 2 > PackGroups{{
+			{.layout = "Albedo", .members = {{{.key = AlbedoString, .output = std::nullopt}, {.key = OpacityString, .output = PixelFactory::Channel::Alpha}, {}, {}}}, .memberCount = 2, .minimumMembers = 2, .sRGB = true, .normalMap = false},
+			{.layout = "Data", .members = {{{.key = AmbientOcclusionString, .output = PixelFactory::Channel::Red}, {.key = RoughnessString, .output = PixelFactory::Channel::Green}, {.key = MetalnessString, .output = PixelFactory::Channel::Blue}, {.key = HeightString, .output = PixelFactory::Channel::Alpha}}}, .memberCount = 4, .minimumMembers = 2, .sRGB = false, .normalMap = false}
+		}};
+
+		/**
+		 * @brief Reads a map of a material definition that a canonical texture may take: a 2D store texture, not packed yet.
+		 * @param source The material definition.
+		 * @param member The map.
+		 * @return std::optional< PackedMap >
+		 */
+		[[nodiscard]]
+		std::optional< PackedMap >
+		readPackedMap (const Json::Value & source, const PackMember & member) noexcept
+		{
+			if ( !source.isObject() || !source.isMember(member.key) )
+			{
+				return std::nullopt;
+			}
+
+			const auto & block = source[member.key];
+
+			if ( !block.isObject() || !block.isMember(JKType) || !block.isMember(JKData) || FastJSON::getValue< std::string >(block, JKType).value_or(std::string{}) != TextureString )
+			{
+				return std::nullopt;
+			}
+
+			const auto & data = block[JKData];
+
+			if ( !data.isObject() )
+			{
+				return std::nullopt;
+			}
+
+			const auto name = FastJSON::getValue< std::string >(data, Texture::JKResourceName);
+
+			if ( !name.has_value() || name->starts_with(PackRecipe::NamePrefix) )
+			{
+				return std::nullopt;
+			}
+
+			PackedMap map{};
+			map.key = member.key;
+			map.output = member.output;
+			map.imageName = *name;
+
+			/* NOTE: What decides where the map is read (D11): the UV set, the UV scale and the UV offset. */
+			for ( const auto * samplingKey : {Texture::JKChannel, Texture::JKUVWScale, Texture::JKUVWOffset} )
+			{
+				if ( data.isMember(samplingKey) )
+				{
+					map.sampling[samplingKey] = data[samplingKey];
+				}
+			}
+
+			if ( data.isMember(Texture::JKSourceChannel) )
+			{
+				const auto channel = FastJSON::asValue< uint32_t >(data[Texture::JKSourceChannel]);
+
+				if ( !channel.has_value() || *channel > 3 )
+				{
+					return std::nullopt;
+				}
+
+				map.channel = static_cast< PixelFactory::Channel >(*channel);
+			}
+
+			if ( data.isMember(Texture::JKFlipNormalMapY) )
+			{
+				const auto flip = FastJSON::getValue< bool >(data, Texture::JKFlipNormalMapY);
+
+				if ( !flip.has_value() )
+				{
+					return std::nullopt;
+				}
+
+				map.flipNormalMapY = *flip;
+			}
+
+			return map;
+		}
+
+		/** @brief The maps of one canonical texture a definition holds (at most one per member). */
+		using PackedMaps = Base::StaticVector< PackedMap, 4 >;
+
+		/**
+		 * @brief Gathers the maps of a definition one canonical texture may take: 2D store textures whose image exists.
+		 * @param source The material definition.
+		 * @param group The canonical texture.
+		 * @param images The image container.
+		 * @return PackedMaps
+		 */
+		[[nodiscard]]
+		PackedMaps
+		gatherPackedMaps (const Json::Value & source, const PackGroup & group, const Resources::Container< ImageResource > & images) noexcept
+		{
+			PackedMaps maps;
+
+			/* NOTE: In capacity: memberCount ≤ 4, the capacity. */
+			for ( const auto & member : group.members | std::views::take(group.memberCount) )
+			{
+				if ( auto map = readPackedMap(source, member); map.has_value() && images.isResourceExists(map->imageName) )
+				{
+					maps.push_back(std::move(*map));
+				}
+			}
+
+			return maps;
+		}
+
+		/**
+		 * @brief Returns whether the maps can share a texture (D11): read at the same UVs, and no scalar map carries a
+		 * normal flip.
+		 * @param maps The maps, not empty.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		arePackable (const PackedMaps & maps) noexcept
+		{
+			const auto & sampling = maps.front().sampling;
+
+			return std::ranges::all_of(maps, [&sampling] (const PackedMap & map) {
+				return map.sampling == sampling && !(map.output.has_value() && map.flipNormalMapY);
+			});
+		}
+
+		/**
+		 * @brief Creates the packed image and its texture for the maps of a canonical texture.
+		 * @param maps The maps.
+		 * @param group The canonical texture.
+		 * @param images The image container.
+		 * @param textures The 2D texture container.
+		 * @return std::optional< std::string > The texture's name, nothing when a creation failed.
+		 */
+		[[nodiscard]]
+		std::optional< std::string >
+		createPackedTexture (const PackedMaps & maps, const PackGroup & group, Resources::Container< ImageResource > & images, Resources::Container< TextureResource::Texture2D > & textures) noexcept
+		{
+			PackRecipe recipe;
+			TextureResource::Usage usage{};
+			usage.sRGB = group.sRGB;
+
+			for ( const auto output : {PixelFactory::Channel::Red, PixelFactory::Channel::Green, PixelFactory::Channel::Blue, PixelFactory::Channel::Alpha} )
+			{
+				/* D4: a channel without a source is 1.0. */
+				recipe.setConstant(output, 255);
+			}
+
+			for ( const auto & map : maps )
+			{
+				auto image = images.getResource(map.imageName);
+
+				if ( map.output.has_value() )
+				{
+					recipe.setChannel(*map.output, std::move(image), map.channel);
+
+					continue;
+				}
+
+				/* NOTE: A colour map (the albedo) fills R, G and B with its own. */
+				recipe.setChannel(PixelFactory::Channel::Red, image, PixelFactory::Channel::Red);
+				recipe.setChannel(PixelFactory::Channel::Green, image, PixelFactory::Channel::Green);
+				recipe.setChannel(PixelFactory::Channel::Blue, std::move(image), PixelFactory::Channel::Blue);
+
+				usage.flipNormalMapY = group.normalMap && map.flipNormalMapY;
+			}
+
+			const auto imageName = recipe.name(group.layout);
+			auto textureName = TextureResource::variantName(imageName, usage);
+
+			const auto packedImage = images.getOrCreateResourceSync(imageName, [recipe] (ImageResource & image) {
+				return image.load(recipe);
+			});
+
+			const auto texture = textures.getOrCreateResourceSync(textureName, [packedImage, usage] (TextureResource::Texture2D & packedTexture) {
+				return packedTexture.enableSRGB(usage.sRGB) && packedTexture.enableFlipNormalMapY(usage.flipNormalMapY) && packedTexture.load(packedImage);
+			});
+
+			/* NOTE: A failed creation answers the default resource. */
+			if ( packedImage == nullptr || packedImage->name() != imageName || texture == nullptr || texture->name() != textureName )
+			{
+				return std::nullopt;
+			}
+
+			return textureName;
+		}
+
+		/**
+		 * @brief Rewrites the maps of a definition to read their packed texture: its name, their output channel.
+		 * @param packed The definition to rewrite.
+		 * @param maps The maps.
+		 * @param textureName The packed texture's name.
+		 * @return std::string The rewritten keys, for the log.
+		 */
+		[[nodiscard]]
+		std::string
+		rewritePackedMaps (Json::Value & packed, const PackedMaps & maps, const std::string & textureName) noexcept
+		{
+			std::string keys;
+
+			for ( const auto & map : maps )
+			{
+				auto & data = packed[map.key][JKData];
+				data[Texture::JKResourceName] = textureName;
+				data.removeMember(Texture::JKFlipNormalMapY);
+
+				if ( map.output.has_value() )
+				{
+					data[Texture::JKSourceChannel] = static_cast< Json::UInt >(*map.output);
+				}
+
+				keys += ' ';
+				keys += map.key;
+			}
+
+			return keys;
+		}
+	}
 
 	bool
 	StandardResource::load () noexcept
@@ -1186,7 +1449,132 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::load (const Json::Value & data) noexcept
+	StandardResource::parseComponents (const Json::Value & data, Resources::AbstractServiceProvider & serviceProvider) noexcept
+	{
+		if ( !this->parseAlbedoComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the albedo component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseRoughnessComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the roughness component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseMetalnessComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the metalness component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseNormalComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the normal component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseHeightComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the height component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseReflectionComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the reflection component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseRefractionComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the refraction component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseAutoIlluminationComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the auto-illumination component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseOpacityComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the opacity component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseAmbientOcclusionComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the ambient occlusion component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseReflectivityMapComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the reflectivity map component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseClearCoatComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the clear coat component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseSubsurfaceComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the subsurface component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseSheenComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the sheen component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseAnisotropyComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the anisotropy component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseTransmissionComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the transmission component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		if ( !this->parseIridescenceComponent(data, serviceProvider) )
+		{
+			TraceError{ClassId} << "Error while parsing the iridescence component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	StandardResource::load (const Json::Value & source) noexcept
 	{
 		if ( !this->beginLoading() )
 		{
@@ -1195,122 +1583,12 @@ namespace EmEn::Graphics::Material
 
 		auto & serviceProvider = this->serviceProvider();
 
-		if ( !this->parseAlbedoComponent(data, serviceProvider) )
+		/* NOTE: The texture packing rewrites the definition BEFORE any texture is requested (graphics § 39, L2). */
+		Json::Value packed;
+		const Json::Value & data = this->planPackedTextures(source, packed, serviceProvider) ? packed : source;
+
+		if ( !this->parseComponents(data, serviceProvider) )
 		{
-			TraceError{ClassId} << "Error while parsing the albedo component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseRoughnessComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the roughness component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseMetalnessComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the metalness component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseNormalComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the normal component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseHeightComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the height component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseReflectionComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the reflection component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseRefractionComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the refraction component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseAutoIlluminationComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the auto-illumination component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseOpacityComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the opacity component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseAmbientOcclusionComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the ambient occlusion component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseReflectivityMapComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the reflectivity map component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseClearCoatComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the clear coat component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseSubsurfaceComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the subsurface component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseSheenComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the sheen component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseAnisotropyComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the anisotropy component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseTransmissionComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the transmission component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
-			return this->setLoadSuccess(false);
-		}
-
-		if ( !this->parseIridescenceComponent(data, serviceProvider) )
-		{
-			TraceError{ClassId} << "Error while parsing the iridescence component for PBR material '" << this->name() << "' resource from JSON file !" "\n" "Data : " << data;
-
 			return this->setLoadSuccess(false);
 		}
 
@@ -1786,6 +2064,61 @@ namespace EmEn::Graphics::Material
 		}
 
 		return true;
+	}
+
+	bool
+	StandardResource::planPackedTextures (const Json::Value & source, Json::Value & packed, Resources::AbstractServiceProvider & serviceProvider) const noexcept
+	{
+		if ( !serviceProvider.primaryServices().settings().getOrSetDefault< bool >(GraphicsTexturePackingKey, DefaultGraphicsTexturePacking) )
+		{
+			return false;
+		}
+
+		auto * images = serviceProvider.container< ImageResource >();
+		auto * textures = serviceProvider.container< TextureResource::Texture2D >();
+
+		if ( images == nullptr || textures == nullptr )
+		{
+			return false;
+		}
+
+		bool rewritten = false;
+
+		for ( const auto & group : PackGroups )
+		{
+			const auto maps = gatherPackedMaps(source, group, *images);
+
+			if ( maps.size() < group.minimumMembers )
+			{
+				continue;
+			}
+
+			if ( !arePackable(maps) )
+			{
+				TraceInfo{ClassId} << "PBR material '" << this->name() << "': its " << group.layout << " maps are read at different UVs, they stay separate textures.";
+
+				continue;
+			}
+
+			const auto textureName = createPackedTexture(maps, group, *images, *textures);
+
+			if ( !textureName.has_value() )
+			{
+				TraceError{ClassId} << "PBR material '" << this->name() << "': unable to pack its " << group.layout << " maps, they stay separate textures !";
+
+				continue;
+			}
+
+			if ( !rewritten )
+			{
+				packed = source;
+				rewritten = true;
+			}
+
+			TraceInfo{ClassId} << "PBR material '" << this->name() << "': maps" << rewritePackedMaps(packed, maps, *textureName) << " packed into '" << *textureName << "'.";
+		}
+
+		return rewritten;
 	}
 
 	size_t

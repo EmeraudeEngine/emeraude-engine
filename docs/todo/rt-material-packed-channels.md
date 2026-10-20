@@ -1,7 +1,7 @@
 ---
 id: rt-material-packed-channels
 title: RT material data — carry the channel of every packed texture (opacity, AO, metalness…)
-status: open
+status: in-progress
 priority: unranked
 scope: Graphics/Material (GPURTMaterialData), RT shaders (RTR, RTGI, alpha test, irradiance probes)
 opened: 2026-10-20
@@ -19,11 +19,13 @@ lives in the albedo's A and the data maps share one texture (graphics § 39), RT
 
 ## What remains
 
-- A channel field for opacity (and any other packed role RT reads); `collectRTTextures()` and `SceneMetaData`
-  fill it; a shared image keeps one bindless slot (already the case: cached by texture pointer).
-- Shaders: `RTAlphaTestGLSL.hpp`, `RTR.cpp`, `RTGI.cpp`, `IrradianceProbeVolume.cpp` — kept in sync with the C++
-  shifts; the stride `* 7u` is hard-coded in GLSL: change it everywhere if the struct grows.
-- Proof: RT reflections / GI of a packed material match the unpacked one.
+- DONE on Linux (2026-10-20, uncommitted): the opacity channel — `GPURTMaterialData::OpacityChannelShift` (flags
+  bits 20-21), filled by `SceneMetaData`, read by the shared alpha test (`RTOpacityChannelShift`). Without it a packed
+  opacity (the albedo's A) was read as the albedo's RED: Grid003 +2.7 brighter under RT (graphics § 39).
+- Any other packed role RT reads gets the same treatment when it is packed: today RT reads albedo, normal, roughness
+  / metalness (channels already carried), emission, opacity — none other is packed.
+- The UV transform parity (RT uses the raw `hitUV`) is a separate known gap.
+- Validation by the peers (macOS, Windows).
 
 ## References
 

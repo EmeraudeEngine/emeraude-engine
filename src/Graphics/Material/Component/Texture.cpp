@@ -35,6 +35,7 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "Graphics/ImageResource.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/StoreTexture.hpp"
 #include "Graphics/TextureResource/Texture1D.hpp"
@@ -43,6 +44,7 @@
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Graphics/Types.hpp"
 #include "Logging/Severity.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/ResourceTrait.hpp"
 #include "Resources/Types.hpp"
 #include "Tracer.hpp"
@@ -159,6 +161,23 @@ namespace EmEn::Graphics::Material::Component
 	std::shared_ptr< TextureResource::Abstract >
 	Texture::findStoreTexture (FillingType fillingType, const std::string & resourceName, const TextureResource::Usage & usage, Resources::AbstractServiceProvider & serviceProvider) noexcept
 	{
+		/* NOTE: A PACKED texture (graphics § 39) is no store file: the material's planner created it with its own
+		 * identity (colour space, normal flip), which the usage of one of its readers does not change — the opacity
+		 * reads the A of an sRGB albedo, and alpha is linear in every format. */
+		if ( fillingType == FillingType::Texture && resourceName.starts_with(PackRecipe::NamePrefix) )
+		{
+			auto * container = serviceProvider.container< TextureResource::Texture2D >();
+
+			if ( container == nullptr || !container->isResourceExists(resourceName) )
+			{
+				TraceError{ClassId} << "The packed texture '" << resourceName << "' was not created by its material !";
+
+				return nullptr;
+			}
+
+			return container->getResource(resourceName);
+		}
+
 		switch ( fillingType )
 		{
 			case FillingType::Gradient :
