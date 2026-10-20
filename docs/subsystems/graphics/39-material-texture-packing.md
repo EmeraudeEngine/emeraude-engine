@@ -218,6 +218,18 @@ equal to the previous lot within the noise; MCP 1902 / 0; 0 VUID beyond the know
   texture (random Perlin noise in Release, different at every launch) and are never packed. A data defect, not the
   engine's.
 
+## Animated textures in BC7 (2026-10-20)
+
+`AnimatedTexture2D::createCompressedImage()`: on a BC-capable GPU every frame goes through the texture cache (BC7, its
+own mip chain) and the frames are uploaded as the layers of one BC7 array (`Vulkan::Image::createFromCompressed()`
+takes a layer count, the mips LAYER-major); RGBA8 stays the fallback (no BC, a frame that fails). Owner decisions:
+BC7 now, BC5 for every normal map with D8; the ocean keeps its 120 × 1024² frames.
+
+Measured (Linux, `water-world`, validation on, 0 `VUID-`): the ocean normal map 640.3 → **160.3 MiB** (120 layers, 11
+mips); the scene's textures 734.1 → **242.2 MiB** (the explosion / fire / smoke sprites are animated textures too);
+the first load compresses the 120 frames in ~40 s, a warm cache loads them in ~4 s. The water looks as before; a per-pixel
+A/B is not possible (the normal map animates with time).
+
 ## Reference measurement (2026-10-20, before any packing)
 
 Linux, RTX 3070 Ti (8 GB), Release, `Core.RendererService.getTextureMemory()` once the demo was built, validation

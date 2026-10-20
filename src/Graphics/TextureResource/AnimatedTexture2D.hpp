@@ -29,17 +29,40 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/MovieResource.hpp"
+#include "Graphics/MovieResource.hpp" // IWYU pragma: export (load() takes a MovieResource: every caller needs its definition)
+#include "Hash/FNV1a.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
+#include "Vulkan/TextureInterface.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
 {
 	template< typename resource_t >
 	class Container;
+}
+
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class Image;
+	class ImageView;
+	class Sampler;
 }
 
 namespace EmEn::Graphics::TextureResource
@@ -277,6 +300,17 @@ namespace EmEn::Graphics::TextureResource
 			bool load (const std::shared_ptr< MovieResource > & movieResource) noexcept;
 
 		private:
+
+			/**
+			 * @brief Creates the image BC7-compressed (graphics § 39): every frame through the texture cache, uploaded as the
+			 * layers of one block-compressed array.
+			 * @note An uncompressed image was 640 MiB for the ocean's 120 × 1024² normal map; BC7 is a quarter of it.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param mipLevels The mip levels asked of each frame.
+			 * @return bool False when a frame failed to compress or the upload failed: the caller falls back to RGBA8.
+			 */
+			[[nodiscard]]
+			bool createCompressedImage (Renderer & renderer, uint32_t mipLevels) noexcept;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependencyFailed() */
 			[[nodiscard]]

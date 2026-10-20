@@ -800,14 +800,16 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Image::createFromCompressed (TransferManager & transferManager, std::span< const CompressedMip > mips) noexcept
+	Image::createFromCompressed (TransferManager & transferManager, std::span< const CompressedMip > mips, uint32_t layerCount) noexcept
 	{
-		if ( mips.empty() )
+		if ( mips.empty() || layerCount == 0 || mips.size() % layerCount != 0 )
 		{
-			Tracer::error(ClassId, "No compressed mip levels provided !");
+			TraceError{ClassId} << "Invalid compressed upload: " << mips.size() << " mip level(s) for " << layerCount << " layer(s) !";
 
 			return false;
 		}
+
+		const auto levelsPerLayer = static_cast< uint32_t >(mips.size() / layerCount);
 
 		if ( !this->createOnHardware() )
 		{
@@ -819,22 +821,25 @@ namespace EmEn::Vulkan
 		std::vector< VkBufferImageCopy > regions;
 		regions.reserve(mips.size());
 
-		for ( uint32_t level = 0; level < static_cast< uint32_t >(mips.size()); ++level )
+		uint32_t index = 0;
+
+		for ( const auto & mip : mips )
 		{
 			VkBufferImageCopy region{};
 			region.bufferOffset = totalBytes;
 			region.bufferRowLength = 0;
 			region.bufferImageHeight = 0;
 			region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-			region.imageSubresource.mipLevel = level;
-			region.imageSubresource.baseArrayLayer = 0;
+			region.imageSubresource.mipLevel = index % levelsPerLayer;
+			region.imageSubresource.baseArrayLayer = index / levelsPerLayer;
 			region.imageSubresource.layerCount = 1;
 			region.imageOffset = {.x = 0, .y = 0, .z = 0};
-			region.imageExtent = {.width = mips[level].width, .height = mips[level].height, .depth = 1};
+			region.imageExtent = {.width = mip.width, .height = mip.height, .depth = 1};
 
 			regions.emplace_back(region);
 
-			totalBytes += mips[level].size;
+			totalBytes += mip.size;
+			++index;
 		}
 
 		/* Write all compressed mip data sequentially to the staging buffer. */

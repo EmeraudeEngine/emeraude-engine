@@ -1,7 +1,7 @@
 ---
 id: animated-texture-frames-uncompressed
 title: AnimatedTexture2D uploads every frame uncompressed — the ocean normal map holds 640 MiB
-status: open
+status: in-progress
 priority: unranked
 scope: Graphics/TextureResource (AnimatedTexture2D, AnimatedTextureCubemap), TextureCompressor
 opened: 2026-10-20
@@ -21,11 +21,11 @@ unlike `Texture2D` (BC7 on every BC-capable GPU). BC7 would divide it by 4 (160 
 
 ## What remains
 
-- Give the animated textures the block-compression path of `Texture2D` (per layer, through the `TextureCache`), with
-  the format chosen by the texture kind (D8: BC5 for a normal map, BC7 for colour).
-- Decide with the owner whether 120 frames at 1024² is the intended budget for a looping normal map (fewer frames,
-  a lower resolution, or a ratio from `texture-footprint-ratios-per-kind`).
-- Proof: `getTextureMemory` before / after, the water surface at a pinned pose.
+- DONE on Linux (2026-10-20, uncommitted): BC7 per frame through the texture cache, one BC7 array — the ocean 640.3 →
+  160.3 MiB, water-world 734.1 → 242.2 MiB, 0 VUID (graphics § 39 § Animated textures in BC7). Owner decisions: BC7
+  now, BC5 with D8 (`texture-block-format-per-kind`); 120 × 1024² kept.
+- `AnimatedTextureCubemap` keeps its uncompressed upload (no measured need yet).
+- Validation by the peers (macOS, Windows), then close.
 
 ## References
 

@@ -482,14 +482,16 @@ namespace EmEn::Vulkan
 			};
 
 			/**
-			 * @brief Creates the image and uploads pre-compressed multi-mip data.
+			 * @brief Creates the image and uploads pre-compressed multi-mip data, for one or several array layers.
 			 * @note For BC7 (or other block-compressed formats). Skips GPU mipmap generation.
 			 * @param transferManager A reference to the transfer manager.
-			 * @param mips A span of compressed mip level descriptors (level 0 first).
-			 * @return bool
+			 * @param mips A span of compressed mip level descriptors, LAYER-major: the mip chain of layer 0 (level 0
+			 * first), then layer 1's, and so on — every layer with the same mip count.
+			 * @param layerCount The array layers the span covers. Default 1.
+			 * @return bool False on an empty span or one that does not split into `layerCount` equal chains.
 			 */
 			[[nodiscard]]
-			bool createFromCompressed (TransferManager & transferManager, std::span< const CompressedMip > mips) noexcept;
+			bool createFromCompressed (TransferManager & transferManager, std::span< const CompressedMip > mips, uint32_t layerCount = 1) noexcept;
 
 			/**
 			 * @brief Writes raw data to this image using a staging buffer.

@@ -28,17 +28,33 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <functional>
+#include <span>
+#include <string>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/MovieResource.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/TextureCache.hpp"
+#include "Graphics/TextureCompressor.hpp"
+#include "Logging/Severity.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
-#include "Resources/Container.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
-#include "Vulkan/Instance.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
+#include "Vulkan/Sampler.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {
@@ -60,6 +76,70 @@ namespace EmEn::Graphics::TextureResource
 
 		if ( m_sampler == nullptr || !m_sampler->isCreated() )
 		{
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	AnimatedTexture2D::createCompressedImage (Renderer & renderer, uint32_t mipLevels) noexcept
+	{
+		const auto frameCount = m_localData->frameCount();
+
+		/* NOTE: Each frame through the texture cache (its pixels are its key): compressed once, read back afterwards. */
+		std::vector< std::vector< CompressedMipLevel > > frames;
+		frames.reserve(frameCount);
+
+		for ( const auto & frame : m_localData->frames() )
+		{
+			auto mips = renderer.textureCache().getOrCompress(this->name() + "#layer" + std::to_string(frames.size()), frame.pixmap(), mipLevels);
+
+			if ( mips.empty() || (!frames.empty() && mips.size() != frames.front().size()) )
+			{
+				TraceWarning{ClassId} << "BC7 compression failed for frame " << frames.size() << " of '" << this->name() << "', falling back to uncompressed.";
+
+				return false;
+			}
+
+			frames.push_back(std::move(mips));
+		}
+
+		if ( frames.empty() )
+		{
+			return false;
+		}
+
+		/* NOTE: Layer-major: the chain of frame 0, then frame 1's… (Vulkan::Image::createFromCompressed()). */
+		std::vector< Vulkan::Image::CompressedMip > mipDescs;
+		mipDescs.reserve(frames.size() * frames.front().size());
+
+		for ( const auto & frameMips : frames )
+		{
+			for ( const auto & mip : frameMips )
+			{
+				mipDescs.push_back({mip.data.data(), static_cast< uint32_t >(mip.data.size()), mip.width, mip.height});
+			}
+		}
+
+		m_image = std::make_shared< Vulkan::Image >(
+			renderer.device(),
+			VK_IMAGE_TYPE_2D,
+			this->isSRGB() ? VK_FORMAT_BC7_SRGB_BLOCK : VK_FORMAT_BC7_UNORM_BLOCK,
+			VkExtent3D{m_localData->width(), m_localData->height(), 1U},
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			0,
+			static_cast< uint32_t >(frames.front().size()),
+			frameCount
+		);
+		m_image->setIdentifier(ClassId, this->name(), "Image");
+
+		if ( !m_image->createFromCompressed(renderer.transferManager(), mipDescs, frameCount) )
+		{
+			TraceWarning{ClassId} << "BC7 upload failed for '" << this->name() << "', falling back to uncompressed.";
+
+			m_image.reset();
+
 			return false;
 		}
 
@@ -99,26 +179,32 @@ namespace EmEn::Graphics::TextureResource
 			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
 		);
 
-		/* Create a Vulkan image. */
-		m_image = std::make_shared< Vulkan::Image >(
-			renderer.device(),
-			VK_IMAGE_TYPE_2D,
-			Image::getFormat< uint8_t >(m_localData->data(0).colorCount(), this->isSRGB()),
-			VkExtent3D{m_localData->width(), m_localData->height(), 1},
-			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-			0,
-			mipLevels,
-			m_localData->frameCount()
-		);
-		m_image->setIdentifier(ClassId, this->name(), "Image");
+		/* NOTE: BC7 on every BC-capable GPU, like Texture2D (graphics § 39); RGBA8 otherwise, or when a frame fails. */
+		const auto useBC7 = renderer.device()->physicalDevice()->featuresVK10().textureCompressionBC == VK_TRUE;
 
-		if ( !m_image->create(renderer.transferManager(), m_localData) )
+		if ( !useBC7 || !this->createCompressedImage(renderer, mipLevels) )
 		{
-			Tracer::error(ClassId, "Unable to create an image !");
+			/* Create a Vulkan image. */
+			m_image = std::make_shared< Vulkan::Image >(
+				renderer.device(),
+				VK_IMAGE_TYPE_2D,
+				Image::getFormat< uint8_t >(m_localData->data(0).colorCount(), this->isSRGB()),
+				VkExtent3D{m_localData->width(), m_localData->height(), 1},
+				VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+				0,
+				mipLevels,
+				m_localData->frameCount()
+			);
+			m_image->setIdentifier(ClassId, this->name(), "Image");
 
-			m_image.reset();
+			if ( !m_image->create(renderer.transferManager(), m_localData) )
+			{
+				Tracer::error(ClassId, "Unable to create an image !");
 
-			return false;
+				m_image.reset();
+
+				return false;
+			}
 		}
 
 		/* Create a Vulkan image view. */
@@ -156,7 +242,7 @@ namespace EmEn::Graphics::TextureResource
 				VkImageSubresourceRange{
 					.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
 					.baseMipLevel = 0,
-					.levelCount = mipLevels,
+					.levelCount = m_image->createInfo().mipLevels,
 					.baseArrayLayer = layer,
 					.layerCount = 1
 				}
