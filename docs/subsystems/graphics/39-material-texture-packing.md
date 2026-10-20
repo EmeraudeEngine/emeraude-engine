@@ -65,6 +65,11 @@ OUT of the canonical layout in this first pass; they only gain a working `Source
     `VkComponentMapping` broadcasts R so the shader is unchanged. The CPU must keep one channel instead of forcing
     RGBA (`Abstract::validatePixmap()`).
   - The encoder: `rgbcx` (BC1/BC3/BC4/BC5), shipped in the same bc7enc_rdo library the engine already links.
+  - **Sub-decisions (owner, 2026-10-20)**: the shaders reconstruct Z for EVERY normal map, whatever its format (one
+    decode, no program variant); a normal map is known by an IDENTITY flag its creator sets (`Usage::normalMap`, the
+    `#normal` variant — like `#sRGB` and `#flipY`), never by a content heuristic; BC4 is chosen by CONTENT (a linear
+    texture whose every pixel is grey and opaque), never by a declared kind; the CPU copy kept on one channel is the
+    NEXT step (this lot is the GPU side). Implemented: § Block format per kind.
 - **D9 — The sources of a packed texture live in a GENERATED `ImageResource`** (owner, 2026-10-20), not in the
   texture classes: a "packed image" holds `std::array< ChannelSource, 4 >` (per output channel: the source image, its
   channel, a default value — D4), its sources are `ResourceTrait` dependencies, marked releasable once composed; it is
@@ -283,6 +288,70 @@ spread); MCP 1902 / 0. **Windows peer** (MSVC Release + Debug 0 warning, RTX 350
 MiB; 49.8 s cold, 0.71 s warm; the RT lane (the per-layer 2D views in the bindless table) 0 VUID in water-world and
 terrain; MCP 1902 / 0. `AnimatedTextureCubemap` keeps its uncompressed upload (no measured need yet).
 
+## Block format per kind (D8, 2026-10-20)
+
+`TextureCompressor::selectFormat(pixels, sRGB, normalMap)` decides at upload, in `Texture2D::createFromPixelData()` and
+`AnimatedTexture2D::createCompressedImage()` (one format for every layer; BC4 only when every frame qualifies):
+
+| The texture | Format | Cost / block |
+|---|---|---|
+| Declared a normal map (`Abstract::enableNormalMap()`), linear | **BC5** (X, Y) — rgbcx `encode_bc5_hq` | 16 B |
+| Linear, every pixel grey and opaque (R = G = B, A = 255 — `isOpaqueGrey()`) | **BC4** — rgbcx `encode_bc4_hq` | 8 B |
+| Everything else (colour, opacity, the packed Data texture, an sRGB grey) | BC7 (the fast preset as before) | 16 B |
+
+- **The normal map identity**: `TextureResource::Usage::normalMap` → the `#normal` variant of a store texture
+  (`getStoreTexture()`); the JSON material asks it for the `Normal` and `ClearCoatNormal` components (the `Texture`
+  component's `normalMap` argument); the glTF, FBX and USD loaders cache THREE usages per image
+  (`loaderUsageSlot()`: data, sRGB, normal map; suffixes `-data` / `-srgb` / `-normal`); `Toolkit::vegetationMaterial`
+  asks it for `-normal`. Forgetting it is never wrong, only heavier: the map stays BC7 and renders the same. An sRGB
+  normal map is a creator error: it stays BC7, with an error.
+- **Z is reconstructed** in the three decodes (`StandardResource` normal and clear-coat normal, `RTR.cpp` hit
+  shading): `xy = rg * 2 - 1`, `z = sqrt(max(1 - dot(xy, xy), 0))`, then `normalize(vec3(xy * scale, z))` (glTF's
+  scale). A pre-encoded KTX2 BC5 normal map is right too (it used to read B = 0).
+- **BC5 renormalizes every texel of every level before keeping X and Y** (`renormalizedNormals()`, on a copy: the chain
+  keeps filtering the true box average). It is NOT optional: a source whose vectors are not unit (Pavement006: length
+  1.071 on average, 0.98–1.20) reconstructs the wrong Z — 7.78° mean error without it, 0.77° with it.
+- **BC4 is broadcast by the image VIEW**: `TextureCompressor::componentMapping(format)` maps a one-channel format
+  (BC4, R8) to (R, R, R, 1), so every channel a reader samples (thickness reads G) is the grey it was in RGBA8 — the
+  shaders are unchanged. Decided by the IMAGE format: a pre-encoded KTX2 BC4 gets it too.
+- **The cache**: version 4, the format in the header and (BC5 / BC4 only) in the key — caution-points § The BC7 texture
+  cache.
+- **The library**: `rgbcx.cpp` and `rgbcx.h` are added to the bc7enc_rdo static library by ext-deps-generator's
+  `patches/bc7enc_rdo.patch` (the upstream CMake builds them into tools only); a release of the ext-deps archives is
+  needed for every OS.
+
+Measured (Linux, RTX 3070 Ti, validation on, 0 new `VUID-` — the `relief` + `setGround` runs keep the 4 + 2 known ones of
+`default-mesh-instance-destroyed-while-in-use`):
+
+| Asset | Change | Image (per pixel, against the BC7 build; noise ~1.1) |
+|---|---|---|
+| `relief` + Sand002 | normal BC5 (5.3354 MiB, as BC7) | mean \|d\| 2.39, +0.44 brighter |
+| `relief` + Grid003 | normal BC5; height BC4 0.335 → 0.169 MiB | mean \|d\| 3.67, 13.9 % > 8, a fine speckle on the rust, no feature moved |
+| Grenade40mm height | BC4 1.335 → 0.669 MiB | — |
+| `water-world` | the ocean BC5 (120 layers, 160.31 MiB, as BC7); the scene 242.2 → 241.55 MiB | the same sea (animated: no A/B) |
+| DamagedHelmet (glTF) | normal BC5 (`4-normal`) | mean \|d\| 0.034 (noise 0.031) |
+| `normal-map-debug` 4,2,0 (control) | both flip variants BC5 | top omni: the lit lip BELOW the groove on the authored quad (231.5 vs 210.9), above on the flipped one |
+
+The image change is BC7's own error leaving. Offline round trip with the engine's encoders against the source (angular
+error of the normal; |d| /255 of a height):
+
+| Map | BC7 (engine preset) | BC5 / BC4 |
+|---|---|---|
+| Sand002 normal | 3.02° mean, p99 10.6°, max 37.6° | **0.92°**, p99 2.35°, max 13.7° |
+| Grid003 normal | 4.48°, p99 25.1°, max 88.8° | **1.97°**, p99 9.1°, max 31.2° (unit source: the same renormalized) |
+| Pavement006 normal | 1.52°, p99 7.6° | **0.77°**, p99 2.8° (renormalized; 7.78° without) |
+| Grid003 height | 0.22, p99 2, max 6 | 0.61, p99 5, max 6 |
+| Grenade40mm height | 0.21, p99 2, max 7 | 0.51, p99 4, max 12 |
+| Sand002 height | 0.02, p99 1, max 4 | 0.15, p99 1, max 7 |
+
+BC4 is a little less exact than BC7 on a grey map (it spends half the bytes on it), still under 2.5 % at the 99th
+percentile; BC5 is two to three times more exact than BC7 on a normal map for the same bytes.
+
+⚠️ **Measurement trap met here**: a run on a COLD texture cache (the first after the format change) encodes on the
+workers for tens of seconds — the ocean's 120 frames ~40 s — and a capture 6 s after the ground swap caught a scene
+whose temporal state had not converged: 20 levels darker, the relief "stronger". The same capture 40 s later equals
+the warm one (2.39 vs 2.33). Measure on a warm cache, or wait for the encodes to end.
+
 ## Reference measurement (2026-10-20, before any packing)
 
 Linux, RTX 3070 Ti (8 GB), Release, `Core.RendererService.getTextureMemory()` once the demo was built, validation
@@ -311,4 +380,5 @@ layer on (0 `VUID-`). MiB = the device memory of the loaded textures, each image
 4. `material-texture-canonical-repack` — D2, D4, D6, D7, recipe release.
 5. `texture-footprint-ratios-per-kind` — D5, per-kind mip chains.
 6. `rt-material-packed-channels` — the RT parity.
-7. `texture-block-format-per-kind` — D8.
+7. `texture-block-format-per-kind` — D8: the GPU side done 2026-10-20 (§ Block format per kind); the one-channel CPU
+   copy remains.

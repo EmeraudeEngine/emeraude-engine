@@ -30,22 +30,19 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <string>
-#include <unordered_map>
-#include <unordered_set>
+#include <string_view>
 #include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "Animation/AnimationChannel.hpp"
-#include "Animation/Skin.hpp"
-#include "VertexFactory/Shape.hpp"
-#include "Resources/Manager.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
 
 /* Forward declarations. */
 namespace fastgltf
@@ -56,6 +53,16 @@ namespace fastgltf
 namespace EmEn::Scenes::Loaders::GLTF
 {
 	struct Asset;
+}
+
+namespace EmEn::Scenes::Loaders
+{
+	struct SceneData;
+}
+
+namespace EmEn::Resources
+{
+	class Manager;
 }
 
 namespace EmEn::Animations
@@ -183,12 +190,12 @@ namespace EmEn::Scenes::Loaders
 			 * way to the GPU, m_images for anything the engine has to decode to pixels. */
 			std::vector< std::shared_ptr< Graphics::ImageResource > > m_images;
 			std::vector< std::shared_ptr< Graphics::CompressedImageResource > > m_compressedImages;
-			/* ⚠️ TWO slots per glTF texture, indexed by colour space (0 = linear data,
-			 * 1 = sRGB). The sRGB flag is baked into the resource when it is created and comes
-			 * from the USAGE, not from the asset: one image may serve as an sRGB albedo for one
-			 * material and as a linear roughness map for another. A cache keyed on the texture
-			 * index alone let the first usage impose its colour space on every other one. */
-			std::vector< std::array< std::shared_ptr< Graphics::TextureResource::Texture2D >, 2 > > m_textures;
+			/* ⚠️ THREE slots per glTF texture, indexed by usage (TextureResource::loaderUsageSlot(): linear data, sRGB,
+			 * normal map). The colour space and the normal map kind are baked into the resource when it is created and
+			 * come from the USAGE, not from the asset: one image may serve as an sRGB albedo for one material and as a
+			 * linear roughness map for another. A cache keyed on the texture index alone let the first usage impose its
+			 * identity on every other one. */
+			std::vector< std::array< std::shared_ptr< Graphics::TextureResource::Texture2D >, Graphics::TextureResource::LoaderUsageCount > > m_textures;
 			std::vector< std::shared_ptr< Graphics::Material::Interface > > m_materials;
 			/* ⚠️ The VERTEX-COLOUR VARIANT of each material, non-null only for the materials a
 			 * COLOR_0 primitive actually uses. `UseVertexColors` changes the material's SHADER

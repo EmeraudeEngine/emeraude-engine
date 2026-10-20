@@ -87,17 +87,31 @@ namespace EmEn::Graphics::TextureResource
 	{
 		const auto frameCount = m_localData->frameCount();
 
+		/* NOTE: One format for every layer of the array (graphics § 39, D8): BC5 for a normal map; BC4 only when EVERY
+		 * frame is an opaque grey map; BC7 otherwise. */
+		auto blockFormat = BlockFormat::BC7;
+
+		if ( !m_localData->frames().empty() )
+		{
+			blockFormat = TextureCompressor::selectFormat(m_localData->frames().front().pixmap(), this->isSRGB(), this->isNormalMap());
+
+			if ( blockFormat == BlockFormat::BC4 && !std::ranges::all_of(m_localData->frames(), [] (const auto & frame) { return TextureCompressor::isOpaqueGrey(frame.pixmap()); }) )
+			{
+				blockFormat = BlockFormat::BC7;
+			}
+		}
+
 		/* NOTE: Each frame through the texture cache (its pixels are its key): compressed once, read back afterwards. */
 		std::vector< std::vector< CompressedMipLevel > > frames;
 		frames.reserve(frameCount);
 
 		for ( const auto & frame : m_localData->frames() )
 		{
-			auto mips = renderer.textureCache().getOrCompress(this->name() + "#layer" + std::to_string(frames.size()), frame.pixmap(), mipLevels);
+			auto mips = renderer.textureCache().getOrCompress(this->name() + "#layer" + std::to_string(frames.size()), frame.pixmap(), mipLevels, blockFormat);
 
 			if ( mips.empty() || (!frames.empty() && mips.size() != frames.front().size()) )
 			{
-				TraceWarning{ClassId} << "BC7 compression failed for frame " << frames.size() << " of '" << this->name() << "', falling back to uncompressed.";
+				TraceWarning{ClassId} << to_cstring(blockFormat) << " compression failed for frame " << frames.size() << " of '" << this->name() << "', falling back to uncompressed.";
 
 				return false;
 			}
@@ -125,7 +139,7 @@ namespace EmEn::Graphics::TextureResource
 		m_image = std::make_shared< Vulkan::Image >(
 			renderer.device(),
 			VK_IMAGE_TYPE_2D,
-			this->isSRGB() ? VK_FORMAT_BC7_SRGB_BLOCK : VK_FORMAT_BC7_UNORM_BLOCK,
+			TextureCompressor::vulkanFormat(blockFormat, this->isSRGB()),
 			VkExtent3D{m_localData->width(), m_localData->height(), 1U},
 			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			0,
@@ -136,7 +150,7 @@ namespace EmEn::Graphics::TextureResource
 
 		if ( !m_image->createFromCompressed(renderer.transferManager(), mipDescs, frameCount) )
 		{
-			TraceWarning{ClassId} << "BC7 upload failed for '" << this->name() << "', falling back to uncompressed.";
+			TraceWarning{ClassId} << to_cstring(blockFormat) << " upload failed for '" << this->name() << "', falling back to uncompressed.";
 
 			m_image.reset();
 
@@ -179,10 +193,10 @@ namespace EmEn::Graphics::TextureResource
 			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
 		);
 
-		/* NOTE: BC7 on every BC-capable GPU, like Texture2D (graphics § 39); RGBA8 otherwise, or when a frame fails. */
-		const auto useBC7 = renderer.device()->physicalDevice()->featuresVK10().textureCompressionBC == VK_TRUE;
+		/* NOTE: Block-compressed on every BC-capable GPU, like Texture2D (graphics § 39); RGBA8 otherwise, or when a frame fails. */
+		const auto useBlockCompression = renderer.device()->physicalDevice()->featuresVK10().textureCompressionBC == VK_TRUE;
 
-		if ( !useBC7 || !this->createCompressedImage(renderer, mipLevels) )
+		if ( !useBlockCompression || !this->createCompressedImage(renderer, mipLevels) )
 		{
 			/* Create a Vulkan image. */
 			m_image = std::make_shared< Vulkan::Image >(
@@ -217,7 +231,9 @@ namespace EmEn::Graphics::TextureResource
 				.levelCount = m_image->createInfo().mipLevels,
 				.baseArrayLayer = 0,
 				.layerCount = m_image->createInfo().arrayLayers
-			}
+			},
+			/* NOTE: A one-channel image (BC4) broadcasts its R: the shaders read RGBA as from the source (D8). */
+			TextureCompressor::componentMapping(m_image->createInfo().format)
 		);
 		m_imageView->setIdentifier(ClassId, this->name(), "ImageView");
 
@@ -245,7 +261,8 @@ namespace EmEn::Graphics::TextureResource
 					.levelCount = m_image->createInfo().mipLevels,
 					.baseArrayLayer = layer,
 					.layerCount = 1
-				}
+				},
+				TextureCompressor::componentMapping(m_image->createInfo().format)
 			);
 			frameView->setIdentifier(ClassId, this->name() + "_Frame" + std::to_string(layer), "ImageView");
 

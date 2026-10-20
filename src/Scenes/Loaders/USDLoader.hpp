@@ -53,6 +53,11 @@ namespace EmEn::Scenes::Loaders::USD
 	struct Material;
 }
 
+namespace EmEn::Scenes::Loaders
+{
+	struct SceneData;
+}
+
 namespace EmEn::Resources
 {
 	class Manager;
@@ -71,6 +76,7 @@ namespace EmEn::Graphics::Material
 namespace EmEn::Graphics::TextureResource
 {
 	class Abstract;
+	struct Usage;
 }
 
 namespace EmEn::Scenes::Loaders
@@ -149,22 +155,22 @@ namespace EmEn::Scenes::Loaders
 			 * @brief Decodes one image out of the mapped archive into an engine texture.
 			 * @note Reads the archive bytes IN PLACE — no extraction to disk, no intermediate copy.
 			 * @param assetIdentifier The asset path Tydra reported for the image.
-			 * @param sRGB Whether the texture holds colour rather than data.
+			 * @param usage The texture's identity: colour (sRGB) or data, normal map (graphics § 39, D8).
 			 * @return std::shared_ptr< Graphics::TextureResource::Abstract > Null when unusable.
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::TextureResource::Abstract > archiveTexture (const std::string & assetIdentifier, bool sRGB) noexcept;
+			std::shared_ptr< Graphics::TextureResource::Abstract > archiveTexture (const std::string & assetIdentifier, const Graphics::TextureResource::Usage & usage) noexcept;
 
 			/**
 			 * @brief Turns a texture asset identifier into an engine texture: out of the archive, or next to the stage
 			 * (a case-insensitive retry included).
 			 * @param assetIdentifier The asset path Tydra reported for the image (empty: none).
-			 * @param sRGB Whether the texture holds colour rather than data.
+			 * @param usage The texture's identity: colour (sRGB) or data, normal map (graphics § 39, D8).
 			 * @param stageDirectory The directory the stage was read from.
 			 * @return std::shared_ptr< Graphics::TextureResource::Abstract > Null when unusable.
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Graphics::TextureResource::Abstract > resolveTexture (const std::string & assetIdentifier, bool sRGB, const std::filesystem::path & stageDirectory) noexcept;
+			std::shared_ptr< Graphics::TextureResource::Abstract > resolveTexture (const std::string & assetIdentifier, const Graphics::TextureResource::Usage & usage, const std::filesystem::path & stageDirectory) noexcept;
 
 			/**
 			 * @brief Translates the render scene's materials into engine PBR materials.

@@ -27,15 +27,33 @@
 #include "RTR.hpp"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
-#include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
+#include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
+#include "PrimaryServices.hpp"
+#include "Saphir/Types.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Vulkan/DescriptorPool.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/ImageView.hpp"
+#include "Vulkan/Sampler.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
 #include <bit>
 #include <cmath>
+#include <functional>
+#include <string>
+#include <utility>
 
 /* Local inclusions. */
 #include "Graphics/IrradianceProbeVolume.hpp"
@@ -184,7 +202,6 @@ const uint ChannelMask = 3u;
 const float PI = 3.14159265359;
 /* Prefiltered environment mip count - 1 (IBLTexture::PrefilteredMipLevels). */
 const float PrefilteredMaxLod = 5.0;
-
 
 /* GGX/Smith/Schlick — the same microfacet family as the raster PBR pass, so a
  * reflected surface matches the directly rendered one. */
@@ -810,16 +827,17 @@ void main()
 		 * normalOffsetFloats == 9 IS the TBN presence signal — the same layout contract
 		 * SceneMetaData's offset computation and the skinning mirror already rely on
 		 * (tangent at float 3, binormal at float 6). Decode matches the raster
-		 * (StandardResource): raw = rgb * 2 - 1, XY scaled by the material normalScale. */
+		 * (StandardResource): xy = rg * 2 - 1, Z reconstructed (a BC5 normal map stores
+		 * X and Y only — graphics § 39, D8), XY scaled by the material normalScale. */
 		if ((flags & HasNormalTexture) != 0u && mesh.normalOffsetFloats == 9u)
 		{
 			int texIndex = floatBitsToInt(materialSSBO.materials[matBase + 5u].y);
 
 			if (texIndex >= 0)
 			{
-				vec3 rawNormal = textureLod(textures2D[nonuniformEXT(texIndex)], hitUV, rtTextureLod(texIndex, hitLod)).rgb * 2.0 - 1.0;
+				vec2 rawNormal = textureLod(textures2D[nonuniformEXT(texIndex)], hitUV, rtTextureLod(texIndex, hitLod)).rg * 2.0 - 1.0;
 				float normalScale = materialSSBO.materials[matBase + 6u].w;
-				vec3 tangentSpaceNormal = normalize(vec3(rawNormal.xy * normalScale, rawNormal.z));
+				vec3 tangentSpaceNormal = normalize(vec3(rawNormal * normalScale, sqrt(max(1.0 - dot(rawNormal, rawNormal), 0.0))));
 
 				vec3 hitTangent = normalize(mat3(objectToWorld) * getHitAttributeVec3(mesh, barycentrics, 3u));
 				vec3 hitBinormal = normalize(mat3(objectToWorld) * getHitAttributeVec3(mesh, barycentrics, 6u));
@@ -1684,7 +1702,6 @@ namespace EmEn::Graphics::Effects::Lighting
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
 		const auto * lightSet = context.lightSet;
-
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 

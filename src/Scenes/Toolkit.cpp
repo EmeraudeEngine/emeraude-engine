@@ -137,7 +137,8 @@ namespace EmEn::Scenes
 			alphaMask = textures->getResource(name + "-alpha", false);
 		}
 
-		const auto normal = hasImage("-normal") ? textures->getResource(name + "-normal", false) : nullptr;
+		/* NOTE: A normal map identity: BC5 (graphics § 39, D8). */
+		const auto normal = hasImage("-normal") ? TextureResource::getStoreTexture(*textures, name + "-normal", {.normalMap = true}, false) : nullptr;
 		const auto roughness = !foliage && hasImage("-roughness") ? textures->getResource(name + "-roughness", false) : nullptr;
 		const std::string materialName = std::string{foliage ? "Vegetation/Foliage/" : "Vegetation/Bark/"} + name;
 

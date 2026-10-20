@@ -27,6 +27,8 @@
 #include "TextureCache.hpp"
 
 /* STL inclusions. */
+#include <array>
+#include <bit>
 #include <cstddef>
 #include <fstream>
 #include <string_view>
@@ -137,7 +139,7 @@ namespace EmEn::Graphics
 	}
 
 	size_t
-	TextureCache::cacheKey (const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) noexcept
+	TextureCache::cacheKey (const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format) noexcept
 	{
 		/* NOTE: Content-addressed on purpose. Anything derived from the resource NAME alone lets an
 		 * edited texture keep serving its stale blob; hashing the decoded pixels cannot. The
@@ -155,6 +157,12 @@ namespace EmEn::Graphics
 		fold(static_cast< size_t >(pixmap.colorCount()));
 		/* NOTE: The chain asked is part of the entry: the same pixels compressed with one level are another blob. */
 		fold(static_cast< size_t >(maxMipLevels));
+
+		/* NOTE: Not for BC7: its key stays the version-3 one, so the new entry replaces the old file (see the declaration). */
+		if ( format != BlockFormat::BC7 )
+		{
+			fold(static_cast< size_t >(format));
+		}
 
 		return key;
 	}
@@ -178,7 +186,7 @@ namespace EmEn::Graphics
 	}
 
 	std::vector< CompressedMipLevel >
-	TextureCache::tryLoad (size_t key) const noexcept
+	TextureCache::tryLoad (size_t key, BlockFormat format) const noexcept
 	{
 		const auto path = this->cacheFilePath(key);
 
@@ -204,16 +212,31 @@ namespace EmEn::Graphics
 		/* Read and validate header. */
 		uint32_t magic = 0;
 		uint32_t version = 0;
+		uint32_t storedFormat = 0;
 		uint32_t mipCount = 0;
 
 		file.read(reinterpret_cast< char * >(&magic), sizeof(magic));
 		file.read(reinterpret_cast< char * >(&version), sizeof(version));
-		file.read(reinterpret_cast< char * >(&mipCount), sizeof(mipCount));
 
-		if ( !file || magic != Magic || version != Version || mipCount == 0 || mipCount > 20 )
+		/* NOTE: The version first: an older layout has no format field, its next word is the mip count. */
+		if ( !file || magic != Magic || version != Version )
 		{
 			return {};
 		}
+
+		/* NOTE: Through a byte array and std::bit_cast: the stream reads chars. */
+		std::array< char, sizeof(uint32_t) > storedFormatBytes{};
+
+		file.read(storedFormatBytes.data(), static_cast< std::streamsize >(storedFormatBytes.size()));
+		storedFormat = std::bit_cast< uint32_t >(storedFormatBytes);
+		file.read(reinterpret_cast< char * >(&mipCount), sizeof(mipCount));
+
+		if ( !file || storedFormat != static_cast< uint32_t >(format) || mipCount == 0 || mipCount > 20 )
+		{
+			return {};
+		}
+
+		const auto bytesPerBlock = static_cast< uint64_t >(TextureCompressor::blockBytes(format));
 
 		/* Read mip levels. */
 		std::vector< CompressedMipLevel > result;
@@ -235,13 +258,13 @@ namespace EmEn::Graphics
 			}
 
 			/* NOTE: The cache is a file on disk (a truncated write, a disk error): a level's size must be exactly the
-			 * BC7 size of its dimensions (16 bytes per 4x4 block) — otherwise resize() could ask for gigabytes and the
-			 * upload would read past a short buffer. Anything else is a cache miss (triad 2026-10-01). */
+			 * size of its dimensions in its format (16 bytes per 4x4 block, 8 for BC4) — otherwise resize() could ask for
+			 * gigabytes and the upload would read past a short buffer. Anything else is a cache miss (triad 2026-10-01). */
 			const auto blockCount = ((static_cast< uint64_t >(width) + 3) / 4) * ((static_cast< uint64_t >(height) + 3) / 4);
 
-			if ( static_cast< uint64_t >(dataSize) != blockCount * 16 || static_cast< uint64_t >(file.tellg()) + dataSize > fileSize )
+			if ( static_cast< uint64_t >(dataSize) != blockCount * bytesPerBlock || static_cast< uint64_t >(file.tellg()) + dataSize > fileSize )
 			{
-				TraceWarning{ClassId} << "The texture cache entry '" << path << "' declares " << dataSize << " bytes for a " << width << 'x' << height << " BC7 level (or more than the file holds), ignored.";
+				TraceWarning{ClassId} << "The texture cache entry '" << path << "' declares " << dataSize << " bytes for a " << width << 'x' << height << ' ' << to_cstring(format) << " level (or more than the file holds), ignored.";
 
 				return {};
 			}
@@ -265,7 +288,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	TextureCache::store (size_t key, const std::vector< CompressedMipLevel > & mipLevels) const noexcept
+	TextureCache::store (size_t key, BlockFormat format, const std::vector< CompressedMipLevel > & mipLevels) const noexcept
 	{
 		if ( mipLevels.empty() )
 		{
@@ -286,10 +309,12 @@ namespace EmEn::Graphics
 		/* Write header. */
 		const uint32_t magic = Magic;
 		const uint32_t version = Version;
+		const auto storedFormat = std::bit_cast< std::array< char, sizeof(uint32_t) > >(static_cast< uint32_t >(format));
 		const auto mipCount = static_cast< uint32_t >(mipLevels.size());
 
 		file.write(reinterpret_cast< const char * >(&magic), sizeof(magic));
 		file.write(reinterpret_cast< const char * >(&version), sizeof(version));
+		file.write(storedFormat.data(), static_cast< std::streamsize >(storedFormat.size()));
 		file.write(reinterpret_cast< const char * >(&mipCount), sizeof(mipCount));
 
 		/* Write mip levels. */
@@ -314,14 +339,14 @@ namespace EmEn::Graphics
 	}
 
 	std::vector< CompressedMipLevel >
-	TextureCache::getOrCompress (const std::string & resourceName, const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) const noexcept
+	TextureCache::getOrCompress (const std::string & resourceName, const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format) const noexcept
 	{
 		const auto cacheEnabled = !m_cacheDirectory.empty();
-		const auto key = cacheEnabled ? TextureCache::cacheKey(pixmap, maxMipLevels) : 0;
+		const auto key = cacheEnabled ? TextureCache::cacheKey(pixmap, maxMipLevels, format) : 0;
 
 		if ( cacheEnabled )
 		{
-			auto cached = this->tryLoad(key);
+			auto cached = this->tryLoad(key, format);
 
 			if ( !cached.empty() )
 			{
@@ -331,14 +356,14 @@ namespace EmEn::Graphics
 			}
 		}
 
-		auto compressed = m_compressor.compress(pixmap, maxMipLevels);
+		auto compressed = m_compressor.compress(pixmap, maxMipLevels, format);
 
 		if ( compressed.empty() || !cacheEnabled )
 		{
 			return compressed;
 		}
 
-		if ( !this->store(key, compressed) )
+		if ( !this->store(key, format, compressed) )
 		{
 			TraceWarning{ClassId} << "Unable to cache the compressed texture '" << resourceName << "' ! It will be compressed again on the next run.";
 		}

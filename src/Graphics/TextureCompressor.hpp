@@ -33,6 +33,9 @@
 #include <cstdint>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritance. */
 #include "ServiceInterface.hpp"
 
@@ -42,27 +45,52 @@
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief Represents a single mip level of BC7-compressed texture data.
+	 * @brief The block-compressed format of a texture, chosen by its kind (graphics § 39, D8).
+	 * @note Every format stores 4 × 4 pixel blocks; the source is always an RGBA8 pixmap.
+	 */
+	enum class BlockFormat : uint8_t
+	{
+		/** @brief BC7: four channels, 16 bytes per block — colour, opacity and the packed Data texture. sRGB or linear. */
+		BC7,
+		/** @brief BC5: the R and G channels, 16 bytes per block — a tangent-space normal map (X, Y; the shader
+		 * reconstructs Z). Linear only. */
+		BC5,
+		/** @brief BC4: the R channel, 8 bytes per block — an opaque grey-scale map, broadcast to R, G and B by the image
+		 * view (componentMapping()). Linear only. */
+		BC4
+	};
+
+	/**
+	 * @brief Returns the name of a block format, for the logs.
+	 * @param format The block format.
+	 * @return const char *
+	 */
+	[[nodiscard]]
+	EMEN_API
+	const char * to_cstring (BlockFormat format) noexcept;
+
+	/**
+	 * @brief Represents a single mip level of block-compressed texture data.
 	 */
 	struct EMEN_API CompressedMipLevel
 	{
-		std::vector< uint8_t > data; ///< BC7 compressed blocks (16 bytes per 4x4 block).
+		std::vector< uint8_t > data; ///< Compressed blocks (TextureCompressor::blockBytes() per 4x4 block).
 		uint32_t width{0}; ///< Width of this mip level in pixels.
 		uint32_t height{0}; ///< Height of this mip level in pixels.
 	};
 
 	/**
-	 * @brief BC7 texture compression sub-service of the Renderer.
+	 * @brief Block texture compression sub-service of the Renderer: BC7, BC5 and BC4 (graphics § 39, D8).
 	 *
-	 * Uses bc7enc_rdo for block compression. Generates CPU-side mipmaps
-	 * (linear downscale) and compresses each level independently.
+	 * Uses bc7enc_rdo for BC7 and its rgbcx encoder for BC4 / BC5 (Richard Geldreich, public domain or MIT,
+	 * https://github.com/richgel999/bc7enc_rdo). Generates CPU-side mipmaps (an area-weighted box filter) and
+	 * compresses each level independently.
 	 * Blocks are compressed SEQUENTIALLY on the calling thread: parallelism comes from the
 	 * resource manager loading several textures at once on different workers, never from within
 	 * one texture. The thread pool this used to receive was threaded through and never used.
 	 *
-	 * BC7 produces 16 bytes per 4x4 pixel block, giving a 4:1 compression
-	 * ratio on RGBA8 textures. The compressed data is suitable for direct
-	 * upload to VkImage with VK_FORMAT_BC7_UNORM_BLOCK or VK_FORMAT_BC7_SRGB_BLOCK.
+	 * BC7 and BC5 produce 16 bytes per 4x4 pixel block (4:1 on RGBA8), BC4 8 bytes (8:1). The compressed data is
+	 * suitable for direct upload to the VkImage of vulkanFormat().
 	 *
 	 * @note The encoder's one-time setup happens in onInitialize(), so a caller can
 	 * never reach a compression method before the encoder is ready. This used to be a
@@ -76,11 +104,14 @@ namespace EmEn::Graphics
 
 			static constexpr auto ClassId{"TextureCompressorService"};
 
-			/** @brief BC7 block size in pixels (4x4). */
+			/** @brief Block size in pixels (4x4), every format. */
 			static constexpr uint32_t BlockSize = 4;
 
-			/** @brief BC7 compressed block size in bytes (128 bits). */
+			/** @brief BC7 / BC5 compressed block size in bytes (128 bits). */
 			static constexpr uint32_t BlockBytes = 16;
+
+			/** @brief BC4 compressed block size in bytes (64 bits). */
+			static constexpr uint32_t HalfBlockBytes = 8;
 
 			/**
 			 * @brief Constructs the texture compressor.
@@ -88,14 +119,19 @@ namespace EmEn::Graphics
 			TextureCompressor () noexcept;
 
 			/**
-			 * @brief Compresses an RGBA8 pixmap to BC7 with full mipchain.
+			 * @brief Compresses an RGBA8 pixmap with its mip chain.
+			 * @note BC5 renormalizes the (X, Y, Z) vector of every texel of every level before keeping X and Y: the
+			 * shader reconstructs Z = sqrt(1 - X² - Y²), which needs a unit vector — a box-filtered mip is shorter, and
+			 * reconstructing from it would flatten the normal with distance where the BC7 path (normalize(xyz)) keeps
+			 * its direction. A null vector becomes (0, 0, 1). The chain keeps filtering the UNNORMALIZED level.
 			 * @param pixmap Source RGBA8 pixel data. Dimensions should be multiples of 4.
 			 * @param maxMipLevels Maximum number of mip levels to generate (0 = full chain down to 1x1).
+			 * @param format The block format (BC7 by default).
 			 * @return Vector of compressed mip levels, empty on failure.
 			 * @note Non-multiple-of-4 dimensions are padded by repeating edge pixels.
 			 */
 			[[nodiscard]]
-			std::vector< CompressedMipLevel > compress (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) const noexcept;
+			std::vector< CompressedMipLevel > compress (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format = BlockFormat::BC7) const noexcept;
 
 			/**
 			 * @brief Compresses a single RGBA8 pixmap to BC7 (no mipchain).
@@ -106,22 +142,62 @@ namespace EmEn::Graphics
 			CompressedMipLevel compressSingle (const Base::PixelFactory::Pixmap< uint8_t > & pixmap) const noexcept;
 
 			/**
-			 * @brief Returns the compressed size in bytes for a given resolution.
-			 * @note Pure arithmetic on its arguments, hence static: it holds no state.
-			 * @param width Texture width in pixels.
-			 * @param height Texture height in pixels.
-			 * @return Size in bytes of the BC7 compressed data.
+			 * @brief Chooses the block format of a texture (graphics § 39, D8 — owner decisions 2026-10-20).
+			 * @note A normal map (an identity the texture's creator gives, TextureResource::Usage::normalMap) is BC5;
+			 * any other LINEAR texture whose every pixel is grey and opaque (R = G = B, A = 255) is BC4 — lossless in
+			 * meaning whatever channel a reader samples, since the view broadcasts R; everything else is BC7. An sRGB
+			 * texture stays BC7: BC4 and BC5 have no sRGB format (an sRGB normal map is a creator error, logged).
+			 * @param pixmap The RGBA8 pixels the texture uploads.
+			 * @param sRGB Whether the texture is sRGB.
+			 * @param normalMap Whether the texture is a normal map.
+			 * @return BlockFormat
+			 */
+			[[nodiscard]]
+			static BlockFormat selectFormat (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, bool sRGB, bool normalMap) noexcept;
+
+			/**
+			 * @brief Returns whether every pixel of an RGBA8 pixmap is grey and opaque (R = G = B, A = 255).
+			 * @note Stops at the first pixel that is not: a colour texture costs a few pixels, a grey one a full scan.
+			 * @param pixmap The pixels.
+			 * @return bool False for an invalid or non-RGBA8 pixmap.
+			 */
+			[[nodiscard]]
+			static bool isOpaqueGrey (const Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
+
+			/**
+			 * @brief Returns the Vulkan format of a block format.
+			 * @param format The block format.
+			 * @param sRGB Whether the texture is sRGB (honoured by BC7 only, see selectFormat()).
+			 * @return VkFormat
+			 */
+			[[nodiscard]]
+			static VkFormat vulkanFormat (BlockFormat format, bool sRGB) noexcept;
+
+			/**
+			 * @brief Returns the image view swizzle an image format needs so the shaders read it as RGBA.
+			 * @note A one-channel format (BC4, R8) broadcasts its R to R, G and B with an opaque A: a grey map reads the
+			 * same from any channel, as its RGBA8 source did. Every other format is the identity (BC5 reads B = 0 and
+			 * A = 1, the shaders reconstructing Z). Decided by the IMAGE format, so a pre-encoded KTX2 BC4 gets it too.
+			 * @param format The format of the image the view shows.
+			 * @return VkComponentMapping
+			 */
+			[[nodiscard]]
+			static VkComponentMapping componentMapping (VkFormat format) noexcept;
+
+			/**
+			 * @brief Returns the size in bytes of one 4 × 4 block.
+			 * @param format The block format.
+			 * @return uint32_t
 			 */
 			[[nodiscard]]
 			static
+			constexpr
 			uint32_t
-			compressedSize (uint32_t width, uint32_t height) noexcept
+			blockBytes (BlockFormat format) noexcept
 			{
-				const uint32_t blocksX = (width + BlockSize - 1) / BlockSize;
-				const uint32_t blocksY = (height + BlockSize - 1) / BlockSize;
-
-				return blocksX * blocksY * BlockBytes;
+				return format == BlockFormat::BC4 ? HalfBlockBytes : BlockBytes;
 			}
+
 
 		private:
 

@@ -28,42 +28,58 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cctype>
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
 #include <system_error>
 #include <tuple>
+#include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 /* Third-party inclusions. */
 #include "lightusd.hh"
-#include "composition.hh"
 #include "asset-resolution.hh"
 #include "tydra/render-data.hh"
 
 /* Local inclusions. */
-#include "IO/IO.hpp"
-#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "BlobTrait.hpp"
 #include "GeometryDeduplicator.hpp"
-#include "USDParser.hpp"
-#include "USDZArchive.hpp"
-#include "VertexFactory/ShapeSimplifier.hpp"
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
-#include "Graphics/TextureResource/Texture2D.hpp"
-#include "PixelFactory/FileIO.hpp"
-#include "PixelFactory/StreamIO.hpp"
-#include "PixelFactory/Pixmap.hpp"
+#include "Graphics/RasterizationOptions.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
+#include "Graphics/Types.hpp"
+#include "IO/IO.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PixelFactory/FileIO.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "PixelFactory/StreamIO.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
-#include "String.hpp"
 #include "SceneData.hpp"
+#include "Scenes/Loaders/LoaderOptions.hpp"
 #include "Tracer.hpp"
+#include "USDParser.hpp"
+#include "USDZArchive.hpp"
 #include "VertexFactory/Shape.hpp"
+#include "VertexFactory/ShapeSimplifier.hpp"
+#include "VertexFactory/ShapeTriangle.hpp"
 
 namespace EmEn::Scenes::Loaders
 {
@@ -72,7 +88,6 @@ namespace EmEn::Scenes::Loaders
 	{
 
 	}
-
 
 	size_t
 	USDLoader::buildInstanceSets (const std::vector< USD::Instancer > & instancers, const std::map< std::string, size_t > & builtMeshesByPath, SceneData & output) noexcept
@@ -185,7 +200,7 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	std::shared_ptr< Graphics::TextureResource::Abstract >
-	USDLoader::archiveTexture (const std::string & assetIdentifier, bool sRGB) noexcept
+	USDLoader::archiveTexture (const std::string & assetIdentifier, const Graphics::TextureResource::Usage & usage) noexcept
 	{
 		using namespace Graphics;
 		using namespace Base::PixelFactory;
@@ -292,9 +307,9 @@ namespace EmEn::Scenes::Loaders
 		 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
 		 * docs/caution-points.md). */
 		return m_resources.container< TextureResource::Texture2D >()
-			->getOrCreateResourceSync(m_resourcePrefix + "/texture/" + entryName + ( sRGB ? "-srgb" : "-data" ), [image, sRGB] (auto & textureResource) {
-				/* Set sRGB BEFORE load(): the flag must be in place when the VkImage is created. */
-				if ( !textureResource.enableSRGB(sRGB) )
+			->getOrCreateResourceSync(m_resourcePrefix + "/texture/" + entryName + TextureResource::loaderUsageSuffix(usage), [image, usage] (auto & textureResource) {
+				/* Set sRGB (and the normal map kind) BEFORE load(): the flags must be in place when the VkImage is created. */
+				if ( !textureResource.enableSRGB(usage.sRGB) || !textureResource.enableNormalMap(usage.normalMap) )
 				{
 					return false;
 				}
@@ -304,7 +319,7 @@ namespace EmEn::Scenes::Loaders
 	}
 
 	std::shared_ptr< Graphics::TextureResource::Abstract >
-	USDLoader::resolveTexture (const std::string & assetIdentifier, bool sRGB, const std::filesystem::path & stageDirectory) noexcept
+	USDLoader::resolveTexture (const std::string & assetIdentifier, const Graphics::TextureResource::Usage & usage, const std::filesystem::path & stageDirectory) noexcept
 	{
 		using namespace Graphics;
 		using namespace Base::PixelFactory;
@@ -316,7 +331,7 @@ namespace EmEn::Scenes::Loaders
 
 		if ( m_archive != nullptr )
 		{
-			return this->archiveTexture(assetIdentifier, sRGB);
+			return this->archiveTexture(assetIdentifier, usage);
 		}
 
 		std::error_code pathError;
@@ -408,9 +423,9 @@ namespace EmEn::Scenes::Loaders
 		 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
 		 * docs/caution-points.md). */
 		return m_resources.container< TextureResource::Texture2D >()
-			->getOrCreateResourceSync(m_resourcePrefix + "/texture/" + Base::IO::toU8String(fullPath.filename()) + ( sRGB ? "-srgb" : "-data" ), [image, sRGB] (auto & textureResource) {
-				/* Set sRGB BEFORE load(): the flag must be in place when the VkImage is created. */
-				if ( !textureResource.enableSRGB(sRGB) )
+			->getOrCreateResourceSync(m_resourcePrefix + "/texture/" + Base::IO::toU8String(fullPath.filename()) + TextureResource::loaderUsageSuffix(usage), [image, usage] (auto & textureResource) {
+				/* Set sRGB (and the normal map kind) BEFORE load(): the flags must be in place when the VkImage is created. */
+				if ( !textureResource.enableSRGB(usage.sRGB) || !textureResource.enableNormalMap(usage.normalMap) )
 				{
 					return false;
 				}
@@ -432,10 +447,10 @@ namespace EmEn::Scenes::Loaders
 		{
 			const auto & materialName = description.resourceName;
 
-			const auto albedoTexture = this->resolveTexture(description.albedoTexture, true, stageDirectory);
-			const auto roughnessTexture = this->resolveTexture(description.roughnessTexture, false, stageDirectory);
-			const auto metalnessTexture = this->resolveTexture(description.metalnessTexture, false, stageDirectory);
-			const auto normalTexture = this->resolveTexture(description.normalTexture, false, stageDirectory);
+			const auto albedoTexture = this->resolveTexture(description.albedoTexture, {.sRGB = true}, stageDirectory);
+			const auto roughnessTexture = this->resolveTexture(description.roughnessTexture, {}, stageDirectory);
+			const auto metalnessTexture = this->resolveTexture(description.metalnessTexture, {}, stageDirectory);
+			const auto normalTexture = this->resolveTexture(description.normalTexture, {.normalMap = true}, stageDirectory);
 
 			const auto albedoValue = description.albedoValue;
 			const auto roughnessValue = description.roughnessValue;

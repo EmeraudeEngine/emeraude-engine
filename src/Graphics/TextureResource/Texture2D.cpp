@@ -27,17 +27,36 @@
 #include "Texture2D.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <functional>
 #include <optional>
+#include <span>
 #include <string>
+#include <vector>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
-#include "FileSystem.hpp"
+#include "BlobTrait.hpp"
+#include "Graphics/KTX2Decoder.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/TextureCache.hpp"
 #include "Graphics/TextureCompressor.hpp"
-#include "Resources/Manager.hpp"
+#include "Graphics/TextureResource/Abstract.hpp"
+#include "Logging/Severity.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
-#include "Vulkan/Instance.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
+#include "Vulkan/Sampler.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {
@@ -90,7 +109,9 @@ namespace EmEn::Graphics::TextureResource
 				.levelCount = m_image->createInfo().mipLevels,
 				.baseArrayLayer = 0,
 				.layerCount = m_image->createInfo().arrayLayers
-			}
+			},
+			/* NOTE: A one-channel image (BC4) broadcasts its R: the shaders read RGBA as from the source (D8). */
+			TextureCompressor::componentMapping(m_image->createInfo().format)
 		);
 		m_imageView->setIdentifier(ClassId, this->name(), "ImageView");
 
@@ -258,24 +279,24 @@ namespace EmEn::Graphics::TextureResource
 			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
 		);
 
-		/* Check if BC7 hardware compression is supported. */
-		const auto useBC7 = renderer.device()->physicalDevice()->featuresVK10().textureCompressionBC == VK_TRUE;
+		/* Check if BC hardware compression is supported. */
+		const auto useBlockCompression = renderer.device()->physicalDevice()->featuresVK10().textureCompressionBC == VK_TRUE;
 		bool imageCreated = false;
 
-		if ( useBC7 )
+		if ( useBlockCompression )
 		{
-			/* BC7 compressed path: the texture cache service owns it end to end -- disk lookup,
-			 * compression on a miss, and storing the result. */
-			const auto compressedMips = renderer.textureCache().getOrCompress(this->name(), pixels, mipLevels);
+			/* Compressed path: the format follows the texture's kind (graphics § 39, D8 — BC5 for a normal map, BC4 for an
+			 * opaque grey map, BC7 otherwise); the texture cache service owns it end to end -- disk lookup, compression on
+			 * a miss, and storing the result. */
+			const auto blockFormat = TextureCompressor::selectFormat(pixels, this->isSRGB(), this->isNormalMap());
+			const auto compressedMips = renderer.textureCache().getOrCompress(this->name(), pixels, mipLevels, blockFormat);
 
 			if ( !compressedMips.empty() )
 			{
-				const auto bc7Format = this->isSRGB() ? VK_FORMAT_BC7_SRGB_BLOCK : VK_FORMAT_BC7_UNORM_BLOCK;
-
 				m_image = std::make_shared< Vulkan::Image >(
 					renderer.device(),
 					VK_IMAGE_TYPE_2D,
-					bc7Format,
+					TextureCompressor::vulkanFormat(blockFormat, this->isSRGB()),
 					VkExtent3D{m_localData->width(), m_localData->height(), 1U},
 					VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 					0,
@@ -298,20 +319,20 @@ namespace EmEn::Graphics::TextureResource
 				}
 				else
 				{
-					TraceWarning{ClassId} << "BC7 upload failed for '" << this->name() << "', falling back to uncompressed.";
+					TraceWarning{ClassId} << to_cstring(blockFormat) << " upload failed for '" << this->name() << "', falling back to uncompressed.";
 
 					m_image.reset();
 				}
 			}
 			else
 			{
-				TraceWarning{ClassId} << "BC7 compression failed for '" << this->name() << "', falling back to uncompressed.";
+				TraceWarning{ClassId} << to_cstring(blockFormat) << " compression failed for '" << this->name() << "', falling back to uncompressed.";
 			}
 		}
 
 		if ( !imageCreated )
 		{
-			/* Uncompressed path (fallback or no BC7 support). */
+			/* Uncompressed path (fallback or no BC support). */
 			m_image = std::make_shared< Vulkan::Image >(
 				renderer.device(),
 				VK_IMAGE_TYPE_2D,
@@ -337,7 +358,6 @@ namespace EmEn::Graphics::TextureResource
 
 		return true;
 	}
-
 
 	bool
 	Texture2D::destroyTexture () noexcept

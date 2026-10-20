@@ -159,8 +159,11 @@ namespace EmEn::Graphics::Material::Component
 			 * @param serviceProvider A reference to the resource manager through a service provider.
 			 * @param defaultSourceChannel The channel read when the data names none ('SourceChannel'): the component
 			 * type's own (glTF: the thickness maps in G). Default red.
+			 * @param normalMap True when the component reads a normal map (the normal and clear-coat normal
+			 * components): the store texture is requested with that identity, block-compressed as BC5 (graphics § 39,
+			 * D8). Default false.
 			 */
-			Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::AbstractServiceProvider & serviceProvider, Base::PixelFactory::Channel defaultSourceChannel = Base::PixelFactory::Channel::Red) noexcept;
+			Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::AbstractServiceProvider & serviceProvider, Base::PixelFactory::Channel defaultSourceChannel = Base::PixelFactory::Channel::Red, bool normalMap = false) noexcept;
 
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::create() */
 			[[nodiscard]]
@@ -462,13 +465,14 @@ namespace EmEn::Graphics::Material::Component
 		private:
 
 			/**
-			 * @brief Reads the texture's identity a usage asks for: the colour space (from the variable name) and the
-			 * optional 'FlipNormalMapY'.
+			 * @brief Reads the texture's identity a usage asks for: the colour space (from the variable name), the
+			 * normal map kind (from the component) and the optional 'FlipNormalMapY'.
 			 * @param data The texture object (`Data`), checked as an object by the caller.
+			 * @param normalMap Whether the component reads a normal map.
 			 * @return std::optional< TextureResource::Usage > Empty when 'FlipNormalMapY' is not a boolean.
 			 */
 			[[nodiscard]]
-			std::optional< TextureResource::Usage > parseUsage (const Json::Value & data) const noexcept;
+			std::optional< TextureResource::Usage > parseUsage (const Json::Value & data, bool normalMap) const noexcept;
 
 			/**
 			 * @brief Returns the store texture (the variant of the usage) a filling type names.

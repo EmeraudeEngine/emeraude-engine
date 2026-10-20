@@ -86,7 +86,7 @@ namespace EmEn::Graphics::Material::Component
 		return false;
 	}
 
-	Texture::Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::AbstractServiceProvider & serviceProvider, Base::PixelFactory::Channel defaultSourceChannel) noexcept
+	Texture::Texture (const char * samplerName, std::string variableName, const Json::Value & data, const FillingType & fillingType, Resources::AbstractServiceProvider & serviceProvider, Base::PixelFactory::Channel defaultSourceChannel, bool normalMap) noexcept
 		: m_samplerName{samplerName},
 		m_variableName{std::move(variableName)},
 		m_sourceChannel{defaultSourceChannel}
@@ -107,7 +107,7 @@ namespace EmEn::Graphics::Material::Component
 			return;
 		}
 
-		const auto usage = this->parseUsage(data);
+		const auto usage = this->parseUsage(data, normalMap);
 
 		if ( !usage.has_value() )
 		{
@@ -130,7 +130,7 @@ namespace EmEn::Graphics::Material::Component
 	}
 
 	std::optional< TextureResource::Usage >
-	Texture::parseUsage (const Json::Value & data) const noexcept
+	Texture::parseUsage (const Json::Value & data, bool normalMap) const noexcept
 	{
 		/* NOTE: The colour space and the normal map flip are part of the texture's IDENTITY (owner decision
 		 * 2026-10-14): they are requested here, from the usage, and getStoreTexture() hands out the variant created
@@ -138,9 +138,10 @@ namespace EmEn::Graphics::Material::Component
 		 * first one, or the write would race the upload on a pool worker.
 		 * Convention: a material variable name ending with "Color" is a perceptual colour (albedo, emissive...)
 		 * encoded in sRGB, decoded to linear by the GPU on sampling. "FlipNormalMapY": true converts a
-		 * Direct3D-style normal map (+Y down) into the Khronos convention. */
+		 * Direct3D-style normal map (+Y down) into the Khronos convention. A normal map is BC5 (graphics § 39, D8). */
 		TextureResource::Usage usage{};
 		usage.sRGB = m_variableName.ends_with("Color");
+		usage.normalMap = normalMap;
 
 		if ( data.isMember(JKFlipNormalMapY) )
 		{

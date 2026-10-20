@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstddef>
 #include <memory>
 #include <string>
 
@@ -48,7 +49,52 @@ namespace EmEn::Graphics::TextureResource
 		bool sRGB{false};
 		/** @brief True for a Direct3D-style normal map (+Y down), converted to the Khronos convention at upload. */
 		bool flipNormalMapY{false};
+		/** @brief True for a tangent-space normal map, block-compressed as BC5 (X, Y; the shader reconstructs Z —
+		 * graphics § 39, D8). Linear only. */
+		bool normalMap{false};
 	};
+
+	/**
+	 * @brief The number of usages a scene loader caches per source image: linear data, sRGB colour, normal map.
+	 * @note A loader's textures never flip a normal map (their formats state the convention).
+	 */
+	constexpr size_t LoaderUsageCount{3};
+
+	/**
+	 * @brief Returns the cache slot of a usage in a scene loader (< LoaderUsageCount).
+	 * @param usage The sampling properties.
+	 * @return size_t
+	 */
+	[[nodiscard]]
+	constexpr
+	size_t
+	loaderUsageSlot (const Usage & usage) noexcept
+	{
+		if ( usage.normalMap )
+		{
+			return 2;
+		}
+
+		return usage.sRGB ? 1 : 0;
+	}
+
+	/**
+	 * @brief Returns the resource name suffix of a usage in a scene loader.
+	 * @param usage The sampling properties.
+	 * @return const char *
+	 */
+	[[nodiscard]]
+	constexpr
+	const char *
+	loaderUsageSuffix (const Usage & usage) noexcept
+	{
+		if ( usage.normalMap )
+		{
+			return "-normal";
+		}
+
+		return usage.sRGB ? "-srgb" : "-data";
+	}
 
 	/**
 	 * @brief Returns the resource name of a store texture's variant.
@@ -74,12 +120,18 @@ namespace EmEn::Graphics::TextureResource
 			name += "#flipY";
 		}
 
+		if ( usage.normalMap )
+		{
+			name += "#normal";
+		}
+
 		return name;
 	}
 
 	/**
 	 * @brief Returns a store texture as a given usage samples it.
-	 * @note The colour space and the normal map flip are part of a texture's identity (owner decision 2026-10-14):
+	 * @note The colour space, the normal map flip and the normal map kind (D8, 2026-10-20) are part of a texture's
+	 * identity (owner decision 2026-10-14):
 	 * each usage is a distinct resource, named by variantName(), whose properties are set by its creation function
 	 * BEFORE the loading starts, then never changed. Two materials sampling one image differently get two textures;
 	 * the BC7 cache is keyed by the pixels, so the sRGB and linear variants share one cache entry.
@@ -105,7 +157,7 @@ namespace EmEn::Graphics::TextureResource
 	getStoreTexture (Resources::Container< texture_t > & container, const std::string & storeName, const Usage & usage, bool asyncLoad = true) noexcept
 	{
 		/* NOTE: An absent name goes through getResource() too: its usual warning and the default resource. */
-		if ( (!usage.sRGB && !usage.flipNormalMapY) || storeName == Resources::Default || !container.isResourceExists(storeName) )
+		if ( (!usage.sRGB && !usage.flipNormalMapY && !usage.normalMap) || storeName == Resources::Default || !container.isResourceExists(storeName) )
 		{
 			return container.getResource(storeName, asyncLoad);
 		}
@@ -121,7 +173,7 @@ namespace EmEn::Graphics::TextureResource
 		}
 
 		return container.getOrCreateResourceSync(variantName(storeName, usage), [&filepath, &usage] (texture_t & texture) {
-			if ( !texture.enableSRGB(usage.sRGB) || !texture.enableFlipNormalMapY(usage.flipNormalMapY) )
+			if ( !texture.enableSRGB(usage.sRGB) || !texture.enableFlipNormalMapY(usage.flipNormalMapY) || !texture.enableNormalMap(usage.normalMap) )
 			{
 				return false;
 			}

@@ -377,6 +377,13 @@ Linux with a settings copy asking one level: 12 levels served before the fix, 1 
 mip count is in the key now. ⚠️ A key change ORPHANS the old entries (they stay on disk, unreachable): clearing the
 directory (`--clear-renderer-cache`) is the owner's call.
 
+**Version 4 (2026-10-20, D8 — graphics § 39):** the cache holds BC7, BC5 and BC4 chains; the header carries the block
+format (after the version, before the mip count) and `tryLoad()` refuses an entry whose format is not the one asked
+(and checks every level's size against THAT format: 8 bytes per block for BC4). The format is folded into the key for
+BC5 and BC4 only: a BC7 key is the version-3 key, so the first version-4 run REWRITES each BC7 file under its old name
+instead of orphaning it (one re-encode per texture, no disk growth). The same pixels as a BC7 texture and as a `#normal`
+variant are two entries.
+
 ### Material Types Registration
 
 > [!CRITICAL]
@@ -2560,6 +2567,9 @@ whatever the loaded image happens to carry (1.0 when it has no alpha, which is t
 > before it is set and refuse at random. The synchronous form costs nothing there: the function only links an
 > already-requested source (`load(image)`), decoded on the pool as before (the FBX / glTF / USD / WAD loaders, the
 > image viewer and `getStoreTexture()` all do so since 2026-10-14).
+> The normal map KIND joined them on 2026-10-20 (`enableNormalMap()`, `Usage::normalMap`, `Name#normal`; the loaders'
+> `-normal` slot): it makes the texture BC5 (graphics § 39 § Block format per kind). Unlike the colour space, a texture
+> missing it is not refused anywhere — it stays BC7 and renders the same (the shaders reconstruct Z for every format).
 
 Until 2026-10-14 the material component and every texture setter WROTE the colour space (and the JSON component the
 flip) on the texture it was handed — a resource shared by name, requested asynchronously a line earlier. Three

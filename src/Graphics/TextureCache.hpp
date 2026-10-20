@@ -51,13 +51,13 @@ namespace EmEn
 namespace EmEn::Graphics
 {
 	/**
-	 * @brief Disk cache for BC7-compressed textures, sub-service of the Renderer.
+	 * @brief Disk cache for block-compressed textures (BC7, BC5, BC4), sub-service of the Renderer.
 	 *
-	 * Stores and retrieves pre-compressed BC7 mip chains on disk to avoid re-compressing
+	 * Stores and retrieves pre-compressed mip chains on disk to avoid re-compressing
 	 * textures at every engine launch. Cache files live in a "texture-cache" sub-directory
 	 * of the user cache directory.
 	 *
-	 * The service owns the whole BC7 path through getOrCompress(): look the entry up, compress
+	 * The service owns the whole compressed path through getOrCompress(): look the entry up, compress
 	 * it on a miss through the TextureCompressor sub-service, store the result. A caller only
 	 * asks for compressed mips and never sees the cache policy.
 	 *
@@ -66,7 +66,7 @@ namespace EmEn::Graphics
 	 * is what you want to measure the encoding cost.
 	 *
 	 * @note Invalidation is keyed on a FNV-1a hash of the DECODED PIXELS plus the dimensions,
-	 * the channel count and the mip levels asked (since 2026-10-20). Hashing the content is what makes it correct: the previous key mixed the
+	 * the channel count, the mip levels asked and the block format (since 2026-10-20). Hashing the content is what makes it correct: the previous key mixed the
 	 * resource name with a "file size" that was the decoded byte count and a "modification time"
 	 * that was width * 1000000 + height, so it reduced to name + dimensions. Repainting a texture
 	 * without resizing it served the stale BC7 blob forever.
@@ -78,6 +78,7 @@ namespace EmEn::Graphics
 	 * File format (.bc7cache):
 	 *   [4 bytes] Magic ("BC7C")
 	 *   [4 bytes] Version
+	 *   [4 bytes] Block format (BlockFormat, since version 4)
 	 *   [4 bytes] Mip level count
 	 *   For each mip level:
 	 *	 [4 bytes] Width
@@ -99,15 +100,16 @@ namespace EmEn::Graphics
 			TextureCache (PrimaryServices & primaryServices, const TextureCompressor & compressor) noexcept;
 
 			/**
-			 * @brief Returns the BC7 mip chain for a pixmap, compressing it only on a cache miss.
+			 * @brief Returns the compressed mip chain for a pixmap, compressing it only on a cache miss.
 			 * @param resourceName The texture resource name, used for logging ONLY: the key is
 			 * derived from the pixel content, never from the name.
 			 * @param pixmap A reference to the decoded RGBA8 source pixels.
 			 * @param maxMipLevels Maximum number of mip levels (0 = full chain).
+			 * @param format The block format (TextureCompressor::selectFormat()).
 			 * @return Vector of compressed mip levels, empty on failure.
 			 */
 			[[nodiscard]]
-			std::vector< CompressedMipLevel > getOrCompress (const std::string & resourceName, const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) const noexcept;
+			std::vector< CompressedMipLevel > getOrCompress (const std::string & resourceName, const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format) const noexcept;
 
 			/**
 			 * @brief Erases every cache entry from disk.
@@ -124,16 +126,20 @@ namespace EmEn::Graphics
 			bool onTerminate () noexcept override;
 
 			/**
-			 * @brief Computes the content-addressed cache key for a pixmap and the mip chain asked of it.
+			 * @brief Computes the content-addressed cache key for a pixmap, the mip chain and the block format asked of it.
 			 * @note The mip count is part of the key (2026-10-20): keyed on the pixels alone, an entry written with
 			 * one mip level (a run with `Core/Graphics/Texture/MipMappingLevels` = 1) served every later run that asked
 			 * for a full chain, and a full chain served a run that asked for one level.
+			 * @note The block format is folded in for BC5 and BC4 only (D8, 2026-10-20): the same pixels may be a BC7
+			 * texture and a BC5 normal map variant at once, and one shared entry would make them overwrite each other.
+			 * A BC7 key is the version-3 key, so the version-4 entry REPLACES the old file instead of orphaning it.
 			 * @param pixmap A reference to the decoded RGBA8 source pixels.
 			 * @param maxMipLevels The mip levels asked of the compression.
+			 * @param format The block format.
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static size_t cacheKey (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) noexcept;
+			static size_t cacheKey (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format) noexcept;
 
 			/**
 			 * @brief Returns the cache file path for a key.
@@ -146,19 +152,21 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Tries to load a compressed mip chain from disk.
 			 * @param key The content-addressed cache key.
+			 * @param format The block format the entry must hold (anything else is a miss).
 			 * @return Vector of compressed mip levels, empty on a miss.
 			 */
 			[[nodiscard]]
-			std::vector< CompressedMipLevel > tryLoad (size_t key) const noexcept;
+			std::vector< CompressedMipLevel > tryLoad (size_t key, BlockFormat format) const noexcept;
 
 			/**
 			 * @brief Stores a compressed mip chain on disk.
 			 * @param key The content-addressed cache key.
+			 * @param format The block format of the chain.
 			 * @param mipLevels A reference to the compressed mip chain.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool store (size_t key, const std::vector< CompressedMipLevel > & mipLevels) const noexcept;
+			bool store (size_t key, BlockFormat format, const std::vector< CompressedMipLevel > & mipLevels) const noexcept;
 
 			static constexpr uint32_t Magic{0x43374342}; /* "BC7C" */
 			/* ⚠️ BUMP THIS whenever the BLOCKS a given pixmap compresses to change, not only when the
@@ -167,8 +175,9 @@ namespace EmEn::Graphics
 			 * chains for binary alpha masks (TextureCompressor::compress()); version 1 blobs carry
 			 * box-filtered alpha and would keep far foliage thinning out. Version 3 = every mip level is an
 			 * exact area-weighted box filter (Processor::downsample()); version 2 blobs were bilinear
-			 * resamples whose tail lost the mean (a 23 % leaf mask read 0.001 at 1 × 4). */
-			static constexpr uint32_t Version{3};
+			 * resamples whose tail lost the mean (a 23 % leaf mask read 0.001 at 1 × 4). Version 4 = the header
+			 * carries the block format (BC7, BC5, BC4 — D8, 2026-10-20). */
+			static constexpr uint32_t Version{4};
 			static constexpr auto CacheDirectoryName{"texture-cache"};
 			static constexpr auto CacheFileExtension{".bc7cache"};
 

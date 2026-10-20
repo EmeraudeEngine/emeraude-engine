@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <iterator>
 #include <limits>
 #include <numbers>
 #include <optional>
@@ -73,6 +74,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/TexturePacker.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/Types.hpp"
 #include "IO/IO.hpp"
@@ -896,23 +898,26 @@ namespace EmEn::Scenes::Loaders
 			const auto name = buildResourceKey(m_resourcePrefix, "Material/", {glTFMaterial.name.data(), glTFMaterial.name.size()}, materialIndex);
 
 			/* Resolve a glTF texture index to a Texture2D resource, creating it on demand. */
-			const auto resolveTexture = [&] (size_t textureIndex, bool sRGB = false) -> std::shared_ptr< TextureResource::Texture2D > {
+			const auto resolveTexture = [&] (size_t textureIndex, const TextureResource::Usage & usage = {}) -> std::shared_ptr< TextureResource::Texture2D > {
 				if ( textureIndex >= asset.textures.size() )
 				{
 					return nullptr;
 				}
 
 				/* Return cached texture if already created.
-				 * ⚠️ TWO slots per glTF texture, selected by the colour space. The sRGB flag is
-				 * baked into the resource at creation and comes from the USAGE, not from the
-				 * asset: the same image legitimately serves as an sRGB albedo for one material
-				 * and as a linear data map for another. Caching on the texture index alone let
-				 * whichever usage resolved FIRST impose its colour space on the other. */
-				const auto colourSpaceSlot = sRGB ? 1U : 0U;
+				 * ⚠️ THREE slots per glTF texture, selected by the usage (linear data, sRGB colour, normal map). The
+				 * colour space and the normal map kind are baked into the resource at creation and come from the USAGE,
+				 * not from the asset: the same image legitimately serves as an sRGB albedo for one material and as a
+				 * linear data map for another. Caching on the texture index alone let whichever usage resolved FIRST
+				 * impose its identity on the other. */
+				const auto usageSlot = TextureResource::loaderUsageSlot(usage);
 
-				if ( m_textures[textureIndex][colourSpaceSlot] != nullptr )
+				/* NOTE: The slot is < LoaderUsageCount by construction (loaderUsageSlot()). */
+				auto & usageEntry = *std::next(m_textures[textureIndex].begin(), static_cast< std::ptrdiff_t >(usageSlot));
+
+				if ( usageEntry != nullptr )
 				{
-					return m_textures[textureIndex][colourSpaceSlot];
+					return usageEntry;
 				}
 
 				const auto & glTFTexture = asset.textures[textureIndex];
@@ -981,17 +986,18 @@ namespace EmEn::Scenes::Loaders
 				 * the usage, so it must stay part of the key: one glTF texture legitimately
 				 * yields two engine resources. Same convention as the USD loader. */
 				std::string texName = buildResourceKey(m_resourcePrefix, "Texture/", {glTFTexture.name.data(), glTFTexture.name.size()}, textureIndex);
-				texName += sRGB ? "-srgb" : "-data";
+				texName += TextureResource::loaderUsageSuffix(usage);
 
 				/* NOTE: Created SYNCHRONOUSLY (the function only links the source): the colour space is set when this returns,
 				 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
 				 * docs/caution-points.md). */
 				auto texture = m_resources.container< TextureResource::Texture2D >()
-					->getOrCreateResourceSync(texName, [image, compressedImage, sRGB, wrapU, wrapV] (auto & textureResource) {
+					->getOrCreateResourceSync(texName, [image, compressedImage, usage, wrapU, wrapV] (auto & textureResource) {
 						/* Set sRGB BEFORE load() so the flag is in place when
 						 * onDependenciesLoaded() fires and creates the VkImage. The colour space is
-						 * decided here, from the usage, for both kinds of source alike. */
-						if ( !textureResource.enableSRGB(sRGB) )
+						 * decided here, from the usage, for both kinds of source alike — and so is
+						 * the normal map kind, which makes a decoded image BC5 (graphics § 39, D8). */
+						if ( !textureResource.enableSRGB(usage.sRGB) || !textureResource.enableNormalMap(usage.normalMap) )
 						{
 							return false;
 						}
@@ -1008,7 +1014,7 @@ namespace EmEn::Scenes::Loaders
 						return textureResource.load(image);
 					});
 
-				m_textures[textureIndex][colourSpaceSlot] = texture;
+				usageEntry = texture;
 
 				return texture;
 			};
@@ -1062,7 +1068,7 @@ namespace EmEn::Scenes::Loaders
 
 			/* Albedo (sRGB: perceptual color data). */
 			auto albedoTex = PBRData.baseColorTexture.has_value()
-				? resolveTexture(PBRData.baseColorTexture->textureIndex, true) : nullptr;
+				? resolveTexture(PBRData.baseColorTexture->textureIndex, {.sRGB = true}) : nullptr;
 
 			const auto & bc = PBRData.baseColorFactor;
 			Color< float > albedoColor{
@@ -1163,7 +1169,7 @@ namespace EmEn::Scenes::Loaders
 
 			/* Normal. */
 			auto normalTex = glTFMaterial.normalTexture.has_value()
-				? resolveTexture(glTFMaterial.normalTexture->textureIndex) : nullptr;
+				? resolveTexture(glTFMaterial.normalTexture->textureIndex, {.normalMap = true}) : nullptr;
 
 			const auto normalScale = glTFMaterial.normalTexture.has_value()
 				? static_cast< float >(glTFMaterial.normalTexture->scale) : 0.0F;
@@ -1181,7 +1187,7 @@ namespace EmEn::Scenes::Loaders
 
 			/* Emissive (sRGB: perceptual color data). */
 			auto emissiveTex = glTFMaterial.emissiveTexture.has_value()
-				? resolveTexture(glTFMaterial.emissiveTexture->textureIndex, true) : nullptr;
+				? resolveTexture(glTFMaterial.emissiveTexture->textureIndex, {.sRGB = true}) : nullptr;
 
 			/* ⚠️⚠️ EXPERIMENT (Aug 2026) — PHOTOMETRIC ANCHOR FOR THE EMISSIVE.
 			 *
@@ -1213,7 +1219,7 @@ namespace EmEn::Scenes::Loaders
 				|| glTFMaterial.emissiveFactor[2] > 0.0F;
 
 			auto sheenColorTex = ( glTFMaterial.sheen != nullptr && glTFMaterial.sheen->sheenColorTexture.has_value() )
-				? resolveTexture(glTFMaterial.sheen->sheenColorTexture->textureIndex, true) : nullptr;
+				? resolveTexture(glTFMaterial.sheen->sheenColorTexture->textureIndex, {.sRGB = true}) : nullptr;
 
 			auto sheenRoughnessTex = ( glTFMaterial.sheen != nullptr && glTFMaterial.sheen->sheenRoughnessTexture.has_value() )
 				? resolveTexture(glTFMaterial.sheen->sheenRoughnessTexture->textureIndex) : nullptr;
@@ -1252,7 +1258,7 @@ namespace EmEn::Scenes::Loaders
 
 			if ( glTFMaterial.clearcoat != nullptr && glTFMaterial.clearcoat->clearcoatNormalTexture.has_value() )
 			{
-				clearcoatNormalTex = resolveTexture(glTFMaterial.clearcoat->clearcoatNormalTexture->textureIndex);
+				clearcoatNormalTex = resolveTexture(glTFMaterial.clearcoat->clearcoatNormalTexture->textureIndex, {.normalMap = true});
 				clearcoatNormalScale = static_cast< float >(glTFMaterial.clearcoat->clearcoatNormalTexture->scale);
 			}
 
@@ -1341,7 +1347,7 @@ namespace EmEn::Scenes::Loaders
 				 */
 				if ( glTFMaterial.volume->thicknessTexture.has_value() )
 				{
-					volumeThicknessTex = resolveTexture(glTFMaterial.volume->thicknessTexture->textureIndex, false);
+					volumeThicknessTex = resolveTexture(glTFMaterial.volume->thicknessTexture->textureIndex);
 				}
 			}
 
@@ -1383,7 +1389,7 @@ namespace EmEn::Scenes::Loaders
 				 * MAXIMUM, not the midpoint. */
 				if ( glTFMaterial.iridescence->iridescenceThicknessTexture.has_value() )
 				{
-					iridescenceThicknessTex = resolveTexture(glTFMaterial.iridescence->iridescenceThicknessTexture->textureIndex, false);
+					iridescenceThicknessTex = resolveTexture(glTFMaterial.iridescence->iridescenceThicknessTexture->textureIndex);
 				}
 			}
 
@@ -1460,13 +1466,13 @@ namespace EmEn::Scenes::Loaders
 
 			/* The two specular maps. ⚠️ `specularTexture` carries its value in the **A channel**
 			 * and is LINEAR; `specularColorTexture` carries the F0 tint in RGB and is **sRGB** —
-			 * hence the `true` on the second `resolveTexture()` and not on the first. Both
+			 * hence the `{.sRGB = true}` on the second `resolveTexture()` and not on the first. Both
 			 * MULTIPLY their respective factor, which the material's component codegen folds in. */
 			auto specularTex = ( glTFMaterial.specular != nullptr && glTFMaterial.specular->specularTexture.has_value() )
 				? resolveTexture(glTFMaterial.specular->specularTexture->textureIndex) : nullptr;
 
 			auto specularColorTex = ( glTFMaterial.specular != nullptr && glTFMaterial.specular->specularColorTexture.has_value() )
-				? resolveTexture(glTFMaterial.specular->specularColorTexture->textureIndex, true) : nullptr;
+				? resolveTexture(glTFMaterial.specular->specularColorTexture->textureIndex, {.sRGB = true}) : nullptr;
 
 			const auto specularUVTransform = glTFMaterial.specular != nullptr ? readUVTransform(glTFMaterial.specular->specularTexture) : UVTransform{};
 			const auto specularColorUVTransform = glTFMaterial.specular != nullptr ? readUVTransform(glTFMaterial.specular->specularColorTexture) : UVTransform{};

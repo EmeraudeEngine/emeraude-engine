@@ -27,7 +27,9 @@
 #include "Abstract.hpp"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "PixelFactory/Processor.hpp"
+#include "Resources/Types.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::TextureResource
@@ -123,6 +125,19 @@ namespace EmEn::Graphics::TextureResource
 		}
 
 		m_flipNormalMapY = enable;
+
+		return true;
+	}
+
+	bool
+	Abstract::enableNormalMap (bool enable) noexcept
+	{
+		if ( !this->isIdentityStillOpen("normal map kind") )
+		{
+			return false;
+		}
+
+		m_normalMap = enable;
 
 		return true;
 	}

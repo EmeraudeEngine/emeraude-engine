@@ -32,6 +32,12 @@
 /* STL inclusions. */
 #include <atomic>
 #include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "Vulkan/TextureInterface.hpp"
@@ -265,6 +271,30 @@ namespace EmEn::Graphics::TextureResource
 			}
 
 			/**
+			 * @brief Declares this texture a tangent-space normal map: block-compressed as BC5 (X, Y), the shaders
+			 * reconstructing Z (graphics § 39, D8 — owner decision 2026-10-20).
+			 * @note Part of the texture's IDENTITY, like the colour space: only the creator sets it, before load()
+			 * (see enableSRGB()). A normal map is linear: declared sRGB too, it stays BC7 with an error.
+			 * @note Forgetting it is never wrong, only heavier: the shaders reconstruct Z for every normal map, so a
+			 * normal map left BC7 (or uncompressed) renders the same.
+			 * @param enable True for a normal map.
+			 * @return bool False, with an error, when the loading has already started: the value is left unchanged.
+			 */
+			[[nodiscard]]
+			bool enableNormalMap (bool enable) noexcept;
+
+			/**
+			 * @brief Returns whether this texture is declared a normal map.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isNormalMap () const noexcept
+			{
+				return m_normalMap;
+			}
+
+			/**
 			 * @brief Sets how texture coordinates outside [0, 1] resolve.
 			 * @warning Must be called BEFORE the texture is created on hardware: the sampler is
 			 * built once, from these values, and never revisited.
@@ -401,5 +431,6 @@ namespace EmEn::Graphics::TextureResource
 			/* NOTE: Atomic: written by the creator before load(), read by the upload on a pool worker. */
 			std::atomic< bool > m_sRGB{false};
 			std::atomic< bool > m_flipNormalMapY{false};
+			std::atomic< bool > m_normalMap{false};
 	};
 }

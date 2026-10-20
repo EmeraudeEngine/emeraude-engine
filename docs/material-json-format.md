@@ -60,6 +60,9 @@ requests the store texture through `TextureResource::getStoreTexture()`, which h
 set before its loading. Two materials sampling one image differently therefore get two textures, and no material can
 change another's (the former design wrote both properties on the SHARED texture after the request: the last material
 parsed won for all of them, and a write after the upload, or racing it on a pool worker, changed nothing).
+The `Normal` and `ClearCoatNormal` components also request the normal map identity (`#normal`, after the others:
+`Name#flipY#normal`), which block-compresses the image as BC5 — nothing to write in the JSON (graphics § 39 § Block
+format per kind).
 
 ### Surface
 

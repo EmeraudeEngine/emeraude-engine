@@ -492,7 +492,7 @@ namespace EmEn::Graphics::Material
 			case FillingType::Cubemap :
 			case FillingType::AnimatedTexture :
 			{
-				const auto result = m_components.emplace(ComponentType::Normal, std::make_unique< Texture >(Uniform::NormalSampler, SurfaceNormalVector, componentData, fillingType, serviceProvider));
+				const auto result = m_components.emplace(ComponentType::Normal, std::make_unique< Texture >(Uniform::NormalSampler, SurfaceNormalVector, componentData, fillingType, serviceProvider, PixelFactory::Channel::Red, true));
 
 				if ( !result.second || result.first->second == nullptr )
 				{
@@ -4459,9 +4459,13 @@ namespace EmEn::Graphics::Material
 				return true;
 			}
 
+			/* NOTE: Z is RECONSTRUCTED from X and Y for every normal map (graphics § 39, D8 — owner decision 2026-10-20):
+			 * a BC5 normal map stores X and Y only, and one decode for every format keeps the program independent of it —
+			 * a normal map left BC7 or RGBA8 renders the same (its stored Z, unit by construction, is the same value).
+			 * The scale applies to X and Y after the reconstruction, as glTF's normalTexture.scale specifies. */
 			Code{shader, Location::Top} <<
-				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Normal, component) << ").rgb * 2.0 - 1.0;" << Line::End <<
-				"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::NormalScale) << ", " << component->variableName() << "_raw.z));";
+				"const vec2 " << component->variableName() << "_xy = texture(" << component->samplerName() << ", " << transformedTexCoords(ComponentType::Normal, component) << ").rg * 2.0 - 1.0;" << Line::End <<
+				"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_xy * " << MaterialUB(UniformBlock::Component::NormalScale) << ", sqrt(max(1.0 - dot(" << component->variableName() << "_xy, " << component->variableName() << "_xy), 0.0))));";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -4809,9 +4813,10 @@ namespace EmEn::Graphics::Material
 
 		/* Clear Coat normal component (texture-based, KHR_materials_clearcoat). */
 		if ( !this->generateTextureComponentFragmentShader(ComponentType::ClearCoatNormal, [this] (FragmentShader & shader, const Texture * component) {
+			/* NOTE: Z reconstructed from X and Y, as the normal component does (D8). */
 			Code{shader, Location::Top} <<
-				"const vec3 " << component->variableName() << "_raw = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::ClearCoatNormal, component) << ").rgb * 2.0 - 1.0;" << Line::End <<
-				"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_raw.xy * " << MaterialUB(UniformBlock::Component::ClearCoatNormalScale) << ", " << component->variableName() << "_raw.z));";
+				"const vec2 " << component->variableName() << "_xy = texture(" << component->samplerName() << ", " << this->transformedTexCoords(ComponentType::ClearCoatNormal, component) << ").rg * 2.0 - 1.0;" << Line::End <<
+				"const vec3 " << component->variableName() << " = normalize(vec3(" << component->variableName() << "_xy * " << MaterialUB(UniformBlock::Component::ClearCoatNormalScale) << ", sqrt(max(1.0 - dot(" << component->variableName() << "_xy, " << component->variableName() << "_xy), 0.0))));";
 
 			return true;
 		}, fragmentShader, materialSet) )
@@ -7288,7 +7293,7 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* NOTE: Without an explicit 'SourceChannel', the map reads its type's channel (glTF: the thickness maps in G). */
-		const auto result = m_components.emplace(componentType, std::make_unique< Texture >(samplerName, variableName, componentData, fillingType, serviceProvider, defaultSourceChannel(componentType)));
+		const auto result = m_components.emplace(componentType, std::make_unique< Texture >(samplerName, variableName, componentData, fillingType, serviceProvider, defaultSourceChannel(componentType), componentType == ComponentType::ClearCoatNormal));
 
 		if ( !result.second || result.first->second == nullptr )
 		{

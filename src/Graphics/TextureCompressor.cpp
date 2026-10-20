@@ -27,13 +27,19 @@
 #include "TextureCompressor.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <algorithm>
-#include <bc7enc_rdo/bc7enc.h>
+#include <array>
 #include <chrono>
+#include <cmath>
 #include <cstring>
+#include <string>
+
+/* Third-party inclusions. */
+#include <bc7enc_rdo/bc7enc.h>
+#include <bc7enc_rdo/rgbcx.h>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/AlphaCoverage.hpp"
 #include "PixelFactory/Processor.hpp"
 #include "Tracer.hpp"
@@ -73,19 +79,93 @@ namespace EmEn::Graphics
 		}
 
 		/**
-		 * @brief Compresses one mip level to BC7 blocks.
+		 * @brief Returns a copy of an RGBA8 normal map whose every texel is a unit vector (BC5, see compress()).
+		 * @note A texel decodes as v = byte / 255 × 2 − 1, the shader's mapping, and encodes back rounded. A null
+		 * vector (a flat 128-grey area, an unpainted border) becomes (0, 0, 1). The alpha is left as it was.
+		 * @param source A reference to the source pixmap.
+		 * @return Pixmap< uint8_t >
+		 */
+		[[nodiscard]]
+		Pixmap< uint8_t >
+		renormalizedNormals (const Pixmap< uint8_t > & source) noexcept
+		{
+			constexpr auto decode = [] (uint8_t value) noexcept {
+				return (static_cast< float >(value) / 255.0F * 2.0F) - 1.0F;
+			};
+
+			constexpr auto encode = [] (float value) noexcept {
+				return static_cast< uint8_t >(std::lround(std::clamp((value + 1.0F) * 0.5F * 255.0F, 0.0F, 255.0F)));
+			};
+
+			auto result = source;
+			auto & bytes = result.data();
+
+			for ( size_t offset = 0; offset + 3 < bytes.size(); offset += 4 )
+			{
+				const auto x = decode(bytes[offset]);
+				const auto y = decode(bytes[offset + 1]);
+				const auto z = decode(bytes[offset + 2]);
+				const auto length = std::sqrt((x * x) + (y * y) + (z * z));
+
+				if ( length < 1.0e-6F )
+				{
+					bytes[offset] = encode(0.0F);
+					bytes[offset + 1] = encode(0.0F);
+					bytes[offset + 2] = encode(1.0F);
+
+					continue;
+				}
+
+				bytes[offset] = encode(x / length);
+				bytes[offset + 1] = encode(y / length);
+				bytes[offset + 2] = encode(z / length);
+			}
+
+			return result;
+		}
+
+		/**
+		 * @brief Compresses one 4 × 4 block of RGBA8 pixels.
+		 * @param format The block format.
+		 * @param blockPixels The 16 RGBA8 pixels, row-major.
+		 * @param params The BC7 parameters (unused by BC4 / BC5).
+		 * @param outputBlock Where to write the block (TextureCompressor::blockBytes(format) bytes).
+		 */
+		void
+		compressBlock (BlockFormat format, const uint8_t * blockPixels, const bc7enc_compress_block_params & params, uint8_t * outputBlock) noexcept
+		{
+			switch ( format )
+			{
+				case BlockFormat::BC7 :
+					bc7enc_compress_block(outputBlock, blockPixels, &params);
+					return;
+
+				/* NOTE: The HQ encoders: the load time is no constraint (owner, 2026-10-20), and the cache keeps the result. */
+				case BlockFormat::BC5 :
+					rgbcx::encode_bc5_hq(outputBlock, blockPixels, 0, 1, 4);
+					return;
+
+				case BlockFormat::BC4 :
+					static_cast< void >(rgbcx::encode_bc4_hq(outputBlock, blockPixels, 4));
+					return;
+			}
+		}
+
+		/**
+		 * @brief Compresses one mip level to blocks of a format.
 		 * @note Blocks are compressed sequentially on the calling thread. Parallelism comes from
 		 * the resource manager loading several textures at once on different workers, which is why
 		 * this takes no thread pool: the one it used to receive was never used.
 		 * @param pixmap A reference to the source RGBA8 pixel data for this mip level.
+		 * @param format The block format.
 		 * @return CompressedMipLevel
 		 */
 		[[nodiscard]]
 		CompressedMipLevel
-		compressLevel (const Pixmap< uint8_t > & pixmap) noexcept
+		compressLevel (const Pixmap< uint8_t > & pixmap, BlockFormat format) noexcept
 		{
 			constexpr auto BlockSize = TextureCompressor::BlockSize;
-			constexpr auto BlockBytes = TextureCompressor::BlockBytes;
+			const auto bytesPerBlock = TextureCompressor::blockBytes(format);
 
 			const auto startTime = std::chrono::steady_clock::now();
 
@@ -100,7 +180,7 @@ namespace EmEn::Graphics
 			CompressedMipLevel result;
 			result.width = width;
 			result.height = height;
-			result.data.resize(static_cast< size_t >(totalBlocks) * BlockBytes);
+			result.data.resize(static_cast< size_t >(totalBlocks) * bytesPerBlock);
 
 			/* Setup BC7 compression parameters. */
 			bc7enc_compress_block_params params{};
@@ -138,18 +218,33 @@ namespace EmEn::Graphics
 					}
 				}
 
-				/* Compress the block. */
-				auto * outputBlock = &result.data[blockIndex * BlockBytes];
-
-				bc7enc_compress_block(outputBlock, blockPixels.data(), &params);
+				compressBlock(format, blockPixels.data(), params, &result.data[blockIndex * bytesPerBlock]);
 			}
 
 			const auto elapsed = std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - startTime).count();
 
-			TraceDebug{TextureCompressor::ClassId} << "Compressed " << width << "x" << height << " mip level (" << totalBlocks << " blocks) in " << elapsed << " ms.";
+			TraceDebug{TextureCompressor::ClassId} << "Compressed " << width << "x" << height << " mip level to " << to_cstring(format) << " (" << totalBlocks << " blocks) in " << elapsed << " ms.";
 
 			return result;
 		}
+	}
+
+	const char *
+	to_cstring (BlockFormat format) noexcept
+	{
+		switch ( format )
+		{
+			case BlockFormat::BC7 :
+				return "BC7";
+
+			case BlockFormat::BC5 :
+				return "BC5";
+
+			case BlockFormat::BC4 :
+				return "BC4";
+		}
+
+		return "Unknown";
 	}
 
 	TextureCompressor::TextureCompressor () noexcept
@@ -161,9 +256,12 @@ namespace EmEn::Graphics
 	bool
 	TextureCompressor::onInitialize () noexcept
 	{
+		/* NOTE: Both set up global tables once, before any worker compresses (rgbcx::init() is not thread-safe, its
+		 * encoders are). */
 		bc7enc_compress_block_init();
+		rgbcx::init();
 
-		Tracer::success(ClassId, "BC7 encoder initialized.");
+		Tracer::success(ClassId, "BC7 and BC4 / BC5 encoders initialized.");
 
 		return true;
 	}
@@ -175,7 +273,7 @@ namespace EmEn::Graphics
 	}
 
 	std::vector< CompressedMipLevel >
-	TextureCompressor::compress (const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels) const noexcept
+	TextureCompressor::compress (const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format) const noexcept
 	{
 		if ( !pixmap.isValid() || pixmap.colorCount() != 4 )
 		{
@@ -192,7 +290,7 @@ namespace EmEn::Graphics
 		result.reserve(mipCount);
 
 		/* Compress base level. */
-		result.emplace_back(compressLevel(pixmap));
+		result.emplace_back(format == BlockFormat::BC5 ? compressLevel(renormalizedNormals(pixmap), format) : compressLevel(pixmap, format));
 
 		if ( result.back().data.empty() )
 		{
@@ -209,7 +307,7 @@ namespace EmEn::Graphics
 		 * (a translucent decal, a glass pane) is left strictly alone — there is no coverage to hold.
 		 * ⚠️ The chain keeps filtering the UNCORRECTED level: feeding the correction back into the
 		 * next downsample would compound the gain and turn the mask opaque a few levels down. */
-		const auto preserveCoverage = AlphaCoverage::isBinaryMask(pixmap);
+		const auto preserveCoverage = format == BlockFormat::BC7 && AlphaCoverage::isBinaryMask(pixmap);
 		const auto baseCoverage = preserveCoverage ? AlphaCoverage::coverage(pixmap, AlphaCoverage::DefaultCutoff) : 0.0F;
 
 		if ( preserveCoverage )
@@ -239,11 +337,16 @@ namespace EmEn::Graphics
 
 				AlphaCoverage::rescaleToCoverage(correctedMip, baseCoverage, AlphaCoverage::DefaultCutoff);
 
-				result.emplace_back(compressLevel(correctedMip));
+				result.emplace_back(compressLevel(correctedMip, format));
+			}
+			else if ( format == BlockFormat::BC5 )
+			{
+				/* NOTE: Like the coverage correction, on a copy: the chain keeps filtering the true box average. */
+				result.emplace_back(compressLevel(renormalizedNormals(currentMip), format));
 			}
 			else
 			{
-				result.emplace_back(compressLevel(currentMip));
+				result.emplace_back(compressLevel(currentMip, format));
 			}
 
 			if ( result.back().data.empty() )
@@ -264,7 +367,7 @@ namespace EmEn::Graphics
 
 		TraceSuccess{ClassId} <<
 			"Compressed " << pixmap.width() << "x" << pixmap.height() <<
-			" texture to BC7 (" << result.size() << " mip levels, " <<
+			" texture to " << to_cstring(format) << " (" << result.size() << " mip levels, " <<
 			(totalCompressedBytes / 1024) << " KB).";
 
 		return result;
@@ -280,6 +383,79 @@ namespace EmEn::Graphics
 			return {};
 		}
 
-		return compressLevel(pixmap);
+		return compressLevel(pixmap, BlockFormat::BC7);
+	}
+
+	bool
+	TextureCompressor::isOpaqueGrey (const Pixmap< uint8_t > & pixmap) noexcept
+	{
+		if ( !pixmap.isValid() || pixmap.colorCount() != 4 )
+		{
+			return false;
+		}
+
+		const auto & bytes = pixmap.data();
+
+		for ( size_t offset = 0; offset + 3 < bytes.size(); offset += 4 )
+		{
+			if ( bytes[offset] != bytes[offset + 1] || bytes[offset] != bytes[offset + 2] || bytes[offset + 3] != 255 )
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	BlockFormat
+	TextureCompressor::selectFormat (const Pixmap< uint8_t > & pixmap, bool sRGB, bool normalMap) noexcept
+	{
+		if ( normalMap )
+		{
+			if ( !sRGB )
+			{
+				return BlockFormat::BC5;
+			}
+
+			Tracer::error(ClassId, "A normal map is declared sRGB: BC5 has no sRGB format, it stays BC7 (the texture's creator must declare it linear) !");
+
+			return BlockFormat::BC7;
+		}
+
+		if ( !sRGB && isOpaqueGrey(pixmap) )
+		{
+			return BlockFormat::BC4;
+		}
+
+		return BlockFormat::BC7;
+	}
+
+	VkFormat
+	TextureCompressor::vulkanFormat (BlockFormat format, bool sRGB) noexcept
+	{
+		switch ( format )
+		{
+			case BlockFormat::BC7 :
+				return sRGB ? VK_FORMAT_BC7_SRGB_BLOCK : VK_FORMAT_BC7_UNORM_BLOCK;
+
+			case BlockFormat::BC5 :
+				return VK_FORMAT_BC5_UNORM_BLOCK;
+
+			case BlockFormat::BC4 :
+				return VK_FORMAT_BC4_UNORM_BLOCK;
+		}
+
+		return VK_FORMAT_UNDEFINED;
+	}
+
+	VkComponentMapping
+	TextureCompressor::componentMapping (VkFormat format) noexcept
+	{
+		if ( format == VK_FORMAT_BC4_UNORM_BLOCK || format == VK_FORMAT_R8_UNORM )
+		{
+			return {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_ONE};
+		}
+
+		return {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY};
 	}
 }

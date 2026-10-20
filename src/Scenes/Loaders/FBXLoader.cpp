@@ -28,7 +28,9 @@
 
 /* STL inclusions. */
 #include <array>
+#include <cstddef>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <ranges>
@@ -60,6 +62,7 @@
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/TexturePacker.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/Types.hpp"
 #include "IO/IO.hpp"
@@ -214,34 +217,38 @@ namespace EmEn::Scenes::Loaders
 			Tracer::warning(ClassId, "Some images failed to load, continuing with defaults.");
 		}
 
-		/* ---- Textures: created on demand, TWO slots per FBX texture selected by the colour space. ----
-		 * ⚠️ The sRGB flag is baked into the resource at creation and comes from the USAGE, not from
-		 * the asset: the same image legitimately serves as an sRGB albedo for one material and as a
+		/* ---- Textures: created on demand, THREE slots per FBX texture selected by the usage (linear data, sRGB
+		 * colour, normal map — TextureResource::loaderUsageSlot()). ----
+		 * ⚠️ The sRGB flag and the normal map kind are baked into the resource at creation and come from the USAGE,
+		 * not from the asset: the same image legitimately serves as an sRGB albedo for one material and as a
 		 * linear data map for another. Caching on the texture index alone let whichever usage
-		 * resolved FIRST impose its colour space on the other. */
-		std::vector< std::array< std::shared_ptr< TextureResource::Texture2D >, 2 > > textures(asset.images.size());
+		 * resolved FIRST impose its identity on the other. */
+		std::vector< std::array< std::shared_ptr< TextureResource::Texture2D >, TextureResource::LoaderUsageCount > > textures(asset.images.size());
 
-		const auto resolveTexture = [&] (const std::optional< FBX::TextureSlot > & slot) -> std::shared_ptr< TextureResource::Texture2D > {
+		const auto resolveTexture = [&] (const std::optional< FBX::TextureSlot > & slot, bool normalMap = false) -> std::shared_ptr< TextureResource::Texture2D > {
 			if ( !slot.has_value() || slot->texture >= textures.size() )
 			{
 				return nullptr;
 			}
 
 			const auto texIdx = slot->texture;
-			const auto sRGB = slot->sRGB;
-			const auto colourSpaceSlot = sRGB ? 1U : 0U;
+			const TextureResource::Usage usage{.sRGB = slot->sRGB, .normalMap = normalMap};
+			const auto usageSlot = TextureResource::loaderUsageSlot(usage);
 
-			if ( textures[texIdx][colourSpaceSlot] != nullptr )
+			/* NOTE: The slot is < LoaderUsageCount by construction (loaderUsageSlot()). */
+			auto & usageEntry = *std::next(textures[texIdx].begin(), static_cast< std::ptrdiff_t >(usageSlot));
+
+			if ( usageEntry != nullptr )
 			{
-				return textures[texIdx][colourSpaceSlot];
+				return usageEntry;
 			}
 
 			/* NOTE: Created SYNCHRONOUSLY (the function only links the source): the colour space is set when this returns,
 			 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
 			 * docs/caution-points.md). */
 			auto texture = m_resources.container< TextureResource::Texture2D >()
-				->getOrCreateResourceSync(asset.images[texIdx].textureName + (sRGB ? "-srgb" : "-data"), [image = images[texIdx], sRGB] (auto & textureResource) {
-					if ( !textureResource.enableSRGB(sRGB) )
+				->getOrCreateResourceSync(asset.images[texIdx].textureName + TextureResource::loaderUsageSuffix(usage), [image = images[texIdx], usage] (auto & textureResource) {
+					if ( !textureResource.enableSRGB(usage.sRGB) || !textureResource.enableNormalMap(usage.normalMap) )
 					{
 						return false;
 					}
@@ -249,7 +256,7 @@ namespace EmEn::Scenes::Loaders
 					return textureResource.load(image);
 				});
 
-			textures[texIdx][colourSpaceSlot] = texture;
+			usageEntry = texture;
 
 			return texture;
 		};
@@ -312,7 +319,7 @@ namespace EmEn::Scenes::Loaders
 			auto albedoTex = mapTexture(ComponentType::Albedo, description.albedoTexture, albedoChannel);
 			auto roughnessTex = mapTexture(ComponentType::Roughness, description.roughnessTexture, roughnessChannel);
 			auto metalnessTex = mapTexture(ComponentType::Metalness, description.metalnessTexture, metalnessChannel);
-			auto normalTex = resolveTexture(description.normalTexture);
+			auto normalTex = resolveTexture(description.normalTexture, true);
 			auto aoTex = mapTexture(ComponentType::AmbientOcclusion, description.ambientOcclusionTexture, aoChannel);
 			auto emissiveTex = resolveTexture(description.emissiveTexture);
 			auto opacityTex = mapTexture(ComponentType::Opacity, description.opacityTexture, opacityChannel);

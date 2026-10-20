@@ -302,9 +302,9 @@ namespace EmEn::Graphics::TextureResource
 		private:
 
 			/**
-			 * @brief Creates the image BC7-compressed (graphics § 39): every frame through the texture cache, uploaded as the
-			 * layers of one block-compressed array.
-			 * @note An uncompressed image was 640 MiB for the ocean's 120 × 1024² normal map; BC7 is a quarter of it.
+			 * @brief Creates the image block-compressed (graphics § 39): every frame through the texture cache, uploaded as
+			 * the layers of one block-compressed array, in the format of the texture's kind (D8: BC5 for a normal map).
+			 * @note An uncompressed image was 640 MiB for the ocean's 120 × 1024² normal map; BC7 or BC5 is a quarter of it.
 			 * @param renderer A reference to the graphics renderer.
 			 * @param mipLevels The mip levels asked of each frame.
 			 * @return bool False when a frame failed to compress or the upload failed: the caller falls back to RGBA8.
