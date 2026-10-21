@@ -1,7 +1,7 @@
 # The `GPUTextures` store — GPU-ready material textures (design, Oct 2026)
 
-> Status: L1 to L6 implemented (2026-10-21/22, § Implementation). Item `gpu-textures-store` (`docs/todo/`). Owner
-> decisions 2026-10-21 (T1–T15 below; T9 revised 2026-10-22). Builds on graphics § 39 (packing, block formats, the mip
+> Status: L1 to L6 implemented (2026-10-21/22, § Implementation), validated on the three OS (2026-10-22). Owner
+> decisions 2026-10-21 (T1–T15 below; T9 revised 2026-10-22). Open work: the engine items listed in § Open work. Builds on graphics § 39 (packing, block formats, the mip
 > filter, the baked assets) and § 30 (the compressed image path).
 
 ## Why
@@ -283,6 +283,28 @@ off; an entry without fingerprint is served and reported; the pipeline version i
   of 0.40, spectrum 0.99–1.02) where it was 0.83 apart without it (the leaves blended: spectrum 0.64 in the highest
   band); a JSON material `Test/Leaf` (albedo + binary opacity, so BLEND) promoted on both paths, its `GPUTextures` entry
   `Test/Leaf.Color-Opacity` against the sources 0.06 apart. 0 `VUID-` (the known `setGround` ones only).
+
+**Validated on the three OS (2026-10-22**, base 145fda6, engine 3f8feeff, projet-alpha d648e28b): `relief`'s
+code-built ground (Pavement006 BC7 sRGB + BC5), its bake read from a `GPUTextures` test store (image equal to the source
+path's: macOS 0.30, Windows 1.31 against a run-to-run 1.39; the parallax option reads the BC4 displacement too), `sponza`
+on both options unchanged, and L6 on `Models/IridescenceMetallicSpheres` (glTF-Sample-Assets: `ExternalData` is
+git-ignored, the peers have no cypress) — one container with `Emeraude.AlphaCoverage`, forward slashes in its uris,
+"1 of 1 image(s) kept block-compressed", its BLEND material promoted to a cutout as from the PNG; `LightsPunctualLamp`
+refused before baking (a texture inside `KHR_materials_transmission`). 0 `VUID-` (the known `setGround` ones aside).
+- **macOS** (M6, MoltenVK 1.4.2): Apple clang paranoid 0 warning, `-Wdocumentation -Werror` clean on the 8 touched TUs,
+  base 2721 passed / 6 skipped / 0 failed; L6 0.142 apart (p99.9 2); `sponza` 1887.4 MiB / 162 bindings both options;
+  no MoltenVK complaint about BC4 / BC5 / BC7 KTX2.
+- **Windows** (RTX 3500 Ada, MSVC /W4 /WX): Release and Debug 0 warning, the tool too, base 2722 passed / 3 skipped /
+  3 disabled / 0 failed in both; L6 0.73–0.78 apart against 0.70 within a run; `sponza` with the RT lane 1886.8 MiB /
+  162 bindings both options. The tool prints its output paths with mixed `\` and `/` (cosmetic).
+- **Linux** (RTX 3070 Ti): the numbers of each lot above.
+
+## Open work
+
+Engine items (`docs/todo/`): `texture-purpose-vocabulary-beyond-ambientcg` (the open question below),
+`gpu-textures-container-agnostic-decoder` (T7), `images-material-source-recognition` (T13),
+`gpu-data-texture-single-fetch` (D10 for a GPU data texture), `gpu-textures-set-index`, `material-bake-parallel`,
+`gltf-baked-textures-fingerprint`. projet-alpha: `source-images-pbr-naming-pass`.
 
 ## Open questions (owner)
 
