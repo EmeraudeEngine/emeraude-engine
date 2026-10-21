@@ -800,7 +800,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	Image::createFromCompressed (TransferManager & transferManager, std::span< const CompressedMip > mips, uint32_t layerCount) noexcept
+	Image::createFromMipChain (TransferManager & transferManager, std::span< const MipLevelData > mips, uint32_t layerCount) noexcept
 	{
 		if ( mips.empty() || layerCount == 0 || mips.size() % layerCount != 0 )
 		{
@@ -821,10 +821,20 @@ namespace EmEn::Vulkan
 		std::vector< VkBufferImageCopy > regions;
 		regions.reserve(mips.size());
 
+		/* NOTE: Every level starts on 4 bytes: a copy recorded on a transfer-only queue needs it
+		 * (VUID-vkCmdCopyBufferToImage-commandBuffer-07737), and an uncompressed one-channel level may be any size (a
+		 * block-compressed one is a multiple of 8 already). */
+		constexpr size_t LevelAlignment{4};
+		const auto aligned = [] (size_t offset) noexcept {
+			return (offset + LevelAlignment - 1) / LevelAlignment * LevelAlignment;
+		};
+
 		uint32_t index = 0;
 
 		for ( const auto & mip : mips )
 		{
+			totalBytes = aligned(totalBytes);
+
 			VkBufferImageCopy region{};
 			region.bufferOffset = totalBytes;
 			region.bufferRowLength = 0;
@@ -842,20 +852,18 @@ namespace EmEn::Vulkan
 			++index;
 		}
 
-		/* Write all compressed mip data sequentially to the staging buffer. */
-		return transferManager.uploadCompressedImage(*this, totalBytes, [&mips] (const Buffer & stagingBuffer) {
-			size_t offset = 0;
-
-			for ( const auto & mip : mips )
+		/* Write every level to the staging buffer, at its region's offset. */
+		return transferManager.uploadCompressedImage(*this, totalBytes, [&mips, &regions] (const Buffer & stagingBuffer) {
+			for ( size_t level = 0; level < mips.size(); ++level )
 			{
-				if ( !stagingBuffer.writeData({mip.data, mip.size, offset}) )
+				const auto & mip = mips[level];
+
+				if ( !stagingBuffer.writeData({mip.data, mip.size, static_cast< size_t >(regions[level].bufferOffset)}) )
 				{
-					TraceError{ClassId} << "Unable to write " << mip.size << " bytes of compressed mip data !";
+					TraceError{ClassId} << "Unable to write " << mip.size << " bytes of mip data !";
 
 					return false;
 				}
-
-				offset += mip.size;
 			}
 
 			return true;

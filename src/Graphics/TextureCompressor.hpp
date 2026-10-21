@@ -121,18 +121,22 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Compresses an RGBA8 pixmap with its mip chain.
 			 * @note BC5 renormalizes the (X, Y, Z) vector of every texel of every level before keeping X and Y: the
-			 * shader reconstructs Z = sqrt(1 - X² - Y²), which needs a unit vector — a box-filtered mip is shorter, and
+			 * shader reconstructs Z = sqrt(1 - X² - Y²), which needs a unit vector — a filtered mip is shorter, and
 			 * reconstructing from it would flatten the normal with distance where the BC7 path (normalize(xyz)) keeps
 			 * its direction. A null vector becomes (0, 0, 1). The chain keeps filtering the UNNORMALIZED level.
 			 * @param source Source RGBA8 pixel data, or one channel for a grey-scale image (read as its RGBA expansion).
 			 * Dimensions should be multiples of 4.
 			 * @param maxMipLevels Maximum number of mip levels to generate (0 = full chain down to 1x1).
-			 * @param format The block format (BC7 by default).
+			 * @note Every level is the previous one reduced by NVTT's Kaiser-windowed sinc (Processor::downsample(),
+			 * ReductionFilter::Kaiser), the colour of an sRGB texture in linear light (graphics § 39 § The mip filter).
+			 * @param format The block format.
+			 * @param sRGB Whether the texture is a colour (sRGB) one: its colour channels are filtered in linear light, the
+			 * alpha always linear. Read for BC7 only (BC5 holds normals, BC4 a linear grey map).
 			 * @return Vector of compressed mip levels, empty on failure.
 			 * @note Non-multiple-of-4 dimensions are padded by repeating edge pixels.
 			 */
 			[[nodiscard]]
-			std::vector< CompressedMipLevel > compress (const Base::PixelFactory::Pixmap< uint8_t > & source, uint32_t maxMipLevels, BlockFormat format = BlockFormat::BC7) const noexcept;
+			std::vector< CompressedMipLevel > compress (const Base::PixelFactory::Pixmap< uint8_t > & source, uint32_t maxMipLevels, BlockFormat format, bool sRGB) const noexcept;
 
 			/**
 			 * @brief Compresses a single RGBA8 pixmap to BC7 (no mipchain).

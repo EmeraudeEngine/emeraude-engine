@@ -30,11 +30,10 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <cmath>
 #include <cstddef>
-#include <optional>
 #include <span>
 #include <string>
+#include <utility>
 
 /* Third-party inclusions. */
 #include <bc7enc_rdo/bc7enc.h>
@@ -42,8 +41,7 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
-#include "Graphics/AlphaCoverage.hpp"
-#include "PixelFactory/Processor.hpp"
+#include "Graphics/MipChain.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Image.hpp"
 
@@ -53,79 +51,6 @@ namespace EmEn::Graphics
 
 	namespace
 	{
-		/**
-		 * @brief Generates the next mip level: an exact area-weighted box filter (Processor::downsample()).
-		 * @note ⚠️ It was Processor::resize(Linear) — a bilinear resample from the top-left corner, which reads the
-		 * corner pixel alone for a 1 × 1 target and lost the MEAN of every texture along its chain. Measured on the
-		 * 23 % needle mask of the conifer (1022 × 2048): 0.35 at 3 × 8, 0.001 at 1 × 4. Every card small enough to
-		 * sample those levels vanished — the pines of the forest benches were bare trunks beyond ~300 m, and their
-		 * imposter atlas baked bare.
-		 * @param source A reference to the source pixmap.
-		 * @return Pixmap< uint8_t >
-		 */
-		[[nodiscard]]
-		Pixmap< uint8_t >
-		generateMip (const Pixmap< uint8_t > & source) noexcept
-		{
-			const auto newWidth = std::max(source.width() / 2, static_cast< decltype(source.width()) >(1));
-			const auto newHeight = std::max(source.height() / 2, static_cast< decltype(source.height()) >(1));
-
-			Pixmap< uint8_t > mip;
-
-			if ( !Processor< uint8_t >::downsample(source, newWidth, newHeight, mip) )
-			{
-				return {};
-			}
-
-			return mip;
-		}
-
-		/**
-		 * @brief Returns a copy of an RGBA8 normal map whose every texel is a unit vector (BC5, see compress()).
-		 * @note A texel decodes as v = byte / 255 × 2 − 1, the shader's mapping, and encodes back rounded. A null
-		 * vector (a flat 128-grey area, an unpainted border) becomes (0, 0, 1). The alpha is left as it was.
-		 * @param source A reference to the source pixmap.
-		 * @return Pixmap< uint8_t >
-		 */
-		[[nodiscard]]
-		Pixmap< uint8_t >
-		renormalizedNormals (const Pixmap< uint8_t > & source) noexcept
-		{
-			constexpr auto decode = [] (uint8_t value) noexcept {
-				return (static_cast< float >(value) / 255.0F * 2.0F) - 1.0F;
-			};
-
-			constexpr auto encode = [] (float value) noexcept {
-				return static_cast< uint8_t >(std::lround(std::clamp((value + 1.0F) * 0.5F * 255.0F, 0.0F, 255.0F)));
-			};
-
-			auto result = source;
-			auto & bytes = result.data();
-
-			for ( size_t offset = 0; offset + 3 < bytes.size(); offset += 4 )
-			{
-				const auto x = decode(bytes[offset]);
-				const auto y = decode(bytes[offset + 1]);
-				const auto z = decode(bytes[offset + 2]);
-				const auto length = std::sqrt((x * x) + (y * y) + (z * z));
-
-				if ( length < 1.0e-6F )
-				{
-					bytes[offset] = encode(0.0F);
-					bytes[offset + 1] = encode(0.0F);
-					bytes[offset + 2] = encode(1.0F);
-
-					continue;
-				}
-
-				bytes[offset] = encode(x / length);
-				bytes[offset + 1] = encode(y / length);
-				bytes[offset + 2] = encode(z / length);
-			}
-
-			return result;
-		}
-
 		/**
 		 * @brief Compresses one 4 × 4 block of RGBA8 pixels.
 		 * @param format The block format.
@@ -241,85 +166,6 @@ namespace EmEn::Graphics
 
 			return result;
 		}
-		/**
-		 * @brief Fills the colour under the transparent pixels of an RGBA image (Processor::fillTransparentColour()).
-		 * @note A pixel is a hole below the alpha test's cutoff for a binary mask (it is never drawn, its colour only
-		 * reaches the screen through a filter), at alpha 0 only for graded alpha (a semi-transparent pixel's colour is
-		 * seen). The alpha, the coverage it carries, is untouched.
-		 * @param pixmap The image (RGBA or one channel: a one-channel image has no hole).
-		 * @param binaryMask Whether its alpha is a binary coverage mask.
-		 * @param dilated The dilated copy, written when this returns true.
-		 * @return bool False when there is nothing to fill (or the fill failed: logged): use the image itself.
-		 */
-		[[nodiscard]]
-		bool
-		dilateHoles (const Pixmap< uint8_t > & pixmap, bool binaryMask, Pixmap< uint8_t > & dilated) noexcept
-		{
-			if ( pixmap.colorCount() != 4 )
-			{
-				return false;
-			}
-
-			const auto holeThreshold = binaryMask ? static_cast< uint8_t >(std::lround(AlphaCoverage::DefaultCutoff * 255.0F)) : uint8_t{1};
-			const auto & bytes = pixmap.data();
-			bool hasHole = false;
-
-			for ( size_t offset = 3; offset < bytes.size(); offset += 4 )
-			{
-				if ( bytes[offset] < holeThreshold )
-				{
-					hasHole = true;
-
-					break;
-				}
-			}
-
-			if ( !hasHole )
-			{
-				return false;
-			}
-
-			dilated = pixmap;
-
-			if ( !Processor< uint8_t >::fillTransparentColour(dilated, holeThreshold) )
-			{
-				Tracer::warning(TextureCompressor::ClassId, "Unable to dilate the colour under the transparent pixels: the mip chain may darken the edges.");
-
-				return false;
-			}
-
-			return true;
-		}
-
-		/**
-		 * @brief Compresses one level of the chain after the base: its alpha rescaled to the base coverage for a binary
-		 * mask, its normals renormalized for BC5 — both on a copy, the chain keeping the true box average.
-		 * @param level The box-filtered level.
-		 * @param format The block format.
-		 * @param preserveCoverage Whether the coverage of a binary mask is held.
-		 * @param baseCoverage The coverage of the base level.
-		 * @return CompressedMipLevel
-		 */
-		[[nodiscard]]
-		CompressedMipLevel
-		compressChainLevel (const Pixmap< uint8_t > & level, BlockFormat format, bool preserveCoverage, float baseCoverage) noexcept
-		{
-			if ( preserveCoverage )
-			{
-				auto correctedMip = level;
-
-				AlphaCoverage::rescaleToCoverage(correctedMip, baseCoverage, AlphaCoverage::DefaultCutoff);
-
-				return compressLevel(correctedMip, format);
-			}
-
-			if ( format == BlockFormat::BC5 )
-			{
-				return compressLevel(renormalizedNormals(level), format);
-			}
-
-			return compressLevel(level, format);
-		}
 	}
 
 	const char *
@@ -366,7 +212,7 @@ namespace EmEn::Graphics
 	}
 
 	std::vector< CompressedMipLevel >
-	TextureCompressor::compress (const Pixmap< uint8_t > & source, uint32_t maxMipLevels, BlockFormat format) const noexcept
+	TextureCompressor::compress (const Pixmap< uint8_t > & source, uint32_t maxMipLevels, BlockFormat format, bool sRGB) const noexcept
 	{
 		if ( !source.isValid() || (source.colorCount() != 4 && source.colorCount() != 1) )
 		{
@@ -375,84 +221,38 @@ namespace EmEn::Graphics
 			return {};
 		}
 
-		/* NOTE: A one-channel image is encoded as it is (each block reads it as its RGBA expansion), but a normal map is
-		 * renormalized on its three components: a grey-scale one (nonsense, yet possible) is expanded first. */
-		std::optional< Pixmap< uint8_t > > expanded;
-
-		if ( source.colorCount() == 1 && format == BlockFormat::BC5 )
-		{
-			expanded.emplace(Processor< uint8_t >::toRGBA(source));
-		}
-
-		const auto & pixmap = expanded.has_value() ? *expanded : source;
-
-		/* Compute the number of mip levels. */
-		const auto fullMipCount = Vulkan::Image::getMIPLevels(pixmap.width(), pixmap.height());
-		const auto mipCount = maxMipLevels == 0 ? fullMipCount : std::min(maxMipLevels, fullMipCount);
-
 		std::vector< CompressedMipLevel > result;
-		result.reserve(mipCount);
+		result.reserve(maxMipLevels == 0 ? Vulkan::Image::getMIPLevels(source.width(), source.height()) : maxMipLevels);
 
-		/* A BINARY coverage mask (foliage, a grate, a sprite) needs its COVERAGE preserved down the
-		 * chain, not its alpha mean: a box filter keeps the mean and lets the fraction passing the
-		 * alpha test collapse — measured on Sponza's cypress mask, 6.34 % at the base against 1.56 %
-		 * at mip 9 and 0 % at mip 10, i.e. a canopy that thins out and then disappears with distance.
-		 * Castano's correction rescales each level's alpha to match the base coverage. Graded alpha
-		 * (a translucent decal, a glass pane) is left strictly alone — there is no coverage to hold.
-		 * ⚠️ The chain keeps filtering the UNCORRECTED level: feeding the correction back into the
-		 * next downsample would compound the gain and turn the mask opaque a few levels down. */
-		const auto preserveCoverage = format == BlockFormat::BC7 && AlphaCoverage::isBinaryMask(pixmap);
-		const auto baseCoverage = preserveCoverage ? AlphaCoverage::coverage(pixmap, AlphaCoverage::DefaultCutoff) : 0.0F;
+		/* NOTE: The format tells the kind (selectFormat()): BC5 holds a normal map, BC4 an opaque grey LINEAR map, BC7
+		 * anything else — the only one that can be colour, and the only one with an alpha to handle. */
+		const MipChain::Treatment treatment{
+			.sRGB = sRGB && format == BlockFormat::BC7,
+			.normalMap = format == BlockFormat::BC5,
+			.alpha = format == BlockFormat::BC7
+		};
 
-		if ( preserveCoverage )
-		{
-			TraceInfo{ClassId} <<
-				"Binary alpha mask detected (base coverage " << (baseCoverage * 100.0F) <<
-				" %): preserving coverage across the mip chain.";
-		}
+		/* NOTE: A level that fails to compress ends the chain: the levels before it are kept. */
+		static_cast< void >(MipChain::build(source, maxMipLevels, treatment, [&result, format] (uint32_t level, const Pixmap< uint8_t > & pixmap) {
+			auto compressed = compressLevel(pixmap, format);
 
-		/* The colour under the transparent pixels is dilated from the visible ones before anything filters it
-		 * (Processor::fillTransparentColour(), pull-push): a texture stores black (or anything) there, and both the box
-		 * filter of the chain and the sampler's bilinear tap mixed it into the visible edge — Sponza's cypress leaves
-		 * kept 56 % of their green at mip 8 (2026-10-21, engine item alpha-mask-textures-lose-coverage-and-colour-in-the-
-		 * mip-chain). A pixel is a hole below the alpha test's cutoff for a binary mask (it is never drawn, its colour only
-		 * reaches the screen through a filter), at alpha 0 only for graded alpha (a semi-transparent pixel's colour is
-		 * seen). The alpha itself, the coverage it carries, is untouched. */
-		Pixmap< uint8_t > dilated;
-		const auto * base = format == BlockFormat::BC7 && dilateHoles(pixmap, preserveCoverage, dilated) ? &dilated : &pixmap;
+			if ( compressed.data.empty() )
+			{
+				TraceError{ClassId} << "Failed to compress mip level " << level << " !";
 
-		/* Compress base level. */
-		result.emplace_back(format == BlockFormat::BC5 ? compressLevel(renormalizedNormals(*base), format) : compressLevel(*base, format));
+				return false;
+			}
 
-		if ( result.back().data.empty() )
+			result.emplace_back(std::move(compressed));
+
+			return true;
+		}));
+
+		if ( result.empty() )
 		{
 			Tracer::error(ClassId, "Failed to compress base mip level !");
 
 			return {};
-		}
-
-		/* Generate and compress subsequent mip levels. */
-		Pixmap< uint8_t > currentMip = *base;
-
-		for ( uint32_t level = 1; level < mipCount; ++level )
-		{
-			currentMip = generateMip(currentMip);
-
-			if ( !currentMip.isValid() )
-			{
-				TraceError{ClassId} << "Failed to generate mip level " << level << " !";
-
-				break;
-			}
-
-			result.emplace_back(compressChainLevel(currentMip, format, preserveCoverage, baseCoverage));
-
-			if ( result.back().data.empty() )
-			{
-				TraceError{ClassId} << "Failed to compress mip level " << level << " !";
-
-				break;
-			}
 		}
 
 		/* Calculate total compressed size for logging. */
@@ -464,7 +264,7 @@ namespace EmEn::Graphics
 		}
 
 		TraceSuccess{ClassId} <<
-			"Compressed " << pixmap.width() << "x" << pixmap.height() <<
+			"Compressed " << source.width() << "x" << source.height() <<
 			" texture to " << to_cstring(format) << " (" << result.size() << " mip levels, " <<
 			(totalCompressedBytes / 1024) << " KB).";
 

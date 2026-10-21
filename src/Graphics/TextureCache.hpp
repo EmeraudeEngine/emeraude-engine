@@ -106,10 +106,11 @@ namespace EmEn::Graphics
 			 * @param pixmap A reference to the decoded RGBA8 source pixels.
 			 * @param maxMipLevels Maximum number of mip levels (0 = full chain).
 			 * @param format The block format (TextureCompressor::selectFormat()).
+			 * @param sRGB Whether the texture is a colour (sRGB) one: its chain is filtered in linear light.
 			 * @return Vector of compressed mip levels, empty on failure.
 			 */
 			[[nodiscard]]
-			std::vector< CompressedMipLevel > getOrCompress (const std::string & resourceName, const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format) const noexcept;
+			std::vector< CompressedMipLevel > getOrCompress (const std::string & resourceName, const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format, bool sRGB) const noexcept;
 
 			/**
 			 * @brief Erases every cache entry from disk.
@@ -133,13 +134,17 @@ namespace EmEn::Graphics
 			 * @note The block format is folded in for BC5 and BC4 only (D8, 2026-10-20): the same pixels may be a BC7
 			 * texture and a BC5 normal map variant at once, and one shared entry would make them overwrite each other.
 			 * A BC7 key is the version-3 key, so the version-4 entry REPLACES the old file instead of orphaning it.
+			 * @note The colour space is folded in for a LINEAR BC7 texture only (version 6, 2026-10-21): an sRGB chain is
+			 * filtered in linear light, a linear one as stored, so the same pixels make two blobs. The common case, an sRGB
+			 * BC7 colour texture, keeps the version-3 key and replaces its old file.
 			 * @param pixmap A reference to the decoded RGBA8 source pixels.
 			 * @param maxMipLevels The mip levels asked of the compression.
 			 * @param format The block format.
+			 * @param sRGB Whether the texture is a colour (sRGB) one.
 			 * @return size_t
 			 */
 			[[nodiscard]]
-			static size_t cacheKey (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format) noexcept;
+			static size_t cacheKey (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format, bool sRGB) noexcept;
 
 			/**
 			 * @brief Returns the cache file path for a key.
@@ -177,8 +182,9 @@ namespace EmEn::Graphics
 			 * exact area-weighted box filter (Processor::downsample()); version 2 blobs were bilinear
 			 * resamples whose tail lost the mean (a 23 % leaf mask read 0.001 at 1 × 4). Version 4 = the header
 			 * carries the block format (BC7, BC5, BC4 — D8, 2026-10-20). Version 5 = the colour under the transparent
-			 * pixels of a BC7 chain is dilated first (Processor::fillTransparentColour(), 2026-10-21). */
-			static constexpr uint32_t Version{5};
+			 * pixels of a BC7 chain is dilated first (Processor::fillTransparentColour(), 2026-10-21). Version 6 = every
+			 * level is NVTT's Kaiser of the previous one, an sRGB colour filtered in linear light (2026-10-21). */
+			static constexpr uint32_t Version{6};
 			static constexpr auto CacheDirectoryName{"texture-cache"};
 			static constexpr auto CacheFileExtension{".bc7cache"};
 

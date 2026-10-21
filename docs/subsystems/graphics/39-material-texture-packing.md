@@ -275,7 +275,7 @@ following the texture detail, no shifted feature — the same BC7 shared-block c
 ## Animated textures in BC7 (2026-10-20)
 
 `AnimatedTexture2D::createCompressedImage()`: on a BC-capable GPU every frame goes through the texture cache (BC7, its
-own mip chain) and the frames are uploaded as the layers of one BC7 array (`Vulkan::Image::createFromCompressed()`
+own mip chain) and the frames are uploaded as the layers of one BC7 array (`Vulkan::Image::createFromMipChain()`
 takes a layer count, the mips LAYER-major); RGBA8 stays the fallback (no BC, a frame that fails). Owner decisions:
 BC7 now, BC5 for every normal map with D8; the ocean keeps its 120 × 1024² frames.
 
@@ -465,12 +465,12 @@ included, stay full resolution: the reduction is the running machine's decision)
   (`SpriteResource`), the image viewer, light projections (projet-alpha's flashlight and spot cookies). With the
   defaults at 0, a consumer that forgets it is unaffected.
 - **The pixel path** compresses (and caches) the FULL chain, then uploads from level k: changing a setting re-encodes
-  nothing. The RGBA8 fallback reduces its base with the mip filter (`Processor::downsample()`). **The KTX2 path** (UASTC
+  nothing. The uncompressed path keeps the same chain from level k (§ The mip filter). **The KTX2 path** (UASTC
   or baked) starts its upload at level k — free, the chain ships ready-made. At least one level is always kept.
   `MaxDimension` (graphics § 30) still applies first to the KTX2 sources, whatever their kind.
-- The reduced image is the box-filtered mip of the chain (renormalized for BC5, coverage-preserved and colour-dilated
-  for an alpha mask): no dedicated resampling filter — a Kaiser-class chain filter would serve the reduction and the
-  distance alike (item `mip-chain-quality-filter`).
+- The reduced image is a level of the chain (renormalized for a normal map, coverage-preserved and colour-dilated for
+  an alpha mask): no dedicated resampling filter — the chain's filter (§ The mip filter) serves the reduction and the
+  distance alike.
 
 Measured (Linux, RTX 3070 Ti, 3840 × 1990, validation on, 0 new `VUID-`; the study ran the same reduction through the
 sampler's `minLod`, kind by kind):
@@ -491,6 +491,59 @@ Ada, MSVC /W4 /WX Release + Debug, the RT lane): the defaults change nothing (VR
 options with 0 VUID (the reduced KTX2 images in the RT bindless table too). The Sponza image change shrinks with the
 screen: 0.86–0.92 at 3840 × 1990 (Linux), 0.25 / 0.04 at 2560 × 1440 (macOS), within the noise on Windows — the fewer
 pixels, the less the dropped top level is sampled.
+
+## The mip filter (2026-10-21)
+
+Owner decisions: NVIDIA Texture Tools' **Kaiser** (not Lanczos-3, not Mitchell, not the box in linear); each level from
+the **previous** one (NVTT's way; from the base cost ~12 × the first level of a 4K); an sRGB colour filtered in
+**linear light**; the edges **mirrored** (NVTT's default — never mixes opposite edges: atlases, sprites, baked glTF
+UVs); the **uncompressed path** rebuilt on the same chain in the same lot.
+
+- **The filter** — emeraude-base `Processor::downsample(…, ReductionFilter::Kaiser, sRGB)` (its `ReductionKernel`:
+  Kaiser-windowed sinc, half-width 3 destination pixels, alpha 4, stretch 1, each tap averaged over its source pixel,
+  after I. Castaño's `src/nvimage/Filter.cpp`, public domain). The edge mirror repeats the edge pixel, as
+  `VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT` does (NVTT skips it). The ringing of the negative lobes is clamped to the
+  byte range. The alpha is always linear; an sRGB colour is decoded by a 256-entry table and encoded to the nearest
+  byte. Base traps and numbers: its `docs/caution-points.md` § PixelFactory.
+- **One chain for both paths** — `Graphics/MipChain::build(base, levels, treatment, visitor)` emits every level, base
+  first: the colour under the holes dilated before any filter, each level the Kaiser of the previous one, a binary
+  mask's coverage held on the emitted copy, a normal map renormalized on the emitted copy (the chain keeps the
+  unnormalized, uncorrected level). `TextureCompressor::compress(source, levels, format, sRGB)` encodes each level;
+  the uncompressed path of `Texture2D` and `AnimatedTexture2D` keeps them and uploads them as they are
+  (`Vulkan::Image::createFromMipChain()`, renamed from `createFromCompressed()`: every level copied, nothing blitted,
+  no `TRANSFER_SRC`, each level at a 4-byte offset in the staging buffer — a one-channel level may be any size).
+  Before, that path blitted a 2 × 2 box on the GPU: no dilation, no coverage, no unit normals although the shaders
+  reconstruct Z (item `alpha-mask-textures-lose-coverage-and-colour-in-the-mip-chain` point 3).
+- **`Core/Graphics/Texture/BlockCompression`** (default true, owner decision): false takes the uncompressed path on a
+  BC-capable device — an A/B of the encoders, the only way to exercise the path a device without BC takes. A KTX2
+  source ships its blocks: unaffected.
+- **`TextureCache` version 6**; the colour space is folded into the key of a LINEAR BC7 chain only (an sRGB BC7 keeps
+  the version-3 key and replaces its file).
+- **Cost** (CPU, a full 4096² RGBA chain, GCC -O3, best of 5): former box 178 ms with a 256 MiB `double`
+  intermediate, Kaiser 259 ms, Kaiser sRGB 317 ms, the intermediate a ring of 13 rows. The BC encoders dominate.
+- ⚠️ The baked assets (§ Baked assets) were baked with the box chain: `Sponza.baked.glb` is not what the engine now
+  produces until it is baked again.
+
+Measured (Linux, RTX 3070 Ti, 3840 × 1990, X11, validation on, `relief` with its ground replaced, the demo's camera,
+exposure pinned f/8 1/250 ISO 100, a cold texture cache per run, HEAD built beside as the baseline; the only `VUID-`
+are the known 4 × 00922 + 2 × 05137 of `setGround`, item `default-mesh-instance-destroyed-while-in-use`, in both builds):
+
+| Case | Mean abs. change vs the box (run-to-run noise) | Power of the image, Kaiser / box, by screen frequency (fraction of the Nyquist: 0.03–0.125 / –0.25 / –0.5 / –0.75 / –1.0) |
+|---|---|---|
+| Sand002, far third | 2.11 (1.43) | 1.006 / 1.006 / 1.006 / 0.971 / **0.870** |
+| Sand002, middle | 2.85 (1.51) | 1.009 / 1.017 / 1.015 / 0.986 / **0.829** |
+| Sand002, near field (mip 0) | 1.97 (1.65) | 1.002 / 1.002 / 1.001 / 0.989 / 0.980 |
+| Sand002, every kind at 1, near field (the reduced level) | 3.55 | 1.001 / 1.020 / 1.010 / **0.754 / 0.630** |
+| Grid003 (alpha mask), far third | 1.84 | 0.963 / 0.992 / 0.968 / 0.952 / **0.879** |
+
+Reading: what the screen can hold keeps slightly more contrast, and the top band — where a box-filtered level
+shimmers (it lets 31 % of a detail above the new Nyquist fold back, the Kaiser 0.3 %) — loses 12 to 17 %. The near field
+of a reduced texture (every kind at 1) loses its finest grain (−25 / −37 % in the top half): it is the magnified level's
+own top octave, the Kaiser's transition band, where the box passed both detail and aliasing. Side by side at 1:1 the
+two are hard to tell apart; no halo at the grid's hard edges. The means do not move (Sand002 ± 0.07, Grid003 + 0.3 far).
+**The uncompressed path** (`BlockCompression` false) matches the compressed one within the encoders' error: mean
+change 2.2–2.4 against a 1.4–1.65 noise, the BC7 / BC5 levels losing 3 % of contrast (std 16.5 → 15.96 far) — Sand002
+64 MiB in RGBA8 against 16 MiB in BC7; the binary masks detected and held on both paths.
 
 ## Reference measurement (2026-10-20, before any packing)
 
@@ -518,8 +571,8 @@ layer on (0 `VUID-`). MiB = the device memory of the loaded textures, each image
 2. ~~SourceChannel ignored by most components~~ — DONE, validated on the 3 OS 2026-10-20 (graphics § 08-8).
 3. ~~One binding per distinct texture~~ — DONE, validated on the 3 OS 2026-10-20 (§ One binding per distinct texture).
 4. `material-texture-canonical-repack` — D2, D4, D6, D7, recipe release.
-5. ~~`texture-footprint-ratios-per-kind`~~ — D5 DONE 2026-10-21 (§ GPU footprint per kind); the chain filter's quality
-   is `mip-chain-quality-filter`.
+5. ~~`texture-footprint-ratios-per-kind`~~ — D5 DONE 2026-10-21 (§ GPU footprint per kind); ~~`mip-chain-quality-filter`~~
+   DONE 2026-10-21 (§ The mip filter; Linux measured, the peers' validation pending).
 6. `rt-material-packed-channels` — the RT parity.
 7. ~~`texture-block-format-per-kind`~~ — D8 DONE: the GPU side 2026-10-20, the one-channel CPU copy 2026-10-21
    (§ Block format per kind).

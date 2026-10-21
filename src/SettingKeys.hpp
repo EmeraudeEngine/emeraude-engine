@@ -536,6 +536,13 @@ namespace EmEn
 			constexpr auto GraphicsTexturePackingKey{"Core/Graphics/Texture/Packing"};
 			constexpr auto DefaultGraphicsTexturePacking{true};
 
+			/* Block compression of the textures decoded from pixels (graphics § 39: BC7, BC5 for a normal map, BC4 for an
+			 * opaque grey map) on a device with textureCompressionBC. Turn it OFF to take the uncompressed path — the SAME
+			 * CPU mip chain (graphics § 39 § The mip filter), uploaded as RGBA8 / R8 — for an A/B of the encoders, or to
+			 * exercise the path of a device without BC. A KTX2 source ships its blocks: unaffected. Read at each upload. */
+			constexpr auto GraphicsTextureBlockCompressionKey{"Core/Graphics/Texture/BlockCompression"};
+			constexpr auto DefaultGraphicsTextureBlockCompression{true};
+
 			/* GPU footprint per texture kind (graphics § 39, D5, owner decisions 2026-10-21): the number of top mip levels
 			 * a MATERIAL's 2D texture skips at upload — 0 the full resolution (default), 1 half (the VRAM / 4), 2 a quarter
 			 * (/ 16). The kind is the texture's identity: a normal map, a colour (sRGB: albedo, emission), the rest data (AO,

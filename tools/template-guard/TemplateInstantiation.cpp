@@ -235,6 +235,7 @@
 #include "Graphics/Material/Materials.hpp"
 #include "Graphics/Material/PathResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/MipChain.hpp"
 #include "Graphics/MovieResource.hpp"
 #include "Graphics/OceanWaves.hpp"
 #include "Graphics/OverflowCensus.hpp"

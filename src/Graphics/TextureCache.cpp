@@ -139,7 +139,7 @@ namespace EmEn::Graphics
 	}
 
 	size_t
-	TextureCache::cacheKey (const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format) noexcept
+	TextureCache::cacheKey (const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format, bool sRGB) noexcept
 	{
 		/* NOTE: Content-addressed on purpose. Anything derived from the resource NAME alone lets an
 		 * edited texture keep serving its stale blob; hashing the decoded pixels cannot. The
@@ -162,6 +162,12 @@ namespace EmEn::Graphics
 		if ( format != BlockFormat::BC7 )
 		{
 			fold(static_cast< size_t >(format));
+		}
+		/* NOTE: A linear BC7 chain is another blob than the sRGB one (filtered as stored, not in linear light); the sRGB
+		 * key stays the version-3 one, so the common colour texture replaces its old file (see the declaration). */
+		else if ( !sRGB )
+		{
+			fold(static_cast< size_t >(0x4C494E45)); /* "LINE" */
 		}
 
 		return key;
@@ -339,10 +345,10 @@ namespace EmEn::Graphics
 	}
 
 	std::vector< CompressedMipLevel >
-	TextureCache::getOrCompress (const std::string & resourceName, const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format) const noexcept
+	TextureCache::getOrCompress (const std::string & resourceName, const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format, bool sRGB) const noexcept
 	{
 		const auto cacheEnabled = !m_cacheDirectory.empty();
-		const auto key = cacheEnabled ? TextureCache::cacheKey(pixmap, maxMipLevels, format) : 0;
+		const auto key = cacheEnabled ? TextureCache::cacheKey(pixmap, maxMipLevels, format, sRGB) : 0;
 
 		if ( cacheEnabled )
 		{
@@ -356,7 +362,7 @@ namespace EmEn::Graphics
 			}
 		}
 
-		auto compressed = m_compressor.compress(pixmap, maxMipLevels, format);
+		auto compressed = m_compressor.compress(pixmap, maxMipLevels, format, sRGB);
 
 		if ( compressed.empty() || !cacheEnabled )
 		{

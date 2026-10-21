@@ -56,8 +56,9 @@
  * (graphics § 39, the baked assets, owner decision 2026-10-21). It runs the runtime's own steps, so the baked blocks are
  * the ones the engine would have produced: PackRecipe::fillChannel() for every output channel (the largest source size,
  * a texture resample for the smaller ones), TextureCompressor::selectFormat() for the block format (BC5 for a normal map,
- * BC4 for an opaque grey linear map, BC7 otherwise), TextureCompressor::compress() for the full mip chain (renormalized
- * normals, coverage-preserving alpha masks), KTX2Writer for the container (zstd-supercompressed).
+ * BC4 for an opaque grey linear map, BC7 otherwise), TextureCompressor::compress() for the full mip chain (Kaiser-filtered,
+ * a colour in linear light, renormalized normals, coverage-preserving alpha masks), KTX2Writer for the container
+ * (zstd-supercompressed).
  *
  * Usage:
  *   EmeraudeTextureBake --output <file.ktx2> --kind colour|normal|data [--flip-normal-y] [--zstd <0-22>]
@@ -458,7 +459,7 @@ main (int argc, char * argv[])
 	}
 
 	const auto format = Graphics::TextureCompressor::selectFormat(packed, arguments.colour, arguments.normal);
-	const auto levels = compressor.compress(packed, 0, format);
+	const auto levels = compressor.compress(packed, 0, format, arguments.colour);
 
 	if ( levels.empty() )
 	{

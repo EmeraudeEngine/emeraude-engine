@@ -67,7 +67,7 @@ namespace EmEn::Graphics
 	 * a decoded RGBA8 @ref Base::PixelFactory::Pixmap that the engine has to compress itself
 	 * (@ref TextureCompressor, BC7, expensive), this resource carries the block-compressed
 	 * mip chain **as it came off the disk**, ready for a straight
-	 * @ref Vulkan::Image::createFromCompressed() upload.
+	 * @ref Vulkan::Image::createFromMipChain() upload.
 	 *
 	 * The payload comes from a KTX2 container, the transport format of the glTF
 	 * `KHR_texture_basisu` extension, transcoded by @ref KTX2Decoder. Nothing here is ever

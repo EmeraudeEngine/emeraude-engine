@@ -471,9 +471,10 @@ namespace EmEn::Vulkan
 			bool create (TransferManager & transferManager, const std::shared_ptr< Graphics::CubemapMovieResource > & cubemapMovieResource) noexcept;
 
 			/**
-			 * @brief Describes one mip level of pre-compressed texture data for upload.
+			 * @brief Describes one level of a pre-built mip chain for upload: block-compressed data, or uncompressed pixels
+			 * tightly packed (rows of width × texel bytes).
 			 */
-			struct CompressedMip
+			struct MipLevelData
 			{
 				const uint8_t * data;
 				uint32_t size;
@@ -482,16 +483,18 @@ namespace EmEn::Vulkan
 			};
 
 			/**
-			 * @brief Creates the image and uploads pre-compressed multi-mip data, for one or several array layers.
-			 * @note For BC7 (or other block-compressed formats). Skips GPU mipmap generation.
+			 * @brief Creates the image and uploads a pre-built mip chain, for one or several array layers.
+			 * @note Every level is copied as given, nothing is blitted: the block-compressed formats (BC7, BC5, BC4 — they
+			 * cannot be blitted) and the uncompressed chains the CPU filters (MipChain::build(), graphics § 39 § The mip
+			 * filter). The image needs no TRANSFER_SRC usage.
 			 * @param transferManager A reference to the transfer manager.
-			 * @param mips A span of compressed mip level descriptors, LAYER-major: the mip chain of layer 0 (level 0
-			 * first), then layer 1's, and so on — every layer with the same mip count.
+			 * @param mips A span of mip level descriptors, LAYER-major: the mip chain of layer 0 (level 0 first), then
+			 * layer 1's, and so on — every layer with the same mip count.
 			 * @param layerCount The array layers the span covers. Default 1.
 			 * @return bool False on an empty span or one that does not split into `layerCount` equal chains.
 			 */
 			[[nodiscard]]
-			bool createFromCompressed (TransferManager & transferManager, std::span< const CompressedMip > mips, uint32_t layerCount = 1) noexcept;
+			bool createFromMipChain (TransferManager & transferManager, std::span< const MipLevelData > mips, uint32_t layerCount = 1) noexcept;
 
 			/**
 			 * @brief Writes raw data to this image using a staging buffer.

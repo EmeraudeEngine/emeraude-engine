@@ -68,8 +68,9 @@ fallback, not an asset: row (b) of the table above still holds for every real KT
 longer reach a compression method before the encoder is ready — the old static `initialize()` the
 caller had to remember to invoke is **DELETED**, and forgetting it used to produce only a runtime
 error log. The cache's directory is the `m_cacheDirectory` member and its readiness is the base
-class `usable()` state. The pure private helpers `generateMip()` and `compressLevel()` moved to an
-anonymous namespace in `TextureCompressor.cpp`. What remains static in the headers is
+class `usable()` state. The pure private helper `compressLevel()` moved to an anonymous namespace in
+`TextureCompressor.cpp`; the chain itself (`generateMip()` then) is `Graphics/MipChain::build()` since 2026-10-21,
+shared with the uncompressed path (graphics § 39 § The mip filter). What remains static in the headers is
 `static constexpr` constants plus two functions that are pure on their arguments and hold nothing:
 `TextureCompressor::compressedSize()` (block arithmetic) and the private `TextureCache::cacheKey()`
 (the content hash).
@@ -153,7 +154,7 @@ footprint per kind, D5) skip levels of MATERIAL textures only, after it.
 ### Block formats and `Image::pixelBytes()` / `colorCount()`
 
 Block formats are **absent** from both tables, which return 0 for them. That is not a latent bug
-on this path: `Image::createFromCompressed()` never consults them — it is handed explicit per-level
+on this path: `Image::createFromMipChain()` never consults them — it is handed explicit per-level
 byte counts. Do not "fix" the tables by giving a block format a per-pixel size; the honest answer
 for BC7 is 1 byte per pixel *amortised over a 4×4 block*, which is not what those accessors mean.
 

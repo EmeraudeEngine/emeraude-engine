@@ -40,7 +40,8 @@ The erroneous GLSL is on stderr (`START OF ERRONEOUS GLSL`): a log that redirect
 sampled at full resolution at every distance (the sampler was right: linear, anisotropy 8, nothing to read), worse
 once `terrain` tiled it once per metre. **Fix:** the full chain, as `Texture2D` builds (`getMIPLevels()` capped by
 `Core/Graphics/Texture/MipMappingLevels`, plus `TRANSFER_SRC` for the blits); the upload already blits every layer's
-chain (`ImageTransferOperation`). 0 VUID. ⚠️ `CubemapMovieResource` (animated cubemaps) has not been checked.
+chain (`ImageTransferOperation`). 0 VUID. (Since 2026-10-21 every layer's chain is filtered on the CPU and uploaded as
+it is — `MipChain::build()`, graphics § 39 § The mip filter — and the image needs no `TRANSFER_SRC`.) ⚠️ `CubemapMovieResource` (animated cubemaps) has not been checked.
 
 
 ### The UV transform table is INDEXED — the component picks a slot, it does not own one

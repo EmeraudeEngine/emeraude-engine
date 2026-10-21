@@ -92,9 +92,11 @@ near-black border.
    cypress leaves baked from their PNG (graphics § 39 § Baked assets): the green of the visible texels 143 at mip 0,
    141 at mip 8 (137 → 80 before; the UASTC asset itself 118). It cannot recover the author's already-darkened edge texels.
    Point 1 is now exercised end to end: `Sponza.baked.glb` carries the cypress mask through the engine's own chain.
-3. The **GPU blit fallback** (`ImageTransferOperation::finalizeForGPU`, `src/Vulkan/ImageTransferOperation.cpp:231`,
-   used when the device has no `textureCompressionBC`) is still a plain `vkCmdBlitImage` with `VK_FILTER_LINEAR`
-   and gets neither correction.
+3. ~~The **GPU blit fallback**~~ — DONE 2026-10-21 for `Texture2D` and `AnimatedTexture2D`: their uncompressed path
+   builds the SAME chain on the CPU (`Graphics/MipChain::build()`: dilation, held coverage, Kaiser, graphics § 39
+   § The mip filter) and uploads it without a blit; `Core/Graphics/Texture/BlockCompression` false exercises it (Grid003:
+   the binary masks detected and held on both paths). Other users of the blit (`Texture1D`, cubemaps, 3D textures)
+   still blit.
 
 ## ⚠️ Traps
 

@@ -66,7 +66,7 @@ namespace EmEn::Graphics
 	 * needs no transcoding) is passed through with its own format untouched.
 	 *
 	 * @note Output mip levels are ordered level 0 (largest) first, which is the order
-	 * @ref Vulkan::Image::createFromCompressed() expects. The KTX2 file itself stores them
+	 * @ref Vulkan::Image::createFromMipChain() expects. The KTX2 file itself stores them
 	 * smallest-first; libktx hides that.
 	 * @note Stateless utility class, all methods are static.
 	 * @see EmEn::Graphics::CompressedImageResource
