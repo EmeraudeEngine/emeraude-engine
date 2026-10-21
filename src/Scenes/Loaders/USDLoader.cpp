@@ -594,7 +594,7 @@ namespace EmEn::Scenes::Loaders
 			const auto & shape = mesh.shape;
 			const auto & resourceName = mesh.resourceName;
 
-		constexpr auto GeometryFlags = Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates;
+		static constexpr auto GeometryFlags = Geometry::EnableTangentSpace | Geometry::EnablePrimaryTextureCoordinates;
 
 		std::vector< std::shared_ptr< Geometry::Interface > > coarserLevels;
 
