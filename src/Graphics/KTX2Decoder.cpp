@@ -30,11 +30,15 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <ranges>
 
 /* Third-party inclusions. */
 #include <ktx.h>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/TextureCompressor.hpp"
+#include "PixelFactory/Types.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics
@@ -175,6 +179,41 @@ namespace EmEn::Graphics
 		});
 
 		return pairIt != BlockFormatPairs.cend() ? pairIt->nonLinear : format;
+	}
+
+	uint32_t
+	KTX2Decoder::channelCount (VkFormat format) noexcept
+	{
+		switch ( toLinearFormat(format) )
+		{
+			case VK_FORMAT_BC4_UNORM_BLOCK :
+			case VK_FORMAT_R8_UNORM :
+				return 1;
+
+			case VK_FORMAT_BC5_UNORM_BLOCK :
+			case VK_FORMAT_R8G8_UNORM :
+				return 2;
+
+			case VK_FORMAT_BC1_RGB_UNORM_BLOCK :
+			case VK_FORMAT_BC6H_UFLOAT_BLOCK :
+			case VK_FORMAT_BC6H_SFLOAT_BLOCK :
+			case VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK :
+				return 3;
+
+			case VK_FORMAT_BC1_RGBA_UNORM_BLOCK :
+			case VK_FORMAT_BC2_UNORM_BLOCK :
+			case VK_FORMAT_BC3_UNORM_BLOCK :
+			case VK_FORMAT_BC7_UNORM_BLOCK :
+			case VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK :
+			case VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK :
+			case VK_FORMAT_ASTC_4x4_UNORM_BLOCK :
+			case VK_FORMAT_R8G8B8A8_UNORM :
+				return 4;
+
+			/* NOTE: VkFormat is a large external enumeration: everything else is a format the engine does not upload. */
+			default :
+				return 0;
+		}
 	}
 
 	bool

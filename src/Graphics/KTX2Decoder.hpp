@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <span>
+#include <string>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -124,6 +125,15 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			static bool isKTX2 (std::span< const std::byte > bytes) noexcept;
+
+			/**
+			 * @brief Returns the channels a block format holds: 4 for BC7, 2 for BC5, 1 for BC4… — a decoded payload's format
+			 * checked against the purpose of a `GPUTextures` file (graphics § 40).
+			 * @param format A format, linear or sRGB.
+			 * @return uint32_t 0 for a format the engine does not upload.
+			 */
+			[[nodiscard]]
+			static uint32_t channelCount (VkFormat format) noexcept;
 
 			/**
 			 * @brief Transcodes a KTX2 blob to a block-compressed mip chain.

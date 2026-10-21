@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <ranges>
 
 /* Local inclusions. */
 #include "AlphaCoverage.hpp"
@@ -50,6 +51,29 @@
 namespace EmEn::Graphics
 {
 	using namespace Base;
+
+	namespace
+	{
+		/**
+		 * @brief Returns whether a file is a GPU texture container (KTX2, Basis Universal, DDS), by its extension.
+		 * @param filepath The file.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isGPUContainer (const std::filesystem::path & filepath) noexcept
+		{
+			constexpr std::array< std::string_view, 3 > Extensions{".ktx2", ".basis", ".dds"};
+
+			auto extension = IO::toU8String(filepath.extension());
+
+			std::ranges::transform(extension, extension.begin(), [] (char character) {
+				return character >= 'A' && character <= 'Z' ? static_cast< char >(character - 'A' + 'a') : character;
+			});
+
+			return std::ranges::find(Extensions, extension) != Extensions.end();
+		}
+	}
 
 	bool
 	ImageResource::load () noexcept
@@ -110,6 +134,14 @@ namespace EmEn::Graphics
 		if ( !this->beginLoading() )
 		{
 			return false;
+		}
+
+		/* NOTE: Images holds classic images only; a GPU container belongs to the GPUTextures store (graphics § 40, T8). */
+		if ( isGPUContainer(filepath) )
+		{
+			TraceError{ClassId} << "The image '" << this->name() << "' is a GPU container (" << filepath.extension() << "): it belongs to the GPUTextures store, not to Images (graphics § 40).";
+
+			return this->setLoadSuccess(false);
 		}
 
 		if ( !this->readLocalData(filepath) )

@@ -38,23 +38,35 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <compare>
+#include <cstdint>
+#include <functional>
+#include <optional>
 #include <ranges>
+#include <sstream>
 #include <string_view>
+#include <system_error>
+#include <utility>
 
 /* Local inclusions. */
 #include "Animations/AnimationClipResource.hpp"
 #include "Animations/SkeletonResource.hpp"
+#include "Arguments.hpp"
 #include "Audio/MusicResource.hpp"
 #include "Audio/PlaylistResource.hpp"
 #include "Audio/SoundfontResource.hpp"
 #include "Audio/SoundResource.hpp"
+#include "BlobTrait.hpp"
+#include "FastJSON.hpp"
+#include "FileSystem.hpp"
+#include "Graphics/CloudShapeResource.hpp"
 #include "Graphics/CompressedImageResource.hpp"
 #include "Graphics/CubemapMovieResource.hpp"
 #include "Graphics/CubemapResource.hpp"
 #include "Graphics/FontResource.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Graphics/Geometry/RawIndexedVertexResource.hpp"
 #include "Graphics/Geometry/PulledVertexResource.hpp"
+#include "Graphics/Geometry/RawIndexedVertexResource.hpp"
 #include "Graphics/Geometry/RawVertexResource.hpp"
 #include "Graphics/Geometry/VertexGridResource.hpp"
 #include "Graphics/Geometry/VertexResource.hpp"
@@ -62,16 +74,14 @@
 #include "Graphics/Material/BeamResource.hpp"
 #include "Graphics/Material/PathResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
-#include "Graphics/MovieResource.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
 #include "Graphics/Renderable/BasicSeaResource.hpp"
 #include "Graphics/Renderable/DynamicSkyResource.hpp"
-#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Graphics/Renderable/SpriteResource.hpp"
 #include "Graphics/Renderable/TerrainResource.hpp"
-#include "Graphics/CloudShapeResource.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/AnimatedTextureCubemap.hpp"
 #include "Graphics/TextureResource/Texture1D.hpp"
@@ -79,18 +89,37 @@
 #include "Graphics/TextureResource/Texture3D.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Graphics/VolumetricImageResource.hpp"
-#include "Arguments.hpp"
-#include "FastJSON.hpp"
-#include "FileSystem.hpp"
 #include "IO/IO.hpp"
+#include "Logging/Severity.hpp"
 #include "Net/Manager.hpp"
+#include "Network/Hostname.hpp"
 #include "Network/URI.hpp"
+#include "Network/URIDomain.hpp"
 #include "PeerStore.hpp"
 #include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
 #include "Scenes/DefinitionResource.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
 #include "SharingServer.hpp"
+#include "String.hpp"
+#include "Tracer.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Audio
+	{
+		class Manager;
+	}
+
+	namespace Graphics
+	{
+		class Renderer;
+	}
+}
 
 namespace EmEn::Resources
 {
@@ -803,7 +832,7 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Audio::SoundfontResource), std::make_unique< Soundfonts >("Soundfont manager", m_primaryServices, *this, this->getLocalStore("SoundBanks")));
 			m_containers.emplace(typeid(Graphics::FontResource), std::make_unique< Fonts >("Font manager", m_primaryServices, *this, this->getLocalStore("Fonts")));
 			m_containers.emplace(typeid(Graphics::ImageResource), std::make_unique< Images >("Image manager", m_primaryServices, *this, this->getLocalStore("Images")));
-			m_containers.emplace(typeid(Graphics::CompressedImageResource), std::make_unique< CompressedImages >("Compressed image manager", m_primaryServices, *this, this->getLocalStore("Images")));
+			m_containers.emplace(typeid(Graphics::CompressedImageResource), std::make_unique< CompressedImages >("Compressed image manager", m_primaryServices, *this, this->getLocalStore("GPUTextures")));
 			m_containers.emplace(typeid(Graphics::CubemapResource), std::make_unique< Cubemaps >("Cubemap manager", m_primaryServices, *this, this->getLocalStore("Cubemaps")));
 			m_containers.emplace(typeid(Graphics::MovieResource), std::make_unique< Movies >("Movie manager", m_primaryServices, *this, this->getLocalStore("Movies")));
 			m_containers.emplace(typeid(Graphics::TextureResource::Texture1D), std::make_unique< Texture1Ds >("Texture 1D manager", m_primaryServices, *this, this->getLocalStore("Images")));

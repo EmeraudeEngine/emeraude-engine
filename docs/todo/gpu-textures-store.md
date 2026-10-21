@@ -1,7 +1,7 @@
 ---
 id: gpu-textures-store
 title: A GPUTextures store of GPU-ready material textures, looked up before Images
-status: open
+status: in-progress
 priority: unranked
 scope: Resources/Manager (stores, containers), Graphics/TextureResource, Graphics/Material/StandardResource, tools/texture-bake
 opened: 2026-10-21
@@ -18,11 +18,15 @@ textures with no texture compute at load, while a development build keeps workin
 
 ## What remains
 
-- The owner's open question of the design (graphics § 40 § Open questions): the tokens beyond ambientCG's set.
-- Then the lots: the store and its container-agnostic decoder (T7); the name parser and its guardrails (unit-tested,
-  every refusal); the resolution per component (`TextureSet` / material name, `GPUTextures` then `Images`; `.gltf`
-  materials too, T9); the fingerprint and the stale-entry fallback (T11); the sources' naming check (T13); `Images` refusing GPU containers (T8); the hidden repack of code-built materials (T10); the tool
-  that bakes a material definition into `GPUTextures`; a store material as the runtime proof on the three OS.
+- L1 DONE 2026-10-21 (graphics § 40 § Implementation): the base `TextureName` parser and its guardrails, the
+  `GPUTextures` store, `Images` refusing GPU containers (T8).
+- L2: the resolution per component for JSON materials (`TextureSet` / material name, `GPUTextures` then `Images`).
+- L3: the tool that bakes a material definition into `GPUTextures`.
+- L4: the fingerprint and the stale-entry fallback (T11).
+- L5: code-built materials (T10 hidden repack, T4 lookup). L6: `.gltf` materials (T9).
+- The container-agnostic decoder (T7) when a second container arrives; the tokens beyond ambientCG's set (open
+  question); the sources' recognition in `Images` (T13).
+- A store material as the runtime proof on the three OS.
 
 ## References
 

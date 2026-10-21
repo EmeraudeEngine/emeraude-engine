@@ -26,14 +26,23 @@
 
 #include "CompressedImageResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/KTX2Decoder.hpp"
 #include "IO/IO.hpp"
+#include "Math/Vector.hpp"
 #include "PixelFactory/Color.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/Processor.hpp"
+#include "PixelFactory/TextureName.hpp"
+#include "PixelFactory/Types.hpp"
 #include "PrimaryServices.hpp"
+#include "Renderer.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
-#include "Renderer.hpp"
 #include "TextureCompressor.hpp"
 #include "Tracer.hpp"
 
@@ -125,6 +134,17 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* NOTE: A file of the GPUTextures store says what it holds by its name (graphics § 40, T2, T3): a badly named one is
+		 * refused, never guessed. (A glTF's embedded image is loaded from memory, not through here.) */
+		const auto textureName = Base::PixelFactory::TextureName::parse(this->name(), Base::PixelFactory::TextureStore::GPU);
+
+		if ( !textureName.isValid() )
+		{
+			TraceError{ClassId} << "The GPU texture '" << this->name() << "' is refused: " << to_cstring(textureName.error()) << " (expected <TextureName>.<Purpose>, graphics § 40).";
+
+			return this->setLoadSuccess(false);
+		}
+
 		std::vector< uint8_t > content;
 
 		if ( !IO::fileGetContents(filepath, content) )
@@ -149,7 +169,22 @@ namespace EmEn::Graphics
 
 		m_payload = KTX2Decoder::decodeCompressed(bytes, options, this->name());
 
-		return this->setLoadSuccess(m_payload.isValid());
+		if ( !m_payload.isValid() )
+		{
+			return this->setLoadSuccess(false);
+		}
+
+		/* The purpose must fit the format's channels (a Color-Opacity in BC4 holds one channel, not four). */
+		if ( const auto channels = KTX2Decoder::channelCount(m_payload.format); textureName.channelCount() > channels )
+		{
+			TraceError{ClassId} << "The GPU texture '" << this->name() << "' is refused: its purpose needs " << textureName.channelCount() << " channel(s), its format holds " << channels << ".";
+
+			m_payload = {};
+
+			return this->setLoadSuccess(false);
+		}
+
+		return this->setLoadSuccess(true);
 	}
 
 	bool

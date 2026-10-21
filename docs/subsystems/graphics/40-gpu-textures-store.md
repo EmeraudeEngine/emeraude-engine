@@ -1,6 +1,6 @@
 # The `GPUTextures` store — GPU-ready material textures (design, Oct 2026)
 
-> Status: DESIGN, nothing implemented. Item `gpu-textures-store` (`docs/todo/`). Owner decisions 2026-10-21 (T1–T13
+> Status: L1 implemented (2026-10-21, § Implementation), the rest DESIGN. Item `gpu-textures-store` (`docs/todo/`). Owner decisions 2026-10-21 (T1–T13
 > below). Builds on graphics § 39 (packing, block formats, the mip
 > filter, the baked assets) and § 30 (the compressed image path).
 
@@ -121,6 +121,29 @@ while T5 keeps serving it first, silently:
 Detectable when the tool writes a fingerprint of the three into the container (KTX2 key/value data) and the engine,
 in development, compares it with the sources it has. A release ships no sources: nothing to compare, the entry is
 served.
+
+## Implementation
+
+The lots: **L1** the store, the name and its guardrails; L2 the resolution for JSON materials; L3 the bake tool; L4 the
+fingerprint and the stale-entry fallback; L5 code-built materials (T10, T4); L6 `.gltf` materials (T9).
+
+**L1 (2026-10-21)**
+- emeraude-base `PixelFactory/TextureName` (owner: the parser lives in the base, tested): `TextureName::parse(name,
+  TextureStore::GPU | Sources)` splits `<TextureName>.<Purpose>` at the last dot of the last path component, reads the
+  nine ambientCG tokens (case-sensitive; any other refused), lays them on consecutive channels from R (a colour three, a
+  normal two, the rest one; four at most) and checks the rules (the normal alone, a colour first, a colour file holding
+  only the opacity in A, no `NormalDX` in the GPU store). Every refusal is a `TextureNameError` with a log sentence
+  (`to_cstring()`). 7 unit tests (`PixelFactoryTextureName.*`).
+- `CompressedImageResource` reads the `GPUTextures` store (it read `Images`). A file loaded from the store is refused
+  when its name is not valid, or when its purpose needs more channels than its format holds (`KTX2Decoder::channelCount()`:
+  BC4 1, BC5 2, BC1 RGB / BC6H / ETC2 RGB 3, BC1 RGBA / BC2 / BC3 / BC7 / ETC2 RGBA / ASTC 4). A glTF's embedded image
+  is loaded from memory and not checked.
+- `ImageResource` refuses a GPU container (`.ktx2`, `.basis`, `.dds`) with a message pointing to `GPUTextures` (T8).
+- Verified (Linux, a test store under `--add-data-directory`, loaded through the console's `loadResource()`):
+  `Test/Good.Color-Opacity` (BC7) and `Test/Grey.Roughness` (BC4) Loaded; `Test/Mismatch.Color-Opacity` (a BC4 payload:
+  "needs 4 channel(s), its format holds 1"), `Test/Bad.Rough` (unknown token), `Test/NoPurpose`, and `Images/Test/Wrong.ktx2`
+  Failed with their reason; 0 `VUID-`. `sponza` (both options, embedded KTX2) still loads its 103 textures, 1886.8 MiB.
+- Nothing USES a `GPUTextures` entry yet: L2.
 
 ## Open questions (owner)
 

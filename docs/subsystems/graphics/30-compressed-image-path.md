@@ -5,7 +5,7 @@
 | | Source | CPU work at load | Disk cache | Uncompressed copy in RAM |
 |---|---|---|---|---|
 | **(a) Pixel path** | `ImageResource` (PNG, JPEG, procedural) | full BC7 encode (bc7enc, via `renderer.textureCache().getOrCompress()`) | yes (`Graphics::TextureCache`, `.bc7cache` on disk) | **yes** — RGBA8 level 0 |
-| **(b) Compressed path** | `CompressedImageResource` (KTX2) | a block→block transcode | no, and none needed | **never** |
+| **(b) Compressed path** | `CompressedImageResource` (KTX2; its store is `GPUTextures` since 2026-10-21, graphics § 40) | a block→block transcode | no, and none needed | **never** |
 
 The colour space is picked by the **texture's** sRGB flag, never by the source container: path (a)
 creates the image as `VK_FORMAT_BC7_SRGB_BLOCK` or `VK_FORMAT_BC7_UNORM_BLOCK`, path (b) runs the
