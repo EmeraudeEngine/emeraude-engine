@@ -459,6 +459,13 @@ sampler's `minLod`, kind by kind):
 Reading: data at 1 is invisible; on a 4096² asset seen in 4K (Sponza) every kind at 1 is barely measurable; near a
 2048² ground the normals show it first. The flashlight (`#full`) and the smoke sprite keep their 2048² / 1024².
 
+**Validated on the three OS (2026-10-21):** macOS (M6, MoltenVK, Apple clang paranoid 0 warning) and Windows (RTX 3500
+Ada, MSVC /W4 /WX Release + Debug, the RT lane): the defaults change nothing (VRAM and image within noise); every kind at
+1 gives Sand002 1024² 1.33 MiB, the `#full` flashlight and smoke sprite unchanged, Sponza 528.3–528.9 MiB in both
+options with 0 VUID (the reduced KTX2 images in the RT bindless table too). The Sponza image change shrinks with the
+screen: 0.86–0.92 at 3840 × 1990 (Linux), 0.25 / 0.04 at 2560 × 1440 (macOS), within the noise on Windows — the fewer
+pixels, the less the dropped top level is sampled.
+
 ## Reference measurement (2026-10-20, before any packing)
 
 Linux, RTX 3070 Ti (8 GB), Release, `Core.RendererService.getTextureMemory()` once the demo was built, validation
