@@ -1,6 +1,6 @@
 # The `GPUTextures` store — GPU-ready material textures (design, Oct 2026)
 
-> Status: L1, L2 and L3 implemented (2026-10-21, § Implementation), the rest DESIGN. Item `gpu-textures-store` (`docs/todo/`). Owner decisions 2026-10-21 (T1–T15
+> Status: L1 to L4 implemented (2026-10-21, § Implementation), the rest DESIGN. Item `gpu-textures-store` (`docs/todo/`). Owner decisions 2026-10-21 (T1–T15
 > below). Builds on graphics § 39 (packing, block formats, the mip
 > filter, the baked assets) and § 30 (the compressed image path).
 
@@ -201,6 +201,29 @@ key is `TextureSet`.
   KTX2 levels, `getTextureMemory()`).
 - The tool is `EXCLUDE_FROM_ALL`: the gate's builds do not compile it — build it with `--target EmeraudeTextureBake` in
   the GCC AND the clang trees before proposing a change to it.
+
+**L4 (2026-10-21)** — the bake's fingerprint and the stale entry (T11). Owner decisions: a source is identified by
+its CONTENT (FNV-1a 64 of its bytes); the check runs when the entry's sources are present, with a setting to turn it
+off; an entry without fingerprint is served and reported; the pipeline version is `TextureCache::version()`.
+- The tool writes the fingerprint into each container's key/value data, key `Emeraude.Bake`
+  (`KTX2Writer::BakeFingerprintKey`): `{"version": 6, "purposes": {"Roughness": {"source": "Test/Grain-roughness",
+  "channel": 0}, …}, "sources": {"Test/Grain-roughness": "<16 hex digits>", …}}` — a colour records no channel, a normal
+  its `flip`.
+- `GPUTextureSet::find()` reads it from the header and the key/value block only (`KTX2Decoder::readKeyValue()`, a bounded
+  hand parser: no image is read); `GPUTextureSet::check()` decides per component: `Unverifiable` when a source file is
+  absent (a product shipped without its sources — served), else `Stale` when the version differs, when the component's
+  declared image / channel / flip differs from what its purpose was baked from, or when a source's content changed —
+  the component then keeps its source (the repack takes it), the engine never rewrites `GPUTextures` (T14). A finding is
+  reported once per entry and reason. `GPUTextureSet::sourceHash()` is the one hash of the tool and the engine.
+- **`Core/Graphics/Texture/CheckGPUTextures`** (default true): false serves every entry as it is.
+- Verified (Linux, `relief`, a test data directory with `Test/Grain` = Sand002's sources, baked by the tool): fresh → the
+  three GPU textures, no report; `Test/GrainRecipe` (same set by `TextureSet`, another albedo image) → "its Color was
+  baked from 'Test/Grain-color', the material now reads 'Grounds/Sand002-color'", the albedo alone from its source; one
+  byte appended to a source → "its source 'Test/Grain-roughness' changed since the bake", AO / roughness / height from
+  their sources (repacked), colour and normal still GPU, reported once; that source deleted → the entry served; the L3
+  bake (no fingerprint) → served, one report per entry. Only the known `setGround` VUIDs.
+- ⚠️ Hashing reads every source of an entry at each development load (Sand002: four files, ~20 MB) — not decoded, once
+  per planning; a product without its sources skips it.
 
 ## Open questions (owner)
 

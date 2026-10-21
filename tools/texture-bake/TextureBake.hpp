@@ -31,6 +31,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <span>
+#include <string>
 #include <string_view>
 
 /* Local inclusions. */
@@ -58,6 +59,8 @@ namespace EmEn::TextureBake
 	struct BakeArguments final
 	{
 		std::filesystem::path output;
+		/** @brief The bake's fingerprint (graphics § 40, L4), written into the container when not empty. */
+		std::string fingerprint;
 		std::array< ChannelArgument, 4 > channels{};
 		uint32_t zstdLevel{18};
 		bool colour{false};

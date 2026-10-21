@@ -38,6 +38,7 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/TextureCompressor.hpp"
+#include "IO/IO.hpp"
 #include "PixelFactory/Types.hpp"
 #include "Tracer.hpp"
 
@@ -214,6 +215,94 @@ namespace EmEn::Graphics
 			default :
 				return 0;
 		}
+	}
+
+	std::optional< std::string >
+	KTX2Decoder::readKeyValue (const std::filesystem::path & filepath, std::string_view key) noexcept
+	{
+		/* NOTE: The KTX 2.0 header: the identifier (12 bytes), nine uint32 fields, then the index — dfdByteOffset,
+		 * dfdByteLength, kvdByteOffset, kvdByteLength (uint32, at byte 48). Little-endian, as every KTX2. */
+		constexpr uint64_t HeaderSize{64};
+		constexpr uint64_t KVDOffsetField{56};
+		/* NOTE: A bound on the key/value block read: a fingerprint is a few KiB. */
+		constexpr uint32_t MaxKeyValueBytes{1U << 20U};
+
+		std::vector< std::byte > header;
+
+		if ( !Base::IO::fileGetRange(filepath, 0, HeaderSize, header) || header.size() < HeaderSize || !isKTX2(header) )
+		{
+			return std::nullopt;
+		}
+
+		const auto readU32 = [] (std::span< const std::byte > bytes, size_t offset) noexcept {
+			uint32_t value = 0;
+
+			for ( size_t index = 0; index < 4; ++index )
+			{
+				value |= static_cast< uint32_t >(std::to_integer< uint8_t >(bytes[offset + index])) << (8U * index);
+			}
+
+			return value;
+		};
+
+		const auto kvdOffset = readU32(header, KVDOffsetField);
+		const auto kvdLength = readU32(header, KVDOffsetField + 4);
+
+		if ( kvdLength == 0 || kvdLength > MaxKeyValueBytes )
+		{
+			return std::nullopt;
+		}
+
+		std::vector< std::byte > block;
+
+		if ( !Base::IO::fileGetRange(filepath, kvdOffset, kvdLength, block) || block.size() != kvdLength )
+		{
+			return std::nullopt;
+		}
+
+		const std::span< const std::byte > data{block};
+		size_t offset = 0;
+
+		/* Each entry: keyAndValueByteLength (uint32), the key NUL-terminated, the value, padded to 4 bytes. */
+		while ( offset + 4 <= data.size() )
+		{
+			const auto length = readU32(data, offset);
+			offset += 4;
+
+			if ( length == 0 || length > data.size() - offset )
+			{
+				return std::nullopt;
+			}
+
+			const auto entry = data.subspan(offset, length);
+			const auto separator = std::ranges::find(entry, std::byte{0});
+
+			if ( separator != entry.end() )
+			{
+				const auto keyLength = static_cast< size_t >(separator - entry.begin());
+				std::string entryKey(keyLength, '\0');
+				std::ranges::transform(entry.first(keyLength), entryKey.begin(), [] (std::byte byte) { return static_cast< char >(std::to_integer< uint8_t >(byte)); });
+
+				if ( entryKey == key )
+				{
+					auto valueBytes = entry.subspan(keyLength + 1);
+
+					if ( !valueBytes.empty() && valueBytes.back() == std::byte{0} )
+					{
+						valueBytes = valueBytes.first(valueBytes.size() - 1);
+					}
+
+					std::string value(valueBytes.size(), '\0');
+					std::ranges::transform(valueBytes, value.begin(), [] (std::byte byte) { return static_cast< char >(std::to_integer< uint8_t >(byte)); });
+
+					return value;
+				}
+			}
+
+			offset += (static_cast< size_t >(length) + 3U) & ~size_t{3};
+		}
+
+		return std::nullopt;
 	}
 
 	bool

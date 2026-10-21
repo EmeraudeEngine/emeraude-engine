@@ -31,10 +31,14 @@
 
 /* STL inclusions. */
 #include <array>
+#include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 /* Local inclusions for usages. */
 #include "PixelFactory/TextureName.hpp"
@@ -46,9 +50,15 @@ namespace EmEn::Resources
 	class Container;
 }
 
+namespace Json
+{
+	class Value;
+}
+
 namespace EmEn::Graphics
 {
 	class CompressedImageResource;
+	class ImageResource;
 
 	namespace TextureResource
 	{
@@ -83,8 +93,23 @@ namespace EmEn::Graphics
 				Base::PixelFactory::TexturePurposeChannels channels{};
 				/** @brief Whether the entry is a colour (sRGB) file. */
 				bool colour{false};
+				/** @brief The bake's fingerprint (KTX2Writer::BakeFingerprintKey), when the entry has one. */
+				std::optional< std::string > fingerprint;
 				/** @brief Whether the entry is a normal map. */
 				bool normalMap{false};
+			};
+
+			/** @brief What a fingerprint check concludes (graphics § 40, L4). */
+			enum class Freshness : uint8_t
+			{
+				/** @brief The sources, the recipe and the pipeline are those of the bake. */
+				Fresh,
+				/** @brief A source is absent (a product without its sources): nothing to compare, the entry is served. */
+				Unverifiable,
+				/** @brief The entry has no fingerprint (baked before L4, or by another tool): served, reported. */
+				NoFingerprint,
+				/** @brief A source, the recipe or the pipeline changed since the bake: the sources replace the entry. */
+				Stale
 			};
 
 			/**
@@ -121,6 +146,32 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			static std::shared_ptr< TextureResource::Texture2D > texture (Resources::Container< TextureResource::Texture2D > & textures, Resources::Container< CompressedImageResource > & store, const Slot & slot) noexcept;
+
+			/** @brief The content hashes of the source files read during one planning: each file hashed once. */
+			using SourceHashes = std::vector< std::pair< std::string, std::string > >;
+
+			/**
+			 * @brief Checks an entry against its fingerprint and the material's current declaration of a component it
+			 * serves: the pipeline version (TextureCache::version()), the component's source (its image, its channel, a
+			 * normal's flip), and the content of every source of the entry (sourceHash()).
+			 * @param slot The entry.
+			 * @param declared The component's declaration (its "Data" object in the material definition).
+			 * @param images The ImageResource container (the sources' files).
+			 * @param hashes The hashes already computed by this planning (completed by this call).
+			 * @param reason Why the entry is stale, written for Freshness::Stale.
+			 * @return Freshness
+			 */
+			[[nodiscard]]
+			static Freshness check (const Slot & slot, const Json::Value & declared, const Resources::Container< ImageResource > & images, SourceHashes & hashes, std::string & reason) noexcept;
+
+			/**
+			 * @brief Returns the content hash of a source file, as a bake fingerprint records it: FNV-1a 64 of its bytes,
+			 * 16 hexadecimal digits (the same function for the bake tool and the engine).
+			 * @param filepath The file.
+			 * @return std::optional< std::string > Nothing when the file cannot be read.
+			 */
+			[[nodiscard]]
+			static std::optional< std::string > sourceHash (const std::filesystem::path & filepath) noexcept;
 
 		private:
 

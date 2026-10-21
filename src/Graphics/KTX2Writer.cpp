@@ -135,7 +135,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	KTX2Writer::write (const std::filesystem::path & filepath, VkFormat format, std::span< const CompressedMipLevel > levels, uint32_t zstdLevel) noexcept
+	KTX2Writer::write (const std::filesystem::path & filepath, VkFormat format, std::span< const CompressedMipLevel > levels, uint32_t zstdLevel, std::string_view bakeFingerprint) noexcept
 	{
 		const auto blockBytes = blockBytesOf(format);
 
@@ -195,6 +195,19 @@ namespace EmEn::Graphics
 			}
 
 			++levelIndex;
+		}
+
+		/* NOTE: A UTF-8 value is NUL-terminated in KTX2 key/value data (KTX 2.0 § 3.11). */
+		if ( !bakeFingerprint.empty() )
+		{
+			const std::string value{bakeFingerprint};
+
+			if ( const auto error = ktxHashList_AddKVPair(&texture->kvDataHead, BakeFingerprintKey, static_cast< unsigned int >(value.size() + 1), value.c_str()); error != KTX_SUCCESS )
+			{
+				TraceError{ClassId} << "Unable to store the bake fingerprint of '" << filepath << "' : " << ktxErrorString(error);
+
+				return false;
+			}
 		}
 
 		if ( zstdLevel > 0 )

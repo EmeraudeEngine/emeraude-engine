@@ -33,6 +33,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <span>
+#include <string_view>
 
 /* Third-party inclusions. */
 #include "volk.h"
@@ -68,6 +69,9 @@ namespace EmEn::Graphics
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"KTX2Writer"};
 
+			/** @brief The key/value key of a bake's fingerprint (graphics § 40, L4): what the entry was baked from. */
+			static constexpr auto BakeFingerprintKey{"Emeraude.Bake"};
+
 			/**
 			 * @brief Writes a mip chain to a KTX2 file.
 			 * @pre The levels are level 0 (largest) first, each one the size of its dimensions in its format, the
@@ -77,10 +81,11 @@ namespace EmEn::Graphics
 			 * @param levels The compressed levels (1 to 32).
 			 * @param zstdLevel The zstd supercompression level (1–22, lossless: the file is smaller, the blocks the
 			 * same), 0 for none.
+			 * @param bakeFingerprint The bake's fingerprint, written under BakeFingerprintKey when not empty.
 			 * @return bool False, with an error, on a refused input or a libktx / file failure (nothing is left half
 			 * written: the container is built in memory first).
 			 */
 			[[nodiscard]]
-			static bool write (const std::filesystem::path & filepath, VkFormat format, std::span< const CompressedMipLevel > levels, uint32_t zstdLevel) noexcept;
+			static bool write (const std::filesystem::path & filepath, VkFormat format, std::span< const CompressedMipLevel > levels, uint32_t zstdLevel, std::string_view bakeFingerprint = {}) noexcept;
 	};
 }

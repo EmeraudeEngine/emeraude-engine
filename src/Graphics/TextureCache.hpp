@@ -100,6 +100,19 @@ namespace EmEn::Graphics
 			TextureCache (PrimaryServices & primaryServices, const TextureCompressor & compressor) noexcept;
 
 			/**
+			 * @brief Returns the version of the blocks a pixmap compresses to (Version, bumped whenever they change): the
+			 * pipeline version a bake's fingerprint records (graphics § 40, L4).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			static constexpr
+			uint32_t
+			version () noexcept
+			{
+				return Version;
+			}
+
+			/**
 			 * @brief Returns the compressed mip chain for a pixmap, compressing it only on a cache miss.
 			 * @param resourceName The texture resource name, used for logging ONLY: the key is
 			 * derived from the pixel content, never from the name.

@@ -435,7 +435,7 @@ namespace EmEn::TextureBake
 			return false;
 		}
 
-		if ( !Graphics::KTX2Writer::write(arguments.output, Graphics::TextureCompressor::vulkanFormat(format, arguments.colour), levels, arguments.zstdLevel) )
+		if ( !Graphics::KTX2Writer::write(arguments.output, Graphics::TextureCompressor::vulkanFormat(format, arguments.colour), levels, arguments.zstdLevel, arguments.fingerprint) )
 		{
 			return false;
 		}

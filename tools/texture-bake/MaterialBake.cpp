@@ -39,11 +39,14 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "Graphics/GPUTextureSet.hpp"
 #include "Graphics/Material/Component/Texture.hpp"
+#include "Graphics/TextureCache.hpp"
 #include "Graphics/TexturePacker.hpp"
 #include "Graphics/Types.hpp"
 #include "IO/IO.hpp"
@@ -104,6 +107,8 @@ namespace
 	struct ReadMap final
 	{
 		const BakeMap * map{nullptr};
+		/** @brief The image's resource name in the Images store. */
+		std::string name;
 		std::filesystem::path image;
 		Channel channel{Channel::Red};
 		std::string samplingKey;
@@ -181,6 +186,7 @@ namespace
 		}
 
 		read.map = &map;
+		read.name = *name;
 		read.image = *image;
 
 		if ( data.isMember(Texture::JKSourceChannel) )
@@ -255,12 +261,45 @@ namespace
 		channels[output] = {.image = read.image, .channel = read.channel, .constant = 255, .fromImage = true};
 	}
 
-	/** @brief One GPUTextures entry to bake: its purpose (the tokens) and its texture. */
+	/** @brief One GPUTextures entry to bake: its purpose (the tokens), its texture, and what its fingerprint records. */
 	struct PlannedEntry final
 	{
 		std::string purpose;
 		BakeArguments bake;
+		/** @brief The fingerprint's purposes: each one's source, channel and normal flip (graphics § 40, L4). */
+		Json::Value purposes{Json::objectValue};
+		/** @brief The entry's source files, by Images resource name. */
+		std::vector< std::pair< std::string, std::filesystem::path > > sources;
 	};
+
+	/**
+	 * @brief Records what a purpose of an entry was baked from.
+	 * @param read The map.
+	 * @param entry The entry.
+	 */
+	void
+	recordSource (const ReadMap & read, PlannedEntry & entry) noexcept
+	{
+		Json::Value recorded{Json::objectValue};
+		recorded["source"] = read.name;
+
+		if ( texturePurposeChannelCount(read.map->purpose) == 1 )
+		{
+			recorded["channel"] = static_cast< Json::UInt >(read.channel);
+		}
+
+		if ( read.map->purpose == TexturePurpose::NormalGL )
+		{
+			recorded["flip"] = read.flipNormalY;
+		}
+
+		entry.purposes[to_cstring(read.map->purpose)] = recorded;
+
+		if ( std::ranges::find(entry.sources, read.name, &std::pair< std::string, std::filesystem::path >::first) == entry.sources.end() )
+		{
+			entry.sources.emplace_back(read.name, read.image);
+		}
+	}
 
 	/**
 	 * @brief Plans the entries of a material: the engine's grouping (TexturePacker::plan()) for the packable maps, one
@@ -322,6 +361,7 @@ namespace
 				}
 
 				entry.purpose += to_cstring(read->map->purpose);
+				recordSource(*read, entry);
 
 				if ( role == ComponentType::Albedo )
 				{
@@ -347,6 +387,7 @@ namespace
 
 			PlannedEntry entry;
 			entry.purpose = to_cstring(read.map->purpose);
+			recordSource(read, entry);
 			entry.bake.zstdLevel = zstdLevel;
 			entry.bake.kindGiven = true;
 
@@ -475,6 +516,28 @@ namespace
 			}
 
 			entry.bake.output = arguments.output / Base::IO::u8path(entryName + ".ktx2");
+
+			/* The fingerprint (graphics § 40, L4): the pipeline version, each purpose's source, each source's content. */
+			Json::Value fingerprint{Json::objectValue};
+			fingerprint["version"] = static_cast< Json::UInt >(Graphics::TextureCache::version());
+			fingerprint["purposes"] = entry.purposes;
+			fingerprint["sources"] = Json::Value{Json::objectValue};
+
+			for ( const auto & [sourceName, sourceFile] : entry.sources )
+			{
+				const auto hash = Graphics::GPUTextureSet::sourceHash(sourceFile);
+
+				if ( !hash.has_value() )
+				{
+					std::cerr << "  unable to read the source '" << Base::IO::toU8String(sourceFile) << "'.\n";
+
+					return false;
+				}
+
+				fingerprint["sources"][sourceName] = *hash;
+			}
+
+			entry.bake.fingerprint = Base::FastJSON::stringify(fingerprint);
 
 			std::cout << "  ";
 

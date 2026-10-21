@@ -32,8 +32,11 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -134,6 +137,17 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			static uint32_t channelCount (VkFormat format) noexcept;
+
+			/**
+			 * @brief Reads one value of a KTX2 file's key/value data, without its images: the header and the key/value
+			 * block only (graphics § 40, L4: a bake's fingerprint).
+			 * @param filepath The KTX2 file.
+			 * @param key The key.
+			 * @return std::optional< std::string > The value (its terminating NUL removed), nothing when the file is not a
+			 * KTX2, is truncated, or has no such key.
+			 */
+			[[nodiscard]]
+			static std::optional< std::string > readKeyValue (const std::filesystem::path & filepath, std::string_view key) noexcept;
 
 			/**
 			 * @brief Transcodes a KTX2 blob to a block-compressed mip chain.

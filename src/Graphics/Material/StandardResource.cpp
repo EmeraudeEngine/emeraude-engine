@@ -2025,6 +2025,13 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
+		/* L4: an entry is checked against its bake's fingerprint when its sources are present (T11). */
+		const auto * images = serviceProvider.container< ImageResource >();
+		const auto checkEntries = images != nullptr && serviceProvider.primaryServices().settings().getOrSetDefault< bool >(GraphicsTextureCheckGPUTexturesKey, DefaultGraphicsTextureCheckGPUTextures);
+		GPUTextureSet::SourceHashes hashes;
+		/* NOTE: An entry serves up to four components: each finding (an entry and its reason) is reported once — a
+		 * changed source stales every component of the entry, a changed recipe only its own. */
+		std::vector< std::string > reported;
 		bool rewritten = false;
 
 		for ( const auto & [key, purpose] : GPUTextureMaps )
@@ -2035,6 +2042,40 @@ namespace EmEn::Graphics::Material
 			if ( slot == nullptr || !isDeclaredTexture(source, key) )
 			{
 				continue;
+			}
+
+			if ( checkEntries )
+			{
+				std::string reason;
+				const auto freshness = GPUTextureSet::check(*slot, source[key][JKData], *images, hashes, reason);
+				auto finding = slot->entry + '|' + reason;
+				const auto firstReport = std::ranges::find(reported, finding) == reported.end();
+
+				if ( firstReport && (freshness == GPUTextureSet::Freshness::NoFingerprint || freshness == GPUTextureSet::Freshness::Stale) )
+				{
+					reported.push_back(std::move(finding));
+				}
+
+				switch ( freshness )
+				{
+					case GPUTextureSet::Freshness::Fresh :
+					case GPUTextureSet::Freshness::Unverifiable :
+						break;
+
+					case GPUTextureSet::Freshness::NoFingerprint :
+						if ( firstReport )
+						{
+							TraceWarning{ClassId} << "Material '" << this->name() << "': the GPU texture '" << slot->entry << "' has no bake fingerprint, it cannot be checked against its sources (graphics § 40).";
+						}
+						break;
+
+					case GPUTextureSet::Freshness::Stale :
+						if ( firstReport )
+						{
+							TraceWarning{ClassId} << "Material '" << this->name() << "': the GPU texture '" << slot->entry << "' is stale (" << reason << "): what it serves for this reason uses its sources for this run. Bake it again (graphics § 40).";
+						}
+						continue;
+				}
 			}
 
 			const auto texture = GPUTextureSet::texture(*textures, *store, *slot);

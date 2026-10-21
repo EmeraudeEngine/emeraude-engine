@@ -543,6 +543,13 @@ namespace EmEn
 			constexpr auto GraphicsTextureBlockCompressionKey{"Core/Graphics/Texture/BlockCompression"};
 			constexpr auto DefaultGraphicsTextureBlockCompression{true};
 
+			/* A GPUTextures entry is checked against its bake's fingerprint when its sources are present (graphics § 40,
+			 * L4, owner decisions T11): a stale one — its sources, its recipe or the pipeline changed since the bake — is
+			 * reported and replaced by the sources for the run (the engine never rewrites GPUTextures). Turn it OFF to
+			 * serve every entry as it is, e.g. for a product that ships its sources too. */
+			constexpr auto GraphicsTextureCheckGPUTexturesKey{"Core/Graphics/Texture/CheckGPUTextures"};
+			constexpr auto DefaultGraphicsTextureCheckGPUTextures{true};
+
 			/* GPU footprint per texture kind (graphics § 39, D5, owner decisions 2026-10-21): the number of top mip levels
 			 * a MATERIAL's 2D texture skips at upload — 0 the full resolution (default), 1 half (the VRAM / 4), 2 a quarter
 			 * (/ 16). The kind is the texture's identity: a normal map, a colour (sRGB: albedo, emission), the rest data (AO,
