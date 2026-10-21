@@ -411,6 +411,19 @@ Gortler et al., *The Lumigraph*, SIGGRAPH 1996): `TextureCompressor::compress()`
 alpha test's cutoff for a binary mask, at alpha 0 only for graded alpha; the alpha is never touched. `TextureCache`
 version 5.
 
+**Validated on the three OS (2026-10-21):** the tool, the writer, the dilation and `Sponza.baked.glb` (projet-alpha
+`sponza --demo-options 0,120,1`, projet-alpha.data 20e18fb).
+- **macOS** (M6, MoltenVK 1.4.2): cascade and the tool 0 warning (Apple clang paranoid), the template guard, base 2709 /
+  0 failed; a baked Grid003 colour BC7_SRGB and normal BC5 (headers right, zstd); `relief` Grid003 against D8 0.28 (noise
+  0.25), `normal-map-debug` identical; Sponza baked: 0 VUID, 1887.4 MiB / 162 bindings as option 0, 30 normals BC5, the
+  cypress brighter and greener (G +3.5), elsewhere 1.27 without bias. Its load ended ~1.5 s LATER than UASTC (5.7 vs
+  4.2 s to the last resource) — unexplained.
+- **Windows** (RTX 3500 Ada, MSVC /W4 /WX): Release and Debug 0 warning, the tool too, base 2710 / 0 failed in both; the
+  same baked headers; `relief` within noise; Sponza baked with the RT lane: 0 VUID, the BC5 normals in the bindless table,
+  1886.8 MiB / 162 bindings, cypress G +6.0; loaded FASTER (10.1–10.8 s vs 11.3–11.4 s).
+- **Linux** (RTX 3070 Ti): 3.47–3.95 s to the scene, 5.67–6.28 s to the last resource, against 3.86 / 6.27 s (one warm
+  UASTC sample).
+
 ## Reference measurement (2026-10-20, before any packing)
 
 Linux, RTX 3070 Ti (8 GB), Release, `Core.RendererService.getTextureMemory()` once the demo was built, validation
