@@ -29,18 +29,45 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/CompressedImageResource.hpp"
 #include "Graphics/ImageResource.hpp"
+#include "Hash/FNV1a.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
+#include "Vulkan/TextureInterface.hpp"
 
 /* Forward declarations. */
+namespace EmEn
+{
+	class Settings;
+}
+
 namespace EmEn::Resources
 {
 	template< typename resource_t >
 	class Container;
+}
+
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class Image;
+	class ImageView;
+	class Sampler;
 }
 
 namespace EmEn::Graphics::TextureResource
@@ -429,6 +456,16 @@ namespace EmEn::Graphics::TextureResource
 			 */
 			[[nodiscard]]
 			bool createFromPixelData (Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Returns the top mip levels this texture skips at upload for its kind's GPU footprint setting
+			 * (graphics § 39, D5): Core/Graphics/Texture/{Normal,Albedo,Data}SkippedMips, by the texture's identity (a
+			 * normal map, a colour, the rest), 0 for a full-resolution texture. The caller keeps at least one level.
+			 * @param settings A reference to the settings.
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t skippedMipLevels (Settings & settings) const noexcept;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependencyFailed() */
 			[[nodiscard]]

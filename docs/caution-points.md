@@ -2571,6 +2571,9 @@ whatever the loaded image happens to carry (1.0 when it has no alpha, which is t
 > The normal map KIND joined them on 2026-10-20 (`enableNormalMap()`, `Usage::normalMap`, `Name#normal`; the loaders'
 > `-normal` slot): it makes the texture BC5 (graphics § 39 § Block format per kind). Unlike the colour space, a texture
 > missing it is not refused anywhere — it stays BC7 and renders the same (the shaders reconstruct Z for every format).
+> The FULL RESOLUTION joined them on 2026-10-21 (`enableFullResolution()`, `Usage::fullResolution`, `Name#full`): a texture
+> that is not a material's (a sprite, a light projection, the image viewer) never skips mip levels for the per-kind
+> footprint settings (graphics § 39 § GPU footprint per kind).
 
 Until 2026-10-14 the material component and every texture setter WROTE the colour space (and the JSON component the
 flip) on the texture it was handed — a resource shared by name, requested asynchronously a line earlier. Three

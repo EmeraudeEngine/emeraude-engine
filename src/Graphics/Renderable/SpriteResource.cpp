@@ -29,21 +29,39 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <initializer_list>
+#include <optional>
+#include <sstream>
 
 /* Project configuration. */
-#include "emeraude_base_config.hpp"
+#include "emeraude_config.hpp"
+
+/* Third-party inclusions. */
+#include "json/json.h"
 
 /* Local inclusions. */
-#include "Resources/Container.hpp"
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Material/Helpers.hpp"
+#include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
-#include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/TextureResource/StoreTexture.hpp"
-#include "VertexFactory/ShapeBuilder.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
+#include "Graphics/Types.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Space3D/Point.hpp"
+#include "Math/Vector.hpp"
+#include "Resources/Container.hpp"
+#include "Saphir/Keys.hpp"
 #include "Types.hpp"
+#include "VertexFactory/Shape.hpp"
+#include "VertexFactory/ShapeBuilder.hpp"
+#include "VertexFactory/ShapeBuilderOptions.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
@@ -102,7 +120,7 @@ namespace EmEn::Graphics::Renderable
 
 				if ( fillingType.value() == FillingType::Texture )
 				{
-					texture2D = TextureResource::getStoreTexture(*this->serviceProvider().container< TextureResource::Texture2D >(), textureName, {.sRGB = true});
+					texture2D = TextureResource::getStoreTexture(*this->serviceProvider().container< TextureResource::Texture2D >(), textureName, {.sRGB = true, .fullResolution = true});
 				}
 				else if ( fillingType.value() == FillingType::AnimatedTexture )
 				{

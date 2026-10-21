@@ -142,6 +142,19 @@ namespace EmEn::Graphics::TextureResource
 		return true;
 	}
 
+	bool
+	Abstract::enableFullResolution (bool enable) noexcept
+	{
+		if ( !this->isIdentityStillOpen("full resolution") )
+		{
+			return false;
+		}
+
+		m_fullResolution = enable;
+
+		return true;
+	}
+
 	void
 	Abstract::applyFlipNormalMapY (Pixmap< uint8_t > & pixmap) const noexcept
 	{

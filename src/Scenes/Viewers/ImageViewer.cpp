@@ -25,26 +25,44 @@
 #include "ImageViewer.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <functional>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/RasterizationOptions.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
+#include "Graphics/Types.hpp"
 #include "IO/IO.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Base.hpp"
+#include "Math/Vector.hpp"
 #include "PixelFactory/FileIO.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
+#include "Scenes/AbstractEntity.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/Visual.hpp"
 #include "Scenes/Manager.hpp"
+#include "Scenes/Node.hpp"
+#include "Scenes/OrbitController.hpp"
 #include "Scenes/Scene.hpp"
+#include "Scenes/StaticEntity.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes::Viewers
@@ -109,8 +127,9 @@ namespace EmEn::Scenes::Viewers
 		 * and the material setter checks it — an asynchronous creation would set it later, on a worker (texture identity,
 		 * docs/caution-points.md). */
 		const auto texture = m_resourceManager.container< TextureResource::Texture2D >()->getOrCreateResourceSync("+ImageViewerTexture" + suffix, [image] (TextureResource::Texture2D & textureResource) {
-			/* The image is the albedo, a colour: sRGB, set before load() (the setter requires it). */
-			if ( !textureResource.enableSRGB(true) )
+			/* The image is the albedo, a colour: sRGB, set before load() (the setter requires it). It is shown AS IS: the
+			 * full resolution whatever the materials' footprint settings (graphics § 39, D5). */
+			if ( !textureResource.enableSRGB(true) || !textureResource.enableFullResolution(true) )
 			{
 				return false;
 			}

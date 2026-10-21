@@ -147,7 +147,8 @@ Largest accepted mip dimension; 0 disables clamping. **Only honored by sources t
 ready-made mip chain** (i.e. KTX2), where clamping is free: the top levels are simply not kept,
 nothing is resampled. Every halving divides the VRAM footprint by four — Sponza's 84 textures cost
 ~1.88 GiB at 4096, ~470 MiB at 2048, ~118 MiB at 1024. The default changes no behaviour; the knob
-exists for the 8 GiB machine.
+exists for the 8 GiB machine. It applies to every KTX2 texture alike; the per-kind settings (graphics § 39 § GPU
+footprint per kind, D5) skip levels of MATERIAL textures only, after it.
 
 ### Block formats and `Image::pixelBytes()` / `colorCount()`
 

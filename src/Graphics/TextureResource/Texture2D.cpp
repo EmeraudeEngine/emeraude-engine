@@ -47,6 +47,7 @@
 #include "Logging/Severity.hpp"
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Processor.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Container.hpp"
 #include "SettingKeys.hpp"
@@ -175,6 +176,28 @@ namespace EmEn::Graphics::TextureResource
 		return true;
 	}
 
+	uint32_t
+	Texture2D::skippedMipLevels (Settings & settings) const noexcept
+	{
+		if ( this->isFullResolution() )
+		{
+			return 0;
+		}
+
+		const auto * key = GraphicsTextureDataSkippedMipsKey;
+
+		if ( this->isNormalMap() )
+		{
+			key = GraphicsTextureNormalSkippedMipsKey;
+		}
+		else if ( this->isSRGB() )
+		{
+			key = GraphicsTextureAlbedoSkippedMipsKey;
+		}
+
+		return settings.getOrSetDefault< uint32_t >(key, DefaultGraphicsTextureSkippedMips);
+	}
+
 	bool
 	Texture2D::createFromCompressedData (Renderer & renderer) noexcept
 	{
@@ -209,21 +232,25 @@ namespace EmEn::Graphics::TextureResource
 		 * call, not the container's, and the blocks are identical either way. */
 		const auto format = this->isSRGB() ? KTX2Decoder::sRGBFormat(m_compressedData->format()) : m_compressedData->format();
 
+		/* D5: the top levels this texture's kind skips — free here, the chain ships ready-made (at least one level kept). */
+		const auto first = std::min(static_cast< size_t >(this->skippedMipLevels(renderer.primaryServices().settings())), mips.size() - 1);
+		const auto & top = mips[first];
+
 		m_image = std::make_shared< Vulkan::Image >(
 			renderer.device(),
 			VK_IMAGE_TYPE_2D,
 			format,
-			VkExtent3D{m_compressedData->width(), m_compressedData->height(), 1U},
+			VkExtent3D{top.width, top.height, 1U},
 			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			0,
-			m_compressedData->levelCount()
+			static_cast< uint32_t >(mips.size() - first)
 		);
 		m_image->setIdentifier(ClassId, this->name(), "Image");
 
 		std::vector< Vulkan::Image::CompressedMip > mipDescs;
-		mipDescs.reserve(mips.size());
+		mipDescs.reserve(mips.size() - first);
 
-		for ( const auto & mip : mips )
+		for ( const auto & mip : std::span{mips}.subspan(first) )
 		{
 			mipDescs.push_back({mip.data.data(), static_cast< uint32_t >(mip.data.size()), mip.width, mip.height});
 		}
@@ -274,10 +301,11 @@ namespace EmEn::Graphics::TextureResource
 
 		auto & settings = renderer.primaryServices().settings();
 
-		const auto mipLevels = std::min(
-			Image::getMIPLevels(m_localData->width(), m_localData->height()),
-			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
-		);
+		const auto fullChain = Image::getMIPLevels(m_localData->width(), m_localData->height());
+		const auto settingLevels = settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels);
+		const auto mipLevels = std::min(fullChain, settingLevels);
+		/* D5: the top levels this texture's kind skips (at least one level kept). */
+		const auto skipped = std::min(this->skippedMipLevels(settings), fullChain - 1);
 
 		/* Check if BC hardware compression is supported. */
 		const auto useBlockCompression = renderer.device()->physicalDevice()->featuresVK10().textureCompressionBC == VK_TRUE;
@@ -289,26 +317,31 @@ namespace EmEn::Graphics::TextureResource
 			 * opaque grey map, BC7 otherwise); the texture cache service owns it end to end -- disk lookup, compression on
 			 * a miss, and storing the result. */
 			const auto blockFormat = TextureCompressor::selectFormat(pixels, this->isSRGB(), this->isNormalMap());
-			const auto compressedMips = renderer.textureCache().getOrCompress(this->name(), pixels, mipLevels, blockFormat);
+			/* NOTE: The chain is compressed (and cached) from the full resolution, the skipped levels included: changing
+			 * the footprint settings re-encodes nothing, the upload starts lower. */
+			const auto compressedMips = renderer.textureCache().getOrCompress(this->name(), pixels, std::min(fullChain, mipLevels + skipped), blockFormat);
 
 			if ( !compressedMips.empty() )
 			{
+				const auto first = std::min(static_cast< size_t >(skipped), compressedMips.size() - 1);
+				const auto & top = compressedMips[first];
+
 				m_image = std::make_shared< Vulkan::Image >(
 					renderer.device(),
 					VK_IMAGE_TYPE_2D,
 					TextureCompressor::vulkanFormat(blockFormat, this->isSRGB()),
-					VkExtent3D{m_localData->width(), m_localData->height(), 1U},
+					VkExtent3D{top.width, top.height, 1U},
 					VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 					0,
-					static_cast< uint32_t >(compressedMips.size())
+					static_cast< uint32_t >(compressedMips.size() - first)
 				);
 				m_image->setIdentifier(ClassId, this->name(), "Image");
 
 				/* Build CompressedMip descriptors for the upload. */
 				std::vector< Vulkan::Image::CompressedMip > mipDescs;
-				mipDescs.reserve(compressedMips.size());
+				mipDescs.reserve(compressedMips.size() - first);
 
-				for ( const auto & mip : compressedMips )
+				for ( const auto & mip : std::span{compressedMips}.subspan(first) )
 				{
 					mipDescs.push_back({mip.data.data(), static_cast< uint32_t >(mip.data.size()), mip.width, mip.height});
 				}
@@ -332,19 +365,35 @@ namespace EmEn::Graphics::TextureResource
 
 		if ( !imageCreated )
 		{
-			/* Uncompressed path (fallback or no BC support). */
+			/* Uncompressed path (fallback or no BC support). The skipped levels: the base reduced by the mip filter. */
+			std::optional< Base::PixelFactory::Pixmap< uint8_t > > reducedPixels;
+
+			if ( skipped > 0 )
+			{
+				reducedPixels.emplace();
+
+				if ( !Base::PixelFactory::Processor< uint8_t >::downsample(pixels, std::max(1U, pixels.width() >> skipped), std::max(1U, pixels.height() >> skipped), *reducedPixels) )
+				{
+					TraceWarning{ClassId} << "Unable to reduce the texture '" << this->name() << "' for its footprint setting: it keeps its full resolution.";
+
+					reducedPixels.reset();
+				}
+			}
+
+			const auto & uploaded = reducedPixels.has_value() ? *reducedPixels : pixels;
+
 			m_image = std::make_shared< Vulkan::Image >(
 				renderer.device(),
 				VK_IMAGE_TYPE_2D,
-				Image::getFormat< uint8_t >(pixels.colorCount(), this->isSRGB()),
-				VkExtent3D{m_localData->width(), m_localData->height(), 1U},
+				Image::getFormat< uint8_t >(uploaded.colorCount(), this->isSRGB()),
+				VkExtent3D{uploaded.width(), uploaded.height(), 1U},
 				VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 				0,
-				mipLevels
+				std::min(Image::getMIPLevels(uploaded.width(), uploaded.height()), settingLevels)
 			);
 			m_image->setIdentifier(ClassId, this->name(), "Image");
 
-			if ( !m_image->create(renderer.transferManager(), pixels) )
+			if ( !m_image->create(renderer.transferManager(), uploaded) )
 			{
 				Tracer::error(ClassId, "Unable to create an image !");
 

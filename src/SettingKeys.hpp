@@ -536,6 +536,17 @@ namespace EmEn
 			constexpr auto GraphicsTexturePackingKey{"Core/Graphics/Texture/Packing"};
 			constexpr auto DefaultGraphicsTexturePacking{true};
 
+			/* GPU footprint per texture kind (graphics § 39, D5, owner decisions 2026-10-21): the number of top mip levels
+			 * a MATERIAL's 2D texture skips at upload — 0 the full resolution (default), 1 half (the VRAM / 4), 2 a quarter
+			 * (/ 16). The kind is the texture's identity: a normal map, a colour (sRGB: albedo, emission), the rest data (AO,
+			 * roughness, metalness, height, masks). The asset is untouched: the reduction is the running machine's decision.
+			 * A texture created with Usage::fullResolution (sprites, light projections, the image viewer) never skips; at
+			 * least one level is always kept. */
+			constexpr auto GraphicsTextureAlbedoSkippedMipsKey{"Core/Graphics/Texture/AlbedoSkippedMips"};
+			constexpr auto GraphicsTextureNormalSkippedMipsKey{"Core/Graphics/Texture/NormalSkippedMips"};
+			constexpr auto GraphicsTextureDataSkippedMipsKey{"Core/Graphics/Texture/DataSkippedMips"};
+			constexpr auto DefaultGraphicsTextureSkippedMips{0};
+
 			/* GPU Profiler (Vulkan timestamp queries).
 			 * Per-pass GPU timings of the main frame command buffer, harvested without
 			 * stall (one query pool per frame in flight) and served by the remote console

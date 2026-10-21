@@ -295,6 +295,29 @@ namespace EmEn::Graphics::TextureResource
 			}
 
 			/**
+			 * @brief Declares this texture outside the materials' GPU footprint policy: it never skips mip levels for the
+			 * per-kind settings (graphics § 39, D5 — owner decision 2026-10-21: the reduction is for materials only).
+			 * @note For a sprite, a light projection, an image shown as is. Part of the texture's IDENTITY, like the
+			 * colour space: only the creator sets it, before load() (see enableSRGB()); a store texture asks it through
+			 * the `#full` variant (Usage::fullResolution).
+			 * @param enable True to keep the full resolution whatever the settings.
+			 * @return bool False, with an error, when the loading has already started: the value is left unchanged.
+			 */
+			[[nodiscard]]
+			bool enableFullResolution (bool enable) noexcept;
+
+			/**
+			 * @brief Returns whether this texture keeps its full resolution whatever the footprint settings.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isFullResolution () const noexcept
+			{
+				return m_fullResolution;
+			}
+
+			/**
 			 * @brief Sets how texture coordinates outside [0, 1] resolve.
 			 * @warning Must be called BEFORE the texture is created on hardware: the sampler is
 			 * built once, from these values, and never revisited.
@@ -432,5 +455,6 @@ namespace EmEn::Graphics::TextureResource
 			std::atomic< bool > m_sRGB{false};
 			std::atomic< bool > m_flipNormalMapY{false};
 			std::atomic< bool > m_normalMap{false};
+			std::atomic< bool > m_fullResolution{false};
 	};
 }

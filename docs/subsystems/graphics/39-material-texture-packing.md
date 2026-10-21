@@ -44,7 +44,8 @@ OUT of the canonical layout in this first pass; they only gain a working `Source
   component the definition gives as a VALUE stays a value component — no texture read at all, still changeable at
   run time — so nothing has to move into a UBO factor. AO 1.0 = no occlusion.
 - **D5 — Ratios are global settings per texture kind** (albedo, normal, data), the same strategy for every loader;
-  a per-material override may come later.
+  a per-material override may come later. **Implemented as skipped mip levels, OPTIONAL (owner, 2026-10-21)**: §
+  GPU footprint per kind.
 - **D6 — REVISED on the measurement (owner, 2026-10-20): the normal map stays alone, the height goes into the A of
   the Data texture.** Normal RGB + height A in one BC7 cost the normal its fine grain (relief, per pixel against the
   unpacked render: mean |d| 2.63, 5.6 % of the pixels off by more than 8, no bias); the height in Data A costs nothing
@@ -424,6 +425,40 @@ version 5.
 - **Linux** (RTX 3070 Ti): 3.47–3.95 s to the scene, 5.67–6.28 s to the last resource, against 3.86 / 6.27 s (one warm
   UASTC sample).
 
+## GPU footprint per kind (D5, 2026-10-21)
+
+Owner decisions: an OPTIONAL reduction for a machine short of VRAM — the default changes nothing; expressed as top mip
+levels SKIPPED per kind (`Core/Graphics/Texture/AlbedoSkippedMips`, `NormalSkippedMips`, `DataSkippedMips`: 0 full
+resolution, 1 half — the VRAM / 4 —, 2 a quarter — / 16 —; default 0); applied at LOAD only (the assets, the baked ones
+included, stay full resolution: the reduction is the running machine's decision); MATERIAL textures only.
+
+- **The kind** is the texture's identity (`Texture2D::skippedMipLevels()`): a normal map (`isNormalMap()`), a colour
+  (`isSRGB()`: albedo, emission), the rest data (AO, roughness, metalness, height, masks).
+- **Materials only, by exclusion** (owner): a texture that is not a material's asks `Usage::fullResolution` / 
+  `Abstract::enableFullResolution()` (the `#full` variant of a store texture) and never skips — sprites
+  (`SpriteResource`), the image viewer, light projections (projet-alpha's flashlight and spot cookies). With the
+  defaults at 0, a consumer that forgets it is unaffected.
+- **The pixel path** compresses (and caches) the FULL chain, then uploads from level k: changing a setting re-encodes
+  nothing. The RGBA8 fallback reduces its base with the mip filter (`Processor::downsample()`). **The KTX2 path** (UASTC
+  or baked) starts its upload at level k — free, the chain ships ready-made. At least one level is always kept.
+  `MaxDimension` (graphics § 30) still applies first to the KTX2 sources, whatever their kind.
+- The reduced image is the box-filtered mip of the chain (renormalized for BC5, coverage-preserved and colour-dilated
+  for an alpha mask): no dedicated resampling filter — a Kaiser-class chain filter would serve the reduction and the
+  distance alike (item `mip-chain-quality-filter`).
+
+Measured (Linux, RTX 3070 Ti, 3840 × 1990, validation on, 0 new `VUID-`; the study ran the same reduction through the
+sampler's `minLod`, kind by kind):
+
+| Case | VRAM | Image change (noise) |
+|---|---|---|
+| `relief` + Sand002, all kinds 1 | Sand002 16.0 → 4.0 MiB, scene 113.25 → 84.75 MiB | 2.99 mean, 5.85 in the near field (1.30 / 1.47) |
+| `sponza` (UASTC or baked), all kinds 1 | 1886.8 → **528.3 MiB** | 0.86–0.92 (0.32) |
+| study, `relief` near field, one kind at 1 | — | data 1.64 (= noise), albedo 3.1, normal 5.3 (noise 1.5) |
+| study, `sponza`, one kind at 1 | — | data 0.40, normal 0.51, albedo 0.64 (0.32) |
+
+Reading: data at 1 is invisible; on a 4096² asset seen in 4K (Sponza) every kind at 1 is barely measurable; near a
+2048² ground the normals show it first. The flashlight (`#full`) and the smoke sprite keep their 2048² / 1024².
+
 ## Reference measurement (2026-10-20, before any packing)
 
 Linux, RTX 3070 Ti (8 GB), Release, `Core.RendererService.getTextureMemory()` once the demo was built, validation
@@ -450,7 +485,8 @@ layer on (0 `VUID-`). MiB = the device memory of the loaded textures, each image
 2. ~~SourceChannel ignored by most components~~ — DONE, validated on the 3 OS 2026-10-20 (graphics § 08-8).
 3. ~~One binding per distinct texture~~ — DONE, validated on the 3 OS 2026-10-20 (§ One binding per distinct texture).
 4. `material-texture-canonical-repack` — D2, D4, D6, D7, recipe release.
-5. `texture-footprint-ratios-per-kind` — D5, per-kind mip chains.
+5. ~~`texture-footprint-ratios-per-kind`~~ — D5 DONE 2026-10-21 (§ GPU footprint per kind); the chain filter's quality
+   is `mip-chain-quality-filter`.
 6. `rt-material-packed-channels` — the RT parity.
 7. `texture-block-format-per-kind` — D8: the GPU side done 2026-10-20 (§ Block format per kind); the one-channel CPU
    copy remains.
