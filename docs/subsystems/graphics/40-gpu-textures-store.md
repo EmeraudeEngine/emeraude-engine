@@ -1,6 +1,6 @@
 # The `GPUTextures` store — GPU-ready material textures (design, Oct 2026)
 
-> Status: L1 implemented (2026-10-21, § Implementation), the rest DESIGN. Item `gpu-textures-store` (`docs/todo/`). Owner decisions 2026-10-21 (T1–T13
+> Status: L1 and L2 implemented (2026-10-21, § Implementation), the rest DESIGN. Item `gpu-textures-store` (`docs/todo/`). Owner decisions 2026-10-21 (T1–T13
 > below). Builds on graphics § 39 (packing, block formats, the mip
 > filter, the baked assets) and § 30 (the compressed image path).
 
@@ -144,6 +144,32 @@ fingerprint and the stale-entry fallback; L5 code-built materials (T10, T4); L6 
   "needs 4 channel(s), its format holds 1"), `Test/Bad.Rough` (unknown token), `Test/NoPurpose`, and `Images/Test/Wrong.ktx2`
   Failed with their reason; 0 `VUID-`. `sponza` (both options, embedded KTX2) still loads its 103 textures, 1886.8 MiB.
 - Nothing USES a `GPUTextures` entry yet: L2.
+
+**L2 (2026-10-21)** — the resolution for JSON materials. Owner decisions: an entry replaces the SOURCE of a component
+the definition declares as a texture only (a value or an absent component is untouched: a bake never changes which
+components a material has); a purpose two entries of a set serve makes the set ambiguous — refused whole, logged; the
+key is `TextureSet`.
+- `Graphics/GPUTextureSet`: `find(store, setName)` collects the entries `<setName>.<Purpose>` of the store (an entry
+  naming the set but breaking the convention is reported and ignored), one slot per purpose; `texture()` creates the
+  entry's `Texture2D` once, named `GPUTextures/<entry>`, with the identity its purpose gives (`enableSRGB()` for a colour,
+  `enableNormalMap()` for `NormalGL`), loaded from the `CompressedImageResource`.
+- `StandardResource::planGPUTextures()` runs before the repack: the set is `TextureSet`, else the material's name; each
+  covered texture component reads its entry (`Name`, `SourceChannel` for a one-channel purpose; a `FlipNormalMapY` is
+  dropped — the tool converts a Direct3D source); the repack then packs whatever still reads `Images`. The texture
+  component finds a `GPUTextures/` texture as it finds a `Packed/` one.
+- Verified (Linux, `relief` + `setGround("Grounds/Sand002")`, a test store with `Grounds/Sand002.Color`, `.NormalGL` and
+  `.AmbientOcclusion-Roughness-Metalness-Displacement` baked by `EmeraudeTextureBake`): the material reads the three GPU
+  textures (BC7 sRGB, BC5, BC7 UNORM through r / g / a), 16.006 MiB and 3 bindings as from the sources; none of its five
+  source images is decoded, 3 BC encodes fewer; the BC5 levels are byte-identical to the runtime chain (12 / 12); the
+  image equals the source path's within the noise (1.20–1.24 against 1.28, mean 130.17 both) once converged; the known
+  `setGround` VUIDs only.
+- ⚠️ **Compare the two paths CONVERGED**: with a cold cache the source path BC-encodes on `setGround`, so its textures
+  arrive seconds after the GPU path's; a capture 8 s later saw a GI / TAA accumulation of another age — +0.66 brighter
+  with RT, 0.38 in screen space (noise 0.14) — that vanished at 30 s.
+- Not yet: D10's single fetch (graphics § 39) is kept for `Packed/` textures, whose readers share their UVs by
+  construction; a GPU data texture is fetched once per reader (to extend when its readers' UV transforms are equal).
+  The set is found by scanning the store's names once per material (`availableResourceNames()`, a copy): an index by
+  set name if the store grows large.
 
 ## Open questions (owner)
 

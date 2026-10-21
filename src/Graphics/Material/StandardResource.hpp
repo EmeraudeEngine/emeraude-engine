@@ -1576,6 +1576,22 @@ namespace EmEn::Graphics::Material
 			bool planPackedTextures (const Json::Value & source, Json::Value & packed, Resources::AbstractServiceProvider & serviceProvider) const noexcept;
 
 			/**
+			 * @brief Plans the GPU-ready textures of a material definition (graphics § 40, L2): the GPUTextures entries of
+			 * its texture set — the "TextureSet" key, else the material's name — replace the SOURCE of the components the
+			 * definition declares as textures (their name, their SourceChannel); a component declared as a value, or
+			 * absent, is untouched, and a component no entry serves keeps its image (the repack then takes the rest).
+			 * @note Before any texture is requested, and before the repack. An ambiguous set is refused (logged): nothing
+			 * is rewritten.
+			 * @param source The material definition.
+			 * @param resolved The rewritten definition, written only when an entry was used.
+			 * @param serviceProvider A reference to the service provider.
+			 * @return bool True when the definition was rewritten; false when nothing was (or "TextureSet" is not a string,
+			 * logged — the material then uses its sources).
+			 */
+			[[nodiscard]]
+			bool planGPUTextures (const Json::Value & source, Json::Value & resolved, Resources::AbstractServiceProvider & serviceProvider) const noexcept;
+
+			/**
 			 * @brief Returns the number of distinct textures the material's texture components show.
 			 * @return size_t
 			 */

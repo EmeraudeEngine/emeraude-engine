@@ -35,6 +35,7 @@
 
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "Graphics/GPUTextureSet.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/StoreTexture.hpp"
@@ -166,13 +167,15 @@ namespace EmEn::Graphics::Material::Component
 		/* NOTE: A PACKED texture (graphics § 39) is no store file: the material's planner created it with its own
 		 * identity (colour space, normal flip), which the usage of one of its readers does not change — the opacity
 		 * reads the A of an sRGB albedo, and alpha is linear in every format. */
-		if ( fillingType == FillingType::Texture && resourceName.starts_with(PackRecipe::NamePrefix) )
+		/* NOTE: The same for a GPU-ready texture (graphics § 40): the planner created it with the identity its purpose
+		 * gives. */
+		if ( fillingType == FillingType::Texture && (resourceName.starts_with(PackRecipe::NamePrefix) || resourceName.starts_with(GPUTextureSet::NamePrefix)) )
 		{
 			auto * container = serviceProvider.container< TextureResource::Texture2D >();
 
 			if ( container == nullptr || !container->isResourceExists(resourceName) )
 			{
-				TraceError{ClassId} << "The packed texture '" << resourceName << "' was not created by its material !";
+				TraceError{ClassId} << "The packed or GPU texture '" << resourceName << "' was not created by its material !";
 
 				return nullptr;
 			}

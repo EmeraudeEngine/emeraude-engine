@@ -54,6 +54,8 @@
 #include "FastJSON.hpp"
 #include "GPURTMaterialData.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/CompressedImageResource.hpp"
+#include "Graphics/GPUTextureSet.hpp"
 #include "Graphics/Geometry/HeightfieldSurface.hpp"
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Geometry/OceanSurface.hpp"
@@ -68,6 +70,7 @@
 #include "Graphics/TextureResource/Abstract.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/Types.hpp"
+#include "PixelFactory/TextureName.hpp"
 #include "Helpers.hpp"
 #include "Logging/Severity.hpp"
 #include "Math/Base.hpp"
@@ -109,6 +112,41 @@ namespace EmEn::Graphics::Material
 
 	namespace
 	{
+		/** @brief The maps of a definition a GPUTextures entry may serve, and the purpose that serves each (graphics § 40). */
+		constexpr std::array< std::pair< const char *, PixelFactory::TexturePurpose >, 8 > GPUTextureMaps{{
+			{AlbedoString, PixelFactory::TexturePurpose::Color},
+			{OpacityString, PixelFactory::TexturePurpose::Opacity},
+			{NormalString, PixelFactory::TexturePurpose::NormalGL},
+			{AmbientOcclusionString, PixelFactory::TexturePurpose::AmbientOcclusion},
+			{RoughnessString, PixelFactory::TexturePurpose::Roughness},
+			{MetalnessString, PixelFactory::TexturePurpose::Metalness},
+			{HeightString, PixelFactory::TexturePurpose::Displacement},
+			{AutoIlluminationString, PixelFactory::TexturePurpose::Emission}
+		}};
+
+		/** @brief The key of a material definition naming its GPUTextures set (graphics § 40, T4). */
+		constexpr auto JKTextureSet{"TextureSet"};
+
+		/**
+		 * @brief Returns whether a map of a material definition is declared as a 2D texture.
+		 * @param source The material definition.
+		 * @param key The map's key.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isDeclaredTexture (const Json::Value & source, const char * key) noexcept
+		{
+			if ( !source.isObject() || !source.isMember(key) )
+			{
+				return false;
+			}
+
+			const auto & block = source[key];
+
+			return block.isObject() && block.isMember(JKData) && block[JKData].isObject() && FastJSON::getValue< std::string >(block, JKType).value_or(std::string{}) == TextureString;
+		}
+
 		/** @brief The maps of a definition the texture packer may take, and the role each one plays. */
 		constexpr std::array< std::pair< const char *, ComponentType >, 6 > PackableMaps{{
 			{AlbedoString, ComponentType::Albedo},
@@ -1412,9 +1450,12 @@ namespace EmEn::Graphics::Material
 
 		auto & serviceProvider = this->serviceProvider();
 
-		/* NOTE: The texture packing rewrites the definition BEFORE any texture is requested (graphics § 39, L2). */
+		/* NOTE: The GPU-ready textures (graphics § 40, L2), then the texture packing of the remaining sources (graphics § 39,
+		 * L2), rewrite the definition BEFORE any texture is requested. */
+		Json::Value resolved;
+		const Json::Value & planned = this->planGPUTextures(source, resolved, serviceProvider) ? resolved : source;
 		Json::Value packed;
-		const Json::Value & data = this->planPackedTextures(source, packed, serviceProvider) ? packed : source;
+		const Json::Value & data = this->planPackedTextures(planned, packed, serviceProvider) ? packed : planned;
 
 		if ( !this->parseComponents(data, serviceProvider) )
 		{
@@ -1947,6 +1988,86 @@ namespace EmEn::Graphics::Material
 		}
 
 		return true;
+	}
+
+	bool
+	StandardResource::planGPUTextures (const Json::Value & source, Json::Value & resolved, Resources::AbstractServiceProvider & serviceProvider) const noexcept
+	{
+		auto * store = serviceProvider.container< CompressedImageResource >();
+		auto * textures = serviceProvider.container< TextureResource::Texture2D >();
+
+		if ( store == nullptr || textures == nullptr || !source.isObject() )
+		{
+			return false;
+		}
+
+		/* The set: the "TextureSet" key, else the material's name (T4). */
+		auto setName = this->name();
+
+		if ( source.isMember(JKTextureSet) )
+		{
+			const auto declared = FastJSON::getValue< std::string >(source, JKTextureSet);
+
+			if ( !declared.has_value() || declared->empty() )
+			{
+				TraceError{ClassId} << "The key '" << JKTextureSet << "' of the material '" << this->name() << "' must be a non-empty string: the material uses its sources.";
+
+				return false;
+			}
+
+			setName = *declared;
+		}
+
+		const auto set = GPUTextureSet::find(*store, setName);
+
+		if ( set.empty() )
+		{
+			return false;
+		}
+
+		bool rewritten = false;
+
+		for ( const auto & [key, purpose] : GPUTextureMaps )
+		{
+			const auto * slot = set.slot(purpose);
+
+			/* NOTE: Only a component declared as a texture: the material decides which components exist (owner). */
+			if ( slot == nullptr || !isDeclaredTexture(source, key) )
+			{
+				continue;
+			}
+
+			const auto texture = GPUTextureSet::texture(*textures, *store, *slot);
+
+			if ( texture == nullptr )
+			{
+				continue;
+			}
+
+			if ( !rewritten )
+			{
+				resolved = source;
+				rewritten = true;
+			}
+
+			auto & data = resolved[key][JKData];
+			data[Texture::JKResourceName] = texture->name();
+			/* NOTE: A GPU normal map is in the engine's convention already: the tool converted a Direct3D source. */
+			data.removeMember(Texture::JKFlipNormalMapY);
+
+			if ( slot->channels.channelCount == 1 )
+			{
+				data[Texture::JKSourceChannel] = static_cast< Json::UInt >(slot->channels.firstChannel);
+			}
+			else
+			{
+				data.removeMember(Texture::JKSourceChannel);
+			}
+
+			TraceDebug{ClassId} << "Material '" << this->name() << "': " << key << " reads the GPU texture '" << slot->entry << "'.";
+		}
+
+		return rewritten;
 	}
 
 	size_t

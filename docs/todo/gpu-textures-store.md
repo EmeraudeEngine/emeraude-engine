@@ -20,7 +20,8 @@ textures with no texture compute at load, while a development build keeps workin
 
 - L1 DONE 2026-10-21 (graphics § 40 § Implementation): the base `TextureName` parser and its guardrails, the
   `GPUTextures` store, `Images` refusing GPU containers (T8).
-- L2: the resolution per component for JSON materials (`TextureSet` / material name, `GPUTextures` then `Images`).
+- L2 DONE 2026-10-21: the resolution for JSON materials (`TextureSet` / material name, `GPUTextures` then `Images`).
+  Follow-ups: D10's single fetch for a GPU data texture; an index by set name if the store grows large.
 - L3: the tool that bakes a material definition into `GPUTextures`.
 - L4: the fingerprint and the stale-entry fallback (T11).
 - L5: code-built materials (T10 hidden repack, T4 lookup). L6: `.gltf` materials (T9).

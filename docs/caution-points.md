@@ -393,6 +393,16 @@ ImageResource's pixels must not assume 4 channels: take `colorCount()` into acco
 (`Processor< uint8_t >::toRGBA()`, as `CursorAtlas` does). The in-tree consumers were adapted (`TextureCompressor`,
 `PackRecipe::fillChannel()`, the R8 views, `MovieResource`, `CursorAtlas`); the scene loaders still decode RGBA.
 
+### GPUTextures: the material reads `GPUTextures/<entry>`, and two texture paths are compared CONVERGED (2026-10-21)
+
+A JSON material whose set (`TextureSet`, else its name) has entries in the `GPUTextures` store reads them through
+`Texture2D` resources named `GPUTextures/<entry>`, created by `StandardResource::planGPUTextures()` before the repack —
+never store files: the texture component finds them by prefix, as `Packed/` ones (graphics § 40 L2). Only components
+declared as textures are replaced; an ambiguous set (a purpose served twice) is refused whole.
+- ⚠️ **A/B of a GPU texture against its sources**: with a cold cache the sources are BC-encoded at load, seconds after
+  the GPU path is ready, so a capture a few seconds later compares two GI / TAA accumulations of different ages (+0.66
+  with RT, 0.38 in screen space, noise 0.14): wait for convergence (30 s on `relief`) — then they match within noise.
+
 ### Material Types Registration
 
 > [!CRITICAL]

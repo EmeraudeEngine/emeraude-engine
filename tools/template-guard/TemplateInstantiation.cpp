@@ -191,6 +191,7 @@
 #include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Frustum.hpp"
 #include "Graphics/GIDenoiser.hpp"
+#include "Graphics/GPUTextureSet.hpp"
 #include "Graphics/Geometry/CDLODTerrainResource.hpp"
 #include "Graphics/Geometry/DisplacedGridResource.hpp"
 #include "Graphics/Geometry/GenerationParameters.hpp"
