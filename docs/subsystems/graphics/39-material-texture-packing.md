@@ -555,6 +555,15 @@ two are hard to tell apart; no halo at the grid's hard edges. The means do not m
 change 2.2–2.4 against a 1.4–1.65 noise, the BC7 / BC5 levels losing 3 % of contrast (std 16.5 → 15.96 far) — Sand002
 64 MiB in RGBA8 against 16 MiB in BC7; the binary masks detected and held on both paths.
 
+**Validated on the three OS (2026-10-21)**, base 0a3982d, engine ff73c8fe, projet-alpha.data 06d5b19:
+- **macOS** (M6, MoltenVK 1.4.2; Apple clang 21 paranoid 0 warning, `-Wdocumentation -Werror` clean on the 8 touched
+  TUs): `relief` Sand002 / Grid003 BC and uncompressed, `sponza` both options, `water-world` — only the known `setGround`
+  VUIDs, 0 `[Error]`; Grid003's holes intact at distance, "slightly crisper"; Grid003-height R8_UNORM uncompressed.
+- **Windows** (RTX 3500 Ada and the Intel iGPU; MSVC /W4 /WX Release and Debug 0 warning AFTER base 0a3982d — f964a97
+  failed on C4127, base caution-points § PixelFactory): the same runs on both GPUs, 0 new VUID; the re-baked Sponza
+  2.50 from the box bake (noise 1.09), slightly brighter, its cypress +2 to +3 levels (the sRGB levels filtered in
+  linear light keep the highlights); the Intel driver reports ~17 % more MiB per image (its alignment), formats identical.
+
 ## Reference measurement (2026-10-20, before any packing)
 
 Linux, RTX 3070 Ti (8 GB), Release, `Core.RendererService.getTextureMemory()` once the demo was built, validation
@@ -582,7 +591,7 @@ layer on (0 `VUID-`). MiB = the device memory of the loaded textures, each image
 3. ~~One binding per distinct texture~~ — DONE, validated on the 3 OS 2026-10-20 (§ One binding per distinct texture).
 4. `material-texture-canonical-repack` — D2, D4, D6, D7, recipe release.
 5. ~~`texture-footprint-ratios-per-kind`~~ — D5 DONE 2026-10-21 (§ GPU footprint per kind); ~~`mip-chain-quality-filter`~~
-   DONE 2026-10-21 (§ The mip filter; Linux measured, the peers' validation pending).
+   DONE 2026-10-21 (§ The mip filter), validated on the three OS.
 6. `rt-material-packed-channels` — the RT parity.
 7. ~~`texture-block-format-per-kind`~~ — D8 DONE: the GPU side 2026-10-20, the one-channel CPU copy 2026-10-21
    (§ Block format per kind).
