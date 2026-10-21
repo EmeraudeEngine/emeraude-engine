@@ -117,6 +117,27 @@ namespace EmEn
 namespace EmEn::Graphics::Material
 {
 	/**
+	 * @brief A material component declared by its SOURCE image instead of a texture already requested (graphics § 40,
+	 * L5): the material resolves it when it finishes loading — its GPUTextures set first (T4), then the repack of what
+	 * still reads Images (T10) — as a JSON definition is resolved. Nothing is loaded for a source a GPU texture replaces.
+	 */
+	struct TextureSource final
+	{
+		/** @brief The image's resource name in the Images store. */
+		std::string image;
+		/** @brief The image channel a one-channel component reads (a colour or a normal reads RGB). */
+		Base::PixelFactory::Channel channel{Base::PixelFactory::Channel::Red};
+		/** @brief The UV set. */
+		uint32_t uvChannel{0};
+		/** @brief The UV scale. */
+		Base::Math::Vector< 2, float > uvScale{1.0F, 1.0F};
+		/** @brief The UV offset. */
+		Base::Math::Vector< 2, float > uvOffset{0.0F, 0.0F};
+		/** @brief A Direct3D-style normal map (+Y down), converted to the engine's convention. */
+		bool flipNormalY{false};
+	};
+
+	/**
 	 * @brief PBR (Physically Based Rendering) material resource using the Metallic-Roughness workflow.
 	 * @extends EmEn::Graphics::Material::Interface This is a material.
 	 *
@@ -445,6 +466,84 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			bool setAlbedoComponent (const std::shared_ptr< TextureResource::Abstract > & texture, bool enableAlpha = false) noexcept;
+
+			/**
+			 * @brief Declares a component by its source image (graphics § 40, L5): resolved when the material finishes
+			 * loading — the material's GPUTextures set first, then the repack of what still reads Images — exactly as
+			 * the same declaration in a JSON definition. One declaration per component; a component already set is
+			 * refused.
+			 * @note The texture-object setters stay: a texture given explicitly is used as it is (no lookup, no repack).
+			 * The roughness has no inversion here, as in JSON.
+			 * @warning This function is available before creation time, in the material's creation function.
+			 * @param source The source.
+			 * @param enableAlpha (albedo) Sample the image's alpha channel (blending, cutout).
+			 * @return bool False on an empty image name, a non-finite UV, or a component already set (logged).
+			 */
+			bool setAlbedoComponent (const TextureSource & source, bool enableAlpha = false) noexcept;
+
+			/**
+			 * @brief Names the material's GPUTextures set, when it is not the material's name (graphics § 40, T4): the
+			 * "TextureSet" key of a JSON definition. Read with the components declared by their source.
+			 * @param setName The set's name.
+			 * @return bool False on an empty name.
+			 */
+			bool setTextureSet (const std::string & setName) noexcept;
+
+			/**
+			 * @brief Declares the opacity component by its source image (see setAlbedoComponent(const TextureSource &, bool)).
+			 * @param source The source.
+			 * @param amount The opacity factor.
+			 * @return bool
+			 */
+			bool setOpacityComponent (const TextureSource & source, float amount = DefaultOpacity) noexcept;
+
+			/**
+			 * @brief Declares the normal component by its source image (see setAlbedoComponent(const TextureSource &, bool)).
+			 * @param source The source.
+			 * @param scale The normal scale.
+			 * @return bool
+			 */
+			bool setNormalComponent (const TextureSource & source, float scale = DefaultNormalScale) noexcept;
+
+			/**
+			 * @brief Declares the ambient occlusion component by its source image (see setAlbedoComponent(const TextureSource &, bool)).
+			 * @param source The source.
+			 * @param intensity The occlusion intensity.
+			 * @return bool
+			 */
+			bool setAmbientOcclusionComponent (const TextureSource & source, float intensity = DefaultAOIntensity) noexcept;
+
+			/**
+			 * @brief Declares the roughness component by its source image (see setAlbedoComponent(const TextureSource &, bool)).
+			 * @param source The source.
+			 * @param value The multiplying factor.
+			 * @return bool
+			 */
+			bool setRoughnessComponent (const TextureSource & source, float value = DefaultTextureFactor) noexcept;
+
+			/**
+			 * @brief Declares the metalness component by its source image (see setAlbedoComponent(const TextureSource &, bool)).
+			 * @param source The source.
+			 * @param value The multiplying factor.
+			 * @return bool
+			 */
+			bool setMetalnessComponent (const TextureSource & source, float value = DefaultTextureFactor) noexcept;
+
+			/**
+			 * @brief Declares the height component by its source image (see setAlbedoComponent(const TextureSource &, bool)).
+			 * @param source The source.
+			 * @param scale The height scale.
+			 * @return bool
+			 */
+			bool setHeightComponent (const TextureSource & source, float scale = DefaultHeightScale) noexcept;
+
+			/**
+			 * @brief Declares the emission component by its source image (see setAlbedoComponent(const TextureSource &, bool)).
+			 * @param source The source.
+			 * @param amount The emission amount.
+			 * @return bool
+			 */
+			bool setAutoIlluminationComponent (const TextureSource & source, float amount = DefaultAutoIlluminationAmount) noexcept;
 
 			/**
 			 * @brief Sets the albedo (base color) component from a raw GPU texture (render target).
@@ -1493,6 +1592,22 @@ namespace EmEn::Graphics::Material
 
 		private:
 
+			/** @copydoc EmEn::Resources::ResourceTrait::onLoadFinishing() */
+			[[nodiscard]]
+			bool onLoadFinishing () noexcept override;
+
+			/**
+			 * @brief Records a component declared by its source, in the JSON definition format (graphics § 40, L5).
+			 * @param key The component's JSON key.
+			 * @param type The component.
+			 * @param source The source.
+			 * @param block The component's block, its scalars already set ("Value", "Scale", "Amount"…).
+			 * @param enableAlpha The albedo's alpha.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool declareSource (const char * key, ComponentType type, const TextureSource & source, Json::Value block, bool enableAlpha) noexcept;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::onBeforeCreation() */
 			void onBeforeCreation () noexcept override;
 
@@ -2162,6 +2277,8 @@ namespace EmEn::Graphics::Material
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::unordered_map< ComponentType, std::unique_ptr< Component::Interface > > m_components;
+			/** @brief The components declared by their source, in the JSON definition format, until the load finishes (L5). */
+			Json::Value m_declaredSources{Json::objectValue};
 			Base::StaticVector< TextureBinding, MaxTextureBindings > m_textureBindings;
 			BlendingMode m_blendingMode{BlendingMode::None};
 			/**

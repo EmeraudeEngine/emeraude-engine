@@ -124,6 +124,7 @@ class ResourceTrait : public std::enable_shared_from_this<ResourceTrait>,
 
     // Dependency management
     bool addDependency(const std::shared_ptr<ResourceTrait>& dependency);
+    virtual bool onLoadFinishing();      // Last moment to add a dependency (setLoadSuccess(true), before the check)
     virtual bool onDependenciesLoaded();  // Finalization hook
 
     // State queries
@@ -141,6 +142,9 @@ class ResourceTrait : public std::enable_shared_from_this<ResourceTrait>,
 - **Loading states**: Tracks Unloaded → Enqueuing → Loading → Loaded/Failed transitions
 - **Event propagation**: Notifies parents when dependencies complete (thread-safe)
 - **Finalization**: Provides hook (`onDependenciesLoaded`) for GPU upload, etc.
+- **Late declarations** (2026-10-21): `onLoadFinishing()` runs in `setLoadSuccess(true)` just before the dependencies
+  are checked — the last moment a resource adds one; false fails the load. A material resolves there the components
+  its setters declared by their SOURCE (graphics § 40, L5), which needs every map of the material at once.
 - **Thread safety**: Atomic status + mutex-protected dependency lists
 
 ## The Neutral Resource Pattern (Critical!)

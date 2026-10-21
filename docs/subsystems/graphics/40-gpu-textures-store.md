@@ -1,6 +1,6 @@
 # The `GPUTextures` store — GPU-ready material textures (design, Oct 2026)
 
-> Status: L1 to L4 implemented (2026-10-21, § Implementation), the rest DESIGN. Item `gpu-textures-store` (`docs/todo/`). Owner decisions 2026-10-21 (T1–T15
+> Status: L1 to L5 implemented (2026-10-21, § Implementation), L6 DESIGN. Item `gpu-textures-store` (`docs/todo/`). Owner decisions 2026-10-21 (T1–T15
 > below). Builds on graphics § 39 (packing, block formats, the mip
 > filter, the baked assets) and § 30 (the compressed image path).
 
@@ -224,6 +224,23 @@ off; an entry without fingerprint is served and reported; the pipeline version i
   bake (no fingerprint) → served, one report per entry. Only the known `setGround` VUIDs.
 - ⚠️ Hashing reads every source of an entry at each development load (Sand002: four files, ~20 MB) — not decoded, once
   per planning; a product without its sources skips it.
+
+**L5 (2026-10-21)** — code-built materials (T4, T10). Owner decision: setters BY SOURCE, the texture setters kept.
+- `Material::TextureSource` {image (an Images name), channel, UV set, UV scale, UV offset, Direct3D normal flip} and the
+  overloads `setAlbedoComponent(source, enableAlpha)`, `setOpacityComponent`, `setNormalComponent`,
+  `setAmbientOcclusionComponent`, `setRoughnessComponent`, `setMetalnessComponent`, `setHeightComponent`,
+  `setAutoIlluminationComponent`, plus `setTextureSet()`: a declaration is RECORDED in the JSON definition format, and
+  resolved by the JSON code when the material finishes loading — `planGPUTextures()`, `planPackedTextures()`, then the
+  component's own `parse…Component()` and its dependency. A texture given explicitly (the former setters) is used as it
+  is. The roughness has no inversion here, as in JSON. A component set twice is refused (logged).
+- The hook: `Resources::ResourceTrait::onLoadFinishing()` (new, virtual, default true), called by
+  `setLoadSuccess(true)` before the dependencies are checked — the last moment a resource adds a dependency.
+- Verified (Linux, projet-alpha's `relief`, its own ground converted — projet-alpha's builtin docs § 6e): from the images
+  the same textures as before the conversion (`Pavement006-color_c#sRGB` BC7 sRGB, `#normal` BC5, the height; 2.6709 /
+  3.3398 MiB); with a bake of `Grounds/Pavement006` the three `GPUTextures/` entries, fresh; a temporary ambient
+  occlusion declared from the height image → "2 maps packed into 'Packed/Data/…height.r|#255|#255|…height.r'" (the
+  hidden repack, AO r, height a); a missing image → the store's default texture with a warning, as in JSON, a clean
+  exit. 0 `VUID-` (no `setGround`).
 
 ## Open questions (owner)
 

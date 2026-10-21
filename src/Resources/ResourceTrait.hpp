@@ -1178,6 +1178,21 @@ namespace EmEn::Resources
 			bool setLoadSuccess (bool status) noexcept;
 
 			/**
+			 * @brief Called by setLoadSuccess(true) just before the dependencies are checked: the LAST moment a resource
+			 * may still add a dependency. A material resolves there the sources its setters declared (graphics § 40, L5:
+			 * the GPU-ready textures and the repack need every map of the material at once).
+			 * @return bool False to fail the load (the resource then goes Failed, as on setLoadSuccess(false)).
+			 * @note Default implementation returns true (nothing to finish). Same thread as setLoadSuccess().
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			onLoadFinishing () noexcept
+			{
+				return true;
+			}
+
+			/**
 			 * @brief Callback invoked when all dependencies have completed loading.
 			 *
 			 * This virtual method is called automatically by checkDependencies() when all

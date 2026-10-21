@@ -27,7 +27,8 @@ textures with no texture compute at load, while a development build keeps workin
 - L4 DONE 2026-10-21: the bake's fingerprint (`Emeraude.Bake`) and the stale-entry fallback (T11);
   `Core/Graphics/Texture/CheckGPUTextures`.
   Follow-up: a libFuzzer target for `KTX2Decoder::readKeyValue()` (a parser of file data: bounded, not fuzzed yet).
-- L5: code-built materials (T10 hidden repack, T4 lookup). L6: `.gltf` materials (T9).
+- L5 DONE 2026-10-21: code-built materials declared by their source (`Material::TextureSource`), resolved by the
+  JSON code (T10 hidden repack, T4 lookup). L6: `.gltf` materials (T9).
 - The container-agnostic decoder (T7) when a second container arrives; the tokens beyond ambientCG's set (open
   question); the sources' recognition in `Images` (T13).
 - A store material as the runtime proof on the three OS.

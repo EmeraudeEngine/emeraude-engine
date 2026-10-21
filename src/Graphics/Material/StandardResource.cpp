@@ -2111,6 +2111,226 @@ namespace EmEn::Graphics::Material
 		return rewritten;
 	}
 
+	bool
+	StandardResource::declareSource (const char * key, ComponentType type, const TextureSource & source, Json::Value block, bool enableAlpha) noexcept
+	{
+		if ( source.image.empty() )
+		{
+			TraceError{ClassId} << "Material '" << this->name() << "': the " << key << " source has no image name !";
+
+			return false;
+		}
+
+		if ( !std::isfinite(source.uvScale.x()) || !std::isfinite(source.uvScale.y()) || !std::isfinite(source.uvOffset.x()) || !std::isfinite(source.uvOffset.y()) )
+		{
+			TraceError{ClassId} << "Material '" << this->name() << "': the " << key << " source has a non-finite UV scale or offset !";
+
+			return false;
+		}
+
+		if ( m_components.contains(type) || m_declaredSources.isMember(key) )
+		{
+			TraceError{ClassId} << "Material '" << this->name() << "': its " << key << " component is already set !";
+
+			return false;
+		}
+
+		/* NOTE: The JSON definition format (graphics § 40, L5): the declaration is resolved by the JSON code. */
+		Json::Value data{Json::objectValue};
+		data[Texture::JKResourceName] = source.image;
+
+		if ( source.channel != PixelFactory::Channel::Red )
+		{
+			data[Texture::JKSourceChannel] = static_cast< Json::UInt >(source.channel);
+		}
+
+		if ( source.uvChannel != 0 )
+		{
+			data[Texture::JKChannel] = static_cast< Json::UInt >(source.uvChannel);
+		}
+
+		if ( source.uvScale.x() != 1.0F || source.uvScale.y() != 1.0F )
+		{
+			data[Texture::JKUVWScale] = Json::Value{Json::arrayValue};
+			data[Texture::JKUVWScale].append(static_cast< double >(source.uvScale.x()));
+			data[Texture::JKUVWScale].append(static_cast< double >(source.uvScale.y()));
+			data[Texture::JKUVWScale].append(1.0);
+		}
+
+		if ( source.uvOffset.x() != 0.0F || source.uvOffset.y() != 0.0F )
+		{
+			data[Texture::JKUVWOffset] = Json::Value{Json::arrayValue};
+			data[Texture::JKUVWOffset].append(static_cast< double >(source.uvOffset.x()));
+			data[Texture::JKUVWOffset].append(static_cast< double >(source.uvOffset.y()));
+			data[Texture::JKUVWOffset].append(0.0);
+		}
+
+		if ( source.flipNormalY )
+		{
+			data[Texture::JKFlipNormalMapY] = true;
+		}
+
+		if ( enableAlpha )
+		{
+			data[Texture::JKEnableAlpha] = true;
+		}
+
+		block[JKType] = TextureString;
+		block[JKData] = std::move(data);
+		m_declaredSources[key] = std::move(block);
+
+		return true;
+	}
+
+	bool
+	StandardResource::setTextureSet (const std::string & setName) noexcept
+	{
+		if ( setName.empty() )
+		{
+			TraceError{ClassId} << "Material '" << this->name() << "': an empty texture set name is refused !";
+
+			return false;
+		}
+
+		m_declaredSources[JKTextureSet] = setName;
+
+		return true;
+	}
+
+	bool
+	StandardResource::setAlbedoComponent (const TextureSource & source, bool enableAlpha) noexcept
+	{
+		return this->declareSource(AlbedoString, ComponentType::Albedo, source, Json::Value{Json::objectValue}, enableAlpha);
+	}
+
+	bool
+	StandardResource::setOpacityComponent (const TextureSource & source, float amount) noexcept
+	{
+		Json::Value block{Json::objectValue};
+		block[JKAmount] = static_cast< double >(amount);
+
+		return std::isfinite(amount) && this->declareSource(OpacityString, ComponentType::Opacity, source, std::move(block), false);
+	}
+
+	bool
+	StandardResource::setNormalComponent (const TextureSource & source, float scale) noexcept
+	{
+		Json::Value block{Json::objectValue};
+		block[JKScale] = static_cast< double >(scale);
+
+		return std::isfinite(scale) && this->declareSource(NormalString, ComponentType::Normal, source, std::move(block), false);
+	}
+
+	bool
+	StandardResource::setAmbientOcclusionComponent (const TextureSource & source, float intensity) noexcept
+	{
+		Json::Value block{Json::objectValue};
+		block[JKAmount] = static_cast< double >(intensity);
+
+		return std::isfinite(intensity) && this->declareSource(AmbientOcclusionString, ComponentType::AmbientOcclusion, source, std::move(block), false);
+	}
+
+	bool
+	StandardResource::setRoughnessComponent (const TextureSource & source, float value) noexcept
+	{
+		Json::Value block{Json::objectValue};
+		block[JKValue] = static_cast< double >(value);
+
+		return std::isfinite(value) && this->declareSource(RoughnessString, ComponentType::Roughness, source, std::move(block), false);
+	}
+
+	bool
+	StandardResource::setMetalnessComponent (const TextureSource & source, float value) noexcept
+	{
+		Json::Value block{Json::objectValue};
+		block[JKValue] = static_cast< double >(value);
+
+		return std::isfinite(value) && this->declareSource(MetalnessString, ComponentType::Metalness, source, std::move(block), false);
+	}
+
+	bool
+	StandardResource::setHeightComponent (const TextureSource & source, float scale) noexcept
+	{
+		Json::Value block{Json::objectValue};
+		block[JKScale] = static_cast< double >(scale);
+
+		return std::isfinite(scale) && this->declareSource(HeightString, ComponentType::Displacement, source, std::move(block), false);
+	}
+
+	bool
+	StandardResource::setAutoIlluminationComponent (const TextureSource & source, float amount) noexcept
+	{
+		Json::Value block{Json::objectValue};
+		block[JKAmount] = static_cast< double >(amount);
+
+		return std::isfinite(amount) && this->declareSource(AutoIlluminationString, ComponentType::AutoIllumination, source, std::move(block), false);
+	}
+
+	bool
+	StandardResource::onLoadFinishing () noexcept
+	{
+		/* NOTE: Only the components declared by their source (L5): a JSON definition was resolved by load(). */
+		if ( m_declaredSources.empty() )
+		{
+			return true;
+		}
+
+		auto & serviceProvider = this->serviceProvider();
+		const auto declared = std::exchange(m_declaredSources, Json::Value{Json::objectValue});
+
+		/* The same resolution as a JSON definition: the GPU-ready textures, then the repack of the remaining sources. */
+		Json::Value resolved;
+		const Json::Value & planned = this->planGPUTextures(declared, resolved, serviceProvider) ? resolved : declared;
+		Json::Value packed;
+		const Json::Value & data = this->planPackedTextures(planned, packed, serviceProvider) ? packed : planned;
+
+		using Parser = bool (StandardResource::*)(const Json::Value &, Resources::AbstractServiceProvider &) noexcept;
+
+		const std::array< std::tuple< const char *, ComponentType, Parser >, 8 > parsers{{
+			{AlbedoString, ComponentType::Albedo, &StandardResource::parseAlbedoComponent},
+			{OpacityString, ComponentType::Opacity, &StandardResource::parseOpacityComponent},
+			{NormalString, ComponentType::Normal, &StandardResource::parseNormalComponent},
+			{AmbientOcclusionString, ComponentType::AmbientOcclusion, &StandardResource::parseAmbientOcclusionComponent},
+			{RoughnessString, ComponentType::Roughness, &StandardResource::parseRoughnessComponent},
+			{MetalnessString, ComponentType::Metalness, &StandardResource::parseMetalnessComponent},
+			{HeightString, ComponentType::Displacement, &StandardResource::parseHeightComponent},
+			{AutoIlluminationString, ComponentType::AutoIllumination, &StandardResource::parseAutoIlluminationComponent}
+		}};
+
+		for ( const auto & [key, type, parser] : parsers )
+		{
+			if ( !data.isMember(key) )
+			{
+				continue;
+			}
+
+			if ( !(this->*parser)(data, serviceProvider) )
+			{
+				TraceError{ClassId} << "Material '" << this->name() << "': unable to resolve its " << key << " source !";
+
+				return false;
+			}
+
+			const auto component = m_components.find(type);
+
+			if ( component == m_components.end() || component->second == nullptr || component->second->type() != Type::Texture )
+			{
+				TraceError{ClassId} << "Material '" << this->name() << "': its " << key << " source made no texture component !";
+
+				return false;
+			}
+
+			if ( const auto texture = component->second->textureResource(); !this->addDependency(texture) )
+			{
+				TraceError{ClassId} << "Material '" << this->name() << "': unable to link the texture of its " << key << " source !";
+
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	size_t
 	StandardResource::distinctTextureCount () const noexcept
 	{

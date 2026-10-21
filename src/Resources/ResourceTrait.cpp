@@ -625,6 +625,14 @@ namespace EmEn::Resources
 				break;
 		}
 
+		/* NOTE: The last moment to add a dependency: before the loading stage. */
+		if ( status && !this->onLoadFinishing() )
+		{
+			TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this->classLabel() << ") could not finish its declarations !";
+
+			status = false;
+		}
+
 		if ( status )
 		{
 			/* Set the resource in the loading stage.
