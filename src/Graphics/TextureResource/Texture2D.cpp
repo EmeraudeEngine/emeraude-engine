@@ -519,10 +519,20 @@ namespace EmEn::Graphics::TextureResource
 	bool
 	Texture2D::isBinaryAlphaMask () const noexcept
 	{
-		/* NOTE: Same reasoning as isGrayScale() — a block-compressed source would have to be decoded
-		 * to answer. "Not a mask" is the conservative reply: it leaves the material blended, which is
-		 * what the asset declared. */
-		if ( !this->isLoaded() || m_localData == nullptr )
+		if ( !this->isLoaded() )
+		{
+			return false;
+		}
+
+		/* NOTE: A block-compressed source cannot be inspected, but a bake records the answer in its container
+		 * (graphics § 40, L6); one that does not record it answers "not a mask", the conservative reply: it leaves the
+		 * material blended, which is what the asset declared. */
+		if ( m_compressedData != nullptr )
+		{
+			return m_compressedData->isBinaryAlphaMask();
+		}
+
+		if ( m_localData == nullptr )
 		{
 			return false;
 		}

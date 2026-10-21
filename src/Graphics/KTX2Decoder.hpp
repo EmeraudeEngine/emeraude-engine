@@ -107,6 +107,7 @@ namespace EmEn::Graphics
 			{
 				std::vector< CompressedMipLevel > mips; ///< Block-compressed levels, level 0 first.
 				VkFormat format{VK_FORMAT_UNDEFINED}; ///< Linear (UNORM) format of the blocks.
+				bool binaryAlphaMask{false}; ///< The container records its alpha as a binary coverage mask (KTX2Writer::AlphaCoverageKey).
 
 				/**
 				 * @brief Returns whether the decode produced usable data.
@@ -148,6 +149,17 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			static std::optional< std::string > readKeyValue (const std::filesystem::path & filepath, std::string_view key) noexcept;
+
+			/**
+			 * @brief Reads one value of a KTX2 container's key/value data, the container in memory (graphics § 40, L6: the
+			 * alpha coverage a bake recorded, read from a glTF's embedded or sidecar image).
+			 * @param bytes The whole container. Untrusted: every offset and length is checked against it.
+			 * @param key The key.
+			 * @return std::optional< std::string > The value (its terminating NUL removed), nothing when the bytes are not
+			 * a KTX2, are truncated, or have no such key.
+			 */
+			[[nodiscard]]
+			static std::optional< std::string > readKeyValue (std::span< const std::byte > bytes, std::string_view key) noexcept;
 
 			/**
 			 * @brief Transcodes a KTX2 blob to a block-compressed mip chain.

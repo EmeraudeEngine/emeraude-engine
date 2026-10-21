@@ -37,6 +37,7 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/KTX2Writer.hpp"
 #include "Graphics/TextureCompressor.hpp"
 #include "IO/IO.hpp"
 #include "PixelFactory/Types.hpp"
@@ -50,6 +51,88 @@ namespace EmEn::Graphics
 	{
 		/* The 12-byte KTX2 file identifier, as mandated by the KTX 2.0 specification. */
 		constexpr std::array< uint8_t, 12 > KTX2Identifier{0xABU, 0x4BU, 0x54U, 0x58U, 0x20U, 0x32U, 0x30U, 0xBBU, 0x0DU, 0x0AU, 0x1AU, 0x0AU};
+
+		/* NOTE: The KTX 2.0 header: the identifier (12 bytes), nine uint32 fields, then the index — dfdByteOffset,
+		 * dfdByteLength, kvdByteOffset, kvdByteLength (uint32, at byte 48). Little-endian, as every KTX2. */
+		constexpr uint64_t KTX2HeaderSize{64};
+		constexpr uint64_t KTX2KeyValueOffsetField{56};
+		/* NOTE: A bound on the key/value block read: a fingerprint is a few KiB. */
+		constexpr uint32_t MaxKeyValueBytes{1U << 20U};
+
+		/**
+		 * @brief Reads a little-endian uint32.
+		 * @pre offset + 4 <= bytes.size().
+		 * @param bytes The bytes.
+		 * @param offset The offset of the value.
+		 * @return uint32_t
+		 */
+		[[nodiscard]]
+		uint32_t
+		readU32 (std::span< const std::byte > bytes, size_t offset) noexcept
+		{
+			uint32_t value = 0;
+
+			for ( size_t index = 0; index < 4; ++index )
+			{
+				value |= static_cast< uint32_t >(std::to_integer< uint8_t >(bytes[offset + index])) << (8U * index);
+			}
+
+			return value;
+		}
+
+		/**
+		 * @brief Finds one value in a KTX2 key/value block (KTX 2.0 § 3.11).
+		 * @param data The block. Untrusted: every length is checked against it.
+		 * @param key The key.
+		 * @return std::optional< std::string > The value, its terminating NUL removed.
+		 */
+		[[nodiscard]]
+		std::optional< std::string >
+		findKeyValue (std::span< const std::byte > data, std::string_view key) noexcept
+		{
+			size_t offset = 0;
+
+			/* Each entry: keyAndValueByteLength (uint32), the key NUL-terminated, the value, padded to 4 bytes. */
+			while ( offset + 4 <= data.size() )
+			{
+				const auto length = readU32(data, offset);
+				offset += 4;
+
+				if ( length == 0 || length > data.size() - offset )
+				{
+					return std::nullopt;
+				}
+
+				const auto entry = data.subspan(offset, length);
+				const auto separator = std::ranges::find(entry, std::byte{0});
+
+				if ( separator != entry.end() )
+				{
+					const auto keyLength = static_cast< size_t >(separator - entry.begin());
+					std::string entryKey(keyLength, '\0');
+					std::ranges::transform(entry.first(keyLength), entryKey.begin(), [] (std::byte byte) { return static_cast< char >(std::to_integer< uint8_t >(byte)); });
+
+					if ( entryKey == key )
+					{
+						auto valueBytes = entry.subspan(keyLength + 1);
+
+						if ( !valueBytes.empty() && valueBytes.back() == std::byte{0} )
+						{
+							valueBytes = valueBytes.first(valueBytes.size() - 1);
+						}
+
+						std::string value(valueBytes.size(), '\0');
+						std::ranges::transform(valueBytes, value.begin(), [] (std::byte byte) { return static_cast< char >(std::to_integer< uint8_t >(byte)); });
+
+						return value;
+					}
+				}
+
+				offset += (static_cast< size_t >(length) + 3U) & ~size_t{3};
+			}
+
+			return std::nullopt;
+		}
 
 		/* Linear <-> sRGB pairs for every block format the engine can meet. The transcoder
 		 * always targets BC7; the remaining entries only matter for a KTX2 that already
@@ -220,33 +303,15 @@ namespace EmEn::Graphics
 	std::optional< std::string >
 	KTX2Decoder::readKeyValue (const std::filesystem::path & filepath, std::string_view key) noexcept
 	{
-		/* NOTE: The KTX 2.0 header: the identifier (12 bytes), nine uint32 fields, then the index — dfdByteOffset,
-		 * dfdByteLength, kvdByteOffset, kvdByteLength (uint32, at byte 48). Little-endian, as every KTX2. */
-		constexpr uint64_t HeaderSize{64};
-		constexpr uint64_t KVDOffsetField{56};
-		/* NOTE: A bound on the key/value block read: a fingerprint is a few KiB. */
-		constexpr uint32_t MaxKeyValueBytes{1U << 20U};
-
 		std::vector< std::byte > header;
 
-		if ( !Base::IO::fileGetRange(filepath, 0, HeaderSize, header) || header.size() < HeaderSize || !isKTX2(header) )
+		if ( !Base::IO::fileGetRange(filepath, 0, KTX2HeaderSize, header) || header.size() < KTX2HeaderSize || !isKTX2(header) )
 		{
 			return std::nullopt;
 		}
 
-		const auto readU32 = [] (std::span< const std::byte > bytes, size_t offset) noexcept {
-			uint32_t value = 0;
-
-			for ( size_t index = 0; index < 4; ++index )
-			{
-				value |= static_cast< uint32_t >(std::to_integer< uint8_t >(bytes[offset + index])) << (8U * index);
-			}
-
-			return value;
-		};
-
-		const auto kvdOffset = readU32(header, KVDOffsetField);
-		const auto kvdLength = readU32(header, KVDOffsetField + 4);
+		const auto kvdOffset = readU32(header, KTX2KeyValueOffsetField);
+		const auto kvdLength = readU32(header, KTX2KeyValueOffsetField + 4);
 
 		if ( kvdLength == 0 || kvdLength > MaxKeyValueBytes )
 		{
@@ -260,49 +325,26 @@ namespace EmEn::Graphics
 			return std::nullopt;
 		}
 
-		const std::span< const std::byte > data{block};
-		size_t offset = 0;
+		return findKeyValue(block, key);
+	}
 
-		/* Each entry: keyAndValueByteLength (uint32), the key NUL-terminated, the value, padded to 4 bytes. */
-		while ( offset + 4 <= data.size() )
+	std::optional< std::string >
+	KTX2Decoder::readKeyValue (std::span< const std::byte > bytes, std::string_view key) noexcept
+	{
+		if ( bytes.size() < KTX2HeaderSize || !isKTX2(bytes) )
 		{
-			const auto length = readU32(data, offset);
-			offset += 4;
-
-			if ( length == 0 || length > data.size() - offset )
-			{
-				return std::nullopt;
-			}
-
-			const auto entry = data.subspan(offset, length);
-			const auto separator = std::ranges::find(entry, std::byte{0});
-
-			if ( separator != entry.end() )
-			{
-				const auto keyLength = static_cast< size_t >(separator - entry.begin());
-				std::string entryKey(keyLength, '\0');
-				std::ranges::transform(entry.first(keyLength), entryKey.begin(), [] (std::byte byte) { return static_cast< char >(std::to_integer< uint8_t >(byte)); });
-
-				if ( entryKey == key )
-				{
-					auto valueBytes = entry.subspan(keyLength + 1);
-
-					if ( !valueBytes.empty() && valueBytes.back() == std::byte{0} )
-					{
-						valueBytes = valueBytes.first(valueBytes.size() - 1);
-					}
-
-					std::string value(valueBytes.size(), '\0');
-					std::ranges::transform(valueBytes, value.begin(), [] (std::byte byte) { return static_cast< char >(std::to_integer< uint8_t >(byte)); });
-
-					return value;
-				}
-			}
-
-			offset += (static_cast< size_t >(length) + 3U) & ~size_t{3};
+			return std::nullopt;
 		}
 
-		return std::nullopt;
+		const auto kvdOffset = readU32(bytes, KTX2KeyValueOffsetField);
+		const auto kvdLength = readU32(bytes, KTX2KeyValueOffsetField + 4);
+
+		if ( kvdLength == 0 || kvdLength > MaxKeyValueBytes || kvdOffset > bytes.size() || kvdLength > bytes.size() - kvdOffset )
+		{
+			return std::nullopt;
+		}
+
+		return findKeyValue(bytes.subspan(kvdOffset, kvdLength), key);
 	}
 
 	bool
@@ -395,6 +437,8 @@ namespace EmEn::Graphics
 		}
 
 		ktxTexture_Destroy(asBaseTexture(texture));
+
+		result.binaryAlphaMask = readKeyValue(bytes, KTX2Writer::AlphaCoverageKey) == KTX2Writer::BinaryAlphaCoverage;
 
 		return result;
 	}

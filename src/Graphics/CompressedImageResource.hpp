@@ -77,7 +77,8 @@ namespace EmEn::Graphics
 	 * @note **This resource is an opaque GPU payload, and that is deliberate.** It exposes no
 	 * `averageColor()`, no `isGrayScale()`, no per-pixel access and no `flipNormalMapY()` —
 	 * none of those can be answered without decoding the blocks, which would defeat the whole
-	 * point. Code that needs to *inspect* pixels wants @ref ImageResource, not this.
+	 * point. Code that needs to *inspect* pixels wants @ref ImageResource, not this. The one exception is
+	 * isBinaryAlphaMask(): a bake measures it on the pixels and records it in the container (graphics § 40, L6).
 	 *
 	 * @note The stored format is always the **linear** variant of the block layout. The sRGB
 	 * decision belongs to the consuming texture, which knows the usage (albedo and emissive
@@ -239,6 +240,20 @@ namespace EmEn::Graphics
 			height () const noexcept
 			{
 				return m_payload.mips.empty() ? 0 : m_payload.mips.front().height;
+			}
+
+			/**
+			 * @brief Returns whether the container records its alpha as a binary coverage mask
+			 * (KTX2Writer::AlphaCoverageKey) — the answer ImageResource::isBinaryAlphaMask() gives on the pixels it was
+			 * baked from, so a blended material is promoted to a cutout as on the source path (graphics § 40, L6).
+			 * @note False for a container that does not record it (a Basis Universal file, a bake before 2026-10-22).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isBinaryAlphaMask () const noexcept
+			{
+				return m_payload.binaryAlphaMask;
 			}
 
 			/**

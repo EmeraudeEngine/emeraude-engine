@@ -16,7 +16,9 @@ Three pieces, all decided **on the pixels, never on the declaration**:
    level means "the whole quad is opaque". ⚠️ The chain keeps filtering the UNCORRECTED level, or
    the gain compounds and the mask goes opaque.
 2. **`TextureResource::Abstract::isBinaryAlphaMask()`** — virtual, defaults to `false`, overridden
-   by `Texture2D`. A block-compressed source answers `false` (it would have to be decoded).
+   by `Texture2D`. A block-compressed source answers what its container RECORDS: a bake measures the
+   mask with `isBinaryMask()` and writes `Emeraude.AlphaCoverage = binary` (graphics § 40, L6, 2026-10-22);
+   a container without the key (Basis Universal, an older bake) answers `false`.
 3. **`Material::Interface::onBeforeCreation()`** — ⚠️⚠️ the ONLY window where a material may still
    change its FLAGS: creation bakes them into the descriptor set layout and the program-cache key,
    and the loaders returned long before. `StandardResource::promoteBinaryCoverageToCutout()` runs
@@ -25,9 +27,10 @@ Three pieces, all decided **on the pixels, never on the declaration**:
    it IS the GPU creation, and an override of it that forgot to chain left 133 materials uncreated
    and the window BLACK.
 
-⚠️⚠️ **None of it reaches a KTX2 asset.** `Sponza.ktx2.glb` keeps 84 of 84 images block-compressed
-(UASTC transcoded block-to-block, never decoded), so the mask is never pixels. This path is
-**unverified end to end at runtime** — no shipped scene exercises it yet.
+⚠️⚠️ **Only a baked KTX2 says it is a mask.** `Sponza.ktx2.glb` keeps 84 of 84 images block-compressed
+(UASTC transcoded block-to-block, never decoded), so its mask is never pixels and never promoted. A container
+baked by the engine's tools since 2026-10-22 records the answer (graphics § 40, L6: the cypress package baked in
+place is promoted as from its PNG sources, 0.16 apart against a noise of 0.40).
 
 ⚠️⚠️ **A FIXED threshold loses a SPARSE mask at distance, and Castaño cannot save it** (forest, 2026-09-23).
 The conifer needle card (`leaf007-alpha`, a red-channel JPEG mask) is **23 %** opaque. Box-filtered, its

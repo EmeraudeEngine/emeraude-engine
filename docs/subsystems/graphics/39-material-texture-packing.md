@@ -423,6 +423,9 @@ decode, no transcode, no encode. Three pieces:
   on the recipe, the baker's hash and the zstd level. The textures stay behind `KHR_texture_basisu` (owner decision:
   the file is for Emeraude only — the extension requires Basis payloads; fastgltf refuses an unknown required
   extension, which ruled out a vendor one without patching it).
+  Since 2026-10-22 (graphics § 40, L6) it also bakes a `.gltf` IN PLACE — the containers as files beside it, its
+  recipes read from its own images when no manifest is given — and a baked container records whether its alpha is a
+  binary coverage mask (`Emeraude.AlphaCoverage`), so a blended material is promoted to a cutout as on the source path.
 
 **Sponza** (projet-alpha.data `glTF/Sponza.baked.glb` + `Sponza.bake.json`, 2026-10-21): the 84 textures of
 `Sponza.ktx2.glb` re-baked from the package's PNG sources at full resolution (31 materials, 89 slots); 1443 MB against

@@ -42,6 +42,7 @@
 #include <vector>
 
 /* Local inclusions. */
+#include "Graphics/AlphaCoverage.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/KTX2Writer.hpp"
 #include "Graphics/TextureCompressor.hpp"
@@ -418,6 +419,10 @@ namespace EmEn::TextureBake
 		}
 
 		const auto format = Graphics::TextureCompressor::selectFormat(packed, arguments.colour, arguments.normal);
+		/* NOTE: Measured on the pixels the source path would have measured: the container cannot be inspected once
+		 * written, so it records the answer (graphics § 40, L6). Only BC7 keeps an alpha: a BC5 / BC4 container never
+		 * claims one. */
+		const auto binaryAlphaMask = format == Graphics::BlockFormat::BC7 && Graphics::AlphaCoverage::isBinaryMask(packed);
 		const auto levels = compressor.compress(packed, 0, format, arguments.colour);
 
 		if ( levels.empty() )
@@ -435,12 +440,12 @@ namespace EmEn::TextureBake
 			return false;
 		}
 
-		if ( !Graphics::KTX2Writer::write(arguments.output, Graphics::TextureCompressor::vulkanFormat(format, arguments.colour), levels, arguments.zstdLevel, arguments.fingerprint) )
+		if ( !Graphics::KTX2Writer::write(arguments.output, Graphics::TextureCompressor::vulkanFormat(format, arguments.colour), levels, arguments.zstdLevel, arguments.fingerprint, binaryAlphaMask) )
 		{
 			return false;
 		}
 
-		std::cout << Base::IO::toU8String(arguments.output) << ' ' << Graphics::to_cstring(format) << ' ' << width << 'x' << height << ' ' << levels.size() << " levels\n";
+		std::cout << Base::IO::toU8String(arguments.output) << ' ' << Graphics::to_cstring(format) << ' ' << width << 'x' << height << ' ' << levels.size() << " levels" << (binaryAlphaMask ? ", alpha: binary coverage mask" : "") << '\n';
 
 		return true;
 	}

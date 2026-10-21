@@ -10,8 +10,8 @@ with every validation it carries.
 | `fuzz_wad` | `Scenes/Loaders/WADParser.cpp`, `WAD::parse()` | 2026-10-18 |
 | `fuzz_fbx` | `Scenes/Loaders/FBXParser.cpp`, `FBX::analyse()` + `FBX::analyseClipsOnly()` (ufbx linked from the external dependencies) | 2026-10-18 |
 | `fuzz_usd` | `Scenes/Loaders/USDParser.cpp` + `USDZArchive.cpp`: `USD::composeStage()`, `USD::analyse()`, `USD::forEachMesh()` (lightusd linked from the external dependencies, UBSan's `vptr` check off: lightusd has no RTTI) | 2026-10-18 |
-
 | `fuzz_gltf` | `Scenes/Loaders/GLTFParser.cpp`: `GLTF::parse()` + `GLTF::analyse()` (fastgltf, simdjson, meshoptimizer and Draco linked from the external dependencies) | 2026-10-18 |
+| `fuzz_ktx2` | `Graphics/KTX2Decoder.cpp`: `KTX2Decoder::readKeyValue()` over a container in memory (the bake's fingerprint and alpha coverage, graphics § 40; libktx and zstd linked from the external dependencies) | 2026-10-22 |
 
 The four scene loaders are covered (WAD, FBX, USD, glTF): the former engine item `engine-fuzz-harness-for-loaders`
 is done.
@@ -42,6 +42,9 @@ hermetic: a USDZ resolves against its own table, a plain layer's resolver refuse
 glTF: the self-contained models of projet-alpha's `glTF-Sample-Assets` submodule (`.glb` and `glTF-Embedded` under
 256 KB), plus the small Draco, meshopt and quantized variants with their `.bin` folded into `data:` uris (a seed with
 an external file reads nothing: every uri is confined to an empty directory). 90 seeds.
+
+KTX2: the first 4 KiB of baked containers (the header and the key/value block, before the levels), with and without
+`Emeraude.Bake` / `Emeraude.AlphaCoverage`. 13 seeds.
 
 ## Seeing inside a third-party library
 

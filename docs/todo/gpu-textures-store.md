@@ -26,12 +26,14 @@ textures with no texture compute at load, while a development build keeps workin
   (the engine's grouping, `TexturePacker::plan()`). Follow-up: parallel baking for large stores (sequential now).
 - L4 DONE 2026-10-21: the bake's fingerprint (`Emeraude.Bake`) and the stale-entry fallback (T11);
   `Core/Graphics/Texture/CheckGPUTextures`.
-  Follow-up: a libFuzzer target for `KTX2Decoder::readKeyValue()` (a parser of file data: bounded, not fuzzed yet).
 - L5 DONE 2026-10-21: code-built materials declared by their source (`Material::TextureSource`), resolved by the
-  JSON code (T10 hidden repack, T4 lookup). L6: `.gltf` materials (T9).
+  JSON code (T10 hidden repack, T4 lookup).
+- L6 DONE 2026-10-22 (T9 revised: a glTF never looks in `GPUTextures`): `tools/gltf-bake-textures.py` bakes a `.gltf` in
+  place (sidecar KTX2 files); every baked container records its binary alpha coverage (`Emeraude.AlphaCoverage`), read
+  by `CompressedImageResource`; `fuzz_ktx2`. Follow-up item: `gltf-baked-textures-fingerprint`.
 - The container-agnostic decoder (T7) when a second container arrives; the tokens beyond ambientCG's set (open
   question); the sources' recognition in `Images` (T13).
-- A store material as the runtime proof on the three OS.
+- A store material as the runtime proof on the three OS (L1–L6 sent to the peers once pushed).
 
 ## References
 

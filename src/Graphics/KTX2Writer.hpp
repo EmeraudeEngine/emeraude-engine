@@ -73,6 +73,15 @@ namespace EmEn::Graphics
 			static constexpr auto BakeFingerprintKey{"Emeraude.Bake"};
 
 			/**
+			 * @brief The key/value key that records the alpha coverage of the baked pixels (graphics § 40, L6): a
+			 * container cannot be inspected without decoding it, so the bake measures what the source path would have.
+			 */
+			static constexpr auto AlphaCoverageKey{"Emeraude.AlphaCoverage"};
+
+			/** @brief The AlphaCoverageKey value of an alpha that is a binary coverage mask (AlphaCoverage::isBinaryMask()). */
+			static constexpr auto BinaryAlphaCoverage{"binary"};
+
+			/**
 			 * @brief Writes a mip chain to a KTX2 file.
 			 * @pre The levels are level 0 (largest) first, each one the size of its dimensions in its format, the
 			 * dimensions halving down the chain (`max(1, base >> level)`) — checked, a mismatch is refused.
@@ -82,10 +91,12 @@ namespace EmEn::Graphics
 			 * @param zstdLevel The zstd supercompression level (1–22, lossless: the file is smaller, the blocks the
 			 * same), 0 for none.
 			 * @param bakeFingerprint The bake's fingerprint, written under BakeFingerprintKey when not empty.
+			 * @param binaryAlphaMask Whether the pixels' alpha is a binary coverage mask: AlphaCoverageKey is then written
+			 * as BinaryAlphaCoverage (absent otherwise — the answer of a container without it).
 			 * @return bool False, with an error, on a refused input or a libktx / file failure (nothing is left half
 			 * written: the container is built in memory first).
 			 */
 			[[nodiscard]]
-			static bool write (const std::filesystem::path & filepath, VkFormat format, std::span< const CompressedMipLevel > levels, uint32_t zstdLevel, std::string_view bakeFingerprint = {}) noexcept;
+			static bool write (const std::filesystem::path & filepath, VkFormat format, std::span< const CompressedMipLevel > levels, uint32_t zstdLevel, std::string_view bakeFingerprint = {}, bool binaryAlphaMask = false) noexcept;
 	};
 }

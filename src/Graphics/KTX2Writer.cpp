@@ -135,7 +135,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	KTX2Writer::write (const std::filesystem::path & filepath, VkFormat format, std::span< const CompressedMipLevel > levels, uint32_t zstdLevel, std::string_view bakeFingerprint) noexcept
+	KTX2Writer::write (const std::filesystem::path & filepath, VkFormat format, std::span< const CompressedMipLevel > levels, uint32_t zstdLevel, std::string_view bakeFingerprint, bool binaryAlphaMask) noexcept
 	{
 		const auto blockBytes = blockBytesOf(format);
 
@@ -205,6 +205,18 @@ namespace EmEn::Graphics
 			if ( const auto error = ktxHashList_AddKVPair(&texture->kvDataHead, BakeFingerprintKey, static_cast< unsigned int >(value.size() + 1), value.c_str()); error != KTX_SUCCESS )
 			{
 				TraceError{ClassId} << "Unable to store the bake fingerprint of '" << filepath << "' : " << ktxErrorString(error);
+
+				return false;
+			}
+		}
+
+		if ( binaryAlphaMask )
+		{
+			const std::string value{BinaryAlphaCoverage};
+
+			if ( const auto error = ktxHashList_AddKVPair(&texture->kvDataHead, AlphaCoverageKey, static_cast< unsigned int >(value.size() + 1), value.c_str()); error != KTX_SUCCESS )
+			{
+				TraceError{ClassId} << "Unable to store the alpha coverage of '" << filepath << "' : " << ktxErrorString(error);
 
 				return false;
 			}

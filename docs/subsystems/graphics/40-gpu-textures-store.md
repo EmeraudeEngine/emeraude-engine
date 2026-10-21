@@ -1,7 +1,7 @@
 # The `GPUTextures` store — GPU-ready material textures (design, Oct 2026)
 
-> Status: L1 to L5 implemented (2026-10-21, § Implementation), L6 DESIGN. Item `gpu-textures-store` (`docs/todo/`). Owner decisions 2026-10-21 (T1–T15
-> below). Builds on graphics § 39 (packing, block formats, the mip
+> Status: L1 to L6 implemented (2026-10-21/22, § Implementation). Item `gpu-textures-store` (`docs/todo/`). Owner
+> decisions 2026-10-21 (T1–T15 below; T9 revised 2026-10-22). Builds on graphics § 39 (packing, block formats, the mip
 > filter, the baked assets) and § 30 (the compressed image path).
 
 ## Why
@@ -42,6 +42,10 @@ compute at load, a development build from the sources with the cache at work, an
   kept compatible. (On 2026-10-21 `Images` holds no `.ktx2`.)
 - **T9 — glTF: only a glTF with SEPARATE files (`.gltf`)** also looks its materials up in `GPUTextures` by material
   name; a `.glb` keeps its embedded images (§ 39 § Baked assets).
+  **REVISED 2026-10-22 (owner, L6): a glTF never looks in `GPUTextures`.** A `.gltf` is made GPU-ready by baking its
+  textures INTO the asset: `tools/gltf-bake-textures.py` writes them as KTX2 files beside it and points its images to
+  them (`KHR_texture_basisu`), which the loader already reads. The asset stays self-contained, no set-name rule is
+  invented for glTF materials, the loader is unchanged.
 - **T10 — A material built in C++ from separate sources gets the repack as a HIDDEN step**, as a JSON, glTF or FBX
   material does today (only those three and the Toolkit are repacked on 2026-10-21): the code declares components, the
   engine packs.
@@ -102,7 +106,8 @@ Guardrails (each one a refusal, logged with the file and the reason):
 ## Production (T6)
 
 The existing pieces — `EmeraudeTextureBake` (one canonical texture from its channel sources: `PackRecipe`,
-`TextureCompressor`, the mip chain, `KTX2Writer`) and `tools/gltf-bake-textures.py` (a glTF's textures) — grow into a
+`TextureCompressor`, the mip chain, `KTX2Writer`) and `tools/gltf-bake-textures.py` (a glTF's textures: a GLB, or a
+`.gltf` and its files since L6) — grow into a
 tool that reads a MATERIAL definition (its components and their images) and writes the material's `GPUTextures`
 entries, named by the convention. Later, possibly: a console / MCP command that bakes a material loaded in the running
 engine.
@@ -131,7 +136,8 @@ served.
 ## Implementation
 
 The lots: **L1** the store, the name and its guardrails; L2 the resolution for JSON materials; L3 the bake tool; L4 the
-fingerprint and the stale-entry fallback; L5 code-built materials (T10, T4); L6 `.gltf` materials (T9).
+fingerprint and the stale-entry fallback; L5 code-built materials (T10, T4); L6 `.gltf` assets baked in place (T9
+revised) and the alpha coverage a container records.
 
 **L1 (2026-10-21)**
 - emeraude-base `PixelFactory/TextureName` (owner: the parser lives in the base, tested): `TextureName::parse(name,
@@ -241,6 +247,42 @@ off; an entry without fingerprint is served and reported; the pipeline version i
   occlusion declared from the height image → "2 maps packed into 'Packed/Data/…height.r|#255|#255|…height.r'" (the
   hidden repack, AO r, height a); a missing image → the store's default texture with a warning, as in JSON, a clean
   exit. 0 `VUID-` (no `setGround`).
+
+**L6 (2026-10-22)** — a `.gltf` baked in place (T9 revised), and the alpha coverage of a baked container.
+- `tools/gltf-bake-textures.py IN.gltf [MANIFEST.json --sources DIR | --flip-normal-y] --baker PATH --out OUT.gltf
+  [--textures DIR]`: the containers are written as files in `--textures` (default: the output's name, `.textures` for
+  its extension), named `<material>.<glTF slot>.ktx2`, the images point to them; the buffers are not touched, their uris
+  rewritten relative to the output. Without a manifest the recipes are read from the glTF itself: each textured slot its
+  own image file, channel for channel; `metallicRoughness` and `occlusion` share one image (R the occlusion's R, G B the
+  metallicRoughness texture's, 255 for a slot the material lacks — the canonical layout of § 39); refused when the two
+  read different `texCoord` sets. `--flip-normal-y` for an asset in the Direct3D convention (Intel's Sponza packages).
+  The GLB mode is unchanged (a manifest), its output byte-identical to `Sponza.baked.glb`.
+- Refused BEFORE anything is baked: a buffer or the textures directory outside the output's directory (the loader
+  confines every uri to the asset's directory, owner decision 2026-10-18), an embedded or already-compressed image
+  without a manifest, a missing image file. A container of the textures directory the output does not use is reported,
+  never deleted.
+- The tool's cache key now holds the CONTENT of the sources (SHA-256) beside the recipe, the baker's hash and the zstd
+  level: a repainted source is baked again on the next run (before: only a recipe or baker change was seen).
+  Owner decision: no fingerprint checked at load for a glTF (engine item `gltf-baked-textures-fingerprint`).
+- **The alpha coverage a container records** (owner decision 2026-10-22). Found by L6: a block-compressed image cannot be
+  inspected, so `Texture2D::isBinaryAlphaMask()` answered "not a mask" for every KTX2 — a blended material whose alpha
+  is a binary mask (Sponza's cypress leaves, 99.86 % binary) stayed BLEND where the source path promotes it to a cutout
+  (`StandardResource::promoteBinaryCoverageToCutout()`). The bake now measures it on the packed pixels with the runtime's
+  rule (`AlphaCoverage::isBinaryMask()`, before the compression) and `KTX2Writer` records it under
+  `Emeraude.AlphaCoverage` = `binary` (`AlphaCoverageKey`, `BinaryAlphaCoverage`; absent otherwise). `KTX2Decoder::
+  decodeCompressed()` reads it (`Result::binaryAlphaMask`, through the new in-memory `readKeyValue(bytes, key)`),
+  `CompressedImageResource::isBinaryAlphaMask()` and `Texture2D` answer it. Every KTX2 path gains it: `GPUTextures`, a
+  baked GLB, a baked `.gltf`. A container baked before 2026-10-22 (or a Basis Universal one) has no key: not a mask, as
+  before — `Sponza.baked.glb` included (its demo forces `LeafSpring` to a cutout by name, `cutoutMaterialNames`).
+- libFuzzer target `fuzz_ktx2` (`src/Fuzzing/`): `readKeyValue()` over a container in memory, both keys; 779 million
+  runs in 180 s from 13 container headers, 0 crash (closes L4's follow-up).
+- Verified (Linux, `relief` + the console's `loadGLTF()`, a copy of Intel's cypress package): the four sidecars
+  byte-identical to the cypress images of `Sponza.baked.glb` (same recipes); loaded "4 of 4 image(s) kept
+  block-compressed", 182.58 MiB / 27 bindings as from the PNG sources, their 13 × 4 levels byte-identical to the
+  runtime's texture-cache blobs; with the alpha key the image equals the source path's (0.16 against a run-to-run noise
+  of 0.40, spectrum 0.99–1.02) where it was 0.83 apart without it (the leaves blended: spectrum 0.64 in the highest
+  band); a JSON material `Test/Leaf` (albedo + binary opacity, so BLEND) promoted on both paths, its `GPUTextures` entry
+  `Test/Leaf.Color-Opacity` against the sources 0.06 apart. 0 `VUID-` (the known `setGround` ones only).
 
 ## Open questions (owner)
 
