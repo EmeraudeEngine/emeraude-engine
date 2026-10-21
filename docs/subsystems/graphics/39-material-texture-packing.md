@@ -367,6 +367,12 @@ store holds 79 of them (100 Mpx: 384 MiB as RGBA, 96 MiB as one channel); `land0
 Measured (Linux): `relief` + Sand002 (its AO and height are L files) within noise (1.25, noise 1.3), the same formats;
 `Doors/MetalDoor001` (an L sRGB albedo) BC7_SRGB, the image neutral (R, G, B 93.2 / 93.4 / 93.5), its height BC4;
 `terrain` (the L heightmap) loads, 0 VUID. Not exercised: the R8_SRGB fallback (no BC-less device here).
+**Validated on the three OS (2026-10-21):** macOS (M6, MoltenVK, paranoid 0 warning) and Windows (MSVC /W4 /WX Release +
+Debug, the RT lane): Sand002 and Grid003 within noise, MetalDoor001 BC7_SRGB and neutral (macOS 44.2 / 47.1 / 51.7 at its
+pinned exposure, Windows 87.0 / 87.5 / 88.2), the terrain heightmap loads, only the known `setGround` VUIDs. R8_SRGB in
+practice (Windows, vulkaninfo): the Intel RaptorLake-S iGPU does not support it at all; the RTX 3500 Ada samples and
+filters it but cannot BLIT into it — the uncompressed path builds its mips by GPU blit, so `supportsGreyScaleColour()`
+rightly refuses on both and that path uploads the RGBA expansion (the BC path is taken anyway on every BC device).
 
 ⚠️ **Measurement trap met here**: a run on a COLD texture cache (the first after the format change) encodes on the
 workers for tens of seconds — the ocean's 120 frames ~40 s — and a capture 6 s after the ground swap caught a scene
