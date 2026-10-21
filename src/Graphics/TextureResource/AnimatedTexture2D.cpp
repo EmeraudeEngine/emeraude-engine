@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -49,6 +50,7 @@
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/Processor.hpp"
+#include "PixelFactory/Types.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Container.hpp"
 #include "SettingKeys.hpp"
@@ -206,7 +208,12 @@ namespace EmEn::Graphics::TextureResource
 			/* NOTE: The compressed path's chain, built on the CPU for every frame (MipChain::build(), like Texture2D) and
 			 * uploaded layer by layer, nothing blitted. One-channel colour frames (grey-scale sRGB images) need R8_SRGB,
 			 * whose sampling is optional in Vulkan: without it every level is uploaded as its RGBA expansion. */
-			const auto expandGreyColour = this->isSRGB() && m_localData->data(0).colorCount() == 1 && !Texture2D::supportsGreyScaleColour(renderer);
+			const auto greyColourSupported = !this->isSRGB() || Texture2D::supportsGreyScaleColour(renderer);
+			/* NOTE: Frames grey and opaque by their CONTENT but stored in RGB(A) go up as one channel when EVERY frame is
+			 * (the BC path's BC4 rule, Texture2D's uncompressed path; owner, 2026-10-21). */
+			const auto reduceToGrey = m_localData->data(0).colorCount() == 4 && !this->isNormalMap() && greyColourSupported &&
+				std::ranges::all_of(m_localData->frames(), [] (const auto & frame) { return TextureCompressor::isOpaqueGrey(frame.pixmap()); });
+			const auto expandGreyColour = m_localData->data(0).colorCount() == 1 && !greyColourSupported;
 			const MipChain::Treatment treatment{
 				.sRGB = this->isSRGB(),
 				.normalMap = this->isNormalMap(),
@@ -219,7 +226,14 @@ namespace EmEn::Graphics::TextureResource
 
 			for ( const auto & frame : m_localData->frames() )
 			{
-				const auto chainBuilt = MipChain::build(frame.pixmap(), mipLevels, treatment, [&levels, expandGreyColour] (uint32_t /*level*/, const Base::PixelFactory::Pixmap< uint8_t > & pixmap) {
+				std::optional< Base::PixelFactory::Pixmap< uint8_t > > grey;
+
+				if ( reduceToGrey )
+				{
+					grey.emplace(Base::PixelFactory::Processor< uint8_t >::extractChannel(frame.pixmap(), Base::PixelFactory::Channel::Red));
+				}
+
+				const auto chainBuilt = MipChain::build(grey.has_value() ? *grey : frame.pixmap(), mipLevels, treatment, [&levels, expandGreyColour] (uint32_t /*level*/, const Base::PixelFactory::Pixmap< uint8_t > & pixmap) {
 					levels.emplace_back(expandGreyColour ? Base::PixelFactory::Processor< uint8_t >::toRGBA(pixmap) : pixmap);
 
 					return true;

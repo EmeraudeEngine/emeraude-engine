@@ -50,6 +50,7 @@
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/Processor.hpp"
+#include "PixelFactory/Types.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Container.hpp"
 #include "SettingKeys.hpp"
@@ -381,9 +382,21 @@ namespace EmEn::Graphics::TextureResource
 			 * (MipChain::build(): the Kaiser, an sRGB colour in linear light, the dilated holes, the held coverage, the unit
 			 * normals) and uploaded as it is, nothing blitted — the skipped levels (D5) dropped. */
 			const auto chainLevels = std::min(fullChain, mipLevels + skipped);
+			const auto greyColourSupported = !this->isSRGB() || supportsGreyScaleColour(renderer);
+			/* NOTE: An image grey and opaque by its CONTENT but stored in RGB(A) (a palette PNG, a grey RGB file) goes up as
+			 * one channel, as the BC path chooses BC4 by content (TextureCompressor::isOpaqueGrey(); owner, 2026-10-21) —
+			 * a colour only where the device supports R8_SRGB. */
+			std::optional< Base::PixelFactory::Pixmap< uint8_t > > greyPixels;
+
+			if ( pixels.colorCount() == 4 && !this->isNormalMap() && greyColourSupported && TextureCompressor::isOpaqueGrey(pixels) )
+			{
+				greyPixels.emplace(Base::PixelFactory::Processor< uint8_t >::extractChannel(pixels, Base::PixelFactory::Channel::Red));
+			}
+
+			const auto & chainBase = greyPixels.has_value() ? *greyPixels : pixels;
 			/* NOTE: A one-channel colour (a grey-scale sRGB image) needs R8_SRGB, whose sampling is optional in Vulkan:
 			 * without it every level is uploaded as its RGBA expansion (graphics § 39, D8 step 2). */
-			const auto expandGreyColour = this->isSRGB() && pixels.colorCount() == 1 && !supportsGreyScaleColour(renderer);
+			const auto expandGreyColour = chainBase.colorCount() == 1 && !greyColourSupported;
 			const MipChain::Treatment treatment{
 				.sRGB = this->isSRGB(),
 				.normalMap = this->isNormalMap(),
@@ -393,7 +406,7 @@ namespace EmEn::Graphics::TextureResource
 			std::vector< Base::PixelFactory::Pixmap< uint8_t > > levels;
 			levels.reserve(chainLevels - skipped);
 
-			const auto chainBuilt = MipChain::build(pixels, chainLevels, treatment, [&levels, skipped, expandGreyColour] (uint32_t level, const Base::PixelFactory::Pixmap< uint8_t > & pixmap) {
+			const auto chainBuilt = MipChain::build(chainBase, chainLevels, treatment, [&levels, skipped, expandGreyColour] (uint32_t level, const Base::PixelFactory::Pixmap< uint8_t > & pixmap) {
 				if ( level >= skipped )
 				{
 					levels.emplace_back(expandGreyColour ? Base::PixelFactory::Processor< uint8_t >::toRGBA(pixmap) : pixmap);

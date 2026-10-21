@@ -514,6 +514,13 @@ UVs); the **uncompressed path** rebuilt on the same chain in the same lot.
   no `TRANSFER_SRC`, each level at a 4-byte offset in the staging buffer — a one-channel level may be any size).
   Before, that path blitted a 2 × 2 box on the GPU: no dilation, no coverage, no unit normals although the shaders
   reconstruct Z (item `alpha-mask-textures-lose-coverage-and-colour-in-the-mip-chain` point 3).
+- **Grey by content, one channel** (owner, 2026-10-21, found by macOS-PA): an image grey and opaque by its CONTENT but
+  stored in RGB(A) — a palette PNG (`Metals/Grid003-height`, mode P), a grey RGB file — is BC4 on the BC path
+  (`selectFormat()` reads the content) and went up as RGBA8 on the uncompressed one (the file's channels, D8 step 2
+  keeps one channel for L files only). The uncompressed path now extracts its red channel first
+  (`TextureCompressor::isOpaqueGrey()`; an animated texture when EVERY frame is), a colour only where R8_SRGB is
+  supported: `Grid003-height` R8_UNORM 512² 10 mips 0.337 MiB instead of 1.344, Grid003 12.0 → 11.0 MiB, the image
+  1.91 from the BC path (Linux).
 - **`Core/Graphics/Texture/BlockCompression`** (default true, owner decision): false takes the uncompressed path on a
   BC-capable device — an A/B of the encoders, the only way to exercise the path a device without BC takes. A KTX2
   source ships its blocks: unaffected.
