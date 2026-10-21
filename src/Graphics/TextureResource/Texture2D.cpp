@@ -176,6 +176,16 @@ namespace EmEn::Graphics::TextureResource
 		return true;
 	}
 
+	bool
+	Texture2D::supportsGreyScaleColour (Renderer & renderer) noexcept
+	{
+		constexpr VkFormatFeatureFlags Needed = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT | VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT;
+
+		const auto properties = renderer.device()->physicalDevice()->getFormatProperties(VK_FORMAT_R8_SRGB);
+
+		return (properties.optimalTilingFeatures & Needed) == Needed;
+	}
+
 	uint32_t
 	Texture2D::skippedMipLevels (Settings & settings) const noexcept
 	{
@@ -378,6 +388,13 @@ namespace EmEn::Graphics::TextureResource
 
 					reducedPixels.reset();
 				}
+			}
+
+			/* NOTE: A one-channel colour (a grey-scale sRGB image) needs R8_SRGB, whose sampling and blitting are
+			 * optional in Vulkan: without them it is uploaded as its RGBA expansion (graphics § 39, D8 step 2). */
+			if ( this->isSRGB() && (reducedPixels.has_value() ? *reducedPixels : pixels).colorCount() == 1 && !supportsGreyScaleColour(renderer) )
+			{
+				reducedPixels = Base::PixelFactory::Processor< uint8_t >::toRGBA(reducedPixels.has_value() ? *reducedPixels : pixels);
 			}
 
 			const auto & uploaded = reducedPixels.has_value() ? *reducedPixels : pixels;

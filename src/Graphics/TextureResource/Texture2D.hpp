@@ -430,6 +430,15 @@ namespace EmEn::Graphics::TextureResource
 			[[nodiscard]]
 			std::shared_ptr< CompressedImageResource > compressedData () noexcept;
 
+			/**
+			 * @brief Returns whether the device samples, filters and blits R8_SRGB (a one-channel colour image, uploaded
+			 * uncompressed): optional in Vulkan, R8_UNORM is not.
+			 * @param renderer A reference to the renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool supportsGreyScaleColour (Renderer & renderer) noexcept;
+
 		private:
 
 			/**

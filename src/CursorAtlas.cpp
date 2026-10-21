@@ -28,10 +28,18 @@
 
 /* STL inclusions. */
 #include <ranges>
+#include <utility>
+
+/* Third-party inclusions. */
+#include <GLFW/glfw3.h>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "CoreTypes.hpp"
 #include "Graphics/ImageResource.hpp"
+#include "PixelFactory/Processor.hpp"
 #include "Tracer.hpp"
+#include "Window.hpp"
 
 namespace EmEn
 {
@@ -129,11 +137,17 @@ namespace EmEn
 	void
 	CursorAtlas::setCursor (Window & window, std::string_view label, PixelFactory::Pixmap< uint8_t > pixmap, const std::array< int, 2 > & hotSpot) noexcept
 	{
+		/* NOTE: GLFW takes RGBA: any other image (a grey-scale image file keeps one channel) is expanded first. */
 		if ( pixmap.colorCount() != 4 )
 		{
-			TraceError{ClassId} << "A cursor needs a 4 channels image !";
+			pixmap = PixelFactory::Processor< uint8_t >::toRGBA(pixmap);
 
-			return;
+			if ( !pixmap.isValid() )
+			{
+				TraceError{ClassId} << "The cursor image '" << label << "' cannot be expanded to RGBA !";
+
+				return;
+			}
 		}
 
 		/* Heterogeneous lookup: no allocation if cursor already exists. */

@@ -42,6 +42,7 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/TextureCache.hpp"
 #include "Graphics/TextureCompressor.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
 #include "Logging/Severity.hpp"
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Pixmap.hpp"
@@ -198,6 +199,15 @@ namespace EmEn::Graphics::TextureResource
 
 		if ( !useBlockCompression || !this->createCompressedImage(renderer, mipLevels) )
 		{
+			/* NOTE: One-channel colour frames (grey-scale sRGB images) need R8_SRGB, optional in Vulkan: refused rather
+			 * than shown wrong (graphics § 39, D8 step 2 — the BC path above takes them on every BC-capable GPU). */
+			if ( this->isSRGB() && m_localData->data(0).colorCount() == 1 && !Texture2D::supportsGreyScaleColour(renderer) )
+			{
+				TraceError{ClassId} << "The animated texture '" << this->name() << "' has grey-scale colour frames and the device supports neither block compression nor R8_SRGB !";
+
+				return false;
+			}
+
 			/* Create a Vulkan image. */
 			m_image = std::make_shared< Vulkan::Image >(
 				renderer.device(),

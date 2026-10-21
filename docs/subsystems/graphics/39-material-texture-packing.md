@@ -348,6 +348,26 @@ error of the normal; |d| /255 of a height):
 BC4 is a little less exact than BC7 on a grey map (it spends half the bytes on it), still under 2.5 % at the 99th
 percentile; BC5 is two to three times more exact than BC7 on a normal map for the same bytes.
 
+**Step 2 — a grey-scale image file keeps ONE channel on the CPU (2026-10-21, owner: files decoded as L only).**
+`ImageResource::readLocalData()` keeps a `ChannelMode::Grayscale` pixmap as it is; every other mode (grey + alpha
+included) is expanded to RGBA as before. Not `validatePixmap()` (the cubemap faces use it too); the scene loaders (glTF,
+FBX, USD, WAD) decode RGBA themselves and are untouched. The CPU copy of such an image is a quarter of the RGBA one — the
+store holds 79 of them (100 Mpx: 384 MiB as RGBA, 96 MiB as one channel); `land003-height` (the terrain, kept resident)
+16 → 4 MiB. Every consumer reads it as the RGBA expansion did (R = G = B, A = 1):
+- `TextureCompressor`: `compress()` / `compressSingle()` take one channel (each 4 × 4 block expanded, BC4 / BC7 alike; a
+  BC5 request expands the image first, the renormalization needing three components); `isOpaqueGrey()` is true for it;
+  the hole dilation runs on RGBA only.
+- `PackRecipe::fillChannel()`: G / B of a one-channel source read its R, its A is 255.
+- The views: `componentMapping()` broadcasts `R8_SRGB` too; `Texture1D` uses it like `Texture2D`. R8_SRGB is optional in
+  Vulkan (`Texture2D::supportsGreyScaleColour()`): without it, the uncompressed fallback of `Texture2D` / `Texture1D`
+  uploads the RGBA expansion, and an animated texture with grey colour frames is refused (the BC path takes them).
+- `MovieResource` refuses frames of different channel counts (as it refused different sizes): the upload concatenates them.
+- `CursorAtlas` expands to RGBA for GLFW.
+- `ImageResource::isGrayScale()` (the channel mode) is now true for those files; no caller depends on it.
+Measured (Linux): `relief` + Sand002 (its AO and height are L files) within noise (1.25, noise 1.3), the same formats;
+`Doors/MetalDoor001` (an L sRGB albedo) BC7_SRGB, the image neutral (R, G, B 93.2 / 93.4 / 93.5), its height BC4;
+`terrain` (the L heightmap) loads, 0 VUID. Not exercised: the R8_SRGB fallback (no BC-less device here).
+
 ⚠️ **Measurement trap met here**: a run on a COLD texture cache (the first after the format change) encodes on the
 workers for tens of seconds — the ocean's 120 frames ~40 s — and a capture 6 s after the ground swap caught a scene
 whose temporal state had not converged: 20 levels darker, the relief "stronger". The same capture 40 s later equals
@@ -495,5 +515,5 @@ layer on (0 `VUID-`). MiB = the device memory of the loaded textures, each image
 5. ~~`texture-footprint-ratios-per-kind`~~ — D5 DONE 2026-10-21 (§ GPU footprint per kind); the chain filter's quality
    is `mip-chain-quality-filter`.
 6. `rt-material-packed-channels` — the RT parity.
-7. `texture-block-format-per-kind` — D8: the GPU side done 2026-10-20 (§ Block format per kind); the one-channel CPU
-   copy remains.
+7. ~~`texture-block-format-per-kind`~~ — D8 DONE: the GPU side 2026-10-20, the one-channel CPU copy 2026-10-21
+   (§ Block format per kind).

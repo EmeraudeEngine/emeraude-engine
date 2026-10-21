@@ -31,7 +31,9 @@
 #include <array>
 #include <chrono>
 #include <cmath>
-#include <cstring>
+#include <cstddef>
+#include <optional>
+#include <span>
 #include <string>
 
 /* Third-party inclusions. */
@@ -174,8 +176,10 @@ namespace EmEn::Graphics
 			const auto blocksX = (width + BlockSize - 1) / BlockSize;
 			const auto blocksY = (height + BlockSize - 1) / BlockSize;
 			const auto totalBlocks = blocksX * blocksY;
-			const auto * sourcePixels = pixmap.data().data();
-			const auto stride = width * 4; /* RGBA8 = 4 bytes per pixel. */
+			const auto & sourcePixels = pixmap.data();
+			/* RGBA8, or one channel for a grey-scale image (graphics § 39, D8 step 2). */
+			const auto channels = static_cast< size_t >(pixmap.colorCount());
+			const auto stride = static_cast< size_t >(width) * channels;
 
 			CompressedMipLevel result;
 			result.width = width;
@@ -211,10 +215,20 @@ namespace EmEn::Graphics
 						const auto srcX = std::min(pixelX + col, width - 1);
 						const auto srcY = std::min(pixelY + row, height - 1);
 						/* NOTE: In size_t: srcY * stride wrapped in 32 bits from a 32k x 32k source on (an out-of-bounds read). */
-						const auto srcOffset = (static_cast< size_t >(srcY) * stride) + (static_cast< size_t >(srcX) * 4);
-						const auto dstOffset = (static_cast< size_t >(row) * BlockSize + col) * 4;
+						const auto srcOffset = (static_cast< size_t >(srcY) * stride) + (static_cast< size_t >(srcX) * channels);
+						const auto destination = std::span{blockPixels}.subspan(((static_cast< size_t >(row) * BlockSize) + col) * 4, 4);
+						const auto source = std::span{sourcePixels}.subspan(srcOffset, channels);
 
-						std::memcpy(&blockPixels[dstOffset], &sourcePixels[srcOffset], 4);
+						if ( channels == 4 )
+						{
+							std::ranges::copy(source, destination.begin());
+						}
+						else
+						{
+							/* A one-channel (grey-scale) source: the block reads it as its RGBA expansion (R = G = B, A = 1). */
+							std::ranges::fill(destination.first(3), source.front());
+							destination.back() = 255;
+						}
 					}
 				}
 
@@ -226,6 +240,85 @@ namespace EmEn::Graphics
 			TraceDebug{TextureCompressor::ClassId} << "Compressed " << width << "x" << height << " mip level to " << to_cstring(format) << " (" << totalBlocks << " blocks) in " << elapsed << " ms.";
 
 			return result;
+		}
+		/**
+		 * @brief Fills the colour under the transparent pixels of an RGBA image (Processor::fillTransparentColour()).
+		 * @note A pixel is a hole below the alpha test's cutoff for a binary mask (it is never drawn, its colour only
+		 * reaches the screen through a filter), at alpha 0 only for graded alpha (a semi-transparent pixel's colour is
+		 * seen). The alpha, the coverage it carries, is untouched.
+		 * @param pixmap The image (RGBA or one channel: a one-channel image has no hole).
+		 * @param binaryMask Whether its alpha is a binary coverage mask.
+		 * @param dilated The dilated copy, written when this returns true.
+		 * @return bool False when there is nothing to fill (or the fill failed: logged): use the image itself.
+		 */
+		[[nodiscard]]
+		bool
+		dilateHoles (const Pixmap< uint8_t > & pixmap, bool binaryMask, Pixmap< uint8_t > & dilated) noexcept
+		{
+			if ( pixmap.colorCount() != 4 )
+			{
+				return false;
+			}
+
+			const auto holeThreshold = binaryMask ? static_cast< uint8_t >(std::lround(AlphaCoverage::DefaultCutoff * 255.0F)) : uint8_t{1};
+			const auto & bytes = pixmap.data();
+			bool hasHole = false;
+
+			for ( size_t offset = 3; offset < bytes.size(); offset += 4 )
+			{
+				if ( bytes[offset] < holeThreshold )
+				{
+					hasHole = true;
+
+					break;
+				}
+			}
+
+			if ( !hasHole )
+			{
+				return false;
+			}
+
+			dilated = pixmap;
+
+			if ( !Processor< uint8_t >::fillTransparentColour(dilated, holeThreshold) )
+			{
+				Tracer::warning(TextureCompressor::ClassId, "Unable to dilate the colour under the transparent pixels: the mip chain may darken the edges.");
+
+				return false;
+			}
+
+			return true;
+		}
+
+		/**
+		 * @brief Compresses one level of the chain after the base: its alpha rescaled to the base coverage for a binary
+		 * mask, its normals renormalized for BC5 — both on a copy, the chain keeping the true box average.
+		 * @param level The box-filtered level.
+		 * @param format The block format.
+		 * @param preserveCoverage Whether the coverage of a binary mask is held.
+		 * @param baseCoverage The coverage of the base level.
+		 * @return CompressedMipLevel
+		 */
+		[[nodiscard]]
+		CompressedMipLevel
+		compressChainLevel (const Pixmap< uint8_t > & level, BlockFormat format, bool preserveCoverage, float baseCoverage) noexcept
+		{
+			if ( preserveCoverage )
+			{
+				auto correctedMip = level;
+
+				AlphaCoverage::rescaleToCoverage(correctedMip, baseCoverage, AlphaCoverage::DefaultCutoff);
+
+				return compressLevel(correctedMip, format);
+			}
+
+			if ( format == BlockFormat::BC5 )
+			{
+				return compressLevel(renormalizedNormals(level), format);
+			}
+
+			return compressLevel(level, format);
 		}
 	}
 
@@ -273,14 +366,25 @@ namespace EmEn::Graphics
 	}
 
 	std::vector< CompressedMipLevel >
-	TextureCompressor::compress (const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format) const noexcept
+	TextureCompressor::compress (const Pixmap< uint8_t > & source, uint32_t maxMipLevels, BlockFormat format) const noexcept
 	{
-		if ( !pixmap.isValid() || pixmap.colorCount() != 4 )
+		if ( !source.isValid() || (source.colorCount() != 4 && source.colorCount() != 1) )
 		{
-			Tracer::error(ClassId, "Invalid pixmap: must be valid RGBA8 data.");
+			Tracer::error(ClassId, "Invalid pixmap: must be valid RGBA8 or one-channel (grey-scale) data.");
 
 			return {};
 		}
+
+		/* NOTE: A one-channel image is encoded as it is (each block reads it as its RGBA expansion), but a normal map is
+		 * renormalized on its three components: a grey-scale one (nonsense, yet possible) is expanded first. */
+		std::optional< Pixmap< uint8_t > > expanded;
+
+		if ( source.colorCount() == 1 && format == BlockFormat::BC5 )
+		{
+			expanded.emplace(Processor< uint8_t >::toRGBA(source));
+		}
+
+		const auto & pixmap = expanded.has_value() ? *expanded : source;
 
 		/* Compute the number of mip levels. */
 		const auto fullMipCount = Vulkan::Image::getMIPLevels(pixmap.width(), pixmap.height());
@@ -314,39 +418,8 @@ namespace EmEn::Graphics
 		 * mip-chain). A pixel is a hole below the alpha test's cutoff for a binary mask (it is never drawn, its colour only
 		 * reaches the screen through a filter), at alpha 0 only for graded alpha (a semi-transparent pixel's colour is
 		 * seen). The alpha itself, the coverage it carries, is untouched. */
-		const auto * base = &pixmap;
 		Pixmap< uint8_t > dilated;
-
-		if ( format == BlockFormat::BC7 )
-		{
-			const auto holeThreshold = preserveCoverage ? static_cast< uint8_t >(std::lround(AlphaCoverage::DefaultCutoff * 255.0F)) : uint8_t{1};
-			const auto & bytes = pixmap.data();
-			bool hasHole = false;
-
-			for ( size_t offset = 3; offset < bytes.size(); offset += 4 )
-			{
-				if ( bytes[offset] < holeThreshold )
-				{
-					hasHole = true;
-
-					break;
-				}
-			}
-
-			if ( hasHole )
-			{
-				dilated = pixmap;
-
-				if ( Processor< uint8_t >::fillTransparentColour(dilated, holeThreshold) )
-				{
-					base = &dilated;
-				}
-				else
-				{
-					Tracer::warning(ClassId, "Unable to dilate the colour under the transparent pixels: the mip chain may darken the edges.");
-				}
-			}
-		}
+		const auto * base = format == BlockFormat::BC7 && dilateHoles(pixmap, preserveCoverage, dilated) ? &dilated : &pixmap;
 
 		/* Compress base level. */
 		result.emplace_back(format == BlockFormat::BC5 ? compressLevel(renormalizedNormals(*base), format) : compressLevel(*base, format));
@@ -372,23 +445,7 @@ namespace EmEn::Graphics
 				break;
 			}
 
-			if ( preserveCoverage )
-			{
-				auto correctedMip = currentMip;
-
-				AlphaCoverage::rescaleToCoverage(correctedMip, baseCoverage, AlphaCoverage::DefaultCutoff);
-
-				result.emplace_back(compressLevel(correctedMip, format));
-			}
-			else if ( format == BlockFormat::BC5 )
-			{
-				/* NOTE: Like the coverage correction, on a copy: the chain keeps filtering the true box average. */
-				result.emplace_back(compressLevel(renormalizedNormals(currentMip), format));
-			}
-			else
-			{
-				result.emplace_back(compressLevel(currentMip, format));
-			}
+			result.emplace_back(compressChainLevel(currentMip, format, preserveCoverage, baseCoverage));
 
 			if ( result.back().data.empty() )
 			{
@@ -417,9 +474,9 @@ namespace EmEn::Graphics
 	CompressedMipLevel
 	TextureCompressor::compressSingle (const Pixmap< uint8_t > & pixmap) const noexcept
 	{
-		if ( !pixmap.isValid() || pixmap.colorCount() != 4 )
+		if ( !pixmap.isValid() || (pixmap.colorCount() != 4 && pixmap.colorCount() != 1) )
 		{
-			Tracer::error(ClassId, "Invalid pixmap: must be valid RGBA8 data.");
+			Tracer::error(ClassId, "Invalid pixmap: must be valid RGBA8 or one-channel (grey-scale) data.");
 
 			return {};
 		}
@@ -430,7 +487,18 @@ namespace EmEn::Graphics
 	bool
 	TextureCompressor::isOpaqueGrey (const Pixmap< uint8_t > & pixmap) noexcept
 	{
-		if ( !pixmap.isValid() || pixmap.colorCount() != 4 )
+		if ( !pixmap.isValid() )
+		{
+			return false;
+		}
+
+		/* A one-channel image is grey and opaque by construction. */
+		if ( pixmap.colorCount() == 1 )
+		{
+			return true;
+		}
+
+		if ( pixmap.colorCount() != 4 )
 		{
 			return false;
 		}
@@ -492,7 +560,7 @@ namespace EmEn::Graphics
 	VkComponentMapping
 	TextureCompressor::componentMapping (VkFormat format) noexcept
 	{
-		if ( format == VK_FORMAT_BC4_UNORM_BLOCK || format == VK_FORMAT_R8_UNORM )
+		if ( format == VK_FORMAT_BC4_UNORM_BLOCK || format == VK_FORMAT_R8_UNORM || format == VK_FORMAT_R8_SRGB )
 		{
 			return {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_ONE};
 		}

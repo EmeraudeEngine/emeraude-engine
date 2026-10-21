@@ -124,14 +124,15 @@ namespace EmEn::Graphics
 			 * shader reconstructs Z = sqrt(1 - X² - Y²), which needs a unit vector — a box-filtered mip is shorter, and
 			 * reconstructing from it would flatten the normal with distance where the BC7 path (normalize(xyz)) keeps
 			 * its direction. A null vector becomes (0, 0, 1). The chain keeps filtering the UNNORMALIZED level.
-			 * @param pixmap Source RGBA8 pixel data. Dimensions should be multiples of 4.
+			 * @param source Source RGBA8 pixel data, or one channel for a grey-scale image (read as its RGBA expansion).
+			 * Dimensions should be multiples of 4.
 			 * @param maxMipLevels Maximum number of mip levels to generate (0 = full chain down to 1x1).
 			 * @param format The block format (BC7 by default).
 			 * @return Vector of compressed mip levels, empty on failure.
 			 * @note Non-multiple-of-4 dimensions are padded by repeating edge pixels.
 			 */
 			[[nodiscard]]
-			std::vector< CompressedMipLevel > compress (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format = BlockFormat::BC7) const noexcept;
+			std::vector< CompressedMipLevel > compress (const Base::PixelFactory::Pixmap< uint8_t > & source, uint32_t maxMipLevels, BlockFormat format = BlockFormat::BC7) const noexcept;
 
 			/**
 			 * @brief Compresses a single RGBA8 pixmap to BC7 (no mipchain).
@@ -156,10 +157,11 @@ namespace EmEn::Graphics
 			static BlockFormat selectFormat (const Base::PixelFactory::Pixmap< uint8_t > & pixmap, bool sRGB, bool normalMap) noexcept;
 
 			/**
-			 * @brief Returns whether every pixel of an RGBA8 pixmap is grey and opaque (R = G = B, A = 255).
+			 * @brief Returns whether every pixel of an RGBA8 pixmap is grey and opaque (R = G = B, A = 255) — a one-channel
+			 * pixmap always is.
 			 * @note Stops at the first pixel that is not: a colour texture costs a few pixels, a grey one a full scan.
 			 * @param pixmap The pixels.
-			 * @return bool False for an invalid or non-RGBA8 pixmap.
+			 * @return bool False for an invalid pixmap or one of two or three channels.
 			 */
 			[[nodiscard]]
 			static bool isOpaqueGrey (const Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
@@ -175,8 +177,8 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the image view swizzle an image format needs so the shaders read it as RGBA.
-			 * @note A one-channel format (BC4, R8) broadcasts its R to R, G and B with an opaque A: a grey map reads the
-			 * same from any channel, as its RGBA8 source did. Every other format is the identity (BC5 reads B = 0 and
+			 * @note A one-channel format (BC4, R8 linear or sRGB) broadcasts its R to R, G and B with an opaque A: a grey
+			 * map reads the same from any channel, as its RGBA8 source did. Every other format is the identity (BC5 reads B = 0 and
 			 * A = 1, the shaders reconstructing Z). Decided by the IMAGE format, so a pre-encoded KTX2 BC4 gets it too.
 			 * @param format The format of the image the view shows.
 			 * @return VkComponentMapping

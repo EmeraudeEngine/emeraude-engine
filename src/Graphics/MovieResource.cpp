@@ -26,20 +26,30 @@
 
 #include "MovieResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <charconv>
 #include <algorithm>
 #include <array>
+#include <charconv>
+#include <cmath>
 #include <numeric>
-#include <ranges>
+#include <optional>
+#include <system_error>
 
 /* Local inclusions. */
-#include "Resources/Container.hpp"
-#include "IO/IO.hpp"
-#include "ImageResource.hpp"
 #include "Algorithms/PerlinNoise.hpp"
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
+#include "ImageResource.hpp"
+#include "IO/IO.hpp"
+#include "Logging/Severity.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Resources/Container.hpp"
+#include "String.hpp"
 #include "ThreadPool.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {
@@ -329,7 +339,40 @@ namespace EmEn::Graphics
 	bool
 	MovieResource::onDependenciesLoaded () noexcept
 	{
+		/* NOTE: The frames of a definition come from image resources, loaded only now: the same checks as load(frames). */
+		if ( !this->checkFramesAreUniform(m_frames) )
+		{
+			return false;
+		}
+
 		this->updateDuration();
+
+		return true;
+	}
+
+	bool
+	MovieResource::checkFramesAreUniform (const std::vector< Frame > & frames) const noexcept
+	{
+		if ( frames.empty() )
+		{
+			return true;
+		}
+
+		const auto & first = frames.front().pixmap();
+
+		for ( size_t frameIndex = 0; frameIndex < frames.size(); ++frameIndex )
+		{
+			const auto & pixmap = frames[frameIndex].pixmap();
+
+			if ( pixmap.width() != first.width() || pixmap.height() != first.height() || pixmap.colorCount() != first.colorCount() )
+			{
+				TraceError{ClassId} << "Unable to load the movie '" << this->name() << "': frame " << frameIndex <<
+					" is " << pixmap.width() << 'x' << pixmap.height() << " with " << pixmap.colorCount() << " channel(s) but frame 0 is " <<
+					first.width() << 'x' << first.height() << " with " << first.colorCount() << " !";
+
+				return false;
+			}
+		}
 
 		return true;
 	}
@@ -625,17 +668,10 @@ namespace EmEn::Graphics
 			return this->setLoadSuccess(false);
 		}
 
-		for ( size_t frameIndex = 0; frameIndex < frames.size(); ++frameIndex )
+		/* NOTE: The channel count too: a grey-scale image file keeps one channel (graphics § 39, D8 step 2). */
+		if ( !this->checkFramesAreUniform(frames) )
 		{
-			const auto & pixmap = frames[frameIndex].pixmap();
-
-			if ( pixmap.width() != width || pixmap.height() != height )
-			{
-				TraceError{ClassId} << "Unable to load the movie '" << this->name() << "': frame " << frameIndex <<
-					" is " << pixmap.width() << 'x' << pixmap.height() << " but frame 0 is " << width << 'x' << height << " !";
-
-				return this->setLoadSuccess(false);
-			}
+			return this->setLoadSuccess(false);
 		}
 
 		m_frames = std::move(frames);

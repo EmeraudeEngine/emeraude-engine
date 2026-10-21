@@ -172,7 +172,21 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), pixmap) )
+		/* NOTE: A grey-scale FILE (one channel, no alpha) keeps its one channel (graphics § 39, D8 step 2 — owner,
+		 * 2026-10-21): its CPU copy is a quarter of the RGBA one, and every consumer reads it as the RGBA expansion did
+		 * (R = G = B, A = 1: PackRecipe::fillChannel(), the block encoders, the R8 view's broadcast swizzle). Any other
+		 * mode — grey + alpha included — is expanded to RGBA as before. Only this path: the scene loaders decode RGBA
+		 * themselves, and validatePixmap() also serves the cubemap faces. */
+		if ( pixmap.channelMode() == PixelFactory::ChannelMode::Grayscale )
+		{
+			if ( !pixmap.isValid() )
+			{
+				TraceError{ClassId} << "The grey-scale image from file '" << filepath << "' is invalid !";
+
+				return false;
+			}
+		}
+		else if ( !TextureResource::Abstract::validatePixmap(ClassId, this->name(), pixmap) )
 		{
 			TraceError{ClassId} << "Unable to use the pixmap from file '" << filepath << "' to create an image !";
 
@@ -301,6 +315,17 @@ namespace EmEn::Graphics
 		if ( source == nullptr )
 		{
 			return pixmap.fillChannel(output, constant);
+		}
+
+		/* NOTE: A one-channel (grey-scale) source reads as its RGBA expansion did: G and B are its grey, A is opaque. */
+		if ( source->colorCount() == 1 && sourceChannel != PixelFactory::Channel::Red )
+		{
+			if ( sourceChannel == PixelFactory::Channel::Alpha )
+			{
+				return pixmap.fillChannel(output, uint8_t{255});
+			}
+
+			sourceChannel = PixelFactory::Channel::Red;
 		}
 
 		if ( source->width() == pixmap.width() && source->height() == pixmap.height() )

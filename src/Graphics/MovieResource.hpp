@@ -30,7 +30,10 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -38,10 +41,12 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "json/json.h"
+#include "Hash/FNV1a.hpp"
 #include "ImageResource.hpp"
+#include "json/json.h"
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Pixmap.hpp"
+#include "Resources/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -460,6 +465,16 @@ namespace EmEn::Graphics
 			}
 
 		private:
+
+			/**
+			 * @brief Checks that every frame has the dimensions and the channel count of frame 0: the upload reads the
+			 * extent and the format from frame 0 and concatenates every frame (a grey-scale image file keeps one channel
+			 * since graphics § 39, D8 step 2).
+			 * @param frames The frames.
+			 * @return bool False, with an error naming the first different frame.
+			 */
+			[[nodiscard]]
+			bool checkFramesAreUniform (const std::vector< Frame > & frames) const noexcept;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]

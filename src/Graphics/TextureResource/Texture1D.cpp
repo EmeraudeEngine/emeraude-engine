@@ -26,12 +26,32 @@
 
 #include "Texture1D.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <functional>
+#include <optional>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/ImageResource.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Resources/Manager.hpp"
+#include "Graphics/TextureCompressor.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
+#include "Logging/Severity.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Processor.hpp"
+#include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
-#include "Vulkan/Instance.hpp"
+#include "Vulkan/Sampler.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {
@@ -85,11 +105,22 @@ namespace EmEn::Graphics::TextureResource
 			settings.getOrSetDefault< uint32_t >(GraphicsTextureMipMappingLevelsKey, DefaultGraphicsTextureMipMappingLevels)
 		);
 
+		/* NOTE: A one-channel colour (a grey-scale sRGB gradient) needs R8_SRGB, optional in Vulkan: without it, its RGBA
+		 * expansion is uploaded (graphics § 39, D8 step 2). */
+		std::optional< PixelFactory::Pixmap< uint8_t > > expanded;
+
+		if ( this->isSRGB() && m_localData->data().colorCount() == 1 && !Texture2D::supportsGreyScaleColour(renderer) )
+		{
+			expanded.emplace(PixelFactory::Processor< uint8_t >::toRGBA(m_localData->data()));
+		}
+
+		const auto & uploaded = expanded.has_value() ? *expanded : m_localData->data();
+
 		/* Create a Vulkan image. */
 		m_image = std::make_shared< Vulkan::Image >(
 			renderer.device(),
 			VK_IMAGE_TYPE_1D,
-			Image::getFormat< uint8_t >(m_localData->data().colorCount(), this->isSRGB()),
+			Image::getFormat< uint8_t >(uploaded.colorCount(), this->isSRGB()),
 			VkExtent3D{m_localData->width(), 1U, 1U},
 			VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
 			0,
@@ -97,7 +128,7 @@ namespace EmEn::Graphics::TextureResource
 		);
 		m_image->setIdentifier(ClassId, this->name(), "Image");
 
-		if ( !m_image->create(renderer.transferManager(), m_localData) )
+		if ( !(expanded.has_value() ? m_image->create(renderer.transferManager(), *expanded) : m_image->create(renderer.transferManager(), m_localData)) )
 		{
 			Tracer::error(ClassId, "Unable to create an image !");
 
@@ -116,7 +147,9 @@ namespace EmEn::Graphics::TextureResource
 				.levelCount = m_image->createInfo().mipLevels,
 				.baseArrayLayer = 0,
 				.layerCount = m_image->createInfo().arrayLayers
-			}
+			},
+			/* NOTE: A one-channel (grey-scale) image broadcasts its R, as Texture2D does (graphics § 39, D8). */
+			TextureCompressor::componentMapping(m_image->createInfo().format)
 		);
 		m_imageView->setIdentifier(ClassId, this->name(), "ImageView");
 

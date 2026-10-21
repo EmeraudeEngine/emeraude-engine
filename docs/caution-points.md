@@ -385,6 +385,13 @@ instead of orphaning it (one re-encode per texture, no disk growth). The same pi
 variant are two entries. **Version 5 (2026-10-21):** the colour under the transparent texels of a BC7 chain is dilated
 first (`Processor::fillTransparentColour()`), so every alpha texture's blocks changed.
 
+### A grey-scale image file is ONE channel since 2026-10-21 (graphics § 39, D8 step 2)
+
+`ImageResource::readLocalData()` no longer expands a `ChannelMode::Grayscale` file to RGBA. Code that reads an
+ImageResource's pixels must not assume 4 channels: take `colorCount()` into account, or expand locally
+(`Processor< uint8_t >::toRGBA()`, as `CursorAtlas` does). The in-tree consumers were adapted (`TextureCompressor`,
+`PackRecipe::fillChannel()`, the R8 views, `MovieResource`, `CursorAtlas`); the scene loaders still decode RGBA.
+
 ### Material Types Registration
 
 > [!CRITICAL]
