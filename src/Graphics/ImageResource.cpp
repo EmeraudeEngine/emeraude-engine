@@ -291,25 +291,29 @@ namespace EmEn::Graphics
 		bool
 		fillPackedChannel (PixelFactory::Pixmap< uint8_t > & pixmap, PixelFactory::Channel output, const PackRecipe::ChannelSource & source) noexcept
 		{
-			if ( source.image == nullptr )
-			{
-				return pixmap.fillChannel(output, source.constant);
-			}
-
-			const auto & sourcePixels = source.image->data();
-
-			if ( sourcePixels.width() == pixmap.width() && sourcePixels.height() == pixmap.height() )
-			{
-				return pixmap.copyChannel(output, sourcePixels, source.channel);
-			}
-
-			/* NOTE: A smaller source is upscaled to the packed size: a TEXTURE resample (texel centres aligned, the
-			 * edges wrapping like a repeating texture, Catmull-Rom), never resize(), which maps the corners and reads
-			 * Black past the border — it shifted a 512² mask by half a texel and darkened every tile edge. */
-			PixelFactory::Pixmap< uint8_t > upscaled;
-
-			return PixelFactory::Processor< uint8_t >::resampleTexture(sourcePixels, pixmap.width(), pixmap.height(), upscaled, true) && pixmap.copyChannel(output, upscaled, source.channel);
+			return PackRecipe::fillChannel(pixmap, output, source.image != nullptr ? &source.image->data() : nullptr, source.channel, source.constant);
 		}
+	}
+
+	bool
+	PackRecipe::fillChannel (PixelFactory::Pixmap< uint8_t > & pixmap, PixelFactory::Channel output, const PixelFactory::Pixmap< uint8_t > * source, PixelFactory::Channel sourceChannel, uint8_t constant) noexcept
+	{
+		if ( source == nullptr )
+		{
+			return pixmap.fillChannel(output, constant);
+		}
+
+		if ( source->width() == pixmap.width() && source->height() == pixmap.height() )
+		{
+			return pixmap.copyChannel(output, *source, sourceChannel);
+		}
+
+		/* NOTE: A smaller source is upscaled to the packed size: a TEXTURE resample (texel centres aligned, the
+		 * edges wrapping like a repeating texture, Catmull-Rom), never resize(), which maps the corners and reads
+		 * Black past the border — it shifted a 512² mask by half a texel and darkened every tile edge. */
+		PixelFactory::Pixmap< uint8_t > upscaled;
+
+		return PixelFactory::Processor< uint8_t >::resampleTexture(*source, pixmap.width(), pixmap.height(), upscaled, true) && pixmap.copyChannel(output, upscaled, sourceChannel);
 	}
 
 	PackRecipe::ChannelSource &

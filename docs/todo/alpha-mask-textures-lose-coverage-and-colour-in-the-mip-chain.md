@@ -86,10 +86,12 @@ near-black border.
    nothing in that scene exercises it. Decide whether a block-compressed alpha source should be
    decoded once at load so it can be measured. Still so on 2026-10-13 (the log line is
    `src/Scenes/Loaders/GLTFLoader.cpp:2493`).
-2. **Alpha dilation (edge padding)**: propagate the opaque RGB under the transparent texels before
-   building the chain, so filtering never pulls toward black. Belongs in the same place as the
-   coverage preservation (`src/Graphics/TextureCompressor.cpp:212-240`, nothing dilates yet). It cannot recover the author's already-darkened edge texels, but it stops
-   the mips from darkening further.
+2. ~~**Alpha dilation (edge padding)**~~ — DONE 2026-10-21 (owner: dilation): base
+   `Processor::fillTransparentColour()` (pull-push, 4 unit tests), called by `TextureCompressor::compress()` before the
+   BC7 chain (below the cutoff for a binary mask, at alpha 0 for graded alpha), `TextureCache` version 5. Measured on the
+   cypress leaves baked from their PNG (graphics § 39 § Baked assets): the green of the visible texels 143 at mip 0,
+   141 at mip 8 (137 → 80 before; the UASTC asset itself 118). It cannot recover the author's already-darkened edge texels.
+   Point 1 is now exercised end to end: `Sponza.baked.glb` carries the cypress mask through the engine's own chain.
 3. The **GPU blit fallback** (`ImageTransferOperation::finalizeForGPU`, `src/Vulkan/ImageTransferOperation.cpp:231`,
    used when the device has no `textureCompressionBC`) is still a plain `vkCmdBlitImage` with `VK_FILTER_LINEAR`
    and gets neither correction.

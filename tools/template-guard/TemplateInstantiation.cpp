@@ -38,6 +38,9 @@
  * once in a program; MSVC refuses the repeat, C4661).
  * See docs/static-analysis-ledger.md § The template guard. */
 
+/* STL inclusions. */
+#include <memory>
+
 /* Local inclusions: every header of the engine. */
 // IWYU pragma: begin_keep
 #include "Animations/AnimatableInterface.hpp"
@@ -216,6 +219,7 @@
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Graphics/IrradianceProbeVolume.hpp"
 #include "Graphics/KTX2Decoder.hpp"
+#include "Graphics/KTX2Writer.hpp"
 #include "Graphics/LTCTables.hpp"
 #include "Graphics/LTCTexture.hpp"
 #include "Graphics/MDI/BatchBuilder.hpp"
@@ -591,6 +595,9 @@
 #include "PlatformSpecific/COM.windows.hpp"
 #endif
 // IWYU pragma: end_keep
+
+/* Local inclusions for the instantiations below. */
+#include "Logging/Severity.hpp"
 
 /* Every class template, with the arguments the cascade uses. */
 template class EmEn::Graphics::RenderTarget::ShadowMap< EmEn::Graphics::ViewMatrices2DUBO >;

@@ -382,7 +382,8 @@ format (after the version, before the mip count) and `tryLoad()` refuses an entr
 (and checks every level's size against THAT format: 8 bytes per block for BC4). The format is folded into the key for
 BC5 and BC4 only: a BC7 key is the version-3 key, so the first version-4 run REWRITES each BC7 file under its old name
 instead of orphaning it (one re-encode per texture, no disk growth). The same pixels as a BC7 texture and as a `#normal`
-variant are two entries.
+variant are two entries. **Version 5 (2026-10-21):** the colour under the transparent texels of a BC7 chain is dilated
+first (`Processor::fillTransparentColour()`), so every alpha texture's blocks changed.
 
 ### Material Types Registration
 

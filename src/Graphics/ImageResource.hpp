@@ -207,6 +207,22 @@ namespace EmEn::Graphics
 			};
 
 			/**
+			 * @brief Fills one channel of a packed pixmap: from one channel of a source pixmap, resampled as a TEXTURE
+			 * when its size differs (texel centres aligned, edges wrapping, Catmull-Rom — never resize()), or with a
+			 * constant when there is no source.
+			 * @note The single composition rule of a packed image: the runtime recipe (compose()) and the offline bake
+			 * (`tools/texture-bake`) both go through it, so a baked texture holds the bits the runtime would compose.
+			 * @param pixmap The packed RGBA pixmap, at its final size.
+			 * @param output The output channel.
+			 * @param source The source pixmap, or nullptr for the constant.
+			 * @param sourceChannel The channel of the source to read.
+			 * @param constant The value written when there is no source.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool fillChannel (Base::PixelFactory::Pixmap< uint8_t > & pixmap, Base::PixelFactory::Channel output, const Base::PixelFactory::Pixmap< uint8_t > * source, Base::PixelFactory::Channel sourceChannel, uint8_t constant) noexcept;
+
+			/**
 			 * @brief Fills an output channel from one channel of a source image.
 			 * @param output The output channel.
 			 * @param image The source image. Not null.

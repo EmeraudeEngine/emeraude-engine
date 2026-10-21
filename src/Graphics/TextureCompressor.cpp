@@ -289,16 +289,6 @@ namespace EmEn::Graphics
 		std::vector< CompressedMipLevel > result;
 		result.reserve(mipCount);
 
-		/* Compress base level. */
-		result.emplace_back(format == BlockFormat::BC5 ? compressLevel(renormalizedNormals(pixmap), format) : compressLevel(pixmap, format));
-
-		if ( result.back().data.empty() )
-		{
-			Tracer::error(ClassId, "Failed to compress base mip level !");
-
-			return {};
-		}
-
 		/* A BINARY coverage mask (foliage, a grate, a sprite) needs its COVERAGE preserved down the
 		 * chain, not its alpha mean: a box filter keeps the mean and lets the fraction passing the
 		 * alpha test collapse — measured on Sponza's cypress mask, 6.34 % at the base against 1.56 %
@@ -317,8 +307,59 @@ namespace EmEn::Graphics
 				" %): preserving coverage across the mip chain.";
 		}
 
+		/* The colour under the transparent pixels is dilated from the visible ones before anything filters it
+		 * (Processor::fillTransparentColour(), pull-push): a texture stores black (or anything) there, and both the box
+		 * filter of the chain and the sampler's bilinear tap mixed it into the visible edge — Sponza's cypress leaves
+		 * kept 56 % of their green at mip 8 (2026-10-21, engine item alpha-mask-textures-lose-coverage-and-colour-in-the-
+		 * mip-chain). A pixel is a hole below the alpha test's cutoff for a binary mask (it is never drawn, its colour only
+		 * reaches the screen through a filter), at alpha 0 only for graded alpha (a semi-transparent pixel's colour is
+		 * seen). The alpha itself, the coverage it carries, is untouched. */
+		const auto * base = &pixmap;
+		Pixmap< uint8_t > dilated;
+
+		if ( format == BlockFormat::BC7 )
+		{
+			const auto holeThreshold = preserveCoverage ? static_cast< uint8_t >(std::lround(AlphaCoverage::DefaultCutoff * 255.0F)) : uint8_t{1};
+			const auto & bytes = pixmap.data();
+			bool hasHole = false;
+
+			for ( size_t offset = 3; offset < bytes.size(); offset += 4 )
+			{
+				if ( bytes[offset] < holeThreshold )
+				{
+					hasHole = true;
+
+					break;
+				}
+			}
+
+			if ( hasHole )
+			{
+				dilated = pixmap;
+
+				if ( Processor< uint8_t >::fillTransparentColour(dilated, holeThreshold) )
+				{
+					base = &dilated;
+				}
+				else
+				{
+					Tracer::warning(ClassId, "Unable to dilate the colour under the transparent pixels: the mip chain may darken the edges.");
+				}
+			}
+		}
+
+		/* Compress base level. */
+		result.emplace_back(format == BlockFormat::BC5 ? compressLevel(renormalizedNormals(*base), format) : compressLevel(*base, format));
+
+		if ( result.back().data.empty() )
+		{
+			Tracer::error(ClassId, "Failed to compress base mip level !");
+
+			return {};
+		}
+
 		/* Generate and compress subsequent mip levels. */
-		Pixmap< uint8_t > currentMip = pixmap;
+		Pixmap< uint8_t > currentMip = *base;
 
 		for ( uint32_t level = 1; level < mipCount; ++level )
 		{

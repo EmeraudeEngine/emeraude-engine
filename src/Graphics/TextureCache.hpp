@@ -176,8 +176,9 @@ namespace EmEn::Graphics
 			 * box-filtered alpha and would keep far foliage thinning out. Version 3 = every mip level is an
 			 * exact area-weighted box filter (Processor::downsample()); version 2 blobs were bilinear
 			 * resamples whose tail lost the mean (a 23 % leaf mask read 0.001 at 1 × 4). Version 4 = the header
-			 * carries the block format (BC7, BC5, BC4 — D8, 2026-10-20). */
-			static constexpr uint32_t Version{4};
+			 * carries the block format (BC7, BC5, BC4 — D8, 2026-10-20). Version 5 = the colour under the transparent
+			 * pixels of a BC7 chain is dilated first (Processor::fillTransparentColour(), 2026-10-21). */
+			static constexpr uint32_t Version{5};
 			static constexpr auto CacheDirectoryName{"texture-cache"};
 			static constexpr auto CacheFileExtension{".bc7cache"};
 

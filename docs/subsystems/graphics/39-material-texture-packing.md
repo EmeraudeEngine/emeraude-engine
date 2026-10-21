@@ -377,6 +377,40 @@ warm.
   DamagedHelmet 0.20 (noise 0.08–0.15); `normal-map-debug` as expected.
 - **Linux glibc 2.43** (RTX 3050 Ti): cascade 0 warning, base 2702 / 0 failed, Sand002 normal BC5.
 
+## Baked assets (option A, 2026-10-21)
+
+Owner decision: the runtime pipeline can be run ONCE, offline, and its result shipped — a texture uploaded as stored, no
+decode, no transcode, no encode. Three pieces:
+
+- **`Graphics/KTX2Writer`** — writes a BC7 (sRGB / linear), BC5 or BC4 mip chain into a KTX2 container (libktx, the
+  decoder's library), zstd-supercompressed (lossless), its `vkFormat` the real block format: `KTX2Decoder` passes it
+  through, the image is uploaded as stored. The chain is checked against its format (sizes, halving dimensions).
+- **`EmeraudeTextureBake`** (engine `tools/texture-bake/`, built on demand: `--target EmeraudeTextureBake`) — composes
+  ONE texture of the canonical layout from image channels or constants with `PackRecipe::fillChannel()` (the runtime's
+  own rule, extracted for it: the largest source size, a texture resample for the smaller ones), chooses the format with
+  `TextureCompressor::selectFormat()` (`--kind colour|normal|data`), builds the chain with `TextureCompressor::compress()`
+  and writes it. `--flip-normal-y` converts a Direct3D normal map.
+- **`tools/gltf-bake-textures.py`** — rewrites a GLB from a manifest (per material and glTF slot: the recipe of its
+  texture); identical recipes are baked once and stored once, in parallel; the BIN chunk is rebuilt (the old images
+  dropped, the kept views — `EXT_meshopt_compression` ranges included — copied); the cache of baked containers is keyed
+  on the recipe, the baker's hash and the zstd level. The textures stay behind `KHR_texture_basisu` (owner decision:
+  the file is for Emeraude only — the extension requires Basis payloads; fastgltf refuses an unknown required
+  extension, which ruled out a vendor one without patching it).
+
+**Sponza** (projet-alpha.data `glTF/Sponza.baked.glb` + `Sponza.bake.json`, 2026-10-21): the 84 textures of
+`Sponza.ktx2.glb` re-baked from the package's PNG sources at full resolution (31 materials, 89 slots); 1443 MB against
+1192 MB for UASTC. Loaded by the engine with 0 VUID; the same VRAM (1886.8 MiB) and bindings (162); the normals now BC5
+(27). Against the PNG sources (`arch_stone_wall_01`, level 0) the baked textures are 1.6 to 2.6 times closer than the
+UASTC ones: albedo |d| 0.81 vs 2.15, normal 2.60° vs 5.63°, roughness / metalness 2.69 vs 4.31.
+The bake found the colour defect of alpha textures (below, and engine item
+`alpha-mask-textures-lose-coverage-and-colour-in-the-mip-chain`): the cypress leaves kept 56 % of their green at
+mip 8; with the colour dilated, 117 → 119 (and their coverage 6.25–6.64 % from mip 0 to 10, where UASTC lost it at mip 10).
+
+**The colour under transparent texels is dilated** (`Base::PixelFactory::Processor::fillTransparentColour()`, pull-push,
+Gortler et al., *The Lumigraph*, SIGGRAPH 1996): `TextureCompressor::compress()` fills it before the BC7 chain — below the
+alpha test's cutoff for a binary mask, at alpha 0 only for graded alpha; the alpha is never touched. `TextureCache`
+version 5.
+
 ## Reference measurement (2026-10-20, before any packing)
 
 Linux, RTX 3070 Ti (8 GB), Release, `Core.RendererService.getTextureMemory()` once the demo was built, validation
