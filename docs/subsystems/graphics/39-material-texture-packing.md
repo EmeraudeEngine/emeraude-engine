@@ -521,8 +521,11 @@ UVs); the **uncompressed path** rebuilt on the same chain in the same lot.
   the version-3 key and replaces its file).
 - **Cost** (CPU, a full 4096² RGBA chain, GCC -O3, best of 5): former box 178 ms with a 256 MiB `double`
   intermediate, Kaiser 259 ms, Kaiser sRGB 317 ms, the intermediate a ring of 13 rows. The BC encoders dominate.
-- ⚠️ The baked assets (§ Baked assets) were baked with the box chain: `Sponza.baked.glb` is not what the engine now
-  produces until it is baked again.
+- The baked assets follow the chain only when baked again: `Sponza.baked.glb` was re-baked with it (projet-alpha.data
+  06d5b19, 1447.3 MB). At `sponza`'s start pose (option 2 = 1, 3840 × 1990, exposure pinned, three runs each): mean
+  abs. change 2.86 against the box-chain asset (run-to-run noise 0.07–1.49), mean 151.6 → 152.6, the top half of the
+  screen's spectrum +3 to +6 %, 0 `VUID-`. ⚠️ Three runs in nine started at ANOTHER camera pose (framing shifted, the
+  image 43–56 apart): compare `sponza` captures only after checking the framing.
 
 Measured (Linux, RTX 3070 Ti, 3840 × 1990, X11, validation on, `relief` with its ground replaced, the demo's camera,
 exposure pinned f/8 1/250 ISO 100, a cold texture cache per run, HEAD built beside as the baseline; the only `VUID-`
