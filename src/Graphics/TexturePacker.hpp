@@ -76,6 +76,27 @@ namespace EmEn::Graphics
 	};
 
 	/**
+	 * @brief A canonical map as the grouping sees it: its role and where it is read (graphics § 39, D11).
+	 */
+	struct PackCandidate
+	{
+		ComponentType role{ComponentType::Invalid};
+		/** @brief Where the map is read: two candidates with the same key read the same UVs (D11). */
+		std::string_view samplingKey;
+	};
+
+	/**
+	 * @brief One canonical texture the grouping decided: its layout, the roles it takes in the layout's member order
+	 * (Albedo: albedo, opacity; Data: ambient occlusion, roughness, metalness, height), and its colour space.
+	 */
+	struct PackPlan
+	{
+		std::string_view layout;
+		Base::StaticVector< ComponentType, 4 > roles;
+		bool sRGB{false};
+	};
+
+	/**
 	 * @brief What a role reads once packed: the packed texture and the channel it lands in (the albedo reads RGB).
 	 */
 	struct PackedRole
@@ -123,6 +144,23 @@ namespace EmEn::Graphics
 			{
 				return m_images != nullptr && m_textures != nullptr && m_enabled;
 			}
+
+			/** @brief The canonical textures a grouping may decide, at most. */
+			static constexpr size_t MaxPlans{2};
+
+			/** @brief The canonical textures one grouping decided. */
+			using PackPlans = Base::StaticVector< PackPlan, MaxPlans >;
+
+			/**
+			 * @brief Decides which maps share a canonical texture — the ONE rule, used by pack() at run time and by the
+			 * texture bake tool (graphics § 40, L3): a canonical texture takes the maps of its layout present among the
+			 * candidates, two at least, read at the same UVs (D11); any other map stays alone.
+			 * @param candidates The material's maps (a role at most once).
+			 * @param owner The material's name, for the logs.
+			 * @return PackPlans
+			 */
+			[[nodiscard]]
+			static PackPlans plan (std::span< const PackCandidate > candidates, std::string_view owner) noexcept;
 
 			/**
 			 * @brief Packs the sources that group, and answers what each packed role reads; a role absent from the

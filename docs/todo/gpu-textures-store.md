@@ -22,7 +22,8 @@ textures with no texture compute at load, while a development build keeps workin
   `GPUTextures` store, `Images` refusing GPU containers (T8).
 - L2 DONE 2026-10-21: the resolution for JSON materials (`TextureSet` / material name, `GPUTextures` then `Images`).
   Follow-ups: D10's single fetch for a GPU data texture; an index by set name if the store grows large.
-- L3: the tool that bakes a material definition into `GPUTextures`.
+- L3 DONE 2026-10-21: `EmeraudeTextureBake --material / --materials` bakes a material definition into `GPUTextures`
+  (the engine's grouping, `TexturePacker::plan()`). Follow-up: parallel baking for large stores (sequential now).
 - L4: the fingerprint and the stale-entry fallback (T11).
 - L5: code-built materials (T10 hidden repack, T4 lookup). L6: `.gltf` materials (T9).
 - The container-agnostic decoder (T7) when a second container arrives; the tokens beyond ambientCG's set (open

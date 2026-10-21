@@ -402,6 +402,9 @@ declared as textures are replaced; an ambiguous set (a purpose served twice) is 
 - ⚠️ **A/B of a GPU texture against its sources**: with a cold cache the sources are BC-encoded at load, seconds after
   the GPU path is ready, so a capture a few seconds later compares two GI / TAA accumulations of different ages (+0.66
   with RT, 0.38 in screen space, noise 0.14): wait for convergence (30 s on `relief`) — then they match within noise.
+- ⚠️ **`relief` and `sponza` do not always start at the same camera pose** (`relief` 4 runs in a row on 2026-10-21, the
+  image 15–21 apart; `sponza` 3 in 9): check the framing before reading an image difference, or compare what the GPU
+  holds (the texture-cache blobs, the KTX2 levels, `getTextureMemory()`).
 
 ### Material Types Registration
 

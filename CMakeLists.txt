@@ -530,7 +530,7 @@ if ( EMERAUDE_FAULT_INJECTION )
 endif ()
 
 ## Texture bake executable (graphics § 39, the baked assets): built on demand only (--target EmeraudeTextureBake)
-add_executable(EmeraudeTextureBake EXCLUDE_FROM_ALL ${CMAKE_CURRENT_SOURCE_DIR}/tools/texture-bake/TextureBake.cpp)
+add_executable(EmeraudeTextureBake EXCLUDE_FROM_ALL ${CMAKE_CURRENT_SOURCE_DIR}/tools/texture-bake/TextureBake.cpp ${CMAKE_CURRENT_SOURCE_DIR}/tools/texture-bake/MaterialBake.cpp)
 target_link_libraries(EmeraudeTextureBake PRIVATE ${PROJECT_NAME})
 
 ## ThreadSanitizer stress executables (EMERAUDE_ENABLE_TSAN, decision D12)

@@ -89,33 +89,50 @@ namespace EmEn::Graphics
 		using GroupedSources = StaticVector< GroupedSource, 4 >;
 
 		/**
-		 * @brief Gathers the sources a canonical texture takes (one per member role, with an image).
+		 * @brief Returns whether a source can be packed: it has an image, and not a missing image's stand-in.
+		 * @param source The source.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isPackable (const PackSource & source) noexcept
+		{
+			return source.image != nullptr && source.image->name() != Resources::Default;
+		}
+
+		/**
+		 * @brief Gathers the sources of a planned canonical texture, with the output channel each fills.
 		 * @param sources The material's maps.
-		 * @param group The canonical texture.
+		 * @param plan The canonical texture.
 		 * @return GroupedSources
 		 */
 		[[nodiscard]]
 		GroupedSources
-		gather (std::span< const PackSource > sources, const PackGroup & group) noexcept
+		gather (std::span< const PackSource > sources, const PackPlan & plan) noexcept
 		{
 			GroupedSources grouped;
 
-			for ( const auto & member : group.members )
+			for ( const auto & group : PackGroups )
 			{
-				if ( member.role == ComponentType::Invalid )
+				if ( group.layout != plan.layout )
 				{
 					continue;
 				}
 
-				/* NOTE: A missing image's stand-in (the default resource) is never packed. */
-				const auto source = std::ranges::find_if(sources, [&member] (const PackSource & candidate) {
-					return candidate.role == member.role && candidate.image != nullptr && candidate.image->name() != Resources::Default;
-				});
-
-				/* NOTE: In capacity: one entry per member, 4 members. */
-				if ( source != sources.end() )
+				for ( const auto role : plan.roles )
 				{
-					grouped.push_back({.source = &*source, .output = member.output});
+					for ( const auto & member : group.members )
+					{
+						const auto source = std::ranges::find_if(sources, [role] (const PackSource & candidate) {
+							return candidate.role == role && isPackable(candidate);
+						});
+
+						/* NOTE: In capacity: one entry per planned role, 4 at most. */
+						if ( member.role == role && source != sources.end() )
+						{
+							grouped.push_back({.source = &*source, .output = member.output});
+						}
+					}
 				}
 			}
 
@@ -165,6 +182,64 @@ namespace EmEn::Graphics
 
 	}
 
+	TexturePacker::PackPlans
+	TexturePacker::plan (std::span< const PackCandidate > candidates, std::string_view owner) noexcept
+	{
+		PackPlans plans;
+
+		for ( const auto & group : PackGroups )
+		{
+			PackPlan plan{.layout = group.layout, .roles = {}, .sRGB = group.sRGB};
+			std::string_view samplingKey;
+			bool sameUVs = true;
+
+			for ( const auto & member : group.members )
+			{
+				if ( member.role == ComponentType::Invalid )
+				{
+					continue;
+				}
+
+				const auto candidate = std::ranges::find(candidates, member.role, &PackCandidate::role);
+
+				if ( candidate == candidates.end() )
+				{
+					continue;
+				}
+
+				if ( plan.roles.empty() )
+				{
+					samplingKey = candidate->samplingKey;
+				}
+				else if ( candidate->samplingKey != samplingKey )
+				{
+					sameUVs = false;
+				}
+
+				/* NOTE: In capacity: one role per member, 4 members. */
+				plan.roles.push_back(member.role);
+			}
+
+			if ( plan.roles.size() < group.minimumMembers )
+			{
+				continue;
+			}
+
+			/* D11: only maps read at the same UVs share a texture. */
+			if ( !sameUVs )
+			{
+				TraceInfo{ClassId} << "Material '" << owner << "': its " << group.layout << " maps are read at different UVs, they stay separate textures.";
+
+				continue;
+			}
+
+			/* NOTE: In capacity: one plan per group, MaxPlans groups. */
+			plans.push_back(plan);
+		}
+
+		return plans;
+	}
+
 	TexturePacker::PackedRoles
 	TexturePacker::pack (std::span< const PackSource > sources, std::string_view owner) const noexcept
 	{
@@ -175,39 +250,43 @@ namespace EmEn::Graphics
 			return packed;
 		}
 
-		for ( const auto & group : PackGroups )
+		/* NOTE: Missing images (or their stand-in) are never packed: they are not candidates. */
+		StaticVector< PackCandidate, MaxRoles > candidates;
+
+		for ( const auto & source : sources )
 		{
-			const auto grouped = gather(sources, group);
-
-			if ( grouped.size() < group.minimumMembers )
+			/* NOTE: In capacity: a role at most once, MaxRoles roles. */
+			if ( isPackable(source) && !candidates.full() )
 			{
-				continue;
+				candidates.push_back({.role = source.role, .samplingKey = source.samplingKey});
 			}
+		}
 
-			/* D11: only maps read at the same UVs share a texture. */
-			if ( !std::ranges::all_of(grouped, [&grouped] (const GroupedSource & entry) { return entry.source->samplingKey == grouped.front().source->samplingKey; }) )
+		for ( const auto & plan : TexturePacker::plan({candidates.data(), candidates.size()}, owner) )
+		{
+			const auto grouped = gather(sources, plan);
+
+			if ( grouped.size() != plan.roles.size() )
 			{
-				TraceInfo{ClassId} << "Material '" << owner << "': its " << group.layout << " maps are read at different UVs, they stay separate textures.";
-
 				continue;
 			}
 
 			const auto recipe = buildRecipe(grouped);
-			const auto imageName = recipe.name(group.layout);
-			const auto textureName = TextureResource::variantName(imageName, {.sRGB = group.sRGB});
+			const auto imageName = recipe.name(plan.layout);
+			const auto textureName = TextureResource::variantName(imageName, {.sRGB = plan.sRGB});
 
 			const auto image = m_images->getOrCreateResourceSync(imageName, [recipe] (ImageResource & packedImage) {
 				return packedImage.load(recipe);
 			});
 
-			auto texture = m_textures->getOrCreateResourceSync(textureName, [image, sRGB = group.sRGB] (TextureResource::Texture2D & packedTexture) {
+			auto texture = m_textures->getOrCreateResourceSync(textureName, [image, sRGB = plan.sRGB] (TextureResource::Texture2D & packedTexture) {
 				return packedTexture.enableSRGB(sRGB) && packedTexture.load(image);
 			});
 
 			/* NOTE: A failed creation answers the default resource: the maps then keep their own textures. */
 			if ( image == nullptr || image->name() != imageName || texture == nullptr || texture->name() != textureName )
 			{
-				TraceError{ClassId} << "Material '" << owner << "': unable to pack its " << group.layout << " maps, they stay separate textures !";
+				TraceError{ClassId} << "Material '" << owner << "': unable to pack its " << plan.layout << " maps, they stay separate textures !";
 
 				continue;
 			}

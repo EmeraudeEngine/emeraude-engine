@@ -1,6 +1,6 @@
 # The `GPUTextures` store — GPU-ready material textures (design, Oct 2026)
 
-> Status: L1 and L2 implemented (2026-10-21, § Implementation), the rest DESIGN. Item `gpu-textures-store` (`docs/todo/`). Owner decisions 2026-10-21 (T1–T13
+> Status: L1, L2 and L3 implemented (2026-10-21, § Implementation), the rest DESIGN. Item `gpu-textures-store` (`docs/todo/`). Owner decisions 2026-10-21 (T1–T15
 > below). Builds on graphics § 39 (packing, block formats, the mip
 > filter, the baked assets) and § 30 (the compressed image path).
 
@@ -59,6 +59,12 @@ compute at load, a development build from the sources with the cache at work, an
   sources without a recipe); any other image stays an ordinary image — never refused, never reported. The strict
   checks and refusals are `GPUTextures`' alone. A renaming pass of the material sources is projet-alpha's item
   `source-images-pbr-naming-pass`.
+- **T14 — The engine only writes its cache** (owner): the data it ships with — `Images`, `GPUTextures`, every store —
+  is READ-ONLY to it; in a released product nobody reworks the shipped data. The bake tool is a development tool: it
+  writes where it is told (a development data directory included), never the engine at run time.
+- **T15 — `GPUTextures` is the predominant store of a finished product** (owner): it keeps the work of sending textures
+  to the GPU minimal at the customer's. What cannot be baked ahead (procedural images, dynamic content, an asset without
+  a bake) stays in `Images` and is processed by the engine at the customer's, its cache at work.
 
 ## The Purpose vocabulary
 
@@ -170,6 +176,31 @@ key is `TextureSet`.
   construction; a GPU data texture is fetched once per reader (to extend when its readers' UV transforms are equal).
   The set is found by scanning the store's names once per material (`availableResourceNames()`, a copy): an index by
   set name if the store grows large.
+
+**L3 (2026-10-21)** — the bake tool's material mode. Owner: a dev tool, it reads a data directory and writes where
+`--output` says (T14).
+- `EmeraudeTextureBake --data-directory <dir> (--material <name> | --materials <directory>) --output <dir> [--zstd N]`
+  (`tools/texture-bake/MaterialBake.cpp`): reads `<dir>/data-stores/Materials/<name>.json` as the engine does (the maps
+  declared as 2D textures, their image in `Images` by name, `SourceChannel`, the UV keys of D11, `FlipNormalMapY`,
+  `EnableAlpha`, `TextureSet`), groups them with the engine's rule, and bakes one entry per group or lone map into
+  `<output>/<TextureSet>.<Purpose>.ktx2` (the same steps as the single mode: `PackRecipe`, `TextureCompressor`,
+  `KTX2Writer`). `--materials` walks a directory of the store recursively and prints a summary.
+- **One rule**: `TexturePacker::plan()` (new, static) decides which maps share a canonical texture — the run-time packer
+  and the tool call it. The tool COMPACTS the channels: a purpose lists only what the file serves (Sand002, its metalness
+  a value: `AmbientOcclusion-Roughness-Displacement`, the height in B), where the run-time pack keeps fixed slots filled
+  with 255. A lone grey map repeats its channel in R, G, B (BC4). An albedo read with its alpha (`EnableAlpha`) bakes
+  `Color-Opacity` from its own A. Each entry name is checked with `TextureName` before writing.
+- Verified (Linux): `Grounds/Sand002` → `Color`, `NormalGL`, `AmbientOcclusion-Roughness-Displacement` in 9.4 s,
+  projet-alpha.data untouched; read by `relief`, the image equals the source path's within noise (1.28 = noise); a rerun
+  bakes byte-identical files. `--materials Metals`: 13 definitions in 13.7 s, 12 baked (Grid003 `Color-Opacity` +
+  `NormalGL` + `Displacement`, its other data values; Rusty001 `Color-Opacity`), Grid001 refused (its albedo image is
+  missing from `Images`). The run-time packer after `plan()`: the 222 texture-cache blobs of a `relief` run
+  byte-identical to before (keys and content).
+- ⚠️ **`relief`, like `sponza`, does not always start at the same camera pose** (4 runs in a row 2026-10-21, the image 15–21
+  apart): compare captures only after checking the framing, or compare what the GPU holds (texture-cache blobs,
+  KTX2 levels, `getTextureMemory()`).
+- The tool is `EXCLUDE_FROM_ALL`: the gate's builds do not compile it — build it with `--target EmeraudeTextureBake` in
+  the GCC AND the clang trees before proposing a change to it.
 
 ## Open questions (owner)
 

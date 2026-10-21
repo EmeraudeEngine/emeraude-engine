@@ -45,6 +45,7 @@
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/KTX2Writer.hpp"
 #include "Graphics/TextureCompressor.hpp"
+#include "TextureBake.hpp"
 #include "IO/IO.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "PixelFactory/Pixmap.hpp"
@@ -64,6 +65,9 @@
  *   EmeraudeTextureBake --output <file.ktx2> --kind colour|normal|data [--flip-normal-y] [--zstd <0-22>]
  *                       [--r <source>] [--g <source>] [--b <source>] [--a <source>]
  *   <source> = <image file>:<r|g|b|a>  (one channel of an image)  or  #<0-255>  (a constant)
+ *   EmeraudeTextureBake --data-directory <dir> (--material <name> | --materials <directory>) --output <dir> [--zstd <0-22>]
+ *   The material mode (graphics § 40, L3; MaterialBake.cpp): the GPUTextures entries of a material definition, or of every
+ *   definition under a directory of the Materials store, written to <output>/<TextureSet>.<Purpose>.ktx2.
  * A channel not given is 255 (D4: 1.0). --kind colour is sRGB. --flip-normal-y converts a Direct3D-style normal map
  * (+Y down) to the Khronos convention. The command line is a trust boundary: every value is checked, nothing is guessed.
  * ⚠️ Windows: the arguments are read narrow (the ANSI code page) — keep the paths ASCII there.
@@ -73,27 +77,8 @@ namespace
 {
 	using namespace EmEn;
 	using namespace EmEn::Base::PixelFactory;
-
-	/** @brief One output channel's source, as the command line gives it. */
-	struct ChannelArgument final
-	{
-		std::filesystem::path image;
-		Channel channel{Channel::Red};
-		uint8_t constant{255};
-		bool fromImage{false};
-	};
-
-	/** @brief The parsed command line. */
-	struct BakeArguments final
-	{
-		std::filesystem::path output;
-		std::array< ChannelArgument, 4 > channels{};
-		uint32_t zstdLevel{18};
-		bool colour{false};
-		bool normal{false};
-		bool flipNormalY{false};
-		bool kindGiven{false};
-	};
+	using EmEn::TextureBake::ChannelArgument;
+	using EmEn::TextureBake::BakeArguments;
 
 	/**
 	 * @brief Parses a channel letter.
@@ -360,6 +345,107 @@ namespace
 	}
 }
 
+namespace EmEn::TextureBake
+{
+	bool
+	bakeTexture (const BakeArguments & arguments, const Graphics::TextureCompressor & compressor) noexcept
+	{
+		/* Every distinct image read once; the packed size is the largest one (D12). */
+		std::vector< std::pair< std::filesystem::path, Pixmap< uint8_t > > > images;
+		uint32_t width = 0;
+		uint32_t height = 0;
+
+		for ( const auto & channel : arguments.channels )
+		{
+			if ( !channel.fromImage || std::ranges::any_of(images, [&channel] (const auto & entry) { return entry.first == channel.image; }) )
+			{
+				continue;
+			}
+
+			Pixmap< uint8_t > pixmap;
+
+			if ( !readImage(channel.image, pixmap) )
+			{
+				return false;
+			}
+
+			width = std::max(width, static_cast< uint32_t >(pixmap.width()));
+			height = std::max(height, static_cast< uint32_t >(pixmap.height()));
+			images.emplace_back(channel.image, std::move(pixmap));
+		}
+
+		if ( images.empty() )
+		{
+			std::cerr << "No channel reads an image: nothing to bake.\n";
+
+			return false;
+		}
+
+		Pixmap< uint8_t > packed;
+
+		if ( !packed.initialize(width, height, ChannelMode::RGBA) )
+		{
+			std::cerr << "Unable to allocate the " << width << "x" << height << " packed image.\n";
+
+			return false;
+		}
+
+		uint8_t outputIndex = 0;
+
+		for ( const auto & channel : arguments.channels )
+		{
+			const auto index = outputIndex++;
+			const Pixmap< uint8_t > * source = nullptr;
+
+			if ( channel.fromImage )
+			{
+				/* NOTE: Every image a channel reads was read above: the search always finds it. */
+				const auto entry = std::ranges::find_if(images, [&channel] (const auto & candidate) { return candidate.first == channel.image; });
+				source = &entry->second;
+			}
+
+			if ( !Graphics::PackRecipe::fillChannel(packed, static_cast< Channel >(index), source, channel.channel, channel.constant) )
+			{
+				std::cerr << "Unable to fill the output channel " << static_cast< unsigned int >(index) << ".\n";
+
+				return false;
+			}
+		}
+
+		if ( arguments.flipNormalY )
+		{
+			packed.flipNormalMapY();
+		}
+
+		const auto format = Graphics::TextureCompressor::selectFormat(packed, arguments.colour, arguments.normal);
+		const auto levels = compressor.compress(packed, 0, format, arguments.colour);
+
+		if ( levels.empty() )
+		{
+			std::cerr << "Unable to compress the packed image.\n";
+
+			return false;
+		}
+
+		/* NOTE: The output's directories are created (a texture set may live in sub-directories). */
+		if ( !Base::IO::createDirectory(arguments.output, true) )
+		{
+			std::cerr << "Unable to create the directory of '" << Base::IO::toU8String(arguments.output) << "'.\n";
+
+			return false;
+		}
+
+		if ( !Graphics::KTX2Writer::write(arguments.output, Graphics::TextureCompressor::vulkanFormat(format, arguments.colour), levels, arguments.zstdLevel) )
+		{
+			return false;
+		}
+
+		std::cout << Base::IO::toU8String(arguments.output) << ' ' << Graphics::to_cstring(format) << ' ' << width << 'x' << height << ' ' << levels.size() << " levels\n";
+
+		return true;
+	}
+}
+
 int
 main (int argc, char * argv[])
 {
@@ -373,82 +459,6 @@ main (int argc, char * argv[])
 		commandLine.emplace_back(argument);
 	}
 
-	BakeArguments arguments;
-
-	if ( !parseArguments(commandLine, arguments) )
-	{
-		std::cerr << "Usage: EmeraudeTextureBake --output <file.ktx2> --kind colour|normal|data [--flip-normal-y] [--zstd <0-22>] [--r|--g|--b|--a <image>:<r|g|b|a> | #<0-255>]\n";
-
-		return EXIT_FAILURE;
-	}
-
-	/* Every distinct image read once; the packed size is the largest one (D12). */
-	std::vector< std::pair< std::filesystem::path, Pixmap< uint8_t > > > images;
-	uint32_t width = 0;
-	uint32_t height = 0;
-
-	for ( const auto & channel : arguments.channels )
-	{
-		if ( !channel.fromImage || std::ranges::any_of(images, [&channel] (const auto & entry) { return entry.first == channel.image; }) )
-		{
-			continue;
-		}
-
-		Pixmap< uint8_t > pixmap;
-
-		if ( !readImage(channel.image, pixmap) )
-		{
-			return EXIT_FAILURE;
-		}
-
-		width = std::max(width, static_cast< uint32_t >(pixmap.width()));
-		height = std::max(height, static_cast< uint32_t >(pixmap.height()));
-		images.emplace_back(channel.image, std::move(pixmap));
-	}
-
-	if ( images.empty() )
-	{
-		std::cerr << "No channel reads an image: nothing to bake.\n";
-
-		return EXIT_FAILURE;
-	}
-
-	Pixmap< uint8_t > packed;
-
-	if ( !packed.initialize(width, height, ChannelMode::RGBA) )
-	{
-		std::cerr << "Unable to allocate the " << width << "x" << height << " packed image.\n";
-
-		return EXIT_FAILURE;
-	}
-
-	uint8_t outputIndex = 0;
-
-	for ( const auto & channel : arguments.channels )
-	{
-		const auto index = outputIndex++;
-		const Pixmap< uint8_t > * source = nullptr;
-
-		if ( channel.fromImage )
-		{
-			/* NOTE: Every image a channel reads was read above: the search always finds it. */
-			const auto entry = std::ranges::find_if(images, [&channel] (const auto & candidate) { return candidate.first == channel.image; });
-			source = &entry->second;
-		}
-
-		if ( !Graphics::PackRecipe::fillChannel(packed, static_cast< Channel >(index), source, channel.channel, channel.constant) )
-		{
-			std::cerr << "Unable to fill the output channel " << static_cast< unsigned int >(index) << ".\n";
-
-			return EXIT_FAILURE;
-		}
-	}
-
-	if ( arguments.flipNormalY )
-	{
-		packed.flipNormalMapY();
-	}
-
 	Graphics::TextureCompressor compressor;
 
 	if ( !compressor.initialize() )
@@ -458,22 +468,21 @@ main (int argc, char * argv[])
 		return EXIT_FAILURE;
 	}
 
-	const auto format = Graphics::TextureCompressor::selectFormat(packed, arguments.colour, arguments.normal);
-	const auto levels = compressor.compress(packed, 0, format, arguments.colour);
-
-	if ( levels.empty() )
+	/* The material mode (graphics § 40, L3). */
+	if ( std::ranges::any_of(commandLine, [] (std::string_view argument) { return argument == "--material" || argument == "--materials"; }) )
 	{
-		std::cerr << "Unable to compress the packed image.\n";
+		return TextureBake::runMaterialMode(commandLine, compressor);
+	}
+
+	BakeArguments arguments;
+
+	if ( !parseArguments(commandLine, arguments) )
+	{
+		std::cerr << "Usage: EmeraudeTextureBake --output <file.ktx2> --kind colour|normal|data [--flip-normal-y] [--zstd <0-22>] [--r|--g|--b|--a <image>:<r|g|b|a> | #<0-255>]\n"
+			"       EmeraudeTextureBake --data-directory <dir> (--material <name> | --materials <directory>) --output <dir> [--zstd <0-22>]\n";
 
 		return EXIT_FAILURE;
 	}
 
-	if ( !Graphics::KTX2Writer::write(arguments.output, Graphics::TextureCompressor::vulkanFormat(format, arguments.colour), levels, arguments.zstdLevel) )
-	{
-		return EXIT_FAILURE;
-	}
-
-	std::cout << Base::IO::toU8String(arguments.output) << ' ' << Graphics::to_cstring(format) << ' ' << width << 'x' << height << ' ' << levels.size() << " levels\n";
-
-	return EXIT_SUCCESS;
+	return TextureBake::bakeTexture(arguments, compressor) ? EXIT_SUCCESS : EXIT_FAILURE;
 }
