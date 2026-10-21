@@ -84,6 +84,12 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - **Next step**: Engine 1.0.1 should classify it as `OutdatedDriver` / `IncompatibleHardware` (exit 97, dialog naming the GPU and what it lacks). Confirm on the 8.0.3 reports; if it is still `Other`, make the selection say why each device was refused.
 - **Plan**: `CrashReport Solucius`, wave W1 — app_system's `docs/plans/crashreport-solucius.md`.
 
+## 8.0.3 status (checked 2026-10-21)
+
+**Fixed.** The devices were refused for scene-rendering features (`descriptorIndexing` and the other bindless ones, logged per device). At the Vulkan 1.1 target of 8.0.3 the engine draws the overlay only and checks none of them (`Instance::checkDeviceCompatibility()`, `sceneRenderingEnabled()`, engine 1.0.1): these GPUs should start, provided their driver has timeline semaphores (else exit 97, `OutdatedDriver`).
+
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+
 ## What remains
 
 - Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).

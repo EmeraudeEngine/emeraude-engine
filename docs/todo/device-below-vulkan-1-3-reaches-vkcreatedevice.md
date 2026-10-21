@@ -107,6 +107,12 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/690864c339058be7ea469d9987d85339-4170183d-24af-44cc-a83a-c487db26f382.zip` → `archives/8.0.2/690864c339058be7ea469d9987d85339-4170183d-24af-44cc-a83a-c487db26f382.zip`
 <!-- crash-reports:end -->
 
+## 8.0.3 status (checked 2026-10-21)
+
+**Fixed.** 8.0.3 targets Vulkan 1.1 (app_system `9447f346`, engine `aa8b01e1`): a driver below 1.3 is no longer driven at 1.3, its feature chain stops at its version, and a device that still cannot be created makes the engine try the next one (`7dfbe4c0`). These GPUs should start.
+
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+
 ## What remains
 
 - [ ] macOS: confirm the API version MoltenVK reports (the 1.2 minimum there) on the M6.

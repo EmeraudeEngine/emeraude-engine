@@ -67,6 +67,12 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - **Next step**: Read the journals (requested image count / size). Probably a driver limit: a retry with a smaller swap-chain, or a refusal told to the user.
 - **Plan**: `CrashReport Solucius`, wave W5 — app_system's `docs/plans/crashreport-solucius.md`.
 
+## 8.0.3 status (checked 2026-10-21)
+
+**Likely fixed.** Old Intel UHD drivers, after the application started: engine `39236d0b` (1.0.1) — on an Intel iGPU a minimise reports a 0x0 `maxImageExtent`, the recreation is now skipped, and the swap-chain is created into a local handle (the old one was destroyed twice); `8a5bfd58` retries a failed recreation.
+
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+
 ## What remains
 
 - Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).

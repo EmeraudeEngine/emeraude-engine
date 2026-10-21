@@ -65,6 +65,12 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - **Next step**: Route this path to `stopOnDeviceLoss()` (exit 98) instead of a Fatal, if it is not already the case in 1.0.1.
 - **Plan**: `CrashReport Solucius`, wave W5 — app_system's `docs/plans/crashreport-solucius.md`.
 
+## 8.0.3 status (checked 2026-10-21)
+
+**Possibly affected.** Engine `8a5bfd58` (1.0.1): a failed swap-chain recreation is retried (at most 30 times, ~3 s), then the engine stops as on a lost device (exit 98) — a Fatal no longer. The device itself is still lost.
+
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+
 ## What remains
 
 - Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).

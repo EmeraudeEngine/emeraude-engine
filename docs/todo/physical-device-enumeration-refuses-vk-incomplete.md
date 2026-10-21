@@ -101,6 +101,12 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/d58ebc717921f627434c40fa9e93d9c3-c9872d3f-8cee-4079-9c08-5bc369971118.zip` → `archives/8.0.2/d58ebc717921f627434c40fa9e93d9c3-c9872d3f-8cee-4079-9c08-5bc369971118.zip`
 <!-- crash-reports:end -->
 
+## 8.0.3 status (checked 2026-10-21)
+
+**Fixed.** 34 of the 56 reports carry `VK_INCOMPLETE`, accepted as a success since `7dfbe4c0` (engine 1.0.1): those machines should start. The 22 others had no device at all: 8.0.3 tells them (`NoVulkanDriver`, exit 97) — Changed, not fixed.
+
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+
 ## What remains
 
 - [ ] A run on a machine that answers `VK_INCOMPLETE` (a Windows AMD hybrid laptop, as in the reports): no reproduction

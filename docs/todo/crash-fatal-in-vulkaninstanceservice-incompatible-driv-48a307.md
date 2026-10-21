@@ -84,6 +84,12 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - **Next step**: Engine 1.0.1 (shipped with 8.0.3) classifies it as `NoVulkanDriver`: a dialog, exit code 97 (`docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md`). Confirm on the 8.0.3 reports that it is no longer a Fatal; what remains is app_system's: an exit 97 is still reported as a crash at every launch (app_system item `crash-report-incompatible-system-is-not-a-crash`).
 - **Plan**: `CrashReport Solucius`, wave W1 — app_system's `docs/plans/crashreport-solucius.md`.
 
+## 8.0.3 status (checked 2026-10-21)
+
+**Changed.** The machines have no usable Vulkan driver: the bundled loader (1.4.363) opens, then `vkCreateInstance()` answers `VK_ERROR_INCOMPATIBLE_DRIVER` — no ICD at all; the Vulkan 1.1 target of 8.0.3 does not change that. Engine 1.0.1 tells it instead of a Fatal: `NoVulkanDriver` dialog with the GPUs listed by the OS (`d166a93c`, `c4b115f8`), exit 97. These machines still cannot run Lychee, and app_system still reports exit 97 at every launch (`crash-report-incompatible-system-is-not-a-crash`).
+
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+
 ## What remains
 
 - Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).

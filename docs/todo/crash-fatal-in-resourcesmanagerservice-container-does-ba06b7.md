@@ -63,6 +63,12 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - **Next step**: Read the journal for the container name; if it is a packaging omission the fix is app_system's (`cmake/ConfigureDynamicResources.cmake`).
 - **Plan**: `CrashReport Solucius`, wave W6 — app_system's `docs/plans/crashreport-solucius.md`.
 
+## 8.0.3 status (checked 2026-10-21)
+
+**Possibly affected.** Engine `78ce1936` (1.0.1) registers a container that was missing (volumetric images for `Texture3D`); not verified to be this one.
+
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+
 ## What remains
 
 - Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).

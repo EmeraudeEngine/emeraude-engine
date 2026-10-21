@@ -84,6 +84,12 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - **Next step**: Read the journals (GPU, driver, queues requested). Engine 1.0.1 classifies it as `Other` (still a Fatal): decide whether it is a refusal to tell the user, or a retry with fewer queues/features.
 - **Plan**: `CrashReport Solucius`, wave W1 — app_system's `docs/plans/crashreport-solucius.md`.
 
+## 8.0.3 status (checked 2026-10-21)
+
+**Likely fixed.** AMD Radeon iGPUs: `vkCreateDevice()` answered `VK_ERROR_OUT_OF_HOST_MEMORY` to the 1.3 device request. At the 1.1 target only the structures valid for the device's version are chained (`DeviceRequirements::linkFeatureChain()`, `aa8b01e1`), and a failed creation moves to the next device (`7dfbe4c0`).
+
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+
 ## What remains
 
 - Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).

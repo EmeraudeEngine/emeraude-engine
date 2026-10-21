@@ -84,6 +84,12 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - **Next step**: Read the journals for the first error before the Fatal (accelerated paint / D3D11 shared textures?). Fix in the overlay manager, or make it fall back to the non-accelerated path instead of failing.
 - **Plan**: `CrashReport Solucius`, wave W1 — app_system's `docs/plans/crashreport-solucius.md`.
 
+## 8.0.3 status (checked 2026-10-21)
+
+**Likely fixed.** Every `vkCreateShaderModule()` answered `VK_ERROR_INITIALIZATION_FAILED` — compute shaders included: the driver rejects the SPIR-V 1.6 that 8.0.2 produced. 8.0.3 compiles for its 1.1 target, SPIR-V 1.3 (`ShaderManager`, engine 1.0.1).
+
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+
 ## What remains
 
 - Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).

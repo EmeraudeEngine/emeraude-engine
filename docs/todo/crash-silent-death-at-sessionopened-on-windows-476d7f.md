@@ -94,6 +94,12 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - **Next step**: Needs a native dump to go further (plan wave W0, minidumps). Meanwhile: compare the last trace of each report with the engine's startup order to bound the step that dies.
 - **Plan**: `CrashReport Solucius`, wave W3 — app_system's `docs/plans/crashreport-solucius.md`.
 
+## 8.0.3 status (checked 2026-10-21)
+
+**Possibly affected.** Engine `12566475` (1.0.1) removed the startup aborts (0xC0000409) on a path outside the ANSI code page — install directory, Vulkan loader logs, `BaseInformation`. Unverified link. ⚠️ The last traces lag the death: the tracer writes asynchronously, a crash loses the last queued entries — 10 journals stop at `Core level created`, which precedes the session token that made the report: the run went further.
+
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+
 ## What remains
 
 - Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).
