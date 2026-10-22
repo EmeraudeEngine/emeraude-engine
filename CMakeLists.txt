@@ -41,7 +41,7 @@ endif ()
 
 project(
 	${BINARY_NAME}
-	VERSION 1.0.2
+	VERSION 1.1.0
 	DESCRIPTION "Emeraude-Engine is an open-source (LGPLv3) 3D Graphics engine using Vulkan and written in C++20."
 	HOMEPAGE_URL "https://github.com/EmeraudeEngine/emeraude-engine"
 	LANGUAGES C CXX
