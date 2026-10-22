@@ -47,15 +47,15 @@ Plan: `CrashReport Solucius` (app_system `docs/plans/crashreport-solucius.md`).
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 19 — per version: 8.0.2 ×19 |
-| Reports | 58 (first 2026-10-15, last 2026-10-22) |
-| Versions | 8.0.2 ×58 |
-| Platforms | windows ×58 |
-| OS | Windows 10 Pro ×25, Windows 10 Home ×16, Windows 11 Home ×15, Windows 11 Pro ×2 |
-| GPU (selected) | unknown ×58 |
-| ANGLE backend | d3d11 ×58 |
-| Died at milestone | SessionOpened ×58 |
-| Single-instance lock | not recorded ×58 |
+| Machines | 20 — per version: 8.0.2 ×20 |
+| Reports | 60 (first 2026-10-15, last 2026-10-22) |
+| Versions | 8.0.2 ×60 |
+| Platforms | windows ×60 |
+| OS | Windows 10 Pro ×25, Windows 11 Home ×17, Windows 10 Home ×16, Windows 11 Pro ×2 |
+| GPU (selected) | unknown ×60 |
+| ANGLE backend | d3d11 ×60 |
+| Died at milestone | SessionOpened ×60 |
+| Single-instance lock | not recorded ×60 |
 
 - **Cause (normalized):** `VulkanInstanceService: No physical device available !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/Instance.cpp` — `EmEn::Vulkan::Instance::onInitialize`
@@ -63,7 +63,7 @@ Plan: `CrashReport Solucius` (app_system `docs/plans/crashreport-solucius.md`).
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×58 `died at SessionOpened`
+- ×60 `died at SessionOpened`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
@@ -73,16 +73,14 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 [PlatformManagerService][Info] (vendors/emeraude-engine/src/PlatformManager.cpp `EmEn::PlatformManager::onInitialize`) Vulkan layer search path : '<path> Files\Lychee\vulkan\explicit_layer.d'.
 [VulkanLoader][Info] (vendors/emeraude-engine/src/Vulkan/Loader.cpp `EmEn::Vulkan::Loader::open`) Vulkan loader '<path> Files\Lychee\vulkan\vulkan-<n>.dll' opened (instance version <n>).
 [Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) PlatformManagerService service up!
-[VulkanInstanceService][Error] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::preparePhysicalDevices`) Unable to get physical device count : VK_ERROR_INITIALIZATION_FAILED !
+[VulkanInstanceService][Error] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::preparePhysicalDevices`) Unable to get physical device count : VK_INCOMPLETE !
 [VulkanInstanceService][Fatal] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::onInitialize`) No physical device available !
 [Core][Fatal] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) VulkanInstanceService service failed to execute!
 ```
 
 Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
 
-- … 38 older archive(s), see `crash_reports.py list`
-- `reports/8.0.2/ef17a668da06779c2c8676eec70938e7-2d76c41c-dc8f-4418-a61c-7795de56dc48.zip` → `archives/8.0.2/ef17a668da06779c2c8676eec70938e7-2d76c41c-dc8f-4418-a61c-7795de56dc48.zip`
-- `reports/8.0.2/b5115e87eab991143413f728b339dd8b-2326ddd6-7d71-4a12-b19c-64baeb380dc8.zip` → `archives/8.0.2/b5115e87eab991143413f728b339dd8b-2326ddd6-7d71-4a12-b19c-64baeb380dc8.zip`
+- … 40 older archive(s), see `crash_reports.py list`
 - `reports/8.0.2/a0f06246859f348e122eacf6a246408c-bc1d9b67-bb3c-4d28-9d8c-78cd1bd6e88b.zip` → `archives/8.0.2/a0f06246859f348e122eacf6a246408c-bc1d9b67-bb3c-4d28-9d8c-78cd1bd6e88b.zip`
 - `reports/8.0.2/ed454557d83296853e3b3eb64732021f-daf89069-62a2-4865-8c58-428f7cb40945.zip` → `archives/8.0.2/ed454557d83296853e3b3eb64732021f-daf89069-62a2-4865-8c58-428f7cb40945.zip`
 - `reports/8.0.2/049b1ff7505518c1ff408d9f01bea7e3-ffdd960a-e40c-4104-bd14-682cbb4f4a15.zip` → `archives/8.0.2/049b1ff7505518c1ff408d9f01bea7e3-ffdd960a-e40c-4104-bd14-682cbb4f4a15.zip`
@@ -101,6 +99,8 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/d58ebc717921f627434c40fa9e93d9c3-c9872d3f-8cee-4079-9c08-5bc369971118.zip` → `archives/8.0.2/d58ebc717921f627434c40fa9e93d9c3-c9872d3f-8cee-4079-9c08-5bc369971118.zip`
 - `reports/8.0.2/6676ca9a13bec9b2a5a39c447cafa5f6-1367fc7e-cea5-46f6-a133-0235353261b6.zip` → `archives/8.0.2/6676ca9a13bec9b2a5a39c447cafa5f6-1367fc7e-cea5-46f6-a133-0235353261b6.zip`
 - `reports/8.0.2/dddcc2b7eb2138db8f2acf664cf5fb61-6744b492-6976-4c42-94ac-ef0f8a097944.zip` → `archives/8.0.2/dddcc2b7eb2138db8f2acf664cf5fb61-6744b492-6976-4c42-94ac-ef0f8a097944.zip`
+- `reports/8.0.2/aec19e95152239be1f9e3e0b328aa2df-041c9f4f-e02e-4eb7-a56a-749006c7264f.zip` → `archives/8.0.2/aec19e95152239be1f9e3e0b328aa2df-041c9f4f-e02e-4eb7-a56a-749006c7264f.zip`
+- `reports/8.0.2/6e8fee61128ffdea47a67e411221a49b-7832a4bc-ef83-4838-931d-ab0dece75c69.zip` → `archives/8.0.2/6e8fee61128ffdea47a67e411221a49b-7832a4bc-ef83-4838-931d-ab0dece75c69.zip`
 <!-- crash-reports:end -->
 
 ## 8.0.3 status (checked 2026-10-21)

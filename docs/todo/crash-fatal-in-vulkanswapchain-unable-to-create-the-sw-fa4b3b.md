@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 5 — per version: 8.0.2 ×5 |
-| Reports | 6 (first 2026-10-17, last 2026-10-22) |
-| Versions | 8.0.2 ×6 |
-| Platforms | windows ×6 |
-| OS | Windows 11 Home ×3, Windows 10 Pro ×1, Windows 11 Home Single Language ×1, Windows 11 Pro ×1 |
-| GPU (selected) | Intel(R) UHD Graphics (driver 100.9805) ×2, Intel(R) UHD Graphics 600 (driver 101.2140) ×1, Intel(R) UHD Graphics 605 (driver 101.2121) ×1, Intel(R) UHD Graphics 610 (driver 101.2111) ×1, Intel(R) UHD Graphics 620 (driver 101.2137) ×1 |
-| ANGLE backend | d3d11 ×6 |
-| Died at milestone | ApplicationStarted ×4, Stopping ×2 |
-| Single-instance lock | not recorded ×6 |
+| Machines | 7 — per version: 8.0.2 ×7 |
+| Reports | 8 (first 2026-10-17, last 2026-10-22) |
+| Versions | 8.0.2 ×8 |
+| Platforms | windows ×8 |
+| OS | Windows 11 Home ×4, Windows 10 Home ×1, Windows 10 Pro ×1, Windows 11 Home Single Language ×1, Windows 11 Pro ×1 |
+| GPU (selected) | Intel(R) UHD Graphics (driver 100.9805) ×2, AMD Radeon(TM) 860M Graphics (driver 2.0.373) ×1, Intel(R) HD Graphics 620 (driver 100.9171) ×1, Intel(R) UHD Graphics 600 (driver 101.2140) ×1, Intel(R) UHD Graphics 605 (driver 101.2121) ×1, Intel(R) UHD Graphics 610 (driver 101.2111) ×1, … (1 more) |
+| ANGLE backend | d3d11 ×8 |
+| Died at milestone | ApplicationStarted ×6, Stopping ×2 |
+| Single-instance lock | not recorded ×8 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the swap-chain : VK_ERROR_OUT_OF_HOST_MEMORY !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createBaseSwapChain`
@@ -37,18 +37,18 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×4 `died at ApplicationStarted`
+- ×6 `died at ApplicationStarted`
 - ×2 `died at Stopping`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[WebView][Success] (src/UI/WebView.cpp `Mango3D::System::UI::WebView::onBrowserReady`) The webview 'ViewLib' is ready!
-[WebView][Success] (src/UI/WebView.CefLoadHandler.cpp `Mango3D::System::UI::WebView::OnLoadEnd`) WebView 'ViewLib' loaded 'https:<path>' !
-[WebView][Success] (src/UI/WebView.CefLoadHandler.cpp `Mango3D::System::UI::WebView::OnLoadEnd`) WebView 'ViewPreview3D' loaded 'file:<path>' !
-[UIManagerService][Warning] (src/UI/Manager.cpp `Mango3D::System::UI::Manager::onAppControlMessage`) ================================== DEPRECATED ================================== Broadcasting legacy 'appReady' CustomEvent to all renderers. JS listeners using `window.addEventListener("appReady", ..
-[UIManagerService][Success] (src/UI/Manager.cpp `Mango3D::System::UI::Manager::onAppControlMessage`) The webview 'ViewLib' has been signaled with the 'appReady' event !
-[UIManagerService][Success] (src/UI/Manager.cpp `Mango3D::System::UI::Manager::onAppControlMessage`) The webview 'ViewPreview3D' has been signaled with the 'appReady' event !
+[IPCServer][Error] (src/IPC/Server.cpp `Mango3D::System::IPC::Server::update`) Exception raised from ZeroMQ lib : Interrupted function call
+[IPCServer][Error] (src/IPC/Server.cpp `Mango3D::System::IPC::Server::update`) Exception raised from ZeroMQ lib : Interrupted function call
+[IPCServer][Error] (src/IPC/Server.cpp `Mango3D::System::IPC::Server::update`) Exception raised from ZeroMQ lib : Interrupted function call
+[WebView][Error] (src/UI/WebView.CefRequestHandler.cpp `Mango3D::System::UI::WebView::OnRenderProcessTerminated`) The render process of web-view 'ViewFile' (browser #<n>) terminated unexpectedly ! Status: ProcessCrashed (segmentation fault), error code: -<n> (<hex>), error: 'STATUS_STACK_OVERFLOW'.
+[WebView][Error] (src/UI/WebView.CefRequestHandler.cpp `Mango3D::System::UI::WebView::OnRenderProcessTerminated`) The render process of web-view 'ViewUI' (browser #<n>) terminated unexpectedly ! Status: ProcessCrashed (segmentation fault), error code: -<n> (<hex>), error: 'STATUS_STACK_BUFFER_OVERRUN'.
+[Application][Info] (src/Application.cpp `Mango3D::System::Application::onCoreSurfaceRefreshed`) Core updated the application surface.
 [VulkanSwapChain][Fatal] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createBaseSwapChain`) Unable to create the swap-chain : VK_ERROR_OUT_OF_HOST_MEMORY !
 [VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::recreate`) Unable to recreate the base of the swap-chain !
 ```
@@ -61,6 +61,8 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/5c3628e005d2bad7d98de1bbbc8fa8a5-f6b828f6-f9bc-4156-a9bd-79e15b3fabd7.zip` → `archives/8.0.2/5c3628e005d2bad7d98de1bbbc8fa8a5-f6b828f6-f9bc-4156-a9bd-79e15b3fabd7.zip`
 - `reports/8.0.2/924833e48df41ce1dc3f820e26238ed3-fb491788-6bea-44d6-a762-ad9f1b284b3e.zip` → `archives/8.0.2/924833e48df41ce1dc3f820e26238ed3-fb491788-6bea-44d6-a762-ad9f1b284b3e.zip`
 - `reports/8.0.2/c1d04892acc4efe19953078e84954847-05872382-cf9b-4993-aa08-13caa807271c.zip` → `archives/8.0.2/c1d04892acc4efe19953078e84954847-05872382-cf9b-4993-aa08-13caa807271c.zip`
+- `reports/8.0.2/e9df091cbc1a4881334177860674519e-8b5ff79a-c3da-4b2a-8ae8-071825032993.zip` → `archives/8.0.2/e9df091cbc1a4881334177860674519e-8b5ff79a-c3da-4b2a-8ae8-071825032993.zip`
+- `reports/8.0.2/9e1bbca99aec73a6cc61779d08467ff2-2d45eb3d-7be9-41a9-8d8a-27c160af2791.zip` → `archives/8.0.2/9e1bbca99aec73a6cc61779d08467ff2-2d45eb3d-7be9-41a9-8d8a-27c160af2791.zip`
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

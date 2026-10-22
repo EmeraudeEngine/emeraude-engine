@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 65 — per version: 8.0.2 ×65 |
-| Reports | 221 (first 2026-10-15, last 2026-10-21) |
-| Versions | 8.0.2 ×221 |
-| Platforms | windows ×221 |
-| OS | Windows 10 Pro ×83, Windows 11 Pro ×59, Windows 10 Home ×49, Windows 11 Home ×10, Windows 10 Enterprise ×9, Windows 10 Home Single Language ×7, … (3 more) |
-| GPU (selected) | unknown ×221 |
-| ANGLE backend | d3d11 ×221 |
-| Died at milestone | SessionOpened ×221 |
-| Single-instance lock | not recorded ×221 |
+| Machines | 66 — per version: 8.0.2 ×66 |
+| Reports | 223 (first 2026-10-15, last 2026-10-22) |
+| Versions | 8.0.2 ×223 |
+| Platforms | windows ×223 |
+| OS | Windows 10 Pro ×83, Windows 11 Pro ×59, Windows 10 Home ×50, Windows 11 Home ×10, Windows 10 Enterprise ×9, Windows 10 Home Single Language ×7, … (4 more) |
+| GPU (selected) | unknown ×223 |
+| ANGLE backend | d3d11 ×223 |
+| Died at milestone | SessionOpened ×223 |
+| Single-instance lock | not recorded ×223 |
 
 - **Cause (normalized):** `VulkanInstanceService: Incompatible driver !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/Instance.cpp` — `EmEn::Vulkan::Instance::onInitialize`
@@ -37,7 +37,7 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×221 `died at SessionOpened`
+- ×223 `died at SessionOpened`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
@@ -54,9 +54,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
 
-- … 201 older archive(s), see `crash_reports.py list`
-- `reports/8.0.2/295a1b96c9faf7aab27639d9bb69653c-5f11b2bf-8740-43d6-8215-d87b479d368a.zip` → `archives/8.0.2/295a1b96c9faf7aab27639d9bb69653c-5f11b2bf-8740-43d6-8215-d87b479d368a.zip`
-- `reports/8.0.2/b5225637903a77aa3e023e3bcd128604-28f4cdab-e916-4b84-bddf-328fbde86b19.zip` → `archives/8.0.2/b5225637903a77aa3e023e3bcd128604-28f4cdab-e916-4b84-bddf-328fbde86b19.zip`
+- … 203 older archive(s), see `crash_reports.py list`
 - `reports/8.0.2/eafdcc96daf54867c52b19f150b96b32-bab45e51-7bb8-4abf-af38-218d6d8f14bf.zip` → `archives/8.0.2/eafdcc96daf54867c52b19f150b96b32-bab45e51-7bb8-4abf-af38-218d6d8f14bf.zip`
 - `reports/8.0.2/ffc6b56bad4d7540ad3aa0bda0f880a5-8dd8d228-cf1c-4efd-93cf-b5923182817c.zip` → `archives/8.0.2/ffc6b56bad4d7540ad3aa0bda0f880a5-8dd8d228-cf1c-4efd-93cf-b5923182817c.zip`
 - `reports/8.0.2/eb9530cb172eb1d4845bdf3ebb6fd3a0-3a6789b8-6109-4bd3-b577-be04eb772331.zip` → `archives/8.0.2/eb9530cb172eb1d4845bdf3ebb6fd3a0-3a6789b8-6109-4bd3-b577-be04eb772331.zip`
@@ -75,6 +73,8 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/b789fbfa6f1b369b21036dcd3e9e3056-bb41e8c1-cab9-4755-afdc-3c429f07b129.zip` → `archives/8.0.2/b789fbfa6f1b369b21036dcd3e9e3056-bb41e8c1-cab9-4755-afdc-3c429f07b129.zip`
 - `reports/8.0.2/b4b9deadea9060b829f67c54992c3432-884cc812-88df-4d6f-a59e-b6bb271f82c8.zip` → `archives/8.0.2/b4b9deadea9060b829f67c54992c3432-884cc812-88df-4d6f-a59e-b6bb271f82c8.zip`
 - `reports/8.0.2/cca48fd232a584a7650dfefa4336a649-430c1a25-a104-48b4-872c-6249eac2acca.zip` → `archives/8.0.2/cca48fd232a584a7650dfefa4336a649-430c1a25-a104-48b4-872c-6249eac2acca.zip`
+- `reports/8.0.2/8c3e45358ede49883d45254a60b93b06-74a2b14f-c1fe-4f0f-87b6-299025461f88.zip` → `archives/8.0.2/8c3e45358ede49883d45254a60b93b06-74a2b14f-c1fe-4f0f-87b6-299025461f88.zip`
+- `reports/8.0.2/a1e0f2835afd2444ec311b6308c0c370-c7f27bf8-c945-4052-9a42-558d14c9b238.zip` → `archives/8.0.2/a1e0f2835afd2444ec311b6308c0c370-c7f27bf8-c945-4052-9a42-558d14c9b238.zip`
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

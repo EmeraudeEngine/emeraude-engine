@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 10 — per version: 8.0.2 ×10 |
-| Reports | 10 (first 2026-10-16, last 2026-10-21) |
-| Versions | 8.0.2 ×10 |
-| Platforms | windows ×10 |
-| OS | Windows 11 Pro ×7, Windows 11 Home ×3 |
-| GPU (selected) | AMD Radeon RX 9060 XT (driver 2.0.395) ×2, Microsoft Direct3D12 (NVIDIA GeForce RTX 4060 Laptop GPU) (driver 26.0.129.35) ×1, NVIDIA GeForce RTX 2070 with Max-Q Design (driver 555.97) ×1, NVIDIA GeForce RTX 3070 (driver 610.88) ×1, NVIDIA GeForce RTX 4070 Ti SUPER (driver 610.88) ×1, NVIDIA GeForce RTX 5070 (driver 591.86) ×1, … (3 more) |
-| ANGLE backend | d3d11 ×10 |
-| Died at milestone | Stopping ×10 |
-| Single-instance lock | not recorded ×10 |
+| Machines | 13 — per version: 8.0.2 ×13 |
+| Reports | 14 (first 2026-10-16, last 2026-10-22) |
+| Versions | 8.0.2 ×14 |
+| Platforms | windows ×14 |
+| OS | Windows 11 Pro ×8, Windows 11 Home ×6 |
+| GPU (selected) | AMD Radeon RX 9060 XT (driver 2.0.395) ×2, Quadro P1000 (driver 573.71) ×2, Microsoft Direct3D12 (NVIDIA GeForce RTX 4060 Laptop GPU) (driver 26.0.129.35) ×1, NVIDIA GeForce GT 1030 (driver 560.94) ×1, NVIDIA GeForce RTX 2070 with Max-Q Design (driver 555.97) ×1, NVIDIA GeForce RTX 3070 (driver 610.88) ×1, … (6 more) |
+| ANGLE backend | d3d11 ×14 |
+| Died at milestone | Stopping ×14 |
+| Single-instance lock | not recorded ×14 |
 
 - **Cause (normalized):** `exit code 98 after Stopping`
 - **Where:** no source location
@@ -37,9 +37,11 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×4 `Core: The graphics device is lost or the renderer is no longer usable : the engine stops now (exit code <n>).`
+- ×6 `Core: The graphics device is lost or the renderer is no longer usable : the engine stops now (exit code <n>).`
 - ×3 `UIManagerService: Failed to create the startup error overlay web view !`
+- ×1 `OverlayManagerService: Failed to process screen 'ApplicationUI' updates!`
 - ×1 `VulkanDevice: DEVICE LOST (Queue::present) — GPU diagnostics follow: [checkpoints] last GPU markers reached per queue: - queue <hex> stage=<hex> marker='t`
+- ×1 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'View3D' (2561x1560px) !`
 - ×1 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'View3D' (2561x1566px) !`
 - ×1 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'View3D' (<n><hex>px) !`
 
@@ -68,6 +70,10 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/51eeee3e6ef2d6cf2d629d7bfa3d16b4-bc81d7ea-5ae0-4679-92a5-58c4c62e7fd9.zip` → `archives/8.0.2/51eeee3e6ef2d6cf2d629d7bfa3d16b4-bc81d7ea-5ae0-4679-92a5-58c4c62e7fd9.zip`
 - `reports/8.0.2/67d7b35e57dbb5903c0bb84a75782f1c-14d4757a-06d2-4fad-a148-9e6db78cda68.zip` → `archives/8.0.2/67d7b35e57dbb5903c0bb84a75782f1c-14d4757a-06d2-4fad-a148-9e6db78cda68.zip`
 - `reports/8.0.2/8e7e20e87e5ac6a5e1f89e78b4b42db4-12fa3f6c-39db-49d5-9767-983e9c5b4c4d.zip` → `archives/8.0.2/8e7e20e87e5ac6a5e1f89e78b4b42db4-12fa3f6c-39db-49d5-9767-983e9c5b4c4d.zip`
+- `reports/8.0.2/3daf5592c1bfde494155e710b4d468da-96395c61-f53f-4fff-b84d-ed563fcc4745.zip` → `archives/8.0.2/3daf5592c1bfde494155e710b4d468da-96395c61-f53f-4fff-b84d-ed563fcc4745.zip`
+- `reports/8.0.2/d7fdec870eaf17b14d9d6c839960a646-32069562-64a6-492d-b9de-b49632068ff0.zip` → `archives/8.0.2/d7fdec870eaf17b14d9d6c839960a646-32069562-64a6-492d-b9de-b49632068ff0.zip`
+- `reports/8.0.2/20f87d6fb9579facfd0b857736e4617c-a4a5bf0a-8403-48a4-a8aa-b45f2e5a154b.zip` → `archives/8.0.2/20f87d6fb9579facfd0b857736e4617c-a4a5bf0a-8403-48a4-a8aa-b45f2e5a154b.zip`
+- `reports/8.0.2/4f778c5bdc6299bbd2e4099fcdf15bae-c03ce1dc-538b-4d7f-a705-9796a30ce172.zip` → `archives/8.0.2/4f778c5bdc6299bbd2e4099fcdf15bae-c03ce1dc-538b-4d7f-a705-9796a30ce172.zip`
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 31 — per version: 8.0.2 ×31 |
-| Reports | 44 (first 2026-10-15, last 2026-10-22) |
-| Versions | 8.0.2 ×44 |
-| Platforms | windows ×44 |
-| OS | Windows 11 Home ×30, Windows 10 Pro ×6, Windows 11 Pro ×5, Windows 10 Home ×1, Windows 10 Home Single Language ×1, Windows 11 Home Single Language ×1 |
-| GPU (selected) | unknown ×44 |
-| ANGLE backend | d3d11 ×32, default ×12 |
-| Died at milestone | SessionOpened ×44 |
-| Single-instance lock | not recorded ×44 |
+| Machines | 34 — per version: 8.0.2 ×34 |
+| Reports | 53 (first 2026-10-15, last 2026-10-22) |
+| Versions | 8.0.2 ×53 |
+| Platforms | windows ×53 |
+| OS | Windows 11 Home ×30, Windows 11 Pro ×9, Windows 10 Home ×6, Windows 10 Pro ×6, Windows 10 Home Single Language ×1, Windows 11 Home Single Language ×1 |
+| GPU (selected) | unknown ×53 |
+| ANGLE backend | d3d11 ×41, default ×12 |
+| Died at milestone | SessionOpened ×53 |
+| Single-instance lock | not recorded ×53 |
 
 - **Cause (normalized):** `died at SessionOpened on windows`
 - **Where:** no source location
@@ -37,43 +37,34 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
+- ×11 `ShaderManagerService: The shader 'OverlayRenderingFragmentShader' (<n> bytes) loaded from binary cache !`
 - ×10 `CrashReporter: Session token '<path>' written.`
-- ×6 `ShaderManagerService: The shader 'OverlayRenderingFragmentShader' (<n> bytes) loaded from binary cache !`
+- ×7 `NetAPIClientService: 'https:<path>' (ticket #<n>) answered HTTP <n> (<n> bytes).`
 - ×5 `RendererService: GraphicsRecorderService service failed or disabled at startup!`
-- ×4 `NetAPIClientService: 'https:<path>' (ticket #<n>) answered HTTP <n> (<n> bytes).`
 - ×4 `VulkanInstanceService: The physical device 'Intel(R) UHD Graphics <n>' is missing 'descriptorIndexing' feature !`
 - ×3 `Core: PlatformManagerService service up!`
 - ×3 `no journal`
 - ×2 `Application: [CEF-ACCEL] DirectComposition disabled (the windowed DevTools present path is incompatible with the process-wide shared-texture state).`
 - ×2 `VulkanInstanceService: The physical device 'Microsoft Direct3D12 (Microsoft Basic Render Driver)' is missing 'descriptorIndexing' feature !`
 - ×1 `Application: Crash report question in 'english' (preferred language: 'en-US').`
-- … 4 other(s), 4 report(s)
+- … 5 other(s), 5 report(s)
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[PhysicsManagerService][Warning] (vendors/emeraude-engine/src/Physics/Manager.cpp `EmEn::Physics::Manager::onInitialize`) Physics acceleration disabled at startup.
-[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) PhysicsManagerService service up!
-[AudioManagerService][Warning] (vendors/emeraude-engine/src/Audio/Manager.cpp `EmEn::Audio::Manager::onInitialize`) Audio manager disabled at startup.
-[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) AudioManagerService service up!
-[SystemNotificationService][Info] (vendors/emeraude-engine/src/SystemNotification.cpp `EmEn::SystemNotification::onInitialize`) System notification service initialized.
-[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) SystemNotificationService service up!
-[ShaderManagerService][Success] (vendors/emeraude-engine/src/Saphir/ShaderManager.cpp `EmEn::Saphir::ShaderManager::getShaderModuleFromGeneratedShader`) The shader 'OverlayRenderingVertexShader' (<n> bytes) loaded from binary cache !
-[ShaderManagerService][Success] (vendors/emeraude-engine/src/Saphir/ShaderManager.cpp `EmEn::Saphir::ShaderManager::getShaderModuleFromGeneratedShader`) The shader 'OverlayRenderingFragmentShader' (<n> bytes) loaded from binary cache !
+[Application][Info] (src/Application.CrashReport.cpp `Mango3D::System::Application::offerPendingCrashReport`) The user declined to send the crash report, it stays at '<path>'.
+[Network::HTTPSClient][Error] (vendors/emeraude-engine/src/Tracer.cpp `EmEn::Tracer::earlySetup::<lambda_1>::operator`) performHop(), the total time budget expired.
+[NetAPIClientService][Error] (vendors/emeraude-engine/src/Net/APIClient.cpp `EmEn::Net::APIClient::performRequest`) 'https:<path>' (ticket #<n>) failed: Timeout.
+[Application][Info] (src/Application.CefApp.cpp `Mango3D::System::Application::OnBeforeCommandLineProcessing`) Forcing the high performance GPU in chromium ...
+[Application][Info] (src/Application.CefApp.cpp `Mango3D::System::Application::OnBeforeCommandLineProcessing`) [CEF-ACCEL] Overriding the ANGLE backend 'vulkan' to 'd3d11' (required by the shared-texture path).
+[Application][Info] (src/Application.CefApp.cpp `Mango3D::System::Application::OnBeforeCommandLineProcessing`) [CEF-ACCEL] Pinning the Chromium GPU process to the adapter LUID <n>,<n> (mirroring the engine GPU selection).
+[Application][Info] (src/Application.CefApp.cpp `Mango3D::System::Application::OnBeforeCommandLineProcessing`) [CEF-ACCEL] DirectComposition disabled (the windowed DevTools present path is incompatible with the process-wide shared-texture state).
+[Application][Info] (src/Application.CefBrowserProcessHandler.cpp `Mango3D::System::Application::OnRegisterCustomPreferences`) A global preference has been changed !
 ```
 
 Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
 
-- … 24 older archive(s), see `crash_reports.py list`
-- `reports/8.0.2/3ef76c9dbb164b7f438831bf3be41304-ce4dbd50-6241-445b-af49-bf00fc06db06.zip` → `archives/8.0.2/3ef76c9dbb164b7f438831bf3be41304-ce4dbd50-6241-445b-af49-bf00fc06db06.zip`
-- `reports/8.0.2/6b167dd28974f89cedf4270641d15dc7-bc07fb1f-1a68-4223-9b11-72f2b802fdc9.zip` → `archives/8.0.2/6b167dd28974f89cedf4270641d15dc7-bc07fb1f-1a68-4223-9b11-72f2b802fdc9.zip`
-- `reports/8.0.2/2da5cd91b99d4b5e2858f6f6fbdd02ac-a2084ac4-0fe1-4dfb-8e78-f6c0a761a3c2.zip` → `archives/8.0.2/2da5cd91b99d4b5e2858f6f6fbdd02ac-a2084ac4-0fe1-4dfb-8e78-f6c0a761a3c2.zip`
-- `reports/8.0.2/a6be903a5eb54a226249595bab9bde18-06f04268-67da-4517-899b-52ac9a27409a.zip` → `archives/8.0.2/a6be903a5eb54a226249595bab9bde18-06f04268-67da-4517-899b-52ac9a27409a.zip`
-- `reports/8.0.2/2224056a17efae3a8bdbbfffb9d426b7-cde975c8-d673-406f-99a8-9930a5a60e10.zip` → `archives/8.0.2/2224056a17efae3a8bdbbfffb9d426b7-cde975c8-d673-406f-99a8-9930a5a60e10.zip`
-- `reports/8.0.2/4933581d33420ef178ae18016414abab-807c2633-e943-4787-bbf5-17c0c92c9149.zip` → `archives/8.0.2/4933581d33420ef178ae18016414abab-807c2633-e943-4787-bbf5-17c0c92c9149.zip`
-- `reports/8.0.2/2f7fc657332e60d20e52dbfd8f112208-e5c4aa7d-60fa-416c-9b5b-096c0abd4cc6.zip` → `archives/8.0.2/2f7fc657332e60d20e52dbfd8f112208-e5c4aa7d-60fa-416c-9b5b-096c0abd4cc6.zip`
-- `reports/8.0.2/09a3158c651989726b1a74fb5d27a1ba-be1d8b6d-8a26-466d-966f-77a5787ea722.zip` → `archives/8.0.2/09a3158c651989726b1a74fb5d27a1ba-be1d8b6d-8a26-466d-966f-77a5787ea722.zip`
-- `reports/8.0.2/73e4f0292cb634d88029074767dc799a-4b8afdf0-9106-45d9-bc8a-968301a92671.zip` → `archives/8.0.2/73e4f0292cb634d88029074767dc799a-4b8afdf0-9106-45d9-bc8a-968301a92671.zip`
+- … 33 older archive(s), see `crash_reports.py list`
 - `reports/8.0.2/34ae55d271599c8d50521129327bacb7-3b685493-f512-4216-b0b7-a4eec226c454.zip` → `archives/8.0.2/34ae55d271599c8d50521129327bacb7-3b685493-f512-4216-b0b7-a4eec226c454.zip`
 - `reports/8.0.2/22bf555b8f60b4a012ebc6e618620753-f93b0668-693b-4ecd-be05-e8b206b827ab.zip` → `archives/8.0.2/22bf555b8f60b4a012ebc6e618620753-f93b0668-693b-4ecd-be05-e8b206b827ab.zip`
 - `reports/8.0.2/69b4e99efc17aa1f379aaed6f53c663e-dd4a3a47-5858-47df-9ad3-14bc1f8ca77f.zip` → `archives/8.0.2/69b4e99efc17aa1f379aaed6f53c663e-dd4a3a47-5858-47df-9ad3-14bc1f8ca77f.zip`
@@ -85,6 +76,15 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/ff1fa5a69ed4fa0091f99d6ee87dce8e-a88b170a-b798-4de4-b49e-3156757f56a7.zip` → `archives/8.0.2/ff1fa5a69ed4fa0091f99d6ee87dce8e-a88b170a-b798-4de4-b49e-3156757f56a7.zip`
 - `reports/8.0.2/ff70436ca2c026636e7dcfb1589cf0c6-1fdd5dce-869f-4992-8d81-173e68323205.zip` → `archives/8.0.2/ff70436ca2c026636e7dcfb1589cf0c6-1fdd5dce-869f-4992-8d81-173e68323205.zip`
 - `reports/8.0.2/a10e94acb08d52a9f9a8361d2144b59f-a99f524f-823f-43c7-a2b6-d434295ad1d4.zip` → `archives/8.0.2/a10e94acb08d52a9f9a8361d2144b59f-a99f524f-823f-43c7-a2b6-d434295ad1d4.zip`
+- `reports/8.0.2/8594c879b6b662419a227bd3191a76dc-eeb52599-c77e-475e-8359-b96464634313.zip` → `archives/8.0.2/8594c879b6b662419a227bd3191a76dc-eeb52599-c77e-475e-8359-b96464634313.zip`
+- `reports/8.0.2/941b2543dd50f62aa8cc086a37ea13bc-089c0b69-ee08-4bad-941b-9891c5dd4223.zip` → `archives/8.0.2/941b2543dd50f62aa8cc086a37ea13bc-089c0b69-ee08-4bad-941b-9891c5dd4223.zip`
+- `reports/8.0.2/97dc4f1464c93222439ab1ee8d468b81-2ccf835c-f5a8-45f3-bfae-badae3062087.zip` → `archives/8.0.2/97dc4f1464c93222439ab1ee8d468b81-2ccf835c-f5a8-45f3-bfae-badae3062087.zip`
+- `reports/8.0.3/8a81b6303ef0830e281afe22a5316222-5ae5ec4c-c320-46c7-abdf-2afc330ec4d8.zip` → `archives/8.0.3/8a81b6303ef0830e281afe22a5316222-5ae5ec4c-c320-46c7-abdf-2afc330ec4d8.zip`
+- `reports/8.0.2/2ab95f7eebe3714b1cc8700f4ab838df-96104445-3882-402c-8a9a-1e17fc377d05.zip` → `archives/8.0.2/2ab95f7eebe3714b1cc8700f4ab838df-96104445-3882-402c-8a9a-1e17fc377d05.zip`
+- `reports/8.0.2/4631270825309d7fd63ff16408b008c0-bcaf328d-aeec-4c4a-a95c-5d63be27b65d.zip` → `archives/8.0.2/4631270825309d7fd63ff16408b008c0-bcaf328d-aeec-4c4a-a95c-5d63be27b65d.zip`
+- `reports/8.0.3/42c6a21da6c1cf409b0b529e6ee513ce-86ec8975-c760-457c-855c-5c705049c9e7.zip` → `archives/8.0.3/42c6a21da6c1cf409b0b529e6ee513ce-86ec8975-c760-457c-855c-5c705049c9e7.zip`
+- `reports/8.0.2/86f9a98857af1b66b8020ea40cd473fe-8c9de12a-2fba-49e1-aacc-7be315175ab3.zip` → `archives/8.0.2/86f9a98857af1b66b8020ea40cd473fe-8c9de12a-2fba-49e1-aacc-7be315175ab3.zip`
+- `reports/8.0.2/916bcf74ce4d15c16318d6b85374c7d8-8619c562-5225-488f-bcec-f739cf7bbeb1.zip` → `archives/8.0.2/916bcf74ce4d15c16318d6b85374c7d8-8619c562-5225-488f-bcec-f739cf7bbeb1.zip`
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)
