@@ -53,13 +53,13 @@ Plan: `CrashReport Solucius` (app_system `docs/plans/crashreport-solucius.md`).
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Reports | 85 (first 2026-10-15, last 2026-10-21) |
-| Versions | 8.0.2 ×85 |
-| Platforms | windows ×85 |
-| OS | Windows 11 Home ×46, Windows 10 Pro ×19, Windows 10 Home ×8, Windows 11 Pro ×5, Windows 11 Home Single Language ×4, Windows 11 Education ×3 |
-| GPU (selected) | unknown ×85 |
-| ANGLE backend | d3d11 ×85 |
-| Died at milestone | SessionOpened ×85 |
+| Reports | 88 (first 2026-10-15, last 2026-10-22) |
+| Versions | 8.0.2 ×88 |
+| Platforms | windows ×88 |
+| OS | Windows 11 Home ×48, Windows 10 Pro ×19, Windows 10 Home ×8, Windows 11 Pro ×6, Windows 11 Home Single Language ×4, Windows 11 Education ×3 |
+| GPU (selected) | unknown ×88 |
+| ANGLE backend | d3d11 ×88 |
+| Died at milestone | SessionOpened ×88 |
 
 - **Cause (normalized):** `VulkanDevice: Unable to create a logical device : VK_ERROR_FEATURE_NOT_PRESENT !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/Device.cpp` — `EmEn::Vulkan::Device::createDevice`
@@ -67,13 +67,13 @@ Plan: `CrashReport Solucius` (app_system `docs/plans/crashreport-solucius.md`).
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×85 `died at SessionOpened`
+- ×88 `died at SessionOpened`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[VulkanInstanceService][Info] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::getGraphicsDevice`) Mesh shaders not supported by this device.
 [VulkanInstanceService][Info] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::getGraphicsDevice`) Vulkan Video H.<n> encode not supported by this device (RushMaker will use software VP9).
+[VulkanInstanceService][Info] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::getGraphicsDevice`) VK_NV_device_diagnostic_checkpoints detected and enabled (GPU checkpoint markers).
 [VulkanInstanceService][Info] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::getGraphicsDevice`) VK_KHR_external_memory_win32 detected and enabled (external D3D11 texture import).
 [VulkanDevice][Info] (vendors/emeraude-engine/src/Vulkan/Device.cpp `EmEn::Vulkan::Device::create`) Create a device requiring graphics capabilities !
 [VulkanDevice][Success] (vendors/emeraude-engine/src/Vulkan/Device.cpp `EmEn::Vulkan::Device::searchGraphicsQueueConfiguration`) Graphics configured with queue family index #<n> (queue count: <n>).
@@ -84,10 +84,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
 
-- … 65 older archive(s), see `crash_reports.py list`
-- `reports/8.0.2/190e8784b0bd26c2b8978758501aea8b-e984c64a-fac1-4ba2-aa53-3115ecd1b3d2.zip` → `archives/8.0.2/190e8784b0bd26c2b8978758501aea8b-e984c64a-fac1-4ba2-aa53-3115ecd1b3d2.zip`
-- `reports/8.0.2/69be9e14fbc24105219c6317c5569668-14dac5f3-f382-4a73-9dfc-22b9b37320ac.zip` → `archives/8.0.2/69be9e14fbc24105219c6317c5569668-14dac5f3-f382-4a73-9dfc-22b9b37320ac.zip`
-- `reports/8.0.2/385ee036df9b2fe78774c17dea8ef90e-46c874ed-1610-4f79-ba7a-df661005bbe5.zip` → `archives/8.0.2/385ee036df9b2fe78774c17dea8ef90e-46c874ed-1610-4f79-ba7a-df661005bbe5.zip`
+- … 68 older archive(s), see `crash_reports.py list`
 - `reports/8.0.2/8a3a64102892e792451c0dae6b68f2f0-e9ae6f38-d4af-48a0-b543-1540e1d5b6e3.zip` → `archives/8.0.2/8a3a64102892e792451c0dae6b68f2f0-e9ae6f38-d4af-48a0-b543-1540e1d5b6e3.zip`
 - `reports/8.0.2/4d97e96bfda7a46dfdc02d9011a26496-098a9c13-27e6-47f0-b1c3-f4ebe6fb12c1.zip` → `archives/8.0.2/4d97e96bfda7a46dfdc02d9011a26496-098a9c13-27e6-47f0-b1c3-f4ebe6fb12c1.zip`
 - `reports/8.0.2/a8fdc3603d6b83598fb48f8599a5a5b4-480d5ddb-1eaf-4194-a859-8b386a23ccb8.zip` → `archives/8.0.2/a8fdc3603d6b83598fb48f8599a5a5b4-480d5ddb-1eaf-4194-a859-8b386a23ccb8.zip`
@@ -105,6 +102,9 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/81eb4d4718273990e2f4e4714aae5cc4-ceb5adb2-eac6-47b6-806e-5f1600c51b7a.zip` → `archives/8.0.2/81eb4d4718273990e2f4e4714aae5cc4-ceb5adb2-eac6-47b6-806e-5f1600c51b7a.zip`
 - `reports/8.0.2/f980c2ebcd3e95a825af973256791830-c1d52764-aa98-4fb0-b010-8e17723cbb04.zip` → `archives/8.0.2/f980c2ebcd3e95a825af973256791830-c1d52764-aa98-4fb0-b010-8e17723cbb04.zip`
 - `reports/8.0.2/690864c339058be7ea469d9987d85339-4170183d-24af-44cc-a83a-c487db26f382.zip` → `archives/8.0.2/690864c339058be7ea469d9987d85339-4170183d-24af-44cc-a83a-c487db26f382.zip`
+- `reports/8.0.2/e80c1f54e06df109b6289593a39a530a-c3d51598-4a2a-4174-962c-c3f8805cfc0d.zip` → `archives/8.0.2/e80c1f54e06df109b6289593a39a530a-c3d51598-4a2a-4174-962c-c3f8805cfc0d.zip`
+- `reports/8.0.2/7b5e7a6b402a5d06f400b9637c9c37bf-3426ff03-e28d-4426-a7a4-88b998608c76.zip` → `archives/8.0.2/7b5e7a6b402a5d06f400b9637c9c37bf-3426ff03-e28d-4426-a7a4-88b998608c76.zip`
+- `reports/8.0.2/b573be844c453e8fde561d717f92df16-5b24be02-5035-4940-9281-6100ba80b9c2.zip` → `archives/8.0.2/b573be844c453e8fde561d717f92df16-5b24be02-5035-4940-9281-6100ba80b9c2.zip`
 <!-- crash-reports:end -->
 
 ## 8.0.3 status (checked 2026-10-21)

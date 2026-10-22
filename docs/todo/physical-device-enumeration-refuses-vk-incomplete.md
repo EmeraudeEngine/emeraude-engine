@@ -47,13 +47,13 @@ Plan: `CrashReport Solucius` (app_system `docs/plans/crashreport-solucius.md`).
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Reports | 56 (first 2026-10-15, last 2026-10-21) |
-| Versions | 8.0.2 ×56 |
-| Platforms | windows ×56 |
-| OS | Windows 10 Pro ×24, Windows 10 Home ×16, Windows 11 Home ×15, Windows 11 Pro ×1 |
-| GPU (selected) | unknown ×56 |
-| ANGLE backend | d3d11 ×56 |
-| Died at milestone | SessionOpened ×56 |
+| Reports | 58 (first 2026-10-15, last 2026-10-22) |
+| Versions | 8.0.2 ×58 |
+| Platforms | windows ×58 |
+| OS | Windows 10 Pro ×25, Windows 10 Home ×16, Windows 11 Home ×15, Windows 11 Pro ×2 |
+| GPU (selected) | unknown ×58 |
+| ANGLE backend | d3d11 ×58 |
+| Died at milestone | SessionOpened ×58 |
 
 - **Cause (normalized):** `VulkanInstanceService: No physical device available !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/Instance.cpp` — `EmEn::Vulkan::Instance::onInitialize`
@@ -61,7 +61,7 @@ Plan: `CrashReport Solucius` (app_system `docs/plans/crashreport-solucius.md`).
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×56 `died at SessionOpened`
+- ×58 `died at SessionOpened`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
@@ -78,9 +78,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
 
-- … 36 older archive(s), see `crash_reports.py list`
-- `reports/8.0.2/593420eac32e053242af832ebd56cdec-6f007b11-92dd-41ae-a8d5-309f398f4f18.zip` → `archives/8.0.2/593420eac32e053242af832ebd56cdec-6f007b11-92dd-41ae-a8d5-309f398f4f18.zip`
-- `reports/8.0.2/56da2c5f3da775bfba08f10bc7034d3c-0c7ebd02-c82c-41fb-a25b-b7d8d26659e4.zip` → `archives/8.0.2/56da2c5f3da775bfba08f10bc7034d3c-0c7ebd02-c82c-41fb-a25b-b7d8d26659e4.zip`
+- … 38 older archive(s), see `crash_reports.py list`
 - `reports/8.0.2/ef17a668da06779c2c8676eec70938e7-2d76c41c-dc8f-4418-a61c-7795de56dc48.zip` → `archives/8.0.2/ef17a668da06779c2c8676eec70938e7-2d76c41c-dc8f-4418-a61c-7795de56dc48.zip`
 - `reports/8.0.2/b5115e87eab991143413f728b339dd8b-2326ddd6-7d71-4a12-b19c-64baeb380dc8.zip` → `archives/8.0.2/b5115e87eab991143413f728b339dd8b-2326ddd6-7d71-4a12-b19c-64baeb380dc8.zip`
 - `reports/8.0.2/a0f06246859f348e122eacf6a246408c-bc1d9b67-bb3c-4d28-9d8c-78cd1bd6e88b.zip` → `archives/8.0.2/a0f06246859f348e122eacf6a246408c-bc1d9b67-bb3c-4d28-9d8c-78cd1bd6e88b.zip`
@@ -99,6 +97,8 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/eabb9355ccf3da277ca54e5f423cb3f0-debe9672-7277-498a-b8b5-c96b1dd5f969.zip` → `archives/8.0.2/eabb9355ccf3da277ca54e5f423cb3f0-debe9672-7277-498a-b8b5-c96b1dd5f969.zip`
 - `reports/8.0.2/7b3cded70076145c2371bf3263edcead-471e207b-504d-45ae-bb00-23dfe293f207.zip` → `archives/8.0.2/7b3cded70076145c2371bf3263edcead-471e207b-504d-45ae-bb00-23dfe293f207.zip`
 - `reports/8.0.2/d58ebc717921f627434c40fa9e93d9c3-c9872d3f-8cee-4079-9c08-5bc369971118.zip` → `archives/8.0.2/d58ebc717921f627434c40fa9e93d9c3-c9872d3f-8cee-4079-9c08-5bc369971118.zip`
+- `reports/8.0.2/6676ca9a13bec9b2a5a39c447cafa5f6-1367fc7e-cea5-46f6-a133-0235353261b6.zip` → `archives/8.0.2/6676ca9a13bec9b2a5a39c447cafa5f6-1367fc7e-cea5-46f6-a133-0235353261b6.zip`
+- `reports/8.0.2/dddcc2b7eb2138db8f2acf664cf5fb61-6744b492-6976-4c42-94ac-ef0f8a097944.zip` → `archives/8.0.2/dddcc2b7eb2138db8f2acf664cf5fb61-6744b492-6976-4c42-94ac-ef0f8a097944.zip`
 <!-- crash-reports:end -->
 
 ## 8.0.3 status (checked 2026-10-21)

@@ -21,13 +21,13 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Reports | 36 (first 2026-10-15, last 2026-10-20) |
-| Versions | 8.0.2 ×36 |
-| Platforms | windows ×36 |
-| OS | Windows 10 Pro ×18, Windows 11 Home Single Language ×8, Windows 11 Pro ×4, Windows 11 Home ×3, Windows 10 Home ×2, Windows 10 Education ×1 |
-| GPU (selected) | unknown ×36 |
-| ANGLE backend | d3d11 ×36 |
-| Died at milestone | SessionOpened ×36 |
+| Reports | 38 (first 2026-10-15, last 2026-10-21) |
+| Versions | 8.0.2 ×38 |
+| Platforms | windows ×38 |
+| OS | Windows 10 Pro ×18, Windows 11 Home Single Language ×8, Windows 11 Pro ×6, Windows 11 Home ×3, Windows 10 Home ×2, Windows 10 Education ×1 |
+| GPU (selected) | unknown ×38 |
+| ANGLE backend | d3d11 ×38 |
+| Died at milestone | SessionOpened ×38 |
 
 - **Cause (normalized):** `Core: OverlayManagerService service failed to execute!`
 - **Where:** `vendors/emeraude-engine/src/Core.cpp` — `EmEn::Core::initializeCoreLevel`
@@ -35,7 +35,7 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×36 `died at SessionOpened`
+- ×38 `died at SessionOpened`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
@@ -52,9 +52,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
 
-- … 16 older archive(s), see `crash_reports.py list`
-- `reports/8.0.2/0e80f210fd5678b13d489fdb0bbfdd12-f141af1a-fe5e-455d-8501-d047ff40c123.zip` → `archives/8.0.2/0e80f210fd5678b13d489fdb0bbfdd12-f141af1a-fe5e-455d-8501-d047ff40c123.zip`
-- `reports/8.0.2/f7b4ce33df8ac7c032e06b2e151341b4-2bc639c3-15cd-4d2e-b3a3-9c6dcdc1e655.zip` → `archives/8.0.2/f7b4ce33df8ac7c032e06b2e151341b4-2bc639c3-15cd-4d2e-b3a3-9c6dcdc1e655.zip`
+- … 18 older archive(s), see `crash_reports.py list`
 - `reports/8.0.2/91b59bad5414e19b55e6afa22cc7db6b-70f2e1e6-16c8-4780-93cf-332bad2f6865.zip` → `archives/8.0.2/91b59bad5414e19b55e6afa22cc7db6b-70f2e1e6-16c8-4780-93cf-332bad2f6865.zip`
 - `reports/8.0.2/242c20b42c61b1324757d418b18f8fd2-2220857a-05f3-4839-87f3-94109702d9b5.zip` → `archives/8.0.2/242c20b42c61b1324757d418b18f8fd2-2220857a-05f3-4839-87f3-94109702d9b5.zip`
 - `reports/8.0.2/210185f2a77e222c081624b344d5916b-a992d088-fa16-4d31-a40f-72238fe3d2d6.zip` → `archives/8.0.2/210185f2a77e222c081624b344d5916b-a992d088-fa16-4d31-a40f-72238fe3d2d6.zip`
@@ -73,6 +71,8 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/addc78103d48aee684fc49c44a8e03ec-d55434d2-771e-469d-8eb8-5c925dd319a5.zip` → `archives/8.0.2/addc78103d48aee684fc49c44a8e03ec-d55434d2-771e-469d-8eb8-5c925dd319a5.zip`
 - `reports/8.0.2/a6c496f68320c3ad54dd86dc89b4ad9e-aaf2e551-6421-4736-9832-0fe9190dd7a8.zip` → `archives/8.0.2/a6c496f68320c3ad54dd86dc89b4ad9e-aaf2e551-6421-4736-9832-0fe9190dd7a8.zip`
 - `reports/8.0.2/28c961e5249b84e3149932dbb7833964-fc0dfe98-b791-4cbc-b03a-2d0cef1879ee.zip` → `archives/8.0.2/28c961e5249b84e3149932dbb7833964-fc0dfe98-b791-4cbc-b03a-2d0cef1879ee.zip`
+- `reports/8.0.2/45f256215913451d72e3cfdfb0d02275-92aeab47-b28e-48bb-b1a4-e05580580841.zip` → `archives/8.0.2/45f256215913451d72e3cfdfb0d02275-92aeab47-b28e-48bb-b1a4-e05580580841.zip`
+- `reports/8.0.2/d11c048fd26be49e66e08c96e4264e6a-213dcae7-a098-40eb-8100-f5acebddfc03.zip` → `archives/8.0.2/d11c048fd26be49e66e08c96e4264e6a-213dcae7-a098-40eb-8100-f5acebddfc03.zip`
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

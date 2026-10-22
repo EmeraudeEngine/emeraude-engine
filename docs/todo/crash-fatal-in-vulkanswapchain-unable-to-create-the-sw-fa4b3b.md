@@ -21,13 +21,13 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Reports | 3 (first 2026-10-17, last 2026-10-19) |
-| Versions | 8.0.2 ×3 |
-| Platforms | windows ×3 |
-| OS | Windows 11 Home ×2, Windows 11 Home Single Language ×1 |
-| GPU (selected) | Intel(R) UHD Graphics (driver 100.9805) ×2, Intel(R) UHD Graphics 600 (driver 101.2140) ×1 |
-| ANGLE backend | d3d11 ×3 |
-| Died at milestone | ApplicationStarted ×2, Stopping ×1 |
+| Reports | 6 (first 2026-10-17, last 2026-10-22) |
+| Versions | 8.0.2 ×6 |
+| Platforms | windows ×6 |
+| OS | Windows 11 Home ×3, Windows 10 Pro ×1, Windows 11 Home Single Language ×1, Windows 11 Pro ×1 |
+| GPU (selected) | Intel(R) UHD Graphics (driver 100.9805) ×2, Intel(R) UHD Graphics 600 (driver 101.2140) ×1, Intel(R) UHD Graphics 605 (driver 101.2121) ×1, Intel(R) UHD Graphics 610 (driver 101.2111) ×1, Intel(R) UHD Graphics 620 (driver 101.2137) ×1 |
+| ANGLE backend | d3d11 ×6 |
+| Died at milestone | ApplicationStarted ×4, Stopping ×2 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the swap-chain : VK_ERROR_OUT_OF_HOST_MEMORY !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createBaseSwapChain`
@@ -35,18 +35,18 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×2 `died at ApplicationStarted`
-- ×1 `died at Stopping`
+- ×4 `died at ApplicationStarted`
+- ×2 `died at Stopping`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[WebView][Success] (src/UI/WebView.CefLoadHandler.cpp `Mango3D::System::UI::WebView::OnLoadEnd`) WebView 'ViewUI' loaded 'https:<path>' !
-[Application][Info] (src/Application.cpp `Mango3D::System::Application::onCoreSurfaceRefreshed`) Core updated the application surface.
-[Application][Info] (src/Application.cpp `Mango3D::System::Application::onCoreSurfaceRefreshed`) Core updated the application surface.
-[WebView][Info] (src/UI/WebView.CefLoadHandler.cpp `Mango3D::System::UI::WebView::OnLoadStart`) WebView 'ViewUI' loading 'https:<path>' ...
-[WebView][Success] (src/UI/WebView.cpp `Mango3D::System::UI::WebView::onBrowserReady`) The webview 'ViewUI' is ready!
-[WebView][Success] (src/UI/WebView.CefLoadHandler.cpp `Mango3D::System::UI::WebView::OnLoadEnd`) WebView 'ViewUI' loaded 'https:<path>' !
+[WebView][Success] (src/UI/WebView.cpp `Mango3D::System::UI::WebView::onBrowserReady`) The webview 'ViewLib' is ready!
+[WebView][Success] (src/UI/WebView.CefLoadHandler.cpp `Mango3D::System::UI::WebView::OnLoadEnd`) WebView 'ViewLib' loaded 'https:<path>' !
+[WebView][Success] (src/UI/WebView.CefLoadHandler.cpp `Mango3D::System::UI::WebView::OnLoadEnd`) WebView 'ViewPreview3D' loaded 'file:<path>' !
+[UIManagerService][Warning] (src/UI/Manager.cpp `Mango3D::System::UI::Manager::onAppControlMessage`) ================================== DEPRECATED ================================== Broadcasting legacy 'appReady' CustomEvent to all renderers. JS listeners using `window.addEventListener("appReady", ..
+[UIManagerService][Success] (src/UI/Manager.cpp `Mango3D::System::UI::Manager::onAppControlMessage`) The webview 'ViewLib' has been signaled with the 'appReady' event !
+[UIManagerService][Success] (src/UI/Manager.cpp `Mango3D::System::UI::Manager::onAppControlMessage`) The webview 'ViewPreview3D' has been signaled with the 'appReady' event !
 [VulkanSwapChain][Fatal] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createBaseSwapChain`) Unable to create the swap-chain : VK_ERROR_OUT_OF_HOST_MEMORY !
 [VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::recreate`) Unable to recreate the base of the swap-chain !
 ```
@@ -56,6 +56,9 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/64a6cf3dedf6e43952fe5eba8969df4e-b28f5da6-1836-46e2-946a-0cedaa9ef200.zip` → `archives/8.0.2/64a6cf3dedf6e43952fe5eba8969df4e-b28f5da6-1836-46e2-946a-0cedaa9ef200.zip`
 - `reports/8.0.2/6f3f754fb278cfa73f0eedf5565cc5f1-76a55ebf-b04d-4dfd-b163-47223da838b8.zip` → `archives/8.0.2/6f3f754fb278cfa73f0eedf5565cc5f1-76a55ebf-b04d-4dfd-b163-47223da838b8.zip`
 - `reports/8.0.2/f2c134c7e6c5a9e92ab1563c01f9f9da-cb83253a-e971-40f8-9cd1-d2ae6689ebc0.zip` → `archives/8.0.2/f2c134c7e6c5a9e92ab1563c01f9f9da-cb83253a-e971-40f8-9cd1-d2ae6689ebc0.zip`
+- `reports/8.0.2/5c3628e005d2bad7d98de1bbbc8fa8a5-f6b828f6-f9bc-4156-a9bd-79e15b3fabd7.zip` → `archives/8.0.2/5c3628e005d2bad7d98de1bbbc8fa8a5-f6b828f6-f9bc-4156-a9bd-79e15b3fabd7.zip`
+- `reports/8.0.2/924833e48df41ce1dc3f820e26238ed3-fb491788-6bea-44d6-a762-ad9f1b284b3e.zip` → `archives/8.0.2/924833e48df41ce1dc3f820e26238ed3-fb491788-6bea-44d6-a762-ad9f1b284b3e.zip`
+- `reports/8.0.2/c1d04892acc4efe19953078e84954847-05872382-cf9b-4993-aa08-13caa807271c.zip` → `archives/8.0.2/c1d04892acc4efe19953078e84954847-05872382-cf9b-4993-aa08-13caa807271c.zip`
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

@@ -21,13 +21,13 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Reports | 25 (first 2026-10-15, last 2026-10-21) |
-| Versions | 8.0.2 ×25 |
-| Platforms | windows ×25 |
-| OS | Windows 11 Home ×10, Windows 10 Home ×6, Windows 11 Pro ×5, Windows 11 Enterprise ×2, Windows 11 Home Single Language ×2 |
-| GPU (selected) | unknown ×25 |
-| ANGLE backend | d3d11 ×25 |
-| Died at milestone | SessionOpened ×25 |
+| Reports | 26 (first 2026-10-15, last 2026-10-21) |
+| Versions | 8.0.2 ×26 |
+| Platforms | windows ×26 |
+| OS | Windows 11 Home ×10, Windows 10 Home ×6, Windows 11 Pro ×6, Windows 11 Enterprise ×2, Windows 11 Home Single Language ×2 |
+| GPU (selected) | unknown ×26 |
+| ANGLE backend | d3d11 ×26 |
+| Died at milestone | SessionOpened ×26 |
 
 - **Cause (normalized):** `VulkanDevice: Unable to create a logical device : VK_ERROR_OUT_OF_HOST_MEMORY !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/Device.cpp` — `EmEn::Vulkan::Device::createDevice`
@@ -35,7 +35,7 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×25 `died at SessionOpened`
+- ×26 `died at SessionOpened`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
@@ -52,8 +52,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
 
-- … 5 older archive(s), see `crash_reports.py list`
-- `reports/8.0.2/211f5a36f477ce4586d2c253e58d8962-f09154e6-87e4-49d7-85b6-290a6655dc8e.zip` → `archives/8.0.2/211f5a36f477ce4586d2c253e58d8962-f09154e6-87e4-49d7-85b6-290a6655dc8e.zip`
+- … 6 older archive(s), see `crash_reports.py list`
 - `reports/8.0.2/e88e825488a82d17c511944e4e3ac4ec-33a83143-f18f-4b3b-84e8-aac0bc5543fa.zip` → `archives/8.0.2/e88e825488a82d17c511944e4e3ac4ec-33a83143-f18f-4b3b-84e8-aac0bc5543fa.zip`
 - `reports/8.0.2/b1fd82cb2719a411e0a08c8df9e656c9-282e8c90-ed85-4699-a91f-96574ed83713.zip` → `archives/8.0.2/b1fd82cb2719a411e0a08c8df9e656c9-282e8c90-ed85-4699-a91f-96574ed83713.zip`
 - `reports/8.0.2/2652ccd11d4e393b96995f946d09516d-4619e04c-fc1e-41a9-8ef2-e4625b2530a4.zip` → `archives/8.0.2/2652ccd11d4e393b96995f946d09516d-4619e04c-fc1e-41a9-8ef2-e4625b2530a4.zip`
@@ -73,6 +72,7 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/ec4f7e255d4940d96a11dd94227aaa74-aa93013f-a37b-4aa3-bf24-d80083fd0cc7.zip` → `archives/8.0.2/ec4f7e255d4940d96a11dd94227aaa74-aa93013f-a37b-4aa3-bf24-d80083fd0cc7.zip`
 - `reports/8.0.2/ba79c713be97cf898a7768c4e4e152b4-dcdecb8b-db1b-45f4-9418-3ee95fea1286.zip` → `archives/8.0.2/ba79c713be97cf898a7768c4e4e152b4-dcdecb8b-db1b-45f4-9418-3ee95fea1286.zip`
 - `reports/8.0.2/18c7b1e26b277a24f7ec7eac21bd011b-452ac3ea-15d7-4714-a96f-f707bb393387.zip` → `archives/8.0.2/18c7b1e26b277a24f7ec7eac21bd011b-452ac3ea-15d7-4714-a96f-f707bb393387.zip`
+- `reports/8.0.2/3f2c79e5e982e50d3c3cb16ac77d7b6f-715c47fd-8381-4c7d-b585-baee9a555a38.zip` → `archives/8.0.2/3f2c79e5e982e50d3c3cb16ac77d7b6f-715c47fd-8381-4c7d-b585-baee9a555a38.zip`
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

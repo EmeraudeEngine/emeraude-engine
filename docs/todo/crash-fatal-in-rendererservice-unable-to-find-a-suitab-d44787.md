@@ -21,13 +21,13 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Reports | 63 (first 2026-10-15, last 2026-10-21) |
-| Versions | 8.0.2 ×63 |
-| Platforms | windows ×63 |
-| OS | Windows 10 Home ×32, Windows 10 Pro ×14, Windows 11 Home ×7, Windows 11 Pro ×4, Windows 10 Enterprise LTSC 2019 ×2, Windows 11 Enterprise ×2, … (2 more) |
-| GPU (selected) | unknown ×63 |
-| ANGLE backend | d3d11 ×63 |
-| Died at milestone | SessionOpened ×63 |
+| Reports | 75 (first 2026-10-15, last 2026-10-22) |
+| Versions | 8.0.2 ×75 |
+| Platforms | windows ×75 |
+| OS | Windows 10 Home ×32, Windows 10 Pro ×15, Windows 11 Pro ×15, Windows 11 Home ×7, Windows 10 Enterprise LTSC 2019 ×2, Windows 11 Enterprise ×2, … (2 more) |
+| GPU (selected) | unknown ×75 |
+| ANGLE backend | d3d11 ×75 |
+| Died at milestone | SessionOpened ×75 |
 
 - **Cause (normalized):** `RendererService: Unable to find a suitable graphics device!`
 - **Where:** `vendors/emeraude-engine/src/Graphics/Renderer.cpp` — `EmEn::Graphics::Renderer::initializeRenderingStack`
@@ -35,16 +35,16 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×63 `died at SessionOpened`
+- ×75 `died at SessionOpened`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[VulkanInstanceService][Warning] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::checkDevicesFeaturesForGraphics`) The physical device '840M' is missing 'sparseResidency4Samples' feature !
-[VulkanInstanceService][Warning] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::checkDevicesFeaturesForGraphics`) The physical device '840M' is missing 'sparseResidency8Samples' feature !
-[VulkanInstanceService][Warning] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::checkDevicesFeaturesForGraphics`) The physical device '840M' is missing 'sparseResidency16Samples' feature !
-[VulkanInstanceService][Warning] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::checkDevicesFeaturesForGraphics`) The physical device '840M' is missing 'sparseResidencyAliased' feature !
-[VulkanInstanceService][Error] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::checkDevicesFeaturesForGraphics`) The physical device '840M' is missing 'descriptorIndexing' feature !
+[VulkanInstanceService][Success] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::checkDeviceCompatibility`) 'Intel(R) UHD Graphics <n>' support presentation!
+[VulkanInstanceService][Warning] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::checkDevicesFeaturesForGraphics`) The physical device 'Intel(R) UHD Graphics <n>' is missing 'depthBounds' feature !
+[VulkanInstanceService][Warning] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::checkDevicesFeaturesForGraphics`) The physical device 'Intel(R) UHD Graphics <n>' is missing 'shaderStorageImageReadWithoutFormat' feature !
+[VulkanInstanceService][Warning] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::checkDevicesFeaturesForGraphics`) The physical device 'Intel(R) UHD Graphics <n>' is missing 'shaderResourceMinLod' feature !
+[VulkanInstanceService][Error] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::checkDevicesFeaturesForGraphics`) The physical device 'Intel(R) UHD Graphics <n>' is missing 'descriptorIndexing' feature !
 [VulkanInstanceService][Error] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::getGraphicsDevice`) There is no physical device (Graphics) compatible with Vulkan.
 [RendererService][Fatal] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeRenderingStack`) Unable to find a suitable graphics device!
 [Core][Fatal] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) RendererService service failed to execute!
@@ -52,19 +52,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
 
-- … 43 older archive(s), see `crash_reports.py list`
-- `reports/8.0.2/5a29f4752863c65d463dbb354ecd5f9f-fcf80c77-ff7a-4155-94e7-76cbf3b92469.zip` → `archives/8.0.2/5a29f4752863c65d463dbb354ecd5f9f-fcf80c77-ff7a-4155-94e7-76cbf3b92469.zip`
-- `reports/8.0.2/2707beecec2c5c2d6779dd2fc43ce994-bac94a21-c663-4408-9be7-71c20cdbf644.zip` → `archives/8.0.2/2707beecec2c5c2d6779dd2fc43ce994-bac94a21-c663-4408-9be7-71c20cdbf644.zip`
-- `reports/8.0.2/18d4b524ca31185bcf363f8318e9598a-f5add297-0bb4-4f20-b264-00e7770bea35.zip` → `archives/8.0.2/18d4b524ca31185bcf363f8318e9598a-f5add297-0bb4-4f20-b264-00e7770bea35.zip`
-- `reports/8.0.2/293f98eec79163cac759122b93dc3a0b-685aa166-aad2-4ef8-970f-f31c2f0a015f.zip` → `archives/8.0.2/293f98eec79163cac759122b93dc3a0b-685aa166-aad2-4ef8-970f-f31c2f0a015f.zip`
-- `reports/8.0.2/65b2463573be16074b2d68115cb86f1b-8ae4be3b-2d71-4a12-9664-45eb549b4606.zip` → `archives/8.0.2/65b2463573be16074b2d68115cb86f1b-8ae4be3b-2d71-4a12-9664-45eb549b4606.zip`
-- `reports/8.0.2/ef6128879787430ad05a0d51156a4413-e8259fbc-7f84-422e-94a5-9453d162d795.zip` → `archives/8.0.2/ef6128879787430ad05a0d51156a4413-e8259fbc-7f84-422e-94a5-9453d162d795.zip`
-- `reports/8.0.2/96991ca2c2b514bb69329a1317763ef2-5c8ed2bd-f75f-4222-a3f9-f4eb971726b1.zip` → `archives/8.0.2/96991ca2c2b514bb69329a1317763ef2-5c8ed2bd-f75f-4222-a3f9-f4eb971726b1.zip`
-- `reports/8.0.2/41f1c967e3cef4cc918537b1acf0b086-eada1795-066b-472e-9f6b-f1058609000c.zip` → `archives/8.0.2/41f1c967e3cef4cc918537b1acf0b086-eada1795-066b-472e-9f6b-f1058609000c.zip`
-- `reports/8.0.2/22ecce5c83973a3df9b4ddda8dee5881-ea62c7c9-e1e8-47c0-ae2b-b76ee17078cb.zip` → `archives/8.0.2/22ecce5c83973a3df9b4ddda8dee5881-ea62c7c9-e1e8-47c0-ae2b-b76ee17078cb.zip`
-- `reports/8.0.2/1f376becc7104ae3c0b3652fbfe5fbcf-6252c80b-be12-42aa-b116-6bfd61fd2dc2.zip` → `archives/8.0.2/1f376becc7104ae3c0b3652fbfe5fbcf-6252c80b-be12-42aa-b116-6bfd61fd2dc2.zip`
-- `reports/8.0.2/699a3481261ba81c6417fbce8bf47f20-8bd78b97-e4f0-4a81-8770-1ec7473eca92.zip` → `archives/8.0.2/699a3481261ba81c6417fbce8bf47f20-8bd78b97-e4f0-4a81-8770-1ec7473eca92.zip`
-- `reports/8.0.2/ecf33a0b83e155589ddf53efa3c6fa03-90ef4ac7-3dfc-4e9e-a647-7a2e1e21e531.zip` → `archives/8.0.2/ecf33a0b83e155589ddf53efa3c6fa03-90ef4ac7-3dfc-4e9e-a647-7a2e1e21e531.zip`
+- … 55 older archive(s), see `crash_reports.py list`
 - `reports/8.0.2/c9b36d3635e9a50182a361b97146b929-1fa4a8e8-b9ee-4ea1-a768-293edd708b90.zip` → `archives/8.0.2/c9b36d3635e9a50182a361b97146b929-1fa4a8e8-b9ee-4ea1-a768-293edd708b90.zip`
 - `reports/8.0.2/be6164ffe2663f241c1b76af5e685f1d-b5e532cf-a1d2-4adf-91e0-dc7038fe49ed.zip` → `archives/8.0.2/be6164ffe2663f241c1b76af5e685f1d-b5e532cf-a1d2-4adf-91e0-dc7038fe49ed.zip`
 - `reports/8.0.2/dbd52caeb15a94e3d41d2e81cf6b4218-b899cb15-5965-4c10-953f-280b119ecfc5.zip` → `archives/8.0.2/dbd52caeb15a94e3d41d2e81cf6b4218-b899cb15-5965-4c10-953f-280b119ecfc5.zip`
@@ -73,6 +61,18 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/6d69de9526bfff24c7a93898f99c720f-6e51c82d-336b-4df1-8ea8-572b795e57c2.zip` → `archives/8.0.2/6d69de9526bfff24c7a93898f99c720f-6e51c82d-336b-4df1-8ea8-572b795e57c2.zip`
 - `reports/8.0.2/a4b83ddde25ebc9bda6c858af1acd4df-81fc101c-099a-42c3-8fab-f7725c3c5e6b.zip` → `archives/8.0.2/a4b83ddde25ebc9bda6c858af1acd4df-81fc101c-099a-42c3-8fab-f7725c3c5e6b.zip`
 - `reports/8.0.2/baa79cdb55ceffbf154d9a634c4e9cdb-d59d3db6-9e87-4420-902b-ffae8a443bec.zip` → `archives/8.0.2/baa79cdb55ceffbf154d9a634c4e9cdb-d59d3db6-9e87-4420-902b-ffae8a443bec.zip`
+- `reports/8.0.2/16693d1354ca1099c3be6cf23011c6d5-8c8bed67-9c49-44f7-98b7-b81e0a934bb8.zip` → `archives/8.0.2/16693d1354ca1099c3be6cf23011c6d5-8c8bed67-9c49-44f7-98b7-b81e0a934bb8.zip`
+- `reports/8.0.2/a2512703cad1e908ea68c39a2169632f-774e126e-8a88-4850-95b5-c5e864d1e6dc.zip` → `archives/8.0.2/a2512703cad1e908ea68c39a2169632f-774e126e-8a88-4850-95b5-c5e864d1e6dc.zip`
+- `reports/8.0.2/bff6263297fc5b0ce4237b458a93c24f-7ea19da5-ef2e-4f27-81df-ea66c6ff3ac2.zip` → `archives/8.0.2/bff6263297fc5b0ce4237b458a93c24f-7ea19da5-ef2e-4f27-81df-ea66c6ff3ac2.zip`
+- `reports/8.0.2/af0e98450b111e2bcc577be47179838b-1747e26a-fa09-40ce-93a9-77a78feff676.zip` → `archives/8.0.2/af0e98450b111e2bcc577be47179838b-1747e26a-fa09-40ce-93a9-77a78feff676.zip`
+- `reports/8.0.2/82b0f4eda2e6fa2a716973955e9ab83b-ec5fc49d-8f50-4f92-99e4-cf66a9724c3d.zip` → `archives/8.0.2/82b0f4eda2e6fa2a716973955e9ab83b-ec5fc49d-8f50-4f92-99e4-cf66a9724c3d.zip`
+- `reports/8.0.2/f6354640950f18afe2fb9c9889c31a9a-ef0876b0-ca02-400c-b1f1-2bcb40979b27.zip` → `archives/8.0.2/f6354640950f18afe2fb9c9889c31a9a-ef0876b0-ca02-400c-b1f1-2bcb40979b27.zip`
+- `reports/8.0.2/b51e363fd646957ccf2bdd72d61acfa2-629a8e0c-24ce-4f44-be33-c1fd1e97eee2.zip` → `archives/8.0.2/b51e363fd646957ccf2bdd72d61acfa2-629a8e0c-24ce-4f44-be33-c1fd1e97eee2.zip`
+- `reports/8.0.2/b42047fea87d6365147a81b5675a24cd-dfdd5b7d-ab51-4c2d-8573-305da9317500.zip` → `archives/8.0.2/b42047fea87d6365147a81b5675a24cd-dfdd5b7d-ab51-4c2d-8573-305da9317500.zip`
+- `reports/8.0.2/51f661997eaa8a8d98ffc9a2c6a50e82-d49505ed-512d-46cc-8104-7d08c49fc044.zip` → `archives/8.0.2/51f661997eaa8a8d98ffc9a2c6a50e82-d49505ed-512d-46cc-8104-7d08c49fc044.zip`
+- `reports/8.0.2/80a11e952ecc73a05ec28262b455808a-76849569-cad5-484e-9936-46ccc6cf499d.zip` → `archives/8.0.2/80a11e952ecc73a05ec28262b455808a-76849569-cad5-484e-9936-46ccc6cf499d.zip`
+- `reports/8.0.2/a99921e3fc13a255198429ce39aa6477-d63eb139-29ca-4ad7-803b-0286a6477ced.zip` → `archives/8.0.2/a99921e3fc13a255198429ce39aa6477-d63eb139-29ca-4ad7-803b-0286a6477ced.zip`
+- `reports/8.0.2/f6f92201748364e138990084421277f1-b577bc92-b239-466b-b374-73012286441b.zip` → `archives/8.0.2/f6f92201748364e138990084421277f1-b577bc92-b239-466b-b374-73012286441b.zip`
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

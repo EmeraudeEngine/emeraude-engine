@@ -21,13 +21,13 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Reports | 204 (first 2026-10-15, last 2026-10-21) |
-| Versions | 8.0.2 ×204 |
-| Platforms | windows ×204 |
-| OS | Windows 10 Pro ×81, Windows 11 Pro ×52, Windows 10 Home ×44, Windows 11 Home ×10, Windows 10 Enterprise ×9, Windows 10 Home Single Language ×4, … (3 more) |
-| GPU (selected) | unknown ×204 |
-| ANGLE backend | d3d11 ×204 |
-| Died at milestone | SessionOpened ×204 |
+| Reports | 221 (first 2026-10-15, last 2026-10-21) |
+| Versions | 8.0.2 ×221 |
+| Platforms | windows ×221 |
+| OS | Windows 10 Pro ×83, Windows 11 Pro ×59, Windows 10 Home ×49, Windows 11 Home ×10, Windows 10 Enterprise ×9, Windows 10 Home Single Language ×7, … (3 more) |
+| GPU (selected) | unknown ×221 |
+| ANGLE backend | d3d11 ×221 |
+| Died at milestone | SessionOpened ×221 |
 
 - **Cause (normalized):** `VulkanInstanceService: Incompatible driver !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/Instance.cpp` — `EmEn::Vulkan::Instance::onInitialize`
@@ -35,13 +35,13 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×204 `died at SessionOpened`
+- ×221 `died at SessionOpened`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
+[Application][Info] (src/Application.CefBrowserProcessHandler.cpp `Mango3D::System::Application::OnRegisterCustomPreferences`) A global preference has been changed !
 [Application][Info] (src/Application.CefBrowserProcessHandler.cpp `Mango3D::System::Application::OnRegisterCustomPreferences`) A request context preference has been changed !
-[NetAPIClientService][Success] (vendors/emeraude-engine/src/Net/APIClient.cpp `EmEn::Net::APIClient::performRequest`) 'https:<path>' (ticket #<n>) answered HTTP <n> (<n> bytes).
 [Application][Success] (src/Application.CefBrowserProcessHandler.cpp `Mango3D::System::Application::OnContextInitialized`) Chromium context initialized !
 [PlatformManagerService][Info] (vendors/emeraude-engine/src/PlatformManager.cpp `EmEn::PlatformManager::onInitialize`) Vulkan layer search path : '<path> Files\Lychee\vulkan\explicit_layer.d'.
 [VulkanLoader][Info] (vendors/emeraude-engine/src/Vulkan/Loader.cpp `EmEn::Vulkan::Loader::open`) Vulkan loader '<path> Files\Lychee\vulkan\vulkan-<n>.dll' opened (instance version <n>).
@@ -52,27 +52,27 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
 
-- … 184 older archive(s), see `crash_reports.py list`
-- `reports/8.0.2/5c54f08152ca252308321fab6594291f-b2c15364-442e-49bd-9df1-b6cbe83f7e77.zip` → `archives/8.0.2/5c54f08152ca252308321fab6594291f-b2c15364-442e-49bd-9df1-b6cbe83f7e77.zip`
-- `reports/8.0.2/3de8a4c925af45af61c7ef165a22f228-82bfdcad-2cc3-49e5-89cb-cab40f81ae93.zip` → `archives/8.0.2/3de8a4c925af45af61c7ef165a22f228-82bfdcad-2cc3-49e5-89cb-cab40f81ae93.zip`
-- `reports/8.0.2/208326056f30203f8760921da615638e-329cdba1-ff22-4fb2-9af1-9dd781ea40b1.zip` → `archives/8.0.2/208326056f30203f8760921da615638e-329cdba1-ff22-4fb2-9af1-9dd781ea40b1.zip`
-- `reports/8.0.2/8a971ac47c84e5f3c303d55c60fc3846-971da2c0-9b90-4599-b0aa-897eedca4d83.zip` → `archives/8.0.2/8a971ac47c84e5f3c303d55c60fc3846-971da2c0-9b90-4599-b0aa-897eedca4d83.zip`
-- `reports/8.0.2/4944c0de35aa6b93f8d47cdd63c40c69-2b1db6b7-5b80-4f14-9f19-9730dea1862d.zip` → `archives/8.0.2/4944c0de35aa6b93f8d47cdd63c40c69-2b1db6b7-5b80-4f14-9f19-9730dea1862d.zip`
-- `reports/8.0.2/b4cc8c5b0870ebf525b2d02e6c12f63f-31f90da9-4ecf-4fb0-90ee-525c6dacc624.zip` → `archives/8.0.2/b4cc8c5b0870ebf525b2d02e6c12f63f-31f90da9-4ecf-4fb0-90ee-525c6dacc624.zip`
-- `reports/8.0.2/5fefbff2c81f7129d59fe0213cdc57cf-8f33dc4c-755d-4302-add6-5cc7cc55532f.zip` → `archives/8.0.2/5fefbff2c81f7129d59fe0213cdc57cf-8f33dc4c-755d-4302-add6-5cc7cc55532f.zip`
-- `reports/8.0.2/c0bf17e0959194e5946a5dbfa7389be6-879d979a-b854-40af-bebe-e504c7dade23.zip` → `archives/8.0.2/c0bf17e0959194e5946a5dbfa7389be6-879d979a-b854-40af-bebe-e504c7dade23.zip`
-- `reports/8.0.2/73e4f0292cb634d88029074767dc799a-4b8afdf0-9106-45d9-bc8a-968301a92671.zip` → `archives/8.0.2/73e4f0292cb634d88029074767dc799a-4b8afdf0-9106-45d9-bc8a-968301a92671.zip`
-- `reports/8.0.2/5e97cac5c4ad6a848b0397c0e205c027-5eb0e3b9-37dc-49e3-a451-7ee49122f63f.zip` → `archives/8.0.2/5e97cac5c4ad6a848b0397c0e205c027-5eb0e3b9-37dc-49e3-a451-7ee49122f63f.zip`
-- `reports/8.0.2/d7b362b8b91d3280ed1967599c8c7729-2e5bb737-bcb7-4322-902c-1371c54606a0.zip` → `archives/8.0.2/d7b362b8b91d3280ed1967599c8c7729-2e5bb737-bcb7-4322-902c-1371c54606a0.zip`
-- `reports/8.0.2/4bbdedb5e156c95f01c03b9a1faf0899-4056fe37-6f9c-4826-a57b-54bb489fed14.zip` → `archives/8.0.2/4bbdedb5e156c95f01c03b9a1faf0899-4056fe37-6f9c-4826-a57b-54bb489fed14.zip`
-- `reports/8.0.2/d6e207d7b13ad6a4534ae312bdc38703-200966ea-7ed6-4398-8f42-3fc311690804.zip` → `archives/8.0.2/d6e207d7b13ad6a4534ae312bdc38703-200966ea-7ed6-4398-8f42-3fc311690804.zip`
-- `reports/8.0.2/2f1f3ad401e1456763fdb02f76df9fb5-f56c9518-ab88-4e97-84e1-4d7e3fd149b9.zip` → `archives/8.0.2/2f1f3ad401e1456763fdb02f76df9fb5-f56c9518-ab88-4e97-84e1-4d7e3fd149b9.zip`
-- `reports/8.0.2/f02384236b7f5438cc20ddee7e476cce-5fcf4284-6d10-44e2-a787-ed24bee83bb9.zip` → `archives/8.0.2/f02384236b7f5438cc20ddee7e476cce-5fcf4284-6d10-44e2-a787-ed24bee83bb9.zip`
-- `reports/8.0.2/edb57531adaf8254c1b65a63e5e0ef18-75ae0538-db14-4bf2-b762-a45c5ba8a3f2.zip` → `archives/8.0.2/edb57531adaf8254c1b65a63e5e0ef18-75ae0538-db14-4bf2-b762-a45c5ba8a3f2.zip`
-- `reports/8.0.2/49a46a21a67f020ac6a7512409b29b2a-9b4f7579-c08b-4ce4-a64b-09c79426c97b.zip` → `archives/8.0.2/49a46a21a67f020ac6a7512409b29b2a-9b4f7579-c08b-4ce4-a64b-09c79426c97b.zip`
+- … 201 older archive(s), see `crash_reports.py list`
 - `reports/8.0.2/295a1b96c9faf7aab27639d9bb69653c-5f11b2bf-8740-43d6-8215-d87b479d368a.zip` → `archives/8.0.2/295a1b96c9faf7aab27639d9bb69653c-5f11b2bf-8740-43d6-8215-d87b479d368a.zip`
 - `reports/8.0.2/b5225637903a77aa3e023e3bcd128604-28f4cdab-e916-4b84-bddf-328fbde86b19.zip` → `archives/8.0.2/b5225637903a77aa3e023e3bcd128604-28f4cdab-e916-4b84-bddf-328fbde86b19.zip`
 - `reports/8.0.2/eafdcc96daf54867c52b19f150b96b32-bab45e51-7bb8-4abf-af38-218d6d8f14bf.zip` → `archives/8.0.2/eafdcc96daf54867c52b19f150b96b32-bab45e51-7bb8-4abf-af38-218d6d8f14bf.zip`
+- `reports/8.0.2/ffc6b56bad4d7540ad3aa0bda0f880a5-8dd8d228-cf1c-4efd-93cf-b5923182817c.zip` → `archives/8.0.2/ffc6b56bad4d7540ad3aa0bda0f880a5-8dd8d228-cf1c-4efd-93cf-b5923182817c.zip`
+- `reports/8.0.2/eb9530cb172eb1d4845bdf3ebb6fd3a0-3a6789b8-6109-4bd3-b577-be04eb772331.zip` → `archives/8.0.2/eb9530cb172eb1d4845bdf3ebb6fd3a0-3a6789b8-6109-4bd3-b577-be04eb772331.zip`
+- `reports/8.0.2/d499bd6f1fed41b67d8d7f10cf8bea78-690d2944-f059-435f-ac44-0d345a7db853.zip` → `archives/8.0.2/d499bd6f1fed41b67d8d7f10cf8bea78-690d2944-f059-435f-ac44-0d345a7db853.zip`
+- `reports/8.0.2/3ec793613ff56f78c35678303207b6ef-ef922fca-bb1c-420a-a4f4-dca587c05d32.zip` → `archives/8.0.2/3ec793613ff56f78c35678303207b6ef-ef922fca-bb1c-420a-a4f4-dca587c05d32.zip`
+- `reports/8.0.2/e07c18d2d41c7434bd1d780ffc8d2d9b-9290e75c-fc5c-455e-a825-431f3ee240a3.zip` → `archives/8.0.2/e07c18d2d41c7434bd1d780ffc8d2d9b-9290e75c-fc5c-455e-a825-431f3ee240a3.zip`
+- `reports/8.0.2/3e54863e3a5bb30d8c2fb538721062e8-bd8f4ef4-1851-4b52-8c0e-345f38d31e48.zip` → `archives/8.0.2/3e54863e3a5bb30d8c2fb538721062e8-bd8f4ef4-1851-4b52-8c0e-345f38d31e48.zip`
+- `reports/8.0.2/62e470242d1cb13183487d55cde0aea0-30dd1b82-fe08-4097-a141-a0d190697767.zip` → `archives/8.0.2/62e470242d1cb13183487d55cde0aea0-30dd1b82-fe08-4097-a141-a0d190697767.zip`
+- `reports/8.0.2/06fb2152069e39a7aafc1e8c4d89e2d5-ce01c095-2b5d-49ea-a180-ff1ebd088321.zip` → `archives/8.0.2/06fb2152069e39a7aafc1e8c4d89e2d5-ce01c095-2b5d-49ea-a180-ff1ebd088321.zip`
+- `reports/8.0.2/5ff19acebe63a3e9bd5898d760cb5057-eba2ed8b-14de-492c-b9b7-f246fd01c0f2.zip` → `archives/8.0.2/5ff19acebe63a3e9bd5898d760cb5057-eba2ed8b-14de-492c-b9b7-f246fd01c0f2.zip`
+- `reports/8.0.2/516ab1ec5117fa18dd0cc9d940fe14ba-0754fe37-b6da-423e-87d8-28003004a96f.zip` → `archives/8.0.2/516ab1ec5117fa18dd0cc9d940fe14ba-0754fe37-b6da-423e-87d8-28003004a96f.zip`
+- `reports/8.0.2/ff1803f315d717bc8d05d9a5a6f9a268-ce5a87a0-f75b-4663-8298-24bf3df4f96d.zip` → `archives/8.0.2/ff1803f315d717bc8d05d9a5a6f9a268-ce5a87a0-f75b-4663-8298-24bf3df4f96d.zip`
+- `reports/8.0.2/866b69cc721fb8289c6263b7261af571-5e71489e-9765-439e-be7a-1d00c453de5f.zip` → `archives/8.0.2/866b69cc721fb8289c6263b7261af571-5e71489e-9765-439e-be7a-1d00c453de5f.zip`
+- `reports/8.0.2/26a86697e82a3190dce001b1a8059b82-a415bda8-3ecd-4517-b6ea-fe721c57fea0.zip` → `archives/8.0.2/26a86697e82a3190dce001b1a8059b82-a415bda8-3ecd-4517-b6ea-fe721c57fea0.zip`
+- `reports/8.0.2/a11715e1d3e8012dc5142523f8b97463-45a174af-1daa-491c-bdb5-85477daf8f73.zip` → `archives/8.0.2/a11715e1d3e8012dc5142523f8b97463-45a174af-1daa-491c-bdb5-85477daf8f73.zip`
+- `reports/8.0.2/b789fbfa6f1b369b21036dcd3e9e3056-bb41e8c1-cab9-4755-afdc-3c429f07b129.zip` → `archives/8.0.2/b789fbfa6f1b369b21036dcd3e9e3056-bb41e8c1-cab9-4755-afdc-3c429f07b129.zip`
+- `reports/8.0.2/b4b9deadea9060b829f67c54992c3432-884cc812-88df-4d6f-a59e-b6bb271f82c8.zip` → `archives/8.0.2/b4b9deadea9060b829f67c54992c3432-884cc812-88df-4d6f-a59e-b6bb271f82c8.zip`
+- `reports/8.0.2/cca48fd232a584a7650dfefa4336a649-430c1a25-a104-48b4-872c-6249eac2acca.zip` → `archives/8.0.2/cca48fd232a584a7650dfefa4336a649-430c1a25-a104-48b4-872c-6249eac2acca.zip`
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

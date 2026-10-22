@@ -21,13 +21,13 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Reports | 35 (first 2026-10-15, last 2026-10-21) |
-| Versions | 8.0.2 ×35 |
-| Platforms | windows ×35 |
-| OS | Windows 11 Home ×23, Windows 10 Pro ×6, Windows 11 Pro ×3, Windows 10 Home ×1, Windows 10 Home Single Language ×1, Windows 11 Home Single Language ×1 |
-| GPU (selected) | unknown ×35 |
-| ANGLE backend | d3d11 ×24, default ×11 |
-| Died at milestone | SessionOpened ×35 |
+| Reports | 44 (first 2026-10-15, last 2026-10-22) |
+| Versions | 8.0.2 ×44 |
+| Platforms | windows ×44 |
+| OS | Windows 11 Home ×30, Windows 10 Pro ×6, Windows 11 Pro ×5, Windows 10 Home ×1, Windows 10 Home Single Language ×1, Windows 11 Home Single Language ×1 |
+| GPU (selected) | unknown ×44 |
+| ANGLE backend | d3d11 ×32, default ×12 |
+| Died at milestone | SessionOpened ×44 |
 
 - **Cause (normalized):** `died at SessionOpened on windows`
 - **Where:** no source location
@@ -36,42 +36,33 @@ tags: [crash, crash-report-auto]
 Last error before the death (else the last trace), by number of reports:
 
 - ×10 `CrashReporter: Session token '<path>' written.`
+- ×6 `ShaderManagerService: The shader 'OverlayRenderingFragmentShader' (<n> bytes) loaded from binary cache !`
 - ×5 `RendererService: GraphicsRecorderService service failed or disabled at startup!`
-- ×5 `ShaderManagerService: The shader 'OverlayRenderingFragmentShader' (<n> bytes) loaded from binary cache !`
+- ×4 `NetAPIClientService: 'https:<path>' (ticket #<n>) answered HTTP <n> (<n> bytes).`
+- ×4 `VulkanInstanceService: The physical device 'Intel(R) UHD Graphics <n>' is missing 'descriptorIndexing' feature !`
 - ×3 `Core: PlatformManagerService service up!`
-- ×3 `NetAPIClientService: 'https:<path>' (ticket #<n>) answered HTTP <n> (<n> bytes).`
 - ×3 `no journal`
+- ×2 `Application: [CEF-ACCEL] DirectComposition disabled (the windowed DevTools present path is incompatible with the process-wide shared-texture state).`
 - ×2 `VulkanInstanceService: The physical device 'Microsoft Direct3D12 (Microsoft Basic Render Driver)' is missing 'descriptorIndexing' feature !`
 - ×1 `Application: Crash report question in 'english' (preferred language: 'en-US').`
-- ×1 `Application: [CEF-ACCEL] DirectComposition disabled (the windowed DevTools present path is incompatible with the process-wide shared-texture state).`
-- ×1 `Core: SystemNotificationService service up!`
-- … 1 other(s), 1 report(s)
+- … 4 other(s), 4 report(s)
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[ResourcesManagerService][Success] (vendors/emeraude-engine/src/Resources/Manager.cpp `EmEn::Resources::Manager::onInitialize`) Basic ground manager service up !
-[ResourcesManagerService][Success] (vendors/emeraude-engine/src/Resources/Manager.cpp `EmEn::Resources::Manager::onInitialize`) Basic sea manager service up !
-[ResourcesManagerService][Success] (vendors/emeraude-engine/src/Resources/Manager.cpp `EmEn::Resources::Manager::onInitialize`) Cloud shape manager service up !
-[ResourcesManagerService][Success] (vendors/emeraude-engine/src/Resources/Manager.cpp `EmEn::Resources::Manager::onInitialize`) Scene definition manager service up !
-[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeBaseLevel`) ResourcesManagerService service up !
-[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeBaseLevel`) UserService service up !
-[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeBaseLevel`) *** Core level created ***
-[CrashReporter][Success] (src/CrashReporter.cpp `Mango3D::System::CrashReporter::openSession`) Session token '<path>' written.
+[PhysicsManagerService][Warning] (vendors/emeraude-engine/src/Physics/Manager.cpp `EmEn::Physics::Manager::onInitialize`) Physics acceleration disabled at startup.
+[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) PhysicsManagerService service up!
+[AudioManagerService][Warning] (vendors/emeraude-engine/src/Audio/Manager.cpp `EmEn::Audio::Manager::onInitialize`) Audio manager disabled at startup.
+[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) AudioManagerService service up!
+[SystemNotificationService][Info] (vendors/emeraude-engine/src/SystemNotification.cpp `EmEn::SystemNotification::onInitialize`) System notification service initialized.
+[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) SystemNotificationService service up!
+[ShaderManagerService][Success] (vendors/emeraude-engine/src/Saphir/ShaderManager.cpp `EmEn::Saphir::ShaderManager::getShaderModuleFromGeneratedShader`) The shader 'OverlayRenderingVertexShader' (<n> bytes) loaded from binary cache !
+[ShaderManagerService][Success] (vendors/emeraude-engine/src/Saphir/ShaderManager.cpp `EmEn::Saphir::ShaderManager::getShaderModuleFromGeneratedShader`) The shader 'OverlayRenderingFragmentShader' (<n> bytes) loaded from binary cache !
 ```
 
 Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
 
-- … 15 older archive(s), see `crash_reports.py list`
-- `reports/8.0.2/6ab1a5df1490ab296be156ab916d5d78-f0b88f4b-f694-4b88-8bb3-5c85c7ce20e0.zip` → `archives/8.0.2/6ab1a5df1490ab296be156ab916d5d78-f0b88f4b-f694-4b88-8bb3-5c85c7ce20e0.zip`
-- `reports/8.0.2/bf88e4e5228fe1b2c60114c77077f1af-c9e615f4-c4a5-4b77-966a-7d3c577d8b01.zip` → `archives/8.0.2/bf88e4e5228fe1b2c60114c77077f1af-c9e615f4-c4a5-4b77-966a-7d3c577d8b01.zip`
-- `reports/8.0.2/c4834236315e4fe0159bedede32d2167-0fcf18c8-126a-4821-a13a-a0929ccc6b81.zip` → `archives/8.0.2/c4834236315e4fe0159bedede32d2167-0fcf18c8-126a-4821-a13a-a0929ccc6b81.zip`
-- `reports/8.0.2/22f433f37bf3c5f2f83053d0aa3a2c4a-372d46fe-19a3-4cdf-b0ef-b676a065148f.zip` → `archives/8.0.2/22f433f37bf3c5f2f83053d0aa3a2c4a-372d46fe-19a3-4cdf-b0ef-b676a065148f.zip`
-- `reports/8.0.2/3340c41ffc40bcc25632f778c1e99d3a-aa159159-d738-4385-9ec0-71412902e23b.zip` → `archives/8.0.2/3340c41ffc40bcc25632f778c1e99d3a-aa159159-d738-4385-9ec0-71412902e23b.zip`
-- `reports/8.0.2/3f6018a87594a557e188056b586b2913-441a7c01-ec1c-4d90-9e31-3d7dea9f8eba.zip` → `archives/8.0.2/3f6018a87594a557e188056b586b2913-441a7c01-ec1c-4d90-9e31-3d7dea9f8eba.zip`
-- `reports/8.0.2/5562ad2822d2a70f2f9a7e90ed172c3a-bb24bb99-061b-4107-a081-3ca5828f0253.zip` → `archives/8.0.2/5562ad2822d2a70f2f9a7e90ed172c3a-bb24bb99-061b-4107-a081-3ca5828f0253.zip`
-- `reports/8.0.2/63abf41d69c15e226a77d01b4ebea99c-bb64e46e-107e-4640-8261-93ae10c735b3.zip` → `archives/8.0.2/63abf41d69c15e226a77d01b4ebea99c-bb64e46e-107e-4640-8261-93ae10c735b3.zip`
-- `reports/8.0.2/850e9ec2ec324da7befd0771dd5b815b-23afac2f-11fa-4699-ae76-36199f162392.zip` → `archives/8.0.2/850e9ec2ec324da7befd0771dd5b815b-23afac2f-11fa-4699-ae76-36199f162392.zip`
+- … 24 older archive(s), see `crash_reports.py list`
 - `reports/8.0.2/3ef76c9dbb164b7f438831bf3be41304-ce4dbd50-6241-445b-af49-bf00fc06db06.zip` → `archives/8.0.2/3ef76c9dbb164b7f438831bf3be41304-ce4dbd50-6241-445b-af49-bf00fc06db06.zip`
 - `reports/8.0.2/6b167dd28974f89cedf4270641d15dc7-bc07fb1f-1a68-4223-9b11-72f2b802fdc9.zip` → `archives/8.0.2/6b167dd28974f89cedf4270641d15dc7-bc07fb1f-1a68-4223-9b11-72f2b802fdc9.zip`
 - `reports/8.0.2/2da5cd91b99d4b5e2858f6f6fbdd02ac-a2084ac4-0fe1-4dfb-8e78-f6c0a761a3c2.zip` → `archives/8.0.2/2da5cd91b99d4b5e2858f6f6fbdd02ac-a2084ac4-0fe1-4dfb-8e78-f6c0a761a3c2.zip`
@@ -83,6 +74,15 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - `reports/8.0.2/73e4f0292cb634d88029074767dc799a-4b8afdf0-9106-45d9-bc8a-968301a92671.zip` → `archives/8.0.2/73e4f0292cb634d88029074767dc799a-4b8afdf0-9106-45d9-bc8a-968301a92671.zip`
 - `reports/8.0.2/34ae55d271599c8d50521129327bacb7-3b685493-f512-4216-b0b7-a4eec226c454.zip` → `archives/8.0.2/34ae55d271599c8d50521129327bacb7-3b685493-f512-4216-b0b7-a4eec226c454.zip`
 - `reports/8.0.2/22bf555b8f60b4a012ebc6e618620753-f93b0668-693b-4ecd-be05-e8b206b827ab.zip` → `archives/8.0.2/22bf555b8f60b4a012ebc6e618620753-f93b0668-693b-4ecd-be05-e8b206b827ab.zip`
+- `reports/8.0.2/69b4e99efc17aa1f379aaed6f53c663e-dd4a3a47-5858-47df-9ad3-14bc1f8ca77f.zip` → `archives/8.0.2/69b4e99efc17aa1f379aaed6f53c663e-dd4a3a47-5858-47df-9ad3-14bc1f8ca77f.zip`
+- `reports/8.0.2/ef673ca669b77ab65d5c640a6ab74018-b8c54b77-9102-454c-ae05-555594709d0b.zip` → `archives/8.0.2/ef673ca669b77ab65d5c640a6ab74018-b8c54b77-9102-454c-ae05-555594709d0b.zip`
+- `reports/8.0.2/2248dfecad8f780a05ae3a27bbb3f464-1838a208-f774-4e07-bcb5-0f4af255353e.zip` → `archives/8.0.2/2248dfecad8f780a05ae3a27bbb3f464-1838a208-f774-4e07-bcb5-0f4af255353e.zip`
+- `reports/8.0.2/478f1c98538b7250a246a09ef3aa3594-481c4f6e-137c-4287-bfec-2ee06e09f76b.zip` → `archives/8.0.2/478f1c98538b7250a246a09ef3aa3594-481c4f6e-137c-4287-bfec-2ee06e09f76b.zip`
+- `reports/8.0.2/941ba077235816ecc3bff153cb113ade-8b112a28-2db4-4de8-952d-e765cc6d44fc.zip` → `archives/8.0.2/941ba077235816ecc3bff153cb113ade-8b112a28-2db4-4de8-952d-e765cc6d44fc.zip`
+- `reports/8.0.2/9ef1374915cc1bf9953d3e3786a7e20c-5cbf4ba6-c7e3-44ae-8a2e-70409d7ee83d.zip` → `archives/8.0.2/9ef1374915cc1bf9953d3e3786a7e20c-5cbf4ba6-c7e3-44ae-8a2e-70409d7ee83d.zip`
+- `reports/8.0.2/ff1fa5a69ed4fa0091f99d6ee87dce8e-a88b170a-b798-4de4-b49e-3156757f56a7.zip` → `archives/8.0.2/ff1fa5a69ed4fa0091f99d6ee87dce8e-a88b170a-b798-4de4-b49e-3156757f56a7.zip`
+- `reports/8.0.2/ff70436ca2c026636e7dcfb1589cf0c6-1fdd5dce-869f-4992-8d81-173e68323205.zip` → `archives/8.0.2/ff70436ca2c026636e7dcfb1589cf0c6-1fdd5dce-869f-4992-8d81-173e68323205.zip`
+- `reports/8.0.2/a10e94acb08d52a9f9a8361d2144b59f-a99f524f-823f-43c7-a2b6-d434295ad1d4.zip` → `archives/8.0.2/a10e94acb08d52a9f9a8361d2144b59f-a99f524f-823f-43c7-a2b6-d434295ad1d4.zip`
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)
