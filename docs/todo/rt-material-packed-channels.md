@@ -19,13 +19,13 @@ lives in the albedo's A and the data maps share one texture (graphics § 39), RT
 
 ## What remains
 
-- DONE on Linux (2026-10-20, uncommitted): the opacity channel — `GPURTMaterialData::OpacityChannelShift` (flags
+- DONE 2026-10-20 (engine b9867c8c), validated on the three OS (graphics § 39: no brightness bias under RT on the
+  Windows peer): the opacity channel — `GPURTMaterialData::OpacityChannelShift` (flags
   bits 20-21), filled by `SceneMetaData`, read by the shared alpha test (`RTOpacityChannelShift`). Without it a packed
   opacity (the albedo's A) was read as the albedo's RED: Grid003 +2.7 brighter under RT (graphics § 39).
 - Any other packed role RT reads gets the same treatment when it is packed: today RT reads albedo, normal, roughness
   / metalness (channels already carried), emission, opacity — none other is packed.
 - The UV transform parity (RT uses the raw `hitUV`) is a separate known gap.
-- Validation by the peers (macOS, Windows).
 
 ## References
 

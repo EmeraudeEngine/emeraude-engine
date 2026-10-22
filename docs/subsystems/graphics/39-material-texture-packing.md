@@ -1,7 +1,9 @@
 # Material texture packing and the GPU footprint policy (design, Oct 2026)
 
-> Status: owner decisions D1-D13 of 2026-10-20; L0, L1, one binding per distinct texture, L2a and L2b DONE on Linux, work not started. The lots are the `docs/todo/` items listed at
-> the end; this file keeps the design and the decisions, the items keep what remains.
+> Status: owner decisions of 2026-10-20/21. Implemented and validated on the three OS: the measurement, `SourceChannel`,
+> one binding per distinct texture, the repack (L2a–L2d), one fetch per canonical texture (D10), the block format per
+> kind (D8), the footprint per kind (D5), the mip filter and the baked assets (then the `GPUTextures` store, graphics
+> § 40). What remains is in the `docs/todo/` items listed at the end; this file keeps the design and the decisions.
 
 ## Goal
 

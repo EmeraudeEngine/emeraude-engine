@@ -35,7 +35,6 @@ Graphics § 39: whatever the source files, the engine builds at most three textu
   Sand002 (below the 5 % bar), kept by the owner — graphics § 39 § One fetch per canonical texture.
 - D7: the `TextureCache` key = hash of the final pixels + the package descriptor, `TextureCache::Version` bumped
   (today the pixel hash alone already tells a packed image apart).
-- Validation by the peers (macOS, Windows).
 
 ## ⚠️ Traps
 
