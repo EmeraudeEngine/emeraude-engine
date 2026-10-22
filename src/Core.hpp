@@ -1434,6 +1434,19 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Tells whether the running stop was requested by the system (requestSystemStop(): the end of the
+			 * session, a termination signal) — the application may record that the system, not the user, ends the run.
+			 * @note Main thread (onBeforeCoreStop() included).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isSystemStopRequested () const noexcept
+			{
+				return m_systemStopDeadline.has_value();
+			}
+
+			/**
 			 * @brief Returns if the user application is safe to quit.
 			 * @return bool
 			 */

@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | AMD Radeon RX 6800 XT (driver 2.0.353) ×1, Intel(R) Iris(R) Xe Graphics (driver 101.7080) ×1 |
 | ANGLE backend | d3d11 ×2 |
 | Died at milestone | Stopping ×2 |
+| Single-instance lock | not recorded ×2 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the swap-chain : VK_ERROR_DEVICE_LOST !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createBaseSwapChain`

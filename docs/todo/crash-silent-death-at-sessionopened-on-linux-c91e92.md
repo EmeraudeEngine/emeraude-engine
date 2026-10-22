@@ -21,13 +21,14 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Reports | 2 (first 2026-10-11, last 2026-10-15) |
-| Versions | 8.0.1 ×1, 8.0.2 ×1 |
-| Platforms | linux ×2 |
-| OS | Debian GNU/Linux 13 (trixie) ×1, Ubuntu 26.04.1 LTS ×1 |
-| GPU (selected) | unknown ×2 |
-| ANGLE backend | default ×1, vulkan ×1 |
-| Died at milestone | SessionOpened ×2 |
+| Reports | 1 (first 2026-10-15, last 2026-10-15) |
+| Versions | 8.0.2 ×1 |
+| Platforms | linux ×1 |
+| OS | Ubuntu 26.04.1 LTS ×1 |
+| GPU (selected) | unknown ×1 |
+| ANGLE backend | vulkan ×1 |
+| Died at milestone | SessionOpened ×1 |
+| Single-instance lock | not recorded ×1 |
 
 - **Cause (normalized):** `died at SessionOpened on linux`
 - **Where:** no source location
@@ -35,7 +36,6 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×1 `Core: *** Core level terminated ***`
 - ×1 `VulkanInstanceService: Vulkan Video H.<n> encode extensions detected and enabled (hardware RushMaker path).`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
@@ -53,7 +53,6 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
 
-- `reports/8.0.1/4efe9b9e4b30ed1a17553b9a07553048-d616e186-e7c3-4ca6-b025-cb5df90fe57b.zip` → `archives/8.0.1/4efe9b9e4b30ed1a17553b9a07553048-d616e186-e7c3-4ca6-b025-cb5df90fe57b.zip`
 - `reports/8.0.2/3f08d8631995e8514da72607b823955e-4c6298fd-2391-4ae4-acc6-abdb5f9c0e32.zip` → `archives/8.0.2/3f08d8631995e8514da72607b823955e-4c6298fd-2391-4ae4-acc6-abdb5f9c0e32.zip`
 <!-- crash-reports:end -->
 

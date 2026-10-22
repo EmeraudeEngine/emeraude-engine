@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | NVIDIA GeForce RTX 5070 Ti Laptop GPU (driver 595.79) ×1 |
 | ANGLE backend | d3d11 ×1 |
 | Died at milestone | ApplicationStarted ×1 |
+| Single-instance lock | not recorded ×1 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the swap-chain : VK_ERROR_OUT_OF_DEVICE_MEMORY !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createBaseSwapChain`

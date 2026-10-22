@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | Intel(R) HD Graphics 520 (SKL GT2) (driver 25.2.8) ×1, Intel(R) Iris(R) Xe Graphics (TGL GT2) (driver 25.0.7) ×1, Intel(R) Iris(R) Xe Graphics (TGL GT2) (driver 26.0.8) ×1 |
 | ANGLE backend | vulkan ×3 |
 | Died at milestone | Stopping ×2, ApplicationStarted ×1 |
+| Single-instance lock | not recorded ×3 |
 
 - **Cause (normalized):** `RendererService: Unable to refresh the swap-chain!`
 - **Where:** `vendors/emeraude-engine/src/Graphics/Renderer.cpp` — `EmEn::Graphics::Renderer::renderFrame`

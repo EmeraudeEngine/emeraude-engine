@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | NVIDIA GeForce RTX 3070 Laptop GPU (driver 572.16) ×1 |
 | ANGLE backend | d3d11 ×1 |
 | Died at milestone | ApplicationStarted ×1 |
+| Single-instance lock | not recorded ×1 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the swap-chain : VK_ERROR_INITIALIZATION_FAILED !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createBaseSwapChain`

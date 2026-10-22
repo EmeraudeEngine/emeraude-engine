@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | AMD Radeon RX 7700 XT (driver 2.0.416) ×1 |
 | ANGLE backend | d3d11 ×1 |
 | Died at milestone | ApplicationReady ×1 |
+| Single-instance lock | not recorded ×1 |
 
 - **Cause (normalized):** `exit code 98 after ApplicationReady`
 - **Where:** no source location

@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | AMD Radeon RX 9060 XT (driver 2.0.395) ×1, NVIDIA GeForce RTX 4070 (driver 617.14) ×1 |
 | ANGLE backend | d3d11 ×2 |
 | Died at milestone | ApplicationStarted ×1, Stopping ×1 |
+| Single-instance lock | not recorded ×2 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the depth buffer #<n> !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createImageArray`

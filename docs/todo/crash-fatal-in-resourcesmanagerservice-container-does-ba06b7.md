@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | unknown ×1 |
 | ANGLE backend | metal ×1 |
 | Died at milestone | SessionOpened ×1 |
+| Single-instance lock | not recorded ×1 |
 
 - **Cause (normalized):** `ResourcesManagerService: Container does not exist !`
 - **Where:** `vendors/emeraude-engine/src/Resources/Manager.cpp` — `*EmEn::Resources::Manager::getContainerInternal`

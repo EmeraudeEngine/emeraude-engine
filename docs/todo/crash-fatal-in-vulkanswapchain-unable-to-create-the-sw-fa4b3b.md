@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | Intel(R) UHD Graphics (driver 100.9805) ×2, Intel(R) UHD Graphics 600 (driver 101.2140) ×1, Intel(R) UHD Graphics 605 (driver 101.2121) ×1, Intel(R) UHD Graphics 610 (driver 101.2111) ×1, Intel(R) UHD Graphics 620 (driver 101.2137) ×1 |
 | ANGLE backend | d3d11 ×6 |
 | Died at milestone | ApplicationStarted ×4, Stopping ×2 |
+| Single-instance lock | not recorded ×6 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the swap-chain : VK_ERROR_OUT_OF_HOST_MEMORY !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createBaseSwapChain`

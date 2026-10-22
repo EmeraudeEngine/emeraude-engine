@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | unknown ×221 |
 | ANGLE backend | d3d11 ×221 |
 | Died at milestone | SessionOpened ×221 |
+| Single-instance lock | not recorded ×221 |
 
 - **Cause (normalized):** `VulkanInstanceService: Incompatible driver !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/Instance.cpp` — `EmEn::Vulkan::Instance::onInitialize`

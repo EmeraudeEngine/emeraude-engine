@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | unknown ×44 |
 | ANGLE backend | d3d11 ×32, default ×12 |
 | Died at milestone | SessionOpened ×44 |
+| Single-instance lock | not recorded ×44 |
 
 - **Cause (normalized):** `died at SessionOpened on windows`
 - **Where:** no source location

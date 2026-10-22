@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | unknown ×1 |
 | ANGLE backend | d3d11 ×1 |
 | Died at milestone | SessionOpened ×1 |
+| Single-instance lock | not recorded ×1 |
 
 - **Cause (normalized):** `WindowService: Trying to create a window with invalid size (<hex>) !`
 - **Where:** `vendors/emeraude-engine/src/Window.cpp` — `EmEn::Window::create`

@@ -28,6 +28,7 @@ tags: [crash, crash-report-auto]
 | GPU (selected) | AMD Radeon RX 9060 XT (driver 2.0.395) ×2, Microsoft Direct3D12 (NVIDIA GeForce RTX 4060 Laptop GPU) (driver 26.0.129.35) ×1, NVIDIA GeForce RTX 2070 with Max-Q Design (driver 555.97) ×1, NVIDIA GeForce RTX 3070 (driver 610.88) ×1, NVIDIA GeForce RTX 4070 Ti SUPER (driver 610.88) ×1, NVIDIA GeForce RTX 5070 (driver 591.86) ×1, … (3 more) |
 | ANGLE backend | d3d11 ×10 |
 | Died at milestone | Stopping ×10 |
+| Single-instance lock | not recorded ×10 |
 
 - **Cause (normalized):** `exit code 98 after Stopping`
 - **Where:** no source location

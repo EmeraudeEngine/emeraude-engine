@@ -54,6 +54,7 @@ Plan: `CrashReport Solucius` (app_system `docs/plans/crashreport-solucius.md`).
 | GPU (selected) | unknown ×58 |
 | ANGLE backend | d3d11 ×58 |
 | Died at milestone | SessionOpened ×58 |
+| Single-instance lock | not recorded ×58 |
 
 - **Cause (normalized):** `VulkanInstanceService: No physical device available !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/Instance.cpp` — `EmEn::Vulkan::Instance::onInitialize`
