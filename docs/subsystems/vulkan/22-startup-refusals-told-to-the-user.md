@@ -83,3 +83,32 @@ NVIDIA `https://www.nvidia.com/drivers`, AMD `https://www.amd.com/en/support/dow
 - ⚠️ Not verified: a real `VK_INCOMPLETE` machine (Windows AMD hybrid laptops), a real outdated driver, an Intel Mac.
 - ⚠️ DXGI / IOKit names differ from Vulkan's ("Intel(R) UHD Graphics" vs "Intel(R) RaptorLake-S Mobile Graphics
   Controller"): match the two lists by the LUID / the vendor and device ids, never by name.
+
+### What the production reports showed (a downstream application, engine 1.0.0, 2026-10-21)
+
+The first 999 crash reports of a downstream application (its 8.0.2, engine 1.0.0, ≈438 machines, 93 % Windows) hold
+the GPU startup failures this page and `23-the-application-targets-a-vulkan-version.md` were written against. Four of
+their causes were closed on 2026-10-22 on the owner's word, the link with engine 1.0.1 (and its 1.1 target downstream)
+verified in every journal and in the code; the downstream crash-report tool flags any later report of them as a
+regression:
+
+| Failure (engine 1.0.0) | Reports / ≈ machines | What the journals hold | Why 1.0.1 at a 1.1 target removes it |
+|---|---:|---|---|
+| `vkCreateDevice()` → `VK_ERROR_FEATURE_NOT_PRESENT` | 85 / 28 | NVIDIA on an outdated driver (Vulkan 1.2, no `maintenance4`) | device driven at its effective version, required features checked before `vkCreateDevice()`, next device tried |
+| "Unable to find a suitable graphics device!" | 63 / 21 | every device refused for the 3D renderer's features (`descriptorIndexing` and the other bindless ones) | at 1.1 the overlay only is drawn: none of them is required |
+| `vkCreateDevice()` → `VK_ERROR_OUT_OF_HOST_MEMORY` | 26 / 8 | **26/26** AMD Radeon (iGPUs, RX 550/560) without `maintenance4`, i.e. a driver below 1.3, given a Vulkan 1.3 feature chain | `DeviceRequirements::linkFeatureChain()` chains only the structures of the effective version |
+| "OverlayManagerService service failed to execute!" | 38 / 7 | **38/38** AMD Radeon without `maintenance4`: every `vkCreateShaderModule()` → `VK_ERROR_INITIALIZATION_FAILED`, compute shaders included (overflow census, BRDF LUT), then the overlay's vertex shader — the only failure that was fatal | shaders compiled for the effective version: SPIR-V 1.3 at 1.1 (`ShaderManager::setTargetAPIVersion()`); the binary cache identity holds the version, so no SPIR-V 1.6 module of an older run is reused |
+
+Still open there: the `VK_INCOMPLETE` share of "No physical device available !" (34 of 56 reports) is fixed, the rest
+had no device at all (`NoVulkanDriver` since 1.0.1), and the old Intel UHD drivers failing a swap-chain recreation with
+`VK_ERROR_OUT_OF_HOST_MEMORY` (the 0x0-extent minimise fix of 1.0.1 is the likely remedy, not proven by the journals).
+
+⚠️ **A driver below Vulkan 1.3 does not say "version too old"**: given a 1.3 feature chain NVIDIA answers
+`VK_ERROR_FEATURE_NOT_PRESENT` and AMD `VK_ERROR_OUT_OF_HOST_MEMORY`; given SPIR-V 1.6 AMD answers
+`VK_ERROR_INITIALIZATION_FAILED` at `vkCreateShaderModule()`. A missing `maintenance4` (mandatory in 1.3) is the tell
+in a log; the device's `apiVersion` is the test.
+
+⚠️ **A refusal still traces the old `Fatal` lines**: with 1.0.1 a machine without any device logs "No physical device
+available !" (`Instance.cpp`), one whose every device is refused "Unable to find a suitable graphics device!"
+(`Renderer.cpp`), before the dialog and exit 97. A crash-report tool that classifies by the first `Fatal` files such a
+refusal under the engine 1.0.0 failure: it must read the exit code 97 first.

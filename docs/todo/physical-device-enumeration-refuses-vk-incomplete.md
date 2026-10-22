@@ -107,6 +107,16 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 
 Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
+## Why it stays open (2026-10-22)
+
+The four sibling causes fixed by 1.0.1 were closed on 2026-10-22 on the owner's word
+(`docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md` § What the production reports showed). Not this one:
+its signature is the Fatal "No physical device available !" (`src/Vulkan/Instance.cpp:320`), which 1.0.1 still traces
+for a machine with no device at all before the `NoVulkanDriver` dialog and exit 97 — and the downstream tool classifies
+by the first Fatal, before the exit code. Closed now, the 22 no-device reports would come back on 8.0.3 as false
+regressions. It closes once the tool tells exit 97 apart (app_system `crash-report-incompatible-system-is-not-a-crash`)
+and the 8.0.3 reports show no `VK_INCOMPLETE`.
+
 ## What remains
 
 - [ ] A run on a machine that answers `VK_INCOMPLETE` (a Windows AMD hybrid laptop, as in the reports): no reproduction

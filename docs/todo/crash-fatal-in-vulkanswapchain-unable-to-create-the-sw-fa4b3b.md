@@ -76,10 +76,24 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 
 Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
+## Journals read (2026-10-22)
+
+6 reports (5 machines), all Intel UHD on old drivers (100.9805, 101.21xx); in all of them a swap-chain RECREATION fails
+(`Unable to recreate the base of the swap-chain`), long after the startup, never the first creation. The journals of
+engine 1.0.0 do not trace a minimise, so the link with the 0x0-extent fix of `39236d0b` cannot be proven from them:
+the closest events before the failure are "Core updated the application surface" (a window resize) and, once, a close
+request. **Kept open** while the "likely fixed" stays unproven (the four verified causes of the family were closed on
+2026-10-22). Worst case on 1.0.1: the recreation is retried 30 times, then a clean stop with exit 98 (`8a5bfd58`) —
+"Changed", not fixed. ⚠️ The retried failure still traces a Fatal (`src/Vulkan/SwapChain.cpp:161`,
+`recovered-device-creation-failure-traced-as-fatal`): this signature reappears on 8.0.3 for a session that recovered
+and was reported for another reason.
+
 ## What remains
 
-- Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).
-- Find the defect, reproduce it, fix it where it lives.
+- On the 8.0.3 reports: this signature (or exit 98 after a retried recreation) on an Intel UHD machine means the fix did
+  not hold; none on a comparable number of machines closes it (plan § 5).
+- If it comes back: a minimise on an Intel iGPU with an old driver (the Windows peer reproduced the 0x0 extent on a
+  current one).
 
 ## References
 
