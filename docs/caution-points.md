@@ -3767,7 +3767,10 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 >   ⚠️ **Only the end of the session is a system stop** (since 2026-10-22, owner decision): the event carries
 >   `kAEQuitReason` (log out, restart, shut down) → `OSRequestsToEndSession`; a "Quit" from the Dock or an AppleScript
 >   `quit` carries none → `OSRequestsToTerminate`, a normal `stop()` like Cmd+Q (vetoes, force-quit dialog, no
->   deadline). Measured before (macOS, a downstream application): the Dock's "Quit" was a system stop, a "save?" dialog
+>   deadline), and is answered AT ONCE: only the session end is suspended. While a quit event waits suspended, macOS
+>   delivers no other one — a Dock "Quit" clicked again on a frozen interface never counted as an attempt and never
+>   reached the force-quit dialog (measured 2026-10-22, owner decision: every "Quit" counts). Consequence: an
+>   AppleScript `quit` gets "done" at once, even if the user then cancels the quit. Measured before (macOS, a downstream application): the Dock's "Quit" was a system stop, a "save?" dialog
 >   ate its 3 s, and "Don't save" ended the run through the expired deadline, cutting the JavaScript cleanup short.
 > - **A system stop the application's USER cancels is cancelled** (`Core::cancelStopRequest()`, owner decision
 >   2026-10-22): the deadline is disarmed, the veto count reset, and macOS's suspended "quit" Apple Event is answered

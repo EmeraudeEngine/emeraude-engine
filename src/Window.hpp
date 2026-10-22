@@ -836,8 +836,8 @@ namespace EmEn
 
 			/**
 			 * @brief Answers a pending quit request of the system as refused: the application decided to run on.
-			 * @note macOS: the suspended "quit" Apple Event (Dock, AppleScript, the end of the session) is answered
-			 * "user canceled" (-128) — a session end then shows that the application cancelled it. No-op elsewhere (a
+			 * @note macOS: the suspended "quit" Apple Event of the end of the session is answered "user canceled" (-128) —
+			 * macOS then shows that the application cancelled it. A Dock or AppleScript quit was answered at once. No-op elsewhere (a
 			 * termination signal or the end of a Windows session has no answer). Main thread.
 			 */
 			void cancelQuitRequest () noexcept;
@@ -1143,8 +1143,8 @@ namespace EmEn
 			PlatformSpecific::DisplaySleepInhibitor m_displaySleepInhibitor;
 #endif
 #if IS_MACOS
-			/* The "quit" Apple Event (AppleScript, the end of the user session) as a system stop, answered when the window is
-			 * released (initializeNativeWindow() / releaseNativeWindow()). */
+			/* The "quit" Apple Event: the end of the user session as a system stop, suspended and answered when the window is
+			 * released (initializeNativeWindow() / releaseNativeWindow()); a Dock or AppleScript quit as a user's stop. */
 			std::unique_ptr< QuitAppleEventHandler, QuitAppleEventHandlerDeleter > m_quitAppleEventHandler;
 #endif
 			/* The framebuffer size for the render thread (publishedFramebufferSize()): width in the high 32 bits. */

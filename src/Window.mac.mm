@@ -51,9 +51,9 @@
  * @brief Receives the "quit" Apple Event in place of AppKit's default handler.
  * @details The default one called [NSApp terminate:], GLFW's delegate answered NSTerminateCancel and the engine then
  * stopped on its own: the sender got "User canceled" (-128: an AppleScript `quit`, and the end of the user session,
- * which macOS may take for a refusal — macOS peer, 2026-10-11). Here the event is SUSPENDED, the engine starts a
- * system stop (its JavaScript handshake included), and the reply ("done") is sent when the window is released at
- * shutdown.
+ * which macOS may take for a refusal — macOS peer, 2026-10-11). Here the end of the session (an event with a quit
+ * reason) is SUSPENDED, the engine starts a system stop (its JavaScript handshake included), and the reply ("done") is
+ * sent when the window is released at shutdown; a Dock or AppleScript quit is a user's stop, answered at once.
  */
 @interface EmEnQuitAppleEventReceiver : NSObject
 
@@ -74,19 +74,21 @@
 {
 	(void) reply;
 
-	/* NOTE: A second quit while the first one waits gets its reply at once: the stop is already under way. */
-	if ( suspended )
-	{
-		return;
-	}
-
 	/* NOTE: The end of the session (log out, restart, shut down) carries its reason (kAEQuitReason); a "Quit" from the
 	 * Dock or an AppleScript `quit` carries none: that one is the user's own quit, stopped like Cmd+Q (owner decision
 	 * 2026-10-22: a system stop's 3 s deadline cut the application's cleanup short after a long "save?" dialog). */
 	const BOOL sessionEnds = [event attributeDescriptorForKeyword:kAEQuitReason] != nil;
 
-	suspensionID = [[NSAppleEventManager sharedAppleEventManager] suspendCurrentAppleEvent];
-	suspended = YES;
+	/* NOTE: Only the end of the session is SUSPENDED (answered when the engine stops, or "user canceled" by
+	 * Window::cancelQuitRequest()): macOS waits for that answer to go on with the log out. A user's quit is answered at
+	 * once, like Cmd+Q — while a quit event waits, macOS delivers no other one, so the Dock's "Quit" clicked again on a
+	 * frozen interface never counted as a new attempt and never reached the force-quit dialog (measured 2026-10-22,
+	 * owner decision: every "Quit" counts). A quit arriving while a session end waits is one more attempt too. */
+	if ( sessionEnds == YES && suspended == NO )
+	{
+		suspensionID = [[NSAppleEventManager sharedAppleEventManager] suspendCurrentAppleEvent];
+		suspended = YES;
+	}
 
 	if ( onQuit )
 	{
