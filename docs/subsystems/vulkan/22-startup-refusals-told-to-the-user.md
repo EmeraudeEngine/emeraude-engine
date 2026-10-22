@@ -55,7 +55,8 @@ graphics renderer WITHOUT a graphics device, `diagnoseStartupRefusal()` classifi
 | `Other` | not classified as above | (no dialog: `EXIT_FAILURE` as before) |
 
 Then `Core::onStartupRefused(refusal)` — the application may show its own message (wording, translations) and return
-`true`; otherwise a native `Dialog::Message` (error, unparented: the window may not exist yet). The process exits with
+`true` (since 2026-10-22 the refusal carries the parts of the message for that: `requiredVersion`, `knownGPUs`,
+`driverPages`, `supportedVersion`, `namedDevice` — a downstream application rebuilds it in 17 languages); otherwise a native `Dialog::Message` (error, unparented: the window may not exist yet). The process exits with
 `Core::IncompatibleSystemExitCode` (97), so a crash reporter can tell "incompatible system" from a crash. Driver pages:
 NVIDIA `https://www.nvidia.com/drivers`, AMD `https://www.amd.com/en/support/download/drivers.html`, Intel
 `https://www.intel.com/content/www/us/en/support/detect.html`.

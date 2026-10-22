@@ -3721,6 +3721,22 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 > device; former item device-lost-shutdown-fail-fast, closed on this proof). A REAL loss on Windows was not reproduced
 > on demand: if a `0xc0000409` ever comes back after one, capture its minidump (WER `LocalDumps`).
 
+### The force-quit dialog waits 10 s; a dead display connection is no user's close (2026-10-22)
+
+> [!CRITICAL]
+> Measured in a downstream application's production crash reports (49 user force-quits, exit 99):
+> - **≈ 35 were chosen 3 to 20 s after the first click on the close button**: three clicks in a row while the
+>   application saved — or while its interface was frozen — opened the dialog at once. `stop()` now opens it at
+>   `MaxStopVetoCount` vetoes AND `ForceQuitMinimumDelay` (10 s) since the first veto (owner decision); "Wait More" and
+>   `cancelStopRequest()` reset both.
+> - **9 (all Linux, Wayland) were no user's close at all**: a compositor protocol error killed the display connection
+>   (`VK_ERROR_SURFACE_LOST_KHR`, `wayland-surface-lost-protocol-error`), and GLFW turns every event poll of a dead
+>   connection into a close request (`wl_window.c`, `flushDisplay()` failing) — 60 per second, the three vetoes gone
+>   in 32 ms, the dialog at once, "Force Quit", reported as a user's choice. `Window::windowCloseCallback()` now asks
+>   `Window::isDisplayConnectionLost()` (`wl_display_get_error()`, resolved on GLFW's libwayland) and notifies
+>   `OSLostDisplayConnection` → `Core::stopOnDisplayLoss()`: no dialog, exit code `DisplayLostExitCode` (96), a real
+>   incident under its own code.
+
 ### The system's stop: termination signals and the Windows end of session (2026-10-11)
 
 > [!CRITICAL]

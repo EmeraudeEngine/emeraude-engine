@@ -189,6 +189,7 @@ namespace EmEn
 				OSMonitorConfigurationChanged,
 				OSRequestsToEndSession, /* The system asks the application to quit: Windows WM_QUERYENDSESSION (shutdown, logoff), the macOS "quit" Apple Event of the session end (log out, restart, shut down; a Dock "Quit" or an AppleScript quit is OSRequestsToTerminate). */
 				OSEndsSession, /* Windows WM_ENDSESSION: the session ends; the process may be killed once the observers return (synchronous). */
+				OSLostDisplayConnection, /* The connection to the display server is dead (Wayland: a compositor protocol error): nothing can be shown any more. */
 				/* Enumeration boundary. */
 				MaxEnum
 			};
@@ -586,6 +587,17 @@ namespace EmEn
 			 * into a silent close request and the swap-chain never got an image back (2026-09-25).
 			 */
 			void drainDisplayConnection () const noexcept;
+
+			/**
+			 * @brief Tells whether the connection to the display server is dead.
+			 * @note Linux / Wayland only (wl_display_get_error(), libwayland resolved on the module GLFW loaded): after a
+			 * compositor protocol error GLFW turns every event poll into a close request (60 per second), which burnt the
+			 * three stop vetoes in 32 ms and opened the force-quit dialog — measured in production crash reports. Always
+			 * false elsewhere (an X11 connection error ends the process in Xlib).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isDisplayConnectionLost () const noexcept;
 
 			/**
 			 * @brief Returns whether the application is currently in fullscreen mode.

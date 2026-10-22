@@ -1821,6 +1821,15 @@ namespace EmEn
 		 * The engine window itself is in the running state. */
 		glfwSetWindowShouldClose(window, GLFW_FALSE);
 
+		/* NOTE: GLFW (Wayland) also raises a close request when the display connection died, at every event poll: that is
+		 * no user's close, the engine must stop on its own (Core::stopOnDisplayLoss()). */
+		if ( _this->isDisplayConnectionLost() )
+		{
+			_this->notify(OSLostDisplayConnection);
+
+			return;
+		}
+
 		/* Send the signal to the engine */
 		_this->notify(OSRequestsToTerminate);
 	}

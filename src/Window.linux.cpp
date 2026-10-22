@@ -91,6 +91,40 @@ namespace EmEn
 		// Nothing to do
 	}
 
+	bool
+	Window::isDisplayConnectionLost () const noexcept
+	{
+		if ( glfwGetPlatform() != GLFW_PLATFORM_WAYLAND )
+		{
+			return false;
+		}
+
+		auto * display = glfwGetWaylandDisplay();
+
+		if ( display == nullptr )
+		{
+			return false;
+		}
+
+		using GetError = int (*) (struct wl_display *);
+
+		/* NOTE: RTLD_NOLOAD: the very module GLFW opened (it stays loaded by GLFW, this handle only drops its reference). */
+		static const auto getError = [] () -> GetError {
+			GetError function{nullptr};
+
+			if ( auto * module = dlopen("libwayland-client.so.0", RTLD_NOW | RTLD_NOLOAD); module != nullptr )
+			{
+				function = reinterpret_cast< GetError >(dlsym(module, "wl_display_get_error"));
+
+				dlclose(module);
+			}
+
+			return function;
+		}();
+
+		return getError != nullptr && getError(display) != 0;
+	}
+
 	void
 	Window::cancelQuitRequest () noexcept
 	{

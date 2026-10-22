@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <iterator>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -102,6 +103,7 @@ namespace EmEn
 
 		StartupRefusal refusal;
 		refusal.refusals = m_vulkanInstance.deviceRefusals();
+		refusal.requiredVersion = requiredVersion;
 
 		/* The GPUs the operating system knows, independently of Vulkan (empty when the platform cannot list them), and
 		 * one driver page per vendor among them. A software adapter is not a GPU. */
@@ -129,6 +131,9 @@ namespace EmEn
 				}
 			}
 		}
+
+		refusal.knownGPUs = knownGPUs;
+		refusal.driverPages = driverPages;
 
 		switch ( m_coreLevelFailure )
 		{
@@ -177,6 +182,7 @@ namespace EmEn
 				{
 					refusal.cause = StartupRefusal::Cause::OutdatedDriver;
 					refusal.title = "Graphics driver too old";
+					refusal.namedDevice = static_cast< size_t >(std::distance(refusal.refusals.begin(), outdated));
 
 					if ( const auto * page = driverPageOf(outdated->vendorID); page != nullptr )
 					{
@@ -193,7 +199,9 @@ namespace EmEn
 					}
 					else
 					{
-						message << "it supports " << vulkanVersionString(outdated->apiVersion) << ", and this application requires " << requiredVersion << ".\n\n";
+						refusal.supportedVersion = vulkanVersionString(outdated->apiVersion);
+
+						message << "it supports " << refusal.supportedVersion << ", and this application requires " << requiredVersion << ".\n\n";
 					}
 
 					message << "Update the graphics driver" << ( refusal.driverURL.empty() ? "." : ":\n" + refusal.driverURL );
@@ -214,6 +222,8 @@ namespace EmEn
 
 				if ( unsupported != refusal.refusals.end() )
 				{
+					refusal.namedDevice = static_cast< size_t >(std::distance(refusal.refusals.begin(), unsupported));
+
 					if ( const auto * page = driverPageOf(unsupported->vendorID); page != nullptr )
 					{
 						refusal.driverURL = page;

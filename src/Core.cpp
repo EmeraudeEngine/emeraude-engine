@@ -1805,8 +1805,17 @@ namespace EmEn
 
 			m_stopVetoCount++;
 
-			/* Below the threshold: just defer. */
-			if ( m_stopVetoCount < MaxStopVetoCount )
+			const auto now = std::chrono::steady_clock::now();
+
+			if ( !m_firstStopVetoTime.has_value() )
+			{
+				m_firstStopVetoTime = now;
+			}
+
+			/* Below the threshold: just defer. NOTE: Attempts AND time (ForceQuitMinimumDelay): clicks in a row on the
+			 * close button while the application saves, or while its interface is frozen, no longer open the dialog
+			 * within a few seconds. */
+			if ( m_stopVetoCount < MaxStopVetoCount || now - m_firstStopVetoTime.value() < ForceQuitMinimumDelay )
 			{
 				return;
 			}
@@ -1832,6 +1841,7 @@ namespace EmEn
 				/* NOTE: "Wait More" grants a NEW grace period: without the reset, the counter stayed at the threshold and
 				 * the very next close request popped the dialog again at once. */
 				m_stopVetoCount = 0;
+				m_firstStopVetoTime.reset();
 
 				return;
 			}
@@ -1897,6 +1907,7 @@ namespace EmEn
 	Core::cancelStopRequest () noexcept
 	{
 		m_stopVetoCount = 0;
+		m_firstStopVetoTime.reset();
 
 		/* NOTE: Any pending quit request of the system is answered as refused, a user's one too (macOS: a "Quit" from
 		 * the Dock or an AppleScript `quit` is a normal stop, its Apple Event waits for an answer). */
@@ -1945,6 +1956,26 @@ namespace EmEn
 
 		/* NOTE: The application may save its data, but cannot refuse: nothing can be drawn any more. */
 		this->setAppReadyToQuit(DeviceLostExitCode);
+
+		static_cast< void >(this->onBeforeCoreStop());
+
+		this->proceedStop();
+	}
+
+	void
+	Core::stopOnDisplayLoss () noexcept
+	{
+		if ( m_deviceLossStopIssued )
+		{
+			return;
+		}
+
+		m_deviceLossStopIssued = true;
+
+		TraceError{ClassId} << "The connection to the display server is lost (on Wayland a compositor protocol error, printed on stderr by libwayland) : the engine stops now (exit code " << DisplayLostExitCode << ").";
+
+		/* NOTE: The application may save its data, but cannot refuse: nothing can be shown any more. */
+		this->setAppReadyToQuit(DisplayLostExitCode);
 
 		static_cast< void >(this->onBeforeCoreStop());
 
@@ -3098,6 +3129,10 @@ namespace EmEn
 					Tracer::info(ClassId, "Stop requested by the window system (close request).");
 
 					this->stop();
+					break;
+
+				case Window::OSLostDisplayConnection :
+					this->stopOnDisplayLoss();
 					break;
 
 				case Window::OSRequestsToEndSession :

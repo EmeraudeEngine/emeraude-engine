@@ -75,6 +75,14 @@ main thread: the window is dead AND the application can no longer be driven (con
 here, besides the root cause: a way out for that state (the main loop must not depend on the dead display connection —
 e.g. detect the lost surface, stop polling Wayland, and still serve the console / shut down).
 
+## In production (2026-10-22, a downstream application's crash reports, 8.0.2)
+
+9 reports on 9 Linux machines (Fedora KDE and Workstation, Debian sid, CachyOS, Bazzite, Omarchy): the surface lost,
+then GLFW's close requests at 60 Hz (its `flushDisplay()` failing on the dead connection), the three stop vetoes gone in
+32 ms, the force-quit dialog, "Force Quit": filed as user force-quits (exit 99). Since 2026-10-22 the engine stops on its
+own with `DisplayLostExitCode` (96, `Core::stopOnDisplayLoss()`): the downstream reports now count this item's
+occurrences under exit code 96. The protocol error itself is on stderr only (libwayland), not in the journals.
+
 ## What remains — in order
 
 **New data, 2026-10-12 (Linux, engine 9054be48 + uncommitted lot 2, Release, no validation layer):** reproduced at the

@@ -184,6 +184,13 @@ namespace EmEn
 		// Nothing to do
 	}
 
+	bool
+	Window::isDisplayConnectionLost () const noexcept
+	{
+		/* NOTE: Wayland only (Window.linux.cpp). */
+		return false;
+	}
+
 	void
 	Window::cancelQuitRequest () noexcept
 	{

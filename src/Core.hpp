@@ -247,6 +247,20 @@ namespace EmEn
 			 */
 			static constexpr int IncompatibleSystemExitCode{97};
 
+			/** @brief Exit code of a run stopped because the connection to the display server died (stopOnDisplayLoss()).
+			 * @details Non-zero on purpose: a real incident (on Wayland, a compositor protocol error killed the connection),
+			 * kept by a downstream crash reporter — no longer disguised as a user's force-quit (ForceQuitExitCode).
+			 */
+			static constexpr int DisplayLostExitCode{96};
+
+			/** @brief The force-quit dialog of stop() opens at MaxStopVetoCount vetoes AND this long after the first one.
+			 * @details Owner decision 2026-10-22: three clicks on the close button within a few seconds, while the
+			 * application is saving or its interface is frozen, opened the dialog at once (≈ 35 force-quits of the
+			 * production crash reports chosen 3 to 20 s after the first click). Aligned with the 10 s fallback of the
+			 * downstream application's own close sequence.
+			 */
+			static constexpr std::chrono::seconds ForceQuitMinimumDelay{10};
+
 			/**
 			 * @brief Why the startup was refused for the graphics hardware or driver, in terms a user can act on (owner
 			 * decision 2026-10-15: the user is told the hardware is not compatible, or to update an outdated driver).
@@ -274,6 +288,20 @@ namespace EmEn
 				std::string driverURL;
 				/** @brief The physical devices refused, and why (Vulkan::Instance::deviceRefusals()). */
 				std::vector< Vulkan::Instance::DeviceRefusal > refusals;
+				/** @name The parts of the message, for an application that writes its own (its translations).
+				 * @{ */
+				/** @brief The Vulkan version the application requires ("Vulkan 1.1"). */
+				std::string requiredVersion;
+				/** @brief The GPUs the operating system lists, comma-separated (empty when the platform cannot list them). */
+				std::string knownGPUs;
+				/** @brief One driver page per vendor among them, one per line. */
+				std::string driverPages;
+				/** @brief OutdatedDriver: the version the named device supports ("Vulkan 1.2.198"); empty when it reaches the
+				 * required version but lacks what it requires (the detail of its refusal says what). */
+				std::string supportedVersion;
+				/** @brief OutdatedDriver, IncompatibleHardware: the index in refusals of the device the message names. */
+				std::optional< size_t > namedDevice;
+				/** @} */
 				Cause cause{Cause::Other};
 			};
 
@@ -1394,6 +1422,18 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Returns the exit code the run will end with (setAppReadyToQuit(), stop(); ForceQuitExitCode once the
+			 * user chose "Force Quit").
+			 * @return int
+			 */
+			[[nodiscard]]
+			int
+			userExitCode () const noexcept
+			{
+				return m_userExitCode;
+			}
+
+			/**
 			 * @brief Returns if the user application is safe to quit.
 			 * @return bool
 			 */
@@ -1533,6 +1573,14 @@ namespace EmEn
 			 * @note Main thread. One-shot.
 			 */
 			void stopOnDeviceLoss () noexcept;
+
+			/**
+			 * @brief Stops the engine because the connection to the display server died (Window::OSLostDisplayConnection).
+			 * @details As stopOnDeviceLoss(): the application is told (onBeforeCoreStop(), it may save its data) and cannot
+			 * refuse; exit code DisplayLostExitCode. No force-quit dialog. One-shot (shared with stopOnDeviceLoss()).
+			 * @note Main thread.
+			 */
+			void stopOnDisplayLoss () noexcept;
 
 			/**
 			 * @brief Main-loop check of a system stop: past its deadline, the stop proceeds whatever the application said.
@@ -2005,8 +2053,9 @@ namespace EmEn
 			std::filesystem::path m_rushVoiceOverPath;
 			int m_userExitCode{0};
 			int m_stopVetoCount{0}; ///< Consecutive `onBeforeCoreStop()` veto count. See stop().
+			std::optional< std::chrono::steady_clock::time_point > m_firstStopVetoTime; ///< When the first of these vetoes happened (ForceQuitMinimumDelay). Main thread only.
 			std::optional< std::chrono::steady_clock::time_point > m_systemStopDeadline; ///< Set by requestSystemStop(): past it, the stop proceeds whatever the application answers. Main thread only.
-			bool m_deviceLossStopIssued{false}; ///< stopOnDeviceLoss() ran (one-shot). Main thread only.
+			bool m_deviceLossStopIssued{false}; ///< stopOnDeviceLoss() or stopOnDisplayLoss() ran (one-shot). Main thread only.
 			std::optional< PlatformSpecific::TerminationSignalCatcher > m_terminationSignals; ///< Catches SIGTERM / SIGHUP / SIGINT during the main loop (run()). Main thread only.
 			uint32_t m_mainLoopFrequency{DefaultMainLoopFrequencyHz< uint32_t >}; ///< Main event-loop tick ceiling (Hz), set at construction. @see mainLoopFrequencyHz()
 			double m_mainLoopEventTimeoutSeconds{1.0 / DefaultMainLoopFrequencyHz< double >}; ///< Precomputed 1/Hz wait timeout passed to waitSystemEvents().
