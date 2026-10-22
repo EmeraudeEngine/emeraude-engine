@@ -120,6 +120,14 @@ trace << "==============================";
 | `Tracer::fatal()` | `TraceFatal{}` | Unrecoverable errors |
 | N/A | `TraceAPI{}` | External API calls (Vulkan, OpenAL, etc.) |
 
+⚠️ **Fatal = the run ends, and only the code that ends it says so.** A function whose caller may recover (try the next
+device, retry a swap-chain recreation, run without an optional service) traces an **Error**; the caller that gives up
+traces the Fatal. A downstream crash reporter classifies a run by its **first Fatal**: a Fatal on a recovered path
+files a later, unrelated crash under it (found in production crash reports, 2026-10-22; fixed in 1.1.0:
+`Device::create()` / `createDevice()`, the whole `Vulkan::SwapChain`, `Physics::Manager::onInitialize()` — the end of
+the run stays a Fatal of `Graphics::Renderer`, `Core`). Changing a traced message or its level changes that
+reporter's signature for the cause: note the version.
+
 ## Console Output Encoding (Windows)
 
 Traces are written as **raw bytes** to `std::cout`. On Windows the console renders those

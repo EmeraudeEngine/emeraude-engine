@@ -111,4 +111,6 @@ in a log; the device's `apiVersion` is the test.
 ⚠️ **A refusal still traces the old `Fatal` lines**: with 1.0.1 a machine without any device logs "No physical device
 available !" (`Instance.cpp`), one whose every device is refused "Unable to find a suitable graphics device!"
 (`Renderer.cpp`), before the dialog and exit 97. A crash-report tool that classifies by the first `Fatal` files such a
-refusal under the engine 1.0.0 failure: it must read the exit code 97 first.
+refusal under the engine 1.0.0 failure: it must read the exit code 97 first. Since 1.1.0 a `vkCreateDevice()` or
+swap-chain failure the engine recovers from (next device, retried recreation) is an Error, no longer a Fatal
+(`docs/tracer-system.md` § Available Severity Levels).

@@ -84,9 +84,11 @@ engine 1.0.0 do not trace a minimise, so the link with the 0x0-extent fix of `39
 the closest events before the failure are "Core updated the application surface" (a window resize) and, once, a close
 request. **Kept open** while the "likely fixed" stays unproven (the four verified causes of the family were closed on
 2026-10-22). Worst case on 1.0.1: the recreation is retried 30 times, then a clean stop with exit 98 (`8a5bfd58`) —
-"Changed", not fixed. ⚠️ The retried failure still traces a Fatal (`src/Vulkan/SwapChain.cpp:161`,
-`recovered-device-creation-failure-traced-as-fatal`): this signature reappears on 8.0.3 for a session that recovered
-and was reported for another reason.
+"Changed", not fixed. ⚠️ On 1.0.1 the retried failure still traces a Fatal (`src/Vulkan/SwapChain.cpp`): this signature reappears on 8.0.3
+for a session that recovered and was reported for another reason. ⚠️ From 1.1.0 it is an Error
+(`docs/tracer-system.md` § Available Severity Levels): this signature can no longer appear, the same failure is signed
+by the renderer's Fatal ("Unable to refresh the swap-chain after N consecutive attempts", exit 98) — its absence on a
+1.1.0 release proves nothing.
 
 ## What remains
 

@@ -158,7 +158,9 @@ namespace EmEn::Vulkan
 
 		if ( result != VK_SUCCESS )
 		{
-			TraceFatal{ClassId} << "Unable to create the swap-chain : " << vkResultToCString(result) << " !";
+			/* NOTE: Every failure of this class is an Error: a recreation is retried, and the renderer traces the Fatal
+			 * when it gives up or when the first creation fails (a crash reporter classifies a run by its first Fatal). */
+			TraceError{ClassId} << "Unable to create the swap-chain : " << vkResultToCString(result) << " !";
 
 			return false;
 		}
@@ -186,7 +188,7 @@ namespace EmEn::Vulkan
 
 		if ( !this->hasDevice() || (!m_headless && window.surface() == nullptr) )
 		{
-			Tracer::fatal(ClassId, "No device or window surface to create the swap-chain !");
+			Tracer::error(ClassId, "No device or window surface to create the swap-chain !");
 
 			return false;
 		}
@@ -591,7 +593,7 @@ namespace EmEn::Vulkan
 		/* NOTE: Will set the image count for the swap-chain. */
 		if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, nullptr); result != VK_SUCCESS )
 		{
-			TraceFatal{ClassId} << "Unable to get image count from the swap-chain : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to get image count from the swap-chain : " << vkResultToCString(result) << " !";
 
 			return false;
 		}
@@ -621,7 +623,7 @@ namespace EmEn::Vulkan
 		 * VK_INCOMPLETE here would mean images are missing — a failure for this caller, unlike a device list. */
 		if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, imageHandles.data()); result != VK_SUCCESS )
 		{
-			TraceFatal{ClassId} << "Unable to get images from the swap-chain : " << vkResultToCString(result) << " !";
+			TraceError{ClassId} << "Unable to get images from the swap-chain : " << vkResultToCString(result) << " !";
 
 			return {};
 		}
@@ -655,7 +657,7 @@ namespace EmEn::Vulkan
 			/* Create the frame N color buffer (swap-chain image, used as resolve target when MSAA is enabled). */
 			if ( !this->createColorBuffer(swapChainImages[imageIndex], frame.colorImage, frame.colorImageView, identifier) )
 			{
-				TraceFatal{ClassId} << "Unable to create the color buffer #" << imageIndex << " !";
+				TraceError{ClassId} << "Unable to create the color buffer #" << imageIndex << " !";
 
 				return false;
 			}
@@ -681,7 +683,7 @@ namespace EmEn::Vulkan
 
 				if ( !frame.MSAAColorImage->createOnHardware() )
 				{
-					TraceFatal{ClassId} << "Unable to create MSAA color image #" << imageIndex << " !";
+					TraceError{ClassId} << "Unable to create MSAA color image #" << imageIndex << " !";
 
 					return false;
 				}
@@ -704,7 +706,7 @@ namespace EmEn::Vulkan
 
 				if ( !frame.MSAAColorImageView->createOnHardware() )
 				{
-					TraceFatal{ClassId} << "Unable to create MSAA color image view #" << imageIndex << " !";
+					TraceError{ClassId} << "Unable to create MSAA color image view #" << imageIndex << " !";
 
 					return false;
 				}
@@ -718,7 +720,7 @@ namespace EmEn::Vulkan
 			/* Create the frame N depth/stencil buffer (used as resolve target when MSAA is enabled). */
 			if ( !this->createDepthStencilBuffer(this->device(), frame.depthStencilImage, frame.depthImageView, frame.stencilImageView, identifier) )
 			{
-				TraceFatal{ClassId} << "Unable to create the depth buffer #" << imageIndex << " !";
+				TraceError{ClassId} << "Unable to create the depth buffer #" << imageIndex << " !";
 
 				return false;
 			}
@@ -744,7 +746,7 @@ namespace EmEn::Vulkan
 
 				if ( !frame.MSAADepthStencilImage->createOnHardware() )
 				{
-					TraceFatal{ClassId} << "Unable to create MSAA depth/stencil image #" << imageIndex << " !";
+					TraceError{ClassId} << "Unable to create MSAA depth/stencil image #" << imageIndex << " !";
 
 					return false;
 				}
@@ -769,7 +771,7 @@ namespace EmEn::Vulkan
 
 					if ( !frame.MSAADepthImageView->createOnHardware() )
 					{
-						TraceFatal{ClassId} << "Unable to create MSAA depth image view #" << imageIndex << " !";
+						TraceError{ClassId} << "Unable to create MSAA depth image view #" << imageIndex << " !";
 
 						return false;
 					}
@@ -793,7 +795,7 @@ namespace EmEn::Vulkan
 
 					if ( !frame.MSAAStencilImageView->createOnHardware() )
 					{
-						TraceFatal{ClassId} << "Unable to create MSAA stencil image view #" << imageIndex << " !";
+						TraceError{ClassId} << "Unable to create MSAA stencil image view #" << imageIndex << " !";
 
 						return false;
 					}
@@ -1350,7 +1352,7 @@ namespace EmEn::Vulkan
 
 			if ( !image->createOnHardware() )
 			{
-				TraceFatal{ClassId} << "Unable to create the headless image '" << instanceId << "' !";
+				TraceError{ClassId} << "Unable to create the headless image '" << instanceId << "' !";
 
 				return false;
 			}
@@ -1363,7 +1365,7 @@ namespace EmEn::Vulkan
 
 			if ( swapChainImage != image->handle() )
 			{
-				TraceFatal{ClassId} << "Unable to create image '" << instanceId << "' !";
+				TraceError{ClassId} << "Unable to create image '" << instanceId << "' !";
 
 				return false;
 			}
@@ -1386,7 +1388,7 @@ namespace EmEn::Vulkan
 
 		if ( !imageView->createOnHardware() )
 		{
-			TraceFatal{ClassId} << "Unable to create image view '" << instanceId << "' !";
+			TraceError{ClassId} << "Unable to create image view '" << instanceId << "' !";
 
 			return false;
 		}
@@ -1433,7 +1435,7 @@ namespace EmEn::Vulkan
 
 			if ( !depthImageView->createOnHardware() )
 			{
-				TraceFatal{ClassId} << "Unable to create image view '" << identifier << "DepthBuffer' !";
+				TraceError{ClassId} << "Unable to create image view '" << identifier << "DepthBuffer' !";
 
 				return false;
 			}
@@ -1456,7 +1458,7 @@ namespace EmEn::Vulkan
 
 			if ( !stencilImageView->createOnHardware() )
 			{
-				TraceFatal{ClassId} << "Unable to create image view '" << identifier << "StencilBuffer' !";
+				TraceError{ClassId} << "Unable to create image view '" << identifier << "StencilBuffer' !";
 
 				return false;
 			}

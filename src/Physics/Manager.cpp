@@ -59,7 +59,7 @@ namespace EmEn::Physics
 
 		if ( !m_vulkanInstance.usable() )
 		{
-			Tracer::fatal(ClassId, "The Vulkan instance is not usable !");
+			Tracer::error(ClassId, "The Vulkan instance is not usable !");
 
 			return false;
 		}
@@ -69,7 +69,7 @@ namespace EmEn::Physics
 
 		if ( m_device == nullptr )
 		{
-			Tracer::fatal(ClassId, "Unable to find a suitable compute device !");
+			Tracer::error(ClassId, "Unable to find a suitable compute device !");
 
 			return false;
 		}
@@ -83,7 +83,7 @@ namespace EmEn::Physics
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_transferManager.name() << " service failed to execute !";
+			TraceError{ClassId} << m_transferManager.name() << " service failed to execute !";
 
 			return false;
 		}
@@ -97,7 +97,7 @@ namespace EmEn::Physics
 		}
 		else
 		{
-			TraceFatal{ClassId} << m_layoutManager.name() << " service failed to execute !";
+			TraceError{ClassId} << m_layoutManager.name() << " service failed to execute !";
 
 			return false;
 		}
@@ -113,7 +113,7 @@ namespace EmEn::Physics
 
 		if ( !m_descriptorPool->createOnHardware() )
 		{
-			Tracer::fatal(ClassId, "Unable to create the descriptor pool !");
+			Tracer::error(ClassId, "Unable to create the descriptor pool !");
 
 			return false;
 		}
@@ -123,7 +123,7 @@ namespace EmEn::Physics
 
 		if ( !m_commandPool->createOnHardware() )
 		{
-			Tracer::fatal(ClassId, "Unable to create the command pool !");
+			Tracer::error(ClassId, "Unable to create the command pool !");
 
 			return false;
 		}

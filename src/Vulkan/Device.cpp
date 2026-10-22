@@ -319,7 +319,7 @@ namespace EmEn::Vulkan
 
 		if ( queueFamilyProperties.empty() )
 		{
-			TraceFatal{ClassId} << "The physical device '" << this->name() << "' has no family queue !";
+			TraceError{ClassId} << "The physical device '" << this->name() << "' has no family queue !";
 
 			return false;
 		}
@@ -918,7 +918,9 @@ namespace EmEn::Vulkan
 
 		if ( const auto result = vkCreateDevice(m_physicalDevice->handle(), &createInfo, nullptr, &m_deviceHandle); result != VK_SUCCESS )
 		{
-			TraceFatal{ClassId} << "Unable to create a logical device : " << vkResultToCString(result) << " !";
+			/* NOTE: An Error, not a Fatal: Instance::getGraphicsDevice() tries the next device, and the caller that gives
+			 * up traces the Fatal (a crash reporter classifies a run by its first Fatal). */
+			TraceError{ClassId} << "Unable to create a logical device : " << vkResultToCString(result) << " !";
 
 			return false;
 		}
