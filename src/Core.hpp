@@ -496,6 +496,17 @@ namespace EmEn
 			void requestSystemStop (const char * reason) noexcept;
 
 			/**
+			 * @brief The application gives up a stop it was asked for (its user cancelled it: "save?" → Cancel).
+			 * @details Disarms the deadline of a system stop (requestSystemStop()): a cancelled stop no longer proceeds
+			 * once SystemStopGracePeriod is over (owner decision 2026-10-22: the user's Cancel wins); the system's quit
+			 * request is answered as refused (Window::cancelQuitRequest()). Resets the veto count, so the next stop
+			 * gets the whole grace before the force-quit dialog. An application that never answers is still stopped
+			 * past the deadline, as before. No effect once the stop proceeds.
+			 * @note Main thread.
+			 */
+			void cancelStopRequest () noexcept;
+
+			/**
 			 * @brief Handles files dropped onto the application window.
 			 * @details This method is called when users drag and drop files onto the window.
 			 * The files go through three stages, in order :

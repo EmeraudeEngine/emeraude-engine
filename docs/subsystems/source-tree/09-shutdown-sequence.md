@@ -11,7 +11,7 @@ Three ways in, one way through (`proceedStop()`):
 | Request | The application's say | Then |
 |---|---|---|
 | `stop(exitCode)` — the user (window close, `Core.shutdown()`, a key) | `onBeforeCoreStop()` may VETO; after `MaxStopVetoCount` vetoes a "Force Quit / Wait More" dialog (one at a time; "Wait More" grants a new grace period) | `proceedStop()` |
-| `requestSystemStop(reason)` — a termination signal caught by the main loop (SIGTERM / SIGHUP / SIGINT) | asked as for `stop()`, but a veto only lasts until `SystemStopGracePeriod`; no veto counting, no dialog | `checkSystemStopDeadline()` forces `proceedStop()` at the deadline (exit code 0: the system ended the run) |
+| `requestSystemStop(reason)` — a termination signal caught by the main loop (SIGTERM / SIGHUP / SIGINT) | asked as for `stop()`, but a veto only lasts until `SystemStopGracePeriod`; no veto counting, no dialog | `checkSystemStopDeadline()` forces `proceedStop()` at the deadline (exit code 0: the system ended the run) — unless the application cancels it first (`cancelStopRequest()`: its user said Cancel; macOS's "quit" Apple Event is answered "user canceled") |
 | `stopOnDeviceLoss()` — the graphics device is lost | told (`onBeforeCoreStop()`, it may save its data), cannot refuse | `proceedStop()` with `DeviceLostExitCode` |
 
 `proceedStop()`: notifies `ExecutionStopping`; stops a running audio / video rush (`stopAudioVideoRecording()`);

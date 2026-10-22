@@ -91,6 +91,12 @@ namespace EmEn
 		// Nothing to do
 	}
 
+	void
+	Window::cancelQuitRequest () noexcept
+	{
+		/* NOTE: A termination signal has no answer. */
+	}
+
 	bool
 	Window::initializeNativeWindow () noexcept
 	{

@@ -154,6 +154,12 @@ namespace EmEn
 		}
 	}
 
+	void
+	Window::cancelQuitRequest () noexcept
+	{
+		/* NOTE: The end of a Windows session has no answer to give back (WM_QUERYENDSESSION was answered already). */
+	}
+
 	bool
 	Window::initializeNativeWindow () noexcept
 	{

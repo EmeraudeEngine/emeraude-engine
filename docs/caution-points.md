@@ -3748,6 +3748,13 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 >   handler (`QuitAppleEventHandler`, `Window.mac.mm`, no GLFW change): the event is SUSPENDED, `OSRequestsToEndSession`
 >   starts the system stop, and the reply ("done") is sent when the window is released at shutdown
 >   (`releaseNativeWindow()`). Cmd+Q (the menu, `[NSApp terminate:]`) is unchanged.
+> - **A system stop the application's USER cancels is cancelled** (`Core::cancelStopRequest()`, owner decision
+>   2026-10-22): the deadline is disarmed, the veto count reset, and macOS's suspended "quit" Apple Event is answered
+>   "user canceled" (-128) (`Window::cancelQuitRequest()`; a session end then says the application cancelled it).
+>   Measured before (macOS, a downstream application): "Quit" from the Dock with an unsaved project, "save?" →
+>   Cancel after more than 3 s (the modal blocks the main thread while the deadline runs) → "did not acknowledge the
+>   system stop within 3000 ms: the stop proceeds", the project lost. An application that never answers is still
+>   stopped at the deadline.
 > - **A child process is waited for EINTR-safely**: the desktop commands (`runDesktopApplication()`,
 >   `runDefaultDesktopApplication()`, Linux / macOS) use `PlatformSpecific::runProcessAndWait()` (`posix_spawnp()` +
 >   `waitpid()` resumed on EINTR, bounded) instead of `reproc::run()`, which resumed neither its `poll()` nor its

@@ -823,6 +823,14 @@ namespace EmEn
 			void applyTitleBarTheme () noexcept;
 
 			/**
+			 * @brief Answers a pending quit request of the system as refused: the application decided to run on.
+			 * @note macOS: the suspended "quit" Apple Event (Dock, AppleScript, the end of the session) is answered
+			 * "user canceled" (-128) — a session end then shows that the application cancelled it. No-op elsewhere (a
+			 * termination signal or the end of a Windows session has no answer). Main thread.
+			 */
+			void cancelQuitRequest () noexcept;
+
+			/**
 			 * @brief Returns the position, in screen coordinates of the window content area upper-left corner.
 			 * @param monitor A pointer to the monitor. Default primary.
 			 * @return std::array< int32_t, 2 >

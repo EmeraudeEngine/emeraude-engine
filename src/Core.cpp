@@ -1894,6 +1894,23 @@ namespace EmEn
 	}
 
 	void
+	Core::cancelStopRequest () noexcept
+	{
+		m_stopVetoCount = 0;
+
+		if ( !m_systemStopDeadline.has_value() )
+		{
+			return;
+		}
+
+		m_systemStopDeadline.reset();
+
+		Tracer::info(ClassId, "The application cancelled the system stop: it runs on.");
+
+		m_window.cancelQuitRequest();
+	}
+
+	void
 	Core::checkSystemStopDeadline () noexcept
 	{
 		if ( !m_systemStopDeadline.has_value() || !m_isMainLoopRunning || std::chrono::steady_clock::now() < m_systemStopDeadline.value() )

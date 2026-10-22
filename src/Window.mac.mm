@@ -136,6 +136,27 @@ namespace EmEn
 				}
 			}
 
+			/**
+			 * @brief Answers the suspended "quit" Apple Event as refused ("user canceled", -128): the application runs on.
+			 * @return void
+			 */
+			void
+			cancel () noexcept
+			{
+				if ( !m_receiver->suspended )
+				{
+					return;
+				}
+
+				NSAppleEventDescriptor * reply = [[NSAppleEventManager sharedAppleEventManager] replyAppleEventForSuspensionID:m_receiver->suspensionID];
+
+				[reply setParamDescriptor:[NSAppleEventDescriptor descriptorWithInt32:userCanceledErr] forKeyword:keyErrorNumber];
+
+				[[NSAppleEventManager sharedAppleEventManager] resumeWithSuspensionID:m_receiver->suspensionID];
+
+				m_receiver->suspended = NO;
+			}
+
 		private:
 
 			EmEnQuitAppleEventReceiver * m_receiver;
@@ -157,6 +178,15 @@ namespace EmEn
 	Window::applyTitleBarTheme () noexcept
 	{
 		// Nothing to do
+	}
+
+	void
+	Window::cancelQuitRequest () noexcept
+	{
+		if ( m_quitAppleEventHandler != nullptr )
+		{
+			m_quitAppleEventHandler->cancel();
+		}
 	}
 
 	bool
