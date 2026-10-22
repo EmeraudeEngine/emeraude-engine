@@ -21,6 +21,7 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
+| Machines | 2 — per version: 8.0.2 ×2 |
 | Reports | 2 (first 2026-10-18, last 2026-10-19) |
 | Versions | 8.0.2 ×2 |
 | Platforms | windows ×2 |

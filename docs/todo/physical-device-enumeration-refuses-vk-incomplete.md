@@ -47,6 +47,7 @@ Plan: `CrashReport Solucius` (app_system `docs/plans/crashreport-solucius.md`).
 <!-- crash-reports:begin -->
 | | |
 |---|---|
+| Machines | 19 — per version: 8.0.2 ×19 |
 | Reports | 58 (first 2026-10-15, last 2026-10-22) |
 | Versions | 8.0.2 ×58 |
 | Platforms | windows ×58 |
