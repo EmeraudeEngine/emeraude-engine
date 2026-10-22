@@ -502,7 +502,9 @@ namespace EmEn
 			void iconify () const noexcept;
 
 			/**
-			 * @brief Restores the window on the user desktop view.
+			 * @brief Restores the window on the user desktop view, from the taskbar (the reverse of iconify()).
+			 * @note Does nothing when the window is not minimised (tested with GLFW_ICONIFIED: on Windows a minimised
+			 * window is still GLFW_VISIBLE).
 			 */
 			void getBackOnDesktop () const noexcept;
 

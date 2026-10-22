@@ -686,7 +686,10 @@ namespace EmEn
 	void
 	Window::getBackOnDesktop () const noexcept
 	{
-		if ( m_windowLess || this->isVisibleOnDesktop() )
+		/* NOTE: The test is GLFW_ICONIFIED, not GLFW_VISIBLE: on Windows a minimised window stays "visible" (visible means
+		 * not hidden), so the restore never happened there (measured 2026-10-22; macOS reports a minimised window as not
+		 * visible, which hid the defect). */
+		if ( m_windowLess || !this->isIconified() )
 		{
 			return;
 		}
