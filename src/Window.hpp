@@ -187,7 +187,7 @@ namespace EmEn
 				OSRequestsToRefreshContent,
 				OSRequestsToTerminate,
 				OSMonitorConfigurationChanged,
-				OSRequestsToEndSession, /* The system asks the application to quit: Windows WM_QUERYENDSESSION (shutdown, logoff), the macOS "quit" Apple Event (AppleScript, logout). */
+				OSRequestsToEndSession, /* The system asks the application to quit: Windows WM_QUERYENDSESSION (shutdown, logoff), the macOS "quit" Apple Event of the session end (log out, restart, shut down; a Dock "Quit" or an AppleScript quit is OSRequestsToTerminate). */
 				OSEndsSession, /* Windows WM_ENDSESSION: the session ends; the process may be killed once the observers return (synchronous). */
 				/* Enumeration boundary. */
 				MaxEnum

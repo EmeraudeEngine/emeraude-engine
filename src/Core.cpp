@@ -1898,6 +1898,10 @@ namespace EmEn
 	{
 		m_stopVetoCount = 0;
 
+		/* NOTE: Any pending quit request of the system is answered as refused, a user's one too (macOS: a "Quit" from
+		 * the Dock or an AppleScript `quit` is a normal stop, its Apple Event waits for an answer). */
+		m_window.cancelQuitRequest();
+
 		if ( !m_systemStopDeadline.has_value() )
 		{
 			return;
@@ -1906,8 +1910,6 @@ namespace EmEn
 		m_systemStopDeadline.reset();
 
 		Tracer::info(ClassId, "The application cancelled the system stop: it runs on.");
-
-		m_window.cancelQuitRequest();
 	}
 
 	void

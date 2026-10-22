@@ -65,14 +65,13 @@
 {
 	/* NOTE: Read and written by QuitAppleEventHandler (this file only), on the main thread. */
 	@public
-	std::function< void () > onQuit;
+	std::function< void (bool sessionEnds) > onQuit;
 	NSAppleEventManagerSuspensionID suspensionID;
 	BOOL suspended;
 }
 
 - (void) handleQuitEvent:(NSAppleEventDescriptor *)event withReplyEvent:(NSAppleEventDescriptor *)reply
 {
-	(void) event;
 	(void) reply;
 
 	/* NOTE: A second quit while the first one waits gets its reply at once: the stop is already under way. */
@@ -81,12 +80,17 @@
 		return;
 	}
 
+	/* NOTE: The end of the session (log out, restart, shut down) carries its reason (kAEQuitReason); a "Quit" from the
+	 * Dock or an AppleScript `quit` carries none: that one is the user's own quit, stopped like Cmd+Q (owner decision
+	 * 2026-10-22: a system stop's 3 s deadline cut the application's cleanup short after a long "save?" dialog). */
+	const BOOL sessionEnds = [event attributeDescriptorForKeyword:kAEQuitReason] != nil;
+
 	suspensionID = [[NSAppleEventManager sharedAppleEventManager] suspendCurrentAppleEvent];
 	suspended = YES;
 
 	if ( onQuit )
 	{
-		onQuit();
+		onQuit(sessionEnds == YES);
 	}
 }
 
@@ -102,7 +106,7 @@ namespace EmEn
 		public:
 
 			explicit
-			QuitAppleEventHandler (std::function< void () > onQuit) noexcept
+			QuitAppleEventHandler (std::function< void (bool sessionEnds) > onQuit) noexcept
 				: m_receiver{[[EmEnQuitAppleEventReceiver alloc] init]}
 			{
 				m_receiver->onQuit = std::move(onQuit);
@@ -193,10 +197,19 @@ namespace EmEn
 	Window::initializeNativeWindow () noexcept
 	{
 		/* NOTE: The callback captures this window, which owns the handler: releaseNativeWindow() destroys it first. */
-		m_quitAppleEventHandler.reset(new QuitAppleEventHandler{[this] () {
-			Tracer::info(ClassId, "macOS asks the application to quit (Apple Event).");
+		m_quitAppleEventHandler.reset(new QuitAppleEventHandler{[this] (bool sessionEnds) {
+			if ( sessionEnds )
+			{
+				Tracer::info(ClassId, "macOS asks the application to quit: the session ends (Apple Event).");
 
-			this->notify(OSRequestsToEndSession);
+				this->notify(OSRequestsToEndSession);
+			}
+			else
+			{
+				Tracer::info(ClassId, "macOS asks the application to quit: Dock or AppleScript (Apple Event).");
+
+				this->notify(OSRequestsToTerminate);
+			}
 		}});
 
 		return true;
