@@ -60,6 +60,7 @@ namespace EmEn::Scenes::Component
 			state["hasSource"] = emitter.hasSource();
 			state["gain"] = static_cast< double >(emitter.gain());
 			state["velocityDistortion"] = emitter.velocityDistortionEnabled();
+			state["oneShots"] = static_cast< Json::UInt64 >(emitter.activeOneShotCount());
 
 			if ( const auto & sound = emitter.attachedSound(); sound != nullptr )
 			{
@@ -134,7 +135,7 @@ namespace EmEn::Scenes::Component
 					const Console::Parameter entity{entityParameter("the sound emitter")};
 					const Console::Parameter component{componentParameter(SoundEmitter::ClassId)};
 
-					this->bindCommand("getState", "Returns the state of a sound emitter as JSON: whether it plays, its gain, its attached sound (resource name, loop) and velocity distortion (Doppler).",
+					this->bindCommand("getState", "Returns the state of a sound emitter as JSON: whether it plays, its gain, its attached sound (resource name, loop), velocity distortion (Doppler) and how many one-shot voices still play (oneShots).",
 						{entity, component},
 						[this] (const std::string & entityName, const std::string & componentName) {
 							return this->act(entityName, componentName, [] (SoundEmitter & emitter) {

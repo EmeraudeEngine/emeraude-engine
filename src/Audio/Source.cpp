@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <cstddef>
+#include <limits>
 #include <vector>
 
 /* Local inclusions. */
@@ -601,6 +602,54 @@ namespace EmEn::Audio
 		}
 
 		alSourcei(this->identifier(), AL_DIRECT_FILTER, AL_FILTER_NULL);
+
+		m_directFilter.reset();
+	}
+
+	void
+	Source::resetToDefaults () noexcept
+	{
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
+		{
+			return;
+		}
+
+		this->stop();
+		this->removeSound();
+
+		for ( const auto & [channel, effectSlot] : m_effectSlots )
+		{
+			effectSlot->disable(this);
+		}
+
+		m_effectSlots.clear();
+
+		const auto source = this->identifier();
+
+		alSourcef(source, AL_PITCH, 1.0F);
+		alSourcef(source, AL_GAIN, 1.0F);
+		alSourcef(source, AL_MIN_GAIN, 0.0F);
+		alSourcef(source, AL_MAX_GAIN, 1.0F);
+		alSource3f(source, AL_POSITION, 0.0F, 0.0F, 0.0F);
+		alSource3f(source, AL_VELOCITY, 0.0F, 0.0F, 0.0F);
+		alSource3f(source, AL_DIRECTION, 0.0F, 0.0F, 0.0F);
+		alSourcei(source, AL_SOURCE_RELATIVE, AL_FALSE);
+		alSourcei(source, AL_LOOPING, AL_FALSE);
+		alSourcef(source, AL_REFERENCE_DISTANCE, 1.0F);
+		alSourcef(source, AL_ROLLOFF_FACTOR, 1.0F);
+		alSourcef(source, AL_MAX_DISTANCE, std::numeric_limits< float >::max());
+		alSourcef(source, AL_CONE_INNER_ANGLE, FullRevolution< float >);
+		alSourcef(source, AL_CONE_OUTER_ANGLE, FullRevolution< float >);
+		alSourcef(source, AL_CONE_OUTER_GAIN, 0.0F);
+
+		m_previousGain = 1.0F;
+
+		if ( OpenAL::isEFXAvailable() )
+		{
+			alSourcei(source, AL_DIRECT_FILTER, AL_FILTER_NULL);
+			alSourcei(source, AL_AIR_ABSORPTION_FACTOR, 0);
+			alSourcef(source, AL_CONE_OUTER_GAINHF, 1.0F);
+		}
 
 		m_directFilter.reset();
 	}

@@ -593,6 +593,18 @@ namespace EmEn::Audio
 			void disableDirectFilter () noexcept;
 
 			/**
+			 * @brief Stops the source, removes its sound and puts every property back to its OpenAL default.
+			 * @note The source pool calls it when a source comes back (Manager::releaseSource()): a pooled source is
+			 * shared by every user in turn, and each one configures only what it relies on. Without it a source left
+			 * relative, pitched, filtered or with short distances by one user (an ambience channel) reached the next one
+			 * (a scene sound emitter) that way.
+			 * @post Pitch 1, gain 1 (gain bounds 0 / 1), position, velocity and direction 0, absolute (not relative),
+			 * reference distance 1, rolloff factor 1, maximum distance FLT_MAX (OpenAL's own default), cone 360° / 360° / outer gain 0, no direct
+			 * filter, no effect slot; with EFX, air absorption 0 and the cone's outer HF gain 1.
+			 */
+			void resetToDefaults () noexcept;
+
+			/**
 			 * @brief Plays a sound or music (streamed) to the source.
 			 * @note If something is playing or paused. It will be stopped and/or removed.
 			 * @param playableInterface A reference to a playable interface smart pointer.

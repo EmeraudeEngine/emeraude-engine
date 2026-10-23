@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -56,6 +57,9 @@ namespace EmEn::Scenes::Component
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"SoundEmitter"};
+
+			/** @brief The number of one-shot voices an emitter can layer over its own sound (playOneShot()). */
+			static constexpr size_t MaxOneShotVoices{4};
 
 			/** @brief Animatable Interface key. */
 			enum AnimationID : uint8_t
@@ -247,39 +251,53 @@ namespace EmEn::Scenes::Component
 			void play (const std::shared_ptr< Audio::SoundResource > & sound, float gain = 1.0F, bool loop = false, bool replaceSound = true) noexcept;
 
 			/**
+			 * @brief Plays a sound once on an extra voice, layered over the emitter's own sound (the model of Unity's
+			 * AudioSource.PlayOneShot()).
+			 * @note It neither stops nor replaces what play() or attachSound() started, and it is not that sound:
+			 * isPlaying(), setGain(), replay(), rewind() and attachedSound() keep speaking of the emitter's own sound only.
+			 * The voice follows the entity (move()), is paused, resumed and stopped with the emitter (pause(), resume(),
+			 * stop(), clear(), a scene suspension) and goes back to the audio pool once its sound ended.
+			 * @note At most MaxOneShotVoices voices per emitter: when all of them are busy, the next one in turn is cut for
+			 * the new sound (the latest event is the one to hear).
+			 * @note A one-shot is an event of NOW: a sound not loaded yet is NOT played later (that is play()'s behaviour),
+			 * it is refused with a warning — preload it.
+			 * @pre Called on the logic thread, the emitter's own (move(), processLogics()).
+			 * @param sound A reference to a sound resource smart pointer. A null pointer is refused (traced).
+			 * @param gain The gain of this play, its absolute value is used. Default 1. A non-finite value is refused.
+			 * @param pitch The pitch of this play, clamped by the source to [0.5, 2]. Default 1. A non-finite value is
+			 * refused.
+			 * @post Nothing plays when the sound is null or not loaded, a value is not finite (all traced), or the audio
+			 * pool has no free source (a saturation, traced in Debug).
+			 */
+			void playOneShot (const std::shared_ptr< Audio::SoundResource > & sound, float gain = 1.0F, float pitch = 1.0F) noexcept;
+
+			/**
+			 * @brief Returns how many one-shot voices are still playing (or paused).
+			 * @return size_t In [0, MaxOneShotVoices].
+			 */
+			[[nodiscard]]
+			size_t activeOneShotCount () const noexcept;
+
+			/**
 			 * @brief Replays the previous sound if exists.
 			 * @note The sound will be rewound if a source is playing.
 			 */
 			void replay () noexcept;
 
 			/**
-			 * @brief Stops the playing.
+			 * @brief Stops the playing, the emitter's own sound and every one-shot voice (released to the pool).
 			 */
 			void stop () noexcept;
 
 			/**
-			 * @brief Pauses the playing.
+			 * @brief Pauses the playing, the emitter's own sound and every one-shot voice.
 			 */
-			void
-			pause () const noexcept
-			{
-				if ( m_source != nullptr )
-				{
-					m_source->pause();
-				}
-			}
+			void pause () const noexcept;
 
 			/**
-			 * @brief Resumes a paused sound.
+			 * @brief Resumes a paused sound, the emitter's own sound and every one-shot voice.
 			 */
-			void
-			resume () const noexcept
-			{
-				if ( m_source != nullptr )
-				{
-					m_source->resume();
-				}
-			}
+			void resume () const noexcept;
 
 			/**
 			 * @brief Rewinds the sound.
@@ -330,10 +348,24 @@ namespace EmEn::Scenes::Component
 			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;
 
 			/**
-			 * @brief Updates the source properties with the entity.
+			 * @brief Updates a source's position, direction (and velocity, if enabled) with the entity.
+			 * @param source A reference to the source, the emitter's own or a one-shot voice.
 			 * @param worldCoordinates A reference to a coordinate.
 			 */
-			void updateSource (const Base::Math::CartesianFrame< float > & worldCoordinates) const noexcept;
+			void updateSource (Audio::Source & source, const Base::Math::CartesianFrame< float > & worldCoordinates) const noexcept;
+
+			/**
+			 * @brief Returns the voice a one-shot plays on: a held voice whose sound ended, else a new one from the pool,
+			 * else the next busy one in turn (cut).
+			 * @return Audio::SourceRequest * Never nullptr unless the pool has no free source and a slot is still empty.
+			 */
+			[[nodiscard]]
+			Audio::SourceRequest * acquireOneShotVoice () noexcept;
+
+			/**
+			 * @brief Stops every one-shot voice and gives it back to the pool.
+			 */
+			void releaseOneShotVoices () noexcept;
 
 			/**
 			 * @brief Plays the attached sound resource.
@@ -358,6 +390,8 @@ namespace EmEn::Scenes::Component
 			static constexpr auto WasPlayingBeforeSuspend{UnusedFlag + 3UL};
 
 			Audio::SourceRequest m_source;
+			std::array< Audio::SourceRequest, MaxOneShotVoices > m_oneShotVoices{};
+			size_t m_nextOneShotVoice{0};
 			std::shared_ptr< Audio::SoundResource > m_attachedSound;
 			float m_gain{1.0F};
 	};

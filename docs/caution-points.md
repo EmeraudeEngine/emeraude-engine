@@ -5315,6 +5315,15 @@ Both buffer paths (streaming queue and single buffer) now check for null and can
 a warning. ⚠️ **A resource that is not ready is a normal state in an asynchronous loader — never
 dereference what a resource accessor returns without checking it.**
 
+### A pooled audio source came back dirty (fixed 2026-10-23)
+
+The audio source pool (`Audio::Manager::requestSource()`) returned a source in the state its LAST user left it: an
+`Ambience` channel's sources are relative to the listener, pitched, with short distances and a direct filter, and a
+`SoundEmitter` drawing one afterwards configured only position, direction, velocity and gain — it played as a
+relative, pitched, filtered sound. Invisible to every visual check and only after a scene change. The pool's deleter
+now calls `Source::resetToDefaults()` (`Manager::releaseSource()`). ⚠️ **A shared, pooled object is reset where it
+returns to the pool, never trusted to be configured by its next user.** Detail: `docs/subsystems/audio/14-soundemitter-one-shot-voices.md`.
+
 ## Build / Compiler
 
 ### ⚠️ MSVC Debug: `if constexpr ( IsDebug ) { return …; } return …;` is unreachable code — C4702 under `/WX` (2026-10-10, FIXED)
