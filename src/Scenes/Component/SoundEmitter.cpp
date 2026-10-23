@@ -27,6 +27,10 @@
 #include "SoundEmitter.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <iterator>
 #include <memory>
 
 /* Local inclusions. */
@@ -41,18 +45,51 @@ namespace EmEn::Scenes::Component
 	using namespace Animations;
 	using namespace Audio;
 
+	namespace
+	{
+		/**
+		 * @brief Returns whether a one-shot voice is done: neither playing nor paused (stopped, or still initial when its
+		 * play() failed — such a voice would never read "stopped" and never go back to the pool).
+		 * @param voice A reference to the voice's source.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isVoiceDone (const Source & voice) noexcept
+		{
+			return !voice.isPlaying() && !voice.isPaused();
+		}
+	}
+
 	void
 	SoundEmitter::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
 		if ( m_source != nullptr )
 		{
-			this->updateSource(worldCoordinates);
+			this->updateSource(*m_source, worldCoordinates);
+		}
+
+		for ( const auto & voice : m_oneShotVoices )
+		{
+			if ( voice != nullptr )
+			{
+				this->updateSource(*voice, worldCoordinates);
+			}
 		}
 	}
 
 	void
 	SoundEmitter::processLogics (const Scene & /*scene*/) noexcept
 	{
+		/* A one-shot voice whose sound ended goes back to the pool. */
+		for ( auto & voice : m_oneShotVoices )
+		{
+			if ( voice != nullptr && isVoiceDone(*voice) )
+			{
+				voice.reset();
+			}
+		}
+
 		if ( m_source == nullptr )
 		{
 			return;
@@ -126,13 +163,13 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	SoundEmitter::updateSource (const CartesianFrame< float > & worldCoordinates) const noexcept
+	SoundEmitter::updateSource (Source & source, const CartesianFrame< float > & worldCoordinates) const noexcept
 	{
 		/* Copy absolute position in world space coordinates. */
-		m_source->setPosition(worldCoordinates.position());
+		source.setPosition(worldCoordinates.position());
 
 		/* Sets the direction of the source. */
-		m_source->setDirection(worldCoordinates.backwardVector());
+		source.setDirection(worldCoordinates.backwardVector());
 
 		if ( this->velocityDistortionEnabled() )
 		{
@@ -141,7 +178,7 @@ namespace EmEn::Scenes::Component
 
 			if ( movable != nullptr )
 			{
-				m_source->setVelocity(movable->getWorldVelocity());
+				source.setVelocity(movable->getWorldVelocity());
 			}
 		}
 	}
@@ -177,6 +214,132 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	SoundEmitter::playOneShot (const std::shared_ptr< SoundResource > & sound, float gain, float pitch) noexcept
+	{
+		if ( sound == nullptr )
+		{
+			TraceError{ClassId} << "playOneShot(), no sound given to the emitter '" << this->name() << "' !";
+
+			return;
+		}
+
+		if ( !this->acceptsFinite("playOneShot", gain, pitch) )
+		{
+			return;
+		}
+
+		/* NOTE: A one-shot is an event of now: played once its loading finished, it would sound out of place. */
+		if ( !sound->isLoaded() )
+		{
+			TraceWarning{ClassId} << "playOneShot(), the sound '" << sound->name() << "' is not loaded yet (preload it): not played by the emitter '" << this->name() << "'.";
+
+			return;
+		}
+
+		auto * voice = this->acquireOneShotVoice();
+
+		if ( voice == nullptr )
+		{
+			TraceDebug{ClassId} << "playOneShot(), no free source in the audio pool: '" << sound->name() << "' not played.";
+
+			return;
+		}
+
+		auto & source = **voice;
+
+		this->updateSource(source, this->getWorldCoordinates());
+
+		source.setGain(std::abs(gain));
+		source.setPitch(pitch);
+		static_cast< void >(source.play(sound, PlayMode::Once));
+	}
+
+	size_t
+	SoundEmitter::activeOneShotCount () const noexcept
+	{
+		return static_cast< size_t >(std::ranges::count_if(m_oneShotVoices, [] (const auto & voice) {
+			return voice != nullptr && !isVoiceDone(*voice);
+		}));
+	}
+
+	SourceRequest *
+	SoundEmitter::acquireOneShotVoice () noexcept
+	{
+		/* A held voice whose sound ended is reused as it is. */
+		for ( auto & voice : m_oneShotVoices )
+		{
+			if ( voice != nullptr && isVoiceDone(*voice) )
+			{
+				return &voice;
+			}
+		}
+
+		/* An empty slot asks the pool. */
+		for ( auto & voice : m_oneShotVoices )
+		{
+			if ( voice == nullptr )
+			{
+				voice = this->engineContext().audioManager.requestSource();
+
+				return voice != nullptr ? &voice : nullptr;
+			}
+		}
+
+		/* Every voice is busy: the next one in turn is cut for the new sound (the cursor stays < MaxOneShotVoices). */
+		auto & voice = *std::next(m_oneShotVoices.begin(), static_cast< std::ptrdiff_t >(m_nextOneShotVoice));
+
+		m_nextOneShotVoice = (m_nextOneShotVoice + 1) % MaxOneShotVoices;
+
+		return &voice;
+	}
+
+	void
+	SoundEmitter::releaseOneShotVoices () noexcept
+	{
+		/* NOTE: The pool stops and resets a source given back (Manager::releaseSource()). */
+		for ( auto & voice : m_oneShotVoices )
+		{
+			voice.reset();
+		}
+
+		m_nextOneShotVoice = 0;
+	}
+
+	void
+	SoundEmitter::pause () const noexcept
+	{
+		if ( m_source != nullptr )
+		{
+			m_source->pause();
+		}
+
+		for ( const auto & voice : m_oneShotVoices )
+		{
+			if ( voice != nullptr )
+			{
+				voice->pause();
+			}
+		}
+	}
+
+	void
+	SoundEmitter::resume () const noexcept
+	{
+		if ( m_source != nullptr )
+		{
+			m_source->resume();
+		}
+
+		for ( const auto & voice : m_oneShotVoices )
+		{
+			if ( voice != nullptr )
+			{
+				voice->resume();
+			}
+		}
+	}
+
+	void
 	SoundEmitter::replay () noexcept
 	{
 		/* No previous sound ... */
@@ -199,6 +362,8 @@ namespace EmEn::Scenes::Component
 	void
 	SoundEmitter::stop () noexcept
 	{
+		this->releaseOneShotVoices();
+
 		if ( m_source != nullptr )
 		{
 			m_source->stop();
@@ -214,6 +379,9 @@ namespace EmEn::Scenes::Component
 	void
 	SoundEmitter::onSuspend () noexcept
 	{
+		/* A one-shot is an event of the moment: it is not resumed at the wakeup. */
+		this->releaseOneShotVoices();
+
 		/* Only suspend if currently playing. */
 		if ( m_source == nullptr || !m_source->isPlaying() )
 		{
@@ -258,7 +426,7 @@ namespace EmEn::Scenes::Component
 		if ( m_source != nullptr )
 		{
 			/* Check if useful. */
-			this->updateSource(this->getWorldCoordinates());
+			this->updateSource(*m_source, this->getWorldCoordinates());
 
 			m_source->setGain(m_gain);
 			m_source->play(m_attachedSound, this->isFlagEnabled(Loop) ? PlayMode::Loop : PlayMode::Once);

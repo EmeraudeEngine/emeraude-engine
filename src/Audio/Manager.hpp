@@ -455,7 +455,9 @@ namespace EmEn::Audio
 			bool setupAudioOutputDevice (Settings & settings) noexcept;
 
 			/**
-			 * @brief Release an unused source.
+			 * @brief Gives a source back to the pool, the deleter of every SourceRequest.
+			 * @post The source is stopped, empty and back to its OpenAL defaults (Source::resetToDefaults()).
+			 * @param source A pointer to a source of this pool, or nullptr (ignored).
 			 */
 			void releaseSource (Source * source) noexcept;
 

@@ -858,6 +858,10 @@ namespace EmEn::Audio
 	{
 		if ( source != nullptr )
 		{
+			/* NOTE: A pooled source goes back clean, the next user gets OpenAL's defaults (an ambience channel left its
+			 * sources relative, pitched and filtered for the next sound emitter). Outside the lock: OpenAL calls only. */
+			source->resetToDefaults();
+
 			const Base::MutexLock lock{m_sourcePoolMutex};
 
 			m_availableSources.push_back(source);

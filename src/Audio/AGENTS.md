@@ -26,3 +26,4 @@ Context for developing the Emeraude Engine 3D spatial audio system.
 | Recorder (Loopback Audio Capture) | [`docs/subsystems/audio/11-recorder.md`](../../docs/subsystems/audio/11-recorder.md) | 2 KB |
 | ExternalInput (Microphone Capture) | [`docs/subsystems/audio/12-externalinput.md`](../../docs/subsystems/audio/12-externalinput.md) | 3 KB |
 | MusicResource MIDI/Soundfont Integration | [`docs/subsystems/audio/13-musicresource-midi-soundfont-integration.md`](../../docs/subsystems/audio/13-musicresource-midi-soundfont-integration.md) | 2 KB |
+| SoundEmitter one-shot voices, the clean source pool | [`docs/subsystems/audio/14-soundemitter-one-shot-voices.md`](../../docs/subsystems/audio/14-soundemitter-one-shot-voices.md) | 4 KB |
