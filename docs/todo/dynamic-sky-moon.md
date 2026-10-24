@@ -26,9 +26,9 @@ with the phase its angle to the sun gives, and light the scene with it.
 - [ ] **The disc**: a texture (albedo, optional normal map), lit by the SUN's direction, so the
       phase and the terminator come out of the geometry. No phase table. Add earthshine (the
       dark side faintly lit by the planet) as an artistic gain.
-- [ ] **The illuminance through the dynamic sky's transmittance** instead of the clock's Beer-Lambert
-      (`dynamic-sky-sun-light-from-transmittance`, the same change for the moons), and the Moon's opposition surge
-      if the Lambert sphere reads too bright at quarter (~0.32 against ~0.1 measured on the Moon).
+- [ ] The Moon's opposition surge if the Lambert sphere reads too bright at quarter (~0.32 against ~0.1 measured
+      on the Moon). Its light already goes through the dynamic sky's transmittance (lot 2, 2026-10-25: graphics
+      doc 42 § "The light").
 - [ ] The moon in the IBL bake: included, unlike the sun (it is an extended, faint source, and it
       is what makes a moonlit ambient blue-grey).
 

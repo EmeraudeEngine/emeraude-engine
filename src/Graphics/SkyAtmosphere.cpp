@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstring>
 #include <numbers>
@@ -453,6 +454,106 @@ namespace EmEn::Graphics
 		}
 
 		return std::nullopt;
+	}
+
+	Vector< 3, float >
+	AtmosphereParameters::transmittanceToTop (float height, float zenithCos) const noexcept
+	{
+		if ( !std::isfinite(height) || !std::isfinite(zenithCos) )
+		{
+			return {0.0F, 0.0F, 0.0F};
+		}
+
+		/* Kilometres from the planet's centre, the ray in the (horizontal, vertical) plane: the table's frame. */
+		const auto ground = static_cast< double >(groundRadius);
+		const auto top = std::max(static_cast< double >(topRadius), ground);
+		const auto radius = ground + std::clamp(static_cast< double >(height), 0.0, top - ground);
+		const auto mu = std::clamp(static_cast< double >(zenithCos), -1.0, 1.0);
+		const auto sinZenith = std::sqrt(std::max(1.0 - (mu * mu), 0.0));
+
+		/* The ground hides a ray going down below the horizon of this height. */
+		if ( mu < 0.0 && (radius * radius * (1.0 - (mu * mu))) < (ground * ground) )
+		{
+			return {0.0F, 0.0F, 0.0F};
+		}
+
+		/* The distance to the top along the ray (the far root: the point is inside the top sphere). */
+		const auto distance = (-radius * mu) + std::sqrt(std::max((radius * radius * ((mu * mu) - 1.0)) + (top * top), 0.0));
+
+		/* packParameters()' scale heights, clamped alike, and the medium of AtmosphereGLSL's atmSampleMedium(). */
+		const auto rayleighRate = -1.0 / static_cast< double >(std::max(rayleighScaleHeight, 1e-3F));
+		const auto mieRate = -1.0 / static_cast< double >(std::max(mieScaleHeight, 1e-3F));
+		const auto mieExtinction = mieScattering + mieAbsorption;
+
+		std::array< double, 3 > opticalDepth{0.0, 0.0, 0.0};
+		double previous = 0.0;
+
+		/* The table's fixed-step march: samples at (s + 0.3) / count of the way, each worth the distance from the
+		 * previous one (Hillaire's reference, kept as is so that the twin and the table agree). */
+		for ( int sample = 0; sample < TransmittanceSampleCount; ++sample )
+		{
+			const auto t = distance * (static_cast< double >(sample) + 0.3) / static_cast< double >(TransmittanceSampleCount);
+			const auto dt = t - previous;
+			previous = t;
+
+			const auto x = t * sinZenith;
+			const auto z = radius + (t * mu);
+			const auto sampleHeight = std::max(std::sqrt((x * x) + (z * z)) - ground, 0.0);
+			const auto densityMie = std::exp(mieRate * sampleHeight);
+			const auto densityRayleigh = std::exp(rayleighRate * sampleHeight);
+			const auto densityAbsorption = std::clamp(sampleHeight < static_cast< double >(absorptionLayerWidth)
+				? (static_cast< double >(absorptionBelowLinear) * sampleHeight) + static_cast< double >(absorptionBelowConstant)
+				: (static_cast< double >(absorptionAboveLinear) * sampleHeight) + static_cast< double >(absorptionAboveConstant), 0.0, 1.0);
+
+			const auto extinction = [&] (size_t channel) {
+				return (densityMie * static_cast< double >(mieExtinction[channel])) + (densityRayleigh * static_cast< double >(rayleighScattering[channel])) + (densityAbsorption * static_cast< double >(absorptionExtinction[channel]));
+			};
+
+			opticalDepth[0] += extinction(0) * dt;
+			opticalDepth[1] += extinction(1) * dt;
+			opticalDepth[2] += extinction(2) * dt;
+		}
+
+		return {
+			static_cast< float >(std::exp(-opticalDepth[0])),
+			static_cast< float >(std::exp(-opticalDepth[1])),
+			static_cast< float >(std::exp(-opticalDepth[2]))
+		};
+	}
+
+	Vector< 3, float >
+	AtmosphereParameters::discTransmittance (float height, float elevation, float angularRadius) const noexcept
+	{
+		if ( !std::isfinite(height) || !std::isfinite(elevation) || !std::isfinite(angularRadius) )
+		{
+			return {0.0F, 0.0F, 0.0F};
+		}
+
+		const auto radius = std::clamp(static_cast< double >(angularRadius), 0.0, std::numbers::pi / 4.0);
+
+		std::array< double, 3 > sum{0.0, 0.0, 0.0};
+		double weights = 0.0;
+
+		for ( int strip = 0; strip < DiscStripCount; ++strip )
+		{
+			/* The strip's centre, from −1 (the disc's bottom) to +1 (its top), and its chord. */
+			const auto offset = -1.0 + ((2.0 * static_cast< double >(strip) + 1.0) / static_cast< double >(DiscStripCount));
+			const auto weight = std::sqrt(std::max(1.0 - (offset * offset), 0.0));
+			const auto stripElevation = static_cast< double >(elevation) + (offset * radius);
+			const auto transmittance = this->transmittanceToTop(height, static_cast< float >(std::sin(stripElevation)));
+
+			sum[0] += weight * static_cast< double >(transmittance[0]);
+			sum[1] += weight * static_cast< double >(transmittance[1]);
+			sum[2] += weight * static_cast< double >(transmittance[2]);
+
+			weights += weight;
+		}
+
+		return {
+			static_cast< float >(sum[0] / weights),
+			static_cast< float >(sum[1] / weights),
+			static_cast< float >(sum[2] / weights)
+		};
 	}
 
 	SkyAtmosphere::SkyAtmosphere (std::string name, const AtmosphereParameters & parameters) noexcept

@@ -37,10 +37,14 @@
 /* Local inclusions. */
 #include "Constants.hpp"
 #include "Graphics/Photometry.hpp"
+#include "Graphics/Renderable/DynamicSkyResource.hpp"
+#include "Graphics/SkyAtmosphere.hpp"
 #include "Math/Base.hpp"
 #include "Math/CartesianFrame.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/Node.hpp"
+#include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes::Component
@@ -49,6 +53,67 @@ namespace EmEn::Scenes::Component
 	using namespace Base::Math;
 
 	namespace Sky = Base::Math::Astronomy;
+
+	namespace
+	{
+		/**
+		 * @brief Returns the Rec.709 luminance of a linear colour (the weights of Color::unitLuminanceChromaticity()).
+		 * @param color The colour.
+		 * @return float
+		 */
+		[[nodiscard]]
+		float
+		luminance (const Vector< 3, float > & color) noexcept
+		{
+			return PixelFactory::Color< float >::computeLuminance(color[0], color[1], color[2], PixelFactory::GrayscaleConversionMode::LumaRec709);
+		}
+
+		/**
+		 * @brief Returns the LINEAR colour of a black body at unit Rec.709 luminance (owner decision 2026-10-24: the
+		 * star's colour is linear, for the sky and the light alike).
+		 * @param kelvin The colour temperature, in kelvins.
+		 * @return Vector< 3, float >
+		 */
+		[[nodiscard]]
+		Vector< 3, float >
+		linearChromaticity (float kelvin) noexcept
+		{
+			const auto linear = Graphics::Photometry::linearColorFromTemperature(kelvin);
+			const Vector< 3, float > color{linear[0], linear[1], linear[2]};
+			const auto luma = luminance(color);
+
+			return luma > 1.0e-6F ? color / luma : Vector< 3, float >{1.0F, 1.0F, 1.0F};
+		}
+
+		/**
+		 * @brief Returns a light's colour from a linear emission: the emission scaled to a largest component of 1 (the
+		 * light keeps the chromaticity, its illuminance carries the quantity).
+		 * @param emission The linear emission, non-negative.
+		 * @param fallback The colour returned for a black emission.
+		 * @return Vector< 3, float >
+		 */
+		[[nodiscard]]
+		Vector< 3, float >
+		lightColor (const Vector< 3, float > & emission, const Vector< 3, float > & fallback) noexcept
+		{
+			const auto largest = std::max({emission[0], emission[1], emission[2]});
+
+			return largest > 0.0F ? emission / largest : fallback;
+		}
+
+		/**
+		 * @brief Converts a linear colour, largest component 1, to the light's colour type (its components are taken
+		 * raw, see Color::unitLuminanceChromaticity()).
+		 * @param color The colour.
+		 * @return PixelFactory::Color< float >
+		 */
+		[[nodiscard]]
+		PixelFactory::Color< float >
+		toLightColor (const Vector< 3, float > & color) noexcept
+		{
+			return {color[0], color[1], color[2], 1.0F};
+		}
+	}
 
 	CelestialClock::Options
 	CelestialClock::simpleCourse (const SimpleCourse & course) noexcept
@@ -89,7 +154,8 @@ namespace EmEn::Scenes::Component
 			.orbitalPeriod = 0.0,
 			.axialTilt = 0.0,
 			.eccentricity = 0.0,
-			.longitudeOfPerihelion = 0.0
+			.longitudeOfPerihelion = 0.0,
+			.semiMajorAxis = 1.0
 		};
 		options.latitude = northern ? 90.0F - noonElevation : noonElevation - 90.0F;
 		options.northDirection = northern ? -noonHorizontal : noonHorizontal;
@@ -124,12 +190,34 @@ namespace EmEn::Scenes::Component
 		}
 
 		m_options.planet.eccentricity = std::clamp(m_options.planet.eccentricity, 0.0, 0.99);
+
+		if ( !(m_options.planet.semiMajorAxis > 0.0) || !std::isfinite(m_options.planet.semiMajorAxis) )
+		{
+			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' declares a non-positive semi-major axis: 1 AU is used.";
+
+			m_options.planet.semiMajorAxis = 1.0;
+		}
+
 		m_options.latitude = std::clamp(m_options.latitude, -90.0F, 90.0F);
 		m_options.timeScale = std::max(0.0F, m_options.timeScale);
 
 		/* ---- Photometry. ---- */
 		m_options.sun.zenithIlluminance = std::max(0.0F, m_options.sun.zenithIlluminance);
 		m_options.sun.extinction = std::max(0.0F, m_options.sun.extinction);
+
+		if ( !std::isfinite(m_options.sun.unitDistanceIlluminance) || m_options.sun.unitDistanceIlluminance < 0.0F )
+		{
+			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' declares an invalid star illuminance at 1 AU: " << DefaultUnitDistanceIlluminance << " lx is used.";
+
+			m_options.sun.unitDistanceIlluminance = DefaultUnitDistanceIlluminance;
+		}
+
+		if ( !std::isfinite(m_options.sun.starTemperature) )
+		{
+			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' declares a non-finite star temperature: " << DefaultStarTemperature << " K is used.";
+
+			m_options.sun.starTemperature = DefaultStarTemperature;
+		}
 
 		for ( auto & moon : m_options.moons )
 		{
@@ -327,13 +415,12 @@ namespace EmEn::Scenes::Component
 	{
 		auto & state = *std::next(m_renderStates.begin(), static_cast< std::ptrdiff_t >(writeStateIndex));
 
-		/* Above the atmosphere: the zenith illuminance is referenced at air mass 1, through one extinction. */
-		const auto starColor = Graphics::Photometry::colorFromTemperature(m_options.sun.zenithTemperature).unitLuminanceChromaticity();
-
+		/* Above the atmosphere: the luminous solar constant over the square of the distance, the LINEAR black-body
+		 * colour (owner decisions 2026-10-24). Only a dynamic sky reads this state. */
 		state.sun = {
 			.direction = m_sunDirection,
-			.illuminance = m_options.sun.zenithIlluminance * std::exp(m_options.sun.extinction),
-			.color = starColor,
+			.illuminance = this->topOfAtmosphereIlluminance(),
+			.color = linearChromaticity(m_options.sun.starTemperature),
 			.angularDiameter = m_options.sun.angularDiameter,
 			.illuminatedFraction = 1.0F
 		};
@@ -347,7 +434,7 @@ namespace EmEn::Scenes::Component
 			return SkyBody{
 				.direction = moon.direction,
 				.illuminance = declared.fullIlluminance * CelestialClock::lambertPhase(moon.illuminatedFraction),
-				.color = Graphics::Photometry::colorFromTemperature(declared.temperature).unitLuminanceChromaticity(),
+				.color = linearChromaticity(declared.temperature),
 				.angularDiameter = declared.angularDiameter,
 				.illuminatedFraction = moon.illuminatedFraction
 			};
@@ -359,8 +446,14 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	CelestialClock::processLogics (const Scene & /*scene*/) noexcept
+	CelestialClock::processLogics (const Scene & scene) noexcept
 	{
+		/* The scene's sky is followed running or not: a stopped clock re-lights once when its sky changes. */
+		if ( this->followAtmosphere(scene) && !m_running )
+		{
+			this->apply();
+		}
+
 		if ( !m_running )
 		{
 			return;
@@ -390,23 +483,18 @@ namespace EmEn::Scenes::Component
 		m_sunElevation = static_cast< float >(Sky::degrees(towardStar.elevation()));
 		m_celestialPole = this->toWorld(Sky::celestialPole(observer));
 		m_siderealAngle = static_cast< float >(Sky::siderealAngle(m_options.planet, time));
+		m_starDistance = Sky::starDistance(m_options.planet, time);
 
-		const auto daytime = m_sunElevation > 0.0F;
-
-		if ( daytime )
+		if ( m_atmosphere != nullptr )
 		{
-			/* Day: Beer-Lambert extinction over the air-mass excess, referenced at the zenith. */
-			const auto airMassExcess = CelestialClock::airMass(m_sunElevation) - 1.0F;
-
-			m_illuminance = m_options.sun.zenithIlluminance * std::exp(-m_options.sun.extinction * airMassExcess);
-			m_temperature = m_options.sun.horizonTemperature + ((m_options.sun.zenithTemperature - m_options.sun.horizonTemperature) * std::exp(-ReddeningRate * airMassExcess));
+			this->lightSunFromAtmosphere(towardStar.elevation());
 		}
 		else
 		{
-			/* Night: the sun lights nothing. */
-			m_illuminance = 0.0F;
-			m_temperature = m_options.sun.horizonTemperature;
+			this->lightSunEmpirically();
 		}
+
+		const auto daytime = m_sunLit;
 
 		const auto pivot = m_sun.pivot.lock();
 		const auto light = m_sun.light.lock();
@@ -430,7 +518,7 @@ namespace EmEn::Scenes::Component
 			if ( daytime )
 			{
 				light->setIlluminance(m_illuminance);
-				light->setColor(Graphics::Photometry::colorFromTemperature(m_temperature));
+				light->setColor(m_atmosphere != nullptr ? toLightColor(m_sunColor) : Graphics::Photometry::colorFromTemperature(m_temperature));
 			}
 		}
 
@@ -438,6 +526,89 @@ namespace EmEn::Scenes::Component
 		{
 			this->applyMoon(index, towardStar, time);
 		}
+	}
+
+	void
+	CelestialClock::lightSunEmpirically () noexcept
+	{
+		m_sunTransmittance = {0.0F, 0.0F, 0.0F};
+		m_sunColor = {1.0F, 1.0F, 1.0F};
+		m_sunLit = m_sunElevation > 0.0F;
+
+		if ( m_sunLit )
+		{
+			/* Day: Beer-Lambert extinction over the air-mass excess, referenced at the zenith. */
+			const auto airMassExcess = CelestialClock::airMass(m_sunElevation) - 1.0F;
+
+			m_illuminance = m_options.sun.zenithIlluminance * std::exp(-m_options.sun.extinction * airMassExcess);
+			m_temperature = m_options.sun.horizonTemperature + ((m_options.sun.zenithTemperature - m_options.sun.horizonTemperature) * std::exp(-ReddeningRate * airMassExcess));
+		}
+		else
+		{
+			/* Night: the sun lights nothing. */
+			m_illuminance = 0.0F;
+			m_temperature = m_options.sun.horizonTemperature;
+		}
+	}
+
+	void
+	CelestialClock::lightSunFromAtmosphere (double elevation) noexcept
+	{
+		/* The disc's transmittance seen from the ground: it reddens, dims and, on the horizon, fades as the ground hides
+		 * the disc. The emission is the star's colour through it; its luminance × the illuminance above the atmosphere
+		 * is the illuminance on the ground. */
+		const auto angularRadius = static_cast< float >(Sky::radians(0.5 * static_cast< double >(m_options.sun.angularDiameter)));
+		const auto starColor = linearChromaticity(m_options.sun.starTemperature);
+
+		m_sunTransmittance = m_atmosphere->parameters().discTransmittance(ObserverHeight, static_cast< float >(elevation), angularRadius);
+
+		const Vector< 3, float > emission{starColor[0] * m_sunTransmittance[0], starColor[1] * m_sunTransmittance[1], starColor[2] * m_sunTransmittance[2]};
+		const auto emissionLuminance = luminance(emission);
+
+		m_sunLit = emissionLuminance > 0.0F;
+		m_illuminance = m_sunLit ? this->topOfAtmosphereIlluminance() * emissionLuminance : 0.0F;
+		m_sunColor = lightColor(emission, lightColor(starColor, {1.0F, 1.0F, 1.0F}));
+		m_temperature = m_options.sun.starTemperature;
+	}
+
+	float
+	CelestialClock::topOfAtmosphereIlluminance () const noexcept
+	{
+		/* configure() keeps the semi-major axis positive and the eccentricity below 0.99: the distance is too. */
+		return static_cast< float >(static_cast< double >(m_options.sun.unitDistanceIlluminance) / (m_starDistance * m_starDistance));
+	}
+
+	bool
+	CelestialClock::followAtmosphere (const Scene & scene) noexcept
+	{
+		const auto background = scene.background();
+		std::shared_ptr< const Graphics::SkyAtmosphere > atmosphere;
+
+		if ( background != nullptr && background->isLoaded() )
+		{
+			if ( const auto * dynamicSky = dynamic_cast< const Graphics::Renderable::DynamicSkyResource * >(background.get()); dynamicSky != nullptr )
+			{
+				atmosphere = dynamicSky->atmosphere();
+			}
+		}
+
+		if ( atmosphere == m_atmosphere )
+		{
+			return false;
+		}
+
+		m_atmosphere = std::move(atmosphere);
+
+		if ( m_atmosphere != nullptr )
+		{
+			TraceInfo{ClassId} << "Celestial clock '" << this->name() << "': the lights follow the atmosphere of the sky '" << background->name() << "'.";
+		}
+		else
+		{
+			TraceInfo{ClassId} << "Celestial clock '" << this->name() << "': no dynamic sky, the lights follow the empirical model.";
+		}
+
+		return true;
 	}
 
 	void
@@ -454,9 +625,18 @@ namespace EmEn::Scenes::Component
 
 		/* A moon lights the scene while it is up and the sun is down: in daylight its fraction of a lux is nothing, and
 		 * one directional light less is one light pass less. */
-		const auto lighting = moon.elevation > 0.0F && m_sunElevation <= 0.0F;
+		if ( m_atmosphere != nullptr )
+		{
+			/* Through the dynamic sky's atmosphere, like the sun: the disc's transmittance colours and dims it. */
+			const auto angularRadius = static_cast< float >(Sky::radians(0.5 * static_cast< double >(declared.angularDiameter)));
+			const auto moonColor = linearChromaticity(declared.temperature);
+			const auto transmittance = m_atmosphere->parameters().discTransmittance(ObserverHeight, static_cast< float >(towardMoon.elevation()), angularRadius);
+			const Vector< 3, float > emission{moonColor[0] * transmittance[0], moonColor[1] * transmittance[1], moonColor[2] * transmittance[2]};
 
-		if ( lighting )
+			moon.illuminance = !m_sunLit ? declared.fullIlluminance * CelestialClock::lambertPhase(moon.illuminatedFraction) * luminance(emission) : 0.0F;
+			moon.color = lightColor(emission, lightColor(moonColor, {1.0F, 1.0F, 1.0F}));
+		}
+		else if ( moon.elevation > 0.0F && !m_sunLit )
 		{
 			const auto airMassExcess = CelestialClock::airMass(moon.elevation) - 1.0F;
 
@@ -475,7 +655,7 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		const auto lit = lighting && moon.illuminance > 0.0F;
+		const auto lit = moon.illuminance > 0.0F;
 
 		if ( lit != moon.lit )
 		{
@@ -488,7 +668,7 @@ namespace EmEn::Scenes::Component
 		if ( lit )
 		{
 			light->setIlluminance(moon.illuminance);
-			light->setColor(Graphics::Photometry::colorFromTemperature(declared.temperature));
+			light->setColor(m_atmosphere != nullptr ? toLightColor(moon.color) : Graphics::Photometry::colorFromTemperature(declared.temperature));
 		}
 	}
 }

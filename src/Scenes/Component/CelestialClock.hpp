@@ -49,6 +49,11 @@
 #include "Scenes/SkyState.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class SkyAtmosphere;
+}
+
 namespace EmEn::Scenes
 {
 	class Node;
@@ -72,6 +77,13 @@ namespace EmEn::Scenes::Component
 	 *   `SunPhotometry::zenithIlluminance`), dark while the star is below the horizon;
 	 * - each MOON's pivot is placed toward it, and its light gets the full-moon illuminance × a Lambert-sphere phase
 	 *   function × the same extinction; a moon lights the scene while it is up AND the sun is down.
+	 * @details WITH A DYNAMIC SKY (the scene's background is a `Graphics::Renderable::DynamicSkyResource`), the lights
+	 * come from the sky's own atmosphere instead (owner decisions 2026-10-24): the star's illuminance above the
+	 * atmosphere (`SunPhotometry::unitDistanceIlluminance` over the square of the planet's distance to its star) and
+	 * its LINEAR black-body colour (`SunPhotometry::starTemperature`), times the transmittance of the disc toward it
+	 * (`AtmosphereParameters::discTransmittance()`, the CPU twin of the table the sky draws with), for an observer on
+	 * the ground. The light then reddens, dims and sets with the drawn disc, the penumbra of the horizon included;
+	 * `zenithIlluminance`, `extinction` and the two temperatures are not used. The moons take the same change.
 	 * @note It REPLACES the former SunCourse (owner decision 2026-10-24, "a special case"): a planet without tilt nor
 	 * orbit, observed at the latitude 90° − the noon elevation, is exactly that course (`Options::simpleCourse()`,
 	 * proven by emeraude-base's `MathAstronomy.AStillPlanetReproducesTheSimpleSunCourse`).
@@ -107,6 +119,20 @@ namespace EmEn::Scenes::Component
 			/** @brief Colour temperature of the sun on the horizon, in kelvins. */
 			static constexpr auto DefaultHorizonTemperature{2000.0F};
 
+			/** @brief The star's illuminance above the atmosphere at 1 AU, in lux: the luminous solar constant (Darula,
+			 * Kittler & Gueymard, "Reference luminous solar constant and solar luminance for illuminance calculations",
+			 * Solar Energy 79(5), 2005, the engineering value; owner decision 2026-10-24). */
+			static constexpr auto DefaultUnitDistanceIlluminance{133800.0F};
+
+			/** @brief The star's colour temperature above the atmosphere, in kelvins: the Sun's nominal effective
+			 * temperature (IAU 2015 Resolution B3). */
+			static constexpr auto DefaultStarTemperature{5772.0F};
+
+			/** @brief The observer's height above the ground for the atmosphere's transmittance, in km: the sky-view's own
+			 * floor (AtmosphereGLSL's AtmPlanetRadiusOffset, 10 m). The light is the ground's, never the camera's (owner
+			 * decision 2026-10-24). */
+			static constexpr auto ObserverHeight{0.01F};
+
 			/** @brief Illuminance of a full moon at the zenith above the atmosphere, in lux (the Moon: ~0.3 lx). */
 			static constexpr auto DefaultFullMoonIlluminance{0.3F};
 
@@ -128,6 +154,11 @@ namespace EmEn::Scenes::Component
 				float horizonTemperature{DefaultHorizonTemperature};
 				/** @brief Apparent angular diameter of the star's disc, in degrees (the Sun: 0.53°). */
 				float angularDiameter{0.53F};
+				/** @brief With a dynamic sky: the star's illuminance above the atmosphere at 1 AU, in lux. It goes as the
+				 * inverse square of the planet's distance (`Planet::semiMajorAxis`, the orbit's eccentricity). */
+				float unitDistanceIlluminance{DefaultUnitDistanceIlluminance};
+				/** @brief With a dynamic sky: the star's colour temperature above the atmosphere, in kelvins. */
+				float starTemperature{DefaultStarTemperature};
 			};
 
 			/**
@@ -347,7 +378,61 @@ namespace EmEn::Scenes::Component
 			bool
 			isDaytime () const noexcept
 			{
-				return m_sunElevation > 0.0F;
+				return m_sunLit;
+			}
+
+			/**
+			 * @brief Returns whether the lights come from the scene's dynamic sky (its atmosphere's transmittance) rather
+			 * than from the empirical model.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			followsAtmosphere () const noexcept
+			{
+				return m_atmosphere != nullptr;
+			}
+
+			/**
+			 * @brief Returns the planet's distance to its star, in AU (the unit of `Planet::semiMajorAxis`).
+			 * @return double
+			 */
+			[[nodiscard]]
+			double
+			starDistance () const noexcept
+			{
+				return m_starDistance;
+			}
+
+			/**
+			 * @brief Returns the star's illuminance above the atmosphere, in lux: `SunPhotometry::unitDistanceIlluminance`
+			 * over the square of starDistance().
+			 * @return float
+			 */
+			[[nodiscard]]
+			float topOfAtmosphereIlluminance () const noexcept;
+
+			/**
+			 * @brief Returns the transmittance of the sun's disc through the dynamic sky's atmosphere, per channel (zero
+			 * without a dynamic sky).
+			 * @return const Base::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Vector< 3, float > &
+			sunTransmittance () const noexcept
+			{
+				return m_sunTransmittance;
+			}
+
+			/**
+			 * @brief Returns the LINEAR colour written to the sun's light with a dynamic sky, its largest component 1.
+			 * @return const Base::Math::Vector< 3, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Vector< 3, float > &
+			sunColor () const noexcept
+			{
+				return m_sunColor;
 			}
 
 			/**
@@ -373,7 +458,8 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
-			 * @brief Returns the colour temperature written to the sun's light, in kelvins.
+			 * @brief Returns the colour temperature written to the sun's light, in kelvins (the empirical model; with a
+			 * dynamic sky, the star's temperature above the atmosphere — the light's colour is sunColor()).
 			 * @return float
 			 */
 			[[nodiscard]]
@@ -563,6 +649,8 @@ namespace EmEn::Scenes::Component
 				float elevation{0.0F};
 				float illuminatedFraction{0.0F};
 				float illuminance{0.0F};
+				/** @brief The LINEAR colour written to its light with a dynamic sky, its largest component 1. */
+				Base::Math::Vector< 3, float > color{1.0F, 1.0F, 1.0F};
 				bool lit{false};
 			};
 
@@ -599,6 +687,26 @@ namespace EmEn::Scenes::Component
 			void apply () noexcept;
 
 			/**
+			 * @brief Follows the scene's sky: keeps the atmosphere of a loaded dynamic sky, forgets it otherwise.
+			 * @note LOGIC THREAD (processLogics()).
+			 * @param scene A reference to the scene.
+			 * @return bool True when the followed atmosphere changed.
+			 */
+			bool followAtmosphere (const Scene & scene) noexcept;
+
+			/**
+			 * @brief Computes the sun's illuminance and colour from the empirical model (air mass, Beer-Lambert).
+			 */
+			void lightSunEmpirically () noexcept;
+
+			/**
+			 * @brief Computes the sun's illuminance and colour from the followed atmosphere's transmittance.
+			 * @pre m_atmosphere != nullptr.
+			 * @param elevation The elevation of the sun's centre, in radians.
+			 */
+			void lightSunFromAtmosphere (double elevation) noexcept;
+
+			/**
 			 * @brief Writes a moon's state to its pivot and light.
 			 * @param index The moon's index.
 			 * @param towardStar The star's direction in the observer's frame.
@@ -610,12 +718,19 @@ namespace EmEn::Scenes::Component
 			static constexpr auto ReddeningRate{0.2F};
 
 			Options m_options;
+			/** @brief The dynamic sky's atmosphere the lights follow, null without one. Its parameters are immutable.
+			 * Written by the logic thread (processLogics()); the console reaches the clock under the scene's exclusive
+			 * access, like every other member. */
+			std::shared_ptr< const Graphics::SkyAtmosphere > m_atmosphere;
 			BoundBody m_sun;
 			std::vector< BoundBody > m_moons;
 			Base::Math::Vector< 3, float > m_east{1.0F, 0.0F, 0.0F};
 			Base::Math::Vector< 3, float > m_north{0.0F, 0.0F, -1.0F};
 			Base::Math::Vector< 3, float > m_sunDirection{0.0F, 1.0F, 0.0F};
 			Base::Math::Vector< 3, float > m_celestialPole{0.0F, 1.0F, 0.0F};
+			Base::Math::Vector< 3, float > m_sunTransmittance{0.0F, 0.0F, 0.0F};
+			Base::Math::Vector< 3, float > m_sunColor{1.0F, 1.0F, 1.0F};
+			double m_starDistance{1.0}; ///< AU.
 			double m_solarDay{Base::Math::Astronomy::SecondsPerDay};
 			double m_referenceTime{0.0}; ///< Simulated time at m_referenceCycle, seconds since the epoch.
 			uint64_t m_referenceCycle{0};
@@ -626,6 +741,7 @@ namespace EmEn::Scenes::Component
 			float m_siderealAngle{0.0F};
 			std::array< SkyState, RenderStateSlotCount > m_renderStates{};
 			bool m_sunBound{false};
+			bool m_sunLit{false};
 			bool m_running{false};
 	};
 }
