@@ -33,17 +33,20 @@
 #include <array>
 #include <cstring>
 #include <string>
+#include <utility>
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/RenderableInstance/RenderContext.hpp"
+#include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Vector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 
 /* Forward declarations. */
@@ -58,11 +61,14 @@ namespace EmEn::Graphics::RenderableInstance
 	using namespace Base::Math;
 	using namespace Vulkan;
 
-	Multiple::Multiple (const std::shared_ptr< Device > & device, const std::shared_ptr< Renderable::Abstract > & renderable, const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t flagBits) noexcept
+	Multiple::Multiple (Renderer & renderer, const std::shared_ptr< Renderable::Abstract > & renderable, const std::vector< CartesianFrame< float > > & instanceLocations, uint32_t flagBits) noexcept
 		: Abstract{renderable, flagBits},
 		m_instanceCount{static_cast< uint32_t >(instanceLocations.size())},
 		m_activeInstanceCount{m_instanceCount}
 	{
+		/* NOTE: The VBO below is GPU-visible: the destructor retires it (~Multiple()). */
+		this->setDeferredDestructor(renderer.deferredDestructor());
+
 		/* cppcheck-suppress knownConditionTrueFalse ; cppcheck reads the const member's default {0}, not this constructor's initializer. */
 		if ( m_instanceCount == 0 )
 		{
@@ -100,7 +106,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/* Create a vertex buffer object to hold locations in video memory
 			 * according to the size of local data. */
-			if ( !this->createOnHardware(device) )
+			if ( !this->createOnHardware(renderer.device()) )
 			{
 				this->setBroken("Unable to create the model matrices VBO !");
 			}
@@ -111,10 +117,13 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 	}
 
-	Multiple::Multiple (const std::shared_ptr< Device > & device, const std::shared_ptr< Renderable::Abstract > & renderable, uint32_t instanceCount, uint32_t flagBits) noexcept
-		: Abstract{renderable, flagBits},
+	Multiple::Multiple (Renderer & renderer, const std::shared_ptr< Renderable::Abstract > & renderable, uint32_t instanceCount) noexcept
+		: Abstract{renderable, 0},
 		m_instanceCount{instanceCount}
 	{
+		/* NOTE: The VBO below is GPU-visible: the destructor retires it (~Multiple()). */
+		this->setDeferredDestructor(renderer.deferredDestructor());
+
 		/* cppcheck-suppress knownConditionTrueFalse ; cppcheck reads the const member's default {0}, not this constructor's initializer. */
 		if ( m_instanceCount == 0 )
 		{
@@ -137,9 +146,17 @@ namespace EmEn::Graphics::RenderableInstance
 
 		/* Create a vertex buffer object to hold locations in video memory
 		 * according to the size of local data. */
-		if ( !this->createOnHardware(device) )
+		if ( !this->createOnHardware(renderer.device()) )
 		{
 			this->setBroken("Unable to create the model matrices VBO !");
+		}
+	}
+
+	Multiple::~Multiple ()
+	{
+		if ( auto * deferredDestructor = this->deferredDestructor(); deferredDestructor != nullptr )
+		{
+			deferredDestructor->retireObject(std::move(m_vertexBufferObject));
 		}
 	}
 

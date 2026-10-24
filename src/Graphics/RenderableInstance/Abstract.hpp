@@ -1363,6 +1363,35 @@ namespace EmEn::Graphics::RenderableInstance
 		protected:
 
 			/**
+			 * @brief Returns the renderer's deferred destructor: given at construction by an instance that owns GPU
+			 * objects of its own (setDeferredDestructor(), Multiple), else known once the instance was made ready for a
+			 * render (prepareSkinningResources()).
+			 * @note For a derived instance's DESTRUCTOR: a GPU object it owns (Multiple's per-instance VBO) is retired
+			 * through it, never destroyed in place — the instance can die at runtime (an actor's end) while frames that
+			 * draw it are in flight (docs/subsystems/vulkan/12-critical-deferred-destruction-contract.md).
+			 * @return Vulkan::DeferredDestructor *
+			 */
+			[[nodiscard]]
+			Vulkan::DeferredDestructor *
+			deferredDestructor () const noexcept
+			{
+				return m_deferredDestructor;
+			}
+
+			/**
+			 * @brief Gives the instance the renderer's deferred destructor at construction.
+			 * @note ⚠️ An instance that OWNS GPU objects must call it in its constructor: the render-readiness path
+			 * (prepareSkinningResources()) does not reach every drawn instance — measured 2026-10-24, 1 615 of 1 647
+			 * destroyed Multiple instances never had it, and their VBO was destroyed under in-flight frames.
+			 * @param deferredDestructor A reference to the renderer's deferred destructor.
+			 */
+			void
+			setDeferredDestructor (Vulkan::DeferredDestructor & deferredDestructor) noexcept
+			{
+				m_deferredDestructor = &deferredDestructor;
+			}
+
+			/**
 			 * @brief Constructs a renderable instance.
 			 * @param renderable A reference to a renderable interface smart pointer.
 			 * @param flagBits The renderable instance level flags.

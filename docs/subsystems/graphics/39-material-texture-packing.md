@@ -324,7 +324,7 @@ terrain; MCP 1902 / 0. `AnimatedTextureCubemap` keeps its uncompressed upload (n
   needed for every OS.
 
 Measured (Linux, RTX 3070 Ti, validation on, 0 new `VUID-` — the `relief` + `setGround` runs keep the 4 + 2 known ones of
-`default-mesh-instance-destroyed-while-in-use`):
+`default-mesh-instance-destroyed-while-in-use`, fixed 2026-10-24 — caution-points § Vulkan Validation):
 
 | Asset | Change | Image (per pixel, against the BC7 build; noise ~1.1) |
 |---|---|---|
@@ -541,7 +541,8 @@ UVs); the **uncompressed path** rebuilt on the same chain in the same lot.
 
 Measured (Linux, RTX 3070 Ti, 3840 × 1990, X11, validation on, `relief` with its ground replaced, the demo's camera,
 exposure pinned f/8 1/250 ISO 100, a cold texture cache per run, HEAD built beside as the baseline; the only `VUID-`
-are the known 4 × 00922 + 2 × 05137 of `setGround`, item `default-mesh-instance-destroyed-while-in-use`, in both builds):
+are the known 4 × 00922 + 2 × 05137 of `setGround`, item `default-mesh-instance-destroyed-while-in-use` (fixed
+2026-10-24), in both builds):
 
 | Case | Mean abs. change vs the box (run-to-run noise) | Power of the image, Kaiser / box, by screen frequency (fraction of the Nyquist: 0.03–0.125 / –0.25 / –0.5 / –0.75 / –1.0) |
 |---|---|---|

@@ -6360,6 +6360,24 @@ an identical one still gives zero). Runtime check (Linux, RTX 3070 Ti, window-le
 
 ## Vulkan Validation
 
+### A drawn instance's or geometry's buffer destroyed in place (fixed 2026-10-24)
+
+`VUID-vkDestroyBuffer-buffer-00922` ("currently in use by VkCommandBuffer") then the same `VkBuffer` in
+`VUID-vkDestroyDevice-device-05137` at exit, three deterministic reproductions (Linux RTX 3070 Ti, macOS M6 / MoltenVK):
+projet-alpha's missile going away (`RenderableInstanceMultiple-MultipleInstance??-VertexBufferObject`: its particles
+emitter's per-instance VBO), `relief` + `setGround()` (`VertexGridResource-…-VertexBufferObject` / `IndexBufferObject`:
+the replaced ground's geometry), and the shell built on a DEFAULT mesh (2026-10-07, not re-run: no console command
+removes a static entity). Both owners destroyed their buffers IN PLACE while frames in flight drew them; they now
+retire them (`docs/subsystems/vulkan/12-critical-deferred-destruction-contract.md`, the 2026-10-24 paragraph).
+- ⚠️ **Name the buffer before guessing**: a Release build has empty identifiers (no debug name in the message); the
+  Debug build names it (`setVulkanObjectName()`), which is how the instance VBO and the ground geometry were told apart.
+- ⚠️ **`prepareSkinningResources()` does not reach every drawn instance**: the first fix, relying on it to know the
+  deferred destructor, changed nothing — a probe counted 1 615 of 1 647 destroyed `Multiple` without it. An owner of GPU
+  objects gets the destructor at construction.
+- ⚠️ **Retiring after the renderer's termination** waited for `~DeferredDestructor()`, after the device: the queue is
+  now CLOSED by `Renderer::onTerminate()` (`DeferredDestructor::close()`), a later retirement is destroyed at once.
+After (Release, validation loaded): 3 missiles, `setGround()`, relief → citadel → relief: 0 `VUID-`, clean exit.
+
 ### A partial image update ran on the transfer-only family: FRAGMENT_SHADER barrier + a race with the frames (fixed 2026-10-11)
 
 `ImageTransferOperation::transferRegion()` (the partial update of an already-sampled image: the staging overlay upload

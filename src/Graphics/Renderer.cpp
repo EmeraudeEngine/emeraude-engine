@@ -1041,8 +1041,9 @@ namespace EmEn::Graphics
 		 * still alive here — and every pipeline this run compiled is now in it. */
 		this->savePipelineCache();
 
-		/* NOTE: The device is idle, pending retirements can be destroyed now. */
-		m_deferredDestructor.flush();
+		/* NOTE: The device is idle, pending retirements can be destroyed now — and the later ones at once (the resources
+		 * are unloaded after this service, the renderer destroyed after the device: Vulkan::DeferredDestructor::close()). */
+		m_deferredDestructor.close();
 
 		/* Release MDI resources before other Vulkan objects are destroyed. */
 		m_MDIBatchBuilder.reset();
