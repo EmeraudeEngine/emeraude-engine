@@ -26,6 +26,12 @@
 
 #include "ParticlesEmitter.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
+#include <iterator>
+
 /* Local inclusions. */
 #include "Scenes/Scene.hpp"
 
@@ -68,6 +74,8 @@ namespace EmEn::Scenes::Component
 
 		/* Particle parameters. */
 		uint32_t activeInstanceCount = 0;
+		/* NOTE: Reset each cycle: an emitter with no live particle has no box (nothing to draw). */
+		Space3D::AACuboid< float > worldBounds;
 		uint32_t newParticles = this->isEmitting() ? m_particleGeneratedPerCycle : 0;
 
 		for ( auto & particle : m_particles )
@@ -155,11 +163,32 @@ namespace EmEn::Scenes::Component
 				}
 			}
 
+			/* The live particle's place in the world, for the emitter's box (its sprite reach: its scale, conservative). */
+			{
+				const auto & particleCoordinates = particle.localCoordinates();
+				const auto worldPosition = this->isFlagEnabled(ConstrainedToEmitterSpace) ?
+					CartesianFrame< float >{emitterMatrix * particleCoordinates.getModelMatrix()}.position() :
+					particleCoordinates.position();
+				const auto scaling = emitterLocation.scalingFactor() * particleCoordinates.scalingFactor();
+				const auto reachValue = std::max({std::abs(scaling[X]), std::abs(scaling[Y]), std::abs(scaling[Z]), particle.size()});
+				const Vector< 3, float > reach{reachValue, reachValue, reachValue};
+
+				worldBounds.merge(Space3D::AACuboid< float >{worldPosition + reach, worldPosition - reach});
+			}
+
 			activeInstanceCount++;
 		}
 
+		m_worldBounds = worldBounds;
+
 		m_renderableInstance->setActiveInstanceCount(activeInstanceCount);
 		m_renderableInstance->updateVideoMemory();
+	}
+
+	void
+	ParticlesEmitter::publishStateForRendering (uint32_t writeStateIndex) noexcept
+	{
+		*std::next(m_renderWorldBounds.begin(), static_cast< std::ptrdiff_t >(writeStateIndex % RenderStateSlotCount)) = m_worldBounds;
 	}
 
 	bool

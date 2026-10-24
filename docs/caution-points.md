@@ -3106,6 +3106,27 @@ Registrations are tokens and a dispatch never walks a shrinking list since 2026-
 
 ## Scene Rendering
 
+### A particles emitter is culled on its particles' world box, never on its node (fixed 2026-10-24)
+
+Owner, 2026-10-24: "the sprite particle emitters disappear with the camera angle". The particles live in the WORLD
+(unless `ConstrainedToEmitterSpace`): born at the emitter, they drift away from it — a smoke column rises, a trail stays
+behind a moving missile. The view and shadow lists culled them with their NODE (`Node::isVisibleTo()`, the rendering
+octree): `ParticlesEmitter` declared no render box, so the entity's box was its mesh's (the missile) or its bare
+position (the smoke actor). With the node out of view the whole emitter vanished, its particles on screen.
+- `ParticlesEmitter` measures its live particles' world box each logic cycle (`processLogics()`, a min / max of what it
+  already walks; reach = the sprite's scale) and publishes it per render state (`worldBoundsStateForRendering()`).
+- The scene keeps its emitters (`ParticlesEmitterCreated` / `ParticlesEmitterDestroyed` — the latter was declared,
+  never sent: `AbstractEntity::unlinkComponent()` now sends it), leaves them out of the entity paths, and culls them in
+  their own pass of `populateRenderLists()` (frustum / cubemap range) and of `populateShadowCastingRenderList()`
+  (caster volume, cascade receivers, shadow distance) on that box. No live particle: not drawn — the Debug
+  `No instance count for the geometry 'QuadSprite000'` (a draw of 0 instances, ~200 per smoke grenade, nearly all from
+  the shadow path) is gone.
+- Measured (citadel, Release, a smoke grenade, the camera looking 14 m above the smoke's node so the node is out of
+  view): view instances 186 with and 186 without the smoke BEFORE (not drawn), 477 vs 93 AFTER (the awk differs between
+  the two runs: compare within a run); shadow instances 1 263 vs 883. 0 `VUID-`, 0 `[Error]`.
+- ⚠️ The emitter's instance count is the logic's live value (`Multiple::activeInstanceCount()`, not published per
+  render state): the pass checks it beside the box — a box published a cycle earlier may outlive the last particle.
+
 ### A surface geometry (FFT ocean, CDLOD terrain) must RETIRE its GPU objects, never free them — fixed 2026-09-30
 
 > [!CAUTION]

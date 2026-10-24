@@ -30,8 +30,11 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <atomic>
+#include <cstddef>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -44,6 +47,7 @@
 /* Local inclusions for usages. */
 #include "Graphics/RenderableInstance/Multiple.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Math/Space3D/AACuboid.hpp"
 #include "Physics/Particle.hpp"
 
 namespace EmEn::Scenes::Component
@@ -124,8 +128,41 @@ namespace EmEn::Scenes::Component
 				// FIXME: Check the particle coordinates
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
+			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics()
+			 * @note Also measures the WORLD box of the live particles (worldBoundsStateForRendering()). */
 			void processLogics (const Scene & scene) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::publishStateForRendering(uint32_t)
+			 * @note Publishes the live particles' world box. */
+			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
+
+			/**
+			 * @brief Returns how many particles the instance draws now (the logic's live count).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			activeParticleCount () const noexcept
+			{
+				return m_renderableInstance->activeInstanceCount();
+			}
+
+			/**
+			 * @brief Returns the world box of the live particles, as published for a render state.
+			 * @note What the scene culls an emitter on (Scene::populateRenderLists(), its own pass): the particles live
+			 * in the WORLD (unless ConstrainedToEmitterSpace) and drift away from the node — a smoke trail left behind a
+			 * moving missile — so the node's extent cannot tell whether they are seen. Invalid when no particle lives
+			 * (nothing to draw). The model of UE5 Niagara's and Unity's dynamic particle bounds.
+			 * @note Render thread (the logic → render triple buffer, RenderStateSlotCount).
+			 * @param readStateIndex The render state index being read.
+			 * @return const Base::Math::Space3D::AACuboid< float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Space3D::AACuboid< float > &
+			worldBoundsStateForRendering (uint32_t readStateIndex) const noexcept
+			{
+				return *std::next(m_renderWorldBounds.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex % RenderStateSlotCount));
+			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
 			[[nodiscard]]
@@ -537,6 +574,10 @@ namespace EmEn::Scenes::Component
 			std::shared_ptr< Graphics::RenderableInstance::Multiple > m_renderableInstance;
 			Physics::BodyPhysicalProperties m_particlePhysicalProperties;
 			std::vector< Physics::Particle > m_particles;
+			/* The live particles' world box: measured by processLogics(), published per render state slot (logic thread
+			 * writes, the render thread reads the published slot). */
+			Base::Math::Space3D::AACuboid< float > m_worldBounds;
+			std::array< Base::Math::Space3D::AACuboid< float >, RenderStateSlotCount > m_renderWorldBounds{};
 			std::function< bool (Physics::Particle &) > m_customPhysicsSimulationSimpleFunction;
 			std::function< bool (const Physics::EnvironmentPhysicalProperties &, const Physics::BodyPhysicalProperties &, const Base::Math::CartesianFrame< float > &, Physics::Particle & particle) > m_customPhysicsSimulationFullFunction;
 			uint32_t m_particleLimit;

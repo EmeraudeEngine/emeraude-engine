@@ -93,6 +93,7 @@
 #include "Scenes/Component/LineLight.hpp"
 #include "Scenes/Component/PointLight.hpp"
 #include "Scenes/Component/SpotLight.hpp"
+#include "Scenes/Component/ParticlesEmitter.hpp"
 #include "Scenes/Component/Visual.hpp"
 #include "Scenes/GroundLevelInterface.hpp"
 #include "Scenes/LightSet.hpp"
@@ -1687,7 +1688,13 @@ namespace EmEn::Scenes
 			 * populateRenderLists(), 2026-10-03). */
 			casterInstances.clear();
 
+			/* NOTE: The particles emitters are left out: they cast from their own world box, in their own pass below. */
 			entity.forEachComponent([&casterInstances] (const Component::Abstract & component) {
+				if ( component.isComponent(Component::ParticlesEmitter::ClassId) )
+				{
+					return;
+				}
+
 				if ( auto renderableInstance = component.getRenderableInstance(); renderableInstance != nullptr )
 				{
 					casterInstances.emplace_back(std::move(renderableInstance));
@@ -1757,8 +1764,91 @@ namespace EmEn::Scenes
 			}
 		}
 
+		/* The particles emitters cast from their live particles' WORLD box, as they are seen (populateRenderLists()):
+		 * culled on the node, a smoke column lost its shadow with its node out of the caster volume, and an emitter with
+		 * no live particle was drawn with 0 instances (the Debug "No instance count", ~200 per smoke grenade). */
+		{
+			this->snapshotParticlesEmitters();
+
+			const Space3D::Sphere< float > lightRange{viewDistance, cameraPosition};
+
+			for ( const auto & emitter : m_particlesEmittersSnapshot )
+			{
+				const auto & entity = emitter->parentEntity();
+
+				if ( !entity.isRenderable() )
+				{
+					continue;
+				}
+
+				const auto renderableInstance = emitter->getRenderableInstance();
+
+				if ( renderableInstance == nullptr || this->checkRenderableInstanceForShadowCasting(renderTarget, renderableInstance) )
+				{
+					continue;
+				}
+
+				const auto & bounds = emitter->worldBoundsStateForRendering(readStateIndex);
+
+				if ( !bounds.isValid() || emitter->activeParticleCount() == 0 )
+				{
+					continue;
+				}
+
+				const auto centre = bounds.centroid();
+				const auto distance = Vector< 3, float >::distance(cameraPosition, centre);
+
+				if ( !isCascaded && distance > viewDistance )
+				{
+					continue;
+				}
+
+				if ( renderTarget->isCubemap() ? !Space3D::isColliding(bounds, lightRange) : !casterVolume.isSeeing(bounds) )
+				{
+					continue;
+				}
+
+				if ( receiverSlice.has_value() && !receiverSlice->isReachedBy(bounds) )
+				{
+					continue;
+				}
+
+				if ( beyondShadowCastingDistance(*renderableInstance, centre) )
+				{
+					continue;
+				}
+
+				const auto & worldCoordinates = entity.getWorldCoordinatesStateForRendering(readStateIndex);
+
+				this->insertIntoShadowCastingRenderList(renderableInstance, &worldCoordinates, distance);
+			}
+
+			/* NOTE: The references go now: the emitters belong to their entities. */
+			m_particlesEmittersSnapshot.clear();
+		}
+
 		/* Return true if something can be rendered. */
 		return !m_renderLists[Shadows].empty();
+	}
+
+	void
+	Scene::snapshotParticlesEmitters () noexcept
+	{
+		m_particlesEmittersSnapshot.clear();
+
+		const Base::MutexLock lock{m_particlesEmittersAccess};
+
+		std::erase_if(m_particlesEmitters, [] (const auto & emitter) {
+			return emitter.expired();
+		});
+
+		for ( const auto & weakEmitter : m_particlesEmitters )
+		{
+			if ( auto emitter = weakEmitter.lock() )
+			{
+				m_particlesEmittersSnapshot.emplace_back(std::move(emitter));
+			}
+		}
 	}
 
 	void
@@ -2025,10 +2115,17 @@ namespace EmEn::Scenes
 		 * keep an instance alive even if its component is removed meanwhile. One buffer, reused for every entity. */
 		std::vector< std::shared_ptr< Graphics::RenderableInstance::Abstract > > entityInstances;
 
-		const auto collectRenderableInstances = [&entityInstances] (const AbstractEntity & entity) noexcept {
+		/* NOTE: The raster leaves the particles emitters out (skipParticles): they are culled on their own world box, in
+		 * their own pass below. */
+		const auto collectRenderableInstances = [&entityInstances] (const AbstractEntity & entity, bool skipParticles) noexcept {
 			entityInstances.clear();
 
-			entity.forEachComponent([&entityInstances] (const Component::Abstract & component) {
+			entity.forEachComponent([&entityInstances, skipParticles] (const Component::Abstract & component) {
+				if ( skipParticles && component.isComponent(Component::ParticlesEmitter::ClassId) )
+				{
+					return;
+				}
+
 				if ( auto renderableInstance = component.getRenderableInstance(); renderableInstance != nullptr )
 				{
 					entityInstances.emplace_back(std::move(renderableInstance));
@@ -2053,7 +2150,7 @@ namespace EmEn::Scenes
 				return;
 			}
 
-			collectRenderableInstances(entity);
+			collectRenderableInstances(entity, false);
 
 			for ( const auto & renderableInstance : entityInstances )
 			{
@@ -2117,7 +2214,7 @@ namespace EmEn::Scenes
 				return;
 			}
 
-			collectRenderableInstances(entity);
+			collectRenderableInstances(entity, true);
 
 			for ( const auto & renderableInstance : entityInstances )
 			{
@@ -2205,6 +2302,61 @@ namespace EmEn::Scenes
 
 				rasterFrom(*crawler.currentNode());
 			}
+		}
+
+		/* The particles emitters: culled on their live particles' WORLD box, never on their node's extent. The particles
+		 * drift away from the node (a smoke trail left behind a moving missile): culled on the node, an emitter vanished
+		 * with the node out of view while its particles filled the screen (owner, 2026-10-24: "the display disappears
+		 * with the camera angle"). No live particle, no box: not drawn (the Debug "No instance count" of a draw of 0). */
+		{
+			this->snapshotParticlesEmitters();
+
+			const Space3D::Sphere< float > viewRange{viewDistance, cameraPosition};
+
+			for ( const auto & emitter : m_particlesEmittersSnapshot )
+			{
+				const auto & entity = emitter->parentEntity();
+
+				if ( !entity.isRenderable() )
+				{
+					continue;
+				}
+
+				const auto renderableInstance = emitter->getRenderableInstance();
+
+				if ( renderableInstance == nullptr || this->checkRenderableInstanceForRendering(renderTarget, renderableInstance) )
+				{
+					continue;
+				}
+
+				const auto & bounds = emitter->worldBoundsStateForRendering(readStateIndex);
+
+				/* NOTE: The live count is the logic's own (not published per render state): a box published a cycle
+				 * earlier may outlive the last particle. */
+				if ( !bounds.isValid() || emitter->activeParticleCount() == 0 )
+				{
+					continue;
+				}
+
+				if ( renderTarget->isCubemap() ? !Space3D::isColliding(bounds, viewRange) : !frustum.isSeeing(bounds) )
+				{
+					continue;
+				}
+
+				const auto distance = Vector< 3, float >::distance(cameraPosition, bounds.centroid());
+
+				if ( renderableInstance->isOutsideDrawDistanceRange(distance) )
+				{
+					continue;
+				}
+
+				const auto & worldCoordinates = entity.getWorldCoordinatesStateForRendering(readStateIndex);
+
+				this->insertIntoRenderLists(renderableInstance, &worldCoordinates, distance, cameraPosition, advanceModelHistory);
+			}
+
+			/* NOTE: The references go now: the emitters belong to their entities. */
+			m_particlesEmittersSnapshot.clear();
 		}
 
 		/* Return true if something can be rendered. */
