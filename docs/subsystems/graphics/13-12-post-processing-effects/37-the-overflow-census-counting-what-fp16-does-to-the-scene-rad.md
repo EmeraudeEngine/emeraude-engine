@@ -2,7 +2,7 @@
 
 ### The overflow census — counting what fp16 does to the scene radiance (Sep 2026)
 
-Scene-colour pre-exposure, step **B1a** (engine `docs/todo/scene-colour-pre-exposure.md`). A physical
+Scene-colour pre-exposure, step **B1a** (graphics doc 41, `../41-scene-colour-pre-exposure.md`). A physical
 luminance above 65 504 nits cannot live in an RGBA16F target: it becomes +Inf, and the first filter
 that multiplies it by 0 makes it NaN. `Graphics::OverflowCensus` (`OverflowCensus.hpp/.cpp`) is the
 instrument that says **how often, where and by how much**, before anything is changed to prevent it.

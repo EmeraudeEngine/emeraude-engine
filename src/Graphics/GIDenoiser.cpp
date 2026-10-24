@@ -26,6 +26,9 @@
 
 #include "GIDenoiser.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -75,7 +78,7 @@ layout(set = 0, binding = 8, std140) uniform FrameData
 	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
 	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
 	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
-	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
+	vec4 prevCamPos;	/* xyz = previous frame camera position, w = r, the pre-exposure rescale of the histories (scene-colour pre-exposure D5). */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (see the Flag constants). */
 	vec4 bounceParams;	/* x = multiBounceStrength, y = pre-exposure, z = variance-clip gamma, w = accumulation cap N. */
@@ -294,6 +297,10 @@ void main()
 	vec4 history = validS && validV ? (histS * wS + histV * wV) / wSum : (validS ? histS : histV);
 	float age = validS && validV ? (momS.b * wS + momV.b * wV) / wSum : (validS ? momS.b : momV.b);
 
+	/* PRE-EXPOSURE (D5): the history was written at the pre-exposure of the frame that wrote it; r = E_now /
+	 * E_then brings it to this frame's scale. RGB only: the alpha is a distance or a confidence. */
+	history.rgb *= prevCamPos.w;
+
 	float alpha = temporalParams.x;
 
 	/* Per-pixel 1/N accumulation counter (SVGF): the blend weight follows the pixel's own
@@ -436,6 +443,10 @@ void main()
 	/* Blend only what was validated (see the colour resolve): garbage times zero is garbage. */
 	vec4 history = validS && validV ? (momS * wS + momV * wV) / wSum : (validS ? momS : momV);
 
+	/* PRE-EXPOSURE (D5): the first moment scales by r, the second by r². */
+	history.r *= prevCamPos.w;
+	history.g *= prevCamPos.w * prevCamPos.w;
+
 	float maxN = max(bounceParams.w, 1.0);
 
 	/* Per-pixel 1/N accumulation counter — same weight as the colour resolve so both integrate
@@ -493,6 +504,7 @@ layout(push_constant) uniform PushConstants
 	float normalSigma;
 	float luminanceSigma;
 	float firstIteration;	/* > 0.5: variance from momentsTex (+ young-history spatial fallback). */
+	float preExposure;	/* The frame's pre-exposure: the floor below is authored in nits. */
 } pc;
 
 const vec3 LumaWeights = vec3(0.2126, 0.7152, 0.0722);
@@ -560,8 +572,10 @@ void main()
 
 	float invDepthSigma2 = 1.0 / (2.0 * pc.depthSigma * pc.depthSigma);
 	float invNormalSigma = 1.0 / max(pc.normalSigma, 0.001);
-	/* Luminance tolerance scales with the local noise (the SVGF auto-dosage). */
-	float lumaDenom = pc.luminanceSigma * sqrt(centerVar) + 0.0001;
+	/* Luminance tolerance scales with the local noise (the SVGF auto-dosage). Its floor is 1e-4 NITS: the signal holds
+	 * nits × E_pre, so the floor scales with it, or a pre-exposed signal (~1e-4 of its nits) would sit at the floor and
+	 * the edge-stopping would go blind (measured, sponza 2026-10-24: 3× the A/A speckle). */
+	float lumaDenom = pc.luminanceSigma * sqrt(centerVar) + 0.0001 * pc.preExposure;
 
 	/* Center tap. */
 	float centerWeight = Kernel[0] * Kernel[0];
@@ -651,7 +665,7 @@ layout(set = 0, binding = 1, std140) uniform FrameData
 	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = camera position X. */
 	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = camera position Y. */
 	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = camera position Z. */
-	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
+	vec4 prevCamPos;	/* xyz = previous frame camera position, w = r, the pre-exposure rescale of the histories (scene-colour pre-exposure D5). */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
 	vec4 bounceParams;	/* x = multiBounceStrength, y = pre-exposure, z = variance-clip gamma, w = unused. */
@@ -986,9 +1000,16 @@ namespace EmEn::Graphics
 		const auto * pvp = prevViewProj.data();
 
 		const auto prevInvView = prevViewMat.inverse();
-		const auto * pinv = prevInvView.data();
 
 		const bool historyUsable = this->historyUsable();
+
+		/* PRE-EXPOSURE (D5): r = this frame's pre-exposure / the one the history was written at, 1 without a usable
+		 * history. A ratio of two stored values, never an accumulated one; and from the HISTORY's own frame, not
+		 * the previous rendered one, so a producer that skipped frames still rescales right. */
+		const auto preExposure = std::isfinite(inputs.preExposure) && inputs.preExposure > 0.0F ? inputs.preExposure : 1.0F;
+		const auto historyRescale = historyUsable && m_historyPreExposure > 0.0F ? preExposure / m_historyPreExposure : 1.0F;
+
+		m_framePreExposure = preExposure;
 
 		const FrameUBOData ubo{
 			.invRelativeViewProj = {
@@ -1009,7 +1030,7 @@ namespace EmEn::Graphics
 			.viewPosY = cameraPosition.y(),
 			.invViewCol2 = {inv[8], inv[9], inv[10]},
 			.viewPosZ = cameraPosition.z(),
-			.prevCamPos = {pinv[12], pinv[13], pinv[14], 0.0F},
+			.prevCamPos = {prevInvView[12], prevInvView[13], prevInvView[14], historyRescale},
 			.traceParams = {inputs.traceMaxDistance, inputs.traceBias, inputs.traceSampleCount, static_cast< float >(m_noiseFrameIndex)},
 			.temporalParams = {
 				historyUsable ? m_parameters.temporalAlpha : 1.0F,
@@ -1227,7 +1248,7 @@ namespace EmEn::Graphics
 					.normalSigma = m_parameters.normalSigma,
 					.luminanceSigma = m_parameters.luminanceSigma,
 					.firstIteration = iteration == 0 ? 1.0F : 0.0F,
-					.padding0 = 0.0F,
+					.preExposure = m_framePreExposure,
 					.padding1 = 0.0F,
 					.padding2 = 0.0F
 				};
@@ -1249,6 +1270,7 @@ namespace EmEn::Graphics
 		/* Flip the history ping-pong for the next frame. */
 		m_historyWriteIndex = readIdx;
 		m_historyValid = true;
+		m_historyPreExposure = m_framePreExposure;
 
 		/* The combine consumes the à-trous output (the freshly resolved history when the
 		 * spatial filter is disabled). The colour history fed back next frame remains the

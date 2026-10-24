@@ -19,6 +19,14 @@ removed the symptom), but the producer is untouched: somewhere in the lit path o
 fully transparent texel yields a NaN that the blender writes as `dst · 1 + NaN · 0 = NaN`. Any other
 reader of the colour buffer (bloom, DoF, motion blur, the TAA history) is exposed to the same NaN.
 
+## Caught 2026-10-24 (the overflow census, during scene-colour pre-exposure B8)
+On `light-and-shadow-debug --demo-options 0,1` (Linux, RTX 3070 Ti, engine on the pre-exposure work, a default
+launch), the census counts **1 NaN texel in `SceneColour`** in ~12 % of the frames (83 of 704 over 10 s), and 0
+in `ToneMapInput`: the chain's guards scrub it. Its rate is the same at E_pre 2.6e-5 and at E_pre 1 (88 of 706),
+so it is not a range overflow but a NaN PRODUCER. Caught frame: `nan 1, inf 0, ceiling 0, peakFinite 1.44`.
+Next: locate it (the census gives counts, not the position — a DebugNonFinite capture, or a `dumpRenderTarget`
+of the grabbed colour on a flagged frame), then check whether it is the pinup sprite.
+
 ## Status 2026-09-13, end of day
 Not reproducible any more: after the owner invalidated the build and cleared every cache, a clean
 rebuild with the day's fixes (SSR non-finite guard, grab barrier → compute stage, NaN-safe denoiser

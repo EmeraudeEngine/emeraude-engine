@@ -18,8 +18,8 @@ and halo as if it were visible — owner report on Sponza, "il passe à travers 
   **+21/255 on the neutral walls with the sun uncovered, 0.00 with the cube** — the probe sees the
   occluder. A skybox is NOT geometry here (the sky region reads the far plane).
 - ⚠️⚠️ **The threshold is EXPOSURE-RELATIVE (fixed 2026-09-24, owner decision over a nits threshold
-  like the VeilingGlare's)**: the bright pass compares `max(r, g, b) × FrameContext::displayExposure`
-  (nit → display value; 1 without a tone mapper) with `Parameters::threshold` = **4** display units
+  like the VeilingGlare's)**: the bright pass compares `max(r, g, b) × FrameContext::residualExposure`
+  (chain value → display value — the chain holds nits × E_pre, graphics doc 41; 1 without a tone mapper) with `Parameters::threshold` = **4** display units
   (1 = the sensor's white). It was 0.8 compared with NITS, a leftover of the display-referred era: on
   `forest` the whole 15 380-nit sky fed the ghosts, split into saturated rainbow streaks through the
   leaves. Measured at the sun pose (`setPosition(30, 0, -40)` + `lookAt(100.5, 48.6, 11.7)`): 0.8
@@ -54,8 +54,9 @@ threshold fixed, a daylight scene had no flare at all.
 ⚠️⚠️ **Three traps met on the way, each invisible until measured:**
 - **A half float stops at 65 504.** The disc carries ~5e7 nits; written in nits the source target
   overflowed to +inf, then NaN once filtered, and NO ghost ever showed, without any validation error.
-  The source pass works in DISPLAY units (nits × exposure, ~5 000 for the sun, clamped at
-  `MaxSunDisplayLuminance` 50 000); the ghost pass returns to nits (× `inverseExposure`).
+  The source pass works in DISPLAY units (~5 000 for the sun, clamped at `MaxSunDisplayLuminance`
+  50 000): the sampled chain × the residual, the ANALYTIC sun (from the light's lux) × `residual × E_pre`,
+  the absolute exposure; the ghost pass returns to chain units (× `inverseExposure` = 1 / residual).
 - **Chapman's sum does not conserve the flux.** Ghost i is the source magnified 1 / |1 - dispersal·i|
   times with its FULL luminance: at 0.35 the fourth ghost was 20× the sun (400× its flux) — a white disc
   over half the frame. Each ghost is weighted by (1 - dispersal·i)²; the halo, which spreads the disc

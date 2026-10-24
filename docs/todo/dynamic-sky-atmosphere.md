@@ -1,11 +1,10 @@
 ---
 id: dynamic-sky-atmosphere
 title: Dynamic sky — a physical, planet-parametric atmosphere drawn as the background, with the sun disc
-status: blocked
+status: open
 priority: unranked
 scope: Graphics/Renderable (DynamicSkyResource, AbstractBackground), Graphics (new atmosphere LUT passes), Saphir (background program), Scenes (DefinitionResource background)
 opened: 2026-10-24
-blocked-by: [scene-colour-pre-exposure]
 tags: [sky, atmosphere, photometry, background, owner-decision, design]
 ---
 
@@ -14,7 +13,7 @@ tags: [sky, atmosphere, photometry, background, owner-decision, design]
 > **Owner decisions (2026-10-24):**
 > - The sky is **PHYSICAL**, and it must be able to render **extraterrestrial skies**. The
 >   atmosphere is described by its planet, not hard-wired to Earth.
-> - The exposure work comes **first**: this item waits on `scene-colour-pre-exposure`.
+> - The exposure work comes **first**: DONE 2026-10-24, the scene colour is pre-exposed (graphics doc 41).
 > - `SkyFollowsSun` **stays**, for the picture skies (`SkyBoxResource`). It does not drive a
 >   dynamic sky.
 > - Time comes from a celestial clock (`celestial-clock`), not from `SunCourse`'s fixed great
@@ -65,9 +64,10 @@ following lots are `dynamic-sky-sun-light-from-transmittance`, `dynamic-sky-amor
 
 ## ⚠️ Traps
 
-- ⚠️ **The sun disc is ~1.6e9 nits at the zenith; fp16 stops at 65 504.** Without pre-exposure,
-  the disc is +Inf in the scene colour, the same overflow class `LensFlare.cpp:52-56` works around
-  locally. This is why the item is blocked.
+- ⚠️ **The sun disc is ~1.6e9 nits at the zenith; fp16 stops at 65 504.** The scene colour is pre-exposed now
+  (graphics doc 41), so the disc is stored × E_pre — write it through the scene programs' multiply, or × E_pre if
+  drawn by a pass of its own. Still out of range for the WORLD caches (S = 2^-4 caps at ~1.05e6 nits): a
+  reflection probe or the IBL bake must mask or clamp the disc (`IBLBaker::StarMask` is the precedent).
 - ⚠️ **The night must still be readable**: a moonless sky is ~1e-3 nits and less. The auto-exposure
   multiplier is clamped at `maxExposure` 100 (`ToneMapping.hpp:122`). A physically dark night
   reads black, so the owner has to choose between a raised floor and an artistic night lift

@@ -97,6 +97,7 @@ namespace EmEn::Graphics
 				float viewPosY;
 				std::array< float, 3 > invViewCol2;
 				float viewPosZ;
+				/* xyz = previous frame camera position, w = r, the pre-exposure rescale of the histories. */
 				std::array< float, 4 > prevCamPos;
 				/* maxDistance, bias, sampleCount (as float), animated-noise frame index (R2). */
 				std::array< float, 4 > traceParams;
@@ -205,7 +206,9 @@ namespace EmEn::Graphics
 				/* > 0.5: first iteration — variance comes from the moments texture (with the
 				 * young-history spatial fallback), the input alpha is the camera distance. */
 				float firstIteration;
-				float padding0;
+				/* The frame's pre-exposure: the luminance tolerance's floor is authored in nits, the signal is in
+				 * nits × E_pre (scene-colour pre-exposure). */
+				float preExposure;
 				float padding1;
 				float padding2;
 			};
@@ -435,5 +438,9 @@ namespace EmEn::Graphics
 			bool m_temporalEnabled{true};
 			/* False until a first frame filled the history (forces alpha=1, no feedback). */
 			bool m_historyValid{false};
+			/* The pre-exposure of the frame being denoised (updateFrameData()), and the one the history was written
+			 * at (0 = none): their ratio rescales the history (scene-colour pre-exposure D5). */
+			float m_framePreExposure{1.0F};
+			float m_historyPreExposure{0.0F};
 	};
 }

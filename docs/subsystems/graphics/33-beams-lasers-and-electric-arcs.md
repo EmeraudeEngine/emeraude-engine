@@ -148,7 +148,8 @@ behind a beam before calling it a defect.
 - **Segments are GEOMETRY, never `lineWidth`**: hardware wide lines are optional (`Vulkan/Instance.cpp` only warns
   without `wideLines`) and Metal has none (`Saphir/Generator/GizmoRendering.cpp` draws at 1 px).
 - **A beam is emissive translucent geometry: out of the TLAS** (item `rt-blended-materials-in-tlas`).
-- **Pre-exposure**: a beam's luminance sits in the scene-colour range (item `scene-colour-pre-exposure`).
+- **Pre-exposure**: a beam's luminance is stored × the frame's pre-exposure like every scene radiance (graphics
+  doc 41, `41-scene-colour-pre-exposure.md`).
 
 ### References
 

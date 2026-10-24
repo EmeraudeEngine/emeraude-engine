@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cmath>
 #include <string>
 
 /* Local inclusions. */
@@ -78,9 +79,12 @@ namespace
 		float debugView;
 		/* 1 when the reactive mask (binding 4) is the real one, 0 when the scene has none and a stand-in is bound. */
 		float reactiveEnabled;
+		/* r = this frame's pre-exposure / the one the history was written at (scene-colour pre-exposure D5), 1
+		 * without a usable history. */
+		float historyRescale;
 	};
 
-	static_assert(sizeof(TAAPushConstants) == 52, "TAAPushConstants must be 52 bytes.");
+	static_assert(sizeof(TAAPushConstants) == 56, "TAAPushConstants must be 56 bytes.");
 
 	/* ---- GLSL Shader Sources ----
 	 *
@@ -138,6 +142,7 @@ layout(push_constant) uniform PushConstants
 	float farPlane;
 	float debugView;
 	float reactiveEnabled;
+	float historyRescale;
 };
 
 float linearizeDepth(float depth)
@@ -395,7 +400,9 @@ void main()
 		return;
 	}
 
-	vec3 history = sampleHistoryCatmullRom(prevUV, texel);
+	/* PRE-EXPOSURE (D5): the history holds the scene colour at the pre-exposure of the frame that wrote it. RGB only:
+	 * the alpha is the linear depth. */
+	vec3 history = sampleHistoryCatmullRom(prevUV, texel) * historyRescale;
 
 	/* Never let a stray NaN/Inf poison the feedback loop permanently. */
 	if (any(isnan(history)) || any(isinf(history)))
@@ -717,6 +724,11 @@ namespace EmEn::Graphics::Effects::Resolve
 		 * (alpha 1) rather than accumulating a smear. */
 		const bool historyUsable = m_historyValid && context.velocity != nullptr && context.depth != nullptr;
 
+		/* PRE-EXPOSURE (D5): r from two stored values — this frame's and the history's own — never accumulated, and
+		 * 1 after any reset (the HDRP white-flash bug: a stale previous exposure on the frame after a reset). */
+		const auto preExposure = std::isfinite(context.preExposure) && context.preExposure > 0.0F ? context.preExposure : 1.0F;
+		const auto historyRescale = historyUsable && m_historyPreExposure > 0.0F ? preExposure / m_historyPreExposure : 1.0F;
+
 		const TAAPushConstants pc{
 			.texelSizeX = 1.0F / static_cast< float >(m_historyTargets[writeIdx].width()),
 			.texelSizeY = 1.0F / static_cast< float >(m_historyTargets[writeIdx].height()),
@@ -731,7 +743,8 @@ namespace EmEn::Graphics::Effects::Resolve
 			.nearPlane = context.constants.nearPlane,
 			.farPlane = context.constants.farPlane,
 			.debugView = 0.0F,
-			.reactiveEnabled = context.reactive != nullptr ? 1.0F : 0.0F
+			.reactiveEnabled = context.reactive != nullptr ? 1.0F : 0.0F,
+			.historyRescale = historyRescale
 		};
 
 		IndirectPostProcessEffect::recordFullscreenPass(
@@ -747,6 +760,7 @@ namespace EmEn::Graphics::Effects::Resolve
 		/* Flip the ping-pong: the freshly resolved image becomes next frame's history. */
 		m_historyWriteIndex = readIdx;
 		m_historyValid = true;
+		m_historyPreExposure = preExposure;
 
 		/* DEBUG VIEW: the same resolve recorded a second time with the same inputs (the history read above is
 		 * untouched by the first pass, which wrote the other ping-pong image), painting its decision into its own

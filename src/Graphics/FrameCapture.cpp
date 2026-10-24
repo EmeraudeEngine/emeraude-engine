@@ -598,7 +598,7 @@ namespace EmEn::Graphics
 
 					if ( meta.hasCamera )
 					{
-						json << "\t\t\t\"exposure\": {\"auto\": " << (meta.autoExposure ? "true" : "false") << ", \"aperture\": " << meta.aperture << ", \"shutterSpeed\": " << meta.shutterSpeed << ", \"sensitivity\": " << meta.sensitivity << ", \"compensation\": " << meta.exposureCompensation << "}\n";
+						json << "\t\t\t\"exposure\": {\"auto\": " << (meta.autoExposure ? "true" : "false") << ", \"aperture\": " << meta.aperture << ", \"shutterSpeed\": " << meta.shutterSpeed << ", \"sensitivity\": " << meta.sensitivity << ", \"compensation\": " << meta.exposureCompensation << ", \"preExposure\": " << meta.preExposure << ", \"displayExposure\": " << meta.displayExposure << "}\n";
 					}
 					else
 					{

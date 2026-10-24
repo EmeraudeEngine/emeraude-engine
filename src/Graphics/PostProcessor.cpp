@@ -1465,10 +1465,9 @@ namespace EmEn::Graphics
 			.residualExposure = [this, &stack, activeCamera] {
 				const auto toneMapping = stack.cameraToneMapping();
 
-				return toneMapping != nullptr ? toneMapping->displayExposure(activeCamera) / m_framePreExposure.value : 0.0F;
+				return toneMapping != nullptr ? toneMapping->displayExposure(activeCamera) / m_framePreExposure : 0.0F;
 			}(),
-			.preExposure = m_framePreExposure.value,
-			.preExposureRatio = m_framePreExposure.ratio,
+			.preExposure = m_framePreExposure,
 			.shutterSpeed = [&stack, activeCamera] {
 				if ( activeCamera == nullptr )
 				{

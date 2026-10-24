@@ -468,11 +468,9 @@ namespace EmEn::Graphics
 				/* The frame's PRE-EXPOSURE (Renderer::preExposure()): the scene colour holds nits × preExposure, so
 				 * the fp16 targets never store an absolute luminance past 65 504. 1 whenever no tone mapper runs. An
 				 * effect reading the scene colour reads PRE-EXPOSED values; one synthesising a radiance from nits
-				 * multiplies it by this. */
+				 * multiplies it by this. A temporal history stores the pre-exposure it was written at and rescales by
+				 * the ratio of the two (D5: TAA, GIDenoiser). */
 				float preExposure{1.0F};
-				/* r = preExposure(this frame) / preExposure(previous rendered frame): what a history recorded at the
-				 * previous frame is multiplied by to be read at this one. */
-				float preExposureRatio{1.0F};
 				/* The exposure time the frame is taken with, in seconds (ToneMapping::effectiveShutterSpeed()): the
 				 * METERED speed under aperture-priority auto-exposure, the camera's authored one otherwise. What the
 				 * motion blur must scale by — the authored speed overstates the smear once the metering shortened it.

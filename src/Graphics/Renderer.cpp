@@ -3448,8 +3448,18 @@ namespace EmEn::Graphics
 				metadata.exposureCompensation = camera->exposureCompensation();
 				metadata.autoExposure = camera->isAutoExposureEnabled();
 				metadata.hasCamera = true;
+
+				if ( const auto * stack = scene->postProcessStack(); stack != nullptr && m_postProcessingActive )
+				{
+					if ( const auto toneMapping = stack->cameraToneMapping(); toneMapping != nullptr && toneMapping->isEnabled() && toneMapping->isCreated() )
+					{
+						metadata.displayExposure = toneMapping->displayExposure(camera.get());
+					}
+				}
 			}
 		}
+
+		metadata.preExposure = m_preExposure;
 
 		return m_frameCapture.recordCopy(commandBuffer, *image, m_swapChain->finalColorLayout(), m_currentFrameIndex, metadata);
 	}
@@ -3460,12 +3470,6 @@ namespace EmEn::Graphics
 		/* Hysteresis of the automatic value: it follows the metered exposure by whole stops, and moves only once the
 		 * metering drifted more than one stop away from it. */
 		constexpr auto HysteresisStops{1.0F};
-
-		/* ⚠️ TRANSITION (scene-colour pre-exposure, steps 4-7 pending): the scene's writers do not multiply by E_pre
-		 * yet, so an automatic E_pre != 1 would feed the metering a scene divided by E_pre and the auto exposure would
-		 * chase it. Until every writer multiplies, the automatic value is 1 — today's image, bit for bit — and only
-		 * the override moves E_pre: the instrument that finds the writers still missing. */
-		constexpr auto PreExposureFollowsCamera{false};
 
 		float preExposure = 1.0F;
 
@@ -3492,7 +3496,7 @@ namespace EmEn::Graphics
 		{
 			preExposure = forced;
 		}
-		else if constexpr ( PreExposureFollowsCamera )
+		else
 		{
 			const auto camera = scene->activeCamera();
 			const auto displayExposure = toneMapping->displayExposure(camera.get());
@@ -3520,12 +3524,9 @@ namespace EmEn::Graphics
 			}
 		}
 
-		/* r over RENDERED frames (the frame-history contract): this function runs once per recorded frame. */
-		m_previousPreExposure = m_preExposure;
 		m_preExposure = preExposure;
-		m_preExposureRatio = m_preExposure / m_previousPreExposure;
 
-		m_postProcessor.setFramePreExposure({.value = m_preExposure, .ratio = m_preExposureRatio});
+		m_postProcessor.setFramePreExposure(m_preExposure);
 
 		/* The scene programs read it from the main view's UBO: this frame's region is already uploaded (the scene's
 		 * updateVideoMemory() ran earlier in this frame), and the setter patches it.
