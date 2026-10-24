@@ -71,7 +71,7 @@ namespace EmEn::Scenes::Component
 			MultipleVisuals (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Abstract > & renderable, std::vector< Base::Math::CartesianFrame< float > > coordinates, Graphics::RenderableInstance::Lighting lighting) noexcept
 				: Abstract{componentName, parentEntity},
 				m_renderableInterface{renderable},
-				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(this->engineContext().graphicsRenderer.device(), renderable, coordinates, Graphics::RenderableInstance::lightingFlags(lighting))},
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(this->engineContext().graphicsRenderer, renderable, coordinates, Graphics::RenderableInstance::lightingFlags(lighting))},
 				m_localCoordinates{std::move(coordinates)}
 			{
 				this->observe(renderable.get());

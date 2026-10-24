@@ -84,7 +84,7 @@ namespace EmEn::Scenes::Component
 			ParticlesEmitter (const std::string & componentName, const AbstractEntity & parentEntity, const std::shared_ptr< Graphics::Renderable::Abstract > & renderable, uint32_t instanceCount) noexcept
 				: Abstract{componentName, parentEntity},
 				m_renderableInterface{renderable},
-				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(this->engineContext().graphicsRenderer.device(), renderable, instanceCount, Graphics::RenderableInstance::None)},
+				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(this->engineContext().graphicsRenderer, renderable, instanceCount)},
 				m_particleLimit{instanceCount}
 			{
 				/* NOTE: Prepare local data at the fixed size. */

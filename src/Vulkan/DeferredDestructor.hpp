@@ -101,6 +101,7 @@ namespace EmEn::Vulkan
 
 			/**
 			 * @brief Sets the retirement delay from the renderer frames-in-flight count.
+			 * @note Also (re)opens the queue (close()): the renderer calls it at its initialization.
 			 * @param framesInFlight The number of frames in flight.
 			 */
 			void
@@ -109,6 +110,26 @@ namespace EmEn::Vulkan
 				const Base::MutexLock lock{m_mutex};
 
 				m_delayTicks = std::max(framesInFlight, 1U);
+				m_closed = false;
+			}
+
+			/**
+			 * @brief Destroys every pending entry (flush()), then CLOSES the queue: from then on, a retirement is
+			 * destroyed (or its action run) at once, in the caller's thread.
+			 * @note The renderer closes it at its termination, its device idle and no frame in flight any more. The
+			 * resources are unloaded AFTER that (Core::terminate(): unloadUnusedResources() after each secondary
+			 * service), and the renderer itself is destroyed after the device: a retirement that waited for the
+			 * renderer's destructor would destroy its Vulkan object with no device left.
+			 * @warning The caller must guarantee the device is idle.
+			 */
+			void
+			close () noexcept
+			{
+				this->flush();
+
+				const Base::MutexLock lock{m_mutex};
+
+				m_closed = true;
 			}
 
 			/**
@@ -123,14 +144,24 @@ namespace EmEn::Vulkan
 					return;
 				}
 
-				const Base::MutexLock lock{m_mutex};
+				{
+					const Base::MutexLock lock{m_mutex};
 
-				m_entries.emplace_back(Entry{
-					.retiredAtTick = m_currentTick,
-					.object = std::move(object),
-					.action = nullptr,
-					.isReady = nullptr
-				});
+					if ( !m_closed )
+					{
+						m_entries.emplace_back(Entry{
+							.retiredAtTick = m_currentTick,
+							.object = std::move(object),
+							.action = nullptr,
+							.isReady = nullptr
+						});
+
+						return;
+					}
+				}
+
+				/* NOTE: Closed (the renderer terminated, its device idle): destroyed now, outside the lock. */
+				object.reset();
 			}
 
 			/**
@@ -161,14 +192,24 @@ namespace EmEn::Vulkan
 					return;
 				}
 
-				const Base::MutexLock lock{m_mutex};
+				{
+					const Base::MutexLock lock{m_mutex};
 
-				m_entries.emplace_back(Entry{
-					.retiredAtTick = m_currentTick,
-					.object = nullptr,
-					.action = std::move(action),
-					.isReady = nullptr
-				});
+					if ( !m_closed )
+					{
+						m_entries.emplace_back(Entry{
+							.retiredAtTick = m_currentTick,
+							.object = nullptr,
+							.action = std::move(action),
+							.isReady = nullptr
+						});
+
+						return;
+					}
+				}
+
+				/* NOTE: Closed (the renderer terminated, its device idle): run now, outside the lock. */
+				action();
 			}
 
 			/**
@@ -188,14 +229,24 @@ namespace EmEn::Vulkan
 					return;
 				}
 
-				const Base::MutexLock lock{m_mutex};
+				{
+					const Base::MutexLock lock{m_mutex};
 
-				m_entries.emplace_back(Entry{
-					.retiredAtTick = m_currentTick,
-					.object = nullptr,
-					.action = std::move(action),
-					.isReady = std::move(isReady)
-				});
+					if ( !m_closed )
+					{
+						m_entries.emplace_back(Entry{
+							.retiredAtTick = m_currentTick,
+							.object = nullptr,
+							.action = std::move(action),
+							.isReady = std::move(isReady)
+						});
+
+						return;
+					}
+				}
+
+				/* NOTE: Closed: the device is idle, the condition holds by construction (flush() does not ask either). */
+				action();
 			}
 
 			/**
@@ -288,5 +339,7 @@ namespace EmEn::Vulkan
 			std::deque< Entry > m_entries EMEN_GUARDED_BY(m_mutex);
 			uint64_t m_currentTick EMEN_GUARDED_BY(m_mutex){0};
 			uint32_t m_delayTicks EMEN_GUARDED_BY(m_mutex){5};
+			/* NOTE: close(): a retirement is destroyed at once (the renderer terminated). */
+			bool m_closed EMEN_GUARDED_BY(m_mutex){false};
 	};
 }

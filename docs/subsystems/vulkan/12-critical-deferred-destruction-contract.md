@@ -38,6 +38,21 @@
 > an instance dies at runtime on actor death). Both keep the destructor pointer from their
 > creation site (`serviceProvider().graphicsRenderer()` / `prepareSkinningResources()`).
 >
+>
+> Migrated 2026-10-24 (`VUID-vkDestroyBuffer-buffer-00922` + the same buffer leaked at `vkDestroyDevice`, item
+> `default-mesh-instance-destroyed-while-in-use`, closed): `RenderableInstance::Multiple`'s per-instance VBO (a
+> particles emitter going with its actor — projet-alpha's missile) and the VBO / IBO of the simple geometries
+> (`IndexedVertexResource`, `RawIndexedVertexResource`, `RawVertexResource`, `VertexGridResource`, `VertexResource`:
+> a ground replaced, `setGround()`), the ocean's and the CDLOD terrain's rule. ⚠️ **An instance that owns GPU objects
+> gets the destructor AT CONSTRUCTION** (`Abstract::setDeferredDestructor()`; `Multiple` takes the `Renderer`): the
+> readiness path (`prepareSkinningResources()`) does NOT reach every drawn instance — measured, 1 615 of 1 647
+> destroyed `Multiple` never had it.
+> **`DeferredDestructor::close()`** (the renderer's termination, after its final `flush()`): from then on a
+> retirement is destroyed at once. Why: `Core::terminate()` unloads the resources AFTER the renderer terminated, and
+> the renderer object is destroyed after the device — a retirement that waited for `~DeferredDestructor()` destroyed
+> its object with no device (a latent hazard of every retiring destructor, the BLAS of `Geometry::Interface`
+> included). `setFramesInFlight()` (the renderer's initialization) reopens it.
+>
 > Known candidates NOT yet migrated: `Overlay::Surface` framebuffer recreation,
 > material/shared-UBO teardown paths, `LightSet::terminate()` (scene teardown — currently
 > in-place).

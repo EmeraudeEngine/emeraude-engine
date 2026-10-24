@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
+#include <utility>
 #include <vector>
 
 /* Local inclusions. */
@@ -77,11 +78,12 @@ namespace EmEn::Graphics::Geometry
 	void
 	RawVertexResource::destroyFromHardware (bool clearLocalData) noexcept
 	{
-		if ( m_vertexBufferObject != nullptr )
-		{
-			m_vertexBufferObject->destroyFromHardware();
-			m_vertexBufferObject.reset();
-		}
+		/* NOTE: The frames in flight may still draw this geometry (a ground replaced, a resource unloaded at runtime):
+		 * its buffers are RETIRED, destroyed once those frames are done, never freed here (the ocean's and the CDLOD
+		 * terrain's rule; VUID-vkDestroyBuffer-buffer-00922 measured on relief's setGround(), 2026-10-24). */
+		auto & deferredDestructor = this->serviceProvider().graphicsRenderer().deferredDestructor();
+
+		deferredDestructor.retireObject(std::move(m_vertexBufferObject));
 
 		if ( clearLocalData )
 		{

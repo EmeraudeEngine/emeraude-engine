@@ -26,8 +26,13 @@
 
 #include "VertexGridResource.hpp"
 
+/* STL inclusions. */
+#include <utility>
+
 /* Local inclusions. */
 #include "FastJSON.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/TransferManager.hpp"
 
 namespace EmEn::Graphics::Geometry
@@ -262,17 +267,13 @@ namespace EmEn::Graphics::Geometry
 	void
 	VertexGridResource::destroyFromHardware (bool clearLocalData) noexcept
 	{
-		if ( m_vertexBufferObject != nullptr )
-		{
-			m_vertexBufferObject->destroyFromHardware();
-			m_vertexBufferObject.reset();
-		}
+		/* NOTE: The frames in flight may still draw this geometry (a ground replaced, a resource unloaded at runtime):
+		 * its buffers are RETIRED, destroyed once those frames are done, never freed here (the ocean's and the CDLOD
+		 * terrain's rule; VUID-vkDestroyBuffer-buffer-00922 measured on relief's setGround(), 2026-10-24). */
+		auto & deferredDestructor = this->serviceProvider().graphicsRenderer().deferredDestructor();
 
-		if ( m_indexBufferObject != nullptr )
-		{
-			m_indexBufferObject->destroyFromHardware();
-			m_indexBufferObject.reset();
-		}
+		deferredDestructor.retireObject(std::move(m_vertexBufferObject));
+		deferredDestructor.retireObject(std::move(m_indexBufferObject));
 
 		if ( clearLocalData )
 		{

@@ -61,21 +61,54 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/**
 			 * @brief Constructs a renderable instance.
-			 * @param device A reference to the device smart-pointer.
+			 * @param renderer A reference to the graphics renderer (its device; its deferred destructor retires the VBO).
 			 * @param renderable A reference to a smart pointer of a renderable object.
 			 * @param instanceLocations A reference to a vector of coordinates. The max location count will be extracted from size().
 			 * @param flagBits The multiple renderable instance level flags. Default 0.
 			 */
-			Multiple (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Renderable::Abstract > & renderable, const std::vector< Base::Math::CartesianFrame< float > > & instanceLocations, uint32_t flagBits = 0) noexcept;
+			Multiple (Renderer & renderer, const std::shared_ptr< Renderable::Abstract > & renderable, const std::vector< Base::Math::CartesianFrame< float > > & instanceLocations, uint32_t flagBits = 0) noexcept;
 
 			/**
 			 * @brief Constructs a renderable instance.
-			 * @param device A reference to the device smart-pointer.
+			 * @param renderer A reference to the graphics renderer (its device; its deferred destructor retires the VBO).
 			 * @param renderable A reference to a smart pointer of a renderable object.
 			 * @param instanceCount The maximum of number of locations holds by this instance.
-			 * @param flagBits The multiple renderable instance level flags. Default 0.
+			 * @note No instance-level flag (its only user, the particles emitter, passed none).
 			 */
-			Multiple (const std::shared_ptr< Vulkan::Device > & device, const std::shared_ptr< Renderable::Abstract > & renderable, uint32_t instanceCount, uint32_t flagBits = 0) noexcept;
+			Multiple (Renderer & renderer, const std::shared_ptr< Renderable::Abstract > & renderable, uint32_t instanceCount) noexcept;
+
+			/**
+			 * @brief Copy constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Multiple (const Multiple & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor.
+			 * @param copy A reference to the copied instance.
+			 */
+			Multiple (Multiple && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Multiple &
+			 */
+			Multiple & operator= (const Multiple & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment.
+			 * @param copy A reference to the copied instance.
+			 * @return Multiple &
+			 */
+			Multiple & operator= (Multiple && copy) noexcept = delete;
+
+			/**
+			 * @brief Destructs the renderable instance: its per-instance VBO is RETIRED (deferredDestructor()), not
+			 * destroyed in place — frames in flight may still draw it (VUID-vkDestroyBuffer-buffer-00922, then the same
+			 * buffer leaked at vkDestroyDevice: a particles emitter going with its actor, projet-alpha's missile).
+			 */
+			~Multiple () override;
 
 			/** @copydoc EmEn::Graphics::RenderableInstance::Abstract::isModelMatricesCreated() const */
 			[[nodiscard]]
