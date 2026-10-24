@@ -102,6 +102,10 @@ namespace EmEn::Graphics
 				float shutterSpeed{0.0F};
 				float sensitivity{0.0F};
 				float exposureCompensation{0.0F};
+				/* The frame's pre-exposure (scene colour = nits × E_pre) and the exposure the tone mapper displayed it
+				 * with (nits -> display; 0 without a tone mapper): scene-colour pre-exposure D9. */
+				float preExposure{1.0F};
+				float displayExposure{0.0F};
 				uint64_t rendererFrame{0};
 				bool autoExposure{false};
 				bool hasCamera{false};

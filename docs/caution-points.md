@@ -1797,13 +1797,14 @@ source target and showed NO ghost at all — no VUID, no error, a flat diff. A h
 **Rule:** a target that may hold a physical source (the sun, a lamp seen directly, a specular of one)
 is written in DISPLAY units (× the camera's exposure) or clamped — never in raw nits. Suspect it whenever an HDR
 effect "does nothing" while its inputs trace as large numbers: trace the value, compare with 65 504.
-⚠️⚠️ **The scene colour buffer does NOT escape it** (this section said it did until 2026-09-25): it holds absolute
-nits in `RGBA16F`, nothing is pre-exposed and no light pass clamps. `basic-scenery`'s pure-blue flying light puts
-79.6 klx on the ground 8 m under it, and the unit-luminance chromaticity makes pure blue ×13.85 in its channel:
-3.5e5·ρ_b nits, +Inf for any blue albedo above 0.19. A mirror metal under a 100 klx sun overflows as well
-(`SSR.cpp` comment). The fix decided by the owner is PRE-EXPOSURE, to be designed with the owner first:
-[`todo/scene-colour-pre-exposure.md`](todo/scene-colour-pre-exposure.md).
-**Measure it** with the overflow census (next section) before and after any change.
+**The scene colour buffer is PRE-EXPOSED since 2026-10-24**: it holds nits × E_pre, the frame's pre-exposure,
+so a physical scene stays in range (`basic-scenery`'s pure-blue light: 0 overflow, peak 163, where it used to reach
++Inf for any blue albedo above 0.19; `light-and-shadow-debug`'s mirror floor: peak 1.4 instead of 56 032). It moved
+the trap rather than removing it: ⚠️ **any radiance synthesised from a CPU constant in nits must be × E_pre**, an
+absolute epsilon on a radiance changes meaning, and a temporal history must rescale by the ratio of the E_pre it
+was written at — graphics doc 41 (`subsystems/graphics/41-scene-colour-pre-exposure.md`).
+**Measure it** with the overflow census (next section) before and after any change, and with the invariance test
+(force E_pre, compare against automatic).
 
 ### Reading the overflow census — three ways to draw a false conclusion (Sep 2026)
 

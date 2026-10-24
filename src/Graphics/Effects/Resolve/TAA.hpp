@@ -179,5 +179,7 @@ namespace EmEn::Graphics::Effects::Resolve
 			uint32_t m_historyWriteIndex{0};
 			/** @brief False until the first resolve after (re)creation: forces alpha to 1 so the uninitialized history is never read. */
 			bool m_historyValid{false};
+			/* The pre-exposure the history was written at (0 = none): the history's rescale is this frame's over it. */
+			float m_historyPreExposure{0.0F};
 	};
 }

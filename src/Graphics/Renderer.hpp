@@ -1055,18 +1055,6 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief RENDER THREAD. Returns r = E_pre(this frame) / E_pre(previous rendered frame): what a history
-			 * recorded at the previous frame is multiplied by to be read at this one.
-			 * @return float
-			 */
-			[[nodiscard]]
-			float
-			preExposureRatio () const noexcept
-			{
-				return m_preExposureRatio;
-			}
-
-			/**
 			 * @brief Forces the pre-exposure, or gives it back to the camera.
 			 * @note Thread-safe: latched by the render thread at its next frame. The settings key
 			 * Core/Graphics/PostProcessing/PreExposure/Override sets it at launch.
@@ -2067,11 +2055,10 @@ namespace EmEn::Graphics
 			std::atomic< bool > m_deferredPunctualLightsEnabled{true};
 			/** @brief Settings: the forced pre-exposure, 0 = automatic (setPreExposureOverride()). */
 			std::atomic< float > m_preExposureOverride{0.0F};
-			/* The pre-exposure (latchPreExposure()), render thread only: the frame's value, the previous rendered
-			 * frame's, their ratio, and the quantised metered value the hysteresis holds (0 = none yet). */
+			/* The pre-exposure (latchPreExposure()), render thread only: the frame's value and the quantised metered
+			 * value the hysteresis holds (0 = none yet). A history rescales by the ratio of the frame's value to the one
+			 * it was written at, which it stores itself (TAA, GIDenoiser). */
 			float m_preExposure{1.0F};
-			float m_previousPreExposure{1.0F};
-			float m_preExposureRatio{1.0F};
 			float m_quantisedPreExposure{0.0F};
 			/* The swap-chain recreation retries (retryDegradedSwapChain()): render thread only, except the given-up flag
 			 * read by the main loop. */
@@ -2113,7 +2100,7 @@ namespace EmEn::Graphics
 			void publishFrameDiagnostics (Scenes::Scene * scene) noexcept;
 
 			/**
-			 * @brief RENDER THREAD. Latches the frame's pre-exposure E_pre and its ratio to the previous rendered frame.
+			 * @brief RENDER THREAD. Latches the frame's pre-exposure E_pre.
 			 * @note Once per frame, after the camera sync and the scene-target block, before the rendering strategy:
 			 * every input is final there. Manual exposure: E_pre is the camera's APEX exposure, exact. Auto exposure:
 			 * the metered exposure quantised to a whole stop, moved only when it drifts more than one stop away

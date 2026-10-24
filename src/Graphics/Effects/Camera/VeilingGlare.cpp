@@ -637,12 +637,12 @@ namespace EmEn::Graphics::Effects::Camera
 		auto fireflyClamp = std::max(threshold, 1.0F) * 64.0F;
 
 		/* PRE-EXPOSURE (step 6, D8): the threshold and the ceiling are authored in NITS, the chain holds
-		 * nits × E_pre. The Karis weight keeps weighing nits (1 / E_pre): the look of before, until the owner
-		 * decides whether it moves to display units (karisLuminanceScale). */
+		 * nits × E_pre. The Karis weight reads DISPLAY units (owner decision 2026-10-24, Karis's intent): the
+		 * residual exposure takes a chain value to the display; without a tone mapper, nits (1 / E_pre). */
 		const auto preExposure = std::isfinite(context.preExposure) && context.preExposure > 0.0F ? context.preExposure : 1.0F;
 		threshold *= preExposure;
 		fireflyClamp *= preExposure;
-		const auto karisLuminanceScale = 1.0F / preExposure;
+		const auto karisLuminanceScale = context.residualExposure > 0.0F ? context.residualExposure : 1.0F / preExposure;
 
 		const auto * inputMaterialProperties = context.materialProperties;
 

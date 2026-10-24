@@ -52,7 +52,8 @@ too; its code is under the Unreal EULA (ideas only, never code) and it is not pa
    the G-buffer, the post-process chain and the swap chain share one size. Every effect then has to know
    which of the two it runs at: SSR / RTGI / RTAO (already half-res of the RENDER size), bloom and glare,
    DoF and motion blur (before or after the upscale: each SDK documents its expected order), tone mapping
-   (the SDKs want HDR input, with an exposure value — see `scene-colour-pre-exposure`), and the UI / CEF
+   (the SDKs want HDR input, with an exposure value — the scene colour is pre-exposed, graphics doc 41: hand them
+   `FrameContext::preExposure` / `residualExposure`), and the UI / CEF
    overlay (composited at OUTPUT resolution, after the upscale).
 4. **Inputs each SDK expects**, to map onto what the engine produces:
    - **Jitter**: today an 8-phase Halton (2,3). The SDKs want a phase count that grows with the upscale
@@ -90,6 +91,6 @@ too; its code is under the Unreal EULA (ideas only, never code) and it is not pa
 - `src/Graphics/Effects/Resolve/TAA.cpp` (the resolve an upscaler would replace; FSR 2 citations in it).
 - `src/Graphics/EffectSlot.hpp`, `src/Graphics/PostProcessStack.hpp` (the slot and jitter polling).
 - `src/Graphics/Renderer.hpp` (Halton (2,3) jitter applied to the main view).
-- Items: `particles-and-translucents-report-no-motion`, `scene-colour-pre-exposure`.
+- Items: `particles-and-translucents-report-no-motion`. The pre-exposure: `docs/subsystems/graphics/41-scene-colour-pre-exposure.md`.
 - External, to verify and cite at step 1: AMD FidelityFX SDK (FSR 2 / 3) documentation, the Intel XeSS
   SDK developer guide, the NVIDIA DLSS programming guide and Streamline documentation.

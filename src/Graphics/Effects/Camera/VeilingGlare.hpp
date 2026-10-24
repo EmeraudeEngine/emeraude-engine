@@ -119,8 +119,8 @@ namespace EmEn::Graphics::Effects::Camera
 				 * legal threshold of zero ("everything glares"). */
 				uint32_t firstPass;
 				/** @brief What the Karis anti-firefly weight `1 / (1 + L)` multiplies a chain luminance by before
-				 * weighing it (scene-colour pre-exposure D8). 1 / E_pre weighs NITS, the look of before the
-				 * pre-exposure; the residual exposure would weigh DISPLAY units, Karis's intent — an owner choice. */
+				 * weighing it (scene-colour pre-exposure D8): the residual exposure, so it weighs DISPLAY units —
+				 * Karis's intent (owner decision 2026-10-24); 1 / E_pre (nits) without a tone mapper. */
 				float karisLuminanceScale;
 			};
 

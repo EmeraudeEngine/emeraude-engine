@@ -17,9 +17,10 @@ filtered) decides whether the history is still valid.
   pixels > 8/255, max 163, far band 21.2 with 61 % > 8; after, mean 0.69, **0.01 %** > 8, max 12, far
   band 2.4 with 0.09 % > 8. Jitter off (the reference of a still frame): mean 0.30. A 0.3 m camera
   jump reconverges in ~15 frames (1.6 % → 0.08 % of pixels > 16 away from the converged image).
-- **Karis weights on the EXPOSED luminance**: `1/(1 + L·E)` with `E` =
-  `ToneMapping::displayExposure()`, carried by `FrameContext::displayExposure` (0 = no tone
-  mapper: plain EMA). In nits `1/(1+L)` is `1/L` — a harmonic mean of the samples that let a DARK
+- **Karis weights on the EXPOSED luminance**: `1/(1 + L·E)` with `E` = the RESIDUAL exposure
+  `ToneMapping::displayExposure() / E_pre`, carried by `FrameContext::residualExposure` (0 = no tone
+  mapper: plain EMA), since the scene colour holds nits × E_pre (graphics doc 41). The history is
+  rescaled by `E_now / E_history` before it is blended (`historyRescale`). In nits `1/(1+L)` is `1/L` — a harmonic mean of the samples that let a DARK
   history texel outweigh a bright current one thousands of times (it stuck dark seams along the
   clouds of `relief` as soon as the clip stopped hiding it). UE4 `HdrWeight4(C, Exposure)`, FSR2
   `PrepareRgb`, HDRP pre-exposure all feed an exposed value.
