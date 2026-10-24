@@ -520,6 +520,10 @@ through `Input::Manager::injectKeyEvent()` **never reaches a Core-level binding*
 > Measured on a model viewer: a held drag moves **99.82 %** of the pixels where the same gesture
 > through `mouseClick` moves **0.0000 %**. ⚠️ The engine does NOT pair them — a forgotten
 > `mouseRelease` leaves the control believing the button is still down.
+>
+> Since 2026-10-23 the pair also holds the POLLED state (`PointerController::isButtonPressed()`: a weapon
+> firing while the button is held), and `mouseWheel(x, y, yOffset)` scrolls
+> (`docs/subsystems/input/04-console-pointer-injection.md`). `mouseClick` stays events-only.
 
 on `keyPress(32, 0)`, which cycled nothing). On 2026-09-13 the consumer projet-alpha injected F9
 (`keyPress(298, 0)`) and its `Application::onCoreKeyRelease()` toggled the compass on screen — the
@@ -1364,7 +1368,7 @@ Core
 +-- AudioManagerService
 |   +-- TrackMixerService   (play, pause, stop, volume, playlist, etc.)
 +-- FileSystemService       (getJson, get, print)
-+-- InputManagerService     (keyPress, keyDown, keyUp, mouseClick, mousePress, mouseRelease, mouseMove, pointerState, gamepadState, joystickState)
++-- InputManagerService     (keyPress, keyDown, keyUp, mouseClick, mousePress, mouseRelease, mouseWheel, mouseMove, pointerState, gamepadState, joystickState)
 +-- RendererService         (screenshot, getStatus)
 +-- ResourcesManagerService (listContainers, listResources)
 +-- SceneManagerService     (createScene, setGround, setBackground, addMesh, etc.)

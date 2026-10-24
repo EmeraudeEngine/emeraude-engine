@@ -199,7 +199,9 @@ The Input::Manager supports injecting synthetic input events that bypass GLFW, e
 | Command | Example | Description |
 |---------|---------|-------------|
 | `keyPress(key, modifiers)` | `keyPress(292, 1)` = Shift+F3 | Injects key press + release |
-| `mouseClick(x, y, button, mods)` | `mouseClick(1017, 1165)` = left click | Injects mouse press + release |
+| `mouseClick(x, y, button, mods)` | `mouseClick(1017, 1165)` = left click | Injects mouse press + release (events only) |
+| `mousePress(x, y, button, mods)` / `mouseRelease(…)` | `mousePress(100, 100, 0)` | Holds / releases a button: events AND the polled state (`isButtonPressed()`) |
+| `mouseWheel(x, y, yOffset, xOffset, mods)` | `mouseWheel(100, 100, 1)` = one notch up | Injects a wheel scroll |
 | `mouseMove(x, y)` | `mouseMove(960, 540)` | Injects pointer move (absolute) |
 
 ### Static Methods
@@ -240,6 +242,10 @@ Whether scaling is enabled is decided by **`Core::updatePointerScaling()`** (`Co
 - **The device state crosses threads** — written on the main thread, polled by the logic thread (the player): one
   `std::atomic` per key / button / axis / hat, relaxed, no whole-device snapshot; the TSan proof `EmeraudeInputStateStress`:
   [`docs/subsystems/input/03-device-state-across-threads.md`](../../docs/subsystems/input/03-device-state-across-threads.md).
+
+- **The console holds a POLLED button and turns the wheel** — `mousePress` / `mouseRelease` write the injected
+  button state (OR-ed into the hardware copy, the keyboard's model), `mouseClick` stays event-only; `mouseWheel`:
+  [`docs/subsystems/input/04-console-pointer-injection.md`](../../docs/subsystems/input/04-console-pointer-injection.md).
 - **No built-in mapping**: Application responsible for action mapping
 - **Dual approach**: Choose events (reactive) or polling (direct) based on need
 - **GLFW dependency**: Input wraps GLFW, follows its limitations/capabilities
