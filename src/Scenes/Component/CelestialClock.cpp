@@ -160,7 +160,9 @@ namespace EmEn::Scenes::Component
 			.axialTilt = 0.0,
 			.eccentricity = 0.0,
 			.longitudeOfPerihelion = 0.0,
-			.semiMajorAxis = 1.0
+			.semiMajorAxis = 1.0,
+			/* A course, not a planet: it claims no identity (no atmosphere check). */
+			.name = ""
 		};
 		options.latitude = northern ? 90.0F - noonElevation : noonElevation - 90.0F;
 		options.northDirection = northern ? -noonHorizontal : noonHorizontal;
@@ -248,6 +250,9 @@ namespace EmEn::Scenes::Component
 
 		/* ---- The moons: the bindings of the moons that remain are kept. ---- */
 		m_moons.resize(m_options.moons.size());
+
+		/* ---- A planet changed under a followed sky. ---- */
+		this->checkPlanet();
 
 		/* ---- The date. ---- */
 		this->setDate(m_options.dayOfYear, m_options.timeOfDay);
@@ -583,6 +588,23 @@ namespace EmEn::Scenes::Component
 		return static_cast< float >(static_cast< double >(m_options.sun.unitDistanceIlluminance) / (m_starDistance * m_starDistance));
 	}
 
+	void
+	CelestialClock::checkPlanet () const noexcept
+	{
+		if ( m_atmosphere == nullptr )
+		{
+			return;
+		}
+
+		const auto & clockPlanet = m_options.planet.name;
+		const auto & skyPlanet = m_atmosphere->parameters().planet;
+
+		if ( !clockPlanet.empty() && !skyPlanet.empty() && clockPlanet != skyPlanet )
+		{
+			TraceWarning{ClassId} << "Celestial clock '" << this->name() << "': its planet is '" << clockPlanet << "', the sky's atmosphere belongs to '" << skyPlanet << "' — the star's course and the light do not match the sky.";
+		}
+	}
+
 	bool
 	CelestialClock::followAtmosphere (const Scene & scene) noexcept
 	{
@@ -607,6 +629,8 @@ namespace EmEn::Scenes::Component
 		if ( m_atmosphere != nullptr )
 		{
 			TraceInfo{ClassId} << "Celestial clock '" << this->name() << "': the lights follow the atmosphere of the sky '" << background->name() << "'.";
+
+			this->checkPlanet();
 		}
 		else
 		{

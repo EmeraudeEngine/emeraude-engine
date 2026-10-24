@@ -86,7 +86,8 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 > PHYSICAL illuminance above the atmosphere — `SunPhotometry::unitDistanceIlluminance` (133 800 lx at 1 AU) over the
 > square of the planet's distance (`Planet::semiMajorAxis`, eccentric) — with its LINEAR colour
 > (`SunPhotometry::starTemperature`, 5772 K); the sky state carries the same star. The sun fades through the horizon
-> (penumbra) instead of a hard switch; `isDaytime()` is "the sun's light is on". Without a dynamic sky nothing changes
+> (penumbra) instead of a hard switch; `isDaytime()` is "the sun's light is on". It warns when its `Planet::name` and
+> the atmosphere's `planet` are both set and differ (a simple course is unnamed). Without a dynamic sky nothing changes
 > (`zenithIlluminance`, `extinction` and the temperatures keep driving the light).
 >
 > `SkyFollowsSun` (2026-09-13, owner decision) is the sky's HALF, deliberately a separate component:

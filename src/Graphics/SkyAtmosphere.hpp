@@ -100,6 +100,9 @@ namespace EmEn::Graphics
 		float absorptionAboveLinear{-1.0F / 15.0F};
 		/** @brief The ground's albedo, lighting the sky from below. */
 		Base::Math::Vector< 3, float > groundAlbedo{0.3F, 0.3F, 0.3F};
+		/** @brief The planet this atmosphere belongs to: a preset's name ("Earth", "Mars"), the identity a celestial
+		 * clock checks against its own planet (`Base::Math::Astronomy::Planet::name`). Empty = unnamed. */
+		std::string planet{"Earth"};
 
 		/**
 		 * @brief Returns Earth's atmosphere (Hillaire 2020's reference values, after Bruneton & Neyret 2008).

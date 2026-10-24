@@ -25,7 +25,10 @@ the night sky was EXACTLY 0 below a −12° sun (one fp16 quantum was the only v
 0.00729 measured). Linear filtering of RGBA32F is optional in Vulkan: it is queried (storage + sampled + linear filter,
 optimal tiling); a device without it falls back to RGBA16F with a warning. Cost (sky-lab, RTX 3070 Ti, 5 windows each):
 `SkyAtmosphere/SkyView` 0.009 → 0.011 ms; `ScenePass` and the frame within the noise (medians 0.139 → 0.133, 2.37 →
-2.24 ms). Memory: < 1 MB for the three.
+2.24 ms). Memory: < 1 MB for the three. **Three OS** (2026-10-25): RGBA32F stored and filtered everywhere tried — RTX
+3070 Ti (Linux), Apple M6 (MoltenVK), RTX 3500 Ada and the Intel Raptor Lake iGPU (Windows); no fallback. SkyView: M6
+0.014 → 0.021 ms, RTX 3500 Ada 0.009 → 0.011 ms, Intel iGPU 0.115–0.164 ms (its frame ~21 ms). The night table below
+matches on the three OS and both Windows GPUs within 0.3 %.
 
 The sky-view pass integrates WITH the ground (unlike Hillaire's): below the horizon the planet's surface shows, lit by
 the star through the air, instead of a black void under the scene's own small floor.
@@ -75,7 +78,11 @@ model (Kasten & Young air mass, 5800 → 2000 K), so the light on the ground and
    gives 133.1 klx) over the square of the planet's distance (`Base::Math::Astronomy::starDistance()`,
    `Planet::semiMajorAxis` with the orbit's eccentricity: Earth 0.983–1.017 AU, ±3.4 % in light).
 4. **The clock finds the atmosphere through the scene's background** (`CelestialClock::followAtmosphere()`, each logic
-   cycle, running or not): a loaded `DynamicSkyResource` → its `AtmosphereParameters`; otherwise the empirical model.
+   cycle, running or not): a loaded `DynamicSkyResource` → its `AtmosphereParameters`; otherwise the empirical model. **The
+   planets are checked** (owner, 2026-10-25): `AtmosphereParameters::planet` (the preset's name, "Earth" / "Mars")
+   against the clock's `Planet::name` (emeraude-base); both named and different → a warning (the star's course and the
+   light would not match the sky). An empty name claims nothing (`CelestialClock::simpleCourse()`). Proven with sky-lab
+   option 6.
 5. **The star's colour is LINEAR**: `linearColorFromTemperature(5772 K)` (IAU 2015 B3) at unit luminance, in the
    `SkyState` and in the light. Lot 1 used the sRGB-encoded `colorFromTemperature()` raw.
 
@@ -126,7 +133,7 @@ background photometry (`AbstractBackground::parsePhotometry()`). From code: `Dyn
   makes the blue aureole of its sunsets. A single scalar g (Hillaire's, UE's) cannot.
 
 ### Console (`Core.SceneManagerService.*`)
-`getDynamicSky()` (JSON: radii, tint, intensity, saturation, star disc, limb darkening),
+`getDynamicSky()` (JSON: planet, radii, tint, intensity, saturation, star disc, limb darkening),
 `setDynamicSkyGrading(r, g, b, intensity)`, `setDynamicSkySaturation(s)`, `setDynamicSkyStar(enabled, u)`. The sun's
 elevation and illuminance: `CelestialClock.getState(...)`.
 

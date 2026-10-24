@@ -632,7 +632,12 @@ base ledger § include-what-you-use). The physical sky's files were brought clea
 complete type) — `// IWYU pragma: keep (<reason>)`. The rest of the window's debt: item `iwyu-debt-since-2026-10-21`.
 The same day, the sky's RGBA32F tables (`SkyAtmosphere.{hpp,cpp}`, `StorageTexture2D.{hpp,cpp}` — `setFormat()`):
 clang-tidy 21.1.6 on the changed lines 0, cppcheck 0, IWYU brought clean (`StorageTexture2D.hpp` forward-declares
-`Vulkan::Image` / `ImageView` / `Sampler`, the `.cpp` `Settings`).
+`Vulkan::Image` / `ImageView` / `Sampler`, the `.cpp` `Settings`). macOS-PA's IWYU (Apple libc++) still asks
+`StorageTexture2D.cpp` for `<string_view>` (an implicit use through a string_view parameter); Linux does not —
+an Apple-libc++-only suggestion, not applied. The planet identity lot touched `Scenes/Manager.console.cpp` (in the
+debt list): brought clean, +54 −2 and a forward declaration of `Console::Argument`; IWYU's removal of
+`Component/Camera.hpp` / `Microphone.hpp` refused (`componentBuilder< Component::Camera >` instantiates a template
+that needs the complete type: the build failed) — `// IWYU pragma: keep (<reason>)`.
 
 **First lot (2026-10-19)**: the 49 files of the engine's cppcheck lot (34 `.cpp`, 15 headers): about 800 includes added
 and 115 removed, 41 forward declarations, converged at the second pass (three residual lines applied); the three
