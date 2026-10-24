@@ -447,6 +447,33 @@ Plumbing:
        traced radiance still in absolute nits, mean 148.8 → 181.6 at E_pre 0.5): expected until steps 5-6.
 5. **RT lanes, the probe volume and its scale (D7), and the finite guard at
    `IrradianceProbeVolume.cpp:435` / `:495`.**
+   - **Step 5 — DONE (2026-10-24, Linux, RTX 3070 Ti).**
+     - **RTGI**: the trace's RGB × the frame's pre-exposure (`bounceParams.y`, the slot of the dead multi-bounce
+       clamp; `GIDenoiser::FrameInputs::preExposure`, 1 for SSGI and RTR which do not use it). The AO lane stays
+       unitless.
+     - **RTR**: both outputs (hit and sky miss) × `preExposure`, a new trailing float of the trace UBO
+       (148 → 152 bytes, offsets pinned by `static_assert`). The confidence stays unitless.
+     - **The probe volume (D7)**: the irradiance atlas stores E/π × `ProbeCacheScale` (= `WorldCacheScale`, 2^-4;
+       a `static_assert` ties the GLSL literal to the C++ constant). The blend pass encodes;
+       `probeIrradiance()` decodes, so every consumer (RTGI's feedback, RTR's hits, the volume's own recursion)
+       reads plain E/π. The distance atlas holds metres and takes no scale.
+     - **The finite guard** in both blends: `probeIsStorable()`, a RANGE test (non-negative, ≤ 65 504; a NaN
+       fails every comparison), not `isnan`/`isinf`, which Metal's fast math may fold. A sample that cannot be
+       stored is dropped (the history is kept); a history that cannot be read is replaced by the sample.
+   - Gate (`post-processor-effect-debug 0,0`, effects ON, bloom off, pinned f/8 · 1/125 s · ISO 100): E_pre forced
+     to 0.5 → max 6/255, 0.60 % over 1/255, mean 148.8 → 149.1 (A/A max 6/255, 0.43 %); before step 5 the
+     mean went to 181.6. At 2^-4: max 11/255, 5.1 %, mean +0.7 — the remainder is step 6's (the TAA's Karis
+     weights still read the absolute display exposure).
+   - `sponza` (RTGI, RTR, RTAO, RT contact shadows, TAA; bloom off): the frame at E_pre 1 is unchanged against
+     `defb1464` (mean 27.3 = 27.3, the difference inside the A/A noise). Scene effects bypassed: bit-exact at 2^-4.
+     Effects ON, the steady state is invariant too, but **a step of E_pre leaves a TRANSIENT** (measured, 1 → 2^-4,
+     a capture every ~2.5 s): mean 27.2 → 69.6, 44.6, 33.5, 29.3, 27.9, 27.4 — ~10 s back to the reference. With
+     the TAA off, the same step is bit-exact 3 s later. A history recorded at the previous scale is still blended
+     (D5, step 7: rescale by r). The input for step 7: the TAA history at least, and check the GIDenoiser's under
+     the TAA.
+   - Auto exposure, E_pre automatic (= 1), Linux: the first 1-2 s after the act activates are blown (mean up to
+     238, 79 % near-white) and settle at the adaptation rate — the eye adaptation's start transient, unrelated to
+     the pre-exposure (macOS saw the same, reported 2026-10-24).
 6. **Post effects and the `FrameContext` fields (D8).**
 7. **Histories (D5).**
 8. **Tests.** Validation layers ON, on all three platforms (the peers). Each one is measurable:

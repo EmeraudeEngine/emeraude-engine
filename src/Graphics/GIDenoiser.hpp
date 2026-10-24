@@ -187,6 +187,9 @@ namespace EmEn::Graphics
 				uint32_t lightCount{0};
 				/* The in-texture celestial body mask (direction, cone half-angle; w = 0: none). */
 				std::array< float, 4 > skyStarMask{0.0F, 0.0F, 0.0F, 0.0F};
+				/* The frame's pre-exposure (FrameContext::preExposure): a trace that synthesises radiance from nits
+				 * (lights, sky, probes) stores it × this, like the scene colour it is combined into. */
+				float preExposure{1.0F};
 			};
 
 			/**

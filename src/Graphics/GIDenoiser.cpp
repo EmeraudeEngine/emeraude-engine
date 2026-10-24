@@ -78,7 +78,7 @@ layout(set = 0, binding = 8, std140) uniform FrameData
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (see the Flag constants). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = unused, z = variance-clip gamma, w = accumulation cap N. */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = pre-exposure, z = variance-clip gamma, w = accumulation cap N. */
 };
 
 const uint FlagVarianceClip = 1u;
@@ -654,7 +654,7 @@ layout(set = 0, binding = 1, std140) uniform FrameData
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = unused, z = variance-clip gamma, w = unused. */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = pre-exposure, z = variance-clip gamma, w = unused. */
 };
 
 void main()
@@ -1025,8 +1025,8 @@ namespace EmEn::Graphics
 			.bounceParams = {
 				/* Not gated on the history: the RTGI feedback reads the irradiance probes (Sep 2026). */
 				inputs.bounceStrength,
-				/* Unused: the multi-bounce clamp died with the screen-history feedback (Sep 2026). */
-				0.0F,
+				/* The frame's pre-exposure (the slot of the multi-bounce clamp, dead since Sep 2026). */
+				inputs.preExposure,
 				m_parameters.temporalVarianceGamma,
 				static_cast< float >(m_parameters.maxAccumulation)
 			},

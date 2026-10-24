@@ -125,7 +125,7 @@ layout(set = 1, binding = 3, std140) uniform FrameData
 	vec4 prevCamPos;	/* xyz = previous frame camera position, w = unused. */
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (bit0 variance clip, bit1 animated noise). */
-	vec4 bounceParams;	/* x = multiBounceStrength, y = unused (the clamp died with the screen-history feedback), z = variance-clip gamma, w = accumulation cap. */
+	vec4 bounceParams;	/* x = multiBounceStrength, y = the frame's pre-exposure (the slot of the clamp that died with the screen-history feedback), z = variance-clip gamma, w = accumulation cap. */
 	vec4 skyParams;		/* x = sky luminance in nits (0 = no sky), y = sky ray distance, z = ambient-occlusion lane range (0 = lane disarmed), w = RT light count. */
 	vec4 skyStarMask;	/* xyz = direction toward the in-texture celestial body, w = cone half-angle in radians (0 = none). */
 };
@@ -313,9 +313,9 @@ vec3 hemispherePoint (uint i, uint sampleCount, vec2 noise)
  * alone read 64 with the feedback on and 65 with it off, while the same face reflected in a
  * mirror through the probe-fed RTR read 214. The probes hold that light for the whole
  * volume, on screen or not, and they are what the reflections already used: ONE estimator of
- * the multi-bounce for the primary surfaces and the reflected ones. The `bounceParams.y`
+ * the multi-bounce for the primary surfaces and the reflected ones. The former `bounceParams.y`
  * clamp (anti-firefly for the noisy per-pixel history) has no purpose on a converged probe
- * average and is gone. */
+ * average and is gone; the slot carries the pre-exposure now. */
 vec3 probeFeedback (vec3 hitPos, vec3 hitNormal, vec3 rayDirection)
 {
 	if (bounceParams.x <= 0.0)
@@ -722,7 +722,9 @@ void main()
 		ao = mix(clamp(1.0 - aoOcclusion / float(sampleCount), 0.0, 1.0), 1.0, aoFade);
 	}
 
-	outIndirect = vec4(indirectLight, ao);
+	/* PRE-EXPOSURE (scene-colour pre-exposure, step 5): everything above is in nits (lights, sky, probes); the trace
+	 * is combined into the scene colour, which holds nits × E_pre. RGB only: the occlusion lane is unitless. */
+	outIndirect = vec4(indirectLight * bounceParams.y, ao);
 }
 )GLSL";
 
@@ -973,7 +975,8 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * pairing (0 = no consumer this frame, the shader publishes the neutral 1.0). */
 			.occlusionMaxDistance = m_occlusionLaneRange,
 			.lightCount = this->renderer().rtLightCount(),
-			.skyStarMask = context.skyStarMask
+			.skyStarMask = context.skyStarMask,
+			.preExposure = context.preExposure
 		}));
 
 		/* ---- Pass 1: Ray Trace GI ---- */
