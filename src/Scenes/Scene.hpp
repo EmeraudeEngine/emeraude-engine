@@ -118,6 +118,11 @@ namespace EmEn
 	}
 }
 
+namespace EmEn::Scenes::Component
+{
+	class ParticlesEmitter;
+}
+
 namespace EmEn::Scenes
 {
 	/**
@@ -2664,6 +2669,14 @@ namespace EmEn::Scenes
 			void releaseWorldSounds (bool finishedOnly) noexcept;
 
 			/**
+			 * @brief Copies the live particles emitters into m_particlesEmittersSnapshot (the expired ones are dropped from
+			 * the list), so a render-list build walks them without the list's lock.
+			 * @note Render thread (populateRenderLists(), populateShadowCastingRenderList()); the caller clears the
+			 * snapshot when done.
+			 */
+			void snapshotParticlesEmitters () noexcept;
+
+			/**
 			 * @brief Returns the voice a world sound plays on: a held voice whose sound ended, else a new one from the
 			 * pool, else the next playing one in turn (cut).
 			 * @return Audio::SourceRequest * nullptr only when the pool has no free source and a slot is still empty.
@@ -3211,6 +3224,14 @@ namespace EmEn::Scenes
 			mutable std::unordered_set< std::shared_ptr< AbstractEntity > > m_renderingOctreeOverflow EMEN_GUARDED_BY(m_renderingOctreeAccess);
 			/** @brief Scratch of the render lists' octree queries (render thread only). */
 			std::vector< std::shared_ptr< AbstractEntity > > m_renderingCandidates;
+			/** @brief Guards the particles emitters' list (registered from the entities' notifications, any thread; read
+			 * by the render thread). */
+			mutable Base::Mutex m_particlesEmittersAccess;
+			/** @brief The scene's particles emitters, culled on their OWN world box in populateRenderLists(), never on
+			 * their node's extent (Component::ParticlesEmitter::worldBoundsStateForRendering()). */
+			std::vector< std::weak_ptr< Component::ParticlesEmitter > > m_particlesEmitters EMEN_GUARDED_BY(m_particlesEmittersAccess);
+			/** @brief Scratch of the emitters a render-list build walks, outside the lock (render thread only). */
+			std::vector< std::shared_ptr< Component::ParticlesEmitter > > m_particlesEmittersSnapshot;
 			/** @brief The stamp of the last rendering gather (gatherRenderingCandidates()). Guarded by m_renderingOctreeAccess. */
 			mutable uint64_t m_renderingGatherStamp EMEN_GUARDED_BY(m_renderingOctreeAccess){0};
 			/** @brief Octree for physics broad-phase collision. @note Uses shared_ptr due to enable_shared_from_this. */

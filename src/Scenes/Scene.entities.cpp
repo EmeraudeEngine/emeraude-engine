@@ -36,6 +36,7 @@
 #include "Scenes/Component/CloudVolume.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/Component/Microphone.hpp"
+#include "Scenes/Component/ParticlesEmitter.hpp"
 
 namespace EmEn::Scenes
 {
@@ -713,6 +714,30 @@ namespace EmEn::Scenes
 				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::LineLight > >(data, ClassId) )
 				{
 					m_lightSet.remove(*this, *payload);
+				}
+
+				return true;
+
+			case AbstractEntity::ParticlesEmitterCreated :
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::ParticlesEmitter > >(data, ClassId) )
+				{
+					const Base::MutexLock lock{m_particlesEmittersAccess};
+
+					m_particlesEmitters.emplace_back(*payload);
+				}
+
+				return true;
+
+			case AbstractEntity::ParticlesEmitterDestroyed :
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::ParticlesEmitter > >(data, ClassId) )
+				{
+					const Base::MutexLock lock{m_particlesEmittersAccess};
+
+					std::erase_if(m_particlesEmitters, [&payload] (const auto & emitter) {
+						const auto locked = emitter.lock();
+
+						return locked == nullptr || locked == *payload;
+					});
 				}
 
 				return true;

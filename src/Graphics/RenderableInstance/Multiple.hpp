@@ -140,6 +140,17 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
+			 * @brief Returns the active instance count to draw (the logic's live value, not published per render state).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			activeInstanceCount () const noexcept
+			{
+				return m_activeInstanceCount.load(std::memory_order_relaxed);
+			}
+
+			/**
 			 * @brief Sets the active instance count to draw.
 			 * @param count The number of instances.
 			 */

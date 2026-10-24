@@ -556,6 +556,11 @@ namespace EmEn::Scenes
 		{
 			this->notify(CloudVolumeDestroyed, std::static_pointer_cast< Component::CloudVolume >(component));
 		}
+		else if ( typeid(*pointer) == typeid(Component::ParticlesEmitter) )
+		{
+			/* NOTE: Declared, never sent until 2026-10-24: the scene now keeps a list of the emitters (their own culling). */
+			this->notify(ParticlesEmitterDestroyed, std::static_pointer_cast< Component::ParticlesEmitter >(component));
+		}
 
 		this->notify(ComponentDestroyed);
 	}
