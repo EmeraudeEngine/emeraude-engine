@@ -3126,6 +3126,22 @@ position (the smoke actor). With the node out of view the whole emitter vanished
   the two runs: compare within a run); shadow instances 1 263 vs 883. 0 `VUID-`, 0 `[Error]`.
 - ⚠️ The emitter's instance count is the logic's live value (`Multiple::activeInstanceCount()`, not published per
   render state): the pass checks it beside the box — a box published a cycle earlier may outlive the last particle.
+  The check at list time is not enough either (Windows Debug: 4 traces in the frame a smoke died out, the count hit 0
+  between the list and the recording): every draw function of `RenderableInstance::Abstract` (`render()` ×2,
+  `castShadows()`, `renderTBNSpace()`) reads `instanceCount()` ONCE and returns on 0 — nothing to draw.
+
+### An instance was declared ready on ANOTHER instance's program (fixed 2026-10-24)
+
+`RenderableInstance::Abstract::isReadyToRender()` answered "the renderable has a program cached for this pass". The
+program cache lives on the RENDERABLE, shared by all its instances, while a program's key depends on the INSTANCE
+(depth write, lighting, …). A missile's smoke trail (`disableDepthWrite(true)`) on the `smoke_001` sprite a smoke
+grenade had drawn first was declared ready with no program of its own: `There is no suitable render program …` and its
+draws skipped (Linux Release, a smoke grenade then 3 missiles: 28 warnings; 34 without the particles commit — pre-existing;
+missiles alone: 0; found by macOS-PA). Now each instance records the targets its OWN `getReadyForRender()` succeeded
+for (`m_readyTargets`: the target, its render pass handle — a resize prepares it again), and `isReadyToRender()` needs
+that record AND a program cached for the pass (a cleared cache prepares it again). The shadow readiness
+(`isReadyToCastShadows()`) already checked the instance's own keys. After: 0 warning; animation-debug, lighten-marbles,
+balls-of-steel, game-logic, relief, basic-scenery with validation: 0 `VUID-`, 0 `[Error]`.
 
 ### A surface geometry (FFT ocean, CDLOD terrain) must RETIRE its GPU objects, never free them — fixed 2026-09-30
 

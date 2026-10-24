@@ -274,7 +274,15 @@ namespace EmEn::Graphics::RenderableInstance
 			bool isReadyToCastShadows (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept;
 
 			/**
-			 * @brief Returns whether this instance is ready for rendering.
+			 * @brief Returns whether this instance is ready for rendering into a target: ITS OWN programs were made ready
+			 * for that target and its current render pass (getReadyForRender() succeeded), not merely "the renderable has
+			 * a program".
+			 * @note ⚠️ The program cache lives on the RENDERABLE, shared by every instance of it, and an instance's
+			 * program keys depend on its own state (depth write, lighting…). Until 2026-10-24 any cached program of the
+			 * renderable for the pass made an instance "ready": a missile's smoke trail (depth write off) on the sprite a
+			 * smoke grenade had already used was declared ready with no program of its own, and its draws were skipped
+			 * ("There is no suitable render program …", ~30 frames per missile).
+			 * @note Render thread (the render lists, as getReadyForRender()).
 			 * @param renderTarget A reference to a render target smart pointer.
 			 * @return bool
 			 */
@@ -1593,6 +1601,15 @@ namespace EmEn::Graphics::RenderableInstance
 			uint64_t m_instanceTransformsFrameSerial{0};
 			/** @brief Instance-local resolved program cache (typically 2-5 entries, linear scan). */
 			mutable Base::StaticVector< ResolvedProgram, MaxResolvedPrograms > m_resolvedPrograms;
+			/** @brief A render target this instance's own rendering programs were made ready for, and the render pass they
+			 * were made for (a resize recreates it: not ready any more). The pointer is compared, never dereferenced. */
+			struct ReadyTarget final
+			{
+				const RenderTarget::Abstract * renderTarget{nullptr};
+				uint64_t renderPassHandle{0};
+			};
+			/** @brief The targets getReadyForRender() succeeded for (isReadyToRender()); render thread only. */
+			std::vector< ReadyTarget > m_readyTargets;
 			uint32_t m_animationTimeMS{0}; /**< Animation time in ms; the per-layer frame index is derived from it. */
 			/** @brief Instance transforms SSBO slot staged for the current render pass (non-instanced path). */
 			uint32_t m_instanceTransformsSlot{0};
