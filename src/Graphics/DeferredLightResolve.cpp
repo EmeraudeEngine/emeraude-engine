@@ -93,7 +93,10 @@ namespace EmEn::Graphics
 			uint32_t tileCountX;
 			/* 0 = every light in every tile (the per-pixel loop of before, the exactness A/B), else culled. */
 			uint32_t tileCullingEnabled;
-			std::array< uint32_t, 3 > padding;
+			/* The view's pre-exposure: the resolve writes radiance into the scene colour like any scene program
+			 * (scene colour = nits × E_pre). The tile culling ignores it. */
+			float preExposure;
+			std::array< uint32_t, 2 > padding;
 		};
 
 		static_assert(sizeof(ResolvePushConstants) == 96, "ResolvePushConstants must be 96 bytes.");
@@ -150,7 +153,7 @@ layout(push_constant) uniform PushConstants
 	uint lightCount;
 	uint tileCountX;
 	uint tileCullingEnabled;
-	uint padding0;
+	float preExposure;
 	uint padding1;
 	uint padding2;
 };
@@ -286,7 +289,7 @@ void main()
 		}
 	}
 
-	outColor = vec4(radianceSum, 0.0);
+	outColor = vec4(radianceSum * preExposure, 0.0);
 }
 )GLSL";
 
@@ -1100,6 +1103,7 @@ void main()
 		pushConstants.lightCount = static_cast< uint32_t >(m_lights.size());
 		pushConstants.tileCountX = m_tileCountX;
 		pushConstants.tileCullingEnabled = m_tileCullingEnabled.load(std::memory_order_relaxed) ? 1U : 0U;
+		pushConstants.preExposure = viewMatrices.preExposure();
 
 		/* The tile culling: one workgroup per tile; then its masks to the resolve's fragment reads. The previous frame
 		 * that used this slot's masks was fenced before recording. */

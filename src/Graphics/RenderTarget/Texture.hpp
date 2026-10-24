@@ -144,7 +144,13 @@ namespace EmEn::Graphics::RenderTarget
 					true
 				}
 			{
-
+				/* A high-precision cubemap is a world radiance cache (a reflection probe): it stores WorldCacheScale
+				 * whatever the camera's exposure, and its readers divide by it. An 8-bit one holds a display-range
+				 * picture and keeps 1. */
+				if ( colorBits >= 16U )
+				{
+					m_viewMatrices.setPreExposure(WorldCacheScale);
+				}
 			}
 
 			/**

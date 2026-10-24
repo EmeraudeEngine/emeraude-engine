@@ -33,6 +33,7 @@
 /* STL inclusions. */
 #include <cmath>
 #include <cstring>
+#include <span>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
@@ -433,18 +434,47 @@ namespace EmEn::Graphics
 
 		std::memcpy(pointer, m_renderState[readStateIndex].bufferData.data(), m_renderState[readStateIndex].bufferData.size() * sizeof(float));
 
-		/* [CAUTION] NEVER write a frame-varying value in here. This uniform buffer object is
-		 * SINGLE-buffered (one UBO, not framesInFlight() copies), so a value that changes every
-		 * frame races the GPU: the raster of frame N can read what frame N±1 wrote. A previous
-		 * revision uploaded the TAA-jittered projection at this very spot; shaders recomposing
-		 * VP from it then rasterized with a different sub-pixel offset than the one the velocity
-		 * pass assumed, yielding a constant ~1-2 px bogus velocity (uniform across all depths)
-		 * that collapsed the TAA history and corrupted the RTGI reprojection. The jitter is now
-		 * a per-draw push constant applied to gl_Position only. */
+		/* The pre-exposure is render-thread state, not logic state: it overrides the slot the copy above carried. */
+		std::span{pointer, ViewUBOElementCount}[PreExposureOffset] = m_preExposure;
+
+		/* [CAUTION] The TAA jitter NEVER goes in here. This buffer has one region per frame in flight since
+		 * 2026-08-26, so a frame-varying value is safe in it (the world position, the velocity, the pre-exposure);
+		 * the jitter is kept out for another reason. When this buffer was still single, a previous revision
+		 * uploaded the TAA-jittered projection at this very spot: shaders recomposing VP from it rasterized with a
+		 * different sub-pixel offset than the one the velocity pass assumed, yielding a constant ~1-2 px bogus
+		 * velocity (uniform across all depths) that collapsed the TAA history and corrupted the RTGI reprojection.
+		 * The jitter is a per-draw push constant applied to gl_Position only, which is what keeps every matrix —
+		 * and so every velocity output — jitter-free by construction. */
 
 		uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
 
 		return true;
+	}
+
+	void
+	ViewMatrices2DUBO::setPreExposure (float preExposure) noexcept
+	{
+		m_preExposure = preExposure;
+
+		/* The region this frame already uploaded gets it too: the main view's upload runs before the frame latches
+		 * its pre-exposure (Renderer::latchPreExposure()), and the frame must render with the value it latched. */
+		if ( m_currentFrameRegion >= m_uniformBufferObjects.size() )
+		{
+			return;
+		}
+
+		const auto & uniformBufferObject = m_uniformBufferObjects[m_currentFrameRegion];
+
+		auto * pointer = uniformBufferObject->mapMemoryAs< float >(0, VK_WHOLE_SIZE);
+
+		if ( pointer == nullptr )
+		{
+			return;
+		}
+
+		std::span{pointer, ViewUBOElementCount}[PreExposureOffset] = m_preExposure;
+
+		uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
 	}
 
 	void

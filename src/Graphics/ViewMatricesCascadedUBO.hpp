@@ -192,6 +192,17 @@ namespace EmEn::Graphics
 				return m_descriptorSets[m_currentFrameRegion].get();
 			}
 
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::setPreExposure() */
+			void setPreExposure (float preExposure) noexcept override;
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::preExposure() */
+			[[nodiscard]]
+			float
+			preExposure () const noexcept override
+			{
+				return m_preExposure;
+			}
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updatePerspectiveViewProperties() */
 			void updatePerspectiveViewProperties (float width, float height, float fov, float distance) noexcept override;
 
@@ -402,6 +413,8 @@ namespace EmEn::Graphics
 			static constexpr auto EnvironmentLuminanceOffset{CascadeMatricesJumpOffset + 25UL};
 			/** @brief Offset of the IBL diffuse weight in the buffer. */
 			static constexpr auto IBLDiffuseWeightOffset{CascadeMatricesJumpOffset + 26UL};
+			/** @brief Offset of the pre-exposure in the buffer (setPreExposure()): the last float of the vec4. */
+			static constexpr auto PreExposureOffset{IBLDiffuseWeightOffset + 1UL};
 
 			/**
 			 * @brief Internal state structure holding view matrices and cascade data.
@@ -479,6 +492,8 @@ namespace EmEn::Graphics
 			 * same idiom ViewMatrices2DUBO uses for its jittered projection.
 			 */
 			mutable uint32_t m_currentFrameRegion{0};
+			/** @brief The pre-exposure every upload writes (setPreExposure()), render thread only. */
+			float m_preExposure{1.0F};
 			uint32_t m_cascadeCount{MaxCascadeCount}; /**< Number of active cascades. */
 			float m_lambda{DefaultCascadeLambda}; /**< Split calculation blend factor. */
 	};

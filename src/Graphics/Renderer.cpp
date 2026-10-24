@@ -3526,6 +3526,15 @@ namespace EmEn::Graphics
 		m_preExposureRatio = m_preExposure / m_previousPreExposure;
 
 		m_postProcessor.setFramePreExposure({.value = m_preExposure, .ratio = m_preExposureRatio});
+
+		/* The scene programs read it from the main view's UBO: this frame's region is already uploaded (the scene's
+		 * updateVideoMemory() ran earlier in this frame), and the setter patches it.
+		 * ⚠️ Only with a scene: without one, nothing uploaded a region this frame, and the current one may still
+		 * belong to a frame in flight. */
+		if ( const auto mainTarget = this->mainRenderTarget(); scene != nullptr && mainTarget != nullptr )
+		{
+			mainTarget->viewMatrices().setPreExposure(m_preExposure);
+		}
 	}
 
 	void

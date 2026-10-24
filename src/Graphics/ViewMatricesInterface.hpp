@@ -397,14 +397,30 @@ namespace EmEn::Graphics
 			 * GPU region per frame-in-flight. The host writes this memory at frame begin while up to
 			 * framesInFlight() - 1 submitted frames are still reading it, so a single region is a
 			 * write-after-read hazard — see the [CAUTION] block in ViewMatrices2DUBO::updateVideoMemory().
-			 * `ViewMatricesCascadedUBO` honours it: its whole leading payload is the cascade matrices,
-			 * refit to the camera every logic tick. The 2D and 3D views keep ONE region because they
-			 * deliberately carry no frame-varying value; if that ever changes, they must be converted
-			 * too, and the caution block says so.
+			 * The three views honour it (the 2D and 3D ones since 2026-08-26: their world position and
+			 * velocity change every frame while the camera moves, and the pre-exposure is a per-frame value).
 			 * @return bool
 			 */
 			[[nodiscard]]
 			virtual bool updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex) const noexcept = 0;
+
+			/**
+			 * @brief RENDER THREAD. Sets the pre-exposure the programs drawing into this view multiply their radiance by
+			 * (scene colour = nits × E_pre): the frame's E_pre for the main view, the fixed cache scale for a
+			 * render-to-texture probe, 1 elsewhere.
+			 * @note Written into every later upload, AND into the region this frame already uploaded: call it after
+			 * this frame's updateVideoMemory(), or before the first one — never between a frame's fence and its upload,
+			 * where the current region still belongs to a frame in flight.
+			 * @param preExposure The factor, > 0.
+			 */
+			virtual void setPreExposure (float preExposure) noexcept = 0;
+
+			/**
+			 * @brief Returns the pre-exposure of this view (setPreExposure()), 1 by default.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float preExposure () const noexcept = 0;
 
 			/**
 			 * @brief Destroys buffer in the video memory.

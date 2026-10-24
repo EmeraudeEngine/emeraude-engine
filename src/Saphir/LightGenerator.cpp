@@ -1047,7 +1047,7 @@ namespace EmEn::Saphir
 			 * shallow water — where Beer's law absorbs almost nothing, so the sunlit sand comes
 			 * through undimmed — into a solid white blowout. */
 			const auto transmissionScale = m_transmissionIsSceneRadiance
-				? std::string{}
+				? sceneRadianceToNits()
 				: " * " + iblIntensity;
 
 			/* ⚠️ The transmitted light is TINTED BY THE BASE COLOUR. KHR_materials_transmission
@@ -1381,7 +1381,7 @@ namespace EmEn::Saphir
 			 * scene behind a thin glass by the sky luminance — CarConcept's windows turned the cabin white and
 			 * orange at citadel's dusk exposure (2026-10-03), while the model viewer's daylight exposure hid it. */
 			const auto transmissionScale = m_transmissionIsSceneRadiance
-				? std::string{}
+				? sceneRadianceToNits()
 				: " * " + iblIntensity;
 
 			/* Quality tier — the RENDERER decides, per program: a distant surface can take the

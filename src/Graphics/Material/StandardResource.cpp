@@ -70,6 +70,7 @@
 #include "Graphics/TextureResource/Abstract.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/Types.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
 #include "PixelFactory/TextureName.hpp"
 #include "Helpers.hpp"
 #include "Logging/Severity.hpp"
@@ -112,6 +113,25 @@ namespace EmEn::Graphics::Material
 
 	namespace
 	{
+		/**
+		 * @brief Returns the scale a render-target source stores its luminance with: its view's pre-exposure
+		 * (WorldCacheScale for a high-precision probe), 1 for a texture that is not a render target.
+		 * @note Fixed at the target's construction, so it is final when the material generates its code.
+		 * @param texture A reference to the source texture.
+		 * @return float
+		 */
+		[[nodiscard]]
+		float
+		renderTargetScale (const TextureInterface & texture) noexcept
+		{
+			if ( const auto * renderTarget = dynamic_cast< const RenderTarget::Abstract * >(&texture); renderTarget != nullptr )
+			{
+				return renderTarget->viewMatrices().preExposure();
+			}
+
+			return 1.0F;
+		}
+
 		/** @brief The maps of a definition a GPUTextures entry may serve, and the purpose that serves each (graphics § 40). */
 		constexpr std::array< std::pair< const char *, PixelFactory::TexturePurpose >, 8 > GPUTextureMaps{{
 			{AlbedoString, PixelFactory::TexturePurpose::Color},
@@ -3301,7 +3321,7 @@ namespace EmEn::Graphics::Material
 
 				if ( m_reflectionSourceIsAbsolute )
 				{
-					lightGenerator.declareReflectionSourceAbsolute();
+					lightGenerator.declareReflectionSourceAbsolute(m_reflectionSourceScale);
 				}
 			}
 			else if ( m_isUsingEnvironmentCubemap )
@@ -3323,7 +3343,7 @@ namespace EmEn::Graphics::Material
 
 				if ( m_refractionSourceIsAbsolute )
 				{
-					lightGenerator.declareRefractionSourceAbsolute();
+					lightGenerator.declareRefractionSourceAbsolute(m_refractionSourceScale);
 				}
 			}
 			else if ( m_isUsingEnvironmentCubemapForRefraction )
@@ -6001,6 +6021,7 @@ namespace EmEn::Graphics::Material
 		/* A render target is the RENDERED SCENE: an absolute luminance — the shader must not
 		 * re-apply the environment luminance to it (see LightGenerator::reflectionIntensity()). */
 		m_reflectionSourceIsAbsolute = true;
+		m_reflectionSourceScale = renderTargetScale(*renderTarget);
 
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
@@ -6158,6 +6179,7 @@ namespace EmEn::Graphics::Material
 
 		/* Absolute luminance source — see the reflection variant above. */
 		m_refractionSourceIsAbsolute = true;
+		m_refractionSourceScale = renderTargetScale(*renderTarget);
 		this->enableFlag(TextureEnabled);
 		this->enableFlag(UsePrimaryTextureCoordinates);
 

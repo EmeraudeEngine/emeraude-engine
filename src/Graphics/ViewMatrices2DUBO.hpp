@@ -226,6 +226,17 @@ namespace EmEn::Graphics
 				return m_descriptorSets[m_currentFrameRegion].get();
 			}
 
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::setPreExposure() */
+			void setPreExposure (float preExposure) noexcept override;
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::preExposure() */
+			[[nodiscard]]
+			float
+			preExposure () const noexcept override
+			{
+				return m_preExposure;
+			}
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updatePerspectiveViewProperties() */
 			void updatePerspectiveViewProperties (float width, float height, float fov, float distance) noexcept override;
 
@@ -292,6 +303,8 @@ namespace EmEn::Graphics
 			static constexpr auto EnvironmentLuminanceOffset{33UL};
 			/** @brief Offset of the IBL diffuse weight in the buffer. */
 			static constexpr auto IBLDiffuseWeightOffset{34UL};
+			/** @brief Offset of the pre-exposure in the buffer (setPreExposure()): the last float of the vec4. */
+			static constexpr auto PreExposureOffset{IBLDiffuseWeightOffset + 1UL};
 
 			/**
 			 * @brief Internal state structure holding view matrices and related data.
@@ -368,6 +381,8 @@ namespace EmEn::Graphics
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			/** @brief Region the descriptor set currently addresses. Set by updateVideoMemory(), which is const. */
 			mutable uint32_t m_currentFrameRegion{0};
+			/** @brief The pre-exposure every upload writes (setPreExposure()), render thread only. */
+			float m_preExposure{1.0F};
 			bool m_projectionJitterEnabled{false}; /**< Whether the sub-pixel projection jitter is active (TAA). */
 	};
 

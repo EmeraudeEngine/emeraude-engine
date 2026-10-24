@@ -357,11 +357,21 @@ namespace EmEn::Graphics
 	EMEN_API FillingType to_FillingType (const std::string & value) noexcept;
 
 	/**
+	 * @brief The fixed scale the WORLD caches store their radiance with: the high-precision render-to-texture probes
+	 * and the irradiance probe volume (scene-colour pre-exposure, D7; owner decision 2026-10-24, k = 4).
+	 * @note The main view stores nits × the frame's pre-exposure E_pre, which follows the camera; a world cache is
+	 * read by every view and outlives any exposure, so it takes ONE scale instead. 2^-4 keeps an fp16 texel finite
+	 * up to ~1.05e6 nits and normal down to ~1e-3 nits (UE's 4 EV default). A reader divides by it.
+	 */
+	constexpr auto WorldCacheScale{0.0625F};
+
+	/**
 	 * @brief Defines a blending operation mode.
 	 * @note There is deliberately NO 'Screen' mode. The screen operator '1 - (1 - src)(1 - dst)'
 	 * is only defined for source values inside [0,1]; the scene colour attachment is an
-	 * unclamped VK_FORMAT_R16G16B16A16_SFLOAT holding ABSOLUTE LUMINANCE IN NITS, so a
-	 * self-illuminated surface feeds it values far above one. Expressed with fixed-function
+	 * unclamped VK_FORMAT_R16G16B16A16_SFLOAT holding LUMINANCE IN NITS × THE VIEW'S PRE-EXPOSURE
+	 * (ViewMatricesInterface::setPreExposure()), so a self-illuminated surface feeds it values far
+	 * above one. Expressed with fixed-function
 	 * blending that operator needs dstColorBlendFactor = ONE_MINUS_SRC_COLOR, which Vulkan does
 	 * not clamp on a floating-point attachment: an emissive sprite at 320 nits turned the factor
 	 * into -319 and SUBTRACTED the background instead of screening it. Emissive surfaces

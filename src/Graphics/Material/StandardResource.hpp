@@ -2311,8 +2311,12 @@ namespace EmEn::Graphics::Material
 			bool m_reflectionIsArtistic{false};
 			/** @brief Reflection source is a render target (probe/mirror): absolute luminance, no environment luminance scale. */
 			bool m_reflectionSourceIsAbsolute{false};
+			/** @brief The pre-exposure the render-target reflection source stores its luminance with (renderTargetScale()). */
+			float m_reflectionSourceScale{1.0F};
 			/** @brief Refraction source is a render target: absolute luminance, no environment luminance scale. */
 			bool m_refractionSourceIsAbsolute{false};
+			/** @brief The pre-exposure the render-target refraction source stores its luminance with. */
+			float m_refractionSourceScale{1.0F};
 			/** @brief The deferred-lighting structure the last generated program was compiled with (deferredLightingStructure()). */
 			mutable std::atomic< bool > m_deferredLightingCompiled{false};
 			bool m_isUsingEnvironmentCubemapForRefraction{false};
