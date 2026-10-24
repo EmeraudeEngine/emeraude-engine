@@ -1462,10 +1462,10 @@ namespace EmEn::Graphics
 			.medium = medium,
 			.clouds = clouds,
 			.projectionJitter = mainRT->viewMatrices().projectionJitter(),
-			.displayExposure = [&stack, activeCamera] {
+			.residualExposure = [this, &stack, activeCamera] {
 				const auto toneMapping = stack.cameraToneMapping();
 
-				return toneMapping != nullptr ? toneMapping->displayExposure(activeCamera) : 0.0F;
+				return toneMapping != nullptr ? toneMapping->displayExposure(activeCamera) / m_framePreExposure.value : 0.0F;
 			}(),
 			.preExposure = m_framePreExposure.value,
 			.preExposureRatio = m_framePreExposure.ratio,

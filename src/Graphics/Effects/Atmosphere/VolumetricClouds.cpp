@@ -986,7 +986,11 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			const auto & color = mainLight->emissionChromaticity();
 
 			block.sunDirection = {direction[X], direction[Y], direction[Z], static_cast< float >(m_parameters.lightStepCount)};
-			block.sunIlluminance = {color[X] * illuminance, color[Y] * illuminance, color[Z] * illuminance, mainLight->shadowBias()};
+			/* PRE-EXPOSURE (step 6, D8): the sun and the sky enter × E_pre, the scale of the scene colour the
+			 * clouds composite over. */
+			const auto exposedIlluminance = illuminance * context.preExposure;
+
+			block.sunIlluminance = {color[X] * exposedIlluminance, color[Y] * exposedIlluminance, color[Z] * exposedIlluminance, mainLight->shadowBias()};
 
 			const auto & shadowMap = mainLight->shadowMap();
 
@@ -1017,7 +1021,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			}
 		}
 
-		block.ambient[0] = context.skyLuminance;
+		block.ambient[0] = context.skyLuminance * context.preExposure;
 		block.ambient[1] = std::clamp(m_parameters.groundAlbedo, 0.0F, 1.0F);
 
 		if ( !updateUniformBufferData(*m_frameUBOs[frameIndex], &block, sizeof(block)) )

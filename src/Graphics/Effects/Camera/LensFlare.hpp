@@ -147,7 +147,7 @@ namespace EmEn::Graphics::Effects::Camera
 				float texelSizeY;
 				float threshold;
 				float softKnee;
-				/* nit -> display value (FrameContext::displayExposure), 1 when the chain has no tone mapper. */
+				/* chain value -> display value (FrameContext::residualExposure), 1 when the chain has no tone mapper. */
 				float exposure;
 				/* The light's projected position, in UV. */
 				float lightScreenX;

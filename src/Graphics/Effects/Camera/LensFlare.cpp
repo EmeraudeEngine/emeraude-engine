@@ -54,7 +54,7 @@ namespace
 	/* The SOURCE pass: what is bright enough to leave a visible ghost, plus the analytic sun. ⚠️ The
 	 * output is in DISPLAY units (nits × exposure), NOT nits: the sun's disc carries ~5e7 nits, far past
 	 * the 65 504 of a half float — written in nits it overflowed to infinity, then NaN once filtered, and
-	 * no ghost ever showed. The ghost pass brings its result back to nits. */
+	 * no ghost ever showed. The ghost pass brings its result back to chain units (nits × pre-exposure). */
 	constexpr auto SourceFragmentShader = R"GLSL(
 #version 450
 
@@ -128,9 +128,10 @@ void main()
 
 	color /= 9.0;
 
-	/* Soft brightness thresholding, in DISPLAY units: the chain colour here is an absolute luminance
-	 * in nits (the camera phase runs before the tone mapping), and a threshold compared with nits let
-	 * a whole daylight sky feed the ghosts. The contribution is a RATIO, so the colour stays in nits. */
+	/* Soft brightness thresholding, in DISPLAY units: the chain colour here is a luminance in nits × the
+	 * frame's pre-exposure (the camera phase runs before the tone mapping; `exposure` is the RESIDUAL that
+	 * takes it to the display), and a threshold compared with chain values let a whole daylight sky feed the
+	 * ghosts. The contribution is a RATIO, so the colour stays in chain units. */
 	float brightness = max(max(color.r, color.g), color.b) * exposure;
 	float kneeWidth = threshold * softKnee;
 	float soft = clamp(brightness - threshold + kneeWidth, 0.0, 2.0 * kneeWidth);
@@ -252,7 +253,7 @@ void main()
 		}
 	}
 
-	/* Back to nits for the chain (the source was in display units); a half float stops at 65 504. */
+	/* Back to chain units (nits × pre-exposure; the source was in display units); a half float stops at 65 504. */
 	outColor = vec4(min(result * intensity * inverseExposure, vec3(60000.0)), 1.0);
 }
 )GLSL";
@@ -405,7 +406,7 @@ namespace EmEn::Graphics::Effects::Camera
 			.texelSizeY = 1.0F / static_cast< float >(m_sourceTarget.height()),
 			.threshold = m_parameters.threshold,
 			.softKnee = m_parameters.softKnee,
-			.exposure = context.displayExposure > 0.0F ? context.displayExposure : 1.0F,
+			.exposure = context.residualExposure > 0.0F ? context.residualExposure : 1.0F,
 			.lightScreenX = 0.5F,
 			.lightScreenY = 0.5F,
 			.sunRadiusX = 0.0F,
@@ -458,7 +459,8 @@ namespace EmEn::Graphics::Effects::Camera
 					 * kept. */
 					const auto & color = mainLight->emissionChromaticity();
 					const auto peakChannel = std::max({color[Base::Math::X], color[Base::Math::Y], color[Base::Math::Z], 1.0F});
-					const auto luminance = std::min(mainLight->illuminance() / std::max(solidAngle, 1.0e-12F) * sourcePC.exposure * onScreen, MaxSunDisplayLuminance / peakChannel);
+					/* ⚠️ A radiance built from NITS (the light's illuminance): the ABSOLUTE exposure, the residual × E_pre. */
+					const auto luminance = std::min(mainLight->illuminance() / std::max(solidAngle, 1.0e-12F) * sourcePC.exposure * context.preExposure * onScreen, MaxSunDisplayLuminance / peakChannel);
 
 					sourcePC.lightScreenX = screenX;
 					sourcePC.lightScreenY = screenY;

@@ -475,6 +475,29 @@ Plumbing:
      238, 79 % near-white) and settle at the adaptation rate — the eye adaptation's start transient, unrelated to
      the pre-exposure (macOS saw the same, reported 2026-10-24).
 6. **Post effects and the `FrameContext` fields (D8).**
+   - **Step 6 — DONE (2026-10-24, Linux, RTX 3070 Ti).**
+     - `FrameContext::displayExposure` is RENAMED `residualExposure` = E_display / E_pre (chain value → display;
+       the rename made every user fail to compile until reviewed). TAA's Karis weights, anti-flicker and debug
+       views and LensFlare's source threshold read it as before, now on pre-exposed values; LensFlare's ANALYTIC
+       sun (built from the light's lux) takes the absolute exposure `residual × E_pre`, and the ghost pass's
+       `1 / residual` returns to chain units.
+     - × E_pre on every radiance synthesised from nits: AtmosphericFog (`fogLuminance`), VolumetricClouds (the sun's
+       illuminance and the sky luminance), VolumetricScattering (the light's illuminance), SSR's sky miss, SSGI's sky
+       term. The chain-sampled terms are untouched.
+     - VolumetricLight's mask is UNITLESS now (D5's advice): the occlusion pass stores the visibility, the radial
+       pass applies colour × intensity × E_pre. Its EMA history needs no rescale.
+     - VeilingGlare: threshold and firefly ceiling × E_pre. The Karis weight keeps weighing NITS
+       (`karisLuminanceScale = 1 / E_pre`, today's look) — D8's choice (display units, i.e. the residual) is the
+       owner's, to be MEASURED once the automatic E_pre is on.
+   - Gates (E_pre forced to 2^-4, effects ON, bloom off, 10 s settle): `light-and-shadow-debug 0,1` (fog,
+     scattering, shafts, flare) mean 41.1 → 41.2, inside its A/A; `water-world` (shafts, flare) 165.6 → 165.8;
+     `post-processor-effect-debug 1,0` (the flare bench) 188.0 → 188.7 (A/A 188.0/188.2).
+   - ⚠️ `terrain` (sun course frozen) and `sponza` keep a +1.5 to +3.5 offset 12 s after the step, and drift back
+     slowly when E_pre returns to 1; any slot toggle (which resets the chain's histories) removes it. A
+     LONG-memory history at the old scale: step 7's input, re-measure there.
+   - Windows-PA (RTX 3500 Ada) on `7b453edb`: water-world's brightest glints (> 240) were slightly rarer at E_pre
+     2^-4 in 22 of 31 interleaved pairs (sign test p ≈ 0.03, order not randomised). A weak hint, re-check with a
+     randomised order once step 7 is in.
 7. **Histories (D5).**
 8. **Tests.** Validation layers ON, on all three platforms (the peers). Each one is measurable:
    - **Invariance test.** Pin the triad and alternate E_pre between 2^-4 and 2^-10 every 30

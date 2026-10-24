@@ -354,7 +354,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		 * mainLight->emissionChromaticity() and mainLight->intensity().
 		 * Default derivation: L = E · ρ / π, the Lambertian relation used everywhere else in the
 		 * engine, with E the illuminance in lux and ρ carried by the chromaticity itself. */
-		const auto fogLuminance = medium->resolveLuminance(mainLight->illuminance());
+		/* PRE-EXPOSURE (step 6, D8): the composited buffer holds nits × E_pre, so the fog's own radiance is
+		 * written at that scale too. */
+		const auto fogLuminance = medium->resolveLuminance(mainLight->illuminance()) * context.preExposure;
 
 		/* Update per-frame descriptor with scene color, depth, and material properties. */
 		static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));

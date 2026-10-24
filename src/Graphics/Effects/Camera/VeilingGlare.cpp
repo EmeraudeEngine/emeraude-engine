@@ -27,6 +27,8 @@
 #include "VeilingGlare.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <cmath>
 #include <string>
 
 /* Local inclusions. */
@@ -74,6 +76,7 @@ layout(push_constant) uniform PushConstants
 	float spread;
 	float fireflyClamp;
 	uint firstPass;
+	float karisLuminanceScale;
 };
 
 /* Karis average weight: suppresses firefly pixels by weighting
@@ -81,7 +84,7 @@ layout(push_constant) uniform PushConstants
  * Bright outlier pixels get near-zero weight. (Epic Games, UE4) */
 float karisWeight (vec3 color)
 {
-	float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+	float luma = dot(color, vec3(0.2126, 0.7152, 0.0722)) * karisLuminanceScale;
 	return 1.0 / (1.0 + luma);
 }
 
@@ -631,7 +634,15 @@ namespace EmEn::Graphics::Effects::Camera
 		/* Anti-firefly ceiling: six stops of differentiation headroom above the threshold
 		 * (the ratio the LDR-era constant provided over a threshold of 1). The max() keeps a
 		 * floor when the threshold is 0 ("everything glares"). Every mip gets the SAME value. */
-		const auto fireflyClamp = std::max(threshold, 1.0F) * 64.0F;
+		auto fireflyClamp = std::max(threshold, 1.0F) * 64.0F;
+
+		/* PRE-EXPOSURE (step 6, D8): the threshold and the ceiling are authored in NITS, the chain holds
+		 * nits × E_pre. The Karis weight keeps weighing nits (1 / E_pre): the look of before, until the owner
+		 * decides whether it moves to display units (karisLuminanceScale). */
+		const auto preExposure = std::isfinite(context.preExposure) && context.preExposure > 0.0F ? context.preExposure : 1.0F;
+		threshold *= preExposure;
+		fireflyClamp *= preExposure;
+		const auto karisLuminanceScale = 1.0F / preExposure;
 
 		const auto * inputMaterialProperties = context.materialProperties;
 
@@ -682,7 +693,8 @@ namespace EmEn::Graphics::Effects::Camera
 				.intensity = intensity,
 				.spread = m_parameters.spread,
 				.fireflyClamp = fireflyClamp,
-				.firstPass = (mipLevel == 0) ? 1U : 0U
+				.firstPass = (mipLevel == 0) ? 1U : 0U,
+				.karisLuminanceScale = karisLuminanceScale
 			};
 
 			/* For the first pass (i==0), use the per-frame descriptor set
@@ -715,7 +727,8 @@ namespace EmEn::Graphics::Effects::Camera
 				.intensity = intensity,
 				.spread = m_parameters.spread,
 				.fireflyClamp = fireflyClamp,
-				.firstPass = 0U
+				.firstPass = 0U,
+				.karisLuminanceScale = karisLuminanceScale
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
@@ -750,7 +763,8 @@ namespace EmEn::Graphics::Effects::Camera
 				.intensity = intensity,
 				.spread = m_parameters.spread,
 				.fireflyClamp = fireflyClamp,
-				.firstPass = 0U
+				.firstPass = 0U,
+				.karisLuminanceScale = karisLuminanceScale
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(
