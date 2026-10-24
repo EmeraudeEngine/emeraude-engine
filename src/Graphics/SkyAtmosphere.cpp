@@ -55,6 +55,7 @@
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Image.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/ShaderModule.hpp"
@@ -247,7 +248,6 @@ layout(local_size_x = 8, local_size_y = 8) in;
 )GLSL";
 
 	constexpr auto TransmittanceMain = R"GLSL(
-layout(set = 0, binding = 3, rgba16f) uniform writeonly image2D outputImage;
 
 void main ()
 {
@@ -284,7 +284,6 @@ layout(local_size_x = 8, local_size_y = 8) in;
 )GLSL";
 
 	constexpr auto MultipleScatteringMain = R"GLSL(
-layout(set = 0, binding = 3, rgba16f) uniform writeonly image2D outputImage;
 
 void main ()
 {
@@ -347,7 +346,6 @@ layout(local_size_x = 8, local_size_y = 8) in;
 )GLSL";
 
 	constexpr auto SkyViewMain = R"GLSL(
-layout(set = 0, binding = 3, rgba16f) uniform writeonly image2D outputImage;
 layout(set = 0, binding = 4, rgba32f) uniform writeonly image2D frameImage;
 
 layout(push_constant) uniform SkyViewPushConstants
@@ -621,6 +619,13 @@ namespace EmEn::Graphics
 			return true;
 		}
 
+		m_tableFormat = SkyAtmosphere::tableFormat(renderer);
+
+		if ( !m_transmittance.setFormat(m_tableFormat) || !m_multipleScattering.setFormat(m_tableFormat) || !m_skyView.setFormat(m_tableFormat) )
+		{
+			return false;
+		}
+
 		if ( !m_transmittance.create(renderer) || !m_multipleScattering.create(renderer) || !m_skyView.create(renderer) || !m_frameData.create(renderer) )
 		{
 			TraceError{ClassId} << "Unable to create the lookup tables of the sky '" << m_name << "' !";
@@ -635,9 +640,24 @@ namespace EmEn::Graphics
 
 		m_created = true;
 
-		TraceSuccess{ClassId} << "Sky atmosphere '" << m_name << "': transmittance (" << TransmittanceWidth << "×" << TransmittanceHeight << ") and multiple scattering (" << MultipleScatteringSize << "²) baked; ground radius " << m_parameters.groundRadius << " km, top " << m_parameters.topRadius << " km.";
+		TraceSuccess{ClassId} << "Sky atmosphere '" << m_name << "': transmittance (" << TransmittanceWidth << "×" << TransmittanceHeight << ") and multiple scattering (" << MultipleScatteringSize << "²) baked in " << (m_tableFormat == VK_FORMAT_R32G32B32A32_SFLOAT ? "RGBA32F" : "RGBA16F") << "; ground radius " << m_parameters.groundRadius << " km, top " << m_parameters.topRadius << " km.";
 
 		return true;
+	}
+
+	VkFormat
+	SkyAtmosphere::tableFormat (Renderer & renderer) noexcept
+	{
+		constexpr VkFormatFeatureFlags Needs = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+
+		if ( const auto properties = renderer.device()->physicalDevice()->getFormatProperties(VK_FORMAT_R32G32B32A32_SFLOAT); (properties.optimalTilingFeatures & Needs) == Needs )
+		{
+			return VK_FORMAT_R32G32B32A32_SFLOAT;
+		}
+
+		TraceWarning{ClassId} << "The device cannot filter RGBA32F storage images: the sky's tables fall back to RGBA16F, and the night sky below a −12° sun flushes to zero.";
+
+		return VK_FORMAT_R16G16B16A16_SFLOAT;
 	}
 
 	bool
@@ -736,10 +756,12 @@ namespace EmEn::Graphics
 
 		/* The atmosphere's block and functions, the same source the sky material declares through Saphir. */
 		const auto atmosphereGLSL = AtmosphereGLSL::uniformBlockGLSL(0, ParametersBinding) + AtmosphereGLSL::sharedFunctionsGLSL() + AtmosphereGLSL::ComputeGLSL;
+		/* The table each pass writes, in the format tableFormat() chose (the image qualifier must match it). */
+		const auto outputGLSL = std::string{"layout(set = 0, binding = "} + std::to_string(OutputBinding) + (m_tableFormat == VK_FORMAT_R32G32B32A32_SFLOAT ? ", rgba32f" : ", rgba16f") + ") uniform writeonly image2D outputImage;\n";
 
-		if ( !makePipeline("SkyTransmittanceCS", std::string{TransmittanceShader} + atmosphereGLSL + IntegrationGLSL + TransmittanceMain, m_transmittancePipeline) ||
-			 !makePipeline("SkyMultipleScatteringCS", std::string{MultipleScatteringShader} + atmosphereGLSL + IntegrationGLSL + MultipleScatteringMain, m_multipleScatteringPipeline) ||
-			 !makePipeline("SkyViewCS", std::string{SkyViewShader} + atmosphereGLSL + IntegrationGLSL + SkyViewMain, m_skyViewPipeline) )
+		if ( !makePipeline("SkyTransmittanceCS", std::string{TransmittanceShader} + atmosphereGLSL + IntegrationGLSL + outputGLSL + TransmittanceMain, m_transmittancePipeline) ||
+			 !makePipeline("SkyMultipleScatteringCS", std::string{MultipleScatteringShader} + atmosphereGLSL + IntegrationGLSL + outputGLSL + MultipleScatteringMain, m_multipleScatteringPipeline) ||
+			 !makePipeline("SkyViewCS", std::string{SkyViewShader} + atmosphereGLSL + IntegrationGLSL + outputGLSL + SkyViewMain, m_skyViewPipeline) )
 		{
 			return false;
 		}

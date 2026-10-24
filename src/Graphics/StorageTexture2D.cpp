@@ -27,14 +27,22 @@
 #include "StorageTexture2D.hpp"
 
 /* STL inclusions. */
+#include <functional>
 #include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Sampler.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Settings;
+}
 
 namespace EmEn::Graphics
 {
@@ -114,6 +122,21 @@ namespace EmEn::Graphics
 
 			return false;
 		}
+
+		return true;
+	}
+
+	bool
+	StorageTexture2D::setFormat (VkFormat format) noexcept
+	{
+		if ( this->isCreated() )
+		{
+			TraceError{ClassId} << "The format of '" << m_name << "' cannot change once it is created !";
+
+			return false;
+		}
+
+		m_format = format;
 
 		return true;
 	}

@@ -42,8 +42,8 @@ scripted fade. This is the correct behaviour, and it costs nothing.
       and the integrated starlight (Leinert et al., "The 1997 reference of diffuse night sky brightness", A&AS 127,
       1998). Model: the airglow as a thin emitting layer, brighter toward the horizon by the van Rhijn path factor and
       seen through the transmittance; its zenith luminance and colour are PLANET DATA (Earth's measured; another
-      planet's its own); the starlight comes from the catalogue and the Milky Way below. Blocked by
-      `sky-view-fp16-night-floor` until the twilight measures.
+      planet's its own); the starlight comes from the catalogue and the Milky Way below. The sun's own twilight is
+      measured (graphics doc 42 § "The night", 2026-10-25): 7.6e-6 cd/m² at −18°, far under the ~2e-4 floor.
 - [ ] **Realistic or artistic, by parameters only** (owner, 2026-10-25): every term above has a gain and a tint,
       neutral by default (the physical sky), exposed in the manifest and the console like the sky's grading. A
       realistic sky is the defaults; an artistic one changes numbers, never code.

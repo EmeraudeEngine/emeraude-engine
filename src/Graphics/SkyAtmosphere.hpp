@@ -36,6 +36,9 @@
 #include <optional>
 #include <string>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for usages. */
 #include "Graphics/StorageTexture2D.hpp"
 #include "Math/Vector.hpp"
@@ -357,6 +360,18 @@ namespace EmEn::Graphics
 			bool bake (Renderer & renderer) noexcept;
 
 			/**
+			 * @brief Returns the format of the lookup tables on this device: RGBA32F where it can be stored and
+			 * filtered linearly, RGBA16F otherwise (a warned precision loss).
+			 * @note The tables hold radiance PER LUX of the star: half floats flush everything under 2^-24 to zero, i.e.
+			 * the sky under ~0.008 nits — the whole night below a −12° sun (graphics doc 42, 2026-10-25).
+			 * Linear filtering of RGBA32F is optional in Vulkan: it is queried, never assumed.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return VkFormat
+			 */
+			[[nodiscard]]
+			static VkFormat tableFormat (Renderer & renderer) noexcept;
+
+			/**
 			 * @brief Packs the atmosphere into its std140 block.
 			 * @return std::array< float, 32 >
 			 */
@@ -379,6 +394,7 @@ namespace EmEn::Graphics
 			std::unique_ptr< Vulkan::ComputePipeline > m_transmittancePipeline;
 			std::unique_ptr< Vulkan::ComputePipeline > m_multipleScatteringPipeline;
 			std::unique_ptr< Vulkan::ComputePipeline > m_skyViewPipeline;
+			VkFormat m_tableFormat{VK_FORMAT_R16G16B16A16_SFLOAT};
 			mutable Base::Mutex m_creationAccess;
 			bool m_created{false};
 	};

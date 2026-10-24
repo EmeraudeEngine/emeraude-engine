@@ -46,6 +46,13 @@ namespace EmEn::Graphics
 	class Renderer;
 }
 
+namespace EmEn::Vulkan
+{
+	class Image;
+	class ImageView;
+	class Sampler;
+}
+
 namespace EmEn::Graphics
 {
 	/**
@@ -82,6 +89,25 @@ namespace EmEn::Graphics
 			 * @brief Destroys the texture from the GPU.
 			 */
 			void destroy () noexcept;
+
+			/**
+			 * @brief Changes the texel format, before the texture is created.
+			 * @param format The texel format (see the constructor).
+			 * @return bool False once the texture is created: its format is then fixed.
+			 */
+			[[nodiscard]]
+			bool setFormat (VkFormat format) noexcept;
+
+			/**
+			 * @brief Returns the texel format.
+			 * @return VkFormat
+			 */
+			[[nodiscard]]
+			VkFormat
+			format () const noexcept
+			{
+				return m_format;
+			}
 
 			/**
 			 * @brief Returns the view a compute shader writes through.
