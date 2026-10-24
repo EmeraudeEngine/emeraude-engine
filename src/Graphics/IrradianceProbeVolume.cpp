@@ -428,11 +428,28 @@ void main ()
 		weightSum += weight;
 	}
 
-	vec3 result = weightSum > 1e-4 ? sum / weightSum : vec3(0.0);
+	/* Stored × ProbeCacheScale (decoded by probeIrradiance()). */
+	vec3 result = (weightSum > 1e-4 ? sum / weightSum : vec3(0.0)) * ProbeCacheScale;
 
 	ivec3 coordinate = ivec3(probeTileOrigin(slot, ProbeIrradianceTexels) + texel, slot.y);
 	vec3 previous = imageLoad(irradianceAtlas, coordinate).rgb;
-	vec3 blended = probeIsReset(slot) ? result : mix(result, previous, probeVolume.biasHysteresis.z);
+
+	/* FINITE GUARD (scene-colour pre-exposure, step 5). With a hysteresis of 0.97 a single non-finite texel never
+	 * leaves the atlas: a sample that cannot be stored is dropped (the history is kept), and a history that cannot be
+	 * read is replaced by the sample. */
+	bool resultStorable = probeIsStorable(result);
+	bool previousStorable = probeIsStorable(previous);
+
+	vec3 blended;
+
+	if (probeIsReset(slot) || !previousStorable)
+	{
+		blended = resultStorable ? result : vec3(0.0);
+	}
+	else
+	{
+		blended = resultStorable ? mix(result, previous, probeVolume.biasHysteresis.z) : previous;
+	}
 
 	imageStore(irradianceAtlas, coordinate, vec4(blended, 1.0));
 }
@@ -492,7 +509,22 @@ void main ()
 
 	ivec3 coordinate = ivec3(probeTileOrigin(slot, ProbeDistanceTexels) + texel, slot.y);
 	vec2 previous = imageLoad(distanceAtlas, coordinate).rg;
-	vec2 blended = probeIsReset(slot) ? result : mix(result, previous, probeVolume.biasHysteresis.z);
+
+	/* FINITE GUARD, the irradiance blend's rule on the two moments (a range test, see probeIsStorable()). */
+	bool resultStorable = probeIsStorable(vec3(result, 0.0));
+	bool previousStorable = probeIsStorable(vec3(previous, 0.0));
+	vec2 fallback = vec2(maxDistance, maxDistance * maxDistance);
+
+	vec2 blended;
+
+	if (probeIsReset(slot) || !previousStorable)
+	{
+		blended = resultStorable ? result : fallback;
+	}
+	else
+	{
+		blended = resultStorable ? mix(result, previous, probeVolume.biasHysteresis.z) : previous;
+	}
 
 	imageStore(distanceAtlas, coordinate, vec4(blended, 0.0, 0.0));
 }

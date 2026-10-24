@@ -26,6 +26,12 @@
 
 #pragma once
 
+/* Local inclusions for usages. */
+#include "Graphics/Types.hpp"
+
+/* The GLSL below states the cache scale as a literal: it must stay the engine's one. */
+static_assert(EmEn::Graphics::WorldCacheScale == 0.0625F, "ProbeCacheScale in EMEN_IRRADIANCE_PROBES_GLSL must equal Graphics::WorldCacheScale.");
+
 /**
  * @file
  * @brief The GLSL side of the irradiance probe volume — the engine's radiance cache — as ONE macro
@@ -83,6 +89,19 @@ layout(set = )GLSL" #setIndex R"GLSL(, binding = 5) uniform sampler2DArray probe
 
 const int ProbeIrradianceTexels = 8;
 const int ProbeDistanceTexels = 16;
+
+/* The irradiance atlas stores E/π × ProbeCacheScale (Graphics::WorldCacheScale, scene-colour pre-exposure D7):
+ * an RGBA16F texel stays finite up to ~1.05e6 and normal down to ~1e-3. The blend pass encodes, probeIrradiance()
+ * decodes: every consumer reads E/π in plain units. */
+const float ProbeCacheScale = 0.0625;
+
+/* A value an RGBA16F texel may store: non-negative and finite, under the binary16 ceiling. ⚠️ A RANGE TEST, not
+ * isnan()/isinf(), which Metal's fast math may fold away; every comparison against a NaN is false, so it is
+ * rejected too (ToneMapping's isPlausible(), same reasoning). */
+bool probeIsStorable (vec3 value)
+{
+	return all(greaterThanEqual(value, vec3(0.0))) && all(lessThanEqual(value, vec3(65504.0)));
+}
 
 vec2 probeSignNotZero (vec2 v)
 {
@@ -282,6 +301,6 @@ vec3 probeIrradiance (vec3 worldPos, vec3 normal, vec3 viewDir)
 	/* ENERGY, unscaled: the update passes and the RTGI feedback consume it as such. A consumer
 	 * composing a final image applies the IndirectDiffuse intensity itself
 	 * (probeVolume.ambientColor.w), the way RTGI applies its own to its result. */
-	return weightSum > 0.0 ? (sum / weightSum) * volumeWeight : vec3(0.0);
+	return weightSum > 0.0 ? (sum / weightSum) * (volumeWeight / ProbeCacheScale) : vec3(0.0);
 }
 )GLSL"

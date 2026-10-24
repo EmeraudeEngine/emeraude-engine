@@ -157,7 +157,7 @@ layout(set = 2, binding = 3) uniform samplerCube texturesCube[];
  * the reflected surface receives — on screen or not. See Effects/Shared/IrradianceProbesGLSL.hpp. */
 )GLSL" EMEN_IRRADIANCE_PROBES_GLSL(3) R"GLSL(
 
-/* Per-frame parameters (set 1, binding 5). A UBO and NOT push constants: this block is 148
+/* Per-frame parameters (set 1, binding 5). A UBO and NOT push constants: this block is 152
  * bytes, above the 128-byte Vulkan minimum guarantee for maxPushConstantsSize, so the pipeline
  * layout failed to create on any device exposing exactly 128 (part of the AMD/Intel fleet) and
  * RTR was never created there -- the scene silently lost its reflections.
@@ -177,6 +177,7 @@ layout(set = 1, binding = 5, std140) uniform TraceParams
 	uint lightCount;
 	vec4 ambientLight;
 	float coneScale;
+	float preExposure;
 };
 
 /* Material flag bits (must match GPURTMaterialData). */
@@ -952,7 +953,9 @@ void main()
 		float coneWidth = 2.0 * coneTan * hitT * coneScale / max(coneDistCam + hitT, 1e-3);
 		imageStore(coneImage, coneCoord, vec4(coneWidth, hitT, 0.0, 0.0));
 
-		outReflection = vec4(litColor * fresnelTint * confidence, confidence);
+		/* PRE-EXPOSURE (scene-colour pre-exposure, step 5): the hit is shaded in nits; the scene colour it is
+		 * combined into holds nits × E_pre. RGB only: the confidence is unitless. */
+		outReflection = vec4(litColor * fresnelTint * confidence * preExposure, confidence);
 	}
 	else
 	{
@@ -981,7 +984,7 @@ void main()
 		 * point (rotation-consistent, no parallax), which is what maxDistance gives it. */
 		imageStore(coneImage, coneCoord, vec4(0.0, maxDistance, 0.0, 0.0));
 
-		outReflection = vec4(envColor * fresnelTint * confidence, confidence);
+		outReflection = vec4(envColor * fresnelTint * confidence * preExposure, confidence);
 	}
 }
 )GLSL";
@@ -1787,7 +1790,8 @@ namespace EmEn::Graphics::Effects::Lighting
 				.ambientB = ambientColor[Base::Math::Z] * ambientIntensity,
 				.skyLuminance = context.skyLuminance,
 				/* |P[1][1]| = 1 / tan(vFOV / 2) (column-major, element 5): focal length in trace texels. */
-				.coneScale = std::abs(projMat.data()[5]) * 0.5F * static_cast< float >(m_traceTarget.height())
+				.coneScale = std::abs(projMat[5]) * 0.5F * static_cast< float >(m_traceTarget.height()),
+				.preExposure = context.preExposure
 			};
 
 			if ( !updateUniformBufferData(*m_traceFrameUBOs[frameIndex], &traceData, sizeof(traceData)) )
