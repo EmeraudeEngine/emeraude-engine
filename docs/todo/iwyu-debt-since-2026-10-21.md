@@ -1,6 +1,6 @@
 ---
 id: iwyu-debt-since-2026-10-21
-title: IWYU debt — the 158 C++ files touched while include-what-you-use did not run (2026-10-21 to 2026-10-25)
+title: IWYU debt — the 154 C++ files touched while include-what-you-use did not run (2026-10-21 to 2026-10-25)
 status: open
 priority: high
 scope: emeraude-engine src/
@@ -8,7 +8,7 @@ opened: 2026-10-25
 tags: [iwyu, static-analysis, gate, debt]
 ---
 
-# IWYU debt — the 158 C++ files touched while include-what-you-use did not run
+# IWYU debt — the 154 C++ files touched while include-what-you-use did not run
 
 ## Why
 
@@ -104,9 +104,6 @@ The files (as of 2026-10-25; the sky lots' files were brought clean that day):
 - `src/Graphics/Renderer.cpp`
 - `src/Graphics/Renderer.hpp`
 - `src/Graphics/RenderTarget/Texture.hpp`
-- `src/Graphics/SkyAtmosphere.hpp`
-- `src/Graphics/StorageTexture2D.cpp`
-- `src/Graphics/StorageTexture2D.hpp`
 - `src/Graphics/TextureCache.cpp`
 - `src/Graphics/TextureCache.hpp`
 - `src/Graphics/TextureCompressor.cpp`
@@ -162,7 +159,6 @@ The files (as of 2026-10-25; the sky lots' files were brought clean that day):
 - `src/Scenes/Loaders/GLTFLoader.hpp`
 - `src/Scenes/Loaders/USDLoader.cpp`
 - `src/Scenes/Loaders/USDLoader.hpp`
-- `src/Scenes/Manager.console.cpp`
 - `src/Scenes/Scene.cpp`
 - `src/Scenes/Scene.entities.cpp`
 - `src/Scenes/Scene.hpp`

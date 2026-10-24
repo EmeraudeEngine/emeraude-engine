@@ -697,6 +697,11 @@ namespace EmEn::Scenes::Component
 			bool followAtmosphere (const Scene & scene) noexcept;
 
 			/**
+			 * @brief Warns when the followed atmosphere belongs to another planet than the clock's (both named).
+			 */
+			void checkPlanet () const noexcept;
+
+			/**
 			 * @brief Computes the sun's illuminance and colour from the empirical model (air mass, Beer-Lambert).
 			 */
 			void lightSunEmpirically () noexcept;

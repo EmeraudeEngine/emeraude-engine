@@ -28,44 +28,106 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <iomanip>
+#include <map>
+#include <memory>
+#include <optional>
 #include <ranges>
+#include <sstream>
+#include <string>
+#include <system_error>
+#include <utility>
+#include <vector>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
-#include "Component/Camera.hpp"
-#include "Component/Microphone.hpp"
-#include "Component/ConsoleAdapter.hpp"
-#include "Component/Visual.hpp"
-#include "IO/IO.hpp"
-#include "Graphics/Geometry/ResourceGenerator.hpp"
-#include "Graphics/ImposterAtlas.hpp"
-#include "Graphics/Material/StandardResource.hpp"
-#include "Graphics/TextureResource/Texture2D.hpp"
-#include "Graphics/Renderable/BasicGroundResource.hpp"
-#include "GroundTriangles.hpp"
+#include "Component/Camera.hpp" // IWYU pragma: keep (componentBuilder< Component::Camera > needs the complete type)
 #include "Component/CharacterController.hpp"
+#include "Component/ConsoleAdapter.hpp"
+#include "Component/Microphone.hpp" // IWYU pragma: keep (componentBuilder< Component::Microphone > needs the complete type)
 #include "Component/Vehicle.hpp"
+#include "Component/Visual.hpp"
+#include "Console/CommandResult.hpp"
+#include "Console/ControllableTrait.hpp"
+#include "Console/JSONNumber.hpp"
+#include "Console/Output.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
+#include "CoreTypes.hpp"
+#include "FastJSON.hpp"
+#include "FileSystem.hpp"
+#include "Graphics/CelestialBody.hpp"
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Geometry/ResourceGenerator.hpp"
+#include "Graphics/Geometry/Types.hpp"
+#include "Graphics/ImposterAtlas.hpp"
+#include "Graphics/Material/Interface.hpp"
+#include "Graphics/Material/SkyAtmosphereResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/RasterizationOptions.hpp"
+#include "Graphics/Renderable/AbstractBackground.hpp"
+#include "Graphics/Renderable/BasicGroundResource.hpp"
+#include "Graphics/Renderable/DynamicSkyResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
-#include "Graphics/Renderable/DynamicSkyResource.hpp"
-#include "Graphics/Material/SkyAtmosphereResource.hpp"
-#include "Graphics/SkyAtmosphere.hpp"
-#include "Scenes/Loaders/GLTFLoader.hpp"
-#include "Scenes/Loaders/SceneData.hpp"
-#include "Scenes/SceneDataConsumer.hpp"
-#include "FileSystem.hpp"
+#include "Graphics/Renderable/Types.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
-#include "PixelFactory/FileIO.hpp"
-#include "PrimaryServices.hpp"
-#include "Resources/Manager.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/RenderTarget/ImposterBake.hpp"
+#include "Graphics/SelectionOutline.hpp"
+#include "Graphics/SkyAtmosphere.hpp"
 #include "Graphics/TextureResource/StoreTexture.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
+#include "GroundTriangles.hpp"
+#include "IO/IO.hpp"
 #include "json/json.h"
-#include "FastJSON.hpp"
-#include "Console/JSONNumber.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Vector.hpp"
+#include "Physics/CharacterController.hpp"
+#include "Physics/MovableTrait.hpp"
+#include "Physics/Vehicle.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PixelFactory/FileIO.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
+#include "Resources/Manager.hpp"
+#include "Scenes/AbstractEntity.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
+#include "Scenes/Component/Abstract.hpp"
+#include "Scenes/GroundLevelInterface.hpp"
+#include "Scenes/LightSet.hpp"
+#include "Scenes/Loaders/GLTFLoader.hpp"
+#include "Scenes/Loaders/LoaderOptions.hpp"
+#include "Scenes/Loaders/SceneData.hpp"
+#include "Scenes/Node.hpp"
+#include "Scenes/PhysicsRecorder.hpp"
+#include "Scenes/Scene.hpp"
+#include "Scenes/SceneDataConsumer.hpp"
+#include "Scenes/StaticEntity.hpp"
+#include "StaticVector.hpp"
+#include "String.hpp"
+#include "VertexFactory/CapUVMapping.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/TextureInterface.hpp"
+#include "Vulkan/TransferManager.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Console
+{
+	class Argument;
+}
 
 namespace EmEn::Scenes
 {
@@ -883,7 +945,7 @@ namespace EmEn::Scenes
 			return std::static_pointer_cast< Graphics::Renderable::DynamicSkyResource >(background)->skyMaterial();
 		};
 
-		this->bindCommand("getDynamicSky", "Returns the physical sky of the active scene as JSON: its planet's radii and its look (tint, intensity, saturation, star disc, limb darkening).", [dynamicSkyMaterial] () {
+		this->bindCommand("getDynamicSky", "Returns the physical sky of the active scene as JSON: its planet's name and radii and its look (tint, intensity, saturation, star disc, limb darkening).", [dynamicSkyMaterial] () {
 			const auto material = dynamicSkyMaterial();
 
 			if ( material == nullptr )
@@ -896,6 +958,7 @@ namespace EmEn::Scenes
 
 			if ( const auto atmosphere = material->atmosphere(); atmosphere != nullptr )
 			{
+				state["planet"] = atmosphere->parameters().planet;
 				state["groundRadiusKm"] = static_cast< double >(atmosphere->parameters().groundRadius);
 				state["topRadiusKm"] = static_cast< double >(atmosphere->parameters().topRadius);
 			}

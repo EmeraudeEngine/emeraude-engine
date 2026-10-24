@@ -442,6 +442,7 @@ namespace EmEn::Graphics
 		/* No ozone. */
 		parameters.absorptionExtinction = {0.0F, 0.0F, 0.0F};
 		parameters.groundAlbedo = {0.25F, 0.15F, 0.08F};
+		parameters.planet = "Mars";
 
 		return parameters;
 	}

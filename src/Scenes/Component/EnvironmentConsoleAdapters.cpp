@@ -160,6 +160,7 @@ namespace EmEn::Scenes::Component
 			planet["orbitalPeriodSeconds"] = options.planet.orbitalPeriod;
 			planet["axialTiltDegrees"] = Sky::degrees(options.planet.axialTilt);
 			planet["eccentricity"] = options.planet.eccentricity;
+			planet["name"] = options.planet.name;
 			planet["semiMajorAxisAU"] = options.planet.semiMajorAxis;
 			planet["starDistanceAU"] = clock.starDistance();
 			state["planet"] = std::move(planet);
@@ -300,7 +301,7 @@ namespace EmEn::Scenes::Component
 					const Console::Parameter entity{entityParameter("the celestial clock")};
 					const Console::Parameter component{componentParameter(CelestialClock::ClassId)};
 
-					this->bindCommand("getState", "Returns the state of a celestial clock as JSON: running, the date (day since the vernal equinox, time of day 0 midnight / 0.5 noon), the time scale, the latitude, the sun (elevation, direction, lux and kelvins written to its light, photometry; with a dynamic sky the model atmosphere, the disc's transmittance and the linear colour written), the planet (with its distance to the star in AU), every moon (elevation, direction, illuminated fraction, lux), the celestial pole and the sidereal angle.",
+					this->bindCommand("getState", "Returns the state of a celestial clock as JSON: running, the date (day since the vernal equinox, time of day 0 midnight / 0.5 noon), the time scale, the latitude, the sun (elevation, direction, lux and kelvins written to its light, photometry; with a dynamic sky the model atmosphere, the disc's transmittance and the linear colour written), the planet (its name and its distance to the star in AU), every moon (elevation, direction, illuminated fraction, lux), the celestial pole and the sidereal angle.",
 						{entity, component},
 						[this] (const std::string & entityName, const std::string & componentName) {
 							return this->act(entityName, componentName, [] (CelestialClock & clock) {
