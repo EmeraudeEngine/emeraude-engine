@@ -95,7 +95,9 @@ and the planet's `starDistanceAU`.
 B/R at 10° 0.588 / 0.295 against 0.590 / 0.296; at 4° 0.375 / 0.079 against 0.378 / 0.082; at 2° 0.253 against 0.247
 (the disc's centre against the disc's average, and 8-bit levels). Mars (sky-lab option 0 = 1, 1.39 AU): 69 080 lx above
 the atmosphere, 32 320 lx at 30°, 8 905 lx at 10°; the art preset's dust lets more blue through than red, so its
-direct sunset light turns blue (0.59, 0.91, 1) — data, tunable. 0 VUID in the three runs.
+direct sunset light turns blue (0.59, 0.91, 1) — data, tunable. 0 VUID in the three runs. **Validated on the three
+OS** (2026-10-25, engine 291efb25): macOS M6 (MoltenVK) and Windows (MSVC, RTX 3500 Ada) give the same sweep (to 3e-5),
+the same disc-vs-light colours (within 8-bit levels) and the same zenith, L = 1 771 cd/m².
 
 The Earth's clean Hillaire atmosphere (aerosol depth ~0.005) is far brighter near the horizon than the empirical model
 (73 klx against ~36 klx at 10°): a hazier day is the manifest's `MieScattering` (sky-lab option 5).

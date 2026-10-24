@@ -36,6 +36,17 @@ scripted fade. This is the correct behaviour, and it costs nothing.
 - [ ] **Artistic controls** (default neutral): a star brightness gain, a limiting magnitude (how
       many stars), a Milky Way gain and tint, a twinkle amount, and a **night lift**. The night
       lift is a floor on the night sky's luminance so a game night stays readable (see Traps).
+- [ ] **The night sky's own glow** (owner, 2026-10-25: the night lift should be PHYSICAL first, artistic on top). A
+      moonless zenith is ~21.5–22 mag/arcsec² (V), ~2e-4 cd/m², and the sun's scattering gives none of it below −18°:
+      it is airglow (the upper atmosphere's chemiluminescence, the green 557.7 nm oxygen line first), zodiacal light
+      and the integrated starlight (Leinert et al., "The 1997 reference of diffuse night sky brightness", A&AS 127,
+      1998). Model: the airglow as a thin emitting layer, brighter toward the horizon by the van Rhijn path factor and
+      seen through the transmittance; its zenith luminance and colour are PLANET DATA (Earth's measured; another
+      planet's its own); the starlight comes from the catalogue and the Milky Way below. Blocked by
+      `sky-view-fp16-night-floor` until the twilight measures.
+- [ ] **Realistic or artistic, by parameters only** (owner, 2026-10-25): every term above has a gain and a tint,
+      neutral by default (the physical sky), exposed in the manifest and the console like the sky's grading. A
+      realistic sky is the defaults; an artistic one changes numbers, never code.
 - [ ] **Twinkle (scintillation)**: a small temporal noise on the stars, stronger near the horizon
       (longer air path). It must be stable under TAA (not a per-frame white noise).
 - [ ] **Licence check** of the chosen catalogue and Milky Way picture, recorded in
@@ -43,7 +54,7 @@ scripted fade. This is the correct behaviour, and it costs nothing.
 
 ## ⚠️ Traps
 
-- ⚠️ **A physical night is close to black**: a moonless sky is ~1e-3 nits and the auto-exposure
+- ⚠️ **A physical night is close to black**: a moonless sky is ~2e-4 nits and the auto-exposure
   multiplier stops at `maxExposure` 100 (`ToneMapping.hpp:122`). The artistic night lift, a raised
   `maxExposure`, or both are an owner choice. Measure before choosing.
 - ⚠️ **A star is under a pixel**: drawn as a raw point, it flickers with TAA jitter and disappears
