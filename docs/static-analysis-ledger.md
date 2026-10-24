@@ -630,6 +630,9 @@ base ledger § include-what-you-use). The physical sky's files were brought clea
 `CelestialClock.hpp` two forward declarations. Known IWYU false suggestion, kept: `CelestialClock.hpp` asked to replace
 `"Scenes/SkyState.hpp"` by a forward declaration, but `m_renderStates` is a `std::array< SkyState, N >` member (a
 complete type) — `// IWYU pragma: keep (<reason>)`. The rest of the window's debt: item `iwyu-debt-since-2026-10-21`.
+The same day, the sky's RGBA32F tables (`SkyAtmosphere.{hpp,cpp}`, `StorageTexture2D.{hpp,cpp}` — `setFormat()`):
+clang-tidy 21.1.6 on the changed lines 0, cppcheck 0, IWYU brought clean (`StorageTexture2D.hpp` forward-declares
+`Vulkan::Image` / `ImageView` / `Sampler`, the `.cpp` `Settings`).
 
 **First lot (2026-10-19)**: the 49 files of the engine's cppcheck lot (34 `.cpp`, 15 headers): about 800 includes added
 and 115 removed, 41 forward declarations, converged at the second pass (three residual lines applied); the three

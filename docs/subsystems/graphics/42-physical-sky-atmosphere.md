@@ -14,10 +14,18 @@ or piecewise-linear in height. **Units: kilometres, per kilometre; the planet's 
 
 | Table | Size, format | Built | Holds |
 |---|---|---|---|
-| Transmittance | 256×64 RGBA16F | once, at creation | transmittance to the top, per (height, zenith cosine) |
-| Multiple scattering | 32×32 RGBA16F | once, at creation | Hillaire's isotropic second-order transfer f_ms, summed as a series |
-| Sky-view | 192×108 RGBA16F | **every frame** | in-scattered radiance **per lux** of the star, around the camera: x the azimuth from the star, y the zenith (non-linear near the horizon) |
+| Transmittance | 256×64 RGBA32F | once, at creation | transmittance to the top, per (height, zenith cosine) |
+| Multiple scattering | 32×32 RGBA32F | once, at creation | Hillaire's isotropic second-order transfer f_ms, summed as a series |
+| Sky-view | 192×108 RGBA32F | **every frame** | in-scattered radiance **per lux** of the star, around the camera: x the azimuth from the star, y the zenith (non-linear near the horizon) |
 | Frame | 4×1 RGBA32F | every frame | texel 0: unit vector toward the star + cos of its angular radius; texel 1: its illuminance above the atmosphere × colour (lux) + the camera's distance to the centre (km) |
+
+⚠️ **The three tables are RGBA32F** (2026-10-25, owner decision; `SkyAtmosphere::tableFormat()`): they hold radiance
+PER LUX of the star, and half floats flushed everything under 2^-24 per lux — ~0.008 nits once × 134 klx — to zero:
+the night sky was EXACTLY 0 below a −12° sun (one fp16 quantum was the only value left at −12°: 0.00733 nits computed,
+0.00729 measured). Linear filtering of RGBA32F is optional in Vulkan: it is queried (storage + sampled + linear filter,
+optimal tiling); a device without it falls back to RGBA16F with a warning. Cost (sky-lab, RTX 3070 Ti, 5 windows each):
+`SkyAtmosphere/SkyView` 0.009 → 0.011 ms; `ScenePass` and the frame within the noise (medians 0.139 → 0.133, 2.37 →
+2.24 ms). Memory: < 1 MB for the three.
 
 The sky-view pass integrates WITH the ground (unlike Hillaire's): below the horizon the planet's surface shows, lit by
 the star through the air, instead of a black void under the scene's own small floor.
@@ -138,6 +146,18 @@ There is no HDR readback; this is the absolute reading:
 | Earth zenith, sun 45°, **134 870 lx** above the atmosphere, LINEAR 5772 K (lot 2, 2026-10-25) | RGB (964, 1799, 3870) nits, **L ≈ 1 771 cd/m²** (a very clear sky by Kittler's zenith formula: ~2 000 at turbidity 2.5); 2^-13 doubles the bytes |
 | Earth dusk, 45° N equinox (sun 12.7°, 5.1°, 0.1°, −3.0°, −7.5°) | halo → yellowing → orange horizon under a purple vault → pink-violet → deep blue with an orange band (frames in the `sky-lab` notes) |
 | Mars | butterscotch day, a white-to-blue aureole core at sunset (tone-mapped: the core saturates) |
+
+### The night (2026-10-25, RGBA32F tables)
+Earth, 45° N, new moon, zenith (post-processor off, the grading raised until the bytes read; the doc's nits protocol):
+
+| Sun | 0° | −3° | −6° | −9° | −12° | −15° | −18° | −21° | −30° |
+|---|---|---|---|---|---|---|---|---|---|
+| Zenith (cd/m²) | 187 | 31 | 1.04 | 0.041 | 0.0024 | 8.7e-5 | 7.6e-6 | 3.7e-7 | 0 |
+
+Civil twilight ends at ~1 cd/m², as measured skies do. Below −18° the zenith column is in the planet's shadow up to
+327 km (the atmosphere is 100 km thick): only multiple scattering from the sunlit horizon remains, and at −30° nothing
+— a PHYSICAL zero of this model. A real moonless night floor (~2e-4 cd/m²) is airglow, zodiacal light and starlight,
+none of which the sun's scattering gives: item `dynamic-sky-stars-and-milky-way` § "The night sky's own glow".
 
 ### ⚠️ Traps
 - A background WITHOUT an environment cubemap is legitimate (`AbstractBackground::environmentCubemap()` answers
