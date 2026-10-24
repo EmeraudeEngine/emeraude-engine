@@ -33,18 +33,23 @@
 #include <iterator>
 #include <numbers>
 #include <span>
+#include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Constants.hpp"
 #include "Graphics/Photometry.hpp"
+#include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderable/DynamicSkyResource.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
 #include "Math/Base.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "PixelFactory/Color.hpp"
+#include "PixelFactory/Types.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/Node.hpp"
 #include "Scenes/Scene.hpp"
+#include "Scenes/SkyState.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes::Component

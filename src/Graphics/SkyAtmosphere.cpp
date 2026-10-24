@@ -31,14 +31,21 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <initializer_list>
 #include <numbers>
 #include <utility>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/AtmosphereGLSL.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
@@ -52,6 +59,7 @@
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
+#include "Vulkan/Types.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
 
 namespace
