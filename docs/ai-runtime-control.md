@@ -1063,6 +1063,27 @@ python3 tools/remote-console.py "Core.SceneManagerService.PostProcess.getStatus(
   never executed.
 - Cost: read it in `getGPUTimings()`, the `OverflowCensus` line inside `PostFXChain`.
 
+### Forcing the pre-exposure (Oct 2026)
+
+The scene colour holds `nits × E_pre`, the frame's **pre-exposure** (engine
+`docs/todo/scene-colour-pre-exposure.md`, steps B1b-B3). The tone mapper applies the residual
+`E_display / E_pre` and the metering divides `E_pre` back out, so **the displayed image must not move when only
+E_pre moves**.
+
+```bash
+python3 tools/remote-console.py "Core.RendererService.setPreExposureOverride(0.0625)"  # force E_pre (0 = automatic)
+python3 tools/remote-console.py "Core.RendererService.getFrameDiagnostics()"             # metering.preExposure / preExposureOverridden
+```
+
+- At launch: `Core/Graphics/PostProcessing/PreExposure/Override` (a float, 0 = automatic, read once).
+- ⚠️ **Transition**: until every writer multiplies by E_pre (steps 4-7), the automatic value is **1**
+  (`PreExposureFollowsCamera` in `Renderer::latchPreExposure()`). Only the override moves E_pre, and an
+  override ≠ 1 brightens the frame by `1 / E_pre`: forcing 0.5 equals a +1 EV compensation (measured,
+  `post-processor-effect-debug 0,0`, pinned f/8 · 1/125 s · ISO 100: max 7/255, 0.5 % of the pixels over
+  1/255, the A/A noise being 8/255 and 0.4 %). Once the writers multiply, a moved region names a writer still
+  missing.
+- No tone mapper in the chain: E_pre is 1, whatever the override.
+
 ### Triggering a RenderDoc GPU frame capture
 
 For deep GPU analysis (draw calls, bound descriptors, sampled images, pipeline state) the engine

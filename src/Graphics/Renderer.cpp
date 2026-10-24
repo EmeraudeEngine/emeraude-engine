@@ -675,6 +675,7 @@ namespace EmEn::Graphics
 
 		m_cutFrameAroundTranslucency = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPCutFrameAroundTranslucencyKey, DefaultGraphicsPPCutFrameAroundTranslucency);
 		m_deferredPunctualLightsEnabled.store(m_primaryServices.settings().getOrSetDefault< bool >(GraphicsDeferredPunctualLightsEnabledKey, DefaultGraphicsDeferredPunctualLightsEnabled), std::memory_order_relaxed);
+		this->setPreExposureOverride(m_primaryServices.settings().getOrSetDefault< float >(GraphicsPPPreExposureOverrideKey, DefaultGraphicsPPPreExposureOverride));
 		m_depthOfFieldAllowed = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPDepthOfFieldEnabledKey, DefaultGraphicsPPDepthOfFieldEnabled);
 		m_motionBlurAllowed = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPMotionBlurEnabledKey, DefaultGraphicsPPMotionBlurEnabled);
 		m_shadowMapsEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsShadowMappingEnabledKey, DefaultGraphicsShadowMappingEnabled);
@@ -2166,6 +2167,10 @@ namespace EmEn::Graphics
 			});
 		}
 
+		/* The frame's pre-exposure: every input is final here (the camera sync, the post-processing decision, the
+		 * scene target), and nothing of this frame has written a radiance yet. */
+		this->latchPreExposure(scene.get());
+
 		/* Dispatch to the appropriate rendering strategy.
 		 * NOTE: The post-processing path is only taken when there IS an active scene. The
 		 * PostProcessor is a renderer-global service that executes the ACTIVE scene's post-process
@@ -3450,6 +3455,80 @@ namespace EmEn::Graphics
 	}
 
 	void
+	Renderer::latchPreExposure (const Scenes::Scene * scene) noexcept
+	{
+		/* Hysteresis of the automatic value: it follows the metered exposure by whole stops, and moves only once the
+		 * metering drifted more than one stop away from it. */
+		constexpr auto HysteresisStops{1.0F};
+
+		/* ⚠️ TRANSITION (scene-colour pre-exposure, steps 4-7 pending): the scene's writers do not multiply by E_pre
+		 * yet, so an automatic E_pre != 1 would feed the metering a scene divided by E_pre and the auto exposure would
+		 * chase it. Until every writer multiplies, the automatic value is 1 — today's image, bit for bit — and only
+		 * the override moves E_pre: the instrument that finds the writers still missing. */
+		constexpr auto PreExposureFollowsCamera{false};
+
+		float preExposure = 1.0F;
+
+		const Effects::Camera::ToneMapping * toneMapping = nullptr;
+
+		if ( scene != nullptr && m_postProcessingActive )
+		{
+			if ( const auto * stack = scene->postProcessStack(); stack != nullptr )
+			{
+				if ( const auto candidate = stack->cameraToneMapping(); candidate != nullptr && candidate->isEnabled() && candidate->isCreated() )
+				{
+					toneMapping = candidate.get();
+				}
+			}
+		}
+
+		if ( toneMapping == nullptr )
+		{
+			/* No tone mapper: the scene colour reaches the screen as it is, so it stays in nits. The hysteresis
+			 * restarts from the metering when a tone mapper comes back. */
+			m_quantisedPreExposure = 0.0F;
+		}
+		else if ( const auto forced = m_preExposureOverride.load(std::memory_order_relaxed); forced > 0.0F )
+		{
+			preExposure = forced;
+		}
+		else if constexpr ( PreExposureFollowsCamera )
+		{
+			const auto camera = scene->activeCamera();
+			const auto displayExposure = toneMapping->displayExposure(camera.get());
+
+			if ( std::isfinite(displayExposure) && displayExposure > 0.0F )
+			{
+				if ( toneMapping->meteringActive(camera.get()) )
+				{
+					const auto stops = std::log2(displayExposure);
+
+					if ( m_quantisedPreExposure <= 0.0F || std::abs(stops - std::log2(m_quantisedPreExposure)) > HysteresisStops )
+					{
+						m_quantisedPreExposure = std::exp2(std::round(stops));
+					}
+
+					preExposure = m_quantisedPreExposure;
+				}
+				else
+				{
+					/* Manual exposure: the camera's APEX triad, exact. */
+					m_quantisedPreExposure = 0.0F;
+
+					preExposure = displayExposure;
+				}
+			}
+		}
+
+		/* r over RENDERED frames (the frame-history contract): this function runs once per recorded frame. */
+		m_previousPreExposure = m_preExposure;
+		m_preExposure = preExposure;
+		m_preExposureRatio = m_preExposure / m_previousPreExposure;
+
+		m_postProcessor.setFramePreExposure({.value = m_preExposure, .ratio = m_preExposureRatio});
+	}
+
+	void
 	Renderer::publishFrameDiagnostics (Scenes::Scene * scene) noexcept
 	{
 		FrameDiagnostics diagnostics{};
@@ -3477,6 +3556,9 @@ namespace EmEn::Graphics
 				diagnostics.metering.meteredShutterSpeed = toneMapping->meteredShutterSpeed();
 				diagnostics.metering.rejectedCount = toneMapping->meteredRejectedCount();
 			}
+
+			diagnostics.metering.preExposure = m_preExposure;
+			diagnostics.metering.preExposureOverridden = m_preExposureOverride.load(std::memory_order_relaxed) > 0.0F;
 
 			stack->publishFrameDiagnostics(diagnostics);
 		}

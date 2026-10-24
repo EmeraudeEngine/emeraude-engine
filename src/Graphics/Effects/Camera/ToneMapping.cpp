@@ -103,7 +103,9 @@ namespace
 	{
 		float texelSizeX;
 		float texelSizeY;
-		float padding0;
+		/* 1 / E_pre: the extract meters ABSOLUTE luminance out of the pre-exposed scene colour (D4). The
+		 * downsample passes ignore it. */
+		float inversePreExposure;
 		float padding1;
 	};
 
@@ -167,7 +169,7 @@ layout(push_constant) uniform PushConstants
 {
 	float texelSizeX;
 	float texelSizeY;
-	float padding0;
+	float inversePreExposure;
 	float padding1;
 };
 
@@ -185,8 +187,10 @@ void main()
 	vec3 s2 = textureLod(inputTex, vUV + ts * vec2(-0.25,  0.25), 0.0).rgb;
 	vec3 s3 = textureLod(inputTex, vUV + ts * vec2( 0.25,  0.25), 0.0).rgb;
 
-	/* Convert to luminance (Rec. 709 coefficients). */
-	const vec3 w = vec3(0.2126, 0.7152, 0.0722);
+	/* Convert to luminance (Rec. 709 coefficients), back in ABSOLUTE nits: the scene colour holds
+	 * nits × E_pre. Dividing here keeps the whole metering chain absolute — the EMA, the
+	 * plausibility window, the floors and the readback — with no feedback through E_pre. */
+	const vec3 w = vec3(0.2126, 0.7152, 0.0722) * inversePreExposure;
 	float l0 = dot(s0, w);
 	float l1 = dot(s1, w);
 	float l2 = dot(s2, w);
@@ -1048,7 +1052,10 @@ namespace EmEn::Graphics::Effects::Camera
 		/* Effective exposure: the ACTIVE CAMERA drives the photographic behaviour when
 		 * present (physical camera model), see resolveExposure(). */
 		const auto terms = this->resolveExposure(context.camera);
-		const auto exposure = terms.exposure;
+		/* The scene colour holds nits × E_pre: the shader's exposure is the RESIDUAL E_display / E_pre (D3), with
+		 * the E_pre THIS frame's writers used, so the displayed exposure stays exact and lag-free whatever E_pre is. */
+		const auto preExposure = std::isfinite(context.preExposure) && context.preExposure > 0.0F ? context.preExposure : 1.0F;
+		const auto exposure = terms.exposure / preExposure;
 		const auto keyValue = terms.keyValue;
 		const auto autoExposureEnabled = terms.autoExposureEnabled;
 		const auto minExposure = terms.minExposure;
@@ -1087,7 +1094,7 @@ namespace EmEn::Graphics::Effects::Camera
 				const LuminancePushConstants pc{
 					.texelSizeX = 1.0F / inputW,
 					.texelSizeY = 1.0F / inputH,
-					.padding0 = 0.0F,
+					.inversePreExposure = 1.0F / preExposure,
 					.padding1 = 0.0F
 				};
 
@@ -1111,7 +1118,7 @@ namespace EmEn::Graphics::Effects::Camera
 				const LuminancePushConstants pc{
 					.texelSizeX = 1.0F / inputW,
 					.texelSizeY = 1.0F / inputH,
-					.padding0 = 0.0F,
+					.inversePreExposure = 1.0F,
 					.padding1 = 0.0F
 				};
 

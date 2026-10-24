@@ -160,6 +160,10 @@ namespace EmEn::Graphics
 		uint32_t rejectedCount{0};
 		/** @brief Whether the camera tone mapping exists, is enabled and created. */
 		bool toneMapper{false};
+		/** @brief The frame's pre-exposure E_pre (Renderer::preExposure()): scene colour = nits × E_pre. */
+		float preExposure{1.0F};
+		/** @brief Whether E_pre is forced (Renderer::setPreExposureOverride()). */
+		bool preExposureOverridden{false};
 		/** @brief Whether the tone mapper meters the frame (auto exposure with its luminance chain). */
 		bool autoExposure{false};
 	};

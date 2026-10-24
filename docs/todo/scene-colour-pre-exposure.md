@@ -177,6 +177,14 @@ decision.
 
   → discuss (b).
 
+> **D2 AMENDED (owner, 2026-10-24): E_pre travels in the VIEW UBO**, not in a new set. D2's premise was stale
+> when it was decided: the 2D and cubemap view UBOs carry one region per frame in flight AND per target since
+> `00a7b9cf0` (2026-08-26), while Rule 4 of `docs/subsystems/graphics/25-16-…` and the `[CAUTION]` block of
+> `ViewMatrices2DUBO::updateVideoMemory()` still said "single-buffered". The free float of the last vec4
+> (offset 35 after `IBLDiffuseWeight`) holds it: every scene program, MDI and cubemap pass already binds that
+> set, so no pipeline layout and no program cache key changes. Written at the latch into the frame's region;
+> the render-to-texture probes hold their fixed cache scale S (D7).
+
 **D2 — How E_pre reaches the scene programs.** It is a per-frame **and** per-target scalar. The
 view UBO (Rule 4), the material UBOs (static) and the light UBOs are all excluded.
 - (a) **A per-draw push constant**, following the jitter precedent
@@ -374,8 +382,10 @@ Plumbing:
      - T3 `sponza`, f/8 · 1/125 s · ISO 100: **the premise is false** — `SceneColour` overflows in
        every one of 82 frames (1-3 texels) and **`RTGI_Trace` holds 315-358 texels at the ceiling in
        every frame** (peak finite 65 472); `ToneMapInput`, `RTR_Trace` and the atlas stay clean.
-   - B1b, the pre-exposure override (`Core/Graphics/PostProcessing/PreExposure/Override`,
-     `setPreExposureOverride`): not started.
+   - **B1b, the pre-exposure override — DONE (2026-10-24, Linux).** The settings key
+     `Core/Graphics/PostProcessing/PreExposure/Override` (a float, 0 = automatic, read once) and
+     `Core.RendererService.setPreExposureOverride(value)`; `getFrameDiagnostics()` answers
+     `metering.preExposure` / `preExposureOverridden`, and `PostProcess.getStatus()` prints a `Pre-exposure:` line.
 2. **E_pre plumbing.** Latch E_pre once in `Renderer::renderFrame`, **right after the scene-target
    block and before the rendering-strategy dispatch** (`Renderer.cpp:1834`/`:1845` at `a42a7410`) —
    ⚠️ AMENDED 2026-09-26 (owner-confirmed P18): this text said "beside `prepareFrameJitter` (`:1665`)".
@@ -386,6 +396,22 @@ Plumbing:
    *Gate:* with E_pre forced to 1, the PNGs are bit-identical.
 3. **Tone map ÷ E_pre and extract ÷ E_pre (D3, D4).**
    *Gate:* with an override ≠ 1 and no writer changed yet, the image scales by exactly that factor.
+   - **Steps 2 and 3 — DONE (2026-10-24, Linux, RTX 3070 Ti).** `Renderer::latchPreExposure()` runs right
+     before the rendering-strategy dispatch; it keeps E_pre, the previous rendered frame's and their ratio r, and
+     hands them to the chain (`PostProcessor::setFramePreExposure()` → `FrameContext::preExposure` /
+     `preExposureRatio`). Manual exposure: the exact APEX exposure; auto: `2^round(log2 E)`, moved only past one
+     stop of drift; 1 without a tone mapper; the override wins. The tone mapper's push constant is
+     `exposure / E_pre` (both paths), and the extract's Rec. 709 weights are multiplied by `1 / E_pre`
+     (`inversePreExposure`, the former `padding0`).
+   - ⚠️ **TRANSITION, `PreExposureFollowsCamera = false`** (`Renderer.cpp`): until step 4-7's writers multiply,
+     the AUTOMATIC value stays 1. An automatic E_pre on an unchanged scene would feed the metering `L / E_pre`
+     and the auto exposure would chase it. Only the override moves E_pre meanwhile. **Flip it to true at the
+     end of step 7**, then run the invariance test (B8).
+   - Gates (`post-processor-effect-debug 0,0`, pinned f/8 · 1/125 s · ISO 100, 0 VUID): the A/A control is max
+     8/255, 0.38 % of the pixels over 1/255; **forced 1 vs automatic**: max 5/255, 0.39 %; **forced 0.5 vs a
+     +1 EV compensation**: max 7/255, 0.51 %, means 193.3 / 193.3 (the remainder is the TAA's Karis weights,
+     which still read the absolute display exposure until step 6). On `sponza` (animated, A/A 16 %), the means
+     are identical too (27.3 / 27.3 and 40.7 / 40.7).
 4. **Scene programs**: the transport chosen in D2, the multiply from D1, the exemptions and
    compensations from D6, and the RTT scale from D7.
 5. **RT lanes, the probe volume and its scale (D7), and the finite guard at

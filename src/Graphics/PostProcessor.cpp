@@ -1467,6 +1467,8 @@ namespace EmEn::Graphics
 
 				return toneMapping != nullptr ? toneMapping->displayExposure(activeCamera) : 0.0F;
 			}(),
+			.preExposure = m_framePreExposure.value,
+			.preExposureRatio = m_framePreExposure.ratio,
 			.shutterSpeed = [&stack, activeCamera] {
 				if ( activeCamera == nullptr )
 				{

@@ -815,6 +815,16 @@ namespace EmEn
 			constexpr auto GraphicsPPOverflowCensusEnabledKey{"Core/Graphics/PostProcessing/OverflowCensus/Enabled"};
 			constexpr auto DefaultGraphicsPPOverflowCensusEnabled{false};
 
+			/* Post-processing > the PRE-EXPOSURE OVERRIDE (scene-colour pre-exposure, step B1b). The
+			 * pre-exposure E_pre is the factor the scene radiance is stored with in the fp16 scene
+			 * colour (Renderer::preExposure()); it follows the camera's exposure by itself. A value
+			 * > 0 FORCES it, whatever the camera: the invariance test of the pre-exposure (the image
+			 * must not move when only E_pre moves) and the A/B of a suspected writer. 0 (the
+			 * default) leaves it automatic. Read once at the renderer's initialization;
+			 * `Core.RendererService.setPreExposureOverride(value)` changes it live. */
+			constexpr auto GraphicsPPPreExposureOverrideKey{"Core/Graphics/PostProcessing/PreExposure/Override"};
+			constexpr auto DefaultGraphicsPPPreExposureOverride{0.0F};
+
 			/* Post-processing > which LANE the lighting family starts on: "Auto" (the best lane
 			 * this machine can actually run), "RayTracing", "ScreenSpace", or "None" for no
 			 * indirect lighting at all. Every lighting concept exists in both lanes and both stay
