@@ -1,0 +1,44 @@
+---
+id: dynamic-sky-sun-light-from-transmittance
+title: Dynamic sky — the sun's directional light takes its colour and illuminance from the atmosphere's transmittance
+status: blocked
+priority: unranked
+scope: Scenes/Component (SunCourse, DirectionalLight), Graphics (atmosphere transmittance LUT readback or CPU twin)
+opened: 2026-10-24
+blocked-by: [dynamic-sky-atmosphere]
+tags: [sky, atmosphere, photometry, lighting, design]
+---
+
+# Dynamic sky — the sun's directional light takes its colour and illuminance from the atmosphere's transmittance
+
+## Why
+
+`SunCourse` sets the light with an empirical model (`src/Scenes/Component/SunCourse.hpp`): an
+air-mass Beer-Lambert extinction (Kasten & Young 1989) and an exponential fit of the colour
+temperature between `zenithTemperature` and `horizonTemperature`. A physical sky computes the real
+transmittance of its atmosphere toward the sun. If the light keeps its own model, the sun disc
+drawn in the sky and the light on the ground disagree. On an alien sky the fit means nothing at
+all, since its 2000/5800 K anchors are Earth's.
+
+## What remains
+
+- [ ] With a dynamic sky, the light's colour and illuminance = the star's top-of-atmosphere
+      illuminance × the transmittance toward the star, read from the same model as the sky.
+      Without one (a picture sky), `SunCourse` keeps its current model.
+- [ ] Choose how the CPU gets the value. Either a CPU twin of the transmittance integral (cheap: a
+      few dozen samples per cycle, one per star), or an asynchronous readback of the LUT. The CPU
+      twin is deterministic and has no frame latency; the readback is guaranteed to match the GPU.
+      Escalate to the owner.
+- [ ] Below the horizon, the light still switches off (current behaviour). The penumbra at
+      sunrise (the disc half cut) follows the transmittance instead of a hard switch.
+- [ ] Measure: the light's lux and colour against the drawn disc at 60°, 10°, 2° and 0°.
+
+## ⚠️ Traps
+
+- ⚠️ `SunCourse` writes a light that shadows. A colour that changes every cycle must not trigger
+  a shadow-map rebuild or a pipeline change: only the light UBO changes.
+
+## References
+
+- `dynamic-sky-atmosphere`, `celestial-clock`.
+- `src/Scenes/Component/SunCourse.cpp`, `src/Graphics/CelestialBody.hpp`.

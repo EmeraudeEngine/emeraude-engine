@@ -133,6 +133,12 @@ With the fp16 cap lifted, the study's variant with a 48 klx cap modelled 0.70 / 
 is projet-alpha item `basic-scenery-palm-belt-lost-bulb-flood`, **blocked by this one**, and it is test case T1's
 neighbour (same scene).
 
+## Waiting on this item: the dynamic sky (owner, 2026-10-24)
+
+The owner put this item **before** the dynamic sky (`dynamic-sky-atmosphere` and its lots). A physical sun disc is
+~1.6e9 nits at the zenith, far past 65 504. The sky also takes the exposure through six orders of magnitude, from a
+100 klx noon down to a ~1e-3-nit moonless night.
+
 ## What remains
 
 ### A. Decisions for the owner
