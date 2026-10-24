@@ -116,6 +116,16 @@ namespace EmEn::Input
 			bool isButtonReleased (MouseButton button) const noexcept;
 
 			/**
+			 * @brief Holds or releases a button by INJECTION (the console's mousePress / mouseRelease): the polled state
+			 * (isButtonPressed()) sees it, and the held state survives the per-frame copy of the hardware state
+			 * (readDeviceState()) until released — the KeyboardController::injectKeyState() model.
+			 * @note Main thread (the console commands), like the other writers.
+			 * @param button The GLFW mouse button (an out-of-range button is ignored).
+			 * @param held Whether the button is held.
+			 */
+			static void injectButtonState (int32_t button, bool held) noexcept;
+
+			/**
 			 * @brief This function is called by the input manager to update device state.
 			 * @note This must be called by the main thread.
 			 * @param window A reference to the window.
@@ -126,6 +136,8 @@ namespace EmEn::Input
 
 			/* NOTE: Written on the main thread, read by the logic thread: one atomic per button (see KeyboardController). */
 			static std::array< std::atomic< uint8_t >, 8 > s_deviceState;
+			/** @brief The buttons held by injection, OR-ed into the hardware state after each copy. */
+			static std::array< std::atomic< uint8_t >, 8 > s_injectedState;
 
 			bool m_disabled{false};
 	};

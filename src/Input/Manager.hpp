@@ -482,6 +482,16 @@ namespace EmEn::Input
 			 */
 			void injectPointerMoveEvent (float positionX, float positionY) noexcept;
 
+			/**
+			 * @brief Injects a synthetic mouse wheel event (dispatched as the GLFW scroll callback does).
+			 * @param positionX The X coordinate in screen pixels.
+			 * @param positionY The Y coordinate in screen pixels.
+			 * @param xOffset The horizontal scroll offset.
+			 * @param yOffset The vertical scroll offset (positive: away from the user).
+			 * @param modifiers The modifier keys mask.
+			 */
+			void injectMouseWheelEvent (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers = 0) noexcept;
+
 		private:
 
 			/**

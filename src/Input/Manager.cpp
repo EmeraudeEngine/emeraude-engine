@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <ranges>
 #include <utility>
@@ -43,6 +44,7 @@
 #include "Console/Command.hpp"
 #include "GamepadController.hpp"
 #include "JoystickController.hpp"
+#include "PointerController.hpp"
 #include "IO/IO.hpp"
 #include "Arguments.hpp"
 #include "BaseUtility.hpp"
@@ -1150,6 +1152,12 @@ namespace EmEn::Input
 	}
 
 	void
+	Manager::injectMouseWheelEvent (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers) noexcept
+	{
+		this->dispatchMouseWheel({positionX, positionY}, xOffset, yOffset, modifiers);
+	}
+
+	void
 	Manager::onRegisterToConsole () noexcept
 	{
 		/* Injected values reach listeners that may index per-key / per-button state: an out-of-range
@@ -1357,7 +1365,7 @@ namespace EmEn::Input
 				return Console::CommandResult::success(std::string{polled ? "Per-frame copy enabled.\n" : "Per-frame copy disabled: read from the device now.\n"} + joystick.getRawState());
 			}, Console::CommandHint::ReadOnly);
 
-		this->bindCommand("mouseClick", "Injects a mouse click (press then release, so it cannot hold a drag).",
+		this->bindCommand("mouseClick", "Injects a mouse click (press then release, so it cannot hold a drag nor be seen by a POLLED button state: use mousePress / mouseRelease for that).",
 			{
 				{"x", "Horizontal position, in PHYSICAL pixels from the left of the framebuffer."},
 				{"y", "Vertical position, in PHYSICAL pixels from the top of the framebuffer."},
@@ -1386,7 +1394,7 @@ namespace EmEn::Input
 		 *   mousePress(x, y) ; mouseMove(...) ... ; mouseRelease(x, y)
 		 * ⚠️ The press and the release are NOT paired by the engine: a caller that forgets the
 		 * release leaves the control believing the button is still down. */
-		this->bindCommand("mousePress", "Injects a mouse button PRESS and leaves it down, so a drag can be performed with mouseMove.",
+		this->bindCommand("mousePress", "Injects a mouse button PRESS and leaves it down until mouseRelease: a drag with mouseMove, and a button held for the code that POLLS it (the player's weapons fire while the left button is held).",
 			{
 				{"x", "Horizontal position, in PHYSICAL pixels from the left of the framebuffer."},
 				{"y", "Vertical position, in PHYSICAL pixels from the top of the framebuffer."},
@@ -1401,6 +1409,7 @@ namespace EmEn::Input
 					return Console::CommandResult::error(error);
 				}
 
+				PointerController::injectButtonState(button, true);
 				this->injectMouseClickEvent(x, y, button, modifiers, GLFW_PRESS);
 
 				return Console::CommandResult::success("Mouse button press injected (it stays DOWN until mouseRelease).");
@@ -1421,9 +1430,39 @@ namespace EmEn::Input
 					return Console::CommandResult::error(error);
 				}
 
+				PointerController::injectButtonState(button, false);
 				this->injectMouseClickEvent(x, y, button, modifiers, GLFW_RELEASE);
 
 				return Console::CommandResult::success("Mouse button release injected.");
+			});
+
+		/* The wheel (2026-10-23): the player cycles its weapons only with it, so a weapon could not be selected from the
+		 * console (engine docs/subsystems/input/04-console-pointer-injection.md). */
+		this->bindCommand("mouseWheel", "Injects a mouse wheel scroll (as the GLFW scroll callback: to the tracking listener, else to the pointer listeners).",
+			{
+				{"x", "Horizontal position, in PHYSICAL pixels from the left of the framebuffer."},
+				{"y", "Vertical position, in PHYSICAL pixels from the top of the framebuffer."},
+				{"yOffset", "The vertical scroll, in wheel notches (positive: away from the user, i.e. scrolling up)."},
+				{"xOffset", "The horizontal scroll, in notches.", 0.0F},
+				{"modifiers", "The GLFW modifier bit mask (1 Shift, 2 Control, 4 Alt, 8 Super).", 0}
+			},
+			[this, checkKey] (float x, float y, float yOffset, float xOffset, int32_t modifiers) {
+				std::string error;
+
+				if ( !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(yOffset) || !std::isfinite(xOffset) )
+				{
+					return Console::CommandResult::error("The position and the offsets must be finite numbers.");
+				}
+
+				/* NOTE: same modifier rule as a key; GLFW_KEY_SPACE only satisfies the key half of the check. */
+				if ( !checkKey(GLFW_KEY_SPACE, modifiers, error) )
+				{
+					return Console::CommandResult::error(error);
+				}
+
+				this->injectMouseWheelEvent(x, y, xOffset, yOffset, modifiers);
+
+				return Console::CommandResult::success("Mouse wheel injected.");
 			});
 
 		this->bindCommand("mouseMove", "Injects a pointer move (absolute dispatch; ignored by a listener in relative mode).",

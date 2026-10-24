@@ -41,6 +41,7 @@
 namespace EmEn::Input
 {
 	std::array< std::atomic< uint8_t >, 8 > PointerController::s_deviceState{};
+	std::array< std::atomic< uint8_t >, 8 > PointerController::s_injectedState{};
 
 	bool
 	PointerController::isButtonPressed (MouseButton button) const noexcept
@@ -78,6 +79,16 @@ namespace EmEn::Input
 		return std::next(s_deviceState.cbegin(), static_cast< std::ptrdiff_t >(button))->load(std::memory_order_relaxed) == 0;
 	}
 
+	void
+	PointerController::injectButtonState (int32_t button, bool held) noexcept
+	{
+		if ( button >= 0 && static_cast< size_t >(button) < s_injectedState.size() )
+		{
+			std::next(s_injectedState.begin(), button)->store(held ? 1 : 0, std::memory_order_relaxed);
+			std::next(s_deviceState.begin(), button)->store(held ? 1 : 0, std::memory_order_relaxed);
+		}
+	}
+
 	std::string
 	PointerController::getRawState () const noexcept
 	{
@@ -112,13 +123,14 @@ namespace EmEn::Input
 		}
 #endif
 
-		auto hardwareIt = hardware.cbegin();
-
-		for ( auto & state : s_deviceState )
+		/* The buttons held by injection stay held (a console mousePress) whatever the hardware says. */
+		for ( size_t button = 0; button < s_deviceState.size(); ++button )
 		{
-			state.store(*hardwareIt != 0 ? 1 : 0, std::memory_order_relaxed);
+			const auto offset = static_cast< std::ptrdiff_t >(button);
+			const auto pressed = *std::next(hardware.cbegin(), offset) != 0;
+			const auto injected = std::next(s_injectedState.cbegin(), offset)->load(std::memory_order_relaxed) != 0;
 
-			++hardwareIt;
+			std::next(s_deviceState.begin(), offset)->store(pressed || injected ? 1 : 0, std::memory_order_relaxed);
 		}
 
 		/* NOTE: glfwGetCursorPos() was removed from here, because of high CPU usage. */
