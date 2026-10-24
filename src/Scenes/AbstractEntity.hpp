@@ -282,6 +282,8 @@ namespace EmEn::Scenes
 				WeightDestroyed,			  ///< Component::Weight removed.
 				CloudVolumeCreated,		   ///< Component::CloudVolume added.
 				CloudVolumeDestroyed,		 ///< Component::CloudVolume removed.
+				CelestialClockCreated,		 ///< Component::CelestialClock added.
+				CelestialClockDestroyed,	 ///< Component::CelestialClock removed.
 				/* Enumeration boundary. */
 				MaxEnum					   ///< Total count of notification codes.
 			};

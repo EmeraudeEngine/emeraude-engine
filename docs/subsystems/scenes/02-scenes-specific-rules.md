@@ -74,6 +74,12 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 > ⚠️ **The sky's bodies only** (owner decision 2026-09-13): the sky, ambient and IBL stay the background's. It also
 > exposes the celestial pole and the local sidereal angle — what a star field turns by. Like `NodeAnimation` it
 > holds WEAK references and asks for its own removal when the sun's node or light dies.
+> It **writes the scene's sky state** (owner decision 2026-10-24): `publishStateForRendering()` fills a
+> `Scenes::SkyState` per render state — the sun and moons with their illuminance ABOVE the atmosphere (the zenith
+> illuminance × exp(extinction)), their unit-luminance colour at the zenith temperature (no horizon reddening: a
+> physical sky reddens it itself), angular diameter and phase — and the scene keeps its clock
+> (`CelestialClockCreated` / `CelestialClockDestroyed`; the last one added wins) behind
+> `Scene::skyStateForRendering(readStateIndex)`, which the renderer's physical sky reads (graphics doc 42).
 >
 > `SkyFollowsSun` (2026-09-13, owner decision) is the sky's HALF, deliberately a separate component:
 > bound to a `CelestialClock`, it maps the sun's elevation through a smoothstep (`duskElevation` −6° → 0,

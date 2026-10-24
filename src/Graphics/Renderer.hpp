@@ -118,6 +118,7 @@ namespace EmEn
 		class GrabPass;
 		class SceneRenderTarget;
 		class SkinnedGeometryProcessor;
+		class SkyAtmosphere;
 	class IrradianceProbeVolume;
 
 		namespace Compute
@@ -1773,6 +1774,17 @@ namespace EmEn::Graphics
 			bool initializeSubServices () noexcept;
 
 			/**
+			 * @brief Refreshes the sky-view table of the scene's physical sky (Renderable::DynamicSkyResource) for this
+			 * frame's star and camera, in a submission of its own, AHEAD of every pass that draws the sky.
+			 * @note No semaphore: every pass that reads the table is submitted later on the same queue, and the
+			 * atmosphere's barriers order them (SkyAtmosphere::recordFrame()).
+			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
+			 * @param scene A reference to the scene.
+			 * @param queue A pointer to the graphics queue to use for submissions.
+			 */
+			void renderSkyAtmosphere (RendererFrameScope & currentFrameScope, const Scenes::Scene & scene, const Vulkan::Queue * queue) noexcept;
+
+			/**
 			 * @brief Updates every shadow map from the scene.
 			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
 			 * @param scene A reference to the scene.
@@ -1939,6 +1951,11 @@ namespace EmEn::Graphics
 			std::shared_ptr< SceneRenderTarget > m_sceneTarget;
 			Vulkan::DeferredDestructor m_deferredDestructor;
 			Base::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
+			/* The sky-view submission of each frame in flight (renderSkyAtmosphere()), from that frame's command pool. */
+			std::array< std::shared_ptr< Vulkan::CommandBuffer >, 5 > m_skyCommandBuffers;
+			/* The atmosphere each frame in flight recorded: kept alive until that frame's slot is reused (its fence
+			 * waited), so a background swapped meanwhile never frees tables the GPU still writes or reads. */
+			std::array< std::shared_ptr< SkyAtmosphere >, 5 > m_skyAtmospheresInFlight;
 			/** @brief Semaphores signaled by the frame submission and waited on by
 			 * vkQueuePresentKHR(), indexed by ACQUIRED SWAP-CHAIN IMAGE INDEX — never by frame
 			 * index. A binary semaphore cannot be re-signaled while an operation still waits on

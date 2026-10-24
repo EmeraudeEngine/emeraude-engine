@@ -3107,6 +3107,23 @@ Registrations are tokens and a dispatch never walks a shrinking list since 2026-
 
 ## Scene Rendering
 
+### A background may have NO environment cubemap: never take its answer unchecked (fixed 2026-10-24)
+
+`AbstractBackground::environmentCubemap()` answers nullptr by contract (a physical sky, `DynamicSkyResource`, has no
+cubemap: its IBL is the item `dynamic-sky-amortised-ibl`). `Scene::setBackground()` already kept the scene's cubemap
+in that case, but `Scene::getRenderableInstanceReadyForRendering()` — which adopts the background's cubemap once its
+visual is ready — assigned the null and dereferenced it for the trace: a SIGSEGV on the first frame of `sky-lab`.
+It now adopts a non-null cubemap only, like `setBackground()`. Graphics doc 42.
+
+### Measuring a sky in NITS: the direct path, E_pre = 1, and its PNG is LINEAR (2026-10-24)
+
+No HDR readback exists. The absolute reading of a sky: `Core.RendererService.setPostProcessorEnabled(0)` (the direct
+swap-chain path — no tone mapper, so `latchPreExposure()` keeps **E_pre = 1** and `setPreExposureOverride()` does NOT
+apply there: an override of 2^-14 left the sky clipped to 255), then scale the sky itself into [0, 1]
+(`setDynamicSkyGrading(1, 1, 1, 2^-14)`). ⚠️ The PNG of that path is **linear** (UNORM swap-chain): doubling the scale
+doubled the bytes exactly, so nits = byte / 255 / scale, with NO sRGB decoding — decoding it read 1 650 nits as 187.
+Graphics doc 42 § "Measuring a sky in nits".
+
 ### A particles emitter is culled on its particles' world box, never on its node (fixed 2026-10-24)
 
 Owner, 2026-10-24: "the sprite particle emitters disappear with the camera angle". The particles live in the WORLD
