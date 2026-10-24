@@ -885,6 +885,17 @@ namespace EmEn::Scenes
 			return Console::CommandResult::info("The active scene is '" + activeScene->name() + "'");
 		}, Console::CommandHint::ReadOnly);
 
+		this->bindCommand("getWorldSoundCount", "Returns how many world sounds (Scene::playSoundAt(): sounds the scene owns, outliving the entity that caused them) still play in the active scene.", [this] () {
+			const auto activeScene = this->activeSceneSnapshot();
+
+			if ( activeScene == nullptr )
+			{
+				return Console::CommandResult::warning("No active scene !");
+			}
+
+			return Console::CommandResult::info("World sounds playing: " + std::to_string(activeScene->activeWorldSoundCount()) + " / " + std::to_string(Scene::MaxWorldSounds) + ".");
+		}, Console::CommandHint::ReadOnly);
+
 		/* NOTE: The compass is a Core-level debug display, bound to F9 on the keyboard. The console
 		 * keeps its OWN entry point: it is the deterministic way to drive it (an injected keyPress()
 		 * does reach Core since 2026-09-13, but a command states what it does and answers). Every

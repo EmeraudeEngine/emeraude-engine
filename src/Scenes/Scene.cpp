@@ -28,6 +28,8 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cmath>
+#include <iterator>
 #include <ranges>
 #include <sstream>
 
@@ -159,6 +161,9 @@ namespace EmEn::Scenes
 				m_ambience->stop();
 				m_ambience = nullptr;
 			}
+
+			/* NOTE: The world sounds go back to the audio pool. */
+			this->releaseWorldSounds(false);
 
 			/* NOTE: Other data are trivial. */
 		}
@@ -426,6 +431,9 @@ namespace EmEn::Scenes
 				this->applyBackgroundLightingNow();
 			}
 		}
+
+		/* The world sounds whose sound ended go back to the audio pool (playSoundAt()). */
+		this->releaseWorldSounds(true);
 
 		/* Environment IBL follows the adopted environment cubemap (any thread may have
 		 * changed the description; idle cost is one mutex lock + a pointer compare). */
@@ -773,6 +781,106 @@ namespace EmEn::Scenes
 		}
 
 		m_ambience->resetSoundSet();
+	}
+
+	void
+	Scene::playSoundAt (const Vector< 3, float > & position, const std::shared_ptr< Audio::SoundResource > & sound, float gain, float pitch) noexcept
+	{
+		if ( sound == nullptr )
+		{
+			TraceError{ClassId} << "playSoundAt(), no sound given to the scene '" << this->name() << "' !";
+
+			return;
+		}
+
+		if ( !std::isfinite(gain) || !std::isfinite(pitch) || !std::isfinite(position[X]) || !std::isfinite(position[Y]) || !std::isfinite(position[Z]) )
+		{
+			TraceError{ClassId} << "playSoundAt(), a non-finite position, gain or pitch for '" << sound->name() << "' is refused.";
+
+			return;
+		}
+
+		/* NOTE: A world sound is an event of now: played once its loading finished, it would sound out of place. */
+		if ( !sound->isLoaded() )
+		{
+			TraceWarning{ClassId} << "playSoundAt(), the sound '" << sound->name() << "' is not loaded yet (preload it): not played.";
+
+			return;
+		}
+
+		const Base::MutexLock lock{m_worldSoundsAccess};
+
+		auto * voice = this->acquireWorldSoundVoice();
+
+		if ( voice == nullptr )
+		{
+			TraceDebug{ClassId} << "playSoundAt(), no free source in the audio pool: '" << sound->name() << "' not played.";
+
+			return;
+		}
+
+		auto & source = **voice;
+
+		source.setPosition(position);
+		source.setGain(std::abs(gain));
+		source.setPitch(pitch);
+		static_cast< void >(source.play(sound, Audio::PlayMode::Once));
+	}
+
+	Audio::SourceRequest *
+	Scene::acquireWorldSoundVoice () noexcept
+	{
+		/* A held voice whose sound ended is reused as it is. */
+		for ( auto & voice : m_worldSounds )
+		{
+			if ( voice != nullptr && voice->isFinished() )
+			{
+				return &voice;
+			}
+		}
+
+		/* An empty slot asks the pool. */
+		for ( auto & voice : m_worldSounds )
+		{
+			if ( voice == nullptr )
+			{
+				voice = m_AVConsoleManager.audioManager().requestSource();
+
+				return voice != nullptr ? &voice : nullptr;
+			}
+		}
+
+		/* Every voice plays: the next one in turn is cut for the new sound (the cursor stays < MaxWorldSounds). */
+		auto & voice = *std::next(m_worldSounds.begin(), static_cast< std::ptrdiff_t >(m_nextWorldSound));
+
+		m_nextWorldSound = (m_nextWorldSound + 1) % MaxWorldSounds;
+
+		return &voice;
+	}
+
+	size_t
+	Scene::activeWorldSoundCount () const noexcept
+	{
+		const Base::MutexLock lock{m_worldSoundsAccess};
+
+		return static_cast< size_t >(std::ranges::count_if(m_worldSounds, [] (const auto & voice) {
+			return voice != nullptr && !voice->isFinished();
+		}));
+	}
+
+	void
+	Scene::releaseWorldSounds (bool finishedOnly) noexcept
+	{
+		/* NOTE: The pool stops and resets a source given back (Audio::Manager::releaseSource()). */
+		const Base::MutexLock lock{m_worldSoundsAccess};
+
+		for ( auto & voice : m_worldSounds )
+		{
+			if ( voice != nullptr && (!finishedOnly || voice->isFinished()) )
+			{
+				voice.reset();
+			}
+		}
 	}
 
 	bool
