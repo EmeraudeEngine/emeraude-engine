@@ -797,25 +797,18 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		/* NOTE: Check if at least one rendering program exists for the CURRENT render pass.
-		 * This is important because after a window resize, the render pass is recreated
-		 * with a new handle, invalidating previously cached programs.
-		 * Using the render pass handle ensures we don't falsely report readiness with stale programs. */
+		/* NOTE: THIS instance's programs were made ready for this target and its CURRENT render pass (a resize recreates
+		 * it with a new handle: the programs are stale, the instance is prepared again). Not "the renderable has a
+		 * program": its cache is shared by instances whose keys differ (see the declaration). */
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 
-		/* For renderables with grab-pass layers rendered in the post-process pass,
-		 * also check programs cached for the post-process render pass. */
-		const auto * postProcessFB = renderTarget->postProcessFramebuffer();
+		const auto prepared = std::ranges::any_of(m_readyTargets, [&renderTarget, renderPassHandle] (const ReadyTarget & readyTarget) {
+			return readyTarget.renderTarget == renderTarget.get() && readyTarget.renderPassHandle == renderPassHandle;
+		});
 
-		if ( postProcessFB != nullptr )
-		{
-			const auto postProcessRPHandle = reinterpret_cast< uint64_t >(postProcessFB->renderPass()->handle());
-
-			return m_renderable->hasAnyCachedProgramsForRenderPass(renderTarget, renderPassHandle)
-				|| m_renderable->hasAnyCachedProgramsForRenderPass(renderTarget, postProcessRPHandle);
-		}
-
-		return m_renderable->hasAnyCachedProgramsForRenderPass(renderTarget, renderPassHandle);
+		/* NOTE: And the renderable's cache still holds programs for that pass: a cleared cache (clearProgramCache()) makes
+		 * the instance prepare again rather than draw with nothing. */
+		return prepared && m_renderable->hasAnyCachedProgramsForRenderPass(renderTarget, renderPassHandle);
 	}
 
 	bool
@@ -1065,6 +1058,18 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 		}
 
+		/* Every rendering program of THIS instance exists for this target and its render pass: ready (isReadyToRender()). */
+		if ( const auto readyIt = std::ranges::find_if(m_readyTargets, [&renderTarget] (const ReadyTarget & readyTarget) {
+			return readyTarget.renderTarget == renderTarget.get();
+		}); readyIt != m_readyTargets.end() )
+		{
+			readyIt->renderPassHandle = mainRenderPassHandle;
+		}
+		else
+		{
+			m_readyTargets.push_back({.renderTarget = renderTarget.get(), .renderPassHandle = mainRenderPassHandle});
+		}
+
 		/* NOTE: A device without the geometry stage (MoltenVK) cannot build the TBN space program: never attempted. */
 		if ( this->isDisplayTBNSpaceEnabled() && renderer.isTBNSpaceRenderingAvailable() )
 		{
@@ -1297,6 +1302,16 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vector< 3, float > & lodViewPosition, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t cascadeIndex, uint32_t LODLevel, const DescriptorSet * sceneTransformsDS) const noexcept
 	{
+		/* NOTE: Read ONCE: a multiple instance's count is the logic's live value (not published per render state); an
+		 * emitter whose last particles just died has nothing to draw (a draw of 0 instances, the Debug "No instance
+		 * count" — 4 seen on Windows in the frame a smoke died out, after the scene's own cull). */
+		const auto drawnInstances = this->instanceCount();
+
+		if ( drawnInstances == 0 )
+		{
+			return;
+		}
+
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, renderPassHandle, layerIndex);
 		const auto program = this->resolveProgram(renderTarget, cacheKey);
@@ -1431,37 +1446,47 @@ namespace EmEn::Graphics::RenderableInstance
 				casterVolume = renderTarget->viewMatrices().frustum(readStateIndex, renderTarget->isCascadedShadowMap() ? cascadeIndex : 0).shadowCasterVolume();
 			}
 
-			drawAdaptiveGeometry(*geometry, casterVolume.has_value() ? &casterVolume.value() : nullptr, lodViewPosition, worldCoordinates, commandBuffer, this->instanceCount(), 0, pushContext, *program);
+			drawAdaptiveGeometry(*geometry, casterVolume.has_value() ? &casterVolume.value() : nullptr, lodViewPosition, worldCoordinates, commandBuffer, drawnInstances, 0, pushContext, *program);
 		}
 		else if ( geometry != nullptr && geometry->primaryTextureCoordinates3DEnabled() )
 		{
-			commandBuffer.draw(*geometry, this->frameIndexFor(layerIndex), this->instanceCount());
+			commandBuffer.draw(*geometry, this->frameIndexFor(layerIndex), drawnInstances);
 		}
 		else if ( pushContext.useInstanceTransforms )
 		{
 			/* The entry slot travels through firstInstance (gl_InstanceIndex), as in render(). */
 			if ( m_renderable->layerCount() == 1 )
 			{
-				commandBuffer.drawWithFirstInstance(*m_renderable->geometry(LODLevel), this->instanceTransformsSlot(), this->instanceCount());
+				commandBuffer.drawWithFirstInstance(*m_renderable->geometry(LODLevel), this->instanceTransformsSlot(), drawnInstances);
 			}
 			else
 			{
-				commandBuffer.drawWithFirstInstance(*m_renderable->geometry(LODLevel), this->instanceTransformsSlot(), layerIndex, this->instanceCount());
+				commandBuffer.drawWithFirstInstance(*m_renderable->geometry(LODLevel), this->instanceTransformsSlot(), layerIndex, drawnInstances);
 			}
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{
-			commandBuffer.draw(*m_renderable->geometry(LODLevel), this->instanceCount());
+			commandBuffer.draw(*m_renderable->geometry(LODLevel), drawnInstances);
 		}
 		else
 		{
-			commandBuffer.draw(*m_renderable->geometry(LODLevel), layerIndex, this->instanceCount());
+			commandBuffer.draw(*m_renderable->geometry(LODLevel), layerIndex, drawnInstances);
 		}
 	}
 
 	void
 	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager, const DescriptorSet * sceneTransformsDS) const noexcept
 	{
+		/* NOTE: Read ONCE: a multiple instance's count is the logic's live value (not published per render state); an
+		 * emitter whose last particles just died has nothing to draw (a draw of 0 instances, the Debug "No instance
+		 * count" — 4 seen on Windows in the frame a smoke died out, after the scene's own cull). */
+		const auto drawnInstances = this->instanceCount();
+
+		if ( drawnInstances == 0 )
+		{
+			return;
+		}
+
 		/* For grab-pass layers on render targets with a post-process framebuffer,
 		 * use the post-process render pass handle (pipelines were created for it). */
 		const auto * postProcessFB = renderTarget->postProcessFramebuffer();
@@ -1616,7 +1641,7 @@ namespace EmEn::Graphics::RenderableInstance
 			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
 			const bool singleView = !renderTarget->isCubemap() && !renderTarget->isCascadedShadowMap();
 
-			drawAdaptiveGeometry(*geometry, singleView ? &renderTarget->viewMatrices().frustum(readStateIndex, 0) : nullptr, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance, pushContext, *program);
+			drawAdaptiveGeometry(*geometry, singleView ? &renderTarget->viewMatrices().frustum(readStateIndex, 0) : nullptr, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, drawnInstances, firstInstance, pushContext, *program);
 		}
 		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
 		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,
@@ -1624,21 +1649,31 @@ namespace EmEn::Graphics::RenderableInstance
 		 * constant and needs its LAYER index here. */
 		else if ( geometry->primaryTextureCoordinates3DEnabled() )
 		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->frameIndexFor(layerIndex), this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->frameIndexFor(layerIndex), drawnInstances);
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, drawnInstances);
 		}
 		else
 		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, layerIndex, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, layerIndex, drawnInstances);
 		}
 	}
 
 	void
 	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager, const DescriptorSet * sceneTransformsDS) const noexcept
 	{
+		/* NOTE: Read ONCE: a multiple instance's count is the logic's live value (not published per render state); an
+		 * emitter whose last particles just died has nothing to draw (a draw of 0 instances, the Debug "No instance
+		 * count" — 4 seen on Windows in the frame a smoke died out, after the scene's own cull). */
+		const auto drawnInstances = this->instanceCount();
+
+		if ( drawnInstances == 0 )
+		{
+			return;
+		}
+
 		/* For grab-pass layers on render targets with a post-process framebuffer,
 		 * use the post-process render pass handle (pipelines were created for it). */
 		const auto * postProcessFB = renderTarget->postProcessFramebuffer();
@@ -1880,7 +1915,7 @@ namespace EmEn::Graphics::RenderableInstance
 			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
 			const bool singleView = !renderTarget->isCubemap() && !renderTarget->isCascadedShadowMap();
 
-			drawAdaptiveGeometry(*geometry, singleView ? &renderTarget->viewMatrices().frustum(readStateIndex, 0) : nullptr, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, this->instanceCount(), firstInstance, pushContext, *program);
+			drawAdaptiveGeometry(*geometry, singleView ? &renderTarget->viewMatrices().frustum(readStateIndex, 0) : nullptr, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, drawnInstances, firstInstance, pushContext, *program);
 		}
 		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
 		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,
@@ -1888,21 +1923,31 @@ namespace EmEn::Graphics::RenderableInstance
 		 * constant and needs its LAYER index here. */
 		else if ( geometry->primaryTextureCoordinates3DEnabled() )
 		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->frameIndexFor(layerIndex), this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->frameIndexFor(layerIndex), drawnInstances);
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, drawnInstances);
 		}
 		else
 		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, layerIndex, this->instanceCount());
+			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, layerIndex, drawnInstances);
 		}
 	}
 
 	void
 	Abstract::renderTBNSpace (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer) const noexcept
 	{
+		/* NOTE: Read ONCE: a multiple instance's count is the logic's live value (not published per render state); an
+		 * emitter whose last particles just died has nothing to draw (a draw of 0 instances, the Debug "No instance
+		 * count" — 4 seen on Windows in the frame a smoke died out, after the scene's own cull). */
+		const auto drawnInstances = this->instanceCount();
+
+		if ( drawnInstances == 0 )
+		{
+			return;
+		}
+
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 		const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::TBNSpace, RenderPassType::SimplePass, renderPassHandle, layerIndex);
 		const auto program = this->resolveProgram(renderTarget, cacheKey);
@@ -1951,11 +1996,11 @@ namespace EmEn::Graphics::RenderableInstance
 		/* TBN debug always uses LOD 0 (full detail). */
 		if ( m_renderable->layerCount() == 1 )
 		{
-			commandBuffer.draw(*m_renderable->geometry(0), this->instanceCount());
+			commandBuffer.draw(*m_renderable->geometry(0), drawnInstances);
 		}
 		else
 		{
-			commandBuffer.draw(*m_renderable->geometry(0), layerIndex, this->instanceCount());
+			commandBuffer.draw(*m_renderable->geometry(0), layerIndex, drawnInstances);
 		}
 	}
 }
