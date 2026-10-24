@@ -24,6 +24,9 @@ On `light-and-shadow-debug --demo-options 0,1` (Linux, RTX 3070 Ti, engine on th
 launch), the census counts **1 NaN texel in `SceneColour`** in ~12 % of the frames (83 of 704 over 10 s), and 0
 in `ToneMapInput`: the chain's guards scrub it. Its rate is the same at E_pre 2.6e-5 and at E_pre 1 (88 of 706),
 so it is not a range overflow but a NaN PRODUCER. Caught frame: `nan 1, inf 0, ceiling 0, peakFinite 1.44`.
+The peers the same day: **macOS (M6, MoltenVK) 37.6 %** of the frames (35 of 93, 36-38 % over 1 044 frames), always
+one NaN texel, exposure-independent; **Windows (RTX 3500 Ada) 0 %** over 6 444 frames, with a census that PASSES its
+self-test — a platform / driver hint.
 Next: locate it (the census gives counts, not the position — a DebugNonFinite capture, or a `dumpRenderTarget`
 of the grabbed colour on a flagged frame), then check whether it is the pinup sprite.
 

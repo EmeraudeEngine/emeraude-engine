@@ -436,9 +436,13 @@ void main()
 	{
 		/* Reset: single-sample moments (variance reads zero — consumers must use the
 		 * age-gated spatial fallback while the accumulation is young). */
-		outMoments = vec4(luma, luma * luma, 1.0, rp.storeDistance);
+		outMoments = vec4(luma, luma, 1.0, rp.storeDistance);
 		return;
 	}
+
+	/* G stores the ROOT of the second moment (see the output): back to m2 before any arithmetic. */
+	momS.g *= momS.g;
+	momV.g *= momV.g;
 
 	/* Blend only what was validated (see the colour resolve): garbage times zero is garbage. */
 	vec4 history = validS && validV ? (momS * wS + momV * wV) / wSum : (validS ? momS : momV);
@@ -460,7 +464,11 @@ void main()
 	float m2 = mix(history.g, luma * luma, alpha);
 	float age = min(history.b + 1.0, maxN);
 
-	outMoments = vec4(m1, m2, age, rp.storeDistance);
+	/* ⚠️ G stores sqrt(m2), the RMS luminance, not m2 itself: m2 = luma² overflows an RGBA16F texel (65 504) as
+	 * soon as the luminance passes 256, which a pre-exposed signal does at a large pre-exposure (measured
+	 * 2026-10-24: fireflies on sponza from E_pre 2^-8 up, macOS and Windows). The root keeps the luminance's range
+	 * and the same relative precision. */
+	outMoments = vec4(m1, sqrt(max(m2, 0.0)), age, rp.storeDistance);
 }
 )GLSL";
 
@@ -559,12 +567,14 @@ void main()
 		}
 		else
 		{
-			centerVar = max(moments.g - moments.r * moments.r, 0.0);
+			/* G is the RMS luminance (the moments pass): squared back to m2. */
+			centerVar = max((moments.g * moments.g) - (moments.r * moments.r), 0.0);
 		}
 	}
 	else
 	{
-		centerVar = max(center.a, 0.0);
+		/* The alpha holds the standard deviation (see the output). */
+		centerVar = center.a * center.a;
 	}
 
 	vec3 centerNormal = texture(normalTex, vUV).rgb;
@@ -624,11 +634,12 @@ void main()
 			if (first)
 			{
 				vec4 qMoments = texture(momentsTex, uv);
-				qVar = max(qMoments.g - qMoments.r * qMoments.r, 0.0);
+				qVar = max((qMoments.g * qMoments.g) - (qMoments.r * qMoments.r), 0.0);
 			}
 			else
 			{
-				qVar = max(q.a, 0.0);
+				/* The alpha holds the standard deviation (see the output). */
+				qVar = q.a * q.a;
 			}
 
 			sumColor += q.rgb * weight;
@@ -637,7 +648,9 @@ void main()
 		}
 	}
 
-	outFiltered = vec4(sumColor / sumWeight, sumVariance / (sumWeight * sumWeight));
+	/* ⚠️ The alpha stores the STANDARD DEVIATION, not the variance: a variance (luminance²) overflows an RGBA16F
+	 * texel past a luminance of 256, which a pre-exposed signal reaches (see the moments pass). */
+	outFiltered = vec4(sumColor / sumWeight, sqrt(max(sumVariance, 0.0)) / sumWeight);
 }
 )GLSL";
 
@@ -1083,7 +1096,7 @@ namespace EmEn::Graphics
 
 		contribution.code =
 			"\tvec4 " + p + "Mom = texture(" + p + "Moments, vUV);\n"
-			"\tfloat " + p + "Var = max(" + p + "Mom.g - " + p + "Mom.r * " + p + "Mom.r, 0.0);\n"
+			"\tfloat " + p + "Var = max(" + p + "Mom.g * " + p + "Mom.g - " + p + "Mom.r * " + p + "Mom.r, 0.0);\n"
 			"\tif (emDyn." + p + "Dynamics0.x < 1.5)\n"
 			"\t{\n"
 			"\t\t/* Variance, amplified x1e6 and bounded (readable under any exposure). */\n"

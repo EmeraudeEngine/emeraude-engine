@@ -72,6 +72,20 @@ Measured (sponza, E_pre 1 → 2^-4): before the rescale the mean went 27.2 → 6
   overflows its fp16 target — the automatic image is the right one.
 - **T4** a 4-stop step of the triad: no ramp (sponza right after the step vs 3 s later inside the A/A noise).
 
+### Squared quantities are stored as their ROOT (fixed 2026-10-24, after the peers' verification)
+The GIDenoiser's second moment `m2 = luma²` and the à-trous variance were stored in RGBA16F: they overflow past a
+luminance of 256, which a pre-exposed signal reaches at a large E_pre. Measured by macOS-PA and Windows-PA on
+`sponza`: fireflies from E_pre 2^-8 up (Windows: 2 564 pixels ≥ 30/255 brighter at 2^-4, A/A 24), a ramp and a
+residue after the step; `disable(IndirectDiffuse)` removed them. sponza's own automatic value (2^-9) sat just below
+the onset, so a darker scene in automatic mode would have shown them. The moments' G now holds `sqrt(m2)` (the RMS
+luminance) and the à-trous alpha the standard deviation: the luminance's range, the same relative precision.
+After: 13 pixels at 2^-4 and 2^-2 against 39 for the A/A (Linux). Rule: **store a squared radiance as its root**.
+
+### Known, accepted: a non-power-of-two E_pre reads ~0.1-0.2/255 brighter (Windows-PA, 2026-10-24)
+A manual camera's E_pre is the exact APEX value (D3), not a power of two; every power of two renders identically
+(within the A/A) while the exact value differs from them by a uniform ~0.13 % (mean |d| 0.27/255, contours on the
+smooth walls of `post-processor-effect-debug`). The fp16 mantissa rounding through the chain. Invisible; kept.
+
 ### ⚠️ Traps
 - ⚠️⚠️ **Any radiance you synthesise from a CPU constant in nits (a light's lux, a sky luminance, an emission) must
   be × E_pre**; anything sampled from the scene colour already is. A forgotten writer shows only when E_pre moves:
