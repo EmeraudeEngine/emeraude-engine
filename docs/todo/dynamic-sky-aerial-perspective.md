@@ -1,11 +1,10 @@
 ---
 id: dynamic-sky-aerial-perspective
 title: Dynamic sky — aerial perspective, fog and clouds lit by the same atmosphere as the sky
-status: blocked
+status: open
 priority: unranked
 scope: Graphics/Effects/Atmosphere (AtmosphericFog, VolumetricClouds, VolumetricScattering), Graphics (atmosphere LUTs)
 opened: 2026-10-24
-blocked-by: [dynamic-sky-atmosphere]
 tags: [sky, atmosphere, fog, clouds, design]
 ---
 
@@ -32,5 +31,5 @@ it.
 
 ## References
 
-- `dynamic-sky-atmosphere`, `dynamic-sky-amortised-ibl`.
+- the physical sky, lot 1 (graphics doc 42, `42-physical-sky-atmosphere.md`), `dynamic-sky-amortised-ibl`.
 - `src/Graphics/Effects/Atmosphere/`, `docs/post-processing-pipeline.md`.

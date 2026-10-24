@@ -1,11 +1,10 @@
 ---
 id: dynamic-sky-amortised-ibl
 title: Dynamic sky — the environment cubemap and its IBL bake follow the sky, amortised over frames
-status: blocked
+status: open
 priority: unranked
 scope: Graphics/Compute (IBLBaker, ProbeConvolver), Graphics/Renderable (DynamicSkyResource::environmentCubemap), Scenes (Scene.lighting, BindlessTextureSet)
 opened: 2026-10-24
-blocked-by: [dynamic-sky-atmosphere]
 tags: [sky, ibl, lighting, performance, design]
 ---
 
@@ -47,6 +46,6 @@ since it only scales a fixed picture.
 
 ## References
 
-- `dynamic-sky-atmosphere`, `indirect-diffuse-intensity-scales-the-sky`.
+- the physical sky, lot 1 (graphics doc 42, `42-physical-sky-atmosphere.md`), `indirect-diffuse-intensity-scales-the-sky`.
 - `src/Graphics/Compute/IBLBaker.hpp`, `src/Graphics/Compute/ProbeConvolver.cpp`,
   `docs/reflection-pipeline.md`.

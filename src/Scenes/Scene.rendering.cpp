@@ -2879,16 +2879,22 @@ namespace EmEn::Scenes
 	bool
 	Scene::getRenderableInstanceReadyForRendering (const std::shared_ptr< RenderableInstance::Abstract > & renderableInstance, const std::shared_ptr< RenderTarget::Abstract > & renderTarget) noexcept
 	{
-		/* The environment cubemap can now be fetched from the visual component. */
+		/* The environment cubemap can now be fetched from the visual component.
+		 * ⚠️ A background may have none (AbstractBackground::environmentCubemap() answers nullptr: a physical sky,
+		 * Renderable::DynamicSkyResource): the scene then keeps the one it has, as setBackground() does. Taken
+		 * unchecked, the null was dereferenced on the first frame (2026-10-24). */
 		if ( m_environmentCubemap != nullptr && m_sceneVisualComponents[0] != nullptr && renderableInstance == m_sceneVisualComponents[0]->getRenderableInstance() )
 		{
-			m_environmentCubemap = m_backgroundResource->environmentCubemap();
+			if ( auto cubemap = m_backgroundResource->environmentCubemap(); cubemap != nullptr )
+			{
+				m_environmentCubemap = std::move(cubemap);
 
-			/* Describe the scene's environment cubemap in the bindless set; the manager writes
-			 * it to the reserved slot when it syncs the active scene's set. */
-			m_bindlessTextureSet.setEnvironmentCubemap(m_environmentCubemap);
+				/* Describe the scene's environment cubemap in the bindless set; the manager writes
+				 * it to the reserved slot when it syncs the active scene's set. */
+				m_bindlessTextureSet.setEnvironmentCubemap(m_environmentCubemap);
 
-			TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
+				TraceSuccess{ClassId} << "Scene will use environment cubemap '" << m_environmentCubemap->name() << "' !";
+			}
 		}
 
 		/* If the object is ready to render, there is nothing more to do! */

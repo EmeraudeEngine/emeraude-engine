@@ -40,6 +40,7 @@
 #include <filesystem>
 #include <initializer_list>
 #include <limits>
+#include <iterator>
 #include <ranges>
 #include <span>
 #include <string>
@@ -67,11 +68,13 @@
 #include "Graphics/PostProcessor.hpp"
 #include "Graphics/Recorder.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
+#include "Graphics/Renderable/DynamicSkyResource.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/RendererFrameScope.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/SelectionOutline.hpp"
 #include "Graphics/SharedUBOManager.hpp"
+#include "Graphics/SkyAtmosphere.hpp"
 #include "Graphics/TextureCache.hpp"
 #include "Graphics/TextureCompressor.hpp"
 #include "Graphics/Types.hpp"
@@ -2005,6 +2008,9 @@ namespace EmEn::Graphics
 
 			scene->updateVideoMemory(this->isShadowMapsEnabled(), this->isRenderToTexturesEnabled());
 
+			/* Before every pass that draws the sky: the render-to-textures (probes) draw it too. */
+			this->renderSkyAtmosphere(currentFrameScope, *scene, m_graphicsQueue);
+
 			if ( this->isShadowMapsEnabled() )
 			{
 				/* [VULKAN-SHADOW] */
@@ -2759,6 +2765,100 @@ namespace EmEn::Graphics
 	}
 
 	void
+	Renderer::renderSkyAtmosphere (RendererFrameScope & currentFrameScope, const Scenes::Scene & scene, const Queue * queue) noexcept
+	{
+		const auto background = scene.background();
+
+		const auto * dynamicSky = dynamic_cast< const Renderable::DynamicSkyResource * >(background.get());
+
+		if ( dynamicSky == nullptr )
+		{
+			return;
+		}
+
+		const auto atmosphere = dynamicSky->atmosphere();
+
+		if ( atmosphere == nullptr || !atmosphere->isCreated() )
+		{
+			return;
+		}
+
+		const auto readStateIndex = scene.frameReadStateIndex();
+
+		/* The star of the scene's clock, else a default afternoon sun (SkyFrameInputs). The table is per lux of the
+		 * star's illuminance above the atmosphere: its colour rides along. */
+		SkyFrameInputs inputs{};
+
+		if ( const auto skyState = scene.skyStateForRendering(readStateIndex); skyState.valid )
+		{
+			inputs.sunDirection = skyState.sun.direction;
+			inputs.sunIlluminance = skyState.sun.color * skyState.sun.illuminance;
+			inputs.sunAngularDiameter = skyState.sun.angularDiameter;
+		}
+
+		/* The world's Y = 0 is the planet's ground. */
+		if ( const auto mainTarget = this->mainRenderTarget(); mainTarget != nullptr )
+		{
+			inputs.cameraAltitude = mainTarget->viewMatrices().position(readStateIndex)[Y];
+		}
+
+		const auto frameIndex = currentFrameScope.frameIndex();
+
+		if ( frameIndex >= m_skyCommandBuffers.size() )
+		{
+			return;
+		}
+
+		/* The frame index is < the array's size (checked above). */
+		auto & commandBuffer = *std::next(m_skyCommandBuffers.begin(), static_cast< std::ptrdiff_t >(frameIndex));
+
+		if ( commandBuffer == nullptr )
+		{
+			commandBuffer = std::make_shared< CommandBuffer >(currentFrameScope.commandPool(), true);
+			commandBuffer->setIdentifier(ClassId, "SkyAtmosphere", "CommandBuffer");
+
+			if ( !commandBuffer->isCreated() )
+			{
+				TraceError{ClassId} << "Unable to create the sky atmosphere command buffer of frame #" << frameIndex << " !";
+
+				commandBuffer = nullptr;
+
+				return;
+			}
+		}
+
+		if ( !commandBuffer->begin() )
+		{
+			TraceError{ClassId} << "Unable to begin the sky atmosphere command buffer !";
+
+			return;
+		}
+
+		{
+			GPUProfiler * profiler = m_GPUProfiler != nullptr && m_GPUProfiler->profilesSideSubmissions() ? m_GPUProfiler.get() : nullptr;
+			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "SkyAtmosphere", "SkyView"};
+
+			atmosphere->recordFrame(*commandBuffer, inputs);
+		}
+
+		if ( !commandBuffer->end() )
+		{
+			TraceError{ClassId} << "Unable to finish the sky atmosphere command buffer !";
+
+			return;
+		}
+
+		if ( !queue->submit(*commandBuffer) )
+		{
+			TraceError{ClassId} << "Unable to submit the sky atmosphere command buffer !";
+
+			return;
+		}
+
+		*std::next(m_skyAtmospheresInFlight.begin(), static_cast< std::ptrdiff_t >(frameIndex)) = atmosphere;
+	}
+
+	void
 	Renderer::renderShadowMaps (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Queue * queue) const noexcept
 	{
 		scene.forEachRenderToShadowMap([&] (const std::shared_ptr< RenderTarget::Abstract > & shadowMap) {
@@ -3137,6 +3237,17 @@ namespace EmEn::Graphics
 	void
 	Renderer::destroyRenderingSystem () noexcept
 	{
+		/* Before their command pools. */
+		for ( auto & commandBuffer : m_skyCommandBuffers )
+		{
+			commandBuffer = nullptr;
+		}
+
+		for ( auto & atmosphere : m_skyAtmospheresInFlight )
+		{
+			atmosphere = nullptr;
+		}
+
 		m_rendererFrameScope.clear();
 		m_presentSemaphores.clear();
 	}

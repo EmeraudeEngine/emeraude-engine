@@ -89,6 +89,7 @@
 #include "SceneMetaData.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
 #include "SeaLevelInterface.hpp"
+#include "SkyState.hpp"
 #include "StaticEntity.hpp"
 
 /* Forward Declarations */
@@ -120,6 +121,7 @@ namespace EmEn
 
 namespace EmEn::Scenes::Component
 {
+	class CelestialClock;
 	class ParticlesEmitter;
 }
 
@@ -770,6 +772,17 @@ namespace EmEn::Scenes
 			{
 				return m_lightSet;
 			}
+
+			/**
+			 * @brief RENDER THREAD. Returns the state of the sky's bodies for the frame: the one the scene's
+			 * Component::CelestialClock published in the frame's read state slot, or an INVALID state without a clock.
+			 * @note The dynamic sky reads its sun here (owner decision 2026-10-24): the sky resource is shared and
+			 * stateless, the time belongs to the scene.
+			 * @param readStateIndex The frame's read state index.
+			 * @return SkyState A copy.
+			 */
+			[[nodiscard]]
+			SkyState skyStateForRendering (uint32_t readStateIndex) const noexcept;
 
 			/**
 			 * @brief Returns the volumetric clouds of the scene.
@@ -3170,6 +3183,10 @@ namespace EmEn::Scenes
 			 * @note ⚠️ Declared AFTER the bindless set on purpose: a cloud frees its shape's bindless slot
 			 * when it dies, so the set must outlive every cloud this one may be the last owner of. */
 			CloudSet m_cloudSet;
+			/** @brief Guards m_celestialClock: set from the entities' notifications, read by the render thread. */
+			mutable Base::Mutex m_celestialClockAccess;
+			/** @brief The scene's sky clock (the last one added), see skyStateForRendering(). */
+			std::weak_ptr< Component::CelestialClock > m_celestialClock EMEN_GUARDED_BY(m_celestialClockAccess);
 			/** @brief Scene metadata manager (TLAS, mesh/material SSBOs for RT). */
 			SceneMetaData m_sceneMetaData;
 			/** @brief Per-instance transforms manager (InstanceTransforms SSBO, non-instanced path). */

@@ -72,6 +72,7 @@
 #include "Graphics/Geometry/VertexResource.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/BeamResource.hpp"
+#include "Graphics/Material/SkyAtmosphereResource.hpp"
 #include "Graphics/Material/PathResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
@@ -855,6 +856,7 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Graphics::Material::StandardResource), std::make_unique< StandardMaterials >("Standard material manager", m_primaryServices, *this, this->getLocalStore("Materials")));
 			m_containers.emplace(typeid(Graphics::Material::BeamResource), std::make_unique< BeamMaterials >("Beam material manager", m_primaryServices, *this, this->getLocalStore("Materials")));
 			m_containers.emplace(typeid(Graphics::Material::PathResource), std::make_unique< PathMaterials >("Path material manager", m_primaryServices, *this, this->getLocalStore("Materials")));
+			m_containers.emplace(typeid(Graphics::Material::SkyAtmosphereResource), std::make_unique< SkyAtmosphereMaterials >("Sky atmosphere material manager", m_primaryServices, *this, this->getLocalStore("Materials")));
 			m_containers.emplace(typeid(Graphics::Renderable::MeshResource), std::make_unique< SimpleMeshes >("Simple mesh manager", m_primaryServices, *this, this->getLocalStore("Meshes")));
 			m_containers.emplace(typeid(Graphics::Renderable::MultiLayerMeshResource), std::make_unique< Meshes >("Mesh manager", m_primaryServices, *this, this->getLocalStore("Meshes")));
 			m_containers.emplace(typeid(Graphics::Renderable::SpriteResource), std::make_unique< Sprites >("Sprite manager", m_primaryServices, *this, this->getLocalStore("Sprites")));

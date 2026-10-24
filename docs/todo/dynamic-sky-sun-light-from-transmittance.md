@@ -1,11 +1,10 @@
 ---
 id: dynamic-sky-sun-light-from-transmittance
 title: Dynamic sky — the sun's directional light takes its colour and illuminance from the atmosphere's transmittance
-status: blocked
+status: open
 priority: unranked
 scope: Scenes/Component (CelestialClock, DirectionalLight), Graphics (atmosphere transmittance LUT readback or CPU twin)
 opened: 2026-10-24
-blocked-by: [dynamic-sky-atmosphere]
 tags: [sky, atmosphere, photometry, lighting, design]
 ---
 
@@ -40,5 +39,5 @@ all, since its 2000/5800 K anchors are Earth's.
 
 ## References
 
-- `dynamic-sky-atmosphere`; the clock: `Scenes::Component::CelestialClock` (scenes doc 02).
+- the physical sky, lot 1 (graphics doc 42, `42-physical-sky-atmosphere.md`); the clock: `Scenes::Component::CelestialClock` (scenes doc 02).
 - `src/Scenes/Component/CelestialClock.cpp`, `src/Graphics/CelestialBody.hpp`.

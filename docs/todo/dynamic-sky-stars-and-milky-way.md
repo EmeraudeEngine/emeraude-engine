@@ -1,11 +1,10 @@
 ---
 id: dynamic-sky-stars-and-milky-way
 title: Dynamic sky — a night sky of catalogue stars and a Milky Way, physical with artistic controls
-status: blocked
+status: open
 priority: unranked
 scope: Graphics/Renderable (DynamicSkyResource), Saphir (background program), Resources (star catalogue, Milky Way cubemap)
 opened: 2026-10-24
-blocked-by: [dynamic-sky-atmosphere]
 tags: [sky, stars, night, photometry, owner-decision, design]
 ---
 
@@ -56,4 +55,4 @@ scripted fade. This is the correct behaviour, and it costs nothing.
 ## References
 
 - Yale Bright Star Catalogue, 5th revised edition (Hoffleit & Warren, 1991).
-- `dynamic-sky-atmosphere`, `dynamic-sky-moon`; the clock: `Scenes::Component::CelestialClock` (scenes doc 02).
+- the physical sky, lot 1 (graphics doc 42, `42-physical-sky-atmosphere.md`), `dynamic-sky-moon`; the clock: `Scenes::Component::CelestialClock` (scenes doc 02).

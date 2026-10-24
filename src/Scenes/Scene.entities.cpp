@@ -33,6 +33,7 @@
 #include "NodeCrawler.hpp"
 #include "AnyValue.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/Component/CelestialClock.hpp"
 #include "Scenes/Component/CloudVolume.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/Component/Microphone.hpp"
@@ -758,6 +759,30 @@ namespace EmEn::Scenes
 
 				return true;
 
+			case AbstractEntity::CelestialClockCreated :
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::CelestialClock > >(data, ClassId) )
+				{
+					/* The last clock added is the scene's sky: one sky per scene. */
+					const Base::MutexLock lock{m_celestialClockAccess};
+
+					m_celestialClock = *payload;
+				}
+
+				return true;
+
+			case AbstractEntity::CelestialClockDestroyed :
+				if ( const auto * const payload = Base::anyValue< std::shared_ptr< Component::CelestialClock > >(data, ClassId) )
+				{
+					const Base::MutexLock lock{m_celestialClockAccess};
+
+					if ( m_celestialClock.lock() == *payload )
+					{
+						m_celestialClock.reset();
+					}
+				}
+
+				return true;
+
 			default:
 				if constexpr ( ObserverDebugEnabled )
 				{
@@ -765,5 +790,24 @@ namespace EmEn::Scenes
 				}
 				return false;
 		}
+	}
+
+	SkyState
+	Scene::skyStateForRendering (uint32_t readStateIndex) const noexcept
+	{
+		std::shared_ptr< Component::CelestialClock > clock;
+
+		{
+			const Base::MutexLock lock{m_celestialClockAccess};
+
+			clock = m_celestialClock.lock();
+		}
+
+		if ( clock == nullptr )
+		{
+			return {};
+		}
+
+		return clock->skyStateForRendering(readStateIndex);
 	}
 }

@@ -29,6 +29,10 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <memory>
+#include <string>
+
 /* Local inclusions for inheritances. */
 #include "AbstractBackground.hpp"
 
@@ -39,10 +43,31 @@ namespace EmEn::Resources
 	class Container;
 }
 
+namespace EmEn::Graphics
+{
+	struct AtmosphereParameters;
+	class SkyAtmosphere;
+}
+
+namespace EmEn::Graphics::Material
+{
+	class SkyAtmosphereResource;
+}
+
 namespace EmEn::Graphics::Renderable
 {
 	/**
-	 * @brief The DynamicSkyResource class
+	 * @brief A PHYSICAL SKY background: a planet's atmosphere (Graphics::SkyAtmosphere) drawn on the skybox cube by
+	 * Material::SkyAtmosphereResource, lit by the scene's star.
+	 * @note The renderer refreshes the atmosphere's sky-view table every frame, before the scene is drawn, from the
+	 * scene's sky state (Scenes::Scene::skyStateForRendering(), written by a Scenes::Component::CelestialClock) and the
+	 * camera's altitude; without a clock, a default afternoon sun lights it.
+	 * @note JSON: "Planet" (a preset name, AtmosphereParameters::preset(), default "Earth"), "Atmosphere" (an object whose
+	 * keys override the preset: "GroundRadius", "TopRadius" and the scale heights in km, "RayleighScattering",
+	 * "MieScattering", "MieAbsorption", "AbsorptionExtinction" per km as [r, g, b], "MiePhaseG" as [r, g, b] or one
+	 * number, "AbsorptionLayerWidth" in km, "GroundAlbedo" as [r, g, b]), the material's artistic
+	 * keys (Material::SkyAtmosphereResource: "Tint", "Intensity", "Saturation", "StarDisc", "LimbDarkening") and the
+	 * background's photometry (AbstractBackground::parsePhotometry()).
 	 * @extends EmEn::Graphics::Renderable::AbstractBackground The is a specialized background.
 	 */
 	class EMEN_API DynamicSkyResource final : public AbstractBackground
@@ -58,6 +83,21 @@ namespace EmEn::Graphics::Renderable
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Complex};
+
+			/* JSON keys. */
+			static constexpr auto JKPlanet{"Planet"};
+			static constexpr auto JKAtmosphere{"Atmosphere"};
+			static constexpr auto JKGroundRadius{"GroundRadius"};
+			static constexpr auto JKTopRadius{"TopRadius"};
+			static constexpr auto JKRayleighScattering{"RayleighScattering"};
+			static constexpr auto JKRayleighScaleHeight{"RayleighScaleHeight"};
+			static constexpr auto JKMieScattering{"MieScattering"};
+			static constexpr auto JKMieAbsorption{"MieAbsorption"};
+			static constexpr auto JKMieScaleHeight{"MieScaleHeight"};
+			static constexpr auto JKMiePhaseG{"MiePhaseG"};
+			static constexpr auto JKAbsorptionExtinction{"AbsorptionExtinction"};
+			static constexpr auto JKAbsorptionLayerWidth{"AbsorptionLayerWidth"};
+			static constexpr auto JKGroundAlbedo{"GroundAlbedo"};
 
 			/**
 			 * @brief Constructs a dynamic skybox resource.
@@ -168,6 +208,13 @@ namespace EmEn::Graphics::Renderable
 			/** @copydoc EmEn::Resources::ResourceTrait::load(const Json::Value &) */
 			bool load (const Json::Value & data) noexcept override;
 
+			/**
+			 * @brief Loads a sky from atmosphere parameters, the material at its defaults.
+			 * @param parameters A reference to the parameters of the planet's atmosphere.
+			 * @return bool
+			 */
+			bool load (const AtmosphereParameters & parameters) noexcept;
+
 			/** @copydoc EmEn::Resources::ResourceTrait::memoryOccupied() const noexcept */
 			[[nodiscard]]
 			size_t
@@ -176,7 +223,37 @@ namespace EmEn::Graphics::Renderable
 				return sizeof(*this);
 			}
 
+			/**
+			 * @brief Returns the atmosphere drawn by this sky: the renderer records its sky-view pass.
+			 * @return std::shared_ptr< SkyAtmosphere >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< SkyAtmosphere >
+			atmosphere () const noexcept
+			{
+				return m_atmosphere;
+			}
+
+			/**
+			 * @brief Returns the material drawing this sky: its artistic controls.
+			 * @return std::shared_ptr< Material::SkyAtmosphereResource >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Material::SkyAtmosphereResource >
+			skyMaterial () const noexcept
+			{
+				return m_skyMaterial;
+			}
+
 		private:
+
+			/**
+			 * @brief Builds the atmosphere, the geometry and the material.
+			 * @param parameters A reference to the parameters of the planet's atmosphere.
+			 * @param data A pointer to the JSON data holding the material's artistic keys, or nullptr.
+			 * @return bool
+			 */
+			bool build (const AtmosphereParameters & parameters, const Json::Value * data) noexcept;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
@@ -198,6 +275,8 @@ namespace EmEn::Graphics::Renderable
 
 			std::shared_ptr< Geometry::Interface > m_geometry;
 			std::shared_ptr< Material::Interface > m_material;
+			std::shared_ptr< Material::SkyAtmosphereResource > m_skyMaterial;
+			std::shared_ptr< SkyAtmosphere > m_atmosphere;
 	};
 }
 

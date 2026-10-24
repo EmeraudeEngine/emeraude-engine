@@ -1,11 +1,10 @@
 ---
 id: dynamic-sky-moon
 title: Dynamic sky — moons drawn with their phase, and the moonlight as the night's directional light
-status: blocked
+status: open
 priority: unranked
 scope: Graphics/Renderable (DynamicSkyResource), Graphics (CelestialBody), Scenes/Component (directional light, celestial clock)
 opened: 2026-10-24
-blocked-by: [dynamic-sky-atmosphere]
 tags: [sky, moon, night, lighting, photometry, design]
 ---
 
@@ -42,5 +41,5 @@ with the phase its angle to the sun gives, and light the scene with it.
 
 ## References
 
-- `dynamic-sky-atmosphere`, `dynamic-sky-stars-and-milky-way`; the clock: `Scenes::Component::CelestialClock` (scenes doc 02).
+- the physical sky, lot 1 (graphics doc 42, `42-physical-sky-atmosphere.md`), `dynamic-sky-stars-and-milky-way`; the clock: `Scenes::Component::CelestialClock` (scenes doc 02).
 - `src/Graphics/CelestialBody.hpp`, `src/Scenes/Scene.lighting.cpp` (`applyBackgroundLightingNow`).

@@ -50,6 +50,9 @@
 #include "Component/Vehicle.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
+#include "Graphics/Renderable/DynamicSkyResource.hpp"
+#include "Graphics/Material/SkyAtmosphereResource.hpp"
+#include "Graphics/SkyAtmosphere.hpp"
 #include "Scenes/Loaders/GLTFLoader.hpp"
 #include "Scenes/Loaders/SceneData.hpp"
 #include "Scenes/SceneDataConsumer.hpp"
@@ -860,6 +863,111 @@ namespace EmEn::Scenes
 
 				return Console::CommandResult::success("Background set to '" + name + "'.");
 			});
+
+		/* The PHYSICAL SKY (Renderable::DynamicSkyResource) of the active scene: its look, at runtime. */
+		const auto dynamicSkyMaterial = [this] () -> std::shared_ptr< Graphics::Material::SkyAtmosphereResource > {
+			const auto activeScene = this->activeSceneSnapshot();
+
+			if ( activeScene == nullptr )
+			{
+				return nullptr;
+			}
+
+			const auto background = activeScene->background();
+
+			if ( background == nullptr || !background->is(Graphics::Renderable::DynamicSkyResource::getClassUID()) )
+			{
+				return nullptr;
+			}
+
+			return std::static_pointer_cast< Graphics::Renderable::DynamicSkyResource >(background)->skyMaterial();
+		};
+
+		this->bindCommand("getDynamicSky", "Returns the physical sky of the active scene as JSON: its planet's radii and its look (tint, intensity, saturation, star disc, limb darkening).", [dynamicSkyMaterial] () {
+			const auto material = dynamicSkyMaterial();
+
+			if ( material == nullptr )
+			{
+				return Console::CommandResult::warning("The active scene has no dynamic sky !");
+			}
+
+			Json::Value state{Json::objectValue};
+			state["material"] = material->name();
+
+			if ( const auto atmosphere = material->atmosphere(); atmosphere != nullptr )
+			{
+				state["groundRadiusKm"] = static_cast< double >(atmosphere->parameters().groundRadius);
+				state["topRadiusKm"] = static_cast< double >(atmosphere->parameters().topRadius);
+			}
+
+			const auto tint = material->tint();
+			state["tint"] = Json::Value{Json::arrayValue};
+			state["tint"].append(static_cast< double >(tint.red()));
+			state["tint"].append(static_cast< double >(tint.green()));
+			state["tint"].append(static_cast< double >(tint.blue()));
+			state["intensity"] = static_cast< double >(material->intensity());
+			state["saturation"] = static_cast< double >(material->saturation());
+			state["starDisc"] = material->isStarDiscEnabled();
+			state["limbDarkening"] = static_cast< double >(material->limbDarkening());
+
+			return Console::CommandResult::json(FastJSON::stringify(state));
+		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("setDynamicSkyGrading", "Sets the tint and the intensity of the physical sky (artistic; white and 1 leave it physical). A known intensity is also the MEASUREMENT scale of the direct path, where the scene colour is not pre-exposed.",
+			{
+				{"red", "Linear tint, red."},
+				{"green", "Linear tint, green."},
+				{"blue", "Linear tint, blue."},
+				{"intensity", "The scale of the sky's radiance."}
+			},
+			[dynamicSkyMaterial] (float red, float green, float blue, float intensity) {
+				const auto material = dynamicSkyMaterial();
+
+				if ( material == nullptr )
+				{
+					return Console::CommandResult::error("The active scene has no dynamic sky !");
+				}
+
+				material->setGrading(Base::PixelFactory::Color< float >{red, green, blue, 1.0F}, intensity);
+
+				return Console::CommandResult::success("Dynamic sky grading set.");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("setDynamicSkySaturation", "Sets the saturation of the physical sky (artistic): 0 grey, 1 physical.",
+			{
+				{"saturation", "The saturation factor."}
+			},
+			[dynamicSkyMaterial] (float saturation) {
+				const auto material = dynamicSkyMaterial();
+
+				if ( material == nullptr )
+				{
+					return Console::CommandResult::error("The active scene has no dynamic sky !");
+				}
+
+				material->setSaturation(saturation);
+
+				return Console::CommandResult::success("Dynamic sky saturation set.");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("setDynamicSkyStar", "Shows or hides the star's disc of the physical sky and sets its limb darkening.",
+			{
+				{"enabled", "Whether the disc is drawn."},
+				{"limbDarkening", "The linear limb-darkening coefficient, 0-1 (0 a flat disc, the Sun about 0.6)."}
+			},
+			[dynamicSkyMaterial] (bool enabled, float limbDarkening) {
+				const auto material = dynamicSkyMaterial();
+
+				if ( material == nullptr )
+				{
+					return Console::CommandResult::error("The active scene has no dynamic sky !");
+				}
+
+				material->enableStarDisc(enabled);
+				material->setLimbDarkening(limbDarkening);
+
+				return Console::CommandResult::success("Dynamic sky star set.");
+			}, Console::CommandHint::Idempotent);
 
 		this->bindCommand("listScenes", "Lists every registered scene name.", [this] () {
 			std::stringstream list;

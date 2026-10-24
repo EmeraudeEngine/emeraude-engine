@@ -30,8 +30,11 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <array>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -40,8 +43,10 @@
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Constants.hpp"
 #include "Math/Astronomy.hpp"
 #include "Math/Vector.hpp"
+#include "Scenes/SkyState.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Scenes
@@ -121,6 +126,8 @@ namespace EmEn::Scenes::Component
 				float zenithTemperature{DefaultZenithTemperature};
 				/** @brief Colour temperature of the star on the horizon, in kelvins. */
 				float horizonTemperature{DefaultHorizonTemperature};
+				/** @brief Apparent angular diameter of the star's disc, in degrees (the Sun: 0.53°). */
+				float angularDiameter{0.53F};
 			};
 
 			/**
@@ -134,6 +141,8 @@ namespace EmEn::Scenes::Component
 				float fullIlluminance{DefaultFullMoonIlluminance};
 				/** @brief Colour temperature of its light, in kelvins. */
 				float temperature{DefaultMoonTemperature};
+				/** @brief Apparent angular diameter of its disc, in degrees (the Moon: 0.52°). */
+				float angularDiameter{0.52F};
 			};
 
 			/**
@@ -494,6 +503,23 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
 
+			/** @copydoc EmEn::Scenes::Component::Abstract::publishStateForRendering() */
+			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
+
+			/**
+			 * @brief Returns the state of the sky's bodies published for a render state slot.
+			 * @note RENDER THREAD, with the frame's read state index (the scene's sky reads it: Scene::skyStateForRendering()).
+			 * @param readStateIndex The slot the render thread holds.
+			 * @return const SkyState &
+			 */
+			[[nodiscard]]
+			const SkyState &
+			skyStateForRendering (uint32_t readStateIndex) const noexcept
+			{
+				/* The slot index is < RenderStateSlotCount by the render-state contract. */
+				return *std::next(m_renderStates.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex));
+			}
+
 			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
 			[[nodiscard]]
 			bool
@@ -598,6 +624,7 @@ namespace EmEn::Scenes::Component
 			float m_illuminance{0.0F};
 			float m_temperature{DefaultHorizonTemperature};
 			float m_siderealAngle{0.0F};
+			std::array< SkyState, RenderStateSlotCount > m_renderStates{};
 			bool m_sunBound{false};
 			bool m_running{false};
 	};

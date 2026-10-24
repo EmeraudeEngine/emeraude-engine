@@ -1,0 +1,104 @@
+## 42. The physical sky — a planet's atmosphere drawn as the background (Oct 2026)
+
+> Owner decisions (2026-10-24): the sky is PHYSICAL and must render extraterrestrial skies (the planet is data);
+> it is drawn as a **background material** on the skybox cube; the **CelestialClock** writes the scene's sky state;
+> **one** scattering sun; an AI-owned lab demo (`sky-lab`, projet-alpha). Lot 1 of the dynamic sky; the next lots
+> are the engine items `dynamic-sky-sun-light-from-transmittance`, `dynamic-sky-amortised-ibl`,
+> `dynamic-sky-stars-and-milky-way`, `dynamic-sky-moon` and `dynamic-sky-aerial-perspective`.
+
+### The model
+S. Hillaire, *A Scalable and Production Ready Sky and Atmosphere Rendering Technique*, EGSR 2020 (the model of UE's
+`SkyAtmosphere`), after his MIT reference implementation; the transmittance parametrisation is Bruneton & Neyret's
+(EGSR 2008). A Rayleigh layer, a Mie layer and an absorbing layer (Earth's ozone, a tent profile), all exponential
+or piecewise-linear in height. **Units: kilometres, per kilometre; the planet's centre is the origin.**
+
+| Table | Size, format | Built | Holds |
+|---|---|---|---|
+| Transmittance | 256×64 RGBA16F | once, at creation | transmittance to the top, per (height, zenith cosine) |
+| Multiple scattering | 32×32 RGBA16F | once, at creation | Hillaire's isotropic second-order transfer f_ms, summed as a series |
+| Sky-view | 192×108 RGBA16F | **every frame** | in-scattered radiance **per lux** of the star, around the camera: x the azimuth from the star, y the zenith (non-linear near the horizon) |
+| Frame | 4×1 RGBA32F | every frame | texel 0: unit vector toward the star + cos of its angular radius; texel 1: its illuminance above the atmosphere × colour (lux) + the camera's distance to the centre (km) |
+
+The sky-view pass integrates WITH the ground (unlike Hillaire's): below the horizon the planet's surface shows, lit by
+the star through the air, instead of a black void under the scene's own small floor.
+
+### The pieces
+| Piece | File | Role |
+|---|---|---|
+| `AtmosphereParameters` | `Graphics/SkyAtmosphere.hpp` | the planet: radii, the three layers, Mie g **per channel**, the ground albedo; `earth()`, `mars()`, `preset(name)` |
+| `SkyAtmosphere` | `Graphics/SkyAtmosphere.{hpp,cpp}` | the tables and their three compute passes; `createOnHardware()` (idempotent, mutexed) bakes transmittance + multiple scattering with a blocking one-time submission; `recordFrame()` records the sky-view pass |
+| `StorageTexture2D` | `Graphics/StorageTexture2D.{hpp,cpp}` | a storage + sampled 2D table (linear, clamped) |
+| `AtmosphereGLSL` | `Graphics/Effects/Shared/AtmosphereGLSL.hpp` | ONE source for the block and the functions both sides read: raw GLSL for the compute passes, Saphir declarations for the material |
+| `Material::SkyAtmosphereResource` | `Graphics/Material/SkyAtmosphereResource.{hpp,cpp}` | unlit, opaque; reads the sky-view, transmittance and frame textures; the star's disc; the artistic grading |
+| `Renderable::DynamicSkyResource` | `Graphics/Renderable/DynamicSkyResource.{hpp,cpp}` | the background: owns the atmosphere and the material, the skybox cube |
+| `Renderer::renderSkyAtmosphere()` | `Graphics/Renderer.cpp` | the per-frame sky-view submission, BEFORE the shadow maps and the render-to-textures (the probes draw the sky too) |
+| `SkyState` | `Scenes/SkyState.hpp` | the scene's sky for the render thread: the sun and moons (direction, illuminance above the atmosphere, unit-luminance colour, angular diameter, phase), written by `CelestialClock::publishStateForRendering()`, read by `Scene::skyStateForRendering(readStateIndex)` |
+
+### The frame
+1. The renderer finds a `DynamicSkyResource` background, reads the scene's `SkyState` at the frame's read state
+   (no clock: `SkyFrameInputs`' default afternoon sun) and the main camera's world Y (**Y = 0 is the planet's
+   ground**; the floor is 10 m, Hillaire's planet-radius offset).
+2. It records the sky-view pass in a command buffer of its own (one per frame in flight, from that frame's pool) and
+   submits it on the graphics queue. **No semaphore**: every reader is submitted later on the same queue, and the
+   pass's barriers (the previous frame's fragment reads → this frame's writes → this frame's reads) order them.
+3. The material, per sky fragment: the direction is the cube's vertex position (centred on the camera, never
+   rotated — the same contract as the picture skybox); `lightViewCos` from the horizontal projections of the view and
+   the star; the sky-view lookup × the star's illuminance; the disc (below); then the grading.
+
+### The star's disc
+Its mean radiance is its illuminance over its solid angle, `E / (2π(1 − cos r))`, shaped by a linear limb
+darkening normalised to that mean (`(1 − u(1 − μ)) / (1 − u/3)`, u = 0.6 for the Sun) and seen through the
+transmittance along the view ray (it reddens and dims on the horizon by itself). Antialiased over one pixel.
+⚠️ **Capped at 32 768 in the PRE-EXPOSED colour** (`StarDiscCeiling`): ~1.6e9 nits at noon is beyond fp16 even × E_pre
+on a world cache (S = 2^-4). The cap reads `ubView.preExposure`, so every view (main, cubemap probe) is covered; the
+disc saturates, it never dims.
+
+### The manifest (Backgrounds store)
+`"Planet"` (a preset name, default `"Earth"`), `"Atmosphere"` (inline overrides: `GroundRadius`, `TopRadius`,
+`RayleighScaleHeight`, `MieScaleHeight`, `AbsorptionLayerWidth` in km; `RayleighScattering`, `MieScattering`,
+`MieAbsorption`, `AbsorptionExtinction` per km as `[r, g, b]`; `MiePhaseG` as `[r, g, b]` or one number;
+`GroundAlbedo`), the artistic keys (`Tint`, `Intensity`, `Saturation`, `StarDisc`, `LimbDarkening`) and the
+background photometry (`AbstractBackground::parsePhotometry()`). From code: `DynamicSkyResource::load(parameters)`.
+
+### The presets
+- **Earth**: Hillaire's / Bruneton's constants (Rayleigh 5.802, 13.558, 33.1 × 1e-3 /km, H 8 km; Mie 3.996e-3
+  scattering + 0.444e-3 absorption, H 1.2 km, g 0.8; ozone 0.650, 1.881, 0.085 × 1e-3 over a 25 km tent; albedo 0.3).
+- **Mars** (an ART approximation, the test of the extraterrestrial decision): a thin CO2 Rayleigh layer (~1.5 % of
+  Earth's), a dust of optical depth ~0.5 that absorbs the blue (butterscotch day), H 11.1 km, and a Mie anisotropy
+  **per channel** (0.50, 0.66, 0.88): the forward peak narrows in the blue (diffraction by ~1.5 µm grains), which
+  makes the blue aureole of its sunsets. A single scalar g (Hillaire's, UE's) cannot.
+
+### Console (`Core.SceneManagerService.*`)
+`getDynamicSky()` (JSON: radii, tint, intensity, saturation, star disc, limb darkening),
+`setDynamicSkyGrading(r, g, b, intensity)`, `setDynamicSkySaturation(s)`, `setDynamicSkyStar(enabled, u)`. The sun's
+elevation and illuminance: `CelestialClock.getState(...)`.
+
+### Measuring a sky in nits (the protocol)
+There is no HDR readback; this is the absolute reading:
+1. `Core.RendererService.setPostProcessorEnabled(0)` — the direct swap-chain path: no exposure, no tone mapping,
+   **E_pre = 1** (`latchPreExposure()`: no tone mapper; the override does not apply there).
+2. `setDynamicSkyGrading(1, 1, 1, k)` with k = 2^-14 (or 2^-13): the sky is scaled into [0, 1].
+3. Screenshot; ⚠️ **the PNG of the direct path is LINEAR** (a UNORM swap-chain: doubling k doubles the bytes exactly
+   — checked), so nits = byte / 255 / k, no sRGB decoding.
+
+### Measurements (2026-10-24, Linux, RTX 3070 Ti, 1920×1080)
+| What | Value |
+|---|---|
+| Sky-view pass (`SkyAtmosphere/SkyView`, GPU profiler) | **0.010 ms** (max 0.040) |
+| Earth zenith, sun 45°, 124 600 lx above the atmosphere | RGB (835, 1677, 3765) nits, **L ≈ 1 650 cd/m²** (a very clear sky by Kittler's zenith formula: ~2 000 at turbidity 2.5) |
+| Earth dusk, 45° N equinox (sun 12.7°, 5.1°, 0.1°, −3.0°, −7.5°) | halo → yellowing → orange horizon under a purple vault → pink-violet → deep blue with an orange band (frames in the `sky-lab` notes) |
+| Mars | butterscotch day, a white-to-blue aureole core at sunset (tone-mapped: the core saturates) |
+
+### ⚠️ Traps
+- A background WITHOUT an environment cubemap is legitimate (`AbstractBackground::environmentCubemap()` answers
+  nullptr): `Scene::getRenderableInstanceReadyForRendering()` dereferenced it on the first frame (fixed 2026-10-24,
+  the scene keeps the cubemap it has). The dynamic sky's IBL is the item `dynamic-sky-amortised-ibl`: until then the
+  scene keeps the default environment cubemap and a flat ambient.
+- `fwidth()` in non-uniform control flow is undefined: the disc's antialiasing derivative is taken BEFORE the
+  ground / disc branch.
+- The sky-view table depends on the camera altitude: the main camera's world Y is fed as the height above the
+  ground. A flight scene whose ground is not at Y = 0 must say so (not wired yet).
+- The descriptor writes of the tables state `SHADER_READ_ONLY_OPTIMAL` explicitly: the atmosphere moves them with its
+  own barriers, the image's tracked layout does not follow.
+- Per-channel g is not in Hillaire's paper: Earth sets one value three times; the integration is unchanged
+  (`atmMiePhase()` returns a vec3).

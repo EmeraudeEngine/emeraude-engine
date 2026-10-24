@@ -29,7 +29,10 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+#include <iterator>
 #include <numbers>
+#include <span>
 
 /* Local inclusions. */
 #include "Constants.hpp"
@@ -317,6 +320,42 @@ namespace EmEn::Scenes::Component
 		const auto phaseAngle = std::acos(std::clamp((2.0F * illuminatedFraction) - 1.0F, -1.0F, 1.0F));
 
 		return std::max(0.0F, (std::sin(phaseAngle) + ((std::numbers::pi_v< float > - phaseAngle) * std::cos(phaseAngle))) / std::numbers::pi_v< float >);
+	}
+
+	void
+	CelestialClock::publishStateForRendering (uint32_t writeStateIndex) noexcept
+	{
+		auto & state = *std::next(m_renderStates.begin(), static_cast< std::ptrdiff_t >(writeStateIndex));
+
+		/* Above the atmosphere: the zenith illuminance is referenced at air mass 1, through one extinction. */
+		const auto starColor = Graphics::Photometry::colorFromTemperature(m_options.sun.zenithTemperature).unitLuminanceChromaticity();
+
+		state.sun = {
+			.direction = m_sunDirection,
+			.illuminance = m_options.sun.zenithIlluminance * std::exp(m_options.sun.extinction),
+			.color = starColor,
+			.angularDiameter = m_options.sun.angularDiameter,
+			.illuminatedFraction = 1.0F
+		};
+
+		/* m_moons mirrors m_options.moons one for one (setOptions()); at most MaxMoons are published. */
+		const auto moonCount = std::min({m_moons.size(), m_options.moons.size(), static_cast< size_t >(SkyState::MaxMoons)});
+
+		state.moonCount = static_cast< uint32_t >(moonCount);
+
+		std::ranges::transform(std::span{m_moons}.first(moonCount), std::span{m_options.moons}.first(moonCount), state.moons.begin(), [] (const BoundBody & moon, const Moon & declared) {
+			return SkyBody{
+				.direction = moon.direction,
+				.illuminance = declared.fullIlluminance * CelestialClock::lambertPhase(moon.illuminatedFraction),
+				.color = Graphics::Photometry::colorFromTemperature(declared.temperature).unitLuminanceChromaticity(),
+				.angularDiameter = declared.angularDiameter,
+				.illuminatedFraction = moon.illuminatedFraction
+			};
+		});
+
+		state.celestialPole = m_celestialPole;
+		state.siderealAngle = m_siderealAngle;
+		state.valid = true;
 	}
 
 	void

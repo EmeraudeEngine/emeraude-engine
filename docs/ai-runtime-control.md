@@ -1320,6 +1320,9 @@ python3 tools/remote-console.py "Core.RendererService.lsfunc()"  # List service 
 | **SceneManagerService** | `createScene(name, boundary, camNode, x, y, z [, bg [, ground]])` | Create full scene |
 | | `setGround([material])` | Add/replace ground (default: "default") |
 | | `setBackground(skyboxName [, applyLighting])` | Set skybox on active scene; `true` as second argument derives the scene lighting (ambient + stars) from the sky's photometric manifest |
+| | `getDynamicSky()` | JSON of the active scene's PHYSICAL sky (`DynamicSkyResource`): planet radii, tint, intensity, saturation, star disc, limb darkening (graphics doc 42) |
+| | `setDynamicSkyGrading(r, g, b, intensity)` | The physical sky's tint and intensity (artistic; white and 1 = physical). A known intensity is also the scale of the nits measurement on the direct path (doc 42) |
+| | `setDynamicSkySaturation(s)` / `setDynamicSkyStar(enabled, limbDarkening)` | The physical sky's saturation (0 grey, 1 physical); the star's disc on/off and its linear limb darkening (0-1, the Sun ≈ 0.6) |
 | | `addMesh(meshResource, entityName, x, y, z [, scale])` | Place a 3D mesh |
 | | `createNode(name [, x, y, z])` | Create node in active scene |
 | | `destroyNode(name)` | Remove node |

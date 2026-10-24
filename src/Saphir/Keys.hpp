@@ -755,6 +755,7 @@ namespace EmEn::Saphir
 				constexpr auto PBRMaterial{"PBRMaterial"};
 				constexpr auto BeamMaterial{"BeamMaterial"};
 				constexpr auto PathMaterial{"PathMaterial"};
+				constexpr auto SkyAtmosphereMaterial{"SkyAtmosphereMaterial"};
 				constexpr auto DirectionalLight{"DirectionalLight"};
 				constexpr auto DirectionalLightCSM{"DirectionalLightCSM"};
 				constexpr auto PointLight{"PointLight"};
@@ -876,6 +877,10 @@ namespace EmEn::Saphir
 				constexpr auto PathStyle{"pathStyle"};
 				/** @brief Path: (depth offset — world units every corner moves toward the eye, 0 = none —, the up vector of a flat ribbon in the entity's space — zero = facing the eye). */
 				constexpr auto PathPlacement{"pathPlacement"};
+				/** @brief Sky atmosphere (Material::SkyAtmosphereResource): (tint.rgb, intensity) applied to the whole sky. */
+				constexpr auto SkyGrading{"skyGrading"};
+				/** @brief Sky atmosphere: (saturation, star disc on = 1, limb darkening coefficient u, unused). */
+				constexpr auto SkyStar{"skyStar"};
 				/* Material Iridescence specific */
 				constexpr auto IridescenceFactor{"iridescenceFactor"};
 				constexpr auto IridescenceIOR{"iridescenceIOR"};

@@ -38,6 +38,7 @@
 #include "BlobTrait.hpp"
 #include "Component/Camera.hpp"
 #include "Component/CharacterController.hpp"
+#include "Component/CelestialClock.hpp"
 #include "Component/CloudVolume.hpp"
 #include "Component/DirectionalLight.hpp"
 #include "Component/DirectionalPushModifier.hpp"
@@ -512,6 +513,10 @@ namespace EmEn::Scenes
 		{
 			this->notify(CloudVolumeCreated, std::static_pointer_cast< Component::CloudVolume >(component));
 		}
+		else if ( typeid(*pointer) == typeid(Component::CelestialClock) )
+		{
+			this->notify(CelestialClockCreated, std::static_pointer_cast< Component::CelestialClock >(component));
+		}
 
 		return true;
 	}
@@ -555,6 +560,10 @@ namespace EmEn::Scenes
 		else if ( typeid(*pointer) == typeid(Component::CloudVolume) )
 		{
 			this->notify(CloudVolumeDestroyed, std::static_pointer_cast< Component::CloudVolume >(component));
+		}
+		else if ( typeid(*pointer) == typeid(Component::CelestialClock) )
+		{
+			this->notify(CelestialClockDestroyed, std::static_pointer_cast< Component::CelestialClock >(component));
 		}
 		else if ( typeid(*pointer) == typeid(Component::ParticlesEmitter) )
 		{
