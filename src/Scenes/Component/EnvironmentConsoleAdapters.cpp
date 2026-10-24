@@ -119,6 +119,16 @@ namespace EmEn::Scenes::Component
 			sun["extinction"] = static_cast< double >(options.sun.extinction);
 			sun["zenithTemperatureKelvin"] = static_cast< double >(options.sun.zenithTemperature);
 			sun["horizonTemperatureKelvin"] = static_cast< double >(options.sun.horizonTemperature);
+			sun["model"] = clock.followsAtmosphere() ? "atmosphere" : "empirical";
+			sun["topOfAtmosphereLux"] = static_cast< double >(clock.topOfAtmosphereIlluminance());
+			sun["unitDistanceIlluminanceLux"] = static_cast< double >(options.sun.unitDistanceIlluminance);
+			sun["starTemperatureKelvin"] = static_cast< double >(options.sun.starTemperature);
+
+			if ( clock.followsAtmosphere() )
+			{
+				sun["transmittance"] = toJson(clock.sunTransmittance());
+				sun["color"] = toJson(clock.sunColor());
+			}
 
 			if ( const auto light = clock.sunLight(); light != nullptr )
 			{
@@ -132,6 +142,8 @@ namespace EmEn::Scenes::Component
 			planet["orbitalPeriodSeconds"] = options.planet.orbitalPeriod;
 			planet["axialTiltDegrees"] = Sky::degrees(options.planet.axialTilt);
 			planet["eccentricity"] = options.planet.eccentricity;
+			planet["semiMajorAxisAU"] = options.planet.semiMajorAxis;
+			planet["starDistanceAU"] = clock.starDistance();
 			state["planet"] = std::move(planet);
 
 			Json::Value moons{Json::arrayValue};
@@ -270,7 +282,7 @@ namespace EmEn::Scenes::Component
 					const Console::Parameter entity{entityParameter("the celestial clock")};
 					const Console::Parameter component{componentParameter(CelestialClock::ClassId)};
 
-					this->bindCommand("getState", "Returns the state of a celestial clock as JSON: running, the date (day since the vernal equinox, time of day 0 midnight / 0.5 noon), the time scale, the latitude, the sun (elevation, direction, lux and kelvins written to its light, photometry), the planet, every moon (elevation, direction, illuminated fraction, lux), the celestial pole and the sidereal angle.",
+					this->bindCommand("getState", "Returns the state of a celestial clock as JSON: running, the date (day since the vernal equinox, time of day 0 midnight / 0.5 noon), the time scale, the latitude, the sun (elevation, direction, lux and kelvins written to its light, photometry; with a dynamic sky the model atmosphere, the disc's transmittance and the linear colour written), the planet (with its distance to the star in AU), every moon (elevation, direction, illuminated fraction, lux), the celestial pole and the sidereal angle.",
 						{entity, component},
 						[this] (const std::string & entityName, const std::string & componentName) {
 							return this->act(entityName, componentName, [] (CelestialClock & clock) {

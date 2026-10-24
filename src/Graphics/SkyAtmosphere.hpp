@@ -121,6 +121,42 @@ namespace EmEn::Graphics
 		 */
 		[[nodiscard]]
 		static std::optional< AtmosphereParameters > preset (const std::string & name) noexcept;
+
+		/**
+		 * @brief Returns the transmittance from a point to the top of the atmosphere: the CPU twin of the transmittance
+		 * table (SkyAtmosphere's pass 1).
+		 * @note The table's own march, sample for sample (40 uniform samples, Hillaire's 0.3 offset, the same medium
+		 * and the same clamped scale heights), in double precision: it differs from the table only by the table's
+		 * interpolation and its half floats. A ray that meets the ground transmits nothing.
+		 * @note Pure and cheap (40 samples): the logic thread calls it every cycle (owner decision 2026-10-24, "a CPU
+		 * twin", against a readback of the table).
+		 * @param height The point's height above the ground, in km. Clamped to [0, top − ground].
+		 * @param zenithCos The cosine of the angle between the ray and the local vertical. Clamped to [-1, 1].
+		 * @return Base::Math::Vector< 3, float > The transmittance per channel, in [0, 1]. Zero for a non-finite input.
+		 */
+		[[nodiscard]]
+		Base::Math::Vector< 3, float > transmittanceToTop (float height, float zenithCos) const noexcept;
+
+		/**
+		 * @brief Returns the transmittance of a star's disc seen from a height: the transmittance averaged over the disc
+		 * by area, the part hidden by the ground counting zero.
+		 * @note The disc is cut into DiscStripCount horizontal strips weighted by their chords (the midpoint rule on the
+		 * disc's area), each through transmittanceToTop() at its elevation. A disc high in the sky gives its centre's
+		 * value; a disc on the horizon fades as it sets (the penumbra of a sunset), and gives exactly zero once the
+		 * ground hides it. Limb darkening is not weighted in (a few per cent of the strip weights).
+		 * @param height The observer's height above the ground, in km.
+		 * @param elevation The elevation of the disc's centre above the horizontal, in radians.
+		 * @param angularRadius The disc's angular radius, in radians. Clamped to [0, π/4].
+		 * @return Base::Math::Vector< 3, float > The transmittance per channel, in [0, 1]. Zero for a non-finite input.
+		 */
+		[[nodiscard]]
+		Base::Math::Vector< 3, float > discTransmittance (float height, float elevation, float angularRadius) const noexcept;
+
+		/** @brief The number of samples of the transmittance march (the table's pass 1 takes as many). */
+		static constexpr int TransmittanceSampleCount{40};
+
+		/** @brief The number of horizontal strips discTransmittance() cuts a disc into. */
+		static constexpr int DiscStripCount{16};
 	};
 
 	/**

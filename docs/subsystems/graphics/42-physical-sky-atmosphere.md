@@ -2,9 +2,9 @@
 
 > Owner decisions (2026-10-24): the sky is PHYSICAL and must render extraterrestrial skies (the planet is data);
 > it is drawn as a **background material** on the skybox cube; the **CelestialClock** writes the scene's sky state;
-> **one** scattering sun; an AI-owned lab demo (`sky-lab`, projet-alpha). Lot 1 of the dynamic sky; the next lots
-> are the engine items `dynamic-sky-sun-light-from-transmittance`, `dynamic-sky-amortised-ibl`,
-> `dynamic-sky-stars-and-milky-way`, `dynamic-sky-moon` and `dynamic-sky-aerial-perspective`.
+> **one** scattering sun; an AI-owned lab demo (`sky-lab`, projet-alpha). Lot 1 of the dynamic sky; lot 2, the sun's
+> light from the same atmosphere, is § "The light" below (2026-10-25); the next lots are the engine items
+> `dynamic-sky-amortised-ibl`, `dynamic-sky-stars-and-milky-way`, `dynamic-sky-moon` and `dynamic-sky-aerial-perspective`.
 
 ### The model
 S. Hillaire, *A Scalable and Production Ready Sky and Atmosphere Rendering Technique*, EGSR 2020 (the model of UE's
@@ -32,7 +32,7 @@ the star through the air, instead of a black void under the scene's own small fl
 | `Material::SkyAtmosphereResource` | `Graphics/Material/SkyAtmosphereResource.{hpp,cpp}` | unlit, opaque; reads the sky-view, transmittance and frame textures; the star's disc; the artistic grading |
 | `Renderable::DynamicSkyResource` | `Graphics/Renderable/DynamicSkyResource.{hpp,cpp}` | the background: owns the atmosphere and the material, the skybox cube |
 | `Renderer::renderSkyAtmosphere()` | `Graphics/Renderer.cpp` | the per-frame sky-view submission, BEFORE the shadow maps and the render-to-textures (the probes draw the sky too) |
-| `SkyState` | `Scenes/SkyState.hpp` | the scene's sky for the render thread: the sun and moons (direction, illuminance above the atmosphere, unit-luminance colour, angular diameter, phase), written by `CelestialClock::publishStateForRendering()`, read by `Scene::skyStateForRendering(readStateIndex)` |
+| `SkyState` | `Scenes/SkyState.hpp` | the scene's sky for the render thread: the sun and moons (direction, illuminance above the atmosphere, unit-luminance LINEAR colour, angular diameter, phase), written by `CelestialClock::publishStateForRendering()`, read by `Scene::skyStateForRendering(readStateIndex)` |
 
 ### The frame
 1. The renderer finds a `DynamicSkyResource` background, reads the scene's `SkyState` at the frame's read state
@@ -52,6 +52,53 @@ transmittance along the view ray (it reddens and dims on the horizon by itself).
 ⚠️ **Capped at 32 768 in the PRE-EXPOSED colour** (`StarDiscCeiling`): ~1.6e9 nits at noon is beyond fp16 even × E_pre
 on a world cache (S = 2^-4). The cap reads `ubView.preExposure`, so every view (main, cubemap probe) is covered; the
 disc saturates, it never dims.
+
+### The light: the sun through the same atmosphere (lot 2, 2026-10-25)
+With a dynamic sky, `CelestialClock` lights its sun and moons from the sky's own atmosphere instead of its empirical
+model (Kasten & Young air mass, 5800 → 2000 K), so the light on the ground and the drawn disc agree. Owner decisions
+(2026-10-24):
+1. **A CPU twin** of the transmittance table, `AtmosphereParameters::transmittanceToTop(height, zenithCos)`: the
+   table's own march sample for sample (40 uniform samples, Hillaire's 0.3 offset, `atmSampleMedium()`'s medium, the
+   clamped scale heights of `packParameters()`), in double, every logic cycle. No GPU readback: deterministic, no
+   frame latency, no asynchronous job. Unreal does the same on the CPU (`FAtmosphereSetup::GetTransmittanceAtGroundLevel`).
+2. **The observer is the ground** (10 m, the sky-view's own floor), never the camera.
+3. **The star above the atmosphere is physical**: `SunPhotometry::unitDistanceIlluminance` = **133 800 lx** at 1 AU
+   (Darula, Kittler & Gueymard, *Solar Energy* 79(5), 2005, the engineering value; the IES Lighting Handbook 10th ed.
+   gives 133.1 klx) over the square of the planet's distance (`Base::Math::Astronomy::starDistance()`,
+   `Planet::semiMajorAxis` with the orbit's eccentricity: Earth 0.983–1.017 AU, ±3.4 % in light).
+4. **The clock finds the atmosphere through the scene's background** (`CelestialClock::followAtmosphere()`, each logic
+   cycle, running or not): a loaded `DynamicSkyResource` → its `AtmosphereParameters`; otherwise the empirical model.
+5. **The star's colour is LINEAR**: `linearColorFromTemperature(5772 K)` (IAU 2015 B3) at unit luminance, in the
+   `SkyState` and in the light. Lot 1 used the sRGB-encoded `colorFromTemperature()` raw.
+
+The light: `E_toa × Y(star ⊙ T_disc)` lux, its colour `star ⊙ T_disc` scaled to a largest component of 1.
+`AtmosphereParameters::discTransmittance()` averages the transmittance over the disc in 16 horizontal strips weighted
+by their chords, the strips under the ground's horizon counting zero: the light fades as the disc sets (the
+penumbra) and goes out once the ground hides it, at −(horizon dip + radius) ≈ −0.37° for the Sun at 10 m. The moons take
+the same change (full-moon illuminance × phase × `Y(moon ⊙ T_disc)`); a moon lights while the sun's light is off.
+`CelestialClock.getState()` says `"model": "atmosphere"` and gives `transmittance`, `color`, `topOfAtmosphereLux`
+and the planet's `starDistanceAU`.
+
+| Earth, 45° N, sky-lab (2026-10-25, Linux) | Sun elevation | Light (lux) | Colour (linear, max 1) |
+|---|---|---|---|
+| June solstice | 60° | 113 690 | (1, 0.808, 0.668) |
+| March equinox (E_toa 134 870 lx, 0.996 AU) | 45° | 114 990 | (1, 0.793, 0.637) |
+| | 30° | 107 800 | (1, 0.761, 0.574) |
+| | 10° | 73 388 | (1, 0.590, 0.296) |
+| | 4° | 38 710 | (1, 0.378, 0.082) |
+| | 2° | 21 565 | (1, 0.247, 0.021) |
+| | 0° | 4 058 | (1, 0.094, 0.0008) |
+| | −0.2° | 1 316 | penumbra |
+| | −0.4° | 0, off | — |
+
+**The light agrees with the drawn disc** (disc minus the surrounding sky, post-processor off, linear PNG): G/R and
+B/R at 10° 0.588 / 0.295 against 0.590 / 0.296; at 4° 0.375 / 0.079 against 0.378 / 0.082; at 2° 0.253 against 0.247
+(the disc's centre against the disc's average, and 8-bit levels). Mars (sky-lab option 0 = 1, 1.39 AU): 69 080 lx above
+the atmosphere, 32 320 lx at 30°, 8 905 lx at 10°; the art preset's dust lets more blue through than red, so its
+direct sunset light turns blue (0.59, 0.91, 1) — data, tunable. 0 VUID in the three runs.
+
+The Earth's clean Hillaire atmosphere (aerosol depth ~0.005) is far brighter near the horizon than the empirical model
+(73 klx against ~36 klx at 10°): a hazier day is the manifest's `MieScattering` (sky-lab option 5).
 
 ### The manifest (Backgrounds store)
 `"Planet"` (a preset name, default `"Earth"`), `"Atmosphere"` (inline overrides: `GroundRadius`, `TopRadius`,
@@ -85,7 +132,8 @@ There is no HDR readback; this is the absolute reading:
 | What | Value |
 |---|---|
 | Sky-view pass (`SkyAtmosphere/SkyView`, GPU profiler) | **0.010 ms** (max 0.040) |
-| Earth zenith, sun 45°, 124 600 lx above the atmosphere | RGB (835, 1677, 3765) nits, **L ≈ 1 650 cd/m²** (a very clear sky by Kittler's zenith formula: ~2 000 at turbidity 2.5) |
+| Earth zenith, sun 45°, 124 600 lx above the atmosphere, sRGB-encoded star colour (lot 1) | RGB (835, 1677, 3765) nits, L ≈ 1 650 cd/m² |
+| Earth zenith, sun 45°, **134 870 lx** above the atmosphere, LINEAR 5772 K (lot 2, 2026-10-25) | RGB (964, 1799, 3870) nits, **L ≈ 1 771 cd/m²** (a very clear sky by Kittler's zenith formula: ~2 000 at turbidity 2.5); 2^-13 doubles the bytes |
 | Earth dusk, 45° N equinox (sun 12.7°, 5.1°, 0.1°, −3.0°, −7.5°) | halo → yellowing → orange horizon under a purple vault → pink-violet → deep blue with an orange band (frames in the `sky-lab` notes) |
 | Mars | butterscotch day, a white-to-blue aureole core at sunset (tone-mapped: the core saturates) |
 
@@ -100,5 +148,8 @@ There is no HDR readback; this is the absolute reading:
   ground. A flight scene whose ground is not at Y = 0 must say so (not wired yet).
 - The descriptor writes of the tables state `SHADER_READ_ONLY_OPTIMAL` explicitly: the atmosphere moves them with its
   own barriers, the image's tracked layout does not follow.
+- ⚠️ **Two sources for one integral**: `AtmosphereParameters::transmittanceToTop()` (C++) must follow
+  `atmSampleMedium()` and the table's march (`AtmosphereGLSL.hpp`, `SkyAtmosphere.cpp` pass 1) — a change to one is a
+  change to the other, re-measured (the light's colour against the disc, § "The light").
 - Per-channel g is not in Hillaire's paper: Earth sets one value three times; the integration is unchanged
   (`atmMiePhase()` returns a vec3).

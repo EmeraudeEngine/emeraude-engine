@@ -80,6 +80,14 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 > physical sky reddens it itself), angular diameter and phase — and the scene keeps its clock
 > (`CelestialClockCreated` / `CelestialClockDestroyed`; the last one added wins) behind
 > `Scene::skyStateForRendering(readStateIndex)`, which the renderer's physical sky reads (graphics doc 42).
+> ⚠️ **With a dynamic sky** (2026-10-25, owner decisions; graphics doc 42 § "The light"), the clock follows the scene's
+> background each logic cycle, running or not (`followAtmosphere()`): a loaded `DynamicSkyResource` makes its lights
+> come from that atmosphere's transmittance (a CPU twin of the sky's table, the observer on the ground) and the star's
+> PHYSICAL illuminance above the atmosphere — `SunPhotometry::unitDistanceIlluminance` (133 800 lx at 1 AU) over the
+> square of the planet's distance (`Planet::semiMajorAxis`, eccentric) — with its LINEAR colour
+> (`SunPhotometry::starTemperature`, 5772 K); the sky state carries the same star. The sun fades through the horizon
+> (penumbra) instead of a hard switch; `isDaytime()` is "the sun's light is on". Without a dynamic sky nothing changes
+> (`zenithIlluminance`, `extinction` and the temperatures keep driving the light).
 >
 > `SkyFollowsSun` (2026-09-13, owner decision) is the sky's HALF, deliberately a separate component:
 > bound to a `CelestialClock`, it maps the sun's elevation through a smoothstep (`duskElevation` −6° → 0,
