@@ -53,16 +53,29 @@ thread ticks twice between two frames, no slot index is "the previous frame". Te
 - `ViewMatricesInterface.hpp` — frame-history contract (previous view/projection + archive)
 - `Renderer.cpp:renderFrame()` — the single `archiveStateAfterRendering()` call site
 
-### Rule 4: The View UBO Is Single-Buffered — Never Put Frame-Varying Data In It
+### Rule 4: The View UBOs Are Per Frame In Flight — But the TAA Jitter Still Stays Out
 
-`ViewMatrices2DUBO` (and its 3D/Cascaded siblings) own **ONE** `UniformBufferObject`
-(`ViewUBOSize`, one descriptor set) — **NOT** `framesInFlight()` copies. `updateVideoMemory()`
-rewrites it once per cycle, on the render thread, while the GPU may still be reading it for
-a frame that is still in flight.
+`ViewMatrices2DUBO`, `ViewMatrices3DUBO` and `ViewMatricesCascadedUBO` each own **one buffer and one
+descriptor set per frame in flight** (`00a7b9cf0`, 2026-08-26; the cascaded one since its creation).
+`updateVideoMemory(readStateIndex, frameIndex)` writes region `frameIndex` and publishes it to
+`descriptorSet()`. A frame-varying value is therefore SAFE in a view UBO: the world position and the
+velocity are, and so is the **pre-exposure** (`setPreExposure()`, scene-colour pre-exposure step 4,
+2026-10-24), the factor every scene program multiplies its radiance by.
 
-This is safe **only** because everything the UBO holds is *view state*, which is identical
-for every frame that observes the same camera. The instant a value inside it varies **per
-rendered frame**, Rule 1 applies and the single buffer becomes a data race.
+> ⚠️ Until 2026-10-24 this rule said "single-buffered — never put frame-varying data in it". It had
+> been stale for two months, and the pre-exposure audit (2026-09-25) built its D2 options on it: it
+> ruled out the view UBO and proposed a new descriptor set in every scene pipeline layout. The owner
+> amended D2 once the stale premise surfaced. Check this kind of rule against the code before
+> designing around it.
+
+`setPreExposure()` writes the member every later upload copies, AND patches the region this frame
+already uploaded: the main view is uploaded by `Scene::updateVideoMemory()` BEFORE
+`Renderer::latchPreExposure()` runs. Call it after this frame's upload or before the first one, never
+between a frame's fence and its upload.
+
+What stays OUT, for another reason: **the TAA jitter**. The history below is why it is a per-draw
+push constant applied to `gl_Position` only — that is what keeps every matrix, and so every velocity
+output, jitter-free by construction.
 
 > [!CAUTION]
 > **Lived example (Jul 2026).** The TAA sub-pixel projection jitter was written into this
@@ -89,8 +102,9 @@ rendered frame**, Rule 1 applies and the single buffer becomes a data race.
 > (baseline `0.11`). See `docs/caution-points.md` § "Sub-pixel projection jitter raced the
 > single-buffered view UBO" and `src/Saphir/AGENTS.md` § "TAA Sub-Pixel Jitter".
 
-**Checklist before adding a member to a view UBO:** does this value differ between two
-frames that share the same camera state? If yes, it does not belong here.
+**Checklist before adding a member to a view UBO:** is it written into the frame's own region (the
+upload, or `setPreExposure()`'s patch)? Does it shift the raster or the velocity (the jitter)? A
+per-frame value is fine; a jitter is not.
 
 ### Rule 5: Frame-in-Flight Index ≠ Swap-Chain Image Index (Aug 2026)
 

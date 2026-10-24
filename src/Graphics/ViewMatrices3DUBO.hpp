@@ -174,6 +174,17 @@ namespace EmEn::Graphics
 				return m_descriptorSets[m_currentFrameRegion].get();
 			}
 
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::setPreExposure() */
+			void setPreExposure (float preExposure) noexcept override;
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::preExposure() */
+			[[nodiscard]]
+			float
+			preExposure () const noexcept override
+			{
+				return m_preExposure;
+			}
+
 			/**
 			 * @copydoc EmEn::Graphics::ViewMatricesInterface::updatePerspectiveViewProperties()
 			 * @note Six cube faces: the field of view is always a quarter revolution (90°), the fov parameter is ignored.
@@ -243,6 +254,8 @@ namespace EmEn::Graphics
 			static constexpr auto EnvironmentLuminanceOffset{ViewMatricesJumpOffset + 33UL};
 			/** @brief Offset of the IBL diffuse weight in the buffer. */
 			static constexpr auto IBLDiffuseWeightOffset{ViewMatricesJumpOffset + 34UL};
+			/** @brief Offset of the pre-exposure in the buffer (setPreExposure()): the last float of the vec4. */
+			static constexpr auto PreExposureOffset{IBLDiffuseWeightOffset + 1UL};
 
 			/** @brief Orientation matrices for the 6 faces of a standard cubemap. */
 			static const std::array< Base::Math::Matrix< 4, float >, CubemapFaceCount > CubemapOrientation;
@@ -325,6 +338,8 @@ namespace EmEn::Graphics
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			/** @brief Region the descriptor set currently addresses. Set by updateVideoMemory(), which is const. */
 			mutable uint32_t m_currentFrameRegion{0};
+			/** @brief The pre-exposure every upload writes (setPreExposure()), render thread only. */
+			float m_preExposure{1.0F};
 	};
 
 	/**

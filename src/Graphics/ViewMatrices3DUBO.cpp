@@ -35,6 +35,7 @@
 #include <cstddef>
 #include <cstring>
 #include <iterator>
+#include <span>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
@@ -441,9 +442,38 @@ namespace EmEn::Graphics
 
 		std::memcpy(pointer, m_renderState[readStateIndex].bufferData.data(), m_renderState[readStateIndex].bufferData.size() * sizeof(float));
 
+		/* The pre-exposure is render-thread state, not logic state: it overrides the slot the copy above carried. */
+		std::span{pointer, ViewUBOElementCount}[PreExposureOffset] = m_preExposure;
+
 		uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
 
 		return true;
+	}
+
+	void
+	ViewMatrices3DUBO::setPreExposure (float preExposure) noexcept
+	{
+		m_preExposure = preExposure;
+
+		/* The region this frame already uploaded gets it too: the main view's upload runs before the frame latches
+		 * its pre-exposure (Renderer::latchPreExposure()), and the frame must render with the value it latched. */
+		if ( m_currentFrameRegion >= m_uniformBufferObjects.size() )
+		{
+			return;
+		}
+
+		const auto & uniformBufferObject = m_uniformBufferObjects[m_currentFrameRegion];
+
+		auto * pointer = uniformBufferObject->mapMemoryAs< float >(0, VK_WHOLE_SIZE);
+
+		if ( pointer == nullptr )
+		{
+			return;
+		}
+
+		std::span{pointer, ViewUBOElementCount}[PreExposureOffset] = m_preExposure;
+
+		uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
 	}
 
 	void

@@ -784,6 +784,8 @@ namespace EmEn::Saphir
 				constexpr auto AmbientLightIntensity{"ambientLightIntensity"};
 				constexpr auto EnvironmentLuminance{"environmentLuminance"};
 				constexpr auto IBLDiffuseWeight{"iblDiffuseWeight"};
+				/* The pre-exposure of the view (scene colour = nits × preExposure), ViewMatricesInterface::setPreExposure(). */
+				constexpr auto PreExposure{"preExposure"};
 				/* Material specific (Phong) */
 				constexpr auto AmbientColor{"ambientColor"};
 				constexpr auto DiffuseColor{"diffuseColor"};

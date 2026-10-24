@@ -414,6 +414,37 @@ Plumbing:
      are identical too (27.3 / 27.3 and 40.7 / 40.7).
 4. **Scene programs**: the transport chosen in D2, the multiply from D1, the exemptions and
    compensations from D6, and the RTT scale from D7.
+   - **Step 4 — DONE (2026-10-24, Linux, RTX 3070 Ti).**
+     - **Transport (D2 amended)**: the view UBOs carry `preExposure` in the free float after `iblDiffuseWeight`
+       (2D offset 35, cubemap 96+35, CSM 64+27), declared in the three GLSL view blocks.
+       `ViewMatricesInterface::setPreExposure()` stores it for every later upload and patches the region this
+       frame already uploaded. `Renderer::latchPreExposure()` sets the main view's (only with a scene: without
+       one no region was uploaded this frame).
+     - **The multiply (D1)**: ONE epilogue in `SceneRendering::generateFragmentShader()`,
+       `svOutputFragment.rgb *= ubView.preExposure`, on every branch: lit, unlit, the no-material magenta and
+       the instrument lanes. A lane left unscaled would be displayed `1 / E_pre` brighter than today; this
+       resolves D6's debug-lane point the other way from UE's exemption. Only the Multiply blend is exempt (it
+       writes a factor).
+     - **D6**: the grab-pass transmission is read `/ ubView.preExposure`
+       (`LightGenerator::sceneRadianceToNits()`, both transmission sites). A render-target reflection or
+       refraction source is divided by ITS OWN scale, read from the target's view at material setup
+       (`renderTargetScale()` → `declare*SourceAbsolute(scale)`).
+     - **D7 for the render-to-texture probes**: `WorldCacheScale` = 2^-4 (`Graphics/Types.hpp`, owner k = 4)
+       on every cubemap target of ≥ 16 bits per channel (`RenderTarget::Texture` constructor). An 8-bit target
+       (the 2D render-to-texture, a display-range picture) and the imposter bake keep 1.
+     - **The deferred punctual lights** (`DeferredLightResolve`) multiply their resolve by the view's
+       pre-exposure (push constant, the former padding).
+   - Gates (validation layers OFF, Release):
+     - **Invariance, scene effects bypassed and bloom off** (`bypassSceneEffects(1)`, `Camera.setBloom(…, 0)`),
+       E_pre forced to 0.5 and to 2^-4 against automatic:
+       - `post-processor-effect-debug 0,0`: **bit-exact** (max 0/255);
+       - `reflexion-debug` (the probe sphere): only the animated dragon moves, as in its A/A;
+       - `water-world` and `liminal` (grab-pass water and glass): inside their A/A noise, same means.
+     - **Old binary (`defb1464`) vs new at E_pre 1, effects ON**: `post-processor-effect-debug` max 8/255,
+       0.36 % (A/A 11/255, 0.38 %); `reflexion-debug`'s probe-reflecting sphere max 2/255, 0.04 % (A/A max 2,
+       0.05 %). The S path is exact.
+     - ⚠️ With the effects ON, the invariance FAILS on `post-processor-effect-debug` (RTR fills the frame with
+       traced radiance still in absolute nits, mean 148.8 → 181.6 at E_pre 0.5): expected until steps 5-6.
 5. **RT lanes, the probe volume and its scale (D7), and the finite guard at
    `IrradianceProbeVolume.cpp:435` / `:495`.**
 6. **Post effects and the `FrameContext` fields (D8).**

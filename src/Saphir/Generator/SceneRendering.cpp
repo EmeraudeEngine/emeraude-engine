@@ -1088,6 +1088,30 @@ namespace EmEn::Saphir::Generator
 			}
 		}
 
+		/* PRE-EXPOSURE (scene-colour pre-exposure, D1): every radiance this program writes is stored × the view's
+		 * pre-exposure, so the fp16 target never holds an absolute luminance past 65 504 — the frame's E_pre on the
+		 * main view, the fixed cache scale on a render-to-texture probe, 1 elsewhere (ViewMatricesInterface::
+		 * setPreExposure()). Linear, so the additive sum of the light passes stays exact.
+		 * ⚠️ RGB only: the alpha drives the blending and the discard below.
+		 * ⚠️ EVERY branch, the instrument lanes and the no-material magenta included: the tone mapper divides the
+		 * whole scene colour by E_pre, so a value left unscaled would be displayed 1 / E_pre times brighter than
+		 * today. The one exemption is the Multiply blend: it writes a FACTOR the destination is multiplied by,
+		 * not a radiance. */
+		{
+			const auto * material = this->materialEnabled() ? this->getMaterialInterface() : nullptr;
+			const bool writesFactor = material != nullptr && material->blendingMode() == BlendingMode::Multiply && material->isFlagEnabled(Material::BlendingEnabled);
+
+			if ( !writesFactor )
+			{
+				if ( !this->declareViewUniformBlock(*fragmentShader) )
+				{
+					return false;
+				}
+
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputFragment << ".rgb *= " << ViewUB(UniformBlock::Component::PreExposure, false) << ';';
+			}
+		}
+
 		/* Discard nearly invisible pixels to avoid blending artifacts.
 		 * ⚠️ This is NOT a coverage test and must never be used as one: 0.01 is a "this texel adds
 		 * nothing to the blend" floor, while an alpha test asks "does this texel cover the pixel".

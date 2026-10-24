@@ -427,9 +427,10 @@ namespace EmEn::Saphir
 			 * before this: a probe reflection burned to 8000 nits under a clear-sky manifest.
 			 */
 			void
-			declareReflectionSourceAbsolute () noexcept
+			declareReflectionSourceAbsolute (float sourceScale = 1.0F) noexcept
 			{
 				m_reflectionSourceAbsolute = true;
+				m_reflectionSourceScale = sourceScale;
 			}
 
 			/**
@@ -437,9 +438,10 @@ namespace EmEn::Saphir
 			 * @copydetails declareReflectionSourceAbsolute()
 			 */
 			void
-			declareRefractionSourceAbsolute () noexcept
+			declareRefractionSourceAbsolute (float sourceScale = 1.0F) noexcept
 			{
 				m_refractionSourceAbsolute = true;
+				m_refractionSourceScale = sourceScale;
 			}
 
 			/**
@@ -1299,8 +1301,13 @@ namespace EmEn::Saphir
 			bool m_reflectionArtistic{false};
 			/** @brief Reflection source is a render target: absolute luminance, no environment luminance scale. */
 			bool m_reflectionSourceAbsolute{false};
+			/* The scale the absolute reflection source stores its luminance with (the source target's pre-exposure:
+			 * WorldCacheScale for a high-precision probe), divided out where it is read. */
+			float m_reflectionSourceScale{1.0F};
 			/** @brief Refraction source is a render target: absolute luminance, no environment luminance scale. */
 			bool m_refractionSourceAbsolute{false};
+			/* The scale of the absolute refraction source, see m_reflectionSourceScale. */
+			float m_refractionSourceScale{1.0F};
 			bool m_useRefraction{false};
 			/**
 			 * @note No declareXxx() setter currently exposes this flag: it is always its default
@@ -1341,6 +1348,40 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Returns the GLSL factor that turns a value re-read from THIS frame's scene colour (the grab pass)
+			 * back into nits: it holds nits × E_pre (scene-colour pre-exposure), and the program's output multiplies
+			 * by E_pre again (SceneRendering::generateFragmentShader()).
+			 * @return std::string A GLSL operand with its operator, " / <view pre-exposure>".
+			 */
+			[[nodiscard]]
+			static
+			std::string
+			sceneRadianceToNits () noexcept
+			{
+				return " / " + ViewUB(Keys::UniformBlock::Component::PreExposure, false);
+			}
+
+			/**
+			 * @brief Returns the GLSL intensity factor of an ABSOLUTE source (a render target): the artistic weight,
+			 * divided by the scale the source stores its luminance with.
+			 * @param sourceScale The source's scale (its pre-exposure), 1 for a source stored in nits.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string
+			absoluteSourceIntensity (float sourceScale) const noexcept
+			{
+				const auto weight = m_surfaceIBLIntensity.empty() ? std::string{"1.0"} : m_surfaceIBLIntensity;
+
+				if ( sourceScale == 1.0F || sourceScale <= 0.0F )
+				{
+					return '(' + weight + ')';
+				}
+
+				return '(' + weight + " / " + std::to_string(sourceScale) + ')';
+			}
+
+			/**
 			 * @brief Returns the GLSL intensity factor for the REFLECTED color leg.
 			 * @note A render-target source (probe/mirror) is the rendered scene — already an
 			 * absolute luminance: only the artistic weight applies. A cubemap source is a
@@ -1353,9 +1394,7 @@ namespace EmEn::Saphir
 			{
 				if ( m_reflectionSourceAbsolute )
 				{
-					const auto weight = m_surfaceIBLIntensity.empty() ? std::string{"1.0"} : m_surfaceIBLIntensity;
-
-					return '(' + weight + ')';
+					return absoluteSourceIntensity(m_reflectionSourceScale);
 				}
 
 				return this->scaledIBLIntensity();
@@ -1372,9 +1411,7 @@ namespace EmEn::Saphir
 			{
 				if ( m_refractionSourceAbsolute )
 				{
-					const auto weight = m_surfaceIBLIntensity.empty() ? std::string{"1.0"} : m_surfaceIBLIntensity;
-
-					return '(' + weight + ')';
+					return absoluteSourceIntensity(m_refractionSourceScale);
 				}
 
 				return this->scaledIBLIntensity();
