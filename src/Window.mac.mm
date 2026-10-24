@@ -144,7 +144,6 @@ namespace EmEn
 
 			/**
 			 * @brief Answers the suspended "quit" Apple Event as refused ("user canceled", -128): the application runs on.
-			 * @return void
 			 */
 			void
 			cancel () noexcept
