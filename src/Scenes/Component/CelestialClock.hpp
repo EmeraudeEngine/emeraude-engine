@@ -46,7 +46,7 @@
 #include "Constants.hpp"
 #include "Math/Astronomy.hpp"
 #include "Math/Vector.hpp"
-#include "Scenes/SkyState.hpp"
+#include "Scenes/SkyState.hpp" // IWYU pragma: keep (m_renderStates is a std::array of SkyState: a complete type)
 
 /* Forward declarations. */
 namespace EmEn::Graphics
@@ -56,7 +56,9 @@ namespace EmEn::Graphics
 
 namespace EmEn::Scenes
 {
+	class AbstractEntity;
 	class Node;
+	class Scene;
 
 	namespace Component
 	{

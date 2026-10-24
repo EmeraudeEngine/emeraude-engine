@@ -624,6 +624,13 @@ cascades (GCC Release and Debug, clang with `-Wdocumentation`), and a second IWY
 - `tools/iwyu-apply.py` (projet-alpha): an emeraude-base header is LOCAL for the engine; a section it creates goes in
   the cascade's order; a section title followed by a preprocessor conditional is kept.
 
+⚠️ **2026-10-25 — IWYU had not run since 2026-10-21** (the base mapping's `<features.h>` entry made it abort every TU;
+base ledger § include-what-you-use). The physical sky's files were brought clean on its return: `SkyAtmosphere.cpp`
++6, `CelestialClock.cpp` +5, `EnvironmentConsoleAdapters.cpp` +12 and a forward declaration of `Scenes::Manager`,
+`CelestialClock.hpp` two forward declarations. Known IWYU false suggestion, kept: `CelestialClock.hpp` asked to replace
+`"Scenes/SkyState.hpp"` by a forward declaration, but `m_renderStates` is a `std::array< SkyState, N >` member (a
+complete type) — `// IWYU pragma: keep (<reason>)`. The rest of the window's debt: item `iwyu-debt-since-2026-10-21`.
+
 **First lot (2026-10-19)**: the 49 files of the engine's cppcheck lot (34 `.cpp`, 15 headers): about 800 includes added
 and 115 removed, 41 forward declarations, converged at the second pass (three residual lines applied); the three
 cascades 0 error, 0 warning. Section layouts that predate the pass were left as they are (`GLTFParser.cpp`'s leading

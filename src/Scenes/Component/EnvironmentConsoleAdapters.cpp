@@ -28,8 +28,13 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <cstddef>
 #include <limits>
+#include <memory>
 #include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "json/json.h"
@@ -37,10 +42,23 @@
 /* Local inclusions. */
 #include "CelestialClock.hpp"
 #include "CloudVolume.hpp"
+#include "Console/CommandResult.hpp"
+#include "Console/ControllableTrait.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
 #include "DirectionalLight.hpp"
 #include "FastJSON.hpp"
+#include "Math/Astronomy.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "SkyFollowsSun.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Scenes
+{
+	class Manager;
+}
 
 namespace EmEn::Scenes::Component
 {
