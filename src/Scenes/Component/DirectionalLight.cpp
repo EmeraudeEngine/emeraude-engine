@@ -121,7 +121,7 @@ namespace EmEn::Scenes::Component
 		/* ⚠️ No early return on a DISABLED light. This method used to skip everything while the
 		 * light was off, so a light that moved while disabled and was then enabled kept a STALE
 		 * direction, shadow frame and light-space matrix — whatever its last enabled move() had
-		 * staged, NaN included (Component::SunCourse, 2026-09-13: the light was built at the origin,
+		 * staged, NaN included (the former Component::SunCourse, 2026-09-13: the light was built at the origin,
 		 * staged a NaN direction, spent the night disabled and rose with it — black frames, GPU
 		 * unresponsive). A light tracks its frame whether it emits or not; emitting is the render
 		 * passes' decision (they skip a disabled light themselves). */

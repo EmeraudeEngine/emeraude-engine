@@ -16,8 +16,8 @@ tags: [sky, atmosphere, photometry, background, owner-decision, design]
 > - The exposure work comes **first**: DONE 2026-10-24, the scene colour is pre-exposed (graphics doc 41).
 > - `SkyFollowsSun` **stays**, for the picture skies (`SkyBoxResource`). It does not drive a
 >   dynamic sky.
-> - Time comes from a celestial clock (`celestial-clock`), not from `SunCourse`'s fixed great
->   circle. This first lot may be driven by `SunCourse` until the clock exists.
+> - Time comes from the celestial clock (`Scenes::Component::CelestialClock`, DONE 2026-10-24), not from a fixed great
+>   circle.
 
 ## Why
 
@@ -26,7 +26,7 @@ tags: [sky, atmosphere, photometry, background, owner-decision, design]
 `SkyFollowsSun` can only dim. It cannot turn orange at sunset or blue at dawn, and it cannot show
 a sun disc that matches the directional light. This item is the first lot of the dynamic sky. The
 following lots are `dynamic-sky-sun-light-from-transmittance`, `dynamic-sky-amortised-ibl`,
-`dynamic-sky-stars-and-milky-way`, `dynamic-sky-moon`, `celestial-clock` and
+`dynamic-sky-stars-and-milky-way`, `dynamic-sky-moon` and
 `dynamic-sky-aerial-perspective`.
 
 ## What remains
@@ -56,7 +56,7 @@ following lots are `dynamic-sky-sun-light-from-transmittance`, `dynamic-sky-amor
       (`Resources/Manager.cpp:862`, `Scenes/DefinitionResource.hpp:225`).
 - [ ] **A component carries the TIME, the resource only the description**: the resource is
       shared and static, while the sun direction changes every cycle. This follows the 2026-09-13
-      split (`SunCourse` = the sun only, the sky belongs to the background).
+      split (the clock drives the bodies only, the sky belongs to the background).
 - [ ] **Artistic controls on top of the physics**: a tint, a saturation and an intensity scale.
       They are multiplicative and default to neutral, so the physical result is the reference.
 - [ ] A doc `docs/subsystems/graphics/` (the model, the units, the presets) and the console
@@ -84,4 +84,4 @@ following lots are `dynamic-sky-sun-light-from-transmittance`, `dynamic-sky-amor
 - S. Hillaire, *A Scalable and Production Ready Sky and Atmosphere Rendering Technique*, EGSR 2020.
 - E. Bruneton, F. Neyret, *Precomputed Atmospheric Scattering*, EGSR 2008 (the Earth constants).
 - `src/Graphics/CelestialBody.hpp`, `src/Graphics/Renderable/AbstractBackground.hpp`,
-  `src/Scenes/Component/SunCourse.hpp`, `src/Scenes/Component/SkyFollowsSun.hpp`.
+  `src/Scenes/Component/CelestialClock.hpp`, `src/Scenes/Component/SkyFollowsSun.hpp`.

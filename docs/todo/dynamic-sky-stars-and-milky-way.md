@@ -5,7 +5,7 @@ status: blocked
 priority: unranked
 scope: Graphics/Renderable (DynamicSkyResource), Saphir (background program), Resources (star catalogue, Milky Way cubemap)
 opened: 2026-10-24
-blocked-by: [dynamic-sky-atmosphere, celestial-clock]
+blocked-by: [dynamic-sky-atmosphere]
 tags: [sky, stars, night, photometry, owner-decision, design]
 ---
 
@@ -30,7 +30,7 @@ scripted fade. This is the correct behaviour, and it costs nothing.
 - [ ] **The Milky Way**: an HDR cubemap in equatorial coordinates, in the same frame as the
       catalogue so both rotate together.
 - [ ] **The rotation**: the celestial sphere turns around the pole at the sidereal rate, from the
-      clock's local sidereal time and latitude (`celestial-clock`).
+      clock's local sidereal angle and celestial pole (`CelestialClock::siderealAngle()`, `celestialPole()`, done 2026-10-24).
 - [ ] **Alien skies**: the catalogue and the cubemap are DATA. A generated star field (seeded,
       with a magnitude distribution) for a fictional sky, and the pole's direction from the
       planet's axis.
@@ -56,4 +56,4 @@ scripted fade. This is the correct behaviour, and it costs nothing.
 ## References
 
 - Yale Bright Star Catalogue, 5th revised edition (Hoffleit & Warren, 1991).
-- `dynamic-sky-atmosphere`, `celestial-clock`, `dynamic-sky-moon`.
+- `dynamic-sky-atmosphere`, `dynamic-sky-moon`; the clock: `Scenes::Component::CelestialClock` (scenes doc 02).

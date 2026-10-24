@@ -141,28 +141,33 @@ auto light = toolkit
     .setCursor(x, y, z)
     .generateSpotLight<StaticEntity>("Spot", lookAt, innerAngle, outerAngle, color, radius, intensity, shadowRes);
 
-// Animated sun (2026-09-13): a movable pivot Node + a DirectionalLight + a Component::SunCourse
-// driving both along the daily course — sunrise at +X, 65° at noon, sunset opposite, then a night
-// as long. Illuminance (Kasten & Young air mass, Beer-Lambert extinction) and colour temperature
-// (5800 K high, 2000 K on the horizon) follow the elevation; below the horizon the light is DISABLED.
-auto sun = toolkit.generateSunCourse("Sun",
-    {.sunriseDirection = {1.0F, 0.0F, 0.0F}, .dayDuration = 120.0F, .noonElevation = 65.0F, .zenithIlluminance = 100000.0F},
+// The sky's bodies on a calendar (2026-10-24, replaces the animated sun of 2026-09-13): a movable pivot Node + a
+// DirectionalLight for the sun, one unshadowed pivot + light per moon, and a Component::CelestialClock driving them
+// from a planet (Earth by default), a latitude, a date and a time of day. Illuminance (Kasten & Young air mass,
+// Beer-Lambert extinction) and colour temperature (5800 K high, 2000 K on the horizon) follow the elevation; below
+// the horizon the sun is DISABLED; a moon lights the scene while it is up and the sun down.
+auto sky = toolkit.generateCelestialClock("Sun",
+    {.latitude = 45.0F, .dayOfYear = 93.0, .timeOfDay = 0.3, .timeScale = 60.0F, .moons = {Component::CelestialClock::Moon{}}},
     {.shadowMapResolution = 4096, .shadowCoverage = 200.0F});
-sun.component()->light();          // the DirectionalLight
-sun.component()->setPhase(0.25F);  // jump to noon (0 sunrise, 0.5 sunset, 0.75 midnight)
-sun.component()->stop();           // pause where it is
+sky.component()->sunLight();           // the sun's DirectionalLight
+sky.component()->setTimeOfDay(0.5);    // jump to noon (0 midnight, 0.25 morning, 0.75 evening)
+sky.component()->stop();               // pause where it is
+
+// The former animated sun, EXACTLY (a fixed great circle, day = night): the simple course.
+auto sun = toolkit.generateCelestialClock("Sun", Component::CelestialClock::simpleCourse(
+    {.sunriseDirection = {1.0F, 0.0F, 0.0F}, .dayDuration = 120.0F, .noonElevation = 65.0F, .sun = {.zenithIlluminance = 100000.0F}}));
 ```
 
-> ⚠️ `generateSunCourse()` drives **the sun only** (owner decision, 2026-09-13): the sky, its ambient
+> ⚠️ `generateCelestialClock()` drives **the sky's bodies only** (owner decision, 2026-09-13): the sky, its ambient
 > and the IBL remain the background's (`Scene::applyBackgroundLighting()`). A scene that replaces a
 > sky's sun with it passes `BackgroundLightingOptions::applyStars = false` and, if it wants the
-> sky to follow the day, adds `Component::SkyFollowsSun` next to the course — the engine's twilight
-> curve on the background luminance (IBL, drawn sky, sky term), the demo's decision to use it. The phase is an **integer cycle counter**
-> over an integer revolution — never a float accumulated per cycle — so the course is exactly periodic
-> (owner rule: recompute from a stored reference). The pivot must stay a **direct child of the root**
+> sky to follow the day, adds `Component::SkyFollowsSun` next to the clock — the engine's twilight
+> curve on the background luminance (IBL, drawn sky, sky term), the demo's decision to use it. The time is **double seconds recomputed
+> from a stored reference and an integer cycle count** — never a float accumulated per cycle (owner rule: recompute
+> from a stored reference). Each pivot must stay a **direct child of the root**
 > (`Node::setPosition()` in world space is complete only at that depth) and the light stays in its
 > position-to-origin direction mode (`useDirectionVector(false)`): the pivot's position IS the unit
-> vector toward the sun.
+> vector toward the body.
 
 ### Render Target Generators
 

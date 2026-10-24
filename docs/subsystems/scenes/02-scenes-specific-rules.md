@@ -37,7 +37,7 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 
 ### Available Components
 **Rendering:** Visual, MultipleVisuals — ⚠️ both take `Graphics::RenderableInstance::Lighting` (Lit/Unlit) as a REQUIRED last constructor argument since 2026-09-25: the former unlit default blacked out three sets of content (the last one every forest tree, lit only by the GI)
-**Lights:** DirectionalLight, PointLight, SpotLight, SunCourse (drives a DirectionalLight along the day), SkyFollowsSun (scales the background's luminance with a SunCourse)
+**Lights:** DirectionalLight, PointLight, SpotLight, CelestialClock (drives the sun's and the moons' DirectionalLights from a calendar), SkyFollowsSun (scales the background's luminance with a CelestialClock's sun)
 **Audio:** SoundEmitter, Microphone
 **Physics:** DirectionalPushModifier, SphericalPushModifier, Weight
 **Animation:** NodeAnimation
@@ -52,24 +52,31 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 > left to animate; the consumer warns instead of silently dropping the animation.
 > ⚠️ **An animated node is exempt from flattening** — see [`Animations/AGENTS.md`](../../../src/Animations/AGENTS.md).
 
-> `SunCourse` (2026-09-13) drives a **`DirectionalLight` along the daily course of the sun**: each
-> logic cycle it places its PIVOT node on the unit vector toward the sun (the light in its
-> position-to-origin mode, `useDirectionVector(false)`, so the position IS the direction), writes the
-> illuminance from the **Kasten & Young (1989) air mass** through a Beer-Lambert extinction referenced
-> at the zenith (`Options::zenithIlluminance`, 100 klx by default; ~30 lx on the horizon), writes the
-> colour from a temperature sliding 5800 K → 2000 K with the same air mass, and **disables the light
-> while the sun is below the horizon** — at night it lights nothing. Great circle through the sunrise
-> and noon points at CONSTANT angular speed: day = night = `Options::dayDuration` (120 s default).
-> Built in one call by `Toolkit::generateSunCourse(name, course, shadows)` (a movable Node, the light
-> under a `DirectionalShadowOptions`, the component suffixed "Course"). ⚠️ **The sun only** (owner
-> decision): the sky, ambient and IBL stay the background's — a scene swapping a sky's sun for it passes
-> `applyStars = false`. ⚠️ The phase is an **integer cycle counter** over an integer revolution length,
-> never a float accumulated per cycle (owner rule: recompute from a stored reference) — `setPhase()`
-> lands on the same direction every time. Like `NodeAnimation` it holds WEAK references and asks for
-> its own removal when the node or the light dies.
+> `CelestialClock` (2026-10-24, replaces `SunCourse`) drives **the sky's bodies from a calendar**: a planet
+> (`Base::Math::Astronomy::Planet` — sidereal day, orbital period, axial tilt, eccentricity, perihelion; Earth is
+> the default), a latitude, a date (days since the vernal equinox) and a time of day (0 midnight, 0.5 noon) place
+> the SUN and the MOONS. Each logic cycle it places each body's PIVOT node on the unit vector toward it (the light
+> in its position-to-origin mode, `useDirectionVector(false)`), writes the sun's illuminance from the **Kasten &
+> Young (1989) air mass** through a Beer-Lambert extinction referenced at the zenith (`SunPhotometry`, 100 klx by
+> default) and its colour from a temperature sliding 5800 K → 2000 K with the same air mass, and **disables the sun
+> while it is below the horizon**. A MOON lights the scene while it is up and the sun is down: full-moon
+> illuminance (0.3 lx above the atmosphere) × a Lambert-sphere phase function × the extinction, 4100 K, no shadow
+> map. The astronomy is emeraude-base's `Math/Astronomy.hpp` (generic two-body orbits, owner decision: no
+> perturbation, ~1° for the Sun), unit-tested there. ⚠️ **Time** is seconds since the epoch in DOUBLE, recomputed
+> every cycle from a stored reference and an integer cycle count — never accumulated (owner rule); `timeScale`
+> simulated seconds per real second. ⚠️ **Frame**: East-North-Up mapped with `Options::northDirection` (default −Z)
+> and up +Y, east = north × up (+X by default). ⚠️ **The former `SunCourse` is `CelestialClock::simpleCourse()`**
+> (owner decision, "a special case"): a planet without tilt nor orbit, sidereal day = two day durations, observed at
+> the latitude 90° − the noon elevation — EXACTLY the old great circle (base test
+> `MathAstronomy.AStillPlanetReproducesTheSimpleSunCourse`; measured on `terrain`: 60.0° and 92 589 lx at noon, as
+> before). Built in one call by `Toolkit::generateCelestialClock(name, options, sunShadows)` (the sun's movable Node
+> and light, the component suffixed "Clock", one unshadowed node + light per moon suffixed "Moon<index>").
+> ⚠️ **The sky's bodies only** (owner decision 2026-09-13): the sky, ambient and IBL stay the background's. It also
+> exposes the celestial pole and the local sidereal angle — what a star field turns by. Like `NodeAnimation` it
+> holds WEAK references and asks for its own removal when the sun's node or light dies.
 >
 > `SkyFollowsSun` (2026-09-13, owner decision) is the sky's HALF, deliberately a separate component:
-> bound to a `SunCourse`, it maps the elevation through a smoothstep (`duskElevation` −6° → 0,
+> bound to a `CelestialClock`, it maps the sun's elevation through a smoothstep (`duskElevation` −6° → 0,
 > `dayElevation` +10° → 1, `nightFactor` 0 by default) and writes `dayLuminance × factor` to the
 > scene's background (`AbstractBackground::setLuminance()`), then `Scene::refreshAmbientLightProperties()`
 > — ONE knob for the IBL scale (diffuse AND specular: with the sky driving the ambient the scalar

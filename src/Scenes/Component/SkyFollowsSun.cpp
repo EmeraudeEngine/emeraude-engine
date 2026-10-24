@@ -32,7 +32,7 @@
 
 /* Local inclusions. */
 #include "Graphics/Renderable/AbstractBackground.hpp"
-#include "Scenes/Component/SunCourse.hpp"
+#include "Scenes/Component/CelestialClock.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 
@@ -48,16 +48,16 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	SkyFollowsSun::bind (const std::shared_ptr< SunCourse > & course) noexcept
+	SkyFollowsSun::bind (const std::shared_ptr< CelestialClock > & clock) noexcept
 	{
-		if ( course == nullptr )
+		if ( clock == nullptr )
 		{
-			TraceError{ClassId} << "The sky follower '" << this->name() << "' needs a sun course !";
+			TraceError{ClassId} << "The sky follower '" << this->name() << "' needs a celestial clock !";
 
 			return;
 		}
 
-		m_course = course;
+		m_clock = clock;
 		m_bound = true;
 		m_lastFactor = -1.0F;
 	}
@@ -93,9 +93,9 @@ namespace EmEn::Scenes::Component
 	void
 	SkyFollowsSun::processLogics (const Scene & scene) noexcept
 	{
-		const auto course = m_course.lock();
+		const auto clock = m_clock.lock();
 
-		if ( course == nullptr )
+		if ( clock == nullptr )
 		{
 			return;
 		}
@@ -119,7 +119,7 @@ namespace EmEn::Scenes::Component
 		}
 
 		/* Quantised: a constant day or night pushes nothing. */
-		const auto factor = std::round(this->twilightFactor(course->elevation()) / FactorStep) * FactorStep;
+		const auto factor = std::round(this->twilightFactor(clock->sunElevation()) / FactorStep) * FactorStep;
 
 		if ( std::abs(factor - m_lastFactor) < FactorStep * 0.5F )
 		{

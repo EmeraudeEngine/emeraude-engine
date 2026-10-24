@@ -448,6 +448,7 @@
 #include "Scenes/Component/AbstractModifier.hpp"
 #include "Scenes/Component/Beam.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/Component/CelestialClock.hpp"
 #include "Scenes/Component/CharacterController.hpp"
 #include "Scenes/Component/CloudVolume.hpp"
 #include "Scenes/Component/ConsoleAdapter.hpp"
@@ -464,7 +465,6 @@
 #include "Scenes/Component/SoundEmitter.hpp"
 #include "Scenes/Component/SphericalPushModifier.hpp"
 #include "Scenes/Component/SpotLight.hpp"
-#include "Scenes/Component/SunCourse.hpp"
 #include "Scenes/Component/Vehicle.hpp"
 #include "Scenes/Component/Visual.hpp"
 #include "Scenes/Component/Weight.hpp"
@@ -666,11 +666,11 @@ template class EmEn::Scenes::Component::ConsoleAdapter< EmEn::Scenes::Component:
 template class EmEn::Scenes::Component::ConsoleAdapter< EmEn::Scenes::Component::SoundEmitter >;
 template class EmEn::Scenes::Component::ConsoleAdapter< EmEn::Scenes::Component::SphericalPushModifier >;
 template class EmEn::Scenes::Component::ConsoleAdapter< EmEn::Scenes::Component::SpotLight >;
-template class EmEn::Scenes::Component::ConsoleAdapter< EmEn::Scenes::Component::SunCourse >;
+template class EmEn::Scenes::Component::ConsoleAdapter< EmEn::Scenes::Component::CelestialClock >;
 template class EmEn::Scenes::Component::ConsoleAdapter< EmEn::Scenes::Component::Visual >;
 template class EmEn::Scenes::Component::ConsoleAdapter< EmEn::Scenes::Component::Weight >;
 template class EmEn::Scenes::BuiltEntity< EmEn::Scenes::Node, EmEn::Scenes::Component::Camera >;
-template class EmEn::Scenes::BuiltEntity< EmEn::Scenes::Node, EmEn::Scenes::Component::SunCourse >;
+template class EmEn::Scenes::BuiltEntity< EmEn::Scenes::Node, EmEn::Scenes::Component::CelestialClock >;
 template class EmEn::Scenes::BuiltEntity< EmEn::Scenes::StaticEntity, EmEn::Scenes::Component::Visual >;
 template class EmEn::Scenes::BuiltEntity< EmEn::Scenes::Node, EmEn::Scenes::Component::Visual >;
 template class EmEn::Scenes::BuiltEntity< EmEn::Scenes::Node, EmEn::Scenes::Component::DirectionalLight >;
@@ -693,7 +693,7 @@ template class EmEn::Scenes::ComponentBuilder< EmEn::Scenes::Component::SkyFollo
 template class EmEn::Scenes::ComponentBuilder< EmEn::Scenes::Component::SoundEmitter >;
 template class EmEn::Scenes::ComponentBuilder< EmEn::Scenes::Component::SphericalPushModifier >;
 template class EmEn::Scenes::ComponentBuilder< EmEn::Scenes::Component::SpotLight >;
-template class EmEn::Scenes::ComponentBuilder< EmEn::Scenes::Component::SunCourse >;
+template class EmEn::Scenes::ComponentBuilder< EmEn::Scenes::Component::CelestialClock >;
 template class EmEn::Scenes::ComponentBuilder< EmEn::Scenes::Component::Visual >;
 template class EmEn::Scenes::ComponentBuilder< EmEn::Scenes::Component::Weight >;
 template class EmEn::T_TraceHelperBase< EmEn::TraceDebug, EmEn::Severity::Debug >;

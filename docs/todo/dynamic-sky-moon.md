@@ -5,7 +5,7 @@ status: blocked
 priority: unranked
 scope: Graphics/Renderable (DynamicSkyResource), Graphics (CelestialBody), Scenes/Component (directional light, celestial clock)
 opened: 2026-10-24
-blocked-by: [dynamic-sky-atmosphere, celestial-clock]
+blocked-by: [dynamic-sky-atmosphere]
 tags: [sky, moon, night, lighting, photometry, design]
 ---
 
@@ -17,29 +17,30 @@ A night under the full moon is not a night without it: about 0.25 lx (`Celestial
 references), enough to cast shadows. A dynamic sky must show the moon where the clock puts it,
 with the phase its angle to the sun gives, and light the scene with it.
 
+> **Done 2026-10-24 with the celestial clock** (owner: "with the light"): every moon's direction, illuminated
+> fraction and LIGHT — a directional light per moon, no shadow map, full-moon illuminance (0.3 lx above the
+> atmosphere) × a Lambert-sphere phase function × the extinction, on while the moon is up and the sun down
+> (`Scenes::Component::CelestialClock`, scenes doc 02). What remains is the DISC and the IBL.
+
 ## What remains
 
 - [ ] **The disc**: a texture (albedo, optional normal map), lit by the SUN's direction, so the
       phase and the terminator come out of the geometry. No phase table. Add earthshine (the
       dark side faintly lit by the planet) as an artistic gain.
-- [ ] **The illuminance**: from the phase angle (a Lambert-sphere phase function, or the
-      opposition-surge fit for the Moon), × the transmittance toward the moon.
-- [ ] **The light**: a second directional light, on while the moon is above the horizon AND the
-      sun is below it, with or without shadows (an option). The sun → moon handover around dusk
-      must not pop: both lights can exist at once, their weights following their illuminance.
-- [ ] **Several moons** for alien skies: the contract is a list of bodies; the clock places each
-      one from its orbit.
+- [ ] **The illuminance through the dynamic sky's transmittance** instead of the clock's Beer-Lambert
+      (`dynamic-sky-sun-light-from-transmittance`, the same change for the moons), and the Moon's opposition surge
+      if the Lambert sphere reads too bright at quarter (~0.32 against ~0.1 measured on the Moon).
 - [ ] The moon in the IBL bake: included, unlike the sun (it is an extended, faint source, and it
       is what makes a moonlit ambient blue-grey).
 
 ## ⚠️ Traps
 
-- ⚠️ Two shadowing directional lights double the shadow cost at dusk. A moon light without shadows
-  by default is the likely answer: ask the owner.
+- ⚠️ Two shadowing directional lights double the shadow cost at dusk: the clock's moon lights carry NO shadow map
+  (`Toolkit::generateCelestialClock()`); a shadowed moon would be an option to add.
 - ⚠️ `sun-unlit-without-shadow-mapping`: a CSM directional light adds no light at all when shadow
   mapping is off. The moon light inherits that defect until it is fixed.
 
 ## References
 
-- `dynamic-sky-atmosphere`, `celestial-clock`, `dynamic-sky-stars-and-milky-way`.
+- `dynamic-sky-atmosphere`, `dynamic-sky-stars-and-milky-way`; the clock: `Scenes::Component::CelestialClock` (scenes doc 02).
 - `src/Graphics/CelestialBody.hpp`, `src/Scenes/Scene.lighting.cpp` (`applyBackgroundLightingNow`).

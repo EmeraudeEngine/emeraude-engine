@@ -102,7 +102,7 @@ namespace EmEn::Scenes::Component
 	PointLight::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
 		/* ⚠️ No early return on a DISABLED light: a light that moves while off and is then switched
-		 * on must not keep a STALE frame (DirectionalLight, Component::SunCourse at sunrise,
+		 * on must not keep a STALE frame (DirectionalLight, Component::CelestialClock at sunrise,
 		 * 2026-09-13). A light tracks its frame whether it emits or not; emitting is the render
 		 * passes' decision (they skip a disabled light themselves). */
 

@@ -48,26 +48,26 @@ namespace EmEn
 
 	namespace Scenes::Component
 	{
-		class SunCourse;
+		class CelestialClock;
 	}
 }
 
 namespace EmEn::Scenes::Component
 {
 	/**
-	 * @brief Makes the scene's BACKGROUND follow a SunCourse: the sky's luminance — hence the
+	 * @brief Makes the scene's BACKGROUND follow a CelestialClock's sun: the sky's luminance — hence the
 	 * IBL it feeds (diffuse and specular), the picture drawn in the skybox and the sky term the
 	 * post-processing reads — is scaled by a twilight factor of the sun's elevation, down to
 	 * `Options::nightFactor` at night.
-	 * @details Every logic cycle the component reads the course's elevation, maps it through a
+	 * @details Every logic cycle the component reads the clock's sun elevation, maps it through a
 	 * smoothstep from `Options::duskElevation` (factor 0) to `Options::dayElevation` (factor 1) and
 	 * writes `dayLuminance * factor` to the background (`AbstractBackground::setLuminance()`), then
 	 * asks the scene to push the new environment luminance to the view buffers
 	 * (`Scene::refreshAmbientLightProperties()`). The DAY luminance is the manifest's, captured the
 	 * first time the background is seen loaded — and captured again if the scene swaps its sky.
 	 * @note ⚠️ This is the COMPLEMENT of the Toolkit's sun, kept apart on purpose (owner decision,
-	 * 2026-09-13): `Toolkit::generateSunCourse()` builds the sun only; a scene that wants its sky
-	 * to follow adds this component next to it. The two are separable: a course without it keeps
+	 * 2026-09-13): `Toolkit::generateCelestialClock()` builds the sky's bodies only; a scene that wants its sky
+	 * to follow adds this component next to it. The two are separable: a clock without it keeps
 	 * a constant sky, a night courtyard then lit by a daylight ambient.
 	 * @note The curve is PERCEPTUAL, not radiative: a clear sky's luminance drops by orders of
 	 * magnitude through twilight and a linear factor cannot follow that; the smoothstep gives a
@@ -145,10 +145,10 @@ namespace EmEn::Scenes::Component
 			~SkyFollowsSun () override;
 
 			/**
-			 * @brief Binds the sun course whose elevation drives the sky.
-			 * @param course A reference to the sun course.
+			 * @brief Binds the celestial clock whose sun elevation drives the sky.
+			 * @param clock A reference to the celestial clock.
 			 */
-			void bind (const std::shared_ptr< SunCourse > & course) noexcept;
+			void bind (const std::shared_ptr< CelestialClock > & clock) noexcept;
 
 			/**
 			 * @brief Sets the twilight curve.
@@ -232,8 +232,8 @@ namespace EmEn::Scenes::Component
 			bool
 			shouldBeRemoved () const noexcept override
 			{
-				/* Once bound, the follower dies with its course. */
-				return m_bound && m_course.expired();
+				/* Once bound, the follower dies with its clock. */
+				return m_bound && m_clock.expired();
 			}
 
 		private:
@@ -255,7 +255,7 @@ namespace EmEn::Scenes::Component
 			static constexpr auto FactorStep{1.0F / 1024.0F};
 
 			Options m_options;
-			std::weak_ptr< SunCourse > m_course;
+			std::weak_ptr< CelestialClock > m_clock;
 			std::weak_ptr< Graphics::Renderable::AbstractBackground > m_background; ///< The background whose day luminance is captured.
 			float m_dayLuminance{0.0F};
 			float m_lastFactor{-1.0F};

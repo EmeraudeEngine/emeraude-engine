@@ -50,7 +50,7 @@
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/CloudVolume.hpp"
 #include "Scenes/Component/SphericalPushModifier.hpp"
-#include "Scenes/Component/SunCourse.hpp"
+#include "Scenes/Component/CelestialClock.hpp"
 #include "Scenes/EffectsToolkit/CameraPresets.hpp"
 #include "Scenes/Scene.hpp"
 #include "Resources/Manager.hpp"
@@ -854,24 +854,24 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Generates an ANIMATED SUN: a movable pivot node, a directional light under the given
-			 * shadow policy, and the Component::SunCourse that drives both along the daily course of the sun.
-			 * @note The light rises at `course.sunriseDirection`, culminates at `course.noonElevation`, sets
-			 * opposite and lights NOTHING while below the horizon; its illuminance and colour temperature
-			 * follow the elevation (Kasten & Young air mass, Beer-Lambert extinction). A day lasts
-			 * `course.dayDuration` seconds, the night as long.
-			 * @note ⚠️ THE SUN ONLY (owner decision, 2026-09-13): the sky, its ambient and the IBL stay the
+			 * @brief Generates the SKY'S BODIES on a calendar: a movable pivot and a directional light for the sun (under
+			 * the given shadow policy), one unshadowed pivot and light per moon, and the Component::CelestialClock that
+			 * drives them from a planet, a latitude, a date and a time of day.
+			 * @note The sun lights NOTHING while below the horizon; its illuminance and colour temperature follow its
+			 * elevation (Kasten & Young air mass, Beer-Lambert extinction). A moon lights the scene while it is up and the
+			 * sun is down, with its phase (Lambert sphere).
+			 * @note The former animated sun is `CelestialClock::simpleCourse()`: a fixed great circle, day = night.
+			 * @note ⚠️ THE SKY'S BODIES ONLY (owner decision, 2026-09-13): the sky, its ambient and the IBL stay the
 			 * background's (Scene::applyBackgroundLighting()). A scene replacing a sky's sun by this one passes
-			 * `BackgroundLightingOptions::applyStars = false` and drives its ambient itself if it wants to.
-			 * @note The returned component exposes the light (`light()`), the playback (`start()`, `stop()`,
-			 * `setPhase()`) and the current state (`elevation()`, `illuminance()`, `temperature()`).
-			 * @param entityName The name of the pivot node and of the light component (the course component is suffixed "Course").
-			 * @param course The course parameters. Default: rises at +X, 60° at noon, 2 minutes of day, 100 klx at the zenith.
-			 * @param shadows The shadow-mapping policy of the light. Default: no shadow map.
-			 * @return BuiltEntity< Node, Component::SunCourse > Invalid when the node or a component could not be created.
+			 * `BackgroundLightingOptions::applyStars = false`, and binds a `SkyFollowsSun` if its picture sky must follow.
+			 * @param entityName The name of the sun's pivot node and light (the clock component is suffixed "Clock", the
+			 * moons' nodes "Moon<index>").
+			 * @param options The clock's parameters. Default: Earth, 45° north, noon of the March equinox, real time.
+			 * @param sunShadows The shadow-mapping policy of the sun's light. Default: no shadow map.
+			 * @return BuiltEntity< Node, Component::CelestialClock > The sun's pivot and the clock; invalid when the node or a component could not be created.
 			 */
 			[[nodiscard]]
-			BuiltEntity< Node, Component::SunCourse > generateSunCourse (const std::string & entityName, const Component::SunCourse::Options & course = {}, const DirectionalShadowOptions & shadows = {}) noexcept;
+			BuiltEntity< Node, Component::CelestialClock > generateCelestialClock (const std::string & entityName, const Component::CelestialClock::Options & options = {}, const DirectionalShadowOptions & sunShadows = {}) noexcept;
 
 			/**
 			 * @brief Generates a renderable instance in the scene from a mesh resource.

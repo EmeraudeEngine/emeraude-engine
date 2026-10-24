@@ -35,12 +35,12 @@
 #include "json/json.h"
 
 /* Local inclusions. */
+#include "CelestialClock.hpp"
 #include "CloudVolume.hpp"
 #include "DirectionalLight.hpp"
 #include "FastJSON.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "SkyFollowsSun.hpp"
-#include "SunCourse.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -67,42 +67,108 @@ namespace EmEn::Scenes::Component
 		}
 
 		/**
-		 * @brief Returns the full state of a sun course as JSON.
-		 * @param course The sun course.
+		 * @brief Returns a world vector as a JSON array.
+		 * @param vector The vector.
+		 * @return Json::Value
+		 */
+		[[nodiscard]]
+		Json::Value
+		toJson (const Base::Math::Vector< 3, float > & vector) noexcept
+		{
+			Json::Value array{Json::arrayValue};
+			array.append(static_cast< double >(vector.x()));
+			array.append(static_cast< double >(vector.y()));
+			array.append(static_cast< double >(vector.z()));
+
+			return array;
+		}
+
+		/**
+		 * @brief Returns the full state of a celestial clock as JSON.
+		 * @param clock The celestial clock.
 		 * @return std::string
 		 */
 		[[nodiscard]]
 		std::string
-		stateOf (const SunCourse & course) noexcept
+		stateOf (const CelestialClock & clock) noexcept
 		{
-			const auto & options = course.options();
+			namespace Sky = Base::Math::Astronomy;
+
+			const auto & options = clock.options();
 
 			Json::Value state{Json::objectValue};
-			state["name"] = course.name();
-			state["entity"] = course.parentEntity().name();
-			state["type"] = SunCourse::ClassId;
-			state["running"] = course.isRunning();
-			state["phase"] = static_cast< double >(course.phase());
-			state["elevationDegrees"] = static_cast< double >(course.elevation());
-			state["daytime"] = course.isDaytime();
-			state["illuminanceLux"] = static_cast< double >(course.illuminance());
-			state["temperatureKelvin"] = static_cast< double >(course.temperature());
+			state["name"] = clock.name();
+			state["entity"] = clock.parentEntity().name();
+			state["type"] = CelestialClock::ClassId;
+			state["running"] = clock.isRunning();
+			state["day"] = static_cast< Json::Int64 >(clock.day());
+			state["timeOfDay"] = clock.timeOfDay();
+			state["timeScale"] = static_cast< double >(options.timeScale);
+			state["solarDaySeconds"] = clock.solarDay();
+			state["latitudeDegrees"] = static_cast< double >(options.latitude);
+			state["siderealAngleDegrees"] = Sky::degrees(static_cast< double >(clock.siderealAngle()));
+			state["celestialPole"] = toJson(clock.celestialPole());
 
-			if ( const auto light = course.light(); light != nullptr )
+			Json::Value sun{Json::objectValue};
+			sun["elevationDegrees"] = static_cast< double >(clock.sunElevation());
+			sun["daytime"] = clock.isDaytime();
+			sun["direction"] = toJson(clock.sunDirection());
+			sun["illuminanceLux"] = static_cast< double >(clock.illuminance());
+			sun["temperatureKelvin"] = static_cast< double >(clock.temperature());
+			sun["zenithIlluminanceLux"] = static_cast< double >(options.sun.zenithIlluminance);
+			sun["extinction"] = static_cast< double >(options.sun.extinction);
+			sun["zenithTemperatureKelvin"] = static_cast< double >(options.sun.zenithTemperature);
+			sun["horizonTemperatureKelvin"] = static_cast< double >(options.sun.horizonTemperature);
+
+			if ( const auto light = clock.sunLight(); light != nullptr )
 			{
-				state["light"] = light->name();
+				sun["light"] = light->name();
 			}
 
-			Json::Value parameters{Json::objectValue};
-			parameters["dayDurationSeconds"] = static_cast< double >(options.dayDuration);
-			parameters["noonElevationDegrees"] = static_cast< double >(options.noonElevation);
-			parameters["zenithIlluminanceLux"] = static_cast< double >(options.zenithIlluminance);
-			parameters["extinction"] = static_cast< double >(options.extinction);
-			parameters["zenithTemperatureKelvin"] = static_cast< double >(options.zenithTemperature);
-			parameters["horizonTemperatureKelvin"] = static_cast< double >(options.horizonTemperature);
-			state["course"] = std::move(parameters);
+			state["sun"] = std::move(sun);
+
+			Json::Value planet{Json::objectValue};
+			planet["siderealDaySeconds"] = options.planet.siderealDay;
+			planet["orbitalPeriodSeconds"] = options.planet.orbitalPeriod;
+			planet["axialTiltDegrees"] = Sky::degrees(options.planet.axialTilt);
+			planet["eccentricity"] = options.planet.eccentricity;
+			state["planet"] = std::move(planet);
+
+			Json::Value moons{Json::arrayValue};
+
+			for ( size_t index = 0; index < clock.moonCount(); ++index )
+			{
+				Json::Value moon{Json::objectValue};
+				moon["elevationDegrees"] = static_cast< double >(clock.moonElevation(index));
+				moon["direction"] = toJson(clock.moonDirection(index));
+				moon["illuminatedFraction"] = static_cast< double >(clock.moonIlluminatedFraction(index));
+				moon["illuminanceLux"] = static_cast< double >(clock.moonIlluminance(index));
+
+				if ( const auto light = clock.moonLight(index); light != nullptr )
+				{
+					moon["light"] = light->name();
+				}
+
+				moons.append(std::move(moon));
+			}
+
+			state["moons"] = std::move(moons);
 
 			return FastJSON::stringify(state);
+		}
+
+		/**
+		 * @brief Reconfigures a clock, keeping its current date and time of day.
+		 * @param clock The celestial clock.
+		 * @param options The new options (their date is replaced by the clock's current one).
+		 */
+		void
+		reconfigureKeepingTheDate (CelestialClock & clock, CelestialClock::Options options) noexcept
+		{
+			options.dayOfYear = static_cast< double >(clock.day());
+			options.timeOfDay = clock.timeOfDay();
+
+			clock.configure(options);
 		}
 
 		/**
@@ -184,13 +250,13 @@ namespace EmEn::Scenes::Component
 			return changedState(std::move(message), stateOf(component));
 		}
 
-		/** @brief `Core.SceneManagerService.SunCourse.*`. */
-		class SunCourseConsoleAdapter final : public ConsoleAdapter< SunCourse >
+		/** @brief `Core.SceneManagerService.CelestialClock.*`. */
+		class CelestialClockConsoleAdapter final : public ConsoleAdapter< CelestialClock >
 		{
 			public:
 
 				explicit
-				SunCourseConsoleAdapter (const Manager & sceneManager) noexcept
+				CelestialClockConsoleAdapter (const Manager & sceneManager) noexcept
 					: ConsoleAdapter{sceneManager}
 				{
 
@@ -201,76 +267,130 @@ namespace EmEn::Scenes::Component
 				void
 				onRegisterToConsole () noexcept override
 				{
-					const Console::Parameter entity{entityParameter("the sun course")};
-					const Console::Parameter component{componentParameter(SunCourse::ClassId)};
+					const Console::Parameter entity{entityParameter("the celestial clock")};
+					const Console::Parameter component{componentParameter(CelestialClock::ClassId)};
 
-					this->bindCommand("getState", "Returns the state of a sun course as JSON: running, phase (0 sunrise, 0.25 noon, 0.5 sunset, 0.75 midnight), sun elevation (degrees), illuminance (lux) and colour temperature (kelvins) written to its light, and the course parameters.",
+					this->bindCommand("getState", "Returns the state of a celestial clock as JSON: running, the date (day since the vernal equinox, time of day 0 midnight / 0.5 noon), the time scale, the latitude, the sun (elevation, direction, lux and kelvins written to its light, photometry), the planet, every moon (elevation, direction, illuminated fraction, lux), the celestial pole and the sidereal angle.",
 						{entity, component},
 						[this] (const std::string & entityName, const std::string & componentName) {
-							return this->act(entityName, componentName, [] (SunCourse & course) {
-								return Console::CommandResult::json(stateOf(course));
+							return this->act(entityName, componentName, [] (CelestialClock & clock) {
+								return Console::CommandResult::json(stateOf(clock));
 							});
 						}, Console::CommandHint::ReadOnly);
 
-					this->bindCommand("start", "Starts (or resumes) a sun course from its current phase.",
+					this->bindCommand("start", "Starts (or resumes) a celestial clock.",
 						{entity, component},
 						[this] (const std::string & entityName, const std::string & componentName) {
-							return this->act(entityName, componentName, [] (SunCourse & course) {
-								course.start();
+							return this->act(entityName, componentName, [] (CelestialClock & clock) {
+								clock.start();
 
-								return changed(course, "Sun course '" + course.name() + "' running.");
+								return changed(clock, "Celestial clock '" + clock.name() + "' running.");
 							});
 						}, Console::CommandHint::Idempotent);
 
-					this->bindCommand("stop", "Pauses a sun course: the sun stays where it is, lit as it is — the way to freeze the light for an A/B measurement.",
+					this->bindCommand("stop", "Pauses a celestial clock: every body stays where it is, lit as it is — the way to freeze the light for an A/B measurement.",
 						{entity, component},
 						[this] (const std::string & entityName, const std::string & componentName) {
-							return this->act(entityName, componentName, [] (SunCourse & course) {
-								course.stop();
+							return this->act(entityName, componentName, [] (CelestialClock & clock) {
+								clock.stop();
 
-								return changed(course, "Sun course '" + course.name() + "' paused.");
+								return changed(clock, "Celestial clock '" + clock.name() + "' paused.");
 							});
 						}, Console::CommandHint::Idempotent);
 
-					this->bindCommand("setPhase", "Moves a sun course to a phase of its revolution and applies it at once (running or not).",
+					this->bindCommand("setTimeOfDay", "Moves a celestial clock to a time of day, keeping the day, and applies it at once (running or not).",
 						{
 							entity,
 							component,
-							{"phase", "The phase, 0 to 1: 0 sunrise, 0.25 noon, 0.5 sunset, 0.75 midnight."}
+							{"timeOfDay", "The time of day, 0 to 1: 0 midnight, 0.25 morning, 0.5 noon, 0.75 evening."}
 						},
-						[this] (const std::string & entityName, const std::string & componentName, float phase) {
-							if ( !std::isfinite(phase) || phase < 0.0F || phase > 1.0F )
+						[this] (const std::string & entityName, const std::string & componentName, float timeOfDay) {
+							if ( !std::isfinite(timeOfDay) || timeOfDay < 0.0F || timeOfDay > 1.0F )
 							{
-								return Console::CommandResult::error("The phase must lie between 0 and 1.");
+								return Console::CommandResult::error("The time of day must lie between 0 and 1.");
 							}
 
-							return this->act(entityName, componentName, [phase] (SunCourse & course) {
-								course.setPhase(phase);
+							return this->act(entityName, componentName, [timeOfDay] (CelestialClock & clock) {
+								clock.setTimeOfDay(static_cast< double >(timeOfDay));
 
-								return changed(course, "Sun course '" + course.name() + "' moved to phase " + std::to_string(course.phase()) + " (" + std::to_string(course.elevation()) + "° of elevation).");
+								return changed(clock, "Celestial clock '" + clock.name() + "' moved to time of day " + std::to_string(clock.timeOfDay()) + " (sun at " + std::to_string(clock.sunElevation()) + "°).");
 							});
 						}, Console::CommandHint::Idempotent);
 
-					this->bindCommand("setCourse", "Changes the parameters of a sun course; an omitted one is kept. The phase is kept too, so the sun does not jump.",
+					this->bindCommand("setDate", "Moves a celestial clock to a date and a time of day and applies it at once.",
 						{
 							entity,
 							component,
-							{"dayDuration", "Seconds from sunrise to sunset, more than 0 (the night lasts as long)."},
-							{"noonElevation", "Elevation of the sun at noon, in degrees, more than 0 and at most 90."},
+							{"day", "Days since the vernal equinox (Earth: 93 ≈ the June solstice, 186 the September equinox, 276 the December solstice)."},
+							{"timeOfDay", "The time of day, 0 to 1: 0 midnight, 0.5 noon."}
+						},
+						[this] (const std::string & entityName, const std::string & componentName, float day, float timeOfDay) {
+							if ( !std::isfinite(day) || !std::isfinite(timeOfDay) || timeOfDay < 0.0F || timeOfDay > 1.0F )
+							{
+								return Console::CommandResult::error("The day must be finite and the time of day between 0 and 1.");
+							}
+
+							return this->act(entityName, componentName, [day, timeOfDay] (CelestialClock & clock) {
+								clock.setDate(static_cast< double >(day), static_cast< double >(timeOfDay));
+
+								return changed(clock, "Celestial clock '" + clock.name() + "' moved to day " + std::to_string(clock.day()) + ", time of day " + std::to_string(clock.timeOfDay()) + " (sun at " + std::to_string(clock.sunElevation()) + "°).");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setTimeScale", "Changes how many simulated seconds pass per real second, from now on (1 = real time, 720 = a day in two minutes, 0 freezes the sky).",
+						{
+							entity,
+							component,
+							{"timeScale", "Simulated seconds per real second, 0 or more."}
+						},
+						[this] (const std::string & entityName, const std::string & componentName, float timeScale) {
+							if ( !std::isfinite(timeScale) || timeScale < 0.0F )
+							{
+								return Console::CommandResult::error("The time scale must be a finite number, 0 or more.");
+							}
+
+							return this->act(entityName, componentName, [timeScale] (CelestialClock & clock) {
+								clock.setTimeScale(timeScale);
+
+								return changed(clock, "Celestial clock '" + clock.name() + "' at " + std::to_string(timeScale) + "× real time.");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setLatitude", "Moves the observer of a celestial clock to a latitude, keeping the date.",
+						{
+							entity,
+							component,
+							{"latitude", "The latitude, in degrees, −90 (south pole) to 90 (north pole)."}
+						},
+						[this] (const std::string & entityName, const std::string & componentName, float latitude) {
+							if ( !std::isfinite(latitude) || latitude < -90.0F || latitude > 90.0F )
+							{
+								return Console::CommandResult::error("The latitude must lie between −90 and 90 degrees.");
+							}
+
+							return this->act(entityName, componentName, [latitude] (CelestialClock & clock) {
+								auto options = clock.options();
+								options.latitude = latitude;
+
+								reconfigureKeepingTheDate(clock, options);
+
+								return changed(clock, "Celestial clock '" + clock.name() + "' observed from " + std::to_string(latitude) + "° of latitude (sun at " + std::to_string(clock.sunElevation()) + "°).");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setSunPhotometry", "Changes the sun's photometry of a celestial clock; an omitted value is kept, and so is the date.",
+						{
+							entity,
+							component,
 							{"zenithIlluminance", "Direct normal illuminance with the sun at the zenith, in lux, 0 or more (100 000 = a clear sky)."},
 							{"extinction", "Broadband optical depth of the atmosphere at air mass 1, 0 or more (0.22 = clear, 0.5 = hazy)."},
 							{"zenithTemperature", "Colour temperature of the high sun, in kelvins, 1667 to 25000 (default 5800)."},
 							{"horizonTemperature", "Colour temperature of the sun on the horizon, in kelvins, 1667 to 25000 (default 2000)."}
 						},
-						[this] (const std::string & entityName, const std::string & componentName, std::optional< float > dayDuration, std::optional< float > noonElevation, std::optional< float > zenithIlluminance, std::optional< float > extinction, std::optional< float > zenithTemperature, std::optional< float > horizonTemperature) {
-							if ( !dayDuration && !noonElevation && !zenithIlluminance && !extinction && !zenithTemperature && !horizonTemperature )
+						[this] (const std::string & entityName, const std::string & componentName, std::optional< float > zenithIlluminance, std::optional< float > extinction, std::optional< float > zenithTemperature, std::optional< float > horizonTemperature) {
+							if ( !zenithIlluminance && !extinction && !zenithTemperature && !horizonTemperature )
 							{
-								return Console::CommandResult::error("Give at least one parameter to change.");
-							}
-
-							if ( ( dayDuration.has_value() && ( !std::isfinite(*dayDuration) || *dayDuration <= 0.0F ) ) || ( noonElevation.has_value() && ( !std::isfinite(*noonElevation) || *noonElevation <= 0.0F || *noonElevation > 90.0F ) ) )
-							{
-								return Console::CommandResult::error("The day duration must be more than 0 s and the noon elevation within (0, 90] degrees.");
+								return Console::CommandResult::error("Give at least one value to change.");
 							}
 
 							if ( !absentOrWithin(zenithIlluminance, 0.0F, std::numeric_limits< float >::max()) || !absentOrWithin(extinction, 0.0F, std::numeric_limits< float >::max()) )
@@ -283,23 +403,16 @@ namespace EmEn::Scenes::Component
 								return Console::CommandResult::error("The colour temperatures must lie between 1667 K and 25000 K (the range the engine converts).");
 							}
 
-							return this->act(entityName, componentName, [&] (SunCourse & course) {
-								auto options = course.options();
-								options.dayDuration = dayDuration.value_or(options.dayDuration);
-								options.noonElevation = noonElevation.value_or(options.noonElevation);
-								options.zenithIlluminance = zenithIlluminance.value_or(options.zenithIlluminance);
-								options.extinction = extinction.value_or(options.extinction);
-								options.zenithTemperature = zenithTemperature.value_or(options.zenithTemperature);
-								options.horizonTemperature = horizonTemperature.value_or(options.horizonTemperature);
+							return this->act(entityName, componentName, [&] (CelestialClock & clock) {
+								auto options = clock.options();
+								options.sun.zenithIlluminance = zenithIlluminance.value_or(options.sun.zenithIlluminance);
+								options.sun.extinction = extinction.value_or(options.sun.extinction);
+								options.sun.zenithTemperature = zenithTemperature.value_or(options.sun.zenithTemperature);
+								options.sun.horizonTemperature = horizonTemperature.value_or(options.sun.horizonTemperature);
 
-								/* ⚠️ SunCourse::configure() keeps the phase of a RUNNING course only: a paused one
-								 * restarts from Options::startPhase. Restoring it keeps the sun where it is. */
-								const auto phase = course.phase();
+								reconfigureKeepingTheDate(clock, options);
 
-								course.configure(options);
-								course.setPhase(phase);
-
-								return changed(course, "Sun course '" + course.name() + "' reconfigured.");
+								return changed(clock, "Celestial clock '" + clock.name() + "' sun photometry changed.");
 							});
 						}, Console::CommandHint::Idempotent);
 				}
@@ -428,7 +541,7 @@ namespace EmEn::Scenes::Component
 	void
 	appendEnvironmentConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept
 	{
-		adapters.emplace_back(std::make_unique< SunCourseConsoleAdapter >(sceneManager));
+		adapters.emplace_back(std::make_unique< CelestialClockConsoleAdapter >(sceneManager));
 		adapters.emplace_back(std::make_unique< SkyFollowsSunConsoleAdapter >(sceneManager));
 		adapters.emplace_back(std::make_unique< CloudVolumeConsoleAdapter >(sceneManager));
 	}

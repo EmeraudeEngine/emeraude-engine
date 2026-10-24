@@ -3,7 +3,7 @@ id: dynamic-sky-sun-light-from-transmittance
 title: Dynamic sky — the sun's directional light takes its colour and illuminance from the atmosphere's transmittance
 status: blocked
 priority: unranked
-scope: Scenes/Component (SunCourse, DirectionalLight), Graphics (atmosphere transmittance LUT readback or CPU twin)
+scope: Scenes/Component (CelestialClock, DirectionalLight), Graphics (atmosphere transmittance LUT readback or CPU twin)
 opened: 2026-10-24
 blocked-by: [dynamic-sky-atmosphere]
 tags: [sky, atmosphere, photometry, lighting, design]
@@ -13,7 +13,7 @@ tags: [sky, atmosphere, photometry, lighting, design]
 
 ## Why
 
-`SunCourse` sets the light with an empirical model (`src/Scenes/Component/SunCourse.hpp`): an
+`CelestialClock` sets the sun's light with an empirical model (`src/Scenes/Component/CelestialClock.cpp`, `apply()`): an
 air-mass Beer-Lambert extinction (Kasten & Young 1989) and an exponential fit of the colour
 temperature between `zenithTemperature` and `horizonTemperature`. A physical sky computes the real
 transmittance of its atmosphere toward the sun. If the light keeps its own model, the sun disc
@@ -24,7 +24,7 @@ all, since its 2000/5800 K anchors are Earth's.
 
 - [ ] With a dynamic sky, the light's colour and illuminance = the star's top-of-atmosphere
       illuminance × the transmittance toward the star, read from the same model as the sky.
-      Without one (a picture sky), `SunCourse` keeps its current model.
+      Without one (a picture sky), the clock keeps its current model. The moons' lights take the same change.
 - [ ] Choose how the CPU gets the value. Either a CPU twin of the transmittance integral (cheap: a
       few dozen samples per cycle, one per star), or an asynchronous readback of the LUT. The CPU
       twin is deterministic and has no frame latency; the readback is guaranteed to match the GPU.
@@ -35,10 +35,10 @@ all, since its 2000/5800 K anchors are Earth's.
 
 ## ⚠️ Traps
 
-- ⚠️ `SunCourse` writes a light that shadows. A colour that changes every cycle must not trigger
+- ⚠️ The clock writes a sun light that shadows. A colour that changes every cycle must not trigger
   a shadow-map rebuild or a pipeline change: only the light UBO changes.
 
 ## References
 
-- `dynamic-sky-atmosphere`, `celestial-clock`.
-- `src/Scenes/Component/SunCourse.cpp`, `src/Graphics/CelestialBody.hpp`.
+- `dynamic-sky-atmosphere`; the clock: `Scenes::Component::CelestialClock` (scenes doc 02).
+- `src/Scenes/Component/CelestialClock.cpp`, `src/Graphics/CelestialBody.hpp`.

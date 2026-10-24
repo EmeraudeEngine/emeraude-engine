@@ -1187,7 +1187,7 @@ namespace EmEn::Scenes
 			 * @param worldCoordinates The new world coordinates (position + orientation).
 			 *
 			 * @note This is thread-safe (protected by m_componentsMutex).
-			 * @note ⚠️ A component MAY move its own entity from processLogics() (Component::SunCourse
+			 * @note ⚠️ A component MAY move its own entity from processLogics() (Component::CelestialClock
 			 * aims its pivot node every cycle). That call arrives UNDER m_componentsMutex, which the
 			 * component loop holds: with a plain std::mutex it deadlocked the logic thread — the whole
 			 * engine froze on a black frame, console still answering, 2026-09-13. Two layers make it
