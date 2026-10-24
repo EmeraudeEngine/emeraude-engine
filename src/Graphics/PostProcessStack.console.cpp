@@ -489,6 +489,11 @@ namespace EmEn::Graphics
 			else
 			{
 				appendMetering(diagnostics.metering, outputs);
+
+				outputs.emplace_back(Severity::Info, std::stringstream{} << std::scientific << std::setprecision(3) <<
+					"Pre-exposure: E_pre " << diagnostics.metering.preExposure << " (scene colour = nits × E_pre) — " <<
+					( diagnostics.metering.preExposureOverridden ? "FORCED, Core.RendererService.setPreExposureOverride(0) gives it back." : "automatic." )
+				);
 				appendOverflowCensus(diagnostics, outputs);
 			}
 

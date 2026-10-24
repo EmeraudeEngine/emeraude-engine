@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <cstddef>
 #include <cstdint>
+#include <cmath>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -1040,6 +1041,55 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief RENDER THREAD. Returns the pre-exposure of the frame being recorded: the factor the scene
+			 * radiance is stored with in the fp16 scene colour (scene colour = nits × E_pre).
+			 * @note Latched once per frame (latchPreExposure()), before the rendering strategy runs. 1 whenever no
+			 * tone mapper runs.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			preExposure () const noexcept
+			{
+				return m_preExposure;
+			}
+
+			/**
+			 * @brief RENDER THREAD. Returns r = E_pre(this frame) / E_pre(previous rendered frame): what a history
+			 * recorded at the previous frame is multiplied by to be read at this one.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			preExposureRatio () const noexcept
+			{
+				return m_preExposureRatio;
+			}
+
+			/**
+			 * @brief Forces the pre-exposure, or gives it back to the camera.
+			 * @note Thread-safe: latched by the render thread at its next frame. The settings key
+			 * Core/Graphics/PostProcessing/PreExposure/Override sets it at launch.
+			 * @param value The forced E_pre, > 0; 0 (or any non-positive or non-finite value) = automatic.
+			 */
+			void
+			setPreExposureOverride (float value) noexcept
+			{
+				m_preExposureOverride.store(std::isfinite(value) && value > 0.0F ? value : 0.0F, std::memory_order_relaxed);
+			}
+
+			/**
+			 * @brief Returns the forced pre-exposure, 0 when it is automatic.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			preExposureOverride () const noexcept
+			{
+				return m_preExposureOverride.load(std::memory_order_relaxed);
+			}
+
+			/**
 			 * @brief Returns the current scene color image for post-processing blit.
 			 * @note Returns the internal target's color image when active, otherwise the swap chain color.
 			 * @return std::shared_ptr< Vulkan::Image >
@@ -2015,6 +2065,14 @@ namespace EmEn::Graphics
 			bool m_cutFrameAroundTranslucency{true};
 			/** @brief Settings: resolve the unshadowed punctual lights deferred (DeferredLightResolve). An A/B switch, default true. */
 			std::atomic< bool > m_deferredPunctualLightsEnabled{true};
+			/** @brief Settings: the forced pre-exposure, 0 = automatic (setPreExposureOverride()). */
+			std::atomic< float > m_preExposureOverride{0.0F};
+			/* The pre-exposure (latchPreExposure()), render thread only: the frame's value, the previous rendered
+			 * frame's, their ratio, and the quantised metered value the hysteresis holds (0 = none yet). */
+			float m_preExposure{1.0F};
+			float m_previousPreExposure{1.0F};
+			float m_preExposureRatio{1.0F};
+			float m_quantisedPreExposure{0.0F};
 			/* The swap-chain recreation retries (retryDegradedSwapChain()): render thread only, except the given-up flag
 			 * read by the main loop. */
 			std::chrono::steady_clock::time_point m_lastSwapChainRecreationFailure;
@@ -2053,6 +2111,18 @@ namespace EmEn::Graphics
 			 * @param scene The scene of the frame, or null.
 			 */
 			void publishFrameDiagnostics (Scenes::Scene * scene) noexcept;
+
+			/**
+			 * @brief RENDER THREAD. Latches the frame's pre-exposure E_pre and its ratio to the previous rendered frame.
+			 * @note Once per frame, after the camera sync and the scene-target block, before the rendering strategy:
+			 * every input is final there. Manual exposure: E_pre is the camera's APEX exposure, exact. Auto exposure:
+			 * the metered exposure quantised to a whole stop, moved only when it drifts more than one stop away
+			 * (hysteresis), so a ratio is an exact power of two and a step is rare. The override wins over both;
+			 * 1 whenever no tone mapper runs.
+			 * ⚠️ Recomputed every frame from the metered value: E_pre is never accumulated (`E *= r`).
+			 * @param scene The scene of the frame, or null.
+			 */
+			void latchPreExposure (const Scenes::Scene * scene) noexcept;
 
 			Base::Mutex m_materialUpdatesAccess; ///< Guards m_pendingMaterialUpdates (logic/loading threads register, the render thread flushes).
 			std::vector< std::weak_ptr< Material::Interface > > m_pendingMaterialUpdates EMEN_GUARDED_BY(m_materialUpdatesAccess); ///< Materials that changed a dynamic property since the last flush.

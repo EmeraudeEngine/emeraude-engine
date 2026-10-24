@@ -382,6 +382,27 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief The pre-exposure of a frame (Renderer::latchPreExposure()).
+			 */
+			struct FramePreExposure
+			{
+				/** @brief E_pre: scene colour = nits × E_pre. */
+				float value{1.0F};
+				/** @brief r = E_pre(this frame) / E_pre(previous rendered frame). */
+				float ratio{1.0F};
+			};
+
+			/**
+			 * @brief RENDER THREAD. Sets the frame's pre-exposure, handed to every effect through FrameContext.
+			 * @param preExposure The frame's pre-exposure and its ratio to the previous rendered frame.
+			 */
+			void
+			setFramePreExposure (const FramePreExposure & preExposure) noexcept
+			{
+				m_framePreExposure = preExposure;
+			}
+
+			/**
 			 * @brief Executes multi-pass scene effects outside any active render pass.
 			 * @note Must be called after recordBlit() and before the RP2 restart.
 			 * Each effect in the chain receives the output of the previous one.
@@ -500,6 +521,8 @@ namespace EmEn::Graphics
 			mutable std::chrono::steady_clock::time_point m_lastChainFrameTime;
 			/** @brief The in-texture celestial body mask of the frame (setSkyStarMask()). */
 			std::array< float, 4 > m_skyStarMask{0.0F, 0.0F, 0.0F, 0.0F};
+			/** @brief The frame's pre-exposure and its ratio (setFramePreExposure()). */
+			FramePreExposure m_framePreExposure{};
 			/* USER master switch, not a capability: it answers "is post-processing allowed",
 			 * never "is there anything to post-process" — that second question belongs to the
 			 * renderer, which alone knows the active scene's chain (Renderer::needsInternalTarget()).

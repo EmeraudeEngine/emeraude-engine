@@ -32,6 +32,7 @@
 #include <atomic>
 #include <charconv>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
@@ -833,6 +834,29 @@ namespace EmEn::Graphics
 				return Console::CommandResult::success("Overflow census disarmed from the next rendered frame (its last counts and its window are kept).");
 			}, Console::CommandHint::Idempotent);
 
+		/* ---- The pre-exposure override (scene-colour pre-exposure, step B1b). ---- */
+
+		this->bindCommand("setPreExposureOverride", "Forces the pre-exposure E_pre (scene colour = nits × E_pre), or gives it back to the camera. The displayed image must not move when only E_pre moves: the invariance test of the pre-exposure.",
+			{
+				{"value", "The forced E_pre, > 0 (e.g. 0.0625 = 2^-4). 0 gives it back to the camera."}
+			},
+			[this] (float value) {
+				if ( !std::isfinite(value) || value < 0.0F )
+				{
+					return Console::CommandResult::error("The pre-exposure must be a finite value > 0, or 0 to give it back to the camera.");
+				}
+
+				/* Latched by the render thread at its next frame. */
+				this->setPreExposureOverride(value);
+
+				if ( value > 0.0F )
+				{
+					return Console::CommandResult::success("Pre-exposure FORCED from the next rendered frame. Read it back with getFrameDiagnostics() (metering.preExposure) or Core.SceneManagerService.PostProcess.getStatus().");
+				}
+
+				return Console::CommandResult::success("Pre-exposure given back to the camera from the next rendered frame.");
+			}, Console::CommandHint::Idempotent);
+
 		this->bindCommand("setPostProcessorEnabled", "Allows or forbids post-processing (the master switch, PostProcessor::enable()). Forbidden, every frame takes the DIRECT swap-chain path: no scene target, no exposure nor tone mapping (a photometric frame clips to white) — a diagnostic of that path, not an A/B of the effects (use PostProcess.bypassSceneEffects for that).",
 			{
 				{"enabled", "1 (true) allows post-processing (the default), 0 (false) forbids it."}
@@ -984,7 +1008,9 @@ namespace EmEn::Graphics
 				R"("meteredLuminance":)" << number(metering.meteredLuminance) << "," <<
 				R"("meteredSensitivity":)" << number(metering.meteredSensitivity) << "," <<
 				R"("meteredShutterSpeed":)" << number(metering.meteredShutterSpeed) << "," <<
-				R"("rejected":)" << metering.rejectedCount << "},";
+				R"("rejected":)" << metering.rejectedCount << "," <<
+				R"("preExposure":)" << number(metering.preExposure) << "," <<
+				R"("preExposureOverridden":)" << boolean(metering.preExposureOverridden) << "},";
 
 			json << R"("census":{)" <<
 				R"("available":)" << boolean(census.available) << "," <<
