@@ -45,3 +45,21 @@ one-shots set a pitch per play: without the reset they would have spread that de
   blades) with its groan as own sound, then the death cry once; a paladin struck by another's swing groaned (own
   sound) with its armour hit as a one-shot.
 - 0 `VUID-`, 0 warning from `playOneShot`, a clean audio shutdown (no `SourceRequest` held at the termination).
+
+### World sounds — `Scene::playSoundAt()` (2026-10-24)
+
+A sound OWNED BY THE SCENE, played once at a world position: it outlives the entity that caused it (UE5's
+`UGameplayStatics::PlaySoundAtLocation()`). projet-alpha's explosion kept its whole actor alive for its sound's tail;
+its smoke grenade lost its ignition hiss at once (the grenade, and its emitter, went away the same cycle).
+- `playSoundAt(position, sound, gain, pitch)`: at most `MaxWorldSounds` (16) voices (`m_worldSounds`, a
+  `Base::Mutex`, any caller thread): a finished voice is reused, an empty slot asks the pool, else the next in turn is
+  cut. Refused (traced) like a one-shot: null, not loaded (an event of now), non-finite.
+- `processLogics()` gives the finished voices back each cycle; a suspension (`suspendAllEntities()`) and the
+  destructor give them all back (never resumed: events of the moment).
+- `Audio::Source::isFinished()` (neither playing nor paused) is the release test of both the emitter's one-shots and
+  the world sounds.
+- Console: `getWorldSoundCount()` (read-only).
+
+Measured (projet-alpha, Linux Release, test ports, 2026-10-24): citadel, 5 rockets in 0.4 s → 5 world blasts, released
+as they end; 8 smoke grenades → their hisses (2-3 at once) now heard to the end; lighten-marbles, 14 marble explosions
+as world sounds in a 6-pass sample. 0 `VUID-`, 0 refusal, no `SourceRequest` held at the audio shutdown.

@@ -57,6 +57,8 @@
 #include "Constants.hpp"
 #include "ScopedRegistration.hpp"
 #include "Audio/Ambience.hpp"
+#include "Audio/SoundResource.hpp"
+#include "Audio/Source.hpp"
 #include "Component/Visual.hpp"
 #include "Graphics/Compute/IBLBaker.hpp"
 #include "Graphics/PostProcessStack.hpp"
@@ -2409,6 +2411,33 @@ namespace EmEn::Scenes
 			 */
 			void resetAmbience () const noexcept;
 
+			/** @brief The number of world sounds the scene plays at once (playSoundAt()). */
+			static constexpr size_t MaxWorldSounds{16};
+
+			/**
+			 * @brief Plays a sound once at a world position, owned by the SCENE: it outlives the entity that caused it
+			 * (an explosion, a projectile's hit) — the model of UE5's UGameplayStatics::PlaySoundAtLocation().
+			 * @note At most MaxWorldSounds at once: when all play, the next one in turn is cut for the new sound. A voice
+			 * goes back to the audio pool once its sound ended (processLogics()), all of them at a suspension and with the
+			 * scene. A sound attached to something that MOVES is a SoundEmitter's (playOneShot()).
+			 * @note A sound not loaded yet is refused (an event of now, as SoundEmitter::playOneShot()): preload it.
+			 * @note Any thread (a mutex guards the voices); the actors call it from the logic thread.
+			 * @param position The world position (metres).
+			 * @param sound A reference to a sound resource smart pointer. A null pointer is refused (traced).
+			 * @param gain The gain, its absolute value is used. Default 1.
+			 * @param pitch The pitch, clamped by the source to [0.5, 2]. Default 1.
+			 * @post Nothing plays when the sound is null or not loaded, a value is not finite (all traced), or the audio
+			 * pool has no free source (a saturation, traced in Debug).
+			 */
+			void playSoundAt (const Base::Math::Vector< 3, float > & position, const std::shared_ptr< Audio::SoundResource > & sound, float gain = 1.0F, float pitch = 1.0F) noexcept;
+
+			/**
+			 * @brief Returns how many world sounds still play (playSoundAt()).
+			 * @return size_t In [0, MaxWorldSounds].
+			 */
+			[[nodiscard]]
+			size_t activeWorldSoundCount () const noexcept;
+
 			/* ============================================================
 			 * [CONCEPT: DEBUG DISPLAY]
 			 * Visual debugging helpers.
@@ -2626,6 +2655,21 @@ namespace EmEn::Scenes
 			 * @see wakeupAllEntities() To restore after suspension.
 			 */
 			void suspendAllEntities () noexcept;
+
+			/**
+			 * @brief Gives the world sounds' voices back to the audio pool.
+			 * @param finishedOnly True: only the voices whose sound ended (each logic cycle); false: all of them (a
+			 * suspension, the destruction — a world sound is an event of the moment, never resumed).
+			 */
+			void releaseWorldSounds (bool finishedOnly) noexcept;
+
+			/**
+			 * @brief Returns the voice a world sound plays on: a held voice whose sound ended, else a new one from the
+			 * pool, else the next playing one in turn (cut).
+			 * @return Audio::SourceRequest * nullptr only when the pool has no free source and a slot is still empty.
+			 */
+			[[nodiscard]]
+			Audio::SourceRequest * acquireWorldSoundVoice () noexcept EMEN_REQUIRES(m_worldSoundsAccess);
 
 			/**
 			 * @brief Wakes up all entities and ambience when scene is re-enabled.
@@ -3203,6 +3247,12 @@ namespace EmEn::Scenes
 
 			/** @brief Audio ambience for background sounds. Lazy-initialized. */
 			std::unique_ptr< Audio::Ambience > m_ambience;
+			/** @brief Guards the world sounds (playSoundAt()): any caller thread, the logic thread releases them. */
+			mutable Base::Mutex m_worldSoundsAccess;
+			/** @brief The world sounds' voices (playSoundAt()), a null slot is free. */
+			std::array< Audio::SourceRequest, MaxWorldSounds > m_worldSounds EMEN_GUARDED_BY(m_worldSoundsAccess){};
+			/** @brief The voice cut next when every world sound plays. */
+			size_t m_nextWorldSound EMEN_GUARDED_BY(m_worldSoundsAccess){0};
 			/** @brief Per-scene multi-pass post-processing effect stack. Null if no scene effects. */
 			std::unique_ptr< Graphics::PostProcessStack > m_postProcessStack;
 			/** @brief Guards the PUBLICATION of the active-camera reference (the pointer swap):

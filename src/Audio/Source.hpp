@@ -484,6 +484,20 @@ namespace EmEn::Audio
 			}
 
 			/**
+			 * @brief Returns whether a once-played sound is over: neither playing nor paused (stopped, or still initial
+			 * when its play() failed — such a source never reads "stopped").
+			 * @note The test a holder of fire-and-forget voices releases them on (SoundEmitter one-shots, the scene's
+			 * world sounds).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isFinished () const noexcept
+			{
+				return !this->isPlaying() && !this->isPaused();
+			}
+
+			/**
 			 * @brief Returns whether the loop mode is enabled or not.
 			 * @return bool
 			 */

@@ -353,6 +353,9 @@ namespace EmEn::Scenes
 			m_ambience->suspend();
 		}
 
+		/* The world sounds are events of the moment: released, never resumed. */
+		this->releaseWorldSounds(false);
+
 		/* Suspend all static entities. */
 		{
 			const Base::MutexLock lock{m_staticEntitiesAccess};

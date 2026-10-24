@@ -45,22 +45,6 @@ namespace EmEn::Scenes::Component
 	using namespace Animations;
 	using namespace Audio;
 
-	namespace
-	{
-		/**
-		 * @brief Returns whether a one-shot voice is done: neither playing nor paused (stopped, or still initial when its
-		 * play() failed — such a voice would never read "stopped" and never go back to the pool).
-		 * @param voice A reference to the voice's source.
-		 * @return bool
-		 */
-		[[nodiscard]]
-		bool
-		isVoiceDone (const Source & voice) noexcept
-		{
-			return !voice.isPlaying() && !voice.isPaused();
-		}
-	}
-
 	void
 	SoundEmitter::move (const CartesianFrame< float > & worldCoordinates) noexcept
 	{
@@ -84,7 +68,7 @@ namespace EmEn::Scenes::Component
 		/* A one-shot voice whose sound ended goes back to the pool. */
 		for ( auto & voice : m_oneShotVoices )
 		{
-			if ( voice != nullptr && isVoiceDone(*voice) )
+			if ( voice != nullptr && voice->isFinished() )
 			{
 				voice.reset();
 			}
@@ -258,7 +242,7 @@ namespace EmEn::Scenes::Component
 	SoundEmitter::activeOneShotCount () const noexcept
 	{
 		return static_cast< size_t >(std::ranges::count_if(m_oneShotVoices, [] (const auto & voice) {
-			return voice != nullptr && !isVoiceDone(*voice);
+			return voice != nullptr && !voice->isFinished();
 		}));
 	}
 
@@ -268,7 +252,7 @@ namespace EmEn::Scenes::Component
 		/* A held voice whose sound ended is reused as it is. */
 		for ( auto & voice : m_oneShotVoices )
 		{
-			if ( voice != nullptr && isVoiceDone(*voice) )
+			if ( voice != nullptr && voice->isFinished() )
 			{
 				return &voice;
 			}
