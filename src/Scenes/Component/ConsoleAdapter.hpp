@@ -229,7 +229,7 @@ namespace EmEn::Scenes::Component
 	void appendCameraConsoleAdapters (const Manager & sceneManager, std::vector< std::unique_ptr< Console::ControllableTrait > > & adapters) noexcept;
 
 	/**
-	 * @brief Creates the console adapters of the sky and weather components (SunCourse, SkyFollowsSun, CloudVolume).
+	 * @brief Creates the console adapters of the sky and weather components (CelestialClock, SkyFollowsSun, CloudVolume).
 	 * @param sceneManager The scene manager.
 	 * @param adapters Receives the adapters (the caller registers and owns them).
 	 */

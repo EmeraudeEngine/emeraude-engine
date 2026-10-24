@@ -477,10 +477,10 @@ namespace EmEn::Scenes
 		return staticEntity;
 	}
 
-	BuiltEntity< Node, Component::SunCourse >
-	Toolkit::generateSunCourse (const std::string & entityName, const Component::SunCourse::Options & course, const DirectionalShadowOptions & shadows) noexcept
+	BuiltEntity< Node, Component::CelestialClock >
+	Toolkit::generateCelestialClock (const std::string & entityName, const Component::CelestialClock::Options & options, const DirectionalShadowOptions & sunShadows) noexcept
 	{
-		/* The pivot: a MOVABLE node, the course writes its world position every logic cycle. */
+		/* The sun's pivot: a MOVABLE node, the clock writes its world position every logic cycle. */
 		auto pivot = this->generateNode(entityName, GenPolicy::Simple, true);
 
 		if ( pivot == nullptr )
@@ -488,40 +488,68 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		/* The light, under the caller's shadow budget. It is built dark: the course writes the
-		 * direction and the photometry of its start phase as soon as it is bound. */
-		const auto light = shadows.build(*pivot, entityName, [] (Component::DirectionalLight & sun) {
-			sun.setColor(White);
-			sun.setIlluminance(0.0F);
-			sun.useDirectionVector(false);
-		});
+		/* The light, under the caller's shadow budget. It is built dark: the clock writes the direction and the
+		 * photometry of its start date as soon as it is bound. */
+		const auto darkLight = [] (Component::DirectionalLight & light) {
+			light.setColor(White);
+			light.setIlluminance(0.0F);
+			light.useDirectionVector(false);
+		};
+
+		const auto light = sunShadows.build(*pivot, entityName, darkLight);
 
 		if ( light == nullptr )
 		{
-			TraceError{ClassId} << "Unable to create the directional light of the sun course '" << entityName << "' !";
+			TraceError{ClassId} << "Unable to create the directional light of the sun of the celestial clock '" << entityName << "' !";
 
 			return {};
 		}
 
-		auto component = pivot->componentBuilder< Component::SunCourse >(entityName + "Course")
-			.setup([&pivot, &light, &course] (Component::SunCourse & sunCourse) {
-				sunCourse.bind(pivot, light);
-				sunCourse.configure(course);
+		auto component = pivot->componentBuilder< Component::CelestialClock >(entityName + "Clock")
+			.setup([&pivot, &light, &options] (Component::CelestialClock & clock) {
+				clock.configure(options);
+				clock.bindSun(pivot, light);
 			}).build();
 
 		if ( component == nullptr )
 		{
-			TraceError{ClassId} << "Unable to create the sun course component '" << entityName << "' !";
+			TraceError{ClassId} << "Unable to create the celestial clock component '" << entityName << "' !";
 
 			return {};
 		}
 
-		if ( course.autoStart )
+		/* One pivot and one light per moon, WITHOUT a shadow map: a second shadowed directional light would double the
+		 * shadow cost at dusk for a fraction of a lux. */
+		for ( size_t index = 0; index < options.moons.size(); ++index )
+		{
+			const auto moonName = entityName + "Moon" + std::to_string(index);
+			const auto moonPivot = this->generateNode(moonName, GenPolicy::Simple, true);
+
+			if ( moonPivot == nullptr )
+			{
+				TraceError{ClassId} << "Unable to create the node of the moon '" << moonName << "' !";
+
+				continue;
+			}
+
+			const auto moonLight = DirectionalShadowOptions{}.build(*moonPivot, moonName, darkLight);
+
+			if ( moonLight == nullptr )
+			{
+				TraceError{ClassId} << "Unable to create the directional light of the moon '" << moonName << "' !";
+
+				continue;
+			}
+
+			component->bindMoon(index, moonPivot, moonLight);
+		}
+
+		if ( options.autoStart )
 		{
 			component->start();
 		}
 
-		TraceInfo{ClassId} << "Sun course '" << entityName << "': " << course.dayDuration << " s of day, " << course.noonElevation << "° at noon, " << course.zenithIlluminance << " lx at the zenith" << (shadows.shadowMapResolution > 0 ? ", shadow-mapped" : ", no shadow map") << ", pivot under '" << pivot->parent()->name() << "'.";
+		TraceInfo{ClassId} << "Celestial clock '" << entityName << "': latitude " << options.latitude << "°, solar day " << component->solarDay() << " s, " << options.timeScale << "× real time, " << options.moons.size() << " moon(s), " << options.sun.zenithIlluminance << " lx at the zenith" << (sunShadows.shadowMapResolution > 0 ? ", shadow-mapped sun" : ", no shadow map") << ", pivot under '" << pivot->parent()->name() << "'.";
 
 		return {pivot, component};
 	}

@@ -36,7 +36,7 @@ second launch. Mean luminance of the lower half of the frame (/255), validation 
 - Confirmed: on `terrain`, with shadow mapping disabled, switching the sun off changes NOTHING — it contributes no
   light at all.
 - It is the CASCADED path: the same demo with the classic map lights normally without shadows, and so does
-  `water-world`. `SunCourse` is not involved (it drives both `terrain` variants).
+  `water-world`. The animated sun (`SunCourse` then, a `CelestialClock` since 2026-10-24) is not involved (it drives both `terrain` variants).
 
 ## What remains
 

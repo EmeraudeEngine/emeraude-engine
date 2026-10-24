@@ -48,8 +48,9 @@ The `Toolkit` class (`Scenes/Toolkit.hpp`) provides high-level entity constructi
 2. `generateCuboidInstance<entity_t>(name, size, material)` — Creates geometry + material + renderable + visual component
 3. Returns `BuiltEntity<entity_t, Component::Visual>` with `.entity()` and `.component()` accessors
 4. Lights: `generateDirectionalLight` / `generatePointLight` / `generateSpotLight`, and since 2026-09-13
-   `generateSunCourse(name, SunCourse::Options, DirectionalShadowOptions)` — the ANIMATED sun (see
-   `SunCourse` above and [`docs/toolkit-system.md`](../../toolkit-system.md) § Lights)
+   `generateCelestialClock(name, CelestialClock::Options, DirectionalShadowOptions)` — the sky's bodies on a
+   calendar, since 2026-10-24 (see `CelestialClock` in `02-scenes-specific-rules.md` and
+   [`docs/toolkit-system.md`](../../toolkit-system.md) § Lights)
 5. Clouds (2026-09-24): `generateCloud<entity_t>(name, CloudShapeResource::Parameters, width, look)` —
    a non-collidable entity at the cursor + a `CloudVolume`; `width` is the unscaled box along local
    X in metres, the height and depth follow `CloudShapeResource::proportionsOf(parameters)` (computed
@@ -100,8 +101,9 @@ toolkit.clearGenerationParameters();
 - `generateDirectionalLight<T>(name, color, intensity, shadowRes, range)`
 - `generatePointLight<T>(name, color, range, intensity, shadowRes)`
 - `generateSpotLight<T>(name, color, range, intensity, angle, shadowRes)`
-- `generateSunCourse(name, SunCourse::Options, DirectionalShadowOptions)` — Node only: the ANIMATED sun
-  (pivot + `DirectionalLight` + `Component::SunCourse`), 2026-09-13
+- `generateCelestialClock(name, CelestialClock::Options, DirectionalShadowOptions)` — Node only: the sky's bodies
+  (the sun's pivot + `DirectionalLight`, one per moon, `Component::CelestialClock`), 2026-10-24 (it replaced
+  `generateSunCourse()`; the former course is `CelestialClock::simpleCourse()`)
 - `generatePerspectiveCamera<T>(name, focalLengthMM, lookAt, primary, showModel, preset)` — ⚠️ the
   framing is a LENS in millimetres, never an angle (13.096 mm = the historical 85° default;
   12 mm = 90°, 20.8 = 60°, 25.7 = 50°, 50 = 27°). See `Component/Camera.hpp`.
@@ -118,7 +120,7 @@ A component type becomes drivable from the console and the MCP server through an
 making the component itself a `ControllableTrait` (the thousands of components never driven must pay
 nothing). Every type that has something to drive is covered since 2026-09-27; one file per family:
 `LightConsoleAdapters.cpp` (Point/Spot/DirectionalLight), `CameraConsoleAdapter.cpp`,
-`EnvironmentConsoleAdapters.cpp` (SunCourse, SkyFollowsSun, CloudVolume), `AnimationConsoleAdapters.cpp`
+`EnvironmentConsoleAdapters.cpp` (CelestialClock, SkyFollowsSun, CloudVolume), `AnimationConsoleAdapters.cpp`
 (NodeAnimation, ParticlesEmitter), `PhysicsConsoleAdapters.cpp` (Directional/SphericalPushModifier,
 Weight), `AudioConsoleAdapters.cpp` (SoundEmitter), `VisualConsoleAdapters.cpp` (Visual,
 MultipleVisuals — one template). `Microphone` has nothing to drive. Operator view (every command, what is

@@ -166,7 +166,7 @@ for BC7 is 1 byte per pixel *amortised over a 4×4 block*, which is not what tho
 > concrete background follow, and `SkyBoxResource` overrides it with
 > `StandardResource::setEmissiveStrengthValue()` (dynamic property) on the material IT authored from
 > the manifest — a caller-owned material (`load(material)`) stays as authored. Caller of record:
-> `Scenes::Component::SkyFollowsSun` (a sky fading through twilight behind `SunCourse`). ⚠️ Changing
+> `Scenes::Component::SkyFollowsSun` (a sky fading through twilight behind a `CelestialClock`'s sun). ⚠️ Changing
 > the luminance does NOT re-bake the IBL: the bake is normalised, the scale is applied at sampling.
 
 > **Material DYNAMIC properties reach the GPU since 2026-09-13.** `StandardResource`'s 39 runtime
