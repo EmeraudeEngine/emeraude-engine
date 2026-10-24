@@ -436,7 +436,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		/* A switched-off sun scatters nothing — and its cascaded map is not rendered any more (its light suspends it),
 		 * so a frozen map is multiplied by zero, never read as the current one (2026-10-05). The medium still
 		 * extinguishes. */
-		const auto lightIlluminance = mainLight->isEnabled() ? mainLight->illuminance() : 0.0F;
+		/* PRE-EXPOSURE (step 6, D8): × E_pre, the scale of the scene colour the inscatter is added to. */
+		const auto lightIlluminance = mainLight->isEnabled() ? mainLight->illuminance() * context.preExposure : 0.0F;
 		const auto & lightColor = mainLight->emissionChromaticity();
 
 		/* ---- Upload the cascade block. The four matrices are 256 bytes on their own, well past

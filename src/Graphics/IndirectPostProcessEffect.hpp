@@ -456,10 +456,15 @@ namespace EmEn::Graphics
 				 * centers; no history counterpart is exposed because nothing in the chain has to
 				 * undo a previous-frame offset (the jitter never travels through a matrix). */
 				Base::Math::Vector< 2, float > projectionJitter;
-				/* The exposure multiplier the tone mapper applies (ToneMapping::displayExposure()), nit -> display
-				 * value, or 0 when the chain has no tone mapper. An effect that weights by luminance BEFORE the tone
-				 * mapping (the TAA's Karis weights) needs a DISPLAY luminance: fed nits, `1 / (1 + L)` is `1 / L`. */
-				float displayExposure{0.0F};
+				/* The RESIDUAL exposure: what the tone mapper multiplies a CHAIN value by (ToneMapping::displayExposure()
+				 * / preExposure), chain value -> display value, or 0 when the chain has no tone mapper. An effect that
+				 * weights by luminance BEFORE the tone mapping (the TAA's Karis weights) needs a DISPLAY luminance: fed
+				 * chain values, `1 / (1 + L)` is `1 / L`.
+				 * ⚠️ A chain value is nits × preExposure. A radiance built from NITS (a CPU constant: a light's
+				 * illuminance, a sky luminance) reaches the display through residualExposure × preExposure, the
+				 * absolute exposure — never through this alone. Named displayExposure until scene-colour
+				 * pre-exposure step 6 (2026-10-24), when it was the absolute one. */
+				float residualExposure{0.0F};
 				/* The frame's PRE-EXPOSURE (Renderer::preExposure()): the scene colour holds nits × preExposure, so
 				 * the fp16 targets never store an absolute luminance past 65 504. 1 whenever no tone mapper runs. An
 				 * effect reading the scene colour reads PRE-EXPOSED values; one synthesising a radiance from nits

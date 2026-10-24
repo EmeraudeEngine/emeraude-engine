@@ -1683,7 +1683,9 @@ namespace EmEn::Graphics::Effects::Lighting
 				.pyramidMaxLod = static_cast< float >(m_colorPyramidMipCount > 0U ? m_colorPyramidMipCount - 1U : 0U),
 				/* The environment fallback samples a normalized cubemap: scaled into nits exactly
 				 * as the RTR miss path is (FrameContext::skyLuminance, 0 under a closed scene). */
-				.skyLuminance = context.skyLuminance,
+				/* PRE-EXPOSURE (step 6, D8): the sky miss is synthesised in nits, the scene colour it stands
+				 * in for holds nits × E_pre. The scene-colour samples are already at that scale. */
+				.skyLuminance = context.skyLuminance * context.preExposure,
 				.debugNonFinite = m_debugNonFinite ? 1.0F : 0.0F
 			};
 

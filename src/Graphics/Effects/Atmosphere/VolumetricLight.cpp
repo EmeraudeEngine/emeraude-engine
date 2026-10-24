@@ -109,8 +109,10 @@ void main()
 		isLit *= texture(cloudTransmittanceTex, sampleUV).r;
 	}
 
-	vec3 lightColor = vec3(lightColorR, lightColorG, lightColorB);
-	vec4 current = vec4(lightColor * lightIntensity * isLit, isLit);
+	/* UNITLESS (scene-colour pre-exposure D5, 2026-10-24): the mask holds the visibility only. The light's colour,
+	 * intensity and the frame's pre-exposure are applied by the radial pass, so this EMA history never holds a
+	 * radiance at a stale scale and needs no rescale when the pre-exposure steps. */
+	vec4 current = vec4(vec3(isLit), isLit);
 
 	/* TEMPORAL EMA of the mask: a source narrower than a pixel (a door slit) RASTERIZES
 	 * differently at every TAA jitter offset — its flux in the depth buffer genuinely
@@ -187,7 +189,9 @@ void main()
 		illuminationDecay *= decay;
 	}
 
-	color *= exposure / float(numSamples);
+	/* The light's radiance (× the frame's pre-exposure, folded into lightIntensity on the CPU) on the unitless
+	 * mask. */
+	color *= vec3(lightColorR, lightColorG, lightColorB) * lightIntensity * (exposure / float(numSamples));
 	color *= lightOnScreen;
 
 	outColor = vec4(color, 1.0);
@@ -458,7 +462,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			.lightColorR = lightColor[Base::Math::X],
 			.lightColorG = lightColor[Base::Math::Y],
 			.lightColorB = lightColor[Base::Math::Z],
-			.lightIntensity = lightIntensity,
+			/* PRE-EXPOSURE (step 6, D8): the shafts are added to a scene colour that holds nits × E_pre. Read by
+			 * the radial pass only: the occlusion mask is unitless. */
+			.lightIntensity = lightIntensity * context.preExposure,
 			.density = m_parameters.density,
 			.decay = m_parameters.decay,
 			.exposure = m_parameters.exposure,

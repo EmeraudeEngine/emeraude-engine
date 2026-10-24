@@ -972,7 +972,8 @@ namespace EmEn::Graphics::Effects::Lighting
 				.sampleCount = m_parameters.sampleCount,
 				.stepCount = m_parameters.stepCount,
 				.noiseFrameIndex = animated ? noiseFrameIndex : -1.0F,
-				.skyLuminance = m_skyVisibilityActive ? context.skyLuminance : 0.0F
+				/* PRE-EXPOSURE (step 6, D8): the sky term × E_pre, like the scene-colour samples it is summed with. */
+				.skyLuminance = m_skyVisibilityActive ? context.skyLuminance * context.preExposure : 0.0F
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(

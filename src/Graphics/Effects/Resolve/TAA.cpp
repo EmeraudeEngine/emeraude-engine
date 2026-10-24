@@ -67,7 +67,7 @@ namespace
 		/* > 0.5: paint in red every pixel whose 3x3 reconstruction holds a non-finite scene texel
 		 * (Core/Graphics/PostProcessing/DebugNonFinite). */
 		float debugNonFinite;
-		/* The tone mapper's exposure (FrameContext::displayExposure), 0 when unknown: the Karis weights and the
+		/* The tone mapper's RESIDUAL exposure (FrameContext::residualExposure: chain value -> display), 0 when unknown: the Karis weights and the
 		 * anti-flicker contrast are computed on the DISPLAY luminance, never on nits. */
 		float displayExposure;
 		/* The camera clip planes: the history carries the LINEAR depth of its surface in alpha. */
@@ -727,7 +727,7 @@ namespace EmEn::Graphics::Effects::Resolve
 			.jitterUVX = context.projectionJitter.x() * 0.5F,
 			.jitterUVY = context.projectionJitter.y() * 0.5F,
 			.debugNonFinite = m_parameters.debugNonFinite ? 1.0F : 0.0F,
-			.displayExposure = context.displayExposure,
+			.displayExposure = context.residualExposure,
 			.nearPlane = context.constants.nearPlane,
 			.farPlane = context.constants.farPlane,
 			.debugView = 0.0F,
