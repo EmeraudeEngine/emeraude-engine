@@ -886,7 +886,7 @@ namespace EmEn::Saphir::Generator
 			if ( m_hasMaterialPropertiesAttachment )
 			{
 				/* Write material properties to MRT attachment 2 for post-process effect modulation.
-				 * Nibble-packed RGBA: R[hi:lo]=reflection:deferredLighting (bit 0, the rest reserved),
+				 * Nibble-packed RGBA: R[hi:lo]=reflection:deferredLighting (bit 0) + lightFace (bit 1, bits 2-3 reserved),
 				 * G[hi:lo]=aoResponse:shadowResponse, B[hi:lo]=bloomContrib:emissiveMask, A[hi:lo]=fogResponse:dofMask.
 				 * Values derived from declared surface properties (metalness, roughness, AO, emissive).
 				 *
@@ -1037,8 +1037,17 @@ namespace EmEn::Saphir::Generator
 				/* G = aoResponse 0 : shadowResponse 15. An unlit surface receives no light, so no ambient occlusion
 				 * either; and its normal is the placeholder (0, 0, 1) written above, so an occlusion computed around
 				 * it is wrong (2026-10-25: the labyrinth's emissive lamp panels lost ~40 % to SSAO once the chain read
-				 * true distances). It was 1.0 (aoResponse 15) until then. */
-				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 15.0 / 255.0, 240.0 / 255.0, 1.0);";
+				 * true distances). It was 1.0 (aoResponse 15) until then.
+				 * R = the light-face bit (low nibble, bit 1): a lamp's panel is the visible face of its light, whose
+				 * emission the screen-space indirect diffuse must not re-emit (graphics doc 13-12 § 42). */
+				if ( const auto lightFace = material->lightFaceExpression(); lightFace.empty() )
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 15.0 / 255.0, 240.0 / 255.0, 1.0);";
+				}
+				else
+				{
+					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(float((" << lightFace << ") > 0.5 ? 2u : 0u) / 255.0, 15.0 / 255.0, 240.0 / 255.0, 1.0);";
+				}
 			}
 
 			if ( m_hasAlbedoAttachment )

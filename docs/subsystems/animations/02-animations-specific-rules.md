@@ -95,6 +95,9 @@ light->addAnimation(Component::SpotLight::Intensity, std::make_shared< LampFlick
   on the next frame). `unlinkEmissiveMaterial()` stops it.
 - ONE material per light (a shared one follows the last light that changed), LOADED before the link
   (`getOrCreateResourceSync()`: no loading thread may write it concurrently).
+- The link also declares the material the light's FACE (`StandardResource::setLightFace(true)`, 2026-10-25): its
+  emission is this light's, so the indirect diffuse never re-emits it — SSGI used to count every lamp twice. A panel
+  material SHARED by many steady lamps is linked to none: declare it with `setLightFace(true)` (graphics doc 13-12 § 42).
 - Proof (`labyrinth`, 2026-10-06): switching its 55 flickering lamps off from the console takes their panel from 133
   to 19.6 (the ceiling around it), back on 133; a steady lamp's panel 168.8 → 169.0.
 

@@ -35,6 +35,10 @@
 /* Local inclusions for inheritances. */
 #include "AbstractLightEmitter.hpp"
 
+/* Local inclusions for usages. */
+#include "Graphics/ViewMatricesCascadedUBO.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+
 namespace EmEn::Scenes::Component
 {
 	/**

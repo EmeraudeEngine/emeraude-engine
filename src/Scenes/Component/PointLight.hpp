@@ -34,6 +34,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Photometry.hpp"
+#include "SettingKeys.hpp"
 
 /* Local inclusions for inheritances. */
 #include "AbstractLightEmitter.hpp"

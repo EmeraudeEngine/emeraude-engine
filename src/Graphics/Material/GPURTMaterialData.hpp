@@ -138,6 +138,10 @@ namespace EmEn::Graphics::Material
 		/** @brief The roughness texture is a smoothness/gloss map: the sampled texel is
 		 * inverted (1 - texel) before the factor applies — raster parity (m_invertRoughness). */
 		static constexpr uint32_t RoughnessTexInverted	= 1U << 9;
+		/** @brief The material is the visible FACE of light sources (StandardResource::setLightFace()): its emission
+		 * is already counted by those lights, so no indirect-diffuse estimator re-emits it (RTGI, the irradiance probe
+		 * volume). A reflection still shows it (RTR). Graphics doc 13-12 § 42. */
+		static constexpr uint32_t IsLightFace			 = 1U << 11;
 
 		/* Source color channel of the roughness/metalness texel, packed in the 'flags'
 		 * field as 2-bit indices (0:R, 1:G, 2:B, 3:A) — mirrors the raster components'

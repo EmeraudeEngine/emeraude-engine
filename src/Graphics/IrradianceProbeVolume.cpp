@@ -114,6 +114,7 @@ layout(set = 2, binding = 0, std430) writeonly buffer ProbeRayData { vec4 rays[]
 const uint HasMetalnessTexture = 1u << 3;
 const uint HasEmissionTexture = 1u << 4;
 const uint IsEmissive = 1u << 6;
+const uint IsLightFace = 1u << 11;
 const uint MetalnessChannelShift = 18u;
 const uint ChannelMask = 3u;
 
@@ -357,7 +358,10 @@ void main ()
 			 * and RTR apply (it was missing here until 2026-09-25). */
 			vec3 radiance = diffuseAlbedo * (irradiance / PI + probeVolume.ambientColor.rgb / PI + probeIrradiance(hitPos, hitNormal, -direction) * probeVolume.skyAmbient.w);
 
-			if ((flags & IsEmissive) != 0u)
+			/* A free emitter re-emits; the visible FACE of a light does not (IsLightFace, graphics doc 13-12 § 42): its
+			 * emission is the light's own, already in computeDirectIrradiance(). Counting it here fed every lamp twice
+			 * into the multi-bounce feedback RTGI reads (2026-10-25). */
+			if ((flags & (IsEmissive | IsLightFace)) == IsEmissive)
 			{
 				vec3 emission = materialSSBO.materials[matBase + 3u].rgb * materialSSBO.materials[matBase + 4u].x;
 

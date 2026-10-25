@@ -29,12 +29,15 @@
 #include <algorithm>
 #include <cmath>
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* Local inclusions. */
-#include "Scenes/BindlessTextureSet.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Resources/ResourceTrait.hpp"
-#include "Scenes/AVConsole/Manager.hpp"
+#include "Scenes/BindlessTextureSet.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/TextureInterface.hpp"
 
@@ -350,6 +353,9 @@ namespace EmEn::Scenes::Component
 		m_linkedEmissiveStrength = emissiveStrength;
 		m_linkedIntensity = m_intensity;
 
+		/* Its emission is this light's: the indirect diffuse must not count it a second time. */
+		m_linkedEmissiveMaterial->setLightFace(true);
+
 		this->syncLinkedEmissiveMaterial();
 
 		return true;
@@ -489,7 +495,6 @@ namespace EmEn::Scenes::Component
 
 		this->requestVideoMemoryUpdate();
 	}
-
 
 	void
 	AbstractLightEmitter::unregisterColorProjectionFromBindless (bool useCubemap) noexcept

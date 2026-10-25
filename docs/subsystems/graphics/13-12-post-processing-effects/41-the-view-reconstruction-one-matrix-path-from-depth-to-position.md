@@ -3,7 +3,7 @@
 ### The view reconstruction — one matrix path from a depth to a position (Oct 2026)
 
 > [!CAUTION]
-> **THE DEFECT** (item `post-process-depth-linearisation-wrong`, found 2026-10-25). The chain linearised depth with
+> **THE DEFECT** (found 2026-10-25, fixed the same day, item closed after the three OS). The chain linearised depth with
 > two scalars, `FrameContext::constants.nearPlane / farPlane`, and `PostProcessor::setClipPlanes()` — their only
 > writer — had **no caller**: every effect worked with 0.1 / 1000 while the real projection used the near plane of
 > `computeNearPlane()` (it FOLLOWS THE FIELD OF VIEW) and far = `Core/Graphics/ViewDistance` (10 km). The error is a
@@ -58,7 +58,9 @@ planes, and the scalar COPY is what went out of sync.
 `VolumetricLight` only lost two dead push fields. `RTGI` took its sky-ray distance from the frozen `farPlane`
 (1000 m): it now reads the REAL far plane of the main view, so geometry between 1 km and the view distance hides the
 sky. The matrix-based effects (RTAO, RTR, RTGI's trace, the contact shadows, the clouds, the aerial perspective) were
-never affected. `SelectionOutline` is not a chain effect: it reads the real planes and is right in perspective.
+never affected. `SelectionOutline` is not a chain effect: it reads the real planes (`mainViewMatrices`) through the
+scalar formula, right in perspective and wrong only for an orthographic main camera — to port if the editor ever needs
+one.
 
 > [!IMPORTANT]
 > **The SSGI horizon search maps a screen direction through the matrix too.** It used to scale a UV step by
@@ -84,9 +86,8 @@ are the mean luminance LINEARISED (sRGB, then the inverse of the Narkowicz ACES 
 > runs clamped at 0.79 (255 → 0.94), macOS-PA's at 0.9999 (255 → 7.22), and labyrinth's panel pose holds ~1 % of
 > clipped pixels (the panel, its glare, its defocus) — the two machines' absolute levels differed by ×1.9 for that
 > alone (macOS-PA, 2026-10-25). Exclude the pixels clipped in ANY of the compared states (one shared mask) and report
-> their share. Excluded, labyrinth's SSGI delta reads +0.129 on Linux; macOS-PA's ~+0.165 and SSR's +0.040 against
-> +0.027 stay higher at that pose only — both dominated by the panel double count of item
-> `labyrinth-lane-parity-indirect-diffuse`; with no panel on screen the two machines agree within 5 %.
+> their share. The mask fixes absolute LEVELS; a slot's delta barely moves, because the clipped set is the same in both
+> states and the clamp cancels (Windows-PA: +0.1776 masked against +0.178).
 
 - **Depth of field** (the proof that settled the formula question): labyrinth's lamp panel 2.6 m from the eye, manual
   focus sweep at f/1.4, sharpness = 99th percentile of the panel edges' gradient. 24 mm: the old DoF is sharpest on a
@@ -94,7 +95,13 @@ are the mean luminance LINEARISED (sRGB, then the inverse of the Narkowicz ACES 
   1.6 m, 128.7 at 2.6 m, 85 at 4.4 m). 85 mm: both peak at 2.6–2.7 m (the frozen near is right there).
 - **SSAO**: the floor-wall corner band now covers its metric width (profile 0.80 / 0.91 / 0.98 against one row at 0.92
   before); sky-lab's 9 km cubes lost the staircase and the diagonals macOS-PA reported. Owner: the radius stays 0.5 m —
-  it now MEANS 0.5 m.
+  it now MEANS 0.5 m (it covered ~0.23 m near the camera before: corners are visibly stronger).
+  - **A defect the true distances revealed, fixed with them**: the unlit path wrote aoResponse 15 and a placeholder
+    normal (0, 0, 1) (`SceneRendering.cpp`), so the emissive lamp panels lost ~36 % to SSAO. Unlit surfaces write
+    aoResponse 0 (material-properties G = 15/255), and the SSAO pass outputs 1 there so its blur cannot spread it.
+  - **Not this defect, still there**: a uniform darker band on the side faces of sky-lab's 9 km cubes (131/115/106
+    with AO against 159/141/125 without, macOS-PA). A 0.5 m radius projects to under a pixel at 9 km and depth
+    precision rules; a screen-space radius floor is the usual lever.
 - **Fog** (`light-and-shadow-debug`, its medium: 0.015 /m, falloff 0.2): both occupants of the `Fog` slot integrated
   a length about twice too long with that camera's lens. VolumetricScattering's contribution −0.0247 → −0.0092,
   AtmosphericFog's +0.041 → +0.021; the near ground clears, the horizon stays white.
@@ -109,6 +116,17 @@ are the mean luminance LINEARISED (sRGB, then the inverse of the Narkowicz ACES 
 - **Motion blur**: `SoftDepthExtent` (0.05 m) now means 0.05 m; it was ~half as soft with a wide lens.
 - **RTGI** with its sky rays at the real far plane (10 km instead of 1 km): `RTGIEffect/trace` 0.849 → 0.875 ms median
   on `relief` (the windows overlap: 0.83–0.87 against 0.85–0.89), 0.174 → 0.175 ms on sky-lab's distant cubes.
+
+**Three operating systems** (engine `5bd6a118`, 2026-10-25): macOS-PA (Apple M6, MoltenVK, ScreenSpace lane) and
+Windows-PA (RTX 3500 Ada and Intel iGPU, MSVC /W4 /WX Release + Debug) green — 0 `VUID-` (sync validation on macOS),
+no crash. Fog contributions within 3 % of Linux on the three (VolumetricScattering −0.0092 / −0.0094 / −0.0090..−0.0092,
+AtmosphericFog +0.021 / +0.020 / +0.020..+0.021); the depth of field sharpest at 2.6 m everywhere; the TAA gate 0 % > 8/255
+everywhere; with no panel on screen, labyrinth's levels within 5 % of Linux (macOS). At labyrinth's PANEL pose the
+deltas read higher elsewhere, masked: SSGI +0.129 Linux (1920×1080), +0.165 macOS (2560×1440), +0.178 / +0.168 Windows
+NVIDIA / Intel (1280×720); SSR +0.027–0.030 / +0.040 / +0.036 / +0.034. Not monotonic in resolution and not explained;
+that pose was dominated by the panel double count, fixed the same day
+([`42-emission-in-the-indirect-diffuse`](42-emission-in-the-indirect-diffuse-a-light-s-face-never-re-emits.md)): to
+re-compare across the platforms on the fixed code.
 
 **No setting default changed**: every value these effects read in metres (`AmbientOcclusion/ScreenSpace/Radius`
 0.5, `IndirectDiffuse/MaxDistance` 8, `IndirectDiffuse/ScreenSpace/Thickness` 0.5,

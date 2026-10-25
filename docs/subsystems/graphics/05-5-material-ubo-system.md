@@ -95,8 +95,8 @@ m_descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
 ### Material Property Layout (std140)
 
 **StandardResource** — the ONE lit material (Cook-Torrance metallic-roughness) — stores properties
-in a 140-float array (560 bytes, std140; `StandardResource::MaterialPropertiesSize`, one neutral list in
-`neutralMaterialProperties()`). ⚠️ This line said "80 floats" until 2026-09-22 — the layout had already
+in a 144-float array (576 bytes, std140; `StandardResource::MaterialPropertiesSize`, one neutral list in
+`neutralMaterialProperties()`; 140 until 2026-10-25, the light-face slot). ⚠️ This line said "80 floats" until 2026-09-22 — the layout had already
 grown to 116 with the indexed UV tables, and the table below had not followed; it said 120 until 2026-09-28,
 the imposter slots having gone in without it:
 
@@ -149,6 +149,7 @@ the imposter slots having gone in without it:
 | 128-131 | imposterGrid | vec4 | octahedral imposter: (views per side, 1 / views per side, unused, unused) |
 | 132-135 | shoreFoamColor | vec4 | shore foam (colour.rgb linear, coverage 0-1) — (1, 1, 1, 1); read only with `ShoreFoamEnabled` |
 | 136-139 | shoreFoamParameters | vec4 | shore foam (band width m 1.5, pattern cells per metre 1, roughness 0.9, unused) |
+| 140-143 | lightFaceParameters | vec4 | (1 = the visible face of light sources, unused, unused, unused) — `setLightFace()`, the indirect diffuse never re-emits it ([`13-12 § 42`](13-12-post-processing-effects/42-emission-in-the-indirect-diffuse-a-light-s-face-never-re-emits.md)) |
 
 The GLSL struct is generated to match this layout exactly.
 

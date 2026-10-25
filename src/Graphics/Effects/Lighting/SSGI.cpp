@@ -61,11 +61,14 @@ namespace
 {
 	using namespace EmEn;
 
-	/** @brief The view reconstruction's bindings: after the horizon's two samplers; after the trace's three, or four
+	/** @brief The view reconstruction's bindings: after the horizon's two samplers; after the trace's four, or five
 	 * with the sky visibility. */
 	constexpr uint32_t HorizonViewBinding{2};
-	constexpr uint32_t TraceViewBinding{3};
-	constexpr uint32_t TraceSkyViewBinding{4};
+	constexpr uint32_t TraceViewBinding{4};
+	constexpr uint32_t TraceSkyViewBinding{5};
+	/** @brief The trace's material-properties sampler (the light-face bit of a hit) and its sky-visibility sampler. */
+	constexpr uint32_t TraceMaterialPropertiesBinding{3};
+	constexpr uint32_t TraceSkyVisibilityBinding{4};
 
 	/* SSGI sky-visibility pass: a GTAO horizon search (Jimenez, Wu, Pesce, Jarabo, "Practical
 	 * Realtime Strategies for Accurate Indirect Occlusion", SIGGRAPH 2016 courses; implementation
@@ -351,9 +354,10 @@ void main()
 	 *   binding 0: depth texture
 	 *   binding 1: normals texture
 	 *   binding 2: scene color texture (HDR, for bounce color sampling)
-	 *   binding 3: sky visibility (bent normal + V), the previous pass of this same effect —
+	 *   binding 3: material properties (packed nibbles: the light-face bit of a hit, R low nibble bit 1)
+	 *   binding 4: sky visibility (bent normal + V), the previous pass of this same effect —
 	 *              declared by the EMEN_SSGI_SKY_VISIBILITY variant only
-	 *   binding 3 (4 with the sky visibility): the view reconstruction (ViewReconstructionGLSL), spliced by create()
+	 *   binding 4 (5 with the sky visibility): the view reconstruction (ViewReconstructionGLSL), spliced by create()
 	 *
 	 * Descriptor set 1 (bindless textures, sky-visibility variant only — BindlessTextureManager):
 	 *   binding 3: samplerCube[] whose reserved slot 1 holds the scene's baked irradiance cubemap
@@ -369,9 +373,10 @@ layout(location = 0) out vec4 outIndirect;
 layout(set = 0, binding = 0) uniform sampler2D depthTex;
 layout(set = 0, binding = 1) uniform sampler2D normalTex;
 layout(set = 0, binding = 2) uniform sampler2D colorTex;
+layout(set = 0, binding = 3) uniform sampler2D materialPropsTex;
 
 #ifdef EMEN_SSGI_SKY_VISIBILITY
-layout(set = 0, binding = 3) uniform sampler2D horizonTex;
+layout(set = 0, binding = 4) uniform sampler2D horizonTex;
 layout(set = 1, binding = 3) uniform samplerCube texturesCube[];
 
 /* Reserved bindless slot of the scene's baked irradiance cubemap (BindlessTextureManager).
@@ -597,8 +602,24 @@ void main()
 
 		if (hit)
 		{
-			/* Sample scene color at the hit point (the indirect bounce). */
-			vec3 hitColor = texture(colorTex, hitUV).rgb;
+			/* The scene colour at the hit point (the indirect bounce), and its material properties, from the SAME texel:
+			 * a filtered colour read beside a nearest flag read let a panel's edge leak half of its 7 800 nits into a
+			 * texel flagged "wall" (2026-10-25). */
+			ivec2 colorTexel = clamp(ivec2(hitUV * vec2(textureSize(colorTex, 0))), ivec2(0), textureSize(colorTex, 0) - 1);
+			ivec2 hitTexel = clamp(ivec2(hitUV * vec2(textureSize(materialPropsTex, 0))), ivec2(0), textureSize(materialPropsTex, 0) - 1);
+			vec3 hitColor = texelFetch(colorTex, colorTexel, 0).rgb;
+
+			/* ⚠️ THE FACE OF A LIGHT brings nothing back (graphics doc 13-12 § 42): its pixel is the emission of a lamp
+			 * whose light already reached every surface directly, so sampling it counted the lamp twice — labyrinth's
+			 * walls received 4.7 times the direct light from their panels, where the traced lane read 0.26 (2026-10-25).
+			 * A screen pixel cannot be split into emission and reflection (that needs an emission attachment), so the
+			 * WHOLE hit is dropped: the reflected part lost is under 1 % for a 7 800-nit panel. Owner decision
+			 * 2026-10-25 (an approximation by intent — see the doc before changing it). The ray still stops here: the
+			 * panel occludes what lies behind it. Packed data: texelFetch, never a filtered read. */
+			if ((uint(texelFetch(materialPropsTex, hitTexel, 0).r * 255.0 + 0.5) & 2u) != 0u)
+			{
+				hitColor = vec3(0.0);
+			}
 
 			/* Range fade — the RTGI curve, verbatim (Sep 2026): the transfer is already governed by
 			 * the solid angle, so a fade proportional to the distance is NOT physical. This lane kept
@@ -758,9 +779,9 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		/* ---- Descriptor set layouts (shared) ---- */
-		/* The trace reads depth + normals + scene colour, plus the sky visibility when it has one, then the view
-		 * reconstruction. */
-		auto traceInputLayout = this->getInputLayout(m_skyVisibilityActive ? 4 : 3, 1);
+		/* The trace reads depth + normals + scene colour + material properties, plus the sky visibility when it has
+		 * one, then the view reconstruction. */
+		auto traceInputLayout = this->getInputLayout(m_skyVisibilityActive ? 5 : 4, 1);
 
 		if ( traceInputLayout == nullptr )
 		{
@@ -938,11 +959,17 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, inputColor));
+
+		if ( context.materialProperties != nullptr )
+		{
+			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(TraceMaterialPropertiesBinding, *context.materialProperties));
+		}
+
 		static_cast< void >(m_tracePerFrame[frameIndex]->writeUniformBufferObject(m_skyVisibilityActive ? TraceSkyViewBinding : TraceViewBinding, *context.view));
 
 		if ( m_skyVisibilityActive )
 		{
-			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(3, m_horizonTarget));
+			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(TraceSkyVisibilityBinding, m_horizonTarget));
 			static_cast< void >(m_horizonPerFrame[frameIndex]->writeUniformBufferObject(HorizonViewBinding, *context.view));
 
 			if ( inputDepth != nullptr )

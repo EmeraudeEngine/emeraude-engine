@@ -34,6 +34,7 @@
 /* Local inclusions for usages. */
 #include "Declaration/UniformBlock.hpp"
 #include "Graphics/Types.hpp"
+#include "Saphir/Keys.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
 
@@ -306,6 +307,18 @@ namespace EmEn::Saphir
 			declareSurfaceDoFMask (const std::string & valueVariableName) noexcept
 			{
 				m_surfaceDoFMask = valueVariableName;
+			}
+
+			/**
+			 * @brief Declares the GLSL value (1 or 0) saying whether this surface is the visible face of light sources.
+			 * @note Packed into the material-properties G-buffer R channel, low nibble, bit 1
+			 * (Material::Interface::lightFaceExpression(), graphics doc 13-12 § 42). Undeclared = not a light face.
+			 * @param valueVariableName The GLSL expression, or an empty string.
+			 */
+			void
+			declareSurfaceLightFace (const std::string & valueVariableName) noexcept
+			{
+				m_surfaceLightFace = valueVariableName;
 			}
 
 			/**
@@ -987,12 +1000,6 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			bool generateFinalFragmentOutput (FragmentShader & fragmentShader, const std::string & diffuseFactor, const std::string & specularFactor) const noexcept;
 
-
-
-
-
-
-
 			/**
 			 * @brief Generates the vertex shader for a light using PBR Cook-Torrance BRDF.
 			 * @param generator A reference to the shader generator.
@@ -1250,6 +1257,7 @@ namespace EmEn::Saphir
 			std::string m_surfaceAOIntensity;
 			std::string m_surfaceFogResponse;
 			std::string m_surfaceDoFMask;
+			std::string m_surfaceLightFace;
 			std::string m_deferredLightingCondition;
 			std::string m_surfaceClearCoatFactor;
 			std::string m_surfaceClearCoatRoughness;

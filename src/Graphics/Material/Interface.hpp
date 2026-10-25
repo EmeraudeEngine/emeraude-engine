@@ -564,6 +564,21 @@ namespace EmEn::Graphics::Material
 				return {};
 			}
 
+			/**
+			 * @brief Returns a GLSL expression worth 1 when the material is the visible FACE of light sources, 0 when it
+			 * is not, or an empty string when the material type has no such notion (then: never a light face).
+			 * @note Packed into the material-properties G-buffer (R channel, low nibble, bit 1) by the lit and the unlit
+			 * paths: the screen-space indirect diffuse never re-emits such a pixel (graphics doc 13-12 § 42).
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			virtual
+			std::string
+			lightFaceExpression () const noexcept
+			{
+				return {};
+			}
+
 			virtual bool setupLightGenerator (Saphir::LightGenerator & lightGenerator) const noexcept = 0;
 
 			/**

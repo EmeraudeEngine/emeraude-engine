@@ -222,8 +222,8 @@ frame):
 
 **The application** (`Effects/Atmosphere/AerialPerspective`, one full-res RGBA16F pass): `scene · T + L × E_pre` per
 geometry pixel; the sky pixels (depth 1) are left alone, since the drawn sky already is the whole atmosphere.
-- The distance comes from the matrix reconstruction, never from the chain's clip planes. Those are wrong: item
-  `post-process-depth-linearisation-wrong`.
+- The distance comes from the matrix reconstruction (the whole chain's since 2026-10-25, when its frozen clip planes
+  were retired: [`13-12 § 41`](13-12-post-processing-effects/41-the-view-reconstruction-one-matrix-path-from-depth-to-position.md)).
 - The lookup is w = √(distance / 128 km). Under half a slice (2 km), the first sampled slice fades linearly to 0 at
   the camera, as in Hillaire's.
 - The material's fog response (alpha's high nibble) scales it: a surface immune to the fog is immune to the haze.

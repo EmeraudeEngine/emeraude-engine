@@ -36,7 +36,7 @@
  * @brief The chain's per-frame VIEW data and the ONE way the post-process effects turn a depth-buffer value into a
  * position: through the inverse of the projection the frame was rendered with, never through a scalar linearisation.
  *
- * ⚠️ Why (owner decision 2026-10-25, option B of item post-process-depth-linearisation-wrong): the chain linearised
+ * ⚠️ Why (owner decision 2026-10-25, option B; graphics doc 13-12 § 41): the chain linearised
  * depth with clip planes frozen at 0.1 / 1000 (`PostProcessor::setClipPlanes()` had no caller), while the real near
  * plane follows the field of view (`computeNearPlane()`): the labyrinth's 13 mm lens read 2.11 m for 1 m and 680 m
  * for 1 km. (The formula itself, OpenGL's on `depth × 2 − 1`, is the Vulkan inverse in disguise.) A scalar formula is

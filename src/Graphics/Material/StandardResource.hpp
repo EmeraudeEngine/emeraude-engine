@@ -354,6 +354,10 @@ namespace EmEn::Graphics::Material
 				return Base::PixelFactory::Channel::Red;
 			}
 
+			/** @copydoc EmEn::Graphics::Material::Interface::lightFaceExpression() */
+			[[nodiscard]]
+			std::string lightFaceExpression () const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::emissionMultiplier() */
 			[[nodiscard]]
 			std::string emissionMultiplier () const noexcept override;
@@ -1099,6 +1103,26 @@ namespace EmEn::Graphics::Material
 			 * focus distance.
 			 */
 			void setDoFMask (float value) noexcept;
+
+			/**
+			 * @brief Declares the material the visible FACE of light sources — a lamp's panel, a bulb's glass: its
+			 * emission IS the light those sources already emit, so no indirect-diffuse estimator re-emits it (SSGI,
+			 * RTGI, the irradiance probe volume). The camera and the reflections still see it.
+			 * @note A dynamic property: material UBO slot 140 (`lightFaceParameters.x`), packed into the
+			 * material-properties G-buffer (R channel, low nibble, bit 1) and exported as the RT material flag
+			 * GPURTMaterialData::IsLightFace. AbstractLightEmitter::linkEmissiveMaterial() sets it; a material that
+			 * several lights share (one panel model for many steady lamps) declares it itself, or through the JSON
+			 * key "LightFace". Graphics doc 13-12 § 42.
+			 * @param state True for the face of a light, false for a free emitter (the default).
+			 */
+			void setLightFace (bool state) noexcept;
+
+			/**
+			 * @brief Returns whether the material is the visible face of light sources (setLightFace()).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isLightFace () const noexcept;
 
 			/**
 			 * @brief Changes the clear coat factor.
@@ -2208,8 +2232,10 @@ namespace EmEn::Graphics::Material
 			static constexpr auto ShoreFoamColorOffset{132UL};
 			/** @brief Shore foam vec4: (band width in metres of water, pattern cells per metre, foam roughness, unused). */
 			static constexpr auto ShoreFoamParametersOffset{136UL};
+			/** @brief Light-face vec4: (1 = the visible face of light sources, 0 = a free emitter; unused, unused, unused). */
+			static constexpr auto LightFaceParametersOffset{140UL};
 			/** @brief Float count of the material UBO. */
-			static constexpr auto MaterialPropertiesSize{140UL};
+			static constexpr auto MaterialPropertiesSize{144UL};
 
 			/* Default values. */
 			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo

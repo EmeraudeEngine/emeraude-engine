@@ -43,11 +43,14 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "ScopedRegistration.hpp"
-#include "Graphics/RenderTarget/ShadowMap.hpp"
+#include "BlobTrait.hpp"
+#include "Math/CartesianFrame.hpp"
 #include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
 #include "PixelFactory/Color.hpp"
 #include "Scenes/AVConsole/Types.hpp"
+#include "ScopedRegistration.hpp"
+#include "Tracer.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -75,7 +78,9 @@ namespace EmEn
 
 	namespace Scenes
 	{
+		class AbstractEntity;
 		class BindlessTextureSet;
+		class Scene;
 	}
 
 	namespace Saphir::Declaration
@@ -221,6 +226,8 @@ namespace EmEn::Scenes::Component
 			 * (two animations would: AnimatableInterface advances them independently). Owner decision 2026-10-06.
 			 * Written through StandardResource::setEmissiveStrengthValue(), the material's dynamic path (flushed to the
 			 * GPU on the next frame). One material per light: a material shared by several lights follows the last one.
+			 * It also declares the material the visible FACE of this light (StandardResource::setLightFace()): its
+			 * emission is this light's, so the indirect diffuse never re-emits it (graphics doc 13-12 § 42).
 			 * @pre The material is LOADED (its factory has run: getOrCreateResourceSync()), so no loading thread writes
 			 * its properties concurrently.
 			 * @param material A reference to the material smart pointer.
@@ -231,7 +238,8 @@ namespace EmEn::Scenes::Component
 			bool linkEmissiveMaterial (const std::shared_ptr< Graphics::Material::StandardResource > & material, float emissiveStrength) noexcept;
 
 			/**
-			 * @brief Stops driving the linked material (it keeps its last emissive strength).
+			 * @brief Stops driving the linked material (it keeps its last emissive strength and stays a light face —
+			 * StandardResource::setLightFace(false) makes it a free emitter).
 			 */
 			void unlinkEmissiveMaterial () noexcept;
 

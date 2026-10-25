@@ -499,6 +499,7 @@ namespace EmEn::Graphics
 	 * material-properties G-buffer A channel. Both default to 1.0 (fully affected). */
 	constexpr auto FogResponseString{"FogResponse"};
 	constexpr auto DoFMaskString{"DoFMask"};
+	constexpr auto LightFaceString{"LightFace"};
 	constexpr auto SpecularKHRString{"Specular"};
 	constexpr auto SpecularColorString{"SpecularColor"};
 	constexpr auto IridescenceThicknessString{"IridescenceThickness"};

@@ -1559,6 +1559,20 @@ namespace EmEn::Graphics::Material
 			this->setDoFMask(FastJSON::getValue< float >(data, DoFMaskString).value_or(DefaultDoFMask));
 		}
 
+		/* The visible face of light sources (a lamp's panel): its emission is the lights' own. Absent = a free
+		 * emitter, as before the key existed. */
+		if ( data.isMember(LightFaceString) )
+		{
+			if ( const auto lightFace = FastJSON::getValue< bool >(data, LightFaceString); lightFace.has_value() )
+			{
+				this->setLightFace(lightFace.value());
+			}
+			else
+			{
+				TraceWarning{ClassId} << "The key '" << LightFaceString << "' of material '" << this->name() << "' is not a boolean, ignored !";
+			}
+		}
+
 		if ( m_components.empty() )
 		{
 			TraceError{ClassId} << "No component could be read from PBR material '" << this->name() << "' resource JSON file !";
@@ -2627,7 +2641,10 @@ namespace EmEn::Graphics::Material
 				/* Shore foam colour (rgb, coverage) and parameters (band width m, cells per metre, roughness, unused). Read only
 				 * with ShoreFoamEnabled (enableShoreFoam()). */
 				1.0F, 1.0F, 1.0F, 1.0F,
-				1.5F, 1.0F, 0.9F, 0.0F
+				1.5F, 1.0F, 0.9F, 0.0F,
+				/* Light face (1 = the visible face of light sources, unused, unused, unused): 0 = a free emitter, which
+				 * every indirect-diffuse estimator counts (setLightFace()). */
+				0.0F, 0.0F, 0.0F, 0.0F
 					};
 
 		return properties;
@@ -2798,6 +2815,12 @@ namespace EmEn::Graphics::Material
 			outData.emissionColor[3] = m_materialProperties[AutoIlluminationColorOffset + 3];
 			outData.emissiveStrength = m_materialProperties[EmissiveStrengthOffset] * autoIllumAmount;
 			outData.flags |= GPURTMaterialData::IsEmissive;
+		}
+
+		/* The face of a light: its emission is the light's own, never re-emitted by the indirect diffuse. */
+		if ( this->isLightFace() )
+		{
+			outData.flags |= GPURTMaterialData::IsLightFace;
 		}
 
 		/* Clear coat. */
@@ -2995,6 +3018,13 @@ namespace EmEn::Graphics::Material
 		}
 
 		return (std::stringstream{} << '(' << MaterialUB(UniformBlock::Component::AutoIlluminationAmount) << " * " << MaterialUB(UniformBlock::Component::EmissiveStrength) << ')').str();
+	}
+
+	std::string
+	StandardResource::lightFaceExpression () const noexcept
+	{
+		/* Always present in the UBO (a dynamic property): linking a lamp later needs no new program. */
+		return MaterialUB(UniformBlock::Component::LightFaceParameters) + ".x";
 	}
 
 	void
@@ -3423,6 +3453,7 @@ namespace EmEn::Graphics::Material
 		 * which exists only when an AO component does). */
 		lightGenerator.declareSurfaceFogResponse(MaterialUB(UniformBlock::Component::FogResponse));
 		lightGenerator.declareSurfaceDoFMask(MaterialUB(UniformBlock::Component::DoFMask));
+		lightGenerator.declareSurfaceLightFace(this->lightFaceExpression());
 
 		/* Reflectivity Map component (texture-based only) */
 		{
@@ -3805,6 +3836,7 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ImposterGrid);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ShoreFoamColor);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ShoreFoamParameters);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::LightFaceParameters);
 
 		return block;
 	}
@@ -7039,6 +7071,20 @@ namespace EmEn::Graphics::Material
 		m_materialProperties[DoFMaskOffset] = clampToUnit(value);
 
 		this->markVideoMemoryDirty();
+	}
+
+	void
+	StandardResource::setLightFace (bool state) noexcept
+	{
+		m_materialProperties[LightFaceParametersOffset] = state ? 1.0F : 0.0F;
+
+		this->markVideoMemoryDirty();
+	}
+
+	bool
+	StandardResource::isLightFace () const noexcept
+	{
+		return m_materialProperties[LightFaceParametersOffset] > 0.5F;
 	}
 
 	void

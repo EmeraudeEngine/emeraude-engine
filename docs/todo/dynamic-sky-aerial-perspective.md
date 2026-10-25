@@ -32,7 +32,7 @@ it.
 References: S. Hillaire, EGSR 2020, and its reference code (`RenderSkyRayMarching.hlsl`: 32 slices of 4 km — 128 km —
 in a squared distribution, 2 × (slice + 1) samples per slice, in-scattering RGB + opacity, a fade over the first half
 slice); Unreal's `SkyAtmosphere`. Distances are reconstructed through the inverse view-projection (the clouds' way),
-never through the chain's clip planes (item `post-process-depth-linearisation-wrong`).
+never through clip planes (the chain's own rule since 2026-10-25: graphics doc 13-12 § 41).
 
 ## What remains
 

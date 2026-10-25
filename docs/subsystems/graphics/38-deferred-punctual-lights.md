@@ -14,7 +14,7 @@ decisions 1-7 in the same item.
 | The light predicate | `Scenes::LightSet::isDeferredPunctualLight()` | enabled, no colour projection, no ACTIVE shadow (global switch AND casting flag AND shadow descriptor set). A shadowed light stays forward for every instance. |
 | The snapshot | `DeferredLightResolve::prepare()` (Renderer, once per frame, before the scene pass) | applies the predicate ONCE, uploads the lights in VIEW space from their **published block** of the frame's render state (`AbstractLightEmitter::publishedBlock()`, the very bytes the forward UBO receives), sorts the pointers. |
 | The forward skip | `Scene::renderOpaque(…, deferredLights)` → `renderLightedSelection()` | skips the point/spot passes of the snapshot's lights, for the batches whose material answers `Material::Interface::deferredLightingEligible()`. OPAQUE lists only: a translucent list is drawn after the resolve, it keeps every pass. |
-| The material bit | `Saphir::LightGenerator::declareDeferredLightingCondition()` | the ambient program writes bit 0 of the material-properties R LOW nibble under the GPU half of the material's condition; the resolve shades only those pixels. |
+| The material bit | `Saphir::LightGenerator::declareDeferredLightingCondition()` | the ambient program writes bit 0 of the material-properties R LOW nibble under the GPU half of the material's condition; the resolve shades only those pixels. (Bit 1 of the same nibble is the light-face bit, graphics doc 13-12 § 42; bits 2-3 are free.) |
 
 ⚠️ The CPU half and the GPU half of a material's eligibility MUST agree every frame: disagreeing counts a lamp twice
 or not at all. `StandardResource` keeps them identical by construction:

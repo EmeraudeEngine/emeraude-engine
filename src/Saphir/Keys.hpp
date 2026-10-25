@@ -861,6 +861,8 @@ namespace EmEn::Saphir
 				constexpr auto ShoreFoamColor{"shoreFoamColor"};
 				/** @brief Shore foam: (band width in metres of water, pattern cells per metre, foam roughness, unused). */
 				constexpr auto ShoreFoamParameters{"shoreFoamParameters"};
+				/** @brief Light face: (1 = the visible face of light sources, unused, unused, unused). */
+				constexpr auto LightFaceParameters{"lightFaceParameters"};
 				/** @brief Octahedral imposter: the object's bounding sphere (centre.xyz, radius), object space. */
 				constexpr auto ImposterBounds{"imposterBounds"};
 				/** @brief Octahedral imposter: (views per side, 1 / views per side, unused, unused). */

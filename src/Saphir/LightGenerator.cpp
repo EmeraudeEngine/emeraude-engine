@@ -267,8 +267,14 @@ namespace EmEn::Saphir
 			? std::string{"0u"}
 			: "((" + m_deferredLightingCondition + ") ? 1u : 0u)";
 
+		/* Light-face bit (R low nibble, bit 1): the surface is the visible face of light sources, whose emission the
+		 * screen-space indirect diffuse must not re-emit (graphics doc 13-12 § 42). */
+		const auto lightFaceBit = m_surfaceLightFace.empty()
+			? std::string{"0u"}
+			: "((" + m_surfaceLightFace + ") > 0.5 ? 2u : 0u)";
+
 		/* Encode nibble-packed vec4:
-		 * R = (reflectivity << 4 | deferredLighting) / 255 — the low nibble's bits 1-3 are reserved
+		 * R = (reflectivity << 4 | lightFace << 1 | deferredLighting) / 255 — the low nibble's bits 2-3 are reserved
 		 * G = (aoResponse << 4 | shadowResponse) / 255	— shadowResponse=15 (full)
 		 * B = (bloomContrib << 4 | emissiveMask) / 255	 — bloomContrib=15 (full)
 		 * A = (fogResponse << 4 | dofMask) / 255
@@ -285,7 +291,7 @@ namespace EmEn::Saphir
 		 * .5 tie is implementation-defined in GLSL. x is clamped to [0,1] upstream, so
 		 * x * 15.0 + 0.5 stays in [0.5, 15.5] and can never overflow the nibble. */
 		return "vec4("
-			"float((uint(" + reflectivity + " * 15.0 + 0.5) << 4u) | " + deferredBit + ") / 255.0, "
+			"float((uint(" + reflectivity + " * 15.0 + 0.5) << 4u) | " + deferredBit + " | " + lightFaceBit + ") / 255.0, "
 			"float((uint(" + aoResponse + " * 15.0 + 0.5) << 4u) | 15u) / 255.0, "
 			"float((15u << 4u) | uint(" + emissiveMask + " * 15.0 + 0.5)) / 255.0, "
 			"float((uint(" + fogResponse + " * 15.0 + 0.5) << 4u) | uint(" + dofMask + " * 15.0 + 0.5)) / 255.0)";

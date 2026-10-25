@@ -33,3 +33,7 @@ adding one.
 > more) and gets the concept-level `IndirectDiffuse/MaxDistance` at its default; the owner's file was
 > migrated by hand (Sep 2026). Any machine whose screen-space GI still stops short of the room checks
 > the concept-level key first, then looks for stale per-lane entries.
+
+> **Emission is a third shared rule (2026-10-25).** A free emitter is a source in both lanes, the visible face of a
+> light in neither: until then SSGI re-emitted every lamp panel on screen and RTGI no emitter at all, a 15–20× gap in
+> `labyrinth`. [`42-emission-in-the-indirect-diffuse`](42-emission-in-the-indirect-diffuse-a-light-s-face-never-re-emits.md).

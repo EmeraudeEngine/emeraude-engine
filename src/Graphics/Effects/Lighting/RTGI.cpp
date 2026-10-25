@@ -200,9 +200,12 @@ const float PI = 3.14159265;
 /* Material flag bits (must match GPURTMaterialData). */
 const uint HasAlbedoTexture = 1u;
 const uint HasMetalnessTexture = 1u << 3;
+const uint HasEmissionTexture = 1u << 4;
+const uint IsEmissive = 1u << 6;
 const uint HasOpacityTexture = 1u << 7;
 const uint IsAlphaTest = 1u << 8;
 const uint IsBlended = 1u << 10;
+const uint IsLightFace = 1u << 11;
 /* A BLEND material declares no cutoff of its own; rays treat it as a cutout at this value.
    Mirrors GPURTMaterialData::RTBlendedCutoff and the shared rtCandidateIsSolid(). */
 const float RTBlendedCutoff = 0.5;
@@ -717,8 +720,33 @@ void main()
 			 * from popping as it crosses the maxDistance boundary. */
 			float distFade = 1.0 - smoothstep(maxDistance * 0.8, maxDistance, hitT);
 
+			/* A FREE emitter is a source of the indirect diffuse: its emission (nits, like the reflected term) leaves
+			 * the hit toward the receiver, as in the probe volume and as SSGI reads it on screen. The visible FACE of a
+			 * light is not (IsLightFace, graphics doc 13-12 § 42): its emission is the light's own, already counted by
+			 * computeDirectLighting() at every hit, and re-emitting it counted every lamp twice (labyrinth: the
+			 * screen-space lane returned 4.7 times the direct light, 2026-10-25). Until then this lane added no emission
+			 * at all, so a free emitter (an exit sign, a neon) lit nothing here.
+			 * ⚠️ A hemisphere ray finds a small bright emitter rarely: unbiased but noisy (fireflies the denoiser has to
+			 * absorb). Sampling the emissive triangles as lights is the production cure (item rt-many-lights-sampling). */
+			vec3 emission = vec3(0.0);
+
+			if ((flags & (IsEmissive | IsLightFace)) == IsEmissive)
+			{
+				emission = materialSSBO.materials[matBase + 3u].rgb * materialSSBO.materials[matBase + 4u].x;
+
+				if ((flags & HasEmissionTexture) != 0u)
+				{
+					int emissionTexIndex = floatBitsToInt(materialSSBO.materials[matBase + 6u].x);
+
+					if (emissionTexIndex >= 0)
+					{
+						emission *= texture(textures2D[nonuniformEXT(emissionTexIndex)], getHitUV(mesh, barycentrics)).rgb;
+					}
+				}
+			}
+
 			/* Lambert BRDF energy conservation: divide by PI. */
-			indirectLight += ((albedo / PI) * lighting + albedo * probeFeedback(hitPos, hitNormal, sampleDir)) * distFade;
+			indirectLight += ((albedo / PI) * lighting + albedo * probeFeedback(hitPos, hitNormal, sampleDir) + emission) * distFade;
 		}
 	}
 
@@ -994,7 +1022,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * never be mistaken for open sky.
 		 * ⚠️ The REAL far plane of the main view (Core/Graphics/ViewDistance), never the chain's former frozen
 		 * 1000 m copy: until 2026-10-25 geometry between 1 km and the view distance could not hide the sky
-		 * (item post-process-depth-linearisation-wrong). */
+		 * (graphics doc 13-12 § 41). */
 		static_cast< void >(m_denoiser.updateFrameData(frameIndex, GIDenoiser::FrameInputs{
 			.traceMaxDistance = m_parameters.maxDistance,
 			.traceBias = m_parameters.bias,

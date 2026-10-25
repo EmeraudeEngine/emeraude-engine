@@ -187,7 +187,8 @@ variables silently changes its colour space.
 ### Whole-material scalars
 
 `EmissiveStrength`, `FogResponse`, `DoFMask`, `BlendingMode`, `Shininess` (legacy) — plain values at
-the top level.
+the top level. `LightFace` (boolean, absent = false): the material is the visible face of light sources — a lamp's
+panel — so the indirect diffuse never re-emits its emission, the lights already carry it (graphics doc 13-12 § 42).
 
 #### `BlendingMode` — three modes, and one that was deleted
 

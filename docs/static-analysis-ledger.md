@@ -666,6 +666,13 @@ first had removed). macOS-PA's IWYU (Apple libc++) also asks for `<string_view>`
 (libstdc++ needs it there for `std::pair`) and wants full includes for `PostProcessor.hpp`'s forward-declared
 `Vulkan::DescriptorSet` / `UniformBufferObject` (the build passes on both with the declarations): Apple-libc++-only
 suggestions, not applied.
+The emission lot (same day; the light face: `StandardResource`, `Material::Interface`, `GPURTMaterialData`,
+`LightGenerator`, `SceneRendering`, `AbstractLightEmitter`, `SSGI`, `RTGI`, the probe volume): clang-tidy 21.1.6 on the
+changed lines 0, cppcheck 0, IWYU brought clean. ⚠️ IWYU removed `Graphics/RenderTarget/ShadowMap.hpp` from
+`AbstractLightEmitter.hpp` (the header uses none of it): `DirectionalLight.hpp`, `PointLight.hpp`, `SpotLight.hpp` and
+`LensFlare.cpp` had compiled through it and now include what they use (`ViewMatricesCascadedUBO.hpp`,
+`Vulkan/DescriptorSet.hpp`, `SettingKeys.hpp`, `ViewMatricesInterface.hpp`); `LensFlare.cpp` brought clean as a touched
+file. A downstream consumer that relied on the same transitive include must add its own.
 
 **First lot (2026-10-19)**: the 49 files of the engine's cppcheck lot (34 `.cpp`, 15 headers): about 800 includes added
 and 115 removed, 41 forward declarations, converged at the second pass (three residual lines applied); the three
