@@ -43,7 +43,11 @@ scripted fade. This is the correct behaviour, and it costs nothing.
 **S1 done 2026-10-25** (graphics doc 42 § "The stars": `StarCatalogueResource`, the canonical schema, Yale BSC5 in
 projet-alpha's data). **S2 done 2026-10-25** (graphics doc 42 § "The stars (lot S2)": `Effects::Atmosphere::StarField`
 in `EffectSlot::Stars` after the TAA, the manifest's `"StarCatalogue"`, the clock's `equatorialFrame`; positions within
-0.2 px, magnitude slope 1.02, the extinction measured; Linux only — the peers' validation pending). Lots: **S1** the catalogue (download, licence, a compact data-store format, the engine's loader); **S2** the points
+0.2 px, magnitude slope 1.02, the extinction measured; Linux only — the peers' validation pending). **S3 split
+(owner decisions 2026-10-26)**: S3a the real date first (done: item `celestial-clock-real-date-and-place`, the
+calendar clock, base `Math/SolarSystem.hpp` with the planets' JPL elements already in), S3b the planets as POINTS of the
+star pass, S3c their DISCS once a disc exceeds ~2 px (the moons' mechanism generalised, an energy-conserving cross-fade)
+and Mars at zoom. Lots: **S1** the catalogue (download, licence, a compact data-store format, the engine's loader); **S2** the points
 pass (magnitude → illuminance, B−V → colour, the sidereal rotation, transmittance, footprint); **S3** the planets
 (JPL J2000 elements, geocentric positions, magnitudes and phases, the point → disc); **S4** the Milky Way background;
 **S5** the night glow and the exposure measurement. Each lot measured, committed on the owner's OK, the peers after.

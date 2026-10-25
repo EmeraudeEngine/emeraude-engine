@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -45,6 +46,7 @@
 /* Local inclusions for usages. */
 #include "Constants.hpp"
 #include "Math/Astronomy.hpp"
+#include "Math/SolarSystem.hpp"
 #include "Math/Vector.hpp"
 #include "Scenes/SkyState.hpp" // IWYU pragma: keep (m_renderStates is a std::array of SkyState: a complete type)
 
@@ -165,6 +167,26 @@ namespace EmEn::Scenes::Component
 			};
 
 			/**
+			 * @brief What the clock's time means.
+			 */
+			enum class TimeModel : uint8_t
+			{
+				/** @brief The planet-generic two-body model (Base::Math::Astronomy): days since the vernal equinox and a local
+				 * solar time, any planet, any number of moons. */
+				Planet,
+				/** @brief OUR sky at a real instant (Base::Math::SolarSystem): a UT Julian day and a place (latitude AND
+				 * longitude); the Sun, the Moon and the precessed star frame from the ephemerides (owner decision
+				 * 2026-10-26). Earth only, one moon: the Moon. */
+				Calendar
+			};
+
+			/** @brief The Moon's mean distance, in km: a declared `Moon::fullIlluminance` holds at it (Calendar). */
+			static constexpr auto MoonMeanDistanceKilometres{384400.0};
+
+			/** @brief The Moon's mean radius, in km (Calendar: its apparent diameter from its distance). */
+			static constexpr auto MoonRadiusKilometres{1737.4};
+
+			/**
 			 * @brief A moon: its orbit and its light.
 			 */
 			struct Moon
@@ -196,6 +218,14 @@ namespace EmEn::Scenes::Component
 				Base::Math::Astronomy::Planet planet{Base::Math::Astronomy::earth()};
 				/** @brief The observer's latitude, in degrees, in [-90, 90]. Default 45° north. */
 				float latitude{45.0F};
+				/** @brief The observer's longitude, in degrees, EAST positive, in [-180, 180] (TimeModel::Calendar: the local
+				 * sidereal time). Default 0, Greenwich. */
+				float longitude{0.0F};
+				/** @brief What the time means. Default the planet model. */
+				TimeModel timeModel{TimeModel::Planet};
+				/** @brief TimeModel::Calendar: the instant, a Julian day in UT (Base::Math::SolarSystem::julianDay()). Default
+				 * J2000.0. `dayOfYear` and `timeOfDay` are ignored then. */
+				double julianDay{2451545.0};
 				/** @brief Horizontal world direction toward the planet's north. The vertical component is discarded. Default −Z. */
 				Base::Math::Vector< 3, float > northDirection{0.0F, 0.0F, -1.0F};
 				/** @brief Days (solar days of the planet) since the vernal equinox. Default 0. */
@@ -314,6 +344,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Jumps to a date and a time of day and applies it.
+			 * @note TimeModel::Planet only: a calendar clock refuses it (setInstant()).
 			 * @param dayOfYear Days since the vernal equinox (any real value).
 			 * @param timeOfDay Fraction of the solar day, wrapped into [0, 1): 0.5 noon.
 			 */
@@ -321,12 +352,36 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Jumps to a time of day, keeping the day, and applies it.
+			 * @note TimeModel::Calendar: the LOCAL MEAN SOLAR time at the observer's longitude, keeping its day.
 			 * @param timeOfDay Fraction of the solar day, wrapped into [0, 1): 0 midnight, 0.5 noon.
 			 */
-			void
-			setTimeOfDay (double timeOfDay) noexcept
+			void setTimeOfDay (double timeOfDay) noexcept;
+
+			/**
+			 * @brief Jumps to a real instant and applies it.
+			 * @note TimeModel::Calendar only: a planet-model clock refuses it.
+			 * @param julianDayUT The instant, a Julian day in UT, finite.
+			 * @return bool False when refused (traced).
+			 */
+			bool setInstant (double julianDayUT) noexcept;
+
+			/**
+			 * @brief Returns the instant, a Julian day in UT (TimeModel::Calendar; the planet model answers J2000.0 + its
+			 * seconds since its own epoch, a number without a calendar meaning).
+			 * @return double
+			 */
+			[[nodiscard]]
+			double julianDay () const noexcept;
+
+			/**
+			 * @brief Returns whether the clock shows our sky at a real instant (TimeModel::Calendar, accepted by configure()).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isCalendar () const noexcept
 			{
-				this->setDate(static_cast< double >(this->day()), timeOfDay);
+				return m_calendar;
 			}
 
 			/**
@@ -346,6 +401,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns the current day since the vernal equinox (the integer part of the date).
+			 * @note TimeModel::Calendar: the local mean solar day number (the Julian day number at the observer's longitude).
 			 * @return int64_t
 			 */
 			[[nodiscard]]
@@ -353,6 +409,7 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Returns the current time of day, in [0, 1): 0 midnight, 0.5 noon.
+			 * @note TimeModel::Calendar: the local MEAN solar time at the observer's longitude (not the civil time zone's).
 			 * @return double
 			 */
 			[[nodiscard]]
@@ -521,6 +578,14 @@ namespace EmEn::Scenes::Component
 			 */
 			[[nodiscard]]
 			float moonPhaseAngle (size_t index) const noexcept;
+
+			/**
+			 * @brief Returns a moon's apparent angular diameter, in degrees (TimeModel::Calendar: from its distance).
+			 * @param index The moon's index.
+			 * @return float 0 for an index out of range.
+			 */
+			[[nodiscard]]
+			float moonAngularDiameter (size_t index) const noexcept;
 
 			/**
 			 * @brief Returns a moon's surface brightness: its textured disc integrated, relative to a uniform one of the
@@ -703,6 +768,11 @@ namespace EmEn::Scenes::Component
 				float illuminance{0.0F};
 				/** @brief Unit world vector along the pole of its orbit: the axis its face is oriented by. */
 				Base::Math::Vector< 3, float > pole{0.0F, 1.0F, 0.0F};
+				/** @brief Its apparent angular diameter, in degrees (the declared one; TimeModel::Calendar: from its distance). */
+				float angularDiameter{0.52F};
+				/** @brief Its full illuminance over the declared one: 1, or TimeModel::Calendar's (mean / distance)² for the
+				 * Moon and the Sun's 1 / distance². */
+				float fullIlluminanceScale{1.0F};
 				/** @brief The LINEAR colour written to its light with a dynamic sky, its largest component 1. */
 				Base::Math::Vector< 3, float > color{1.0F, 1.0F, 1.0F};
 				bool lit{false};
@@ -773,6 +843,36 @@ namespace EmEn::Scenes::Component
 			 */
 			void applyMoon (size_t index, const Base::Math::Astronomy::Horizontal & towardStar, double time) noexcept;
 
+			/**
+			 * @brief Returns the star's apparent angular diameter, in degrees: the declared one (TimeModel::Calendar: at
+			 * 1 AU, over the Sun's distance).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			sunAngularDiameter () const noexcept
+			{
+				return m_calendar ? static_cast< float >(static_cast< double >(m_options.sun.angularDiameter) / std::max(m_starDistance, 1e-6)) : m_options.sun.angularDiameter;
+			}
+
+			/**
+			 * @brief Places the star, the pole and the star frame by the planet model.
+			 * @param time The simulated time.
+			 * @param observer A reference to the observer.
+			 * @return Base::Math::Astronomy::Horizontal The star's direction.
+			 */
+			[[nodiscard]]
+			Base::Math::Astronomy::Horizontal placeModelSky (double time, const Base::Math::Astronomy::Observer & observer) noexcept;
+
+			/**
+			 * @brief Places the Sun, the pole, the precessed star frame and the Moon by the ephemerides (TimeModel::Calendar).
+			 * @param time The simulated time: seconds since J2000.0, UT.
+			 * @param observer A reference to the observer.
+			 * @return Base::Math::Astronomy::Horizontal The Sun's topocentric direction.
+			 */
+			[[nodiscard]]
+			Base::Math::Astronomy::Horizontal placeCalendarSky (double time, const Base::Math::Astronomy::Observer & observer) noexcept;
+
 			/** @brief Rate of the colour-temperature slide with the air mass excess (m - 1): 5100 K at 30° of elevation, 3700 K at 11°, 2700 K at 5.5°, the horizon value at 0°. */
 			static constexpr auto ReddeningRate{0.2F};
 
@@ -793,7 +893,12 @@ namespace EmEn::Scenes::Component
 			std::array< Base::Math::Vector< 3, float >, 3 > m_equatorialFrame{{{1.0F, 0.0F, 0.0F}, {0.0F, 0.0F, -1.0F}, {0.0F, 1.0F, 0.0F}}};
 			Base::Math::Vector< 3, float > m_sunTransmittance{0.0F, 0.0F, 0.0F};
 			Base::Math::Vector< 3, float > m_sunColor{1.0F, 1.0F, 1.0F};
+			/** @brief TimeModel::Calendar: the Moon seen from the Earth's centre at the current instant (mean of date). */
+			Base::Math::SolarSystem::GeocentricPosition m_calendarMoon{};
+			/** @brief TimeModel::Calendar: the north pole of the ecliptic of date, a world vector (the Moon's face). */
+			Base::Math::Vector< 3, float > m_eclipticPole{0.0F, 1.0F, 0.0F};
 			double m_starDistance{1.0}; ///< AU.
+			double m_localSiderealAngle{0.0}; ///< Radians, the current local sidereal angle.
 			double m_solarDay{Base::Math::Astronomy::SecondsPerDay};
 			double m_referenceTime{0.0}; ///< Simulated time at m_referenceCycle, seconds since the epoch.
 			uint64_t m_referenceCycle{0};
@@ -806,5 +911,7 @@ namespace EmEn::Scenes::Component
 			bool m_sunBound{false};
 			bool m_sunLit{false};
 			bool m_running{false};
+			/** @brief TimeModel::Calendar accepted by configure() (Earth, finite instant). */
+			bool m_calendar{false};
 	};
 }

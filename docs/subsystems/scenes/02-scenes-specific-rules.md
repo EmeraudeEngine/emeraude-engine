@@ -96,6 +96,23 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 > (penumbra) instead of a hard switch; `isDaytime()` is "the sun's light is on". It warns when its `Planet::name` and
 > the atmosphere's `planet` are both set and differ (a simple course is unnamed). Without a dynamic sky nothing changes
 > (`zenithIlluminance`, `extinction` and the temperatures keep driving the light).
+> **The calendar** (`Options::timeModel = TimeModel::Calendar`, 2026-10-26, owner decisions; engine item
+> `celestial-clock-real-date-and-place`): OUR sky at a real instant — `Options::julianDay` (UT) and the observer's
+> `latitude` AND `longitude` (east positive) — from emeraude-base's `Math/SolarSystem.hpp`: the Sun (Standish's JPL
+> elements), the Moon (Schlyter: ~1–3.5′, measured against PyEphem) seen from the observer's place (its parallax), the
+> local sidereal time (IAU 1982 + the longitude), and the stars' J2000 frame PRECESSED to the date. Earth only (another
+> `Planet::name` falls back to the planet model, traced) and one moon, the Moon (further moons are dropped, traced); its
+> apparent diameter and full illuminance follow its distance from the observer (× (384 400 km / d)², and the Sun's
+> 1 / d²), the Sun's diameter its distance. The time is seconds since J2000.0 UT; `setInstant(julianDayUT)`,
+> `julianDay()`; `setTimeOfDay()` moves within the LOCAL MEAN SOLAR day at the longitude; `setDate()` is refused (a day
+> since the equinox is the planet model's). `day()` / `timeOfDay()` are the local mean solar day number and time.
+> Console: `setCalendarDate(year, month, day, hour, minute, second)` (UTC) and `setNow()` (the system clock) switch a
+> clock to the calendar, `setDate()` brings it back to the planet model, `setLongitude()`; `getState()` adds
+> `timeModel`, `longitudeDegrees`, `julianDayUT` (a string: the JSON writer keeps 5 digits), `utc` (ISO 8601) and each
+> moon's `angularDiameterDegrees`. Measured from Liège (2026-10-26, sky-lab option 10) against PyEphem with the
+> refraction off: the Sun 11–15″, Betelgeuse through the frame 17–19″, the Moon 31″–3.8′ (Schlyter), its diameter
+> within 0.25 %; the 2026-08-12 eclipse seen from Liège (Sun and Moon 31″ apart, phase 0). The engine's birthplace,
+> the default place of a real sky: `Identification::BirthplaceLatitude` / `BirthplaceLongitude` (Liège, owner).
 >
 > `SkyFollowsSun` (2026-09-13, owner decision) is the sky's HALF, deliberately a separate component:
 > bound to a `CelestialClock`, it maps the sun's elevation through a smoothstep (`duskElevation` −6° → 0,

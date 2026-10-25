@@ -1,7 +1,7 @@
 ---
 id: celestial-clock-real-date-and-place
 title: The celestial clock at a real date and place — UTC, longitude, the engine's birthplace as the default position
-status: open
+status: in-progress
 priority: unranked
 scope: Scenes/Component (CelestialClock), emeraude-base Math/Astronomy, Identification (engine constants), PlatformSpecific (an approximate position)
 opened: 2026-10-25
@@ -16,27 +16,21 @@ The owner's plan (2026-10-25), after the stars lot: a sky generated for a time o
 able to show the real sky of the moment — the sun, the Moon in its real phase, the planets, the stars — wherever the
 application runs. The first consumer is projet-alpha's WaterWorld (its item `waterworld-dynamic-sky`).
 
-Today `CelestialClock` takes a latitude, days since the vernal equinox and a LOCAL SOLAR time: no longitude, no
-calendar, and the Moon's default orbit is "full at the equinox" (an arbitrary phase). Its astronomy is generic
-Keplerian (emeraude-base `Math/Astronomy.hpp`: the Sun within ~1°, the Moon within a few degrees of Meeus).
+The planet model (`TimeModel::Planet`) keeps a latitude, days since the vernal equinox and a local solar time, with
+generic Keplerian astronomy (emeraude-base `Math/Astronomy.hpp`); the calendar (`TimeModel::Calendar`, below) is the
+real sky.
 
 ## What remains
 
-- **A real instant**: the clock set from a UTC time (the system clock), converted to the model's epoch (the vernal
-  equinox of the year, J2000-based), the local solar time from the LONGITUDE (+ the equation of time if the model's day
-  is the mean one), the local sidereal time for the stars from Greenwich's.
-- **The Moon's real phase and position** at that instant (its elements at J2000, mean elongation): a full moon on the
-  calendar's full moon. Measure the model against a reference ephemeris (Meeus, or JPL Horizons) for a few dates.
-- **The engine's birthplace as identity constants** (owner, 2026-10-25): Liège, Belgium, latitude
-  50.639311006498865°, longitude 5.568172430592806° — where this system was born; the default position when none is
-  known. Their home is to decide (`EmEn::Identification` holds the engine's identity constants today).
-- **An approximate position of the machine** — an owner decision between:
-  - the coordinates of the system's TIME ZONE (the IANA `zone.tab` gives each zone's reference city: offline, no
-    permission, accurate to a few hundred km);
-  - the operating system's location service (Windows.Devices.Geolocation, CoreLocation, GeoClue): precise, but a
-    permission prompt and three platform implementations;
-  - an IP geolocation service: the network, a third party, privacy.
-  Without any, the birthplace.
+**Done 2026-10-26** (lot S3a; scenes doc 02 § CelestialClock "The calendar", base caution points
+§ `Math/SolarSystem.hpp`): the calendar time model (a UT Julian day, the longitude, the sidereal time, the Sun and the
+Moon from the ephemerides with their parallax, the precessed star frame), `setCalendarDate` / `setNow` / `setLongitude`,
+the birthplace in `Identification::Birthplace*`. Owner decisions 2026-10-26: the real date before the planets; the Moon
+from Schlyter's perturbations (measured up to 3.5′ from PyEphem — a truncated ELP-2000/82 if ever needed).
+
+- **An approximate position of the machine** — owner decision 2026-10-26: the system's TIME ZONE → its reference city
+  (the IANA `zone.tab`: offline, no permission, a few hundred km; Linux/macOS from the TZ / `/etc/localtime` link,
+  Windows from its zone id through the CLDR `windowsZones` mapping). Without one, the birthplace.
 - **Observation windows and GoTo** (owner, 2026-10-25, for WaterWorld's Mars): from the clock's ephemeris, the dates
   and hours a body is above the horizon at the observer's place with the sun down (below −12°: a dark sky), with its
   apparent size, the best first; and a GoTo that aims a camera at a named body and sets the focal length that frames

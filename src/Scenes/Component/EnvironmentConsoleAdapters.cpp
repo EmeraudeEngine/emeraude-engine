@@ -28,12 +28,16 @@
 
 /* STL inclusions. */
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <iomanip>
 #include <limits>
 #include <memory>
 #include <numbers>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -51,6 +55,7 @@
 #include "DirectionalLight.hpp"
 #include "FastJSON.hpp"
 #include "Math/Astronomy.hpp"
+#include "Math/SolarSystem.hpp"
 #include "Math/Vector.hpp"
 #include "PixelFactory/Color.hpp"
 #include "Scenes/AbstractEntity.hpp"
@@ -104,6 +109,55 @@ namespace EmEn::Scenes::Component
 		}
 
 		/**
+		 * @brief Returns a Julian day (UT) as an ISO 8601 UTC text, e.g. "2026-10-26T22:00:00.000Z".
+		 * @param julianDay The Julian day.
+		 * @return std::string "invalid" outside the Gregorian range.
+		 */
+		[[nodiscard]]
+		std::string
+		utcText (double julianDay) noexcept
+		{
+			/* Rounded to the millisecond BEFORE the split: 18:59:59.9999 prints 19:00:00.000, never 18:59:60.000. */
+			const auto date = Base::Math::SolarSystem::calendarDate(julianDay + (0.0005 / Base::Math::Astronomy::SecondsPerDay));
+
+			if ( !date.has_value() )
+			{
+				return "invalid";
+			}
+
+			std::ostringstream text;
+			text << std::setfill('0') << std::setw(4) << date->year << '-' << std::setw(2) << date->month << '-' << std::setw(2) << date->day
+				<< 'T' << std::setw(2) << date->hour << ':' << std::setw(2) << date->minute << ':'
+				<< std::fixed << std::setprecision(3) << std::setw(6) << (std::floor(date->second * 1000.0) / 1000.0) << 'Z';
+
+			return text.str();
+		}
+
+		/**
+		 * @brief Moves a clock to a real instant, switching it to the calendar when it is on the planet model.
+		 * @param clock A reference to the clock.
+		 * @param julianDayUT The instant, a Julian day in UT (validated by the caller).
+		 * @return bool False when the clock cannot be on the calendar (its planet is not Earth).
+		 */
+		[[nodiscard]]
+		bool
+		moveToInstant (CelestialClock & clock, double julianDayUT) noexcept
+		{
+			if ( clock.isCalendar() )
+			{
+				return clock.setInstant(julianDayUT);
+			}
+
+			auto options = clock.options();
+			options.timeModel = CelestialClock::TimeModel::Calendar;
+			options.julianDay = julianDayUT;
+
+			clock.configure(options);
+
+			return clock.isCalendar();
+		}
+
+		/**
 		 * @brief Returns the full state of a celestial clock as JSON.
 		 * @param clock The celestial clock.
 		 * @return std::string
@@ -126,6 +180,20 @@ namespace EmEn::Scenes::Component
 			state["timeScale"] = static_cast< double >(options.timeScale);
 			state["solarDaySeconds"] = clock.solarDay();
 			state["latitudeDegrees"] = static_cast< double >(options.latitude);
+			state["longitudeDegrees"] = static_cast< double >(options.longitude);
+			state["timeModel"] = clock.isCalendar() ? "Calendar" : "Planet";
+
+			/* The real instant: the Julian day (UT) and its calendar date, ISO 8601. */
+			if ( clock.isCalendar() )
+			{
+				/* A string: the JSON writer keeps ~5 significant digits, a Julian day needs 13. */
+				std::ostringstream julian;
+				julian << std::fixed << std::setprecision(6) << clock.julianDay();
+
+				state["julianDayUT"] = julian.str();
+
+				state["utc"] = utcText(clock.julianDay());
+			}
 			state["siderealAngleDegrees"] = Sky::degrees(static_cast< double >(clock.siderealAngle()));
 			state["celestialPole"] = toJson(clock.celestialPole());
 
@@ -186,6 +254,7 @@ namespace EmEn::Scenes::Component
 				moon["direction"] = toJson(clock.moonDirection(index));
 				moon["illuminatedFraction"] = static_cast< double >(clock.moonIlluminatedFraction(index));
 				moon["phaseAngleDegrees"] = static_cast< double >(clock.moonPhaseAngle(index)) * (180.0 / std::numbers::pi);
+				moon["angularDiameterDegrees"] = static_cast< double >(clock.moonAngularDiameter(index));
 				moon["surfaceBrightness"] = static_cast< double >(clock.moonSurfaceBrightness(index));
 				moon["illuminanceLux"] = static_cast< double >(clock.moonIlluminance(index));
 
@@ -210,6 +279,8 @@ namespace EmEn::Scenes::Component
 		void
 		reconfigureKeepingTheDate (CelestialClock & clock, CelestialClock::Options options) noexcept
 		{
+			/* The calendar keeps its instant; the planet model its day and time of day. */
+			options.julianDay = clock.julianDay();
 			options.dayOfYear = static_cast< double >(clock.day());
 			options.timeOfDay = clock.timeOfDay();
 
@@ -376,9 +447,91 @@ namespace EmEn::Scenes::Component
 							}
 
 							return this->act(entityName, componentName, [day, timeOfDay] (CelestialClock & clock) {
-								clock.setDate(static_cast< double >(day), static_cast< double >(timeOfDay));
+								/* A day since the equinox is the planet model's: a calendar clock goes back to it. */
+								if ( clock.isCalendar() )
+								{
+									auto options = clock.options();
+									options.timeModel = CelestialClock::TimeModel::Planet;
+									options.dayOfYear = static_cast< double >(day);
+									options.timeOfDay = static_cast< double >(timeOfDay);
+
+									clock.configure(options);
+								}
+								else
+								{
+									clock.setDate(static_cast< double >(day), static_cast< double >(timeOfDay));
+								}
 
 								return changed(clock, "Celestial clock '" + clock.name() + "' moved to day " + std::to_string(clock.day()) + ", time of day " + std::to_string(clock.timeOfDay()) + " (sun at " + std::to_string(clock.sunElevation()) + "°).");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setCalendarDate", "Moves a celestial clock to a real UTC instant — our sky then: the Sun, the Moon and the precessed stars from the ephemerides, at the clock's latitude and longitude. A planet-model clock switches to the calendar (Earth only); setDate goes back.",
+						{
+							entity,
+							component,
+							{"year", "The year, 1583 to 9999 (Gregorian)."},
+							{"month", "The month, 1 to 12."},
+							{"day", "The day of the month."},
+							{"hour", "The hour, 0 to 23, UTC."},
+							{"minute", "The minute, 0 to 59."},
+							{"second", "The second, 0 to 60."}
+						},
+						[this] (const std::string & entityName, const std::string & componentName, int32_t year, int32_t month, int32_t day, int32_t hour, int32_t minute, float second) {
+							const auto instant = Base::Math::SolarSystem::julianDay({.year = year, .month = month, .day = day, .hour = hour, .minute = minute, .second = static_cast< double >(second)});
+
+							if ( !instant.has_value() )
+							{
+								return Console::CommandResult::error("Not a Gregorian UTC instant (1583 to 9999, a real day of the month, 0-23 h, 0-59 min, 0-60 s).");
+							}
+
+							return this->act(entityName, componentName, [julianDayUT = instant.value()] (CelestialClock & clock) {
+								if ( !moveToInstant(clock, julianDayUT) )
+								{
+									return Console::CommandResult::error("Celestial clock '" + clock.name() + "' cannot be on the calendar: its planet is '" + clock.options().planet.name + "', the calendar is Earth's.");
+								}
+
+								return changed(clock, "Celestial clock '" + clock.name() + "' at " + utcText(clock.julianDay()) + " (sun at " + std::to_string(clock.sunElevation()) + "°).");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("setNow", "Moves a celestial clock to the system's current UTC time (switching it to the calendar, Earth only): the real sky of this instant at the clock's place.",
+						{
+							entity,
+							component
+						},
+						[this] (const std::string & entityName, const std::string & componentName) {
+							const auto unixSeconds = std::chrono::duration< double >(std::chrono::system_clock::now().time_since_epoch()).count();
+
+							return this->act(entityName, componentName, [julianDayUT = Base::Math::SolarSystem::julianDayFromUnixTime(unixSeconds)] (CelestialClock & clock) {
+								if ( !moveToInstant(clock, julianDayUT) )
+								{
+									return Console::CommandResult::error("Celestial clock '" + clock.name() + "' cannot be on the calendar: its planet is '" + clock.options().planet.name + "', the calendar is Earth's.");
+								}
+
+								return changed(clock, "Celestial clock '" + clock.name() + "' at " + utcText(clock.julianDay()) + " (sun at " + std::to_string(clock.sunElevation()) + "°).");
+							});
+						});
+
+					this->bindCommand("setLongitude", "Moves the observer of a celestial clock to a longitude, keeping the instant (the calendar's local sidereal time; the planet model ignores it).",
+						{
+							entity,
+							component,
+							{"longitude", "The longitude, in degrees, EAST positive, −180 to 180 (Liège: 5.568)."}
+						},
+						[this] (const std::string & entityName, const std::string & componentName, float longitude) {
+							if ( !std::isfinite(longitude) || longitude < -180.0F || longitude > 180.0F )
+							{
+								return Console::CommandResult::error("The longitude must lie between −180 and 180 degrees.");
+							}
+
+							return this->act(entityName, componentName, [longitude] (CelestialClock & clock) {
+								auto options = clock.options();
+								options.longitude = longitude;
+
+								reconfigureKeepingTheDate(clock, options);
+
+								return changed(clock, "Celestial clock '" + clock.name() + "' observed from " + std::to_string(longitude) + "° of longitude (sun at " + std::to_string(clock.sunElevation()) + "°).");
 							});
 						}, Console::CommandHint::Idempotent);
 

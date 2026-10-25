@@ -31,7 +31,9 @@
 #include <cmath>
 #include <cstddef>
 #include <iterator>
+#include <limits>
 #include <numbers>
+#include <optional>
 #include <span>
 #include <utility>
 
@@ -46,6 +48,7 @@
 #include "Graphics/SkyAtmosphere.hpp"
 #include "Math/Base.hpp"
 #include "Math/CartesianFrame.hpp"
+#include "Math/SolarSystem.hpp"
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Types.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
@@ -208,6 +211,44 @@ namespace EmEn::Scenes::Component
 		}
 
 		m_options.latitude = std::clamp(m_options.latitude, -90.0F, 90.0F);
+
+		if ( !std::isfinite(m_options.longitude) )
+		{
+			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' declares a non-finite longitude: Greenwich (0°) is used.";
+
+			m_options.longitude = 0.0F;
+		}
+
+		m_options.longitude = std::remainder(m_options.longitude, 360.0F);
+
+		/* ---- The time model: the calendar is our solar system's ephemeris. ---- */
+		m_calendar = false;
+
+		if ( m_options.timeModel == TimeModel::Calendar )
+		{
+			if ( m_options.planet.name != "Earth" )
+			{
+				TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' asks for the calendar on '" << m_options.planet.name << "': the calendar is our solar system's, Earth only — the planet model is used.";
+			}
+			else if ( !Base::Math::SolarSystem::calendarDate(m_options.julianDay).has_value() )
+			{
+				TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' declares the instant JD " << m_options.julianDay << ", outside the Gregorian range: J2000.0 is used.";
+
+				m_options.julianDay = Base::Math::SolarSystem::JulianDayJ2000;
+				m_calendar = true;
+			}
+			else
+			{
+				m_calendar = true;
+			}
+
+			if ( m_calendar && m_options.moons.size() > 1 )
+			{
+				TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' declares " << m_options.moons.size() << " moons on the calendar: Earth has one, the first is the Moon.";
+
+				m_options.moons.resize(1);
+			}
+		}
 		m_options.timeScale = std::max(0.0F, m_options.timeScale);
 
 		/* ---- Photometry. ---- */
@@ -265,7 +306,14 @@ namespace EmEn::Scenes::Component
 		this->checkPlanet();
 
 		/* ---- The date. ---- */
-		this->setDate(m_options.dayOfYear, m_options.timeOfDay);
+		if ( m_calendar )
+		{
+			static_cast< void >(this->setInstant(m_options.julianDay));
+		}
+		else
+		{
+			this->setDate(m_options.dayOfYear, m_options.timeOfDay);
+		}
 	}
 
 	void
@@ -325,11 +373,72 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
+		if ( m_calendar )
+		{
+			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' is on the calendar: a day since the equinox means nothing there (setInstant()).";
+
+			return;
+		}
+
 		const auto wrappedTimeOfDay = timeOfDay - std::floor(timeOfDay);
 
 		/* The epoch is noon of day 0: noon is the fraction 0.5. */
 		this->anchor((dayOfYear + wrappedTimeOfDay - 0.5) * m_solarDay);
 		this->apply();
+	}
+
+	void
+	CelestialClock::setTimeOfDay (double timeOfDay) noexcept
+	{
+		if ( !std::isfinite(timeOfDay) )
+		{
+			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' refused a non-finite time of day.";
+
+			return;
+		}
+
+		if ( !m_calendar )
+		{
+			this->setDate(static_cast< double >(this->day()), timeOfDay);
+
+			return;
+		}
+
+		/* The local mean solar day: the Julian day shifted by half a day (it starts at noon) and by the longitude. */
+		const auto offset = 0.5 + (static_cast< double >(m_options.longitude) / 360.0);
+		const auto local = this->julianDay() + offset;
+
+		static_cast< void >(this->setInstant(std::floor(local) + (timeOfDay - std::floor(timeOfDay)) - offset));
+	}
+
+	bool
+	CelestialClock::setInstant (double julianDayUT) noexcept
+	{
+		if ( !m_calendar )
+		{
+			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' is not on the calendar: an instant means nothing there (setDate()).";
+
+			return false;
+		}
+
+		if ( !Base::Math::SolarSystem::calendarDate(julianDayUT).has_value() )
+		{
+			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' refused the instant JD " << julianDayUT << " (non-finite or outside the Gregorian range).";
+
+			return false;
+		}
+
+		/* Seconds since J2000.0 UT: the calendar clock's time. */
+		this->anchor((julianDayUT - Base::Math::SolarSystem::JulianDayJ2000) * Sky::SecondsPerDay);
+		this->apply();
+
+		return true;
+	}
+
+	double
+	CelestialClock::julianDay () const noexcept
+	{
+		return Base::Math::SolarSystem::JulianDayJ2000 + (this->currentTime() / Sky::SecondsPerDay);
 	}
 
 	void
@@ -367,13 +476,18 @@ namespace EmEn::Scenes::Component
 	int64_t
 	CelestialClock::day () const noexcept
 	{
+		if ( m_calendar )
+		{
+			return static_cast< int64_t >(std::floor(this->julianDay() + 0.5 + (static_cast< double >(m_options.longitude) / 360.0)));
+		}
+
 		return static_cast< int64_t >(std::floor((this->currentTime() / m_solarDay) + 0.5));
 	}
 
 	double
 	CelestialClock::timeOfDay () const noexcept
 	{
-		const auto date = (this->currentTime() / m_solarDay) + 0.5;
+		const auto date = m_calendar ? this->julianDay() + 0.5 + (static_cast< double >(m_options.longitude) / 360.0) : (this->currentTime() / m_solarDay) + 0.5;
 
 		return date - std::floor(date);
 	}
@@ -400,6 +514,12 @@ namespace EmEn::Scenes::Component
 	CelestialClock::moonPhaseAngle (size_t index) const noexcept
 	{
 		return index < m_moons.size() ? m_moons[index].phaseAngle : 0.0F;
+	}
+
+	float
+	CelestialClock::moonAngularDiameter (size_t index) const noexcept
+	{
+		return index < m_moons.size() ? m_moons[index].angularDiameter : 0.0F;
 	}
 
 	float
@@ -451,7 +571,7 @@ namespace EmEn::Scenes::Component
 			.direction = m_sunDirection,
 			.illuminance = this->topOfAtmosphereIlluminance(),
 			.color = linearChromaticity(m_options.sun.starTemperature),
-			.angularDiameter = m_options.sun.angularDiameter,
+			.angularDiameter = this->sunAngularDiameter(),
 			.illuminatedFraction = 1.0F
 		};
 
@@ -463,12 +583,12 @@ namespace EmEn::Scenes::Component
 		std::ranges::transform(std::span{m_moons}.first(moonCount), std::span{m_options.moons}.first(moonCount), state.moons.begin(), [] (const BoundBody & moon, const Moon & declared) {
 			return SkyBody{
 				.direction = moon.direction,
-				.illuminance = declared.fullIlluminance * CelestialClock::moonBrightness(moon.phaseAngle, moon.earthshine, moon.surfaceBrightness),
+				.illuminance = declared.fullIlluminance * moon.fullIlluminanceScale * CelestialClock::moonBrightness(moon.phaseAngle, moon.earthshine, moon.surfaceBrightness),
 				.color = linearChromaticity(declared.temperature),
-				.angularDiameter = declared.angularDiameter,
+				.angularDiameter = moon.angularDiameter,
 				.illuminatedFraction = moon.illuminatedFraction,
 				.pole = moon.pole,
-				.fullIlluminance = declared.fullIlluminance,
+				.fullIlluminance = declared.fullIlluminance * moon.fullIlluminanceScale,
 				.earthshine = moon.earthshine
 			};
 		});
@@ -511,21 +631,10 @@ namespace EmEn::Scenes::Component
 	{
 		const auto time = this->currentTime();
 		const Sky::Observer observer{.latitude = Sky::radians(static_cast< double >(m_options.latitude))};
-		const auto towardStar = Sky::starDirection(m_options.planet, observer, time);
+		const auto towardStar = m_calendar ? this->placeCalendarSky(time, observer) : this->placeModelSky(time, observer);
 
 		m_sunDirection = this->toWorld(towardStar);
 		m_sunElevation = static_cast< float >(Sky::degrees(towardStar.elevation()));
-		const auto localSiderealAngle = Sky::siderealAngle(m_options.planet, time);
-
-		m_celestialPole = this->toWorld(Sky::celestialPole(observer));
-		m_siderealAngle = static_cast< float >(localSiderealAngle);
-		/* The equatorial axes as the observer sees them now: the stars' frame (the pole is the third axis). */
-		m_equatorialFrame = {
-			this->toWorld(Sky::toHorizontal({.rightAscension = 0.0, .declination = 0.0}, localSiderealAngle, observer)),
-			this->toWorld(Sky::toHorizontal({.rightAscension = std::numbers::pi / 2.0, .declination = 0.0}, localSiderealAngle, observer)),
-			m_celestialPole
-		};
-		m_starDistance = Sky::starDistance(m_options.planet, time);
 
 		if ( m_atmosphere != nullptr )
 		{
@@ -570,6 +679,64 @@ namespace EmEn::Scenes::Component
 		}
 	}
 
+	Sky::Horizontal
+	CelestialClock::placeModelSky (double time, const Sky::Observer & observer) noexcept
+	{
+		const auto localSiderealAngle = Sky::siderealAngle(m_options.planet, time);
+
+		m_localSiderealAngle = localSiderealAngle;
+		m_celestialPole = this->toWorld(Sky::celestialPole(observer));
+		m_siderealAngle = static_cast< float >(localSiderealAngle);
+		/* The equatorial axes as the observer sees them now: the stars' frame (the pole is the third axis). */
+		m_equatorialFrame = {
+			this->toWorld(Sky::toHorizontal({.rightAscension = 0.0, .declination = 0.0}, localSiderealAngle, observer)),
+			this->toWorld(Sky::toHorizontal({.rightAscension = std::numbers::pi / 2.0, .declination = 0.0}, localSiderealAngle, observer)),
+			m_celestialPole
+		};
+		m_starDistance = Sky::starDistance(m_options.planet, time);
+
+		return Sky::starDirection(m_options.planet, observer, time);
+	}
+
+	Sky::Horizontal
+	CelestialClock::placeCalendarSky (double time, const Sky::Observer & observer) noexcept
+	{
+		namespace Solar = Base::Math::SolarSystem;
+
+		/* The Earth turns in UT, the bodies move in TT. */
+		const auto julianDayUT = Solar::JulianDayJ2000 + (time / Sky::SecondsPerDay);
+		const auto julianDayTT = julianDayUT + (Solar::deltaT(julianDayUT) / Sky::SecondsPerDay);
+		const auto localSiderealAngle = Sky::wrapAngle(Solar::greenwichMeanSiderealAngle(julianDayUT) + Sky::radians(static_cast< double >(m_options.longitude)));
+		const auto centuries = Solar::julianCenturies(julianDayTT);
+		const auto sun = Solar::sun(julianDayTT);
+		/* A direction of date at infinity, as a world vector. */
+		const auto toWorldOfDate = [this, localSiderealAngle, &observer] (const Vector< 3, double > & equatorialOfDate) {
+			return this->toWorld(Solar::topocentric({.direction = equatorialOfDate, .distance = std::numeric_limits< double >::infinity()}, localSiderealAngle, observer));
+		};
+
+		m_localSiderealAngle = localSiderealAngle;
+		m_siderealAngle = static_cast< float >(localSiderealAngle);
+		m_celestialPole = this->toWorld(Sky::celestialPole(observer));
+		m_starDistance = sun.distance;
+
+		/* The catalogues' J2000 axes, precessed to the equator of date: the stars land where they are tonight. */
+		const auto precession = Solar::precessionFromJ2000(centuries);
+
+		m_equatorialFrame = {
+			toWorldOfDate(precession(Vector< 3, double >{1.0, 0.0, 0.0})),
+			toWorldOfDate(precession(Vector< 3, double >{0.0, 1.0, 0.0})),
+			toWorldOfDate(precession(Vector< 3, double >{0.0, 0.0, 1.0}))
+		};
+
+		/* The Moon, and the pole of the ecliptic of date its face is oriented by (its spin axis is 1.5° from it). */
+		const auto obliquity = Solar::meanObliquity(centuries);
+
+		m_calendarMoon = Solar::moon(julianDayTT);
+		m_eclipticPole = toWorldOfDate(Vector< 3, double >{0.0, -std::sin(obliquity), std::cos(obliquity)});
+
+		return Solar::topocentric(sun, localSiderealAngle, observer);
+	}
+
 	void
 	CelestialClock::lightSunEmpirically () noexcept
 	{
@@ -599,7 +766,7 @@ namespace EmEn::Scenes::Component
 		/* The disc's transmittance seen from the ground: it reddens, dims and, on the horizon, fades as the ground hides
 		 * the disc. The emission is the star's colour through it; its luminance × the illuminance above the atmosphere
 		 * is the illuminance on the ground. */
-		const auto angularRadius = static_cast< float >(Sky::radians(0.5 * static_cast< double >(m_options.sun.angularDiameter)));
+		const auto angularRadius = static_cast< float >(Sky::radians(0.5 * static_cast< double >(this->sunAngularDiameter())));
 		const auto starColor = linearChromaticity(m_options.sun.starTemperature);
 
 		m_sunTransmittance = m_atmosphere->parameters().discTransmittance(ObserverHeight, static_cast< float >(elevation), angularRadius);
@@ -688,13 +855,35 @@ namespace EmEn::Scenes::Component
 		const auto & declared = m_options.moons[index];
 		auto & moon = m_moons[index];
 		const Sky::Observer observer{.latitude = Sky::radians(static_cast< double >(m_options.latitude))};
-		const auto towardMoon = Sky::moonDirection(m_options.planet, declared.orbit, observer, time);
+		Sky::Horizontal towardMoon;
+
+		if ( m_calendar )
+		{
+			/* The Moon of the ephemeris, seen from the observer's place (its parallax reaches 1°), its size and its light
+			 * from its distance (the declared full illuminance holds at the mean distance and 1 AU). */
+			towardMoon = Base::Math::SolarSystem::topocentric(m_calendarMoon, m_localSiderealAngle, observer);
+
+			/* The distance from the observer, one Earth radius nearer at the zenith (first order): the Moon is ~1.5 %
+			 * larger overhead than on the horizon. */
+			const auto kilometres = (m_calendarMoon.distance * Base::Math::SolarSystem::KilometresPerAU) - (Base::Math::SolarSystem::EarthRadiusKilometres * towardMoon.up);
+			const auto meanOverDistance = MoonMeanDistanceKilometres / kilometres;
+
+			moon.pole = m_eclipticPole;
+			moon.angularDiameter = static_cast< float >(Sky::degrees(2.0 * std::asin(std::min(MoonRadiusKilometres / kilometres, 1.0))));
+			moon.fullIlluminanceScale = static_cast< float >((meanOverDistance * meanOverDistance) / std::max(m_starDistance * m_starDistance, 1e-12));
+		}
+		else
+		{
+			towardMoon = Sky::moonDirection(m_options.planet, declared.orbit, observer, time);
+			moon.pole = this->toWorld(Sky::moonOrbitPole(m_options.planet, declared.orbit, observer, time));
+			moon.angularDiameter = declared.angularDiameter;
+			moon.fullIlluminanceScale = 1.0F;
+		}
 
 		moon.direction = this->toWorld(towardMoon);
 		moon.elevation = static_cast< float >(Sky::degrees(towardMoon.elevation()));
 		moon.illuminatedFraction = static_cast< float >(Sky::illuminatedFraction(towardStar, towardMoon));
 		moon.phaseAngle = static_cast< float >(Sky::phaseAngle(towardStar, towardMoon));
-		moon.pole = this->toWorld(Sky::moonOrbitPole(m_options.planet, declared.orbit, observer, time));
 		/* The planet seen from the moon is at the supplementary phase: full when the moon is new. */
 		moon.earthshine = declared.earthshine * declared.earthshineGain * static_cast< float >(Sky::lommelSeeligerPhaseLaw(std::numbers::pi - static_cast< double >(moon.phaseAngle)));
 		/* The dynamic sky's surface map, where the star stands over it: the light is the disc the sky draws. */
@@ -706,19 +895,19 @@ namespace EmEn::Scenes::Component
 		if ( m_atmosphere != nullptr )
 		{
 			/* Through the dynamic sky's atmosphere, like the sun: the disc's transmittance colours and dims it. */
-			const auto angularRadius = static_cast< float >(Sky::radians(0.5 * static_cast< double >(declared.angularDiameter)));
+			const auto angularRadius = static_cast< float >(Sky::radians(0.5 * static_cast< double >(moon.angularDiameter)));
 			const auto moonColor = linearChromaticity(declared.temperature);
 			const auto transmittance = m_atmosphere->parameters().discTransmittance(ObserverHeight, static_cast< float >(towardMoon.elevation()), angularRadius);
 			const Vector< 3, float > emission{moonColor[0] * transmittance[0], moonColor[1] * transmittance[1], moonColor[2] * transmittance[2]};
 
-			moon.illuminance = !m_sunLit ? declared.fullIlluminance * CelestialClock::moonBrightness(moon.phaseAngle, moon.earthshine, moon.surfaceBrightness) * luminance(emission) : 0.0F;
+			moon.illuminance = !m_sunLit ? declared.fullIlluminance * moon.fullIlluminanceScale * CelestialClock::moonBrightness(moon.phaseAngle, moon.earthshine, moon.surfaceBrightness) * luminance(emission) : 0.0F;
 			moon.color = lightColor(emission, lightColor(moonColor, {1.0F, 1.0F, 1.0F}));
 		}
 		else if ( moon.elevation > 0.0F && !m_sunLit )
 		{
 			const auto airMassExcess = CelestialClock::airMass(moon.elevation) - 1.0F;
 
-			moon.illuminance = declared.fullIlluminance * CelestialClock::moonBrightness(moon.phaseAngle, moon.earthshine, moon.surfaceBrightness) * std::exp(-m_options.sun.extinction * (airMassExcess + 1.0F));
+			moon.illuminance = declared.fullIlluminance * moon.fullIlluminanceScale * CelestialClock::moonBrightness(moon.phaseAngle, moon.earthshine, moon.surfaceBrightness) * std::exp(-m_options.sun.extinction * (airMassExcess + 1.0F));
 		}
 		else
 		{

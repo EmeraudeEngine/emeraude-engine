@@ -57,6 +57,12 @@ namespace EmEn
 			static constexpr auto Platform{PlatformTargeted};
 			static constexpr auto CompilationDate{__DATE__};
 
+			/** @brief Where this engine was born: Liège, Belgium (owner, 2026-10-25) — the default place of a sky at a real
+			 * date when the machine's own is unknown (Scenes::Component::CelestialClock). Degrees, north and EAST positive. */
+			static constexpr auto BirthplaceName{"Liège, Belgium"};
+			static constexpr auto BirthplaceLatitude{50.639311006498865};
+			static constexpr auto BirthplaceLongitude{5.568172430592806};
+
 			/** 
 			 * @brief Constructs an application identification structure.
 			 * @param name The name of the application using the engine.
