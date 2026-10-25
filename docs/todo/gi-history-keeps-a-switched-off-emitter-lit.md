@@ -75,6 +75,19 @@ wall 13 vs 58 (direct only 3.1); Linux (RTX 3070 Ti, 1920×1080, SSGI lane) righ
   arrival (the tracked RMS) gains it, and the SSGI feedback amplifies either. A per-pixel 3σ test on a 6-frame mean
   cannot separate SSGI's noise (per-frame deviation of the order of the mean) from a full drop.
 
+**The safe detector on the three OS** (engine 49b6f570, 2026-10-25). The level is restored everywhere, at ~98 % of
+anti-lag OFF:
+- macOS-PA (M6, SSGI, 2560×1440): labyrinth right wall 82.3 vs OFF 84.3 (first detector 37.4); age view 214.71 vs
+  214.92; noise equal per luma bucket.
+- Windows-PA (Intel iGPU, SSGI): right wall 85.7 vs OFF 87.6; with `AntiLagTemporalSigma` 0, 42.5.
+- The acceleration that remains on SSGI is small:
+  - sky-lab +0.5 s: macOS 17 vs OFF 33 (first detector 6); Intel 29.1 vs OFF 30.7.
+  - The lamp switch-off and the Intel picture-sky switch are identical to OFF within a few seconds: their ~4 s e-fold
+    is longer than the 64-frame history, so the tail comes from SSGI's screen-space feedback, not from the history.
+- RT lane (NVIDIA): 24.4 / 10.7 / 4.7 / 1.3, the Linux curve.
+- 0 VUID and 0 SYNC-HAZARD with the new default on all three. Windows' A/B runs caught the single-queue upload hazard
+  again (item `single-queue-upload-not-ordered-before-draw`).
+
 ## What remains
 
 - Measure the decay in frames on Linux in BOTH lanes (SSGI and RTGI) at a pinned frame rate — the labyrinth's lamps and

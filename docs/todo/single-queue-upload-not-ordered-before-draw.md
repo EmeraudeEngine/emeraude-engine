@@ -29,6 +29,11 @@ semaphore between the two submissions — which the single-queue path does not r
 path: synchronization validation had never run on an Intel device before. A latent wrong result on any single-queue
 device (Intel, some mobile and Apple configurations through MoltenVK).
 
+Seen again (Windows-PA, the same iGPU, 2026-10-25, the GI anti-lag A/B runs): 3 hazards in 11 runs, all the same
+`SYNC-HAZARD-READ-AFTER-WRITE`. `vkCmdDrawIndexed` read an index buffer (offset 0, size **104 772**) written by a
+`vkCmdCopyBuffer` on the same queue: two in `reflexion-debug`, one in `labyrinth`. A model's buffer, not only the
+144-byte cube: any upload can race its first draw.
+
 ## What remains
 
 - [ ] Reproduce on Linux by forcing the single-queue path (a device-queue configuration with the transfer queue off),
