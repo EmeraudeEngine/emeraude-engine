@@ -39,8 +39,23 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/GIDenoiser.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class GraphicsPipeline;
+	class PipelineLayout;
+	class TextureInterface;
+}
 
 namespace EmEn::Graphics::Effects::Lighting
 {
@@ -112,11 +127,16 @@ namespace EmEn::Graphics::Effects::Lighting
 				float temporalNormalThreshold{0.8F};
 				float temporalVarianceGamma{1.0F};
 				uint32_t denoiserMaxAccumulation{64};
+				/* The denoiser's anti-lag: the fast history's length (frames) and its tolerance (standard deviations). */
+				uint32_t denoiserAntiLagFastFrames{6};
+				float denoiserAntiLagSigma{3.0F};
 				/* Denoiser debug view (combine draws it INSTEAD of the GI): 0 = off,
 				 * 1 = temporal variance, 2 = accumulation age. */
 				uint32_t denoiserDebugView{0};
 				bool skyVisibilityEnabled{true};
 				bool denoiserAccumulationCounter{true};
+				/* The denoiser's anti-lag (GIDenoiser::Parameters::antiLag). */
+				bool denoiserAntiLag{true};
 				bool temporalEnabled{true};
 				bool temporalNeighborhoodClamp{false};
 				bool temporalAnimatedNoise{true};

@@ -643,8 +643,16 @@ The sky's own IBL lot (same day; `Graphics/SkyEnvironment` new, `Compute/IBLBake
 clang-tidy 21.1.6 on the changed lines 8 fixed (swappable parameters → named structs `IBLBaker::CubeBarrier`,
 `SkyEnvironment::Inputs`, a reordered `recordPrefilterMip()`; `auto * const` for the Vulkan handles; a ring index
 through `std::next`; an ambiguous `reset()` → `= nullptr`), cppcheck 0, IWYU brought clean with seven forward
-declarations. The template guard gained the headers it lacked: `SkyAtmosphere.hpp`, `StorageTexture2D.hpp`
+declarations. On macOS (macOS-PA, Apple libc++) IWYU also asks for `<string_view>` (IBLBaker.cpp, IBLTexture.cpp,
+DynamicSkyResource.hpp, Scene.lighting.cpp), `<ratio>` (Renderer.cpp) and full includes for vector / unique_ptr /
+shared_ptr members of forward-declared types (IBLBaker.hpp, Renderer.hpp, SkyEnvironment.hpp): Linux is silent there —
+Apple-libc++-only suggestions, not applied. The template guard gained the headers it lacked: `SkyAtmosphere.hpp`, `StorageTexture2D.hpp`
 (forgotten in lot 1), `SkyEnvironment.hpp`, `TexturePacker.hpp`.
+The GI anti-lag (same day; `GIDenoiser`, `RTGI`, `SSGI`, `SettingKeys.hpp`): clang-tidy 21.1.6 on the changed lines 7
+fixed (the ping-pong pairs read through constant-index references, the anti-lag pair created in a range-for, its name
+built with `+=`); cppcheck 0; IWYU brought clean, with forward-declaration blocks in the six files. Windows-PA's
+cppcheck 2.22.0 found two `accessMoved` in `SkyEnvironment.cpp` that the Linux run did not (MSVC defines): fixed with
+`std::exchange`.
 
 **First lot (2026-10-19)**: the 49 files of the engine's cppcheck lot (34 `.cpp`, 15 headers): about 800 includes added
 and 115 removed, 41 forward declarations, converged at the second pass (three residual lines applied); the three

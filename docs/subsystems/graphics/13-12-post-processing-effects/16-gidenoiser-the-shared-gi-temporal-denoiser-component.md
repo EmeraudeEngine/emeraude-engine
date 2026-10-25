@@ -21,7 +21,7 @@ two producers reprojecting into one history would corrupt each other.
 > `recordResolve(cb, raw, context, &hitData)` (binding 7, RG16F: cone width, hitT — 0 = no
 > reflection, `maxDistance` on a sky miss so the environment reprojects as a far point); the GI
 > producers pass nothing and the binding holds their raw input as a placeholder. The frame UBO
-> moved to binding 8. ⚠️ Outside reflection mode every path is bit-for-bit the previous
+> moved to binding 8 (and to binding 9 with the anti-lag, 2026-10-25: binding 8 is the anti-lag texture). ⚠️ Outside reflection mode every path is bit-for-bit the previous
 > behaviour (verified on the direct image: cube 0.54, wall 0.34 as before). Numbers and the
 > integration in RTR: `docs/reflection-pipeline.md` § 3.2. Like `DenoisePass`, it
 extends `IndirectPostProcessEffect` purely to reuse the fullscreen-pass infrastructure and
@@ -128,3 +128,27 @@ the age map shows saturation on stable surfaces and permanent per-frame resets e
 the wind-animated ivy and on silhouette edges under the TAA jitter — the first direct
 visualisation of the "jitter is the vibrator" mechanism, and the zone the stage-2 spatial
 variance fallback must cover.
+
+**Stage 5 — ANTI-LAG (2026-10-25, owner decision: the fast/slow history of NVIDIA's RELAX / ReBLUR — D. Zhdan,
+"ReBLUR: A Hierarchical Recurrent Denoiser", Ray Tracing Gems II, 2021).** The 1/N counter's floor, 1/64, made EVERY
+lighting change take ~64 frames per e-fold, and nothing rectified the history (the neighbourhood clamp is off by
+default: on the raw input it costs ~5 % of the GI). Counted in frames, the lag was 0.2 s at 390 FPS and 10–30 s on an
+iGPU at 47 FPS (a lamp switched off, the dynamic sky's IBL moving). A new pass, recorded FIRST (`GIDenoiser/antiLag`),
+keeps a FAST mean of the raw luminance (`Denoiser/AntiLagFastFrames`, 6) with the moments' reprojection and validation,
+in an RG16F ping-pong (R the fast mean, G this frame's cap); it compares it with the SLOW mean (the moments' m1) against
+the fast mean's expected noise — the raw estimate's 3x3 spatial deviation over √(frames averaged) — times
+`Denoiser/AntiLagSigma` (3) plus a 2 % relative floor. Beyond it, the slow history's age is capped to the fast length
+(a ramp over one more tolerance); the colour resolve and the moments apply the cap (flag bit 4, binding 8), restart
+together, and grow back to `MaxAccumulation`. Diffuse producers only (RTGI, SSGI; the reflection mode never runs it).
+`Denoiser/AntiLag` (default true) is the A/B lever.
+
+| sky-lab, Linux, RTX 3070 Ti, ~390 FPS, exposure pinned: the floor at +0.1 / 0.25 / 0.5 / 1 s after a 0.76 → 0.80 jump | RT lane | SSGI lane |
+|---|---|---|
+| Anti-lag off (the former behaviour) | 39 / 21 / 8 / 2 | 32 / 19 / 8 / 2 |
+| Anti-lag on | **19 / 4 / 1 / 0** | **21 / 5 / 1 / 0** |
+| `IndirectDiffuse` off (the measurement chain's own latency) | 10 / 1 / 0 / 0 | — |
+
+The steady state is untouched: the floor's temporal and spatial deviation over 16 frames is identical on and off
+(RT 0.027 / 0.890 at a 30° sun, 0.169 / 1.177 at twilight; SSGI alike) — the noise never trips it. Cost: 0.037 ms
+(`GIDenoiser/antiLag`, RTX 3070 Ti, GI resolution). 0 VUID, 0 SYNC-HAZARD (sky-lab both lanes, `reflexion-debug`).
+

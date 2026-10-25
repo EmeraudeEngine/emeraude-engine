@@ -29,16 +29,32 @@
 /* STL inclusions. */
 #include <string>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
+#include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 namespace
 {
@@ -662,6 +678,9 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_parameters.temporalNormalThreshold = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalNormalThresholdKey, DefaultGraphicsPPIndirectDiffuseTemporalNormalThreshold);
 		m_parameters.temporalVarianceGamma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalVarianceGammaKey, DefaultGraphicsPPIndirectDiffuseTemporalVarianceGamma);
 		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseDenoiserMaxAccumulation, MinGraphicsPPIndirectDiffuseDenoiserMaxAccumulation, MaxGraphicsPPIndirectDiffuseDenoiserMaxAccumulation);
+		m_parameters.denoiserAntiLag = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseDenoiserAntiLagKey, DefaultGraphicsPPIndirectDiffuseDenoiserAntiLag);
+		m_parameters.denoiserAntiLagFastFrames = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseDenoiserAntiLagFastFramesKey, DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames, MinGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames, MaxGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames);
+		m_parameters.denoiserAntiLagSigma = settings.getOrSetDefaultInRange< float >(GraphicsPPIndirectDiffuseDenoiserAntiLagSigmaKey, DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagSigma, MinGraphicsPPIndirectDiffuseDenoiserAntiLagSigma, MaxGraphicsPPIndirectDiffuseDenoiserAntiLagSigma);
 		m_parameters.denoiserDebugView = settings.getOrSetDefault< uint32_t >(GraphicsPPIndirectDiffuseDenoiserDebugViewKey, DefaultGraphicsPPIndirectDiffuseDenoiserDebugView);
 		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseDenoiserAccumulationCounterKey, DefaultGraphicsPPIndirectDiffuseDenoiserAccumulationCounter);
 		m_parameters.temporalEnabled = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseTemporalEnabledKey, DefaultGraphicsPPIndirectDiffuseTemporalEnabled);
@@ -714,9 +733,12 @@ namespace EmEn::Graphics::Effects::Lighting
 			.temporalNormalThreshold = m_parameters.temporalNormalThreshold,
 			.temporalVarianceGamma = m_parameters.temporalVarianceGamma,
 			.maxAccumulation = m_parameters.denoiserMaxAccumulation,
+			.antiLagFastFrames = m_parameters.denoiserAntiLagFastFrames,
+			.antiLagSigmaScale = m_parameters.denoiserAntiLagSigma,
 			.temporalNeighborhoodClamp = m_parameters.temporalNeighborhoodClamp,
 			.temporalAnimatedNoise = m_parameters.temporalAnimatedNoise,
-			.accumulationCounter = m_parameters.denoiserAccumulationCounter
+			.accumulationCounter = m_parameters.denoiserAccumulationCounter,
+			.antiLag = m_parameters.denoiserAntiLag
 		});
 
 		if ( !m_denoiser.create(halfW, halfH) )

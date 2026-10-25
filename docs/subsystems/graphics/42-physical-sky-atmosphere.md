@@ -155,8 +155,8 @@ A scene takes its ambient from the sky with `applyBackgroundLighting({.applyAmbi
 
 | Measured (sky-lab, Linux, RTX 3070 Ti) | Value |
 |---|---|
-| `SkyAtmosphere/Environment` (GPU profiler, the clock at ×600: cycles back to back) | avg 0.003–0.015 ms, **max 0.10 ms** per frame |
-| Lag behind the sky | one cycle: 8 frames + one logic tick (~0.15 s at 60 FPS), every 0.25° of sun (≈ 1 min in real time) |
+| `SkyAtmosphere/Environment` (GPU profiler, the clock at ×600: cycles back to back) | avg 0.003–0.015 ms, **max 0.10 ms** per frame; Apple M6 (MoltenVK): avg 0.031–0.034, max 0.14–0.42; RTX 3500 Ada: avg 0.008, max 0.08; ⚠️ Intel Raptor Lake iGPU: avg 0.19, **max 2.1 ms** (its heaviest stage in one frame — a split of the prefilter's mip 0 / the irradiance over two frames is the lever if it matters) |
+| Lag behind the sky | one cycle: 8 frames + one logic tick (~0.15 s at 60 FPS), every 0.25° of sun (≈ 1 min in real time). ⚠️ What follows the IBL can be slower: with SSGI owning the indirect diffuse (the ScreenSpace lane), the floor converges with an e-fold of ~1.3 s (macOS-PA, M6; IBL-only: < 0.5 s), and TAA alone smears a sudden global change over ~1 s |
 | The floor (albedo 0.5) under the sky alone, by time of day | noon neutral-warm, sunset orange, after sunset the twilight's purple, night dark (the exposure floor) — Mars: butterscotch at sunset |
 | Validation (Earth, Mars, four picture skies swapped in a row on `reflexion-debug`) | 0 VUID, 0 SYNC-HAZARD (synchronization validation requested with `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`) |
 

@@ -993,6 +993,21 @@ namespace EmEn
 			constexpr auto DefaultGraphicsPPIndirectDiffuseDenoiserMaxAccumulation{64U};
 			constexpr auto MinGraphicsPPIndirectDiffuseDenoiserMaxAccumulation{1U}; /* Inclusive: outside the range the default applies, with a warning. */
 			constexpr auto MaxGraphicsPPIndirectDiffuseDenoiserMaxAccumulation{1024U};
+			/* ANTI-LAG (owner decision 2026-10-25): a fast luminance history beside the slow one; where they part, the
+			 * slow history's age is capped to the fast length, so a lighting change converges in a few frames instead
+			 * of MaxAccumulation (graphics GIDenoiser, NVIDIA RELAX / ReBLUR's anti-lag). */
+			constexpr auto GraphicsPPIndirectDiffuseDenoiserAntiLagKey{"Core/Graphics/PostProcessing/IndirectDiffuse/Denoiser/AntiLag"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseDenoiserAntiLag{true};
+			/* The fast history's length, in frames. */
+			constexpr auto GraphicsPPIndirectDiffuseDenoiserAntiLagFastFramesKey{"Core/Graphics/PostProcessing/IndirectDiffuse/Denoiser/AntiLagFastFrames"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames{6U};
+			constexpr auto MinGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames{1U}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames{64U};
+			/* The tolerance, in standard deviations of the fast mean, before the slow history is shortened. */
+			constexpr auto GraphicsPPIndirectDiffuseDenoiserAntiLagSigmaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/Denoiser/AntiLagSigma"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagSigma{3.0F};
+			constexpr auto MinGraphicsPPIndirectDiffuseDenoiserAntiLagSigma{0.5F}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPIndirectDiffuseDenoiserAntiLagSigma{32.0F};
 			/* Debug view of the denoiser internals, drawn by the combine pass INSTEAD of the
 			 * GI contribution: 0 = off, 1 = temporal variance (binary-amplified x1e6 — a linear
 			 * scale is unreadable under the photometric exposure), 2 = accumulation age

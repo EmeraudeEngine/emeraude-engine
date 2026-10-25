@@ -39,8 +39,24 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/GIDenoiser.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "StaticVector.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class GraphicsPipeline;
+	class PipelineLayout;
+	class TextureInterface;
+}
 
 namespace EmEn::Graphics::Effects::Lighting
 {
@@ -95,6 +111,9 @@ namespace EmEn::Graphics::Effects::Lighting
 				uint32_t atrousIterations{4};
 				/* SVGF 1/N accumulation cap (steady-state blend weight floor = 1/N). */
 				uint32_t denoiserMaxAccumulation{64};
+				/* The denoiser's anti-lag: the fast history's length (frames) and its tolerance (standard deviations). */
+				uint32_t denoiserAntiLagFastFrames{6};
+				float denoiserAntiLagSigma{3.0F};
 				float temporalAlpha{0.1F};
 				float temporalDepthTolerance{0.05F};
 				float temporalNormalThreshold{0.8F};
@@ -106,6 +125,8 @@ namespace EmEn::Graphics::Effects::Lighting
 				uint32_t denoiserDebugView{0};
 				/* Per-pixel 1/N blend weight instead of the fixed Temporal/Alpha (A/B lever). */
 				bool denoiserAccumulationCounter{true};
+				/* The denoiser's anti-lag (GIDenoiser::Parameters::antiLag). */
+				bool denoiserAntiLag{true};
 				bool temporalEnabled{true};
 				bool temporalNeighborhoodClamp{true};
 				bool temporalAnimatedNoise{true};

@@ -26,25 +26,43 @@
 
 #include "RTGI.hpp"
 
+/* STL inclusions. */
+#include <array>
+#include <string>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
-#include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
+#include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/StarMaskGLSL.hpp"
+#include "Math/Vector.hpp"
+#include "PrimaryServices.hpp"
+#include "Saphir/Types.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Vulkan/Device.hpp"
 
 /* Local inclusions. */
 #include "Graphics/IrradianceProbeVolume.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/GPUProfiler.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 namespace
 {
@@ -759,6 +777,9 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_parameters.luminanceSigma = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseDenoiserLuminanceSigmaKey, DefaultGraphicsPPIndirectDiffuseDenoiserLuminanceSigma);
 		m_parameters.atrousIterations = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseDenoiserIterationsKey, DefaultGraphicsPPIndirectDiffuseDenoiserIterations, MinGraphicsPPIndirectDiffuseDenoiserIterations, MaxGraphicsPPIndirectDiffuseDenoiserIterations);
 		m_parameters.denoiserMaxAccumulation = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseDenoiserMaxAccumulationKey, DefaultGraphicsPPIndirectDiffuseDenoiserMaxAccumulation, MinGraphicsPPIndirectDiffuseDenoiserMaxAccumulation, MaxGraphicsPPIndirectDiffuseDenoiserMaxAccumulation);
+		m_parameters.denoiserAntiLag = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseDenoiserAntiLagKey, DefaultGraphicsPPIndirectDiffuseDenoiserAntiLag);
+		m_parameters.denoiserAntiLagFastFrames = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseDenoiserAntiLagFastFramesKey, DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames, MinGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames, MaxGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames);
+		m_parameters.denoiserAntiLagSigma = settings.getOrSetDefaultInRange< float >(GraphicsPPIndirectDiffuseDenoiserAntiLagSigmaKey, DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagSigma, MinGraphicsPPIndirectDiffuseDenoiserAntiLagSigma, MaxGraphicsPPIndirectDiffuseDenoiserAntiLagSigma);
 		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseDenoiserAccumulationCounterKey, DefaultGraphicsPPIndirectDiffuseDenoiserAccumulationCounter);
 		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalAlphaKey, DefaultGraphicsPPIndirectDiffuseTemporalAlpha);
 		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalDepthToleranceKey, DefaultGraphicsPPIndirectDiffuseTemporalDepthTolerance);
@@ -793,9 +814,12 @@ namespace EmEn::Graphics::Effects::Lighting
 			.temporalNormalThreshold = m_parameters.temporalNormalThreshold,
 			.temporalVarianceGamma = m_parameters.temporalVarianceGamma,
 			.maxAccumulation = m_parameters.denoiserMaxAccumulation,
+			.antiLagFastFrames = m_parameters.denoiserAntiLagFastFrames,
+			.antiLagSigmaScale = m_parameters.denoiserAntiLagSigma,
 			.temporalNeighborhoodClamp = m_parameters.temporalNeighborhoodClamp,
 			.temporalAnimatedNoise = m_parameters.temporalAnimatedNoise,
-			.accumulationCounter = m_parameters.denoiserAccumulationCounter
+			.accumulationCounter = m_parameters.denoiserAccumulationCounter,
+			.antiLag = m_parameters.denoiserAntiLag
 		});
 
 		if ( !m_denoiser.create(halfW, halfH) )

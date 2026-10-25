@@ -478,8 +478,7 @@ namespace EmEn::Graphics
 
 		const MutexLock lock{m_publicationAccess};
 
-		m_publication = std::move(m_completed);
-		m_completed.reset();
+		m_publication = std::exchange(m_completed, std::nullopt);
 	}
 
 	std::optional< SkyEnvironment::Publication >
@@ -487,9 +486,6 @@ namespace EmEn::Graphics
 	{
 		const MutexLock lock{m_publicationAccess};
 
-		auto publication = std::move(m_publication);
-		m_publication.reset();
-
-		return publication;
+		return std::exchange(m_publication, std::nullopt);
 	}
 }

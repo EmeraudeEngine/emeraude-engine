@@ -24,6 +24,10 @@ lanes deliver **0.78-0.90** of the raster's own diffuse IBL leg — consistent w
 small bounce. Handing the indirect diffuse over therefore dims the sky by ~20 %, and
 `setLightingMode("None")` brightens a scene by ~25 % for that reason alone.
 
+**Measured again** under the dynamic sky's own IBL (macOS-PA, Apple M6, ScreenSpace lane, 2026-10-25, sky-lab,
+exposure pinned): the twilight floor converges to **~2/3** of its IBL-only level once SSGI owns the indirect diffuse
+(42/28/41 against 63/42/60) — the same transfer loss, on a sky-only scene.
+
 ## The question for the owner
 
 Is `Intensity` an artistic scale of **everything indirect** (current behaviour, one knob, but the

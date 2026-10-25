@@ -28,18 +28,35 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <string>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/IndirectPostProcessEffect.hpp"
+#include "Graphics/IntermediateRenderTarget.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/GPUProfiler.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class CommandBuffer;
+	class DescriptorSetLayout;
+	class TextureInterface;
+}
 
 namespace
 {
@@ -63,15 +80,17 @@ namespace
 	 *    same hit last frame).
 	 * Descriptor bindings shared by both passes: 1 depth, 2 normals (view space, alpha = packed
 	 * roughness/metalness), 4 world-normal history, 5 velocity, 7 hit data (RG16F: cone width,
-	 * hitT — the reflection mode's source; the diffuse producers bind a placeholder), 8 frame UBO. */
+	 * hitT — the reflection mode's source; the diffuse producers bind a placeholder), 8 the anti-lag (RG16F: the fast
+ * luminance, this frame's age cap — the anti-lag pass's output; a placeholder when it does not run), 9 frame UBO. */
 #define GIDENOISER_REPROJECTION_GLSL R"GLSL(
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
 layout(set = 0, binding = 2) uniform sampler2D normalTex;
 layout(set = 0, binding = 4) uniform sampler2D historyNormalTex;
 layout(set = 0, binding = 5) uniform sampler2D velocityTex;
 layout(set = 0, binding = 7) uniform sampler2D hitDataTex;
+layout(set = 0, binding = 8) uniform sampler2D antiLagTex;
 
-layout(set = 0, binding = 8, std140) uniform FrameData
+layout(set = 0, binding = 9, std140) uniform FrameData
 {
 	mat4 invRelativeViewProj;
 	mat4 prevViewProj;
@@ -82,12 +101,16 @@ layout(set = 0, binding = 8, std140) uniform FrameData
 	vec4 traceParams;	/* x = maxDistance, y = bias, z = sampleCount, w = animated-noise frame index (R2). */
 	vec4 temporalParams;	/* x = alpha, y = depthTolerance, z = normalThreshold, w = flags (see the Flag constants). */
 	vec4 bounceParams;	/* x = multiBounceStrength, y = pre-exposure, z = variance-clip gamma, w = accumulation cap N. */
+	vec4 skyParams;		/* The producers' (unused here). */
+	vec4 skyStarMask;	/* The producers' (unused here). */
+	vec4 antiLagParams;	/* x = the fast history's length in frames, y = the tolerance in standard deviations. */
 };
 
 const uint FlagVarianceClip = 1u;
 const uint FlagAnimatedNoise = 2u;
 const uint FlagAccumulationCounter = 4u;
 const uint FlagReflection = 8u;
+const uint FlagAntiLag = 16u;
 
 /* Roughness range over which the virtual path hands over to the surface path (reflection mode). */
 const float VirtualFadeStart = 0.15;
@@ -297,6 +320,13 @@ void main()
 	vec4 history = validS && validV ? (histS * wS + histV * wV) / wSum : (validS ? histS : histV);
 	float age = validS && validV ? (momS.b * wS + momV.b * wV) / wSum : (validS ? momS.b : momV.b);
 
+	/* ANTI-LAG: where the fast history parted from the slow one, the light changed — the slow history restarts at
+	 * the fast length (the anti-lag pass's cap; maxAccumulation where they agree). */
+	if ((uint(temporalParams.w) & FlagAntiLag) != 0u)
+	{
+		age = min(age, texture(antiLagTex, vUV).g);
+	}
+
 	/* PRE-EXPOSURE (D5): the history was written at the pre-exposure of the frame that wrote it; r = E_now /
 	 * E_then brings it to this frame's scale. RGB only: the alpha is a distance or a confidence. */
 	history.rgb *= prevCamPos.w;
@@ -451,6 +481,12 @@ void main()
 	history.r *= prevCamPos.w;
 	history.g *= prevCamPos.w * prevCamPos.w;
 
+	/* ANTI-LAG: the same cap as the colour resolve, so both histories restart together. */
+	if ((uint(temporalParams.w) & FlagAntiLag) != 0u)
+	{
+		history.b = min(history.b, texture(antiLagTex, vUV).g);
+	}
+
 	float maxN = max(bounceParams.w, 1.0);
 
 	/* Per-pixel 1/N accumulation counter — same weight as the colour resolve so both integrate
@@ -469,6 +505,114 @@ void main()
 	 * 2026-10-24: fireflies on sponza from E_pre 2^-8 up, macOS and Windows). The root keeps the luminance's range
 	 * and the same relative precision. */
 	outMoments = vec4(m1, sqrt(max(m2, 0.0)), age, rp.storeDistance);
+}
+)GLSL";
+
+	/* Anti-lag pass (owner decision 2026-10-25; the fast/slow history of NVIDIA's RELAX / ReBLUR — D. Zhdan,
+	 * "ReBLUR: A Hierarchical Recurrent Denoiser", Ray Tracing Gems II, 2021). Recorded FIRST, before the colour
+	 * resolve and the moments. It keeps a FAST mean of the raw luminance (antiLagParams.x frames) with the SAME
+	 * reprojection and validation as the moments, and compares it with the SLOW mean (the moments' m1, 1/N up to
+	 * maxAccumulation). The fast mean's expected noise is the raw estimate's 3x3 spatial deviation over the root of the
+	 * frames it averages; where the two means part by more than antiLagParams.y of it, the light changed and the slow
+	 * history's age is capped to the fast length (a smooth ramp over one more tolerance, so the noise cannot toggle it).
+	 * The colour resolve and the moments apply the cap: both restart together and converge in a few frames, then grow
+	 * back to maxAccumulation.
+	 * Output: R = the fast mean (next frame's history, pre-exposed like the moments), G = the age cap (maxAccumulation
+	 * where the histories agree or no history exists).
+	 *
+	 * Descriptor set 0 (pass-specific bindings; the shared ones are in the prelude):
+	 *   binding 0: raw estimate (the owner's trace output)
+	 *   binding 3: anti-lag history (previous frame: its fast mean)
+	 *   binding 6: moments history (previous frame: the slow mean, the age, the validation distance)
+	 *   binding 8: unused here (a placeholder: it is this pass's own output for the other two)
+	 */
+	constexpr auto GIDenoiserAntiLagFragmentShader = R"GLSL(
+#version 450
+
+layout(location = 0) in vec2 vUV;
+layout(location = 0) out vec4 outAntiLag;
+
+layout(set = 0, binding = 0) uniform sampler2D rawTex;
+layout(set = 0, binding = 3) uniform sampler2D antiLagHistoryTex;
+layout(set = 0, binding = 6) uniform sampler2D momentsHistoryTex;
+)GLSL" GIDENOISER_REPROJECTION_GLSL R"GLSL(
+
+void main()
+{
+	float depth = texture(depthTex, vUV).r;
+	float maxN = max(bounceParams.w, 1.0);
+
+	/* Sky/far-plane: no surface, no cap. */
+	if (depth >= 1.0)
+	{
+		outAntiLag = vec4(0.0, maxN, 0.0, 0.0);
+		return;
+	}
+
+	/* The raw estimate's luminance and its 3x3 spatial deviation (the noise of ONE frame). */
+	vec2 texel = 1.0 / vec2(textureSize(rawTex, 0));
+	float s1 = 0.0;
+	float s2 = 0.0;
+
+	for (int y = -1; y <= 1; y++)
+	{
+		for (int x = -1; x <= 1; x++)
+		{
+			float l = dot(texture(rawTex, vUV + vec2(x, y) * texel).rgb, LumaWeights);
+			s1 += l;
+			s2 += l * l;
+		}
+	}
+
+	float luma = dot(texture(rawTex, vUV).rgb, LumaWeights);
+	float spatialMean = s1 / 9.0;
+	float spatialSigma = sqrt(max(s2 / 9.0 - spatialMean * spatialMean, 0.0));
+
+	/* Reconstruct the world position from NDC + depth (camera-relative, see the colour resolve). */
+	vec2 ndc = vUV * 2.0 - 1.0;
+	vec4 wp = invRelativeViewProj * vec4(ndc, depth, 1.0);
+	vec3 relativePos = wp.xyz / wp.w;
+	vec3 viewPos = vec3(invViewCol0.w, invViewCol1.w, invViewCol2.w);
+	vec3 worldPos = viewPos + relativePos;
+	float cameraDistance = length(relativePos);
+
+	vec4 normalData = texture(normalTex, vUV);
+	mat3 invViewRot = mat3(invViewCol0.xyz, invViewCol1.xyz, invViewCol2.xyz);
+	vec3 worldNormal = normalize(invViewRot * normalize(normalData.rgb));
+
+	/* The SAME reprojection and validation as the moments (the diffuse producers: the surface path only). */
+	Reprojection rp = reproject(vUV, depth, worldPos, viewPos, cameraDistance, normalData.a);
+
+	vec4 momS = texture(momentsHistoryTex, rp.surfaceUV);
+	vec4 fastS = texture(antiLagHistoryTex, rp.surfaceUV);
+	bool valid = temporalParams.x < 1.0 && historySampleFinite(momS) && historySampleFinite(fastS) && historyValid(rp.surfaceUV, momS.a, rp.expectedSurfaceDistance, worldNormal);
+
+	/* No history: the fast mean starts from this frame, nothing to cap (the age restarts anyway). */
+	if (!valid)
+	{
+		outAntiLag = vec4(luma, maxN, 0.0, 0.0);
+		return;
+	}
+
+	/* PRE-EXPOSURE (D5), as the moments: both means were written at the history's pre-exposure. */
+	float slowMean = momS.r * prevCamPos.w;
+	float previousFast = fastS.r * prevCamPos.w;
+	float age = momS.b;
+
+	float fastFrames = max(antiLagParams.x, 1.0);
+	float fastAlpha = max(1.0 / (age + 1.0), 1.0 / fastFrames);
+	float fastMean = mix(previousFast, luma, fastAlpha);
+
+	/* The fast mean's expected noise: one frame's deviation over the root of the frames it averages. A small
+	 * relative floor keeps a noiseless (flat) region from tripping on rounding. */
+	float fastSigma = spatialSigma / sqrt(min(age + 1.0, fastFrames));
+	float tolerance = antiLagParams.y * fastSigma + 0.02 * max(slowMean, fastMean) + 1e-6;
+	float excess = abs(fastMean - slowMean) / tolerance;
+
+	/* Beyond the tolerance, ramp the cap from maxAccumulation down to the fast length over one more tolerance. */
+	float cap = mix(maxN, fastFrames, clamp(excess - 1.0, 0.0, 1.0));
+
+	outAntiLag = vec4(fastMean, cap, 0.0, 0.0);
 }
 )GLSL";
 
@@ -774,13 +918,30 @@ namespace EmEn::Graphics
 			}
 		}
 
+		/* Anti-lag pair (RG16F) — only for a diffuse producer with the anti-lag on. */
+		if ( m_parameters.antiLag && !m_parameters.reflectionMode )
+		{
+			for ( size_t index = 0; auto & target : m_antiLagTargets )
+			{
+				std::string name{baseName};
+				name += "_GIAntiLag";
+				name += std::to_string(index++);
+
+				if ( !target.create(renderer, width, height, VK_FORMAT_R16G16_SFLOAT, name) )
+				{
+					TraceError{ClassId} << "Failed to create the GI anti-lag target '" << name << "' !";
+
+					return false;
+				}
+			}
+		}
+
 		/* ---- Descriptor set layouts ---- */
 
 		/* Temporal resolve input: estimate + depth + normals + history + normal history + velocity
-		 * + moments history (1/N counter age) + hit data (reflection mode), plus the frame UBO at
-		 * binding 8. The moments pass reuses the SAME shape (raw estimate + depth + normals + moments
-		 * history + normal history + velocity + unused + hit data + UBO). */
-		auto temporalInputLayout = this->getInputLayout(8, 1);
+		 * + moments history (1/N counter age) + hit data (reflection mode) + anti-lag, plus the frame UBO at
+		 * binding 9. The moments and anti-lag passes reuse the SAME shape. */
+		auto temporalInputLayout = this->getInputLayout(9, 1);
 
 		/* Normal history input: normals, plus the frame UBO. */
 		auto normalCopyInputLayout = this->getInputLayout(1, 1);
@@ -804,6 +965,7 @@ namespace EmEn::Graphics
 
 			m_temporalLayout = layoutManager.getPipelineLayout(sets, {});
 			m_momentsLayout = m_temporalLayout;
+			m_antiLagLayout = m_temporalLayout;
 		}
 
 		{
@@ -840,8 +1002,10 @@ namespace EmEn::Graphics
 		const auto momentsFragment = shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_Moments_FS", ShaderType::FragmentShader, GIDenoiserMomentsFragmentShader);
 		const auto normalCopyFragment = shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_NormalCopy_FS", ShaderType::FragmentShader, GIDenoiserNormalCopyFragmentShader);
 		const auto atrousFragment = m_parameters.atrousIterations > 0 ? shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_Atrous_FS", ShaderType::FragmentShader, GIDenoiserAtrousFragmentShader) : nullptr;
+		const bool antiLag = m_parameters.antiLag && !m_parameters.reflectionMode;
+		const auto antiLagFragment = antiLag ? shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_AntiLag_FS", ShaderType::FragmentShader, GIDenoiserAntiLagFragmentShader) : nullptr;
 
-		if ( vertexModule == nullptr || temporalFragment == nullptr || momentsFragment == nullptr || normalCopyFragment == nullptr || (m_parameters.atrousIterations > 0 && atrousFragment == nullptr) )
+		if ( vertexModule == nullptr || temporalFragment == nullptr || momentsFragment == nullptr || normalCopyFragment == nullptr || (m_parameters.atrousIterations > 0 && atrousFragment == nullptr) || (antiLag && antiLagFragment == nullptr) )
 		{
 			TraceError{ClassId} << "Failed to compile the GI denoiser shaders !";
 
@@ -858,6 +1022,31 @@ namespace EmEn::Graphics
 		if ( m_temporalPipeline == nullptr || m_momentsPipeline == nullptr || m_normalCopyPipeline == nullptr )
 		{
 			return false;
+		}
+
+		if ( antiLag )
+		{
+			m_antiLagPipeline = this->createFullscreenPipeline(ClassId, baseName + "_GIAntiLag", vertexModule, antiLagFragment, m_antiLagLayout, m_antiLagTargets[0]);
+
+			if ( m_antiLagPipeline == nullptr )
+			{
+				return false;
+			}
+
+			m_antiLagPerFrame = this->createPerFrameDescriptorSets(temporalInputLayout, ClassId, baseName + "_GIAntiLag_DescSet");
+
+			if ( m_antiLagPerFrame.empty() )
+			{
+				return false;
+			}
+
+			for ( size_t f = 0; f < m_antiLagPerFrame.size(); ++f )
+			{
+				if ( !m_antiLagPerFrame[f]->writeUniformBufferObject(9, *m_frameUBOs[f]) )
+				{
+					return false;
+				}
+			}
 		}
 
 		if ( m_parameters.atrousIterations > 0 )
@@ -883,12 +1072,12 @@ namespace EmEn::Graphics
 
 		for ( size_t f = 0; f < m_temporalPerFrame.size(); ++f )
 		{
-			if ( !m_temporalPerFrame[f]->writeUniformBufferObject(8, *m_frameUBOs[f]) )
+			if ( !m_temporalPerFrame[f]->writeUniformBufferObject(9, *m_frameUBOs[f]) )
 			{
 				return false;
 			}
 
-			if ( !m_momentsPerFrame[f]->writeUniformBufferObject(8, *m_frameUBOs[f]) )
+			if ( !m_momentsPerFrame[f]->writeUniformBufferObject(9, *m_frameUBOs[f]) )
 			{
 				return false;
 			}
@@ -939,20 +1128,28 @@ namespace EmEn::Graphics
 			sets.clear();
 		}
 
+		m_antiLagPerFrame.clear();
 		m_normalCopyPerFrame.clear();
 		m_momentsPerFrame.clear();
 		m_temporalPerFrame.clear();
 
 		m_frameUBOs.clear();
 
+		m_antiLagPipeline.reset();
 		m_atrousPipeline.reset();
 		m_normalCopyPipeline.reset();
 		m_momentsPipeline.reset();
 		m_temporalPipeline.reset();
+		m_antiLagLayout.reset();
 		m_atrousLayout.reset();
 		m_normalCopyLayout.reset();
 		m_momentsLayout.reset();
 		m_temporalLayout.reset();
+
+		for ( auto & target : m_antiLagTargets )
+		{
+			target.destroy();
+		}
 
 		for ( auto & target : m_atrousTargets )
 		{
@@ -1053,7 +1250,8 @@ namespace EmEn::Graphics
 					(m_parameters.temporalNeighborhoodClamp ? 1U : 0U) |
 					(this->temporalActive() && m_parameters.temporalAnimatedNoise ? 2U : 0U) |
 					(m_parameters.accumulationCounter ? 4U : 0U) |
-					(m_parameters.reflectionMode ? 8U : 0U)
+					(m_parameters.reflectionMode ? 8U : 0U) |
+					(this->antiLagActive() ? 16U : 0U)
 				)
 			},
 			.bounceParams = {
@@ -1067,7 +1265,8 @@ namespace EmEn::Graphics
 			/* THE SKY IS A LIGHT SOURCE — the scalars come straight from the producer
 			 * (0 = no sky term for the screen-space producers). */
 			.skyParams = {inputs.skyLuminance, inputs.skyDistance, inputs.occlusionMaxDistance, static_cast< float >(inputs.lightCount)},
-			.skyStarMask = inputs.skyStarMask
+			.skyStarMask = inputs.skyStarMask,
+			.antiLagParams = {static_cast< float >(m_parameters.antiLagFastFrames), m_parameters.antiLagSigmaScale, 0.0F, 0.0F}
 		};
 
 		const auto success = IndirectPostProcessEffect::updateUniformBufferData(*m_frameUBOs[frameIndex], &ubo, sizeof(FrameUBOData));
@@ -1148,6 +1347,44 @@ namespace EmEn::Graphics
 		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(7, hitDataTexture));
 		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(7, hitDataTexture));
 
+		/* Anti-lag (binding 8): this frame's cap, written by the anti-lag pass recorded first. Without the anti-lag the
+		 * binding still holds a valid image — the raw input stands in (the shaders read it under FlagAntiLag only). */
+		const bool antiLag = this->antiLagActive();
+		/* The ping-pong pairs with constant indices: [writeIdx] this frame's, [readIdx] the previous one. */
+		const auto & antiLagWrite = writeIdx == 0U ? m_antiLagTargets[0] : m_antiLagTargets[1];
+		const auto & antiLagRead = writeIdx == 0U ? m_antiLagTargets[1] : m_antiLagTargets[0];
+		const TextureInterface & antiLagTexture = antiLag ? static_cast< const TextureInterface & >(antiLagWrite) : rawInput;
+		static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(8, antiLagTexture));
+		static_cast< void >(m_momentsPerFrame[frameIndex]->writeCombinedImageSampler(8, antiLagTexture));
+
+		if ( antiLag )
+		{
+			const auto & set = *m_antiLagPerFrame[frameIndex];
+
+			static_cast< void >(set.writeCombinedImageSampler(0, rawInput));
+			static_cast< void >(set.writeCombinedImageSampler(3, antiLagRead));
+			static_cast< void >(set.writeCombinedImageSampler(4, writeIdx == 0U ? m_normalHistoryTargets[1] : m_normalHistoryTargets[0]));
+			static_cast< void >(set.writeCombinedImageSampler(6, writeIdx == 0U ? m_momentsTargets[1] : m_momentsTargets[0]));
+			/* Unused by the anti-lag shader (shared layout) — valid placeholders. */
+			static_cast< void >(set.writeCombinedImageSampler(7, rawInput));
+			static_cast< void >(set.writeCombinedImageSampler(8, rawInput));
+
+			if ( context.depth != nullptr )
+			{
+				static_cast< void >(set.writeCombinedImageSampler(1, *context.depth));
+			}
+
+			if ( context.normals != nullptr )
+			{
+				static_cast< void >(set.writeCombinedImageSampler(2, *context.normals));
+			}
+
+			if ( context.velocity != nullptr )
+			{
+				static_cast< void >(set.writeCombinedImageSampler(5, *context.velocity));
+			}
+		}
+
 		if ( context.depth != nullptr )
 		{
 			static_cast< void >(m_temporalPerFrame[frameIndex]->writeCombinedImageSampler(1, *context.depth));
@@ -1174,6 +1411,22 @@ namespace EmEn::Graphics
 		 * to tell the trace from the denoiser was an A/B on `Denoiser/Iterations`. A ScopedZone
 		 * on a null profiler is a no-op, so these cost nothing when the profiler is off. */
 		auto * const profiler = this->renderer().gpuProfiler();
+
+		/* The anti-lag FIRST: the colour resolve and the moments read its cap. */
+		if ( antiLag )
+		{
+			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, ClassId, "antiLag"};
+
+			IndirectPostProcessEffect::recordFullscreenPass(
+				commandBuffer,
+				antiLagWrite,
+				*m_antiLagPipeline,
+				*m_antiLagLayout,
+				*m_antiLagPerFrame[frameIndex],
+				nullptr,
+				0
+			);
+		}
 
 		{
 			const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, ClassId, "temporal"};

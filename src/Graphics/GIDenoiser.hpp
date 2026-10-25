@@ -39,8 +39,24 @@
 #include "IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "IntermediateRenderTarget.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class CommandBuffer;
+	class GraphicsPipeline;
+	class PipelineLayout;
+	class TextureInterface;
+}
 
 namespace EmEn::Graphics
 {
@@ -111,6 +127,9 @@ namespace EmEn::Graphics
 				/* The in-texture celestial body mask: direction toward the body, cone half-angle in radians (0 = none) —
 				 * Scenes::Scene::environmentStarMask(), Graphics/Effects/Shared/StarMaskGLSL.hpp. */
 				std::array< float, 4 > skyStarMask;
+				/* The anti-lag (Parameters::antiLag): x = the fast history's length in frames, y = the tolerance in
+				 * standard deviations of the fast mean, z / w unused. */
+				std::array< float, 4 > antiLagParams;
 			};
 
 			/**
@@ -142,6 +161,11 @@ namespace EmEn::Graphics
 				float temporalVarianceGamma{1.0F};
 				/* SVGF 1/N accumulation cap (steady-state blend weight floor = 1/N). */
 				uint32_t maxAccumulation{64};
+				/* ANTI-LAG: the fast history's length in frames (Parameters::antiLag). */
+				uint32_t antiLagFastFrames{6};
+				/* ANTI-LAG: how many standard deviations of the fast mean the fast and slow histories may differ by
+				 * before the slow one is shortened (the noise must never trip it). */
+				float antiLagSigmaScale{3.0F};
 				/* REFLECTION mode (RTR, 2026-09-13): the input is a 4-channel premultiplied colour +
 				 * confidence accumulated as a whole; the history is reprojected through the VIRTUAL
 				 * position of the reflected point (P + V·hitT, hitT from the hit-data texture handed to
@@ -158,6 +182,13 @@ namespace EmEn::Graphics
 				bool temporalAnimatedNoise{true};
 				/* Per-pixel 1/N blend weight instead of the fixed temporalAlpha. */
 				bool accumulationCounter{true};
+				/* ANTI-LAG (owner decision 2026-10-25; the fast/slow history of NVIDIA's RELAX / ReBLUR, D. Zhdan,
+				 * "ReBLUR: A Hierarchical Recurrent Denoiser", Ray Tracing Gems II, 2021): a FAST luminance history
+				 * (antiLagFastFrames) beside the slow one; where they part by more than antiLagSigmaScale standard
+				 * deviations of the fast mean, the slow history's age is capped to the fast length, so a lighting change
+				 * (a lamp switched, the sky moving) converges in a few frames instead of maxAccumulation. Diffuse
+				 * producers only (ignored in reflection mode). */
+				bool antiLag{true};
 			};
 
 			/**
@@ -278,6 +309,18 @@ namespace EmEn::Graphics
 			temporalActive () const noexcept
 			{
 				return m_temporalEnabled && m_temporalPipeline != nullptr;
+			}
+
+			/**
+			 * @brief Returns whether the anti-lag runs: the temporal chain is active, the parameter is on, the producer is a
+			 * diffuse one (not the reflection mode), and its GPU objects exist.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			antiLagActive () const noexcept
+			{
+				return this->temporalActive() && m_parameters.antiLag && !m_parameters.reflectionMode && m_antiLagPipeline != nullptr;
 			}
 
 			/**
@@ -410,20 +453,27 @@ namespace EmEn::Graphics
 			/* À-trous working pair (ping-pong across iterations, RGBA16F): RGB = filtered
 			 * irradiance, A = filtered variance (w² propagation rule). */
 			std::array< IntermediateRenderTarget, 2 > m_atrousTargets;
+			/* Anti-lag (ping-pong, RG16F, only with Parameters::antiLag in diffuse mode): R = the FAST mean of the raw
+			 * luminance (next frame's history), G = this frame's cap on the slow history's age (maxAccumulation where
+			 * the histories agree). */
+			std::array< IntermediateRenderTarget, 2 > m_antiLagTargets;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_temporalPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_momentsPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_normalCopyPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_atrousPipeline;
+			std::shared_ptr< Vulkan::GraphicsPipeline > m_antiLagPipeline;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_temporalLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_momentsLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_normalCopyLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_atrousLayout;
+			std::shared_ptr< Vulkan::PipelineLayout > m_antiLagLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_temporalPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_momentsPerFrame;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_normalCopyPerFrame;
+			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_antiLagPerFrame;
 			/* À-trous sets, one flavour per INPUT: [0] reads the freshly resolved history
 			 * (first iteration), [1] reads atrous[0], [2] reads atrous[1]. */
 			std::array< std::vector< std::unique_ptr< Vulkan::DescriptorSet > >, 3 > m_atrousPerFrame;
