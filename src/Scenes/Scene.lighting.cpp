@@ -26,12 +26,50 @@
 
 #include "Scene.hpp"
 
-/* Local inclusions. */
-#include "BaseUtility.hpp"
+/* STL inclusions. */
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <memory>
+#include <numbers>
+#include <optional>
+#include <string>
+#include <vector>
 
 /* Local inclusions. */
+#include "BaseUtility.hpp"
+#include "BlobTrait.hpp"
+#include "Graphics/CelestialBody.hpp"
 #include "Graphics/Compute/IBLBaker.hpp"
 #include "Graphics/IBLTexture.hpp"
+#include "Graphics/PostProcessStack.hpp"
+#include "Graphics/Renderable/AbstractBackground.hpp"
+#include "Graphics/Renderable/DynamicSkyResource.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/SkyAtmosphere.hpp"
+#include "Graphics/SkyEnvironment.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Base.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Vector.hpp"
+#include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
+#include "Scenes/BindlessTextureSet.hpp"
+#include "Scenes/CloudSet.hpp"
+#include "Scenes/Component/DirectionalLight.hpp"
+#include "Scenes/DirectionalShadowOptions.hpp"
+#include "Scenes/LightSet.hpp"
+#include "Scenes/StaticEntity.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/TextureInterface.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class CommandBuffer;
+}
 
 namespace EmEn::Scenes
 {
@@ -299,9 +337,65 @@ namespace EmEn::Scenes
 		TraceDebug{ClassId} << "The indirect diffuse is now owned by " << (owned ? "the post-process provider (RTGI): the ambient pass' diffuse IBL leg is OFF." : "the raster: the ambient pass' diffuse IBL leg is ON.");
 	}
 
+	bool
+	Scene::updateDynamicSkyIBL () noexcept
+	{
+		const auto background = m_backgroundResource;
+		const auto * dynamicSky = dynamic_cast< const Graphics::Renderable::DynamicSkyResource * >(background.get());
+
+		if ( dynamicSky == nullptr )
+		{
+			return false;
+		}
+
+		const auto atmosphere = dynamicSky->atmosphere();
+
+		if ( atmosphere == nullptr )
+		{
+			return true;
+		}
+
+		auto publication = atmosphere->environment().takePublication();
+
+		if ( !publication.has_value() )
+		{
+			return true;
+		}
+
+		/* The three slots of one complete set (the irradiance below, under the applyAmbient contract). The set stays
+		 * untouched until RingSize − 1 newer ones replaced it: no frame in flight reads it while it is rewritten. */
+		m_bindlessTextureSet.setEnvironmentCubemap(publication->environment);
+		m_bindlessTextureSet.setPrefilteredCubemap(publication->prefiltered);
+		m_IBLBakedIrradiance = publication->irradiance;
+
+		/* A picture sky adopted later is baked afresh, even the one baked before this sky. */
+		m_IBLBakedSource = nullptr;
+
+		/* The once-probes captured a sky: re-rendered when the sun moved enough (deferred flag, thread-safe). */
+		const auto cosResignal = std::cos(ProbeResignalAngle * (std::numbers::pi_v< float > / 180.0F));
+
+		if ( !m_IBLProbeSignalled || Math::Vector< 3, float >::dotProduct(publication->sunDirection, m_IBLProbeSunDirection) < cosResignal )
+		{
+			this->signalOnDemandRenderTargets();
+
+			m_IBLProbeSunDirection = publication->sunDirection;
+			m_IBLProbeSignalled = true;
+		}
+
+		return true;
+	}
+
 	void
 	Scene::updateEnvironmentIBL () noexcept
 	{
+		/* A dynamic sky bakes its own IBL, amortised over frames (Graphics::SkyEnvironment). */
+		if ( this->updateDynamicSkyIBL() )
+		{
+			this->publishBakedIrradiance();
+
+			return;
+		}
+
 		/* The bindless set is the mutex-protected source of truth for the adopted
 		 * environment cubemap (setBackground can run on any thread and the late adoption
 		 * of an async-loaded cubemap happens on the render thread). The engine default
@@ -337,12 +431,12 @@ namespace EmEn::Scenes
 				if ( m_graphicsRenderer.IBLBaker().bakeEnvironment(*source, *irradiance, *prefiltered, starMask) )
 				{
 					/* Publish the prefiltered environment (UPDATE_AFTER_BIND hot-swap at
-					 * the manager's next sync) and flip the pair: frames in flight keep
-					 * sampling the previous bake untouched. The irradiance publication is
+					 * the manager's next sync) and advance the ring: frames in flight keep
+					 * sampling the previous bakes untouched. The irradiance publication is
 					 * decided below, by the applyAmbient contract. */
 					m_bindlessTextureSet.setPrefilteredCubemap(prefiltered);
 					m_IBLBakedIrradiance = irradiance;
-					m_IBLWriteIndex = (m_IBLWriteIndex + 1) % 2;
+					m_IBLWriteIndex = (m_IBLWriteIndex + 1) % IBLRingSize;
 
 					/* The environment IBL is scene LIGHT for every material (ambient-pass
 					 * irradiance, prefiltered reflections): a once-probe baked before this
@@ -360,6 +454,12 @@ namespace EmEn::Scenes
 			}
 		}
 
+		this->publishBakedIrradiance();
+	}
+
+	void
+	Scene::publishBakedIrradiance () noexcept
+	{
 		/* The irradiance SLOT publication follows the applyAmbient contract, even between
 		 * bakes (a scene can derive its lighting from the sky after the bake happened).
 		 * Unpublished, the slot parks on the default black cubemap: the ambient-pass IBL

@@ -30,21 +30,21 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
-#include <cmath>
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <optional>
-#include <string>
 #include <string_view>
+#include <type_traits>
 #include <unordered_map>
 #include <vector>
 
 /* Third-party inclusions. */
+#include "json/json.h"
 #include "volk.h"
 
 /* Local inclusions for inheritances. */
@@ -55,28 +55,32 @@
 
 /* Local inclusions for usages. */
 #include "BindlessTextureManager.hpp"
-#include "ExternalInput.hpp"
-#include "PixelFactory/Color.hpp"
-#include "Mutex.hpp"
-#include "PixelFactory/Pixmap.hpp"
-#include "StaticVector.hpp"
-#include "Thread.hpp"
-#include "Time/Statistics/RealTime.hpp"
-#include "PostProcessor.hpp"
-#include "PathDebugOverlay.hpp"
-#include "SelectionOutline.hpp"
+#include "Constants.hpp"
 #include "DeferredLightResolve.hpp"
-#include "TextureCache.hpp"
-#include "TextureCompressor.hpp"
+#include "ExternalInput.hpp"
 #include "FrameCapture.hpp"
 #include "FrameDiagnostics.hpp"
+#include "Graphics/DirectPostProcessEffect.hpp"
+#include "Hash/FNV1a.hpp"
+#include "Math/Base.hpp"
+#include "Mutex.hpp"
+#include "PathDebugOverlay.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PostProcessor.hpp"
 #include "Recorder.hpp"
 #include "RendererFrameScope.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "SelectionOutline.hpp"
 #include "SharedUBOManager.hpp"
-#include "Vulkan/DeferredDestructor.hpp"
-#include "Vulkan/GPUProfiler.hpp"
+#include "StaticVector.hpp"
+#include "TextureCache.hpp"
+#include "TextureCompressor.hpp"
+#include "Thread.hpp"
+#include "ThreadSafety.hpp"
+#include "Time/Statistics/RealTime.hpp"
 #include "VertexBufferFormatManager.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/TransferManager.hpp"
 
@@ -85,22 +89,26 @@ namespace EmEn
 {
 	namespace Vulkan
 	{
-		class Device;
 		class DescriptorPool;
 		class DescriptorSet;
 		class DescriptorSetLayout;
 		class AccelerationStructure;
 		class AccelerationStructureBuilder;
-		class CommandPool;
 		class CommandBuffer;
 		class Framebuffer;
 		class GraphicsPipeline;
 		class Image;
+		class GPUProfiler;
 		class Instance;
 		class Queue;
 		class Sampler;
 		class ShaderStorageBufferObject;
 		class SwapChain;
+
+		namespace Sync
+		{
+			class Semaphore;
+		}
 	}
 
 	namespace Scenes
@@ -1950,7 +1958,7 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::SwapChain > m_swapChain;
 			std::shared_ptr< SceneRenderTarget > m_sceneTarget;
 			Vulkan::DeferredDestructor m_deferredDestructor;
-			Base::StaticVector< RendererFrameScope, 5 > m_rendererFrameScope;
+			Base::StaticVector< RendererFrameScope, MaxFramesInFlight > m_rendererFrameScope;
 			/* The sky-view submission of each frame in flight (renderSkyAtmosphere()), from that frame's command pool. */
 			std::array< std::shared_ptr< Vulkan::CommandBuffer >, 5 > m_skyCommandBuffers;
 			/* The atmosphere each frame in flight recorded: kept alive until that frame's slot is reused (its fence

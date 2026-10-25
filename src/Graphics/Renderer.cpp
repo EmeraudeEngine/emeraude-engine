@@ -75,6 +75,7 @@
 #include "Graphics/SelectionOutline.hpp"
 #include "Graphics/SharedUBOManager.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
+#include "Graphics/SkyEnvironment.hpp"
 #include "Graphics/TextureCache.hpp"
 #include "Graphics/TextureCompressor.hpp"
 #include "Graphics/Types.hpp"
@@ -87,6 +88,7 @@
 #include "Logging/Severity.hpp"
 #include "LTCTexture.hpp"
 #include "Material/Interface.hpp"
+#include "Material/SkyAtmosphereResource.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "MDI/BatchBuilder.hpp"
@@ -106,6 +108,7 @@
 #include "Scenes/Scene.hpp"
 #include "Scenes/SceneInstanceTransforms.hpp"
 #include "Scenes/SceneMetaData.hpp"
+#include "Scenes/SkyState.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
 #include "SkinnedGeometryProcessor.hpp"
@@ -2841,9 +2844,30 @@ namespace EmEn::Graphics
 			atmosphere->recordFrame(*commandBuffer, inputs);
 		}
 
+		/* The sky's environment for the IBL, one stage per frame, after the sky-view it captures. */
+		{
+			GPUProfiler * profiler = m_GPUProfiler != nullptr && m_GPUProfiler->profilesSideSubmissions() ? m_GPUProfiler.get() : nullptr;
+			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "SkyAtmosphere", "Environment"};
+
+			SkyEnvironment::Grading grading{};
+
+			if ( const auto material = dynamicSky->skyMaterial(); material != nullptr )
+			{
+				const auto tint = material->tint();
+
+				grading.tint = {tint.red(), tint.green(), tint.blue()};
+				grading.intensity = material->intensity();
+				grading.saturation = material->saturation();
+			}
+
+			atmosphere->recordEnvironment(*this, *commandBuffer, inputs, grading);
+		}
+
 		if ( !commandBuffer->end() )
 		{
 			TraceError{ClassId} << "Unable to finish the sky atmosphere command buffer !";
+
+			atmosphere->environment().onSubmitted(false);
 
 			return;
 		}
@@ -2852,8 +2876,12 @@ namespace EmEn::Graphics
 		{
 			TraceError{ClassId} << "Unable to submit the sky atmosphere command buffer !";
 
+			atmosphere->environment().onSubmitted(false);
+
 			return;
 		}
+
+		atmosphere->environment().onSubmitted(true);
 
 		*std::next(m_skyAtmospheresInFlight.begin(), static_cast< std::ptrdiff_t >(frameIndex)) = atmosphere;
 	}

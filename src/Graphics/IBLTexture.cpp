@@ -26,9 +26,25 @@
 
 #include "IBLTexture.hpp"
 
+/* STL inclusions. */
+#include <functional>
+#include <string>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Image.hpp"
+#include "Vulkan/Sampler.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Settings;
+}
 
 namespace EmEn::Graphics
 {
@@ -70,7 +86,15 @@ namespace EmEn::Graphics
 				size = PrefilteredSize;
 				mipLevels = PrefilteredMipLevels;
 				break;
+
+			case Role::EnvironmentCapture :
+				size = EnvironmentCaptureSize;
+				mipLevels = EnvironmentCaptureMipLevels;
+				break;
 		}
+
+		/* The capture's mips are blitted from its mip 0. */
+		const VkImageUsageFlags transferDestination = m_role == Role::EnvironmentCapture ? VK_IMAGE_USAGE_TRANSFER_DST_BIT : 0;
 
 		/* NOTE: RGBA16F is the only 16F format with mandatory STORAGE_IMAGE support.
 		 * TRANSFER_SRC allows the EMERAUDE_DEBUG_IBL_FACES readback dump. */
@@ -79,7 +103,7 @@ namespace EmEn::Graphics
 			VK_IMAGE_TYPE_2D,
 			VK_FORMAT_R16G16B16A16_SFLOAT,
 			VkExtent3D{size, size, 1U},
-			VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+			VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | transferDestination,
 			isCube ? VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT : 0,
 			mipLevels,
 			layerCount
@@ -168,8 +192,10 @@ namespace EmEn::Graphics
 				break;
 
 			/* NOTE: The whole point of the prefiltered chain is roughness-driven LOD:
-			 * never clamp it (the shared "Cubemap" sampler would). */
+			 * never clamp it (the shared "Cubemap" sampler would). The capture is read by solid angle, through its
+			 * mips, alike. */
 			case Role::PrefilteredCubemap :
+			case Role::EnvironmentCapture :
 				m_sampler = renderer.getSampler("IBLPrefiltered", [] (Settings &, VkSamplerCreateInfo & createInfo) {
 					createInfo.magFilter = VK_FILTER_LINEAR;
 					createInfo.minFilter = VK_FILTER_LINEAR;

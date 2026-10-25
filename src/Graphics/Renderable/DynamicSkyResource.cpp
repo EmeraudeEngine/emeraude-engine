@@ -26,13 +26,28 @@
 
 #include "DynamicSkyResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
+#include <functional>
 #include <optional>
 
+/* Third-party inclusions. */
+#include "json/json.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/Material/SkyAtmosphereResource.hpp"
+#include "Graphics/Renderable/Types.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Resources/Container.hpp"
 #include "Tracer.hpp"
 
@@ -69,7 +84,9 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		this->setLuminance(DefaultLuminance);
+		/* ABSOLUTE radiance (SkyEnvironment): the sky's environment cubemap is in nits, so the scale every consumer applies
+		 * to a cubemap sample is 1 (owner decision 2026-10-25). */
+		this->setLuminance(AbsoluteLuminance);
 
 		return this->setLoadSuccess(this->build(parameters, nullptr));
 	}
@@ -151,6 +168,14 @@ namespace EmEn::Graphics::Renderable
 		{
 			return this->setLoadSuccess(false);
 		}
+
+		/* ABSOLUTE radiance (see load(parameters)): a "Luminance" key means nothing for a physical sky. */
+		if ( data.isMember(JKLuminance) )
+		{
+			TraceWarning{ClassId} << "The dynamic sky '" << this->name() << "' ignores its 'Luminance': a physical sky is absolute radiance (luminance 1).";
+		}
+
+		this->setLuminance(AbsoluteLuminance);
 
 		return this->setLoadSuccess(this->build(parameters.value(), &data));
 	}

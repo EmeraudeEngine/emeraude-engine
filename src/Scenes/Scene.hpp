@@ -2872,6 +2872,25 @@ namespace EmEn::Scenes
 			 */
 			void updateEnvironmentIBL () noexcept;
 
+			/**
+			 * @brief Publishes the IBL a dynamic sky baked itself (Graphics::SkyEnvironment, amortised on the render
+			 * thread): the environment, irradiance and prefiltered slots of its last complete set.
+			 * @note LOGIC THREAD (updateEnvironmentIBL()). Re-signals the once-probes when the sun moved more than
+			 * ProbeResignalAngle since they were last signalled (owner decision 2026-10-25: ~2°).
+			 * @return bool True when the background is a dynamic sky (the picture-sky bake is then skipped).
+			 */
+			bool updateDynamicSkyIBL () noexcept;
+
+			/**
+			 * @brief Publishes the last baked irradiance to its slot under the applyAmbient contract (null = the default
+			 * black cubemap).
+			 * @note LOGIC THREAD.
+			 */
+			void publishBakedIrradiance () noexcept;
+
+			/** @brief The sun's motion, in degrees, after which a dynamic sky's published IBL re-signals the once-probes. */
+			static constexpr float ProbeResignalAngle{2.0F};
+
 
 			/**
 			 * @brief Hands the ambient pass' DIFFUSE IBL leg over to an indirect-diffuse
@@ -3145,10 +3164,12 @@ namespace EmEn::Scenes
 			std::vector< std::string > m_backgroundStarEntities;
 			/** @brief Current environment cubemap for IBL. Should never be null after initialization. */
 			std::shared_ptr< Graphics::TextureResource::TextureCubemap > m_environmentCubemap;
-			/** @brief Baked environment IBL (irradiance + prefiltered), ping-pong pairs: a bake
-			 * writes the back pair while frames in flight sample the published front pair. */
-			std::array< std::shared_ptr< Graphics::IBLTexture >, 2 > m_IBLIrradiance{};
-			std::array< std::shared_ptr< Graphics::IBLTexture >, 2 > m_IBLPrefiltered{};
+			/** @brief Baked environment IBL (irradiance + prefiltered), a RING of MaxFramesInFlight + 1 sets, allocated on
+			 * first use: a bake rewrites the set published IBLRingSize − 1 bakes ago, which no frame in flight can still
+			 * read (a 2-deep ping-pong was shorter than the frames in flight; graphics doc 42 § "The environment"). */
+			static constexpr size_t IBLRingSize{MaxFramesInFlight + 1};
+			std::array< std::shared_ptr< Graphics::IBLTexture >, IBLRingSize > m_IBLIrradiance{};
+			std::array< std::shared_ptr< Graphics::IBLTexture >, IBLRingSize > m_IBLPrefiltered{};
 			/** @brief The irradiance of the last successful bake (published under the applyAmbient contract). */
 			std::shared_ptr< Graphics::IBLTexture > m_IBLBakedIrradiance;
 			/** @brief The irradiance currently published to the bindless set (null = default black). */
@@ -3157,7 +3178,9 @@ namespace EmEn::Scenes
 			const Vulkan::TextureInterface * m_IBLBakedSource{nullptr};
 			/** @brief The in-texture celestial body masked out of the last bake attempt (see updateEnvironmentIBL()). */
 			Graphics::Compute::IBLBaker::StarMask m_IBLBakedStarMask;
-			/** @brief Ping-pong write index of the IBL pairs. */
+			/** @brief The sun's direction when a dynamic sky last re-signalled the once-probes (updateDynamicSkyIBL()). */
+			Base::Math::Vector< 3, float > m_IBLProbeSunDirection{0.0F, 1.0F, 0.0F};
+			/** @brief Write index in the IBL ring. */
 			size_t m_IBLWriteIndex{0};
 			/** @brief Scene terrain/ground renderable for visual representation. May be null. */
 			std::shared_ptr< Graphics::Renderable::Abstract > m_groundLevelRenderable;
@@ -3429,6 +3452,8 @@ namespace EmEn::Scenes
 			 * irradiance is published and the scalar ambient pushed to the view UBOs is
 			 * zeroed (see refreshAmbientLightProperties / updateEnvironmentIBL). */
 			bool m_IBLAmbientEnabled{false};
+			/** @brief Whether a dynamic sky's published IBL has signalled the once-probes yet. */
+			bool m_IBLProbeSignalled{false};
 			/** @brief Weight of the ambient pass' diffuse IBL leg, pushed to the view UBOs:
 			 * 1 while the raster owns the indirect diffuse, 0 while a provider (RTGI) does.
 			 * ⚠️ NOT a bool: it is a continuous knob, and a scene may later want a partial

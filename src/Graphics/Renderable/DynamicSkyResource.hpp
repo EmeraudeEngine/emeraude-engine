@@ -30,11 +30,19 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 
 /* Local inclusions for inheritances. */
 #include "AbstractBackground.hpp"
+
+/* Local inclusions for usages. */
+#include "Hash/FNV1a.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -49,9 +57,20 @@ namespace EmEn::Graphics
 	class SkyAtmosphere;
 }
 
+namespace EmEn::Graphics::Geometry
+{
+	class Interface;
+}
+
 namespace EmEn::Graphics::Material
 {
+	class Interface;
 	class SkyAtmosphereResource;
+}
+
+namespace Json
+{
+	class Value;
 }
 
 namespace EmEn::Graphics::Renderable
@@ -85,6 +104,10 @@ namespace EmEn::Graphics::Renderable
 			static constexpr auto Complexity{Resources::DepComplexity::Complex};
 
 			/* JSON keys. */
+			/** @brief A physical sky is ABSOLUTE radiance: its luminance, the scale applied to its environment cubemap, is 1
+			 * (SkyEnvironment, owner decision 2026-10-25). */
+			static constexpr auto AbsoluteLuminance{1.0F};
+
 			static constexpr auto JKPlanet{"Planet"};
 			static constexpr auto JKAtmosphere{"Atmosphere"};
 			static constexpr auto JKGroundRadius{"GroundRadius"};

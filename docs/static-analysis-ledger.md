@@ -638,6 +638,13 @@ an Apple-libc++-only suggestion, not applied. The planet identity lot touched `S
 debt list): brought clean, +54 −2 and a forward declaration of `Console::Argument`; IWYU's removal of
 `Component/Camera.hpp` / `Microphone.hpp` refused (`componentBuilder< Component::Camera >` instantiates a template
 that needs the complete type: the build failed) — `// IWYU pragma: keep (<reason>)`.
+The sky's own IBL lot (same day; `Graphics/SkyEnvironment` new, `Compute/IBLBaker`, `IBLTexture`, `SkyAtmosphere`,
+`Material/SkyAtmosphereResource`, `Renderable/DynamicSkyResource`, `Renderer`, `Scene.lighting.cpp`, `Constants.hpp`):
+clang-tidy 21.1.6 on the changed lines 8 fixed (swappable parameters → named structs `IBLBaker::CubeBarrier`,
+`SkyEnvironment::Inputs`, a reordered `recordPrefilterMip()`; `auto * const` for the Vulkan handles; a ring index
+through `std::next`; an ambiguous `reset()` → `= nullptr`), cppcheck 0, IWYU brought clean with seven forward
+declarations. The template guard gained the headers it lacked: `SkyAtmosphere.hpp`, `StorageTexture2D.hpp`
+(forgotten in lot 1), `SkyEnvironment.hpp`, `TexturePacker.hpp`.
 
 **First lot (2026-10-19)**: the 49 files of the engine's cppcheck lot (34 `.cpp`, 15 headers): about 800 includes added
 and 115 removed, 41 forward declarations, converged at the second pass (three residual lines applied); the three

@@ -3110,7 +3110,7 @@ Registrations are tokens and a dispatch never walks a shrinking list since 2026-
 ### A background may have NO environment cubemap: never take its answer unchecked (fixed 2026-10-24)
 
 `AbstractBackground::environmentCubemap()` answers nullptr by contract (a physical sky, `DynamicSkyResource`, has no
-cubemap: its IBL is the item `dynamic-sky-amortised-ibl`). `Scene::setBackground()` already kept the scene's cubemap
+cubemap: it publishes its own IBL, graphics doc 42 § "The environment"). `Scene::setBackground()` already kept the scene's cubemap
 in that case, but `Scene::getRenderableInstanceReadyForRendering()` — which adopts the background's cubemap once its
 visual is ready — assigned the null and dereferenced it for the trace: a SIGSEGV on the first frame of `sky-lab`.
 It now adopts a non-null cubemap only, like `setBackground()`. Graphics doc 42.

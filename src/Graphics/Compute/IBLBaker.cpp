@@ -31,16 +31,20 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cassert>
 #include <array>
-#include <chrono>
 #include <string>
+#include <utility>
 #include <vector>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/StarMaskGLSL.hpp"
 #include "Graphics/IBLTexture.hpp"
 #include "Math/Base.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
@@ -49,12 +53,15 @@
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/Sampler.hpp"
 #include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
+#include "Vulkan/TextureInterface.hpp"
+#include "Vulkan/Types.hpp"
 
 #ifdef EMERAUDE_DEBUG_IBL_FACES
 #include <cmath>
@@ -186,7 +193,7 @@ void main ()
 	 * the sample solid angle to the texel solid angle — this is what makes 32-128 samples
 	 * per texel enough where brute force needs 1024+. */
 
-	static const std::string EnvironmentCommonGLSL = R"(
+	static const std::string EnvironmentCommonGLSL = std::string{R"(
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform samplerCube sourceEnv;
@@ -206,21 +213,7 @@ layout(push_constant) uniform PushConstants
 } pc;
 
 const float PI = 3.14159265359;
-
-/* Standard cube face layout (+X,-X,+Y,-Y,+Z,-Z), st in [-1,1]. CUBEMAP space. */
-vec3 faceDirection (uint face, vec2 st)
-{
-	switch ( face )
-	{
-		case 0u: return vec3( 1.0, -st.y, -st.x);
-		case 1u: return vec3(-1.0, -st.y,  st.x);
-		case 2u: return vec3( st.x,  1.0,  st.y);
-		case 3u: return vec3( st.x, -1.0, -st.y);
-		case 4u: return vec3( st.x, -st.y,  1.0);
-		default: return vec3(-st.x, -st.y, -1.0);
-	}
-}
-
+)"} + IBLBaker::FaceDirectionGLSL + R"(
 float radicalInverseVdC (uint bits)
 {
 	bits = (bits << 16u) | (bits >> 16u);
@@ -607,6 +600,8 @@ void main ()
 	bool
 	IBLBaker::ensureEnvironmentPipelines ()
 	{
+		const Base::MutexLock lock{m_pipelinesAccess};
+
 		if ( m_prefilterPipeline != nullptr && m_irradiancePipeline != nullptr )
 		{
 			return true;
@@ -702,41 +697,94 @@ void main ()
 		return true;
 	}
 
-	bool
-	IBLBaker::bakeEnvironment (const Vulkan::TextureInterface & source, IBLTexture & irradiance, IBLTexture & prefiltered, const StarMask & starMask) noexcept
+	void
+	IBLBaker::recordCubeBarrier (const Vulkan::CommandBuffer & commandBuffer, VkImage image, const CubeBarrier & barrier) noexcept
+	{
+		const VkImageMemoryBarrier imageBarrier{
+			.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+			.pNext = nullptr,
+			.srcAccessMask = barrier.srcAccess,
+			.dstAccessMask = barrier.dstAccess,
+			.oldLayout = barrier.oldLayout,
+			.newLayout = barrier.newLayout,
+			.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+			.image = image,
+			.subresourceRange = VkImageSubresourceRange{
+				.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+				.baseMipLevel = barrier.baseMip,
+				.levelCount = barrier.mipCount,
+				.baseArrayLayer = 0,
+				.layerCount = 6
+			}
+		};
+
+		vkCmdPipelineBarrier(commandBuffer.handle(), barrier.srcStage, barrier.dstStage, 0, 0, nullptr, 0, nullptr, 1, &imageBarrier);
+	}
+
+	IBLBaker::EnvironmentBindings::EnvironmentBindings (std::shared_ptr< Vulkan::DescriptorPool > pool, std::vector< std::unique_ptr< Vulkan::DescriptorSet > > sets) noexcept
+		: m_pool{std::move(pool)},
+		m_sets{std::move(sets)}
+	{
+
+	}
+
+	IBLBaker::EnvironmentBindings::~EnvironmentBindings ()
+	{
+		/* The sets are freed into their pool: before it. */
+		m_sets.clear();
+		m_pool = nullptr;
+	}
+
+	const Vulkan::DescriptorSet &
+	IBLBaker::EnvironmentBindings::prefilter (uint32_t mipLevel) const noexcept
+	{
+		assert(mipLevel < this->prefilterMipCount());
+
+		return *m_sets[mipLevel];
+	}
+
+	const Vulkan::DescriptorSet &
+	IBLBaker::EnvironmentBindings::irradiance () const noexcept
+	{
+		assert(!m_sets.empty());
+
+		return *m_sets.back();
+	}
+
+	std::unique_ptr< IBLBaker::EnvironmentBindings >
+	IBLBaker::createEnvironmentBindings (const Vulkan::TextureInterface & source, const IBLTexture & irradiance, const IBLTexture & prefiltered) noexcept
 	{
 		if ( !source.isCreated() || !source.isCubemapTexture() )
 		{
 			Tracer::error(ClassId, "The source environment texture is not a created cubemap !");
 
-			return false;
+			return nullptr;
 		}
 
 		if ( !irradiance.isCreated() || irradiance.role() != IBLTexture::Role::IrradianceCubemap )
 		{
 			Tracer::error(ClassId, "The irradiance destination is not a created IrradianceCubemap texture !");
 
-			return false;
+			return nullptr;
 		}
 
 		if ( !prefiltered.isCreated() || prefiltered.role() != IBLTexture::Role::PrefilteredCubemap )
 		{
 			Tracer::error(ClassId, "The prefiltered destination is not a created PrefilteredCubemap texture !");
 
-			return false;
+			return nullptr;
 		}
 
 		if ( !this->ensureEnvironmentPipelines() )
 		{
-			return false;
+			return nullptr;
 		}
 
-		const auto sourceSize = source.image()->width();
 		const uint32_t prefilteredMipLevels = prefiltered.mipLevels();
 		const uint32_t dispatchCount = prefilteredMipLevels + 1;
 
-		/* Transient descriptor pool + sets: one set per dispatch (6 prefilter mips + 1
-		 * irradiance). Rebuilt at every bake — the pool is tiny and a sky change is rare. */
+		/* One set per dispatch (each prefilter mip, then the irradiance). */
 		const std::vector< VkDescriptorPoolSize > poolSizes{
 			{
 				.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -748,15 +796,14 @@ void main ()
 			}
 		};
 
-		/* ⚠️ FREE_DESCRIPTOR_SET_BIT: same contract as above — the sets are freed one by one
-		 * when the descriptorSets vector unwinds. */
-		const auto descriptorPool = std::make_shared< Vulkan::DescriptorPool >(m_device, poolSizes, dispatchCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+		/* ⚠️ FREE_DESCRIPTOR_SET_BIT: the sets are freed one by one when the bindings release them. */
+		auto descriptorPool = std::make_shared< Vulkan::DescriptorPool >(m_device, poolSizes, dispatchCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 		if ( !descriptorPool->createOnHardware() )
 		{
 			Tracer::error(ClassId, "Failed to create the environment descriptor pool !");
 
-			return false;
+			return nullptr;
 		}
 
 		std::vector< std::unique_ptr< Vulkan::DescriptorSet > > descriptorSets;
@@ -800,19 +847,109 @@ void main ()
 			{
 				Tracer::error(ClassId, "Failed to allocate an environment descriptor set !");
 
-				return false;
+				return nullptr;
 			}
 
 			const auto destView = dispatchIndex < prefilteredMipLevels
 				? prefiltered.storageView(dispatchIndex)
 				: irradiance.storageView(0);
 
+			if ( destView == nullptr )
+			{
+				Tracer::error(ClassId, "An environment destination has no storage view !");
+
+				return nullptr;
+			}
+
 			writeDescriptorSet(*descriptorSet, destView);
 
 			descriptorSets.emplace_back(std::move(descriptorSet));
 		}
 
-		/* Record the whole bake (both destination images) in one submission. */
+		return std::make_unique< EnvironmentBindings >(std::move(descriptorPool), std::move(descriptorSets));
+	}
+
+	void
+	IBLBaker::recordPrefilterMip (const Vulkan::CommandBuffer & commandBuffer, const EnvironmentBindings & bindings, uint32_t mipLevel, const IBLTexture & prefiltered, uint32_t sourceSize, const StarMask & starMask) const noexcept
+	{
+		const uint32_t mipLevels = prefiltered.mipLevels();
+
+		assert(mipLevel < mipLevels && mipLevel < bindings.prefilterMipCount());
+
+		auto * const image = prefiltered.image()->handle();
+		const uint32_t destSize = std::max(1U, IBLTexture::PrefilteredSize >> mipLevel);
+
+		/* The mip: discarded and opened for the write, after every earlier read of it on the queue. */
+		recordCubeBarrier(commandBuffer, image, {.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED, .newLayout = VK_IMAGE_LAYOUT_GENERAL, .srcAccess = 0, .dstAccess = VK_ACCESS_SHADER_WRITE_BIT, .srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, .dstStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, .baseMip = mipLevel, .mipCount = 1});
+
+		EnvironmentPushConstants pushConstants{};
+		pushConstants.sourceSize = sourceSize;
+		pushConstants.destSize = destSize;
+		pushConstants.sampleCount = PrefilterBaseSampleCount + (PrefilterSampleCountPerMip * mipLevel);
+		pushConstants.roughness = mipLevels > 1 ? static_cast< float >(mipLevel) / static_cast< float >(mipLevels - 1) : 0.0F;
+		pushConstants.starMaskX = starMask.direction[0];
+		pushConstants.starMaskY = starMask.direction[1];
+		pushConstants.starMaskZ = starMask.direction[2];
+		pushConstants.starMaskHalfAngle = starMask.halfAngleRadians;
+
+		commandBuffer.bind(*m_prefilterPipeline);
+		commandBuffer.bind(bindings.prefilter(mipLevel), *m_environmentPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
+
+		vkCmdPushConstants(commandBuffer.handle(), m_environmentPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(EnvironmentPushConstants), &pushConstants);
+
+		const uint32_t groupCount = (destSize + 7) / 8;
+
+		commandBuffer.dispatch(groupCount, groupCount, 6);
+
+		/* The mip: sampled by the materials, the compute and the ray-tracing effects. */
+		recordCubeBarrier(commandBuffer, image, {.oldLayout = VK_IMAGE_LAYOUT_GENERAL, .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, .srcAccess = VK_ACCESS_SHADER_WRITE_BIT, .dstAccess = VK_ACCESS_SHADER_READ_BIT, .srcStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, .dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, .baseMip = mipLevel, .mipCount = 1});
+	}
+
+	void
+	IBLBaker::recordIrradiance (const Vulkan::CommandBuffer & commandBuffer, const EnvironmentBindings & bindings, const IBLTexture & irradiance, uint32_t sourceSize, const StarMask & starMask) const noexcept
+	{
+		auto * const image = irradiance.image()->handle();
+
+		recordCubeBarrier(commandBuffer, image, {.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED, .newLayout = VK_IMAGE_LAYOUT_GENERAL, .srcAccess = 0, .dstAccess = VK_ACCESS_SHADER_WRITE_BIT, .srcStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, .dstStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, .baseMip = 0, .mipCount = 1});
+
+		EnvironmentPushConstants pushConstants{};
+		pushConstants.sourceSize = sourceSize;
+		pushConstants.destSize = IBLTexture::IrradianceSize;
+		pushConstants.sampleCount = IrradianceSampleCount;
+		pushConstants.roughness = 1.0F;
+		pushConstants.starMaskX = starMask.direction[0];
+		pushConstants.starMaskY = starMask.direction[1];
+		pushConstants.starMaskZ = starMask.direction[2];
+		pushConstants.starMaskHalfAngle = starMask.halfAngleRadians;
+
+		commandBuffer.bind(*m_irradiancePipeline);
+		commandBuffer.bind(bindings.irradiance(), *m_environmentPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
+
+		vkCmdPushConstants(commandBuffer.handle(), m_environmentPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(EnvironmentPushConstants), &pushConstants);
+
+		constexpr uint32_t groupCount = (IBLTexture::IrradianceSize + 7) / 8;
+
+		commandBuffer.dispatch(groupCount, groupCount, 6);
+
+		recordCubeBarrier(commandBuffer, image, {.oldLayout = VK_IMAGE_LAYOUT_GENERAL, .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, .srcAccess = VK_ACCESS_SHADER_WRITE_BIT, .dstAccess = VK_ACCESS_SHADER_READ_BIT, .srcStage = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, .dstStage = VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, .baseMip = 0, .mipCount = 1});
+	}
+
+	bool
+	IBLBaker::bakeEnvironment (const Vulkan::TextureInterface & source, IBLTexture & irradiance, IBLTexture & prefiltered, const StarMask & starMask) noexcept
+	{
+		/* Validates the source and both destinations, ensures the pipelines. */
+		const auto bindings = this->createEnvironmentBindings(source, irradiance, prefiltered);
+
+		if ( bindings == nullptr )
+		{
+			return false;
+		}
+
+		const auto sourceSize = source.image()->width();
+		const uint32_t prefilteredMipLevels = prefiltered.mipLevels();
+
+		/* Record the whole bake (both destination images) in one submission: the same per-mip and irradiance
+		 * recordings the amortised dynamic-sky bake spreads over frames. */
 		if ( !m_commandBuffer->begin(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) )
 		{
 			Tracer::error(ClassId, "Failed to begin the environment command buffer !");
@@ -820,83 +957,12 @@ void main ()
 			return false;
 		}
 
-		/* Both destinations: UNDEFINED -> GENERAL (previous content discarded — the
-		 * ping-pong pair never republishes an old bake). */
-		for ( const auto * texture : {&prefiltered, &irradiance} )
-		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*texture->image(),
-				0,
-				VK_ACCESS_SHADER_WRITE_BIT,
-				VK_IMAGE_LAYOUT_UNDEFINED,
-				VK_IMAGE_LAYOUT_GENERAL
-			};
-
-			m_commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-		}
-
-		/* Prefiltered chain: one dispatch per mip, roughness 0 -> 1 across the chain. */
-		m_commandBuffer->bind(*m_prefilterPipeline);
-
 		for ( uint32_t mipLevel = 0; mipLevel < prefilteredMipLevels; mipLevel++ )
 		{
-			const uint32_t destSize = std::max(1U, IBLTexture::PrefilteredSize >> mipLevel);
-
-			EnvironmentPushConstants pushConstants{};
-			pushConstants.sourceSize = sourceSize;
-			pushConstants.destSize = destSize;
-			pushConstants.sampleCount = PrefilterBaseSampleCount + (PrefilterSampleCountPerMip * mipLevel);
-			pushConstants.roughness = static_cast< float >(mipLevel) / static_cast< float >(prefilteredMipLevels - 1);
-			pushConstants.starMaskX = starMask.direction[0];
-			pushConstants.starMaskY = starMask.direction[1];
-			pushConstants.starMaskZ = starMask.direction[2];
-			pushConstants.starMaskHalfAngle = starMask.halfAngleRadians;
-
-			m_commandBuffer->bind(*descriptorSets[mipLevel], *m_environmentPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
-
-			vkCmdPushConstants(m_commandBuffer->handle(), m_environmentPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(EnvironmentPushConstants), &pushConstants);
-
-			const uint32_t groupCount = (destSize + 7) / 8;
-
-			m_commandBuffer->dispatch(groupCount, groupCount, 6);
+			this->recordPrefilterMip(*m_commandBuffer, *bindings, mipLevel, prefiltered, sourceSize, starMask);
 		}
 
-		/* Irradiance. */
-		{
-			m_commandBuffer->bind(*m_irradiancePipeline);
-
-			EnvironmentPushConstants pushConstants{};
-			pushConstants.sourceSize = sourceSize;
-			pushConstants.destSize = IBLTexture::IrradianceSize;
-			pushConstants.sampleCount = IrradianceSampleCount;
-			pushConstants.roughness = 1.0F;
-			pushConstants.starMaskX = starMask.direction[0];
-			pushConstants.starMaskY = starMask.direction[1];
-			pushConstants.starMaskZ = starMask.direction[2];
-			pushConstants.starMaskHalfAngle = starMask.halfAngleRadians;
-
-			m_commandBuffer->bind(*descriptorSets[prefilteredMipLevels], *m_environmentPipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
-
-			vkCmdPushConstants(m_commandBuffer->handle(), m_environmentPipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(EnvironmentPushConstants), &pushConstants);
-
-			constexpr uint32_t groupCount = (IBLTexture::IrradianceSize + 7) / 8;
-
-			m_commandBuffer->dispatch(groupCount, groupCount, 6);
-		}
-
-		/* Both destinations: GENERAL -> SHADER_READ_ONLY for fragment sampling. */
-		for ( const auto * texture : {&prefiltered, &irradiance} )
-		{
-			const Vulkan::Sync::ImageMemoryBarrier barrier{
-				*texture->image(),
-				VK_ACCESS_SHADER_WRITE_BIT,
-				VK_ACCESS_SHADER_READ_BIT,
-				VK_IMAGE_LAYOUT_GENERAL,
-				VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-			};
-
-			m_commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-		}
+		this->recordIrradiance(*m_commandBuffer, *bindings, irradiance, sourceSize, starMask);
 
 		if ( !m_commandBuffer->end() )
 		{

@@ -153,6 +153,35 @@ namespace EmEn::Graphics::AtmosphereGLSL
 		"\treturn vec2(atmFromUnitToSubUv(uv.x, 192.0), atmFromUnitToSubUv(uv.y, 108.0));\n"
 	};
 
+	/** @brief The sky-view lookup of a world direction (Y up) for a star direction and a view height (km from the centre):
+	 * xy the table's coordinates, z 1 when the direction meets the ground. The camera's frame of the table: the zenith is
+	 * the world Y, the azimuth is measured from the star's, both projected on the horizontal plane (Hillaire's
+	 * lightOnPlane); a direction or a star at the zenith has no azimuth, any value reads the same row. One source for the
+	 * sky material and the sky's environment capture (Graphics::SkyEnvironment). */
+	constexpr FunctionSource SkyViewLookup{
+		.returnType = "vec3",
+		.name = "atmSkyViewLookup",
+		.parameters = {{{.type = "vec3", .name = "direction"}, {.type = "vec3", .name = "starDirection"}, {.type = "float", .name = "viewHeight"}, {}}},
+		.parameterCount = 3,
+		.body = "\tvec2 viewOnPlane = direction.xz;\n"
+		"\tvec2 starOnPlane = starDirection.xz;\n"
+		"\tfloat planeNorms = length(viewOnPlane) * length(starOnPlane);\n"
+		"\tfloat lightViewCos = planeNorms > 1e-6 ? clamp(dot(viewOnPlane, starOnPlane) / planeNorms, -1.0, 1.0) : 1.0;\n"
+		"\tbool hitsGround = atmRaySphereNearest(vec3(0.0, 0.0, viewHeight), vec3(viewOnPlane.x, viewOnPlane.y, direction.y), vec3(0.0), atmosphere.radii.x) >= 0.0;\n"
+		"\treturn vec3(atmSkyViewParametersToUv(hitsGround, direction.y, lightViewCos, viewHeight), hitsGround ? 1.0 : 0.0);\n"
+	};
+
+	/** @brief The sky's artistic grading, neutral at its defaults: the saturation around the Rec.709 luminance, then the
+	 * tint × the intensity (tintIntensity.rgb × tintIntensity.w). One source for the material and the capture. */
+	constexpr FunctionSource Grade{
+		.returnType = "vec3",
+		.name = "atmGrade",
+		.parameters = {{{.type = "vec3", .name = "radiance"}, {.type = "vec4", .name = "tintIntensity"}, {.type = "float", .name = "saturation"}, {}}},
+		.parameterCount = 3,
+		.body = "\tfloat luminance = dot(radiance, vec3(0.2126, 0.7152, 0.0722));\n"
+		"\treturn max(mix(vec3(luminance), radiance, saturation), vec3(0.0)) * tintIntensity.rgb * tintIntensity.w;\n"
+	};
+
 	/**
 	 * @brief Returns a shared function as raw GLSL (the compute sources).
 	 * @param function A reference to the function.
@@ -229,7 +258,7 @@ namespace EmEn::Graphics::AtmosphereGLSL
 	std::string
 	sharedFunctionsGLSL () noexcept
 	{
-		return toGLSL(FromUnitToSubUv) + toGLSL(RaySphereNearest) + toGLSL(TransmittanceParametersToUv) + toGLSL(SkyViewParametersToUv);
+		return toGLSL(FromUnitToSubUv) + toGLSL(RaySphereNearest) + toGLSL(TransmittanceParametersToUv) + toGLSL(SkyViewParametersToUv) + toGLSL(SkyViewLookup) + toGLSL(Grade);
 	}
 
 	/** @brief The compute-only GLSL: the constants, the medium, the phase functions and the inverse parametrisations. */

@@ -563,13 +563,14 @@ namespace EmEn::Graphics
 		};
 	}
 
-	SkyAtmosphere::SkyAtmosphere (std::string name, const AtmosphereParameters & parameters) noexcept
+	SkyAtmosphere::SkyAtmosphere (std::string name, AtmosphereParameters parameters) noexcept
 		: m_name{std::move(name)},
-		m_parameters{parameters},
+		m_parameters{std::move(parameters)},
 		m_transmittance{m_name + "Transmittance", {TransmittanceWidth, TransmittanceHeight}, VK_FORMAT_R16G16B16A16_SFLOAT},
 		m_multipleScattering{m_name + "MultipleScattering", {MultipleScatteringSize, MultipleScatteringSize}, VK_FORMAT_R16G16B16A16_SFLOAT},
 		m_skyView{m_name + "SkyView", {SkyViewWidth, SkyViewHeight}, VK_FORMAT_R16G16B16A16_SFLOAT},
-		m_frameData{m_name + "Frame", {FrameTexels, 1}, VK_FORMAT_R32G32B32A32_SFLOAT}
+		m_frameData{m_name + "Frame", {FrameTexels, 1}, VK_FORMAT_R32G32B32A32_SFLOAT},
+		m_environment{std::make_unique< SkyEnvironment >(m_name)}
 	{
 
 	}
@@ -946,5 +947,16 @@ namespace EmEn::Graphics
 		}
 
 		return true;
+	}
+
+	void
+	SkyAtmosphere::recordEnvironment (Renderer & renderer, const CommandBuffer & commandBuffer, const SkyFrameInputs & inputs, const SkyEnvironment::Grading & grading) noexcept
+	{
+		if ( !this->isCreated() )
+		{
+			return;
+		}
+
+		m_environment->recordStage(renderer, commandBuffer, *this, {.sunDirection = inputs.sunDirection, .sunIlluminance = inputs.sunIlluminance, .grading = grading});
 	}
 }

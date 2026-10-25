@@ -3,8 +3,9 @@
 > Owner decisions (2026-10-24): the sky is PHYSICAL and must render extraterrestrial skies (the planet is data);
 > it is drawn as a **background material** on the skybox cube; the **CelestialClock** writes the scene's sky state;
 > **one** scattering sun; an AI-owned lab demo (`sky-lab`, projet-alpha). Lot 1 of the dynamic sky; lot 2, the sun's
-> light from the same atmosphere, is § "The light" below (2026-10-25); the next lots are the engine items
-> `dynamic-sky-amortised-ibl`, `dynamic-sky-stars-and-milky-way`, `dynamic-sky-moon` and `dynamic-sky-aerial-perspective`.
+> light from the same atmosphere, is § "The light"; lot 3, the sky's own IBL, is § "The environment" (2026-10-25); the
+> next lots are the engine items `dynamic-sky-stars-and-milky-way`, `dynamic-sky-moon` and
+> `dynamic-sky-aerial-perspective`.
 
 ### The model
 S. Hillaire, *A Scalable and Production Ready Sky and Atmosphere Rendering Technique*, EGSR 2020 (the model of UE's
@@ -117,6 +118,48 @@ the same disc-vs-light colours (within 8-bit levels) and the same zenith, L = 1 
 The Earth's clean Hillaire atmosphere (aerosol depth ~0.005) is far brighter near the horizon than the empirical model
 (73 klx against ~36 klx at 10°): a hazier day is the manifest's `MieScattering` (sky-lab option 5).
 
+### The environment: the sky's own IBL, amortised (lot 3, 2026-10-25)
+The ambient, the reflections and the traced lanes' misses read the scene's three IBL slots (environment, irradiance,
+GGX-prefiltered; `docs/reflection-pipeline.md` § 2.2). A dynamic sky fills them itself — `Graphics::SkyEnvironment`,
+owned by the `SkyAtmosphere` — so a shadowed object turns blue at noon, orange at sunset and dark at night by itself.
+Owner decisions (2026-10-25):
+1. **A compute capture** of THIS frame's sky-view table into a 64² cubemap with its full mip chain
+   (`IBLTexture::Role::EnvironmentCapture`), recorded in the sky's command buffer right after the sky-view pass. The
+   lookup and the grading are the material's own: `AtmosphereGLSL::SkyViewLookup` and `AtmosphereGLSL::Grade` (one
+   source, the material moved onto them), the face convention is `IBLBaker::FaceDirectionGLSL`. The star's DISC is not
+   captured (it lights through its directional light, the StarMask rule); its Mie halo is.
+2. **Absolute radiance**: the capture is in nits (the star's illuminance applied, so the night does not underflow in
+   half floats), and the dynamic sky declares a luminance of **1** (`DynamicSkyResource::AbsoluteLuminance`; a manifest
+   "Luminance" is ignored with a warning): every consumer that scales a cubemap sample by the environment luminance
+   stays right.
+3. **Amortised, one stage per frame**: the capture and its mips, then the irradiance, then one prefilter mip per frame
+   (`IBLBaker::recordIrradiance()` / `recordPrefilterMip()`, the same recordings the blocking picture-sky bake now uses
+   — one code path), then publication: 8 frames a cycle. A cycle starts when the star moved more than **0.25°**
+   (`SkyEnvironment::TriggerAngle`), its illuminance or the grading changed by 1 %, or nothing was baked yet.
+4. **A ring of MaxFramesInFlight + 1 = 6 sets**, allocated at the first stage (≈ 6 MB): a cycle writes the set
+   published five cycles ago, which no frame in flight can still read. The picture skies' bake uses the same ring
+   (`Scene::IBLRingSize`; it was a 2-deep ping-pong while up to 5 frames are in flight, and its blocking bake waited on a
+   queue that may not be the renderer's — `getGraphicsQueue(High)` rotates — so a re-bake could overwrite textures a
+   frame still read; fixed 2026-10-25, proven by four skies swapped in a row, 0 SYNC-HAZARD).
+5. **Publication**: the completed set is released after the sky's command buffer is SUBMITTED
+   (`SkyEnvironment::onSubmitted()`; a failed submission drops the cycle and starts it over); the scene takes it on the
+   logic thread (`Scene::updateDynamicSkyIBL()`) and publishes the three slots, the irradiance under the applyAmbient
+   contract. The once-probes are re-signalled when the sun moved more than **2°** since they last were
+   (`Scene::ProbeResignalAngle`).
+6. **The environment slot (0) gets the capture too**: refraction, the RTGI misses and the irradiance probe volume see
+   the sky.
+
+A scene takes its ambient from the sky with `applyBackgroundLighting({.applyAmbient = true, .applyStars = false})`
+(sky-lab does; the clock lights the sun). The CPU photometry of a picture sky (`hemisphereIlluminanceFactor()`,
+`averageColor()`) is moot there: with the IBL ambient on, the scalar ambient is zero (the anti-double-count rule).
+
+| Measured (sky-lab, Linux, RTX 3070 Ti) | Value |
+|---|---|
+| `SkyAtmosphere/Environment` (GPU profiler, the clock at ×600: cycles back to back) | avg 0.003–0.015 ms, **max 0.10 ms** per frame |
+| Lag behind the sky | one cycle: 8 frames + one logic tick (~0.15 s at 60 FPS), every 0.25° of sun (≈ 1 min in real time) |
+| The floor (albedo 0.5) under the sky alone, by time of day | noon neutral-warm, sunset orange, after sunset the twilight's purple, night dark (the exposure floor) — Mars: butterscotch at sunset |
+| Validation (Earth, Mars, four picture skies swapped in a row on `reflexion-debug`) | 0 VUID, 0 SYNC-HAZARD (synchronization validation requested with `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`) |
+
 ### The manifest (Backgrounds store)
 `"Planet"` (a preset name, default `"Earth"`), `"Atmosphere"` (inline overrides: `GroundRadius`, `TopRadius`,
 `RayleighScaleHeight`, `MieScaleHeight`, `AbsorptionLayerWidth` in km; `RayleighScattering`, `MieScattering`,
@@ -169,14 +212,19 @@ none of which the sun's scattering gives: item `dynamic-sky-stars-and-milky-way`
 ### ⚠️ Traps
 - A background WITHOUT an environment cubemap is legitimate (`AbstractBackground::environmentCubemap()` answers
   nullptr): `Scene::getRenderableInstanceReadyForRendering()` dereferenced it on the first frame (fixed 2026-10-24,
-  the scene keeps the cubemap it has). The dynamic sky's IBL is the item `dynamic-sky-amortised-ibl`: until then the
-  scene keeps the default environment cubemap and a flat ambient.
+  the scene keeps the cubemap it has). The dynamic sky publishes its own environment instead (§ "The environment").
 - `fwidth()` in non-uniform control flow is undefined: the disc's antialiasing derivative is taken BEFORE the
   ground / disc branch.
 - The sky-view table depends on the camera altitude: the main camera's world Y is fed as the height above the
   ground. A flight scene whose ground is not at Y = 0 must say so (not wired yet).
 - The descriptor writes of the tables state `SHADER_READ_ONLY_OPTIMAL` explicitly: the atmosphere moves them with its
   own barriers, the image's tracked layout does not follow.
+- ⚠️ **A barrier recorded in a command buffer does not update `Image::currentImageLayout()`**: the bindless table
+  describes a texture with its TRACKED layout. The amortised bake sets SHADER_READ_ONLY_OPTIMAL on the three textures
+  when a set completes (as `IBLBaker::bakeEnvironment()` does after its wait); without it, 10 ×
+  `VUID-VkWriteDescriptorSet-descriptorType-04150` (layout UNDEFINED) at the first publication.
+- ⚠️ The IBL textures are read by fragment, compute AND ray-tracing stages (RTGI misses): the bake's discard and
+  publish barriers use `ALL_COMMANDS` (`IBLBaker::CubeBarrier`).
 - ⚠️ **Two sources for one integral**: `AtmosphereParameters::transmittanceToTop()` (C++) must follow
   `atmSampleMedium()` and the table's march (`AtmosphereGLSL.hpp`, `SkyAtmosphere.cpp` pass 1) — a change to one is a
   change to the other, re-measured (the light's colour against the disc, § "The light").

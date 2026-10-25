@@ -40,6 +40,7 @@
 #include "volk.h"
 
 /* Local inclusions for usages. */
+#include "Graphics/SkyEnvironment.hpp"
 #include "Graphics/StorageTexture2D.hpp"
 #include "Math/Vector.hpp"
 #include "Mutex.hpp"
@@ -217,9 +218,9 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Constructs a sky atmosphere.
 			 * @param name The name, for the debug labels.
-			 * @param parameters A reference to the atmosphere.
+			 * @param parameters The atmosphere (moved in).
 			 */
-			SkyAtmosphere (std::string name, const AtmosphereParameters & parameters) noexcept;
+			SkyAtmosphere (std::string name, AtmosphereParameters parameters) noexcept;
 
 			/**
 			 * @brief Copy constructor.
@@ -275,6 +276,28 @@ namespace EmEn::Graphics
 			 * @return bool
 			 */
 			bool recordFrame (const Vulkan::CommandBuffer & commandBuffer, const SkyFrameInputs & inputs) noexcept;
+
+			/**
+			 * @brief Records this frame's stage of the sky's amortised IBL bake (SkyEnvironment), after recordFrame() in
+			 * the same command buffer: the capture reads this frame's sky-view table.
+			 * @note RENDER THREAD. Nothing is recorded before the tables exist.
+			 * @param renderer A reference to the renderer.
+			 * @param commandBuffer A reference to the recording command buffer (recordFrame()'s).
+			 * @param inputs A reference to the frame's star and camera.
+			 * @param grading The sky material's artistic grading.
+			 */
+			void recordEnvironment (Renderer & renderer, const Vulkan::CommandBuffer & commandBuffer, const SkyFrameInputs & inputs, const SkyEnvironment::Grading & grading) noexcept;
+
+			/**
+			 * @brief Returns the sky's environment for the IBL (its publications, its submissions).
+			 * @return SkyEnvironment &
+			 */
+			[[nodiscard]]
+			SkyEnvironment &
+			environment () const noexcept
+			{
+				return *m_environment;
+			}
 
 			/**
 			 * @brief Returns the atmosphere.
@@ -397,6 +420,9 @@ namespace EmEn::Graphics
 			std::unique_ptr< Vulkan::ComputePipeline > m_transmittancePipeline;
 			std::unique_ptr< Vulkan::ComputePipeline > m_multipleScatteringPipeline;
 			std::unique_ptr< Vulkan::ComputePipeline > m_skyViewPipeline;
+			/** @brief The sky's environment for the IBL: built with the object (no GPU work before its first stage), so the
+			 * logic thread can take its publications without racing a lazy creation. */
+			std::unique_ptr< SkyEnvironment > m_environment;
 			VkFormat m_tableFormat{VK_FORMAT_R16G16B16A16_SFLOAT};
 			mutable Base::Mutex m_creationAccess;
 			bool m_created{false};

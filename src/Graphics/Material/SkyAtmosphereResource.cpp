@@ -28,28 +28,38 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <initializer_list>
+#include <optional>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
 #include "Graphics/Effects/Shared/AtmosphereGLSL.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
+#include "Graphics/StorageTexture2D.hpp"
+#include "Saphir/AbstractShader.hpp"
 #include "Saphir/AbstractVertexStage.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/Declaration/Function.hpp"
 #include "Saphir/Declaration/Sampler.hpp"
 #include "Saphir/Declaration/StageOutput.hpp"
+#include "Saphir/Declaration/Types.hpp"
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/FragmentShader.hpp"
 #include "Saphir/Generator/Abstract.hpp"
 #include "Saphir/Keys.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/SetIndexes.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/Sampler.hpp"
-#include "Vulkan/UniformBufferObject.hpp"
 
 namespace EmEn::Graphics::Material
 {
@@ -456,7 +466,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		for ( const auto * function : {&AtmosphereGLSL::FromUnitToSubUv, &AtmosphereGLSL::RaySphereNearest, &AtmosphereGLSL::TransmittanceParametersToUv, &AtmosphereGLSL::SkyViewParametersToUv} )
+		for ( const auto * function : {&AtmosphereGLSL::FromUnitToSubUv, &AtmosphereGLSL::RaySphereNearest, &AtmosphereGLSL::TransmittanceParametersToUv, &AtmosphereGLSL::SkyViewParametersToUv, &AtmosphereGLSL::SkyViewLookup, &AtmosphereGLSL::Grade} )
 		{
 			if ( !declareAtmosphereFunction(fragmentShader, *function) )
 			{
@@ -478,16 +488,10 @@ namespace EmEn::Graphics::Material
 			"const vec4 skyFrame1 = texelFetch(" << FrameData << ", ivec2(1, 0), 0);" << Line::End <<
 			"const vec3 skyStarDir = skyFrame0.xyz;" << Line::End <<
 			"const float skyViewHeight = skyFrame1.w;" << Line::End <<
-			/* The camera's frame of the table: the zenith is the world Y, the azimuth is measured from the star's, both
-			 * projected on the horizontal plane (Hillaire's lightOnPlane). A direction or a star at the zenith has no
-			 * azimuth: any value reads the same row. */
-			"const vec2 skyViewOnPlane = skyDir.xz;" << Line::End <<
-			"const vec2 skyStarOnPlane = skyStarDir.xz;" << Line::End <<
-			"const float skyPlaneNorms = length(skyViewOnPlane) * length(skyStarOnPlane);" << Line::End <<
-			"const float skyLightViewCos = skyPlaneNorms > 1e-6 ? clamp(dot(skyViewOnPlane, skyStarOnPlane) / skyPlaneNorms, -1.0, 1.0) : 1.0;" << Line::End <<
-			"const bool skyHitsGround = atmRaySphereNearest(vec3(0.0, 0.0, skyViewHeight), vec3(skyViewOnPlane.x, skyViewOnPlane.y, skyDir.y), vec3(0.0), atmosphere.radii.x) >= 0.0;" << Line::End <<
-			"const vec2 skyViewUv = atmSkyViewParametersToUv(skyHitsGround, skyDir.y, skyLightViewCos, skyViewHeight);" << Line::End <<
-			"vec3 " << SkyRadiance << " = textureLod(" << SkyViewLut << ", skyViewUv, 0.0).rgb * skyFrame1.rgb;" << Line::End <<
+			/* The table's lookup, shared with the environment capture (AtmosphereGLSL::SkyViewLookup). */
+			"const vec3 skyLookup = atmSkyViewLookup(skyDir, skyStarDir, skyViewHeight);" << Line::End <<
+			"const bool skyHitsGround = skyLookup.z > 0.5;" << Line::End <<
+			"vec3 " << SkyRadiance << " = textureLod(" << SkyViewLut << ", skyLookup.xy, 0.0).rgb * skyFrame1.rgb;" << Line::End <<
 			/* The star's disc: its illuminance spread over its solid angle (the mean radiance), shaped by the linear
 			 * limb darkening normalized to that mean, seen through the atmosphere. Antialiased over one pixel. */
 			/* ⚠️ The derivative is taken BEFORE the branch: fwidth() in non-uniform control flow is undefined. */
@@ -509,9 +513,8 @@ namespace EmEn::Graphics::Material
 			"		" << SkyRadiance << " += skyDisc * skyCoverage;" << Line::End <<
 			"	}" << Line::End <<
 			"}" << Line::End <<
-			/* The artistic grading, neutral at its defaults: saturation around the luminance, then tint × intensity. */
-			"const float skyLuminance = dot(" << SkyRadiance << ", vec3(0.2126, 0.7152, 0.0722));" << Line::End <<
-			SkyRadiance << " = max(mix(vec3(skyLuminance), " << SkyRadiance << ", " << star << ".x), vec3(0.0)) * " << grading << ".rgb * " << grading << ".w;";
+			/* The artistic grading, shared with the environment capture (AtmosphereGLSL::Grade). */
+			SkyRadiance << " = atmGrade(" << SkyRadiance << ", " << grading << ", " << star << ".x);";
 
 		return true;
 	}

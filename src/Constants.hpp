@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <cstddef>
 #include <cstdint>
 #include <type_traits>
 
@@ -45,6 +46,13 @@ namespace EmEn
 	 * (Scene::publishStateForRendering(), Scene::beginRenderFrame()).
 	 */
 	constexpr uint32_t RenderStateSlotCount{3};
+
+	/**
+	 * @brief The most frames the renderer keeps in flight (one per swap-chain image, capped).
+	 * @note A resource a frame reads is rewritten only after this many frames replaced it: the IBL rings hold
+	 * MaxFramesInFlight + 1 sets (graphics doc 42 § "The environment").
+	 */
+	constexpr size_t MaxFramesInFlight{5};
 
 	/**
 	 * @brief Default ceiling frequency (Hz) of the engine main event loop.

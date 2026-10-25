@@ -115,6 +115,11 @@ The roughness → mip mapping is
 > [`caution-points.md`](caution-points.md): multiply by `environmentLuminance` ONLY what comes
 > out of the cubemap — anything re-read from the rendered scene (grab pass, screen-space
 > capture) is already an absolute luminance.
+>
+> A **physical sky** (`Graphics::Renderable::DynamicSkyResource`) breaks the "normalized" half on purpose: its
+> environment cubemap is captured in ABSOLUTE radiance (nits) and the sky declares a luminance of 1, so the same scale
+> stays right (graphics doc 42 § "The environment", 2026-10-25). Its IBL is re-baked amortised over 8 frames
+> (`Graphics::SkyEnvironment`); both bakes rotate through a ring of MaxFramesInFlight + 1 sets.
 
 ### 2.3 Path 3 — the dynamic cubemap probe
 

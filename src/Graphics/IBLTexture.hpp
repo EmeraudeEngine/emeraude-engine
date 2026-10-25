@@ -37,6 +37,16 @@
 /* Local inclusions for inheritances. */
 #include "Vulkan/TextureInterface.hpp"
 
+/* Local inclusions for usages. */
+#include "Vulkan/ImageView.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class Image;
+	class Sampler;
+}
+
 namespace EmEn::Graphics
 {
 	class Renderer;
@@ -68,7 +78,10 @@ namespace EmEn::Graphics
 				/** @brief Diffuse irradiance cubemap (cosine-convolved, low frequency, 1 mip). */
 				IrradianceCubemap,
 				/** @brief GGX-prefiltered specular cubemap (one roughness per mip level). */
-				PrefilteredCubemap
+				PrefilteredCubemap,
+				/** @brief A dynamic sky captured into a cubemap (absolute radiance), with its full mip chain: the source of
+				 * an amortised IBL bake (Graphics::SkyEnvironment). Also a blit destination (its mips). */
+				EnvironmentCapture
 			};
 
 			/** @brief BRDF LUT resolution (NdotV x roughness). */
@@ -83,6 +96,14 @@ namespace EmEn::Graphics
 
 			/** @brief Prefiltered cubemap mip count: 128 -> 4 (roughness 0 -> 1). */
 			static constexpr uint32_t PrefilteredMipLevels{6};
+
+			/** @brief Environment capture face size: the sky's low frequencies for the irradiance and the rough mips (the
+			 * sharp sun disc is not in it: it lights through its directional light). */
+			static constexpr uint32_t EnvironmentCaptureSize{64};
+
+			/** @brief Environment capture mip count: the full chain, 64 -> 1 (the bake's filtered importance sampling
+			 * reads the source's mips by solid angle). */
+			static constexpr uint32_t EnvironmentCaptureMipLevels{7};
 
 			/**
 			 * @brief Constructs an IBL texture.
@@ -216,6 +237,9 @@ namespace EmEn::Graphics
 
 					case Role::PrefilteredCubemap :
 						return "PrefilteredCubemap";
+
+					case Role::EnvironmentCapture :
+						return "EnvironmentCapture";
 				}
 
 				return "Unknown";

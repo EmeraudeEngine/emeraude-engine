@@ -31,17 +31,26 @@
 
 /* STL inclusions. */
 #include <array>
+#include <cstdint>
 #include <memory>
+#include <vector>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
+/* Local inclusions for usages. */
+#include "Mutex.hpp"
 
 namespace EmEn::Vulkan
 {
 	class CommandBuffer;
 	class CommandPool;
 	class ComputePipeline;
+	class DescriptorPool;
+	class DescriptorSet;
 	class DescriptorSetLayout;
 	class Device;
 	class PipelineLayout;
-	class ShaderModule;
 	class TextureInterface;
 }
 
@@ -76,6 +85,25 @@ namespace EmEn::Graphics::Compute
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"GraphicsComputeIBLBaker"};
+
+			/** @brief The cube-face convention of every compute pass that writes a cubemap through a 2D-array view: the
+			 * standard face layout (+X, −X, +Y, −Y, +Z, −Z), st in [−1, 1], CUBEMAP space (= world space). One source
+			 * for the bake and the dynamic sky's capture (Graphics::SkyEnvironment). */
+			static constexpr auto FaceDirectionGLSL{R"GLSL(
+/* Standard cube face layout (+X,-X,+Y,-Y,+Z,-Z), st in [-1,1]. CUBEMAP space. */
+vec3 faceDirection (uint face, vec2 st)
+{
+	switch ( face )
+	{
+		case 0u: return vec3( 1.0, -st.y, -st.x);
+		case 1u: return vec3(-1.0, -st.y,  st.x);
+		case 2u: return vec3( st.x,  1.0,  st.y);
+		case 3u: return vec3( st.x, -1.0, -st.y);
+		case 4u: return vec3( st.x, -st.y,  1.0);
+		default: return vec3(-st.x, -st.y, -1.0);
+	}
+}
+)GLSL"};
 
 			/**
 			 * @brief Constructs an IBL baker.
@@ -157,6 +185,143 @@ namespace EmEn::Graphics::Compute
 			bool bakeEnvironment (const Vulkan::TextureInterface & source, IBLTexture & irradiance, IBLTexture & prefiltered, const StarMask & starMask) noexcept;
 
 			/**
+			 * @brief The descriptor sets binding ONE source cubemap to ONE (irradiance, prefiltered) pair: one set per
+			 * dispatch (each prefilter mip, then the irradiance).
+			 * @note Created once by createEnvironmentBindings() and reused by every bake of that pairing: the blocking
+			 * bake builds a transient one, the amortised dynamic-sky bake (Graphics::SkyEnvironment) keeps one per ring
+			 * set and records with it frame after frame. The sets free themselves into their pool (FREE_DESCRIPTOR_SET).
+			 */
+			class EMEN_API EnvironmentBindings final
+			{
+				public:
+
+					/**
+					 * @brief Constructs the bindings.
+					 * @param pool The pool the sets were allocated from.
+					 * @param sets The sets, the prefilter mips first, the irradiance last.
+					 */
+					EnvironmentBindings (std::shared_ptr< Vulkan::DescriptorPool > pool, std::vector< std::unique_ptr< Vulkan::DescriptorSet > > sets) noexcept;
+
+					EnvironmentBindings (const EnvironmentBindings &) = delete;
+
+					EnvironmentBindings & operator= (const EnvironmentBindings &) = delete;
+
+					EnvironmentBindings (EnvironmentBindings &&) = delete;
+
+					EnvironmentBindings & operator= (EnvironmentBindings &&) = delete;
+
+					/**
+					 * @brief Destructs the bindings (the sets first, then the pool).
+					 */
+					~EnvironmentBindings ();
+
+					/**
+					 * @brief Returns the set of a prefilter mip.
+					 * @pre mipLevel < prefilterMipCount().
+					 * @param mipLevel The prefiltered mip level.
+					 * @return const Vulkan::DescriptorSet &
+					 */
+					[[nodiscard]]
+					const Vulkan::DescriptorSet & prefilter (uint32_t mipLevel) const noexcept;
+
+					/**
+					 * @brief Returns the set of the irradiance dispatch.
+					 * @return const Vulkan::DescriptorSet &
+					 */
+					[[nodiscard]]
+					const Vulkan::DescriptorSet & irradiance () const noexcept;
+
+					/**
+					 * @brief Returns the number of prefilter mips the bindings cover.
+					 * @return uint32_t
+					 */
+					[[nodiscard]]
+					uint32_t
+					prefilterMipCount () const noexcept
+					{
+						return m_sets.empty() ? 0U : static_cast< uint32_t >(m_sets.size() - 1);
+					}
+
+				private:
+
+					std::shared_ptr< Vulkan::DescriptorPool > m_pool;
+					std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_sets;
+			};
+
+			/**
+			 * @brief Creates the descriptor sets binding a source cubemap to an (irradiance, prefiltered) pair.
+			 * @note Ensures the environment pipelines first. Cold path: validates everything, refuses with a trace.
+			 * @param source A reference to the source environment cubemap (created, with its full mip chain).
+			 * @param irradiance A reference to the destination (IrradianceCubemap role, created).
+			 * @param prefiltered A reference to the destination (PrefilteredCubemap role, created).
+			 * @return std::unique_ptr< EnvironmentBindings > Null on failure.
+			 */
+			[[nodiscard]]
+			std::unique_ptr< EnvironmentBindings > createEnvironmentBindings (const Vulkan::TextureInterface & source, const IBLTexture & irradiance, const IBLTexture & prefiltered) noexcept;
+
+			/**
+			 * @brief Records the GGX prefilter of ONE mip into a command buffer: the mip is discarded and opened for the
+			 * compute write, written, then left in SHADER_READ_ONLY_OPTIMAL for the fragment and compute readers.
+			 * @note The source must be in SHADER_READ_ONLY_OPTIMAL. The first barrier waits for every earlier read of the
+			 * mip on the queue, in any stage (a write-after-read execution dependency), so a ring set can be re-baked in the
+			 * frame command buffer; the last one makes it visible to every later stage (the materials, the compute and the
+			 * ray-tracing effects). Roughness mip / (mips − 1), as the materials sample it.
+			 * @pre The bindings come from createEnvironmentBindings() with this prefiltered texture; mipLevel <
+			 * prefiltered.mipLevels().
+			 * @param commandBuffer A reference to the recording command buffer.
+			 * @param bindings A reference to the bindings.
+			 * @param mipLevel The mip to write.
+			 * @param prefiltered A reference to the destination.
+			 * @param sourceSize The source's face size at mip 0, in texels.
+			 * @param starMask The celestial body to keep out (default: none).
+			 */
+			void recordPrefilterMip (const Vulkan::CommandBuffer & commandBuffer, const EnvironmentBindings & bindings, uint32_t mipLevel, const IBLTexture & prefiltered, uint32_t sourceSize, const StarMask & starMask) const noexcept;
+
+			/**
+			 * @brief An image barrier on mip levels of a cubemap (all six faces): named fields, never swapped.
+			 */
+			struct CubeBarrier
+			{
+				/** @brief The layout before. */
+				VkImageLayout oldLayout{VK_IMAGE_LAYOUT_UNDEFINED};
+				/** @brief The layout after. */
+				VkImageLayout newLayout{VK_IMAGE_LAYOUT_UNDEFINED};
+				/** @brief The accesses to make available. */
+				VkAccessFlags srcAccess{0};
+				/** @brief The accesses to make visible. */
+				VkAccessFlags dstAccess{0};
+				/** @brief The stages to wait for. */
+				VkPipelineStageFlags srcStage{VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
+				/** @brief The stages that wait. */
+				VkPipelineStageFlags dstStage{VK_PIPELINE_STAGE_ALL_COMMANDS_BIT};
+				/** @brief The first mip level. */
+				uint32_t baseMip{0};
+				/** @brief The number of mip levels. */
+				uint32_t mipCount{1};
+			};
+
+			/**
+			 * @brief Records an image barrier on mip levels of a cubemap (all six faces).
+			 * @note Public: the dynamic sky's capture (Graphics::SkyEnvironment) moves its cubemap's mips with it too.
+			 * @param commandBuffer A reference to the recording command buffer.
+			 * @param image The image.
+			 * @param barrier The barrier.
+			 */
+			static void recordCubeBarrier (const Vulkan::CommandBuffer & commandBuffer, VkImage image, const CubeBarrier & barrier) noexcept;
+
+			/**
+			 * @brief Records the irradiance convolution into a command buffer, with the same barriers as
+			 * recordPrefilterMip().
+			 * @pre The bindings come from createEnvironmentBindings() with this irradiance texture.
+			 * @param commandBuffer A reference to the recording command buffer.
+			 * @param bindings A reference to the bindings.
+			 * @param irradiance A reference to the destination.
+			 * @param sourceSize The source's face size at mip 0, in texels.
+			 * @param starMask The celestial body to keep out (default: none).
+			 */
+			void recordIrradiance (const Vulkan::CommandBuffer & commandBuffer, const EnvironmentBindings & bindings, const IBLTexture & irradiance, uint32_t sourceSize, const StarMask & starMask) const noexcept;
+
+			/**
 			 * @brief Push constant block of the environment pipelines (prefilter, irradiance).
 			 * @note Public: the probe convolver (Compute::ProbeConvolver) records the SAME
 			 * prefilter pipeline into the frame command buffer and must push this block.
@@ -179,7 +344,8 @@ namespace EmEn::Graphics::Compute
 			/**
 			 * @brief Creates (once) the cached environment-bake pipelines and command objects.
 			 * @note Public: also called by Compute::ProbeConvolver before borrowing the
-			 * prefilter pipeline (see the getters below).
+			 * prefilter pipeline (see the getters below). Thread-safe: the logic thread (a picture sky's bake) and the
+			 * render thread (a probe, the dynamic sky) both reach it; once created, the pipelines are immutable.
 			 * @return bool True when everything is ready.
 			 */
 			[[nodiscard]]
@@ -240,5 +406,7 @@ namespace EmEn::Graphics::Compute
 			std::unique_ptr< Vulkan::ComputePipeline > m_irradiancePipeline;
 			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
 			std::unique_ptr< Vulkan::CommandBuffer > m_commandBuffer;
+			/** @brief Guards the creation of the environment pipelines (ensureEnvironmentPipelines()). */
+			mutable Base::Mutex m_pipelinesAccess;
 	};
 }

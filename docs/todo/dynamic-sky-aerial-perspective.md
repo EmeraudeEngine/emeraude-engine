@@ -25,11 +25,11 @@ it.
       REPLACES `AtmosphericFog`'s distance fog under a dynamic sky, or adds to it (height fog stays
       a separate, local medium).
 - [ ] **Clouds**: their sun term reads the transmittance toward the sun at the cloud's altitude, and
-      their ambient term reads the sky (the irradiance bake of `dynamic-sky-amortised-ibl`).
+      their ambient term reads the sky (its irradiance, baked amortised since 2026-10-25: graphics doc 42 § "The environment").
 - [ ] **The far horizon**: the geometry's far edge and the sky must meet with no seam (same
       in-scattering at the same distance).
 
 ## References
 
-- the physical sky, lot 1 (graphics doc 42, `42-physical-sky-atmosphere.md`), `dynamic-sky-amortised-ibl`.
+- the physical sky, lot 1 (graphics doc 42, `42-physical-sky-atmosphere.md`, § "The environment").
 - `src/Graphics/Effects/Atmosphere/`, `docs/post-processing-pipeline.md`.
