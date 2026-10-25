@@ -156,7 +156,11 @@ AtmIntegration atmIntegrate (vec3 origin, vec3 direction, vec3 sunDirection, boo
 
 	float dt = tMax / count;
 	float t = 0.0;
-	const float SampleSegmentT = 0.3;
+	/* The MIDPOINT of each step (owner decision 2026-10-25). Hillaire's reference samples at 0.3 of a step: with a full
+	 * step the optical depth comes out +2 to +9 % (an exponential medium is denser at the step's start), and its fixed
+	 * march (dt measured from the previous sample) -6 to -15 % (the first sample, which dominates the thin Mie layer,
+	 * worth 0.3 of a step). The midpoint stays within 2 % of an exact integration for every ray of the tables. */
+	const float SampleSegmentT = 0.5;
 	const float UniformPhase = 1.0 / (4.0 * AtmPi);
 	float cosTheta = dot(sunDirection, direction);
 	vec3 miePhase = atmMiePhase(cosTheta);
@@ -178,9 +182,11 @@ AtmIntegration atmIntegrate (vec3 origin, vec3 direction, vec3 sunDirection, boo
 		}
 		else
 		{
-			float newT = tMax * (s + SampleSegmentT) / count;
-			dt = newT - t;
-			t = newT;
+			/* ⚠️ Each sample is worth a FULL step (dt = tMax / count, set above). Hillaire's reference measures it from
+			 * the previous sample (dt = newT - t from t = 0): the first sample is worth 0.3 of a step and the march
+			 * covers (1 - 0.7 / count) of the ray. Found by measuring the aerial perspective against a CPU integration
+			 * (2026-10-25: its optical depth ~4.5 % short at 1-9 km); fixed with the CPU twin (transmittanceToTop()). */
+			t = tMax * (s + SampleSegmentT) / count;
 		}
 
 		vec3 position = origin + (t * direction);
@@ -493,15 +499,15 @@ namespace EmEn::Graphics
 		const auto mieExtinction = mieScattering + mieAbsorption;
 
 		std::array< double, 3 > opticalDepth{0.0, 0.0, 0.0};
-		double previous = 0.0;
 
-		/* The table's fixed-step march: samples at (s + 0.3) / count of the way, each worth the distance from the
-		 * previous one (Hillaire's reference, kept as is so that the twin and the table agree). */
+		/* The table's fixed-step march: a sample at the MIDPOINT of each step, each worth a full step (the table's own
+		 * march, fixed with it on 2026-10-25: Hillaire's reference sampled at 0.3 of a step and measured a step from the
+		 * previous sample — optical depth -6 to -15 % against an exact integration; the midpoint is within 2 %). */
+		const auto dt = distance / static_cast< double >(TransmittanceSampleCount);
+
 		for ( int sample = 0; sample < TransmittanceSampleCount; ++sample )
 		{
-			const auto t = distance * (static_cast< double >(sample) + 0.3) / static_cast< double >(TransmittanceSampleCount);
-			const auto dt = t - previous;
-			previous = t;
+			const auto t = distance * (static_cast< double >(sample) + 0.5) / static_cast< double >(TransmittanceSampleCount);
 
 			const auto x = t * sinZenith;
 			const auto z = radius + (t * mu);

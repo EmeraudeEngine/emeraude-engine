@@ -132,9 +132,10 @@ namespace EmEn::Graphics
 		/**
 		 * @brief Returns the transmittance from a point to the top of the atmosphere: the CPU twin of the transmittance
 		 * table (SkyAtmosphere's pass 1).
-		 * @note The table's own march, sample for sample (40 uniform samples, Hillaire's 0.3 offset, the same medium
-		 * and the same clamped scale heights), in double precision: it differs from the table only by the table's
-		 * interpolation and its half floats. A ray that meets the ground transmits nothing.
+		 * @note The table's own march, sample for sample (40 uniform steps sampled at their midpoint — Hillaire's
+		 * reference sampled at 0.3 of a step and weighted its first sample 0.3, fixed in both on 2026-10-25 —, the same
+		 * medium and the same clamped scale heights), in double precision: it differs from the table only by the
+		 * table's interpolation and its storage format. A ray that meets the ground transmits nothing.
 		 * @note Pure and cheap (40 samples): the logic thread calls it every cycle (owner decision 2026-10-24, "a CPU
 		 * twin", against a readback of the table).
 		 * @param height The point's height above the ground, in km. Clamped to [0, top − ground].

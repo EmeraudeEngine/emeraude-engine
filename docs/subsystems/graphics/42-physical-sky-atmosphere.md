@@ -13,6 +13,21 @@ S. Hillaire, *A Scalable and Production Ready Sky and Atmosphere Rendering Techn
 (EGSR 2008). A Rayleigh layer, a Mie layer and an absorbing layer (Earth's ozone, a tent profile), all exponential
 or piecewise-linear in height. **Units: kilometres, per kilometre; the planet's centre is the origin.**
 
+⚠️ **Every march samples the MIDPOINT of its steps** (owner decision 2026-10-25). The reference marches at 0.3 of a
+step (`SampleSegmentT`), and its fixed-count branch measures each step from the previous sample, so the first sample
+is worth only 0.3 of a step and the march covers (1 − 0.7/N) of the ray. Against an exact integration (20 000 steps)
+of the transmittance to the top from 10 m:
+- the reference fixed march (the transmittance table): optical depth **−6 to −15 %**;
+- a full step at 0.3: **+2 to +7 %**;
+- the midpoint: **−1.7 to 0 %**.
+
+The variable march (the sky-view) at 0.3 reads +6 to +9 %; at the midpoint, −2 to 0 %. The first sample decides
+because it dominates the thin Mie layer (1.2 km) at the ground. Found by measuring the aerial perspective against a
+CPU integration: its optical depth was ~4.5 % short at 1–9 km. Fixed in `atmIntegrate()` and in the CPU twin
+together (`transmittanceToTop()`, still the table's own march), with lot 2's numbers below re-measured. The reference
+over-lit the low sun: the light went −1.8 % at 60°, −3 % at 30°, −7 % at 10°, −13 % at 2° and −15 % at the horizon,
+and the noon zenith −8 %.
+
 | Table | Size, format | Built | Holds |
 |---|---|---|---|
 | Transmittance | 256×64 RGBA32F | once, at creation | transmittance to the top, per (height, zenith cosine) |
@@ -95,28 +110,43 @@ the same change (full-moon illuminance × phase × `Y(moon ⊙ T_disc)`); a moon
 `CelestialClock.getState()` says `"model": "atmosphere"` and gives `transmittance`, `color`, `topOfAtmosphereLux`
 and the planet's `starDistanceAU`.
 
-| Earth, 45° N, sky-lab (2026-10-25, Linux) | Sun elevation | Light (lux) | Colour (linear, max 1) |
+| Earth, 45° N, sky-lab (re-measured 2026-10-25 with the midpoint march, Linux) | Sun elevation | Light (lux) | Colour (linear, max 1) |
 |---|---|---|---|
-| June solstice | 60° | 113 690 | (1, 0.808, 0.668) |
-| March equinox (E_toa 134 870 lx, 0.996 AU) | 45° | 114 990 | (1, 0.793, 0.637) |
-| | 30° | 107 800 | (1, 0.761, 0.574) |
-| | 10° | 73 388 | (1, 0.590, 0.296) |
-| | 4° | 38 710 | (1, 0.378, 0.082) |
-| | 2° | 21 565 | (1, 0.247, 0.021) |
-| | 0° | 4 058 | (1, 0.094, 0.0008) |
-| | −0.2° | 1 316 | penumbra |
+| June solstice | 60° | 111 670 | (1, 0.800, 0.646) |
+| March equinox (E_toa 134 870 lx, 0.996 AU) | 45° | 112 520 | (1, 0.784, 0.612) |
+| | 30° | 104 600 | (1, 0.748, 0.542) |
+| | 10° | 68 307 | (1, 0.566, 0.257) |
+| | 4° | 34 483 | (1, 0.353, 0.064) |
+| | 2° | 18 748 | (1, 0.227, 0.016) |
+| | 0° | 3 433 | (1, 0.084, 0.001) |
+| | −0.2° | 1 112 | penumbra |
 | | −0.4° | 0, off | — |
 
-**The light agrees with the drawn disc** (disc minus the surrounding sky, post-processor off, linear PNG): G/R and
-B/R at 10° 0.588 / 0.295 against 0.590 / 0.296; at 4° 0.375 / 0.079 against 0.378 / 0.082; at 2° 0.253 against 0.247
-(the disc's centre against the disc's average, and 8-bit levels). Mars (sky-lab option 0 = 1, 1.39 AU): 69 080 lx above
-the atmosphere, 32 320 lx at 30°, 8 905 lx at 10°; the art preset's dust lets more blue through than red, so its
-direct sunset light turns blue (0.59, 0.91, 1) — data, tunable. 0 VUID in the three runs. **Validated on the three
-OS** (2026-10-25, engine 291efb25): macOS M6 (MoltenVK) and Windows (MSVC, RTX 3500 Ada) give the same sweep (to 3e-5),
-the same disc-vs-light colours (within 8-bit levels) and the same zenith, L = 1 771 cd/m².
+(The reference march's values, lot 2: 113 690, 114 990, 107 800, 73 388, 38 710, 21 565, 4 058, 1 316 lx.)
+
+**The light agrees with the drawn disc.** Protocol: post-processor off, linear PNG, a 300 mm lens AIMED at the sun
+(`Act.lookAt` along `getState`'s sun direction), the disc's centre (r < 15 px) minus an annulus clear of it (110–140
+px), k brought until the core reads 200–245. G/R and B/R, disc against light:
+
+| Elevation | G/R disc | G/R light | B/R disc | B/R light |
+|---|---|---|---|---|
+| 30° | 0.748 | 0.748 | 0.546 | 0.542 |
+| 10° | 0.566 | 0.566 | 0.256 | 0.257 |
+| 4° | 0.357 | 0.353 | 0.066 | 0.064 |
+| 2° | 0.227 | 0.227 | 0.017 | 0.016 |
+
+The B/R differences are 8-bit levels. ⚠️ Two traps of the default lens. The disc is ~11 px across, so a ring at 6–9
+px sits on its antialiased edge. And the disc is CAPPED (`StarDiscCeiling`), so the horizon glow can outshine it and
+a global maximum picks the glow.
+
+Mars (sky-lab option 0 = 1, 1.39 AU): 69 080 lx above the atmosphere, 30 220 lx at 30°, 7 606 lx at 10° (reference
+march: 32 320 and 8 905). The art preset's dust lets more blue through than red, so its direct sunset light turns
+blue — data, tunable. 0 VUID. **Validated on the three OS with the reference march** (2026-10-25, engine 291efb25):
+macOS M6 (MoltenVK) and Windows (MSVC, RTX 3500 Ada) gave the same sweep (to 3e-5), the same disc-vs-light colours
+(within 8-bit levels) and the same zenith.
 
 The Earth's clean Hillaire atmosphere (aerosol depth ~0.005) is far brighter near the horizon than the empirical model
-(73 klx against ~36 klx at 10°): a hazier day is the manifest's `MieScattering` (sky-lab option 5).
+(68 klx against ~36 klx at 10°): a hazier day is the manifest's `MieScattering` (sky-lab option 5).
 
 ### The environment: the sky's own IBL, amortised (lot 3, 2026-10-25)
 The ambient, the reflections and the traced lanes' misses read the scene's three IBL slots (environment, irradiance,
@@ -193,7 +223,7 @@ There is no HDR readback; this is the absolute reading:
 |---|---|
 | Sky-view pass (`SkyAtmosphere/SkyView`, GPU profiler) | **0.010 ms** (max 0.040) |
 | Earth zenith, sun 45°, 124 600 lx above the atmosphere, sRGB-encoded star colour (lot 1) | RGB (835, 1677, 3765) nits, L ≈ 1 650 cd/m² |
-| Earth zenith, sun 45°, **134 870 lx** above the atmosphere, LINEAR 5772 K (lot 2, 2026-10-25) | RGB (964, 1799, 3870) nits, **L ≈ 1 771 cd/m²** (a very clear sky by Kittler's zenith formula: ~2 000 at turbidity 2.5); 2^-13 doubles the bytes |
+| Earth zenith, sun 45°, **134 870 lx** above the atmosphere, LINEAR 5772 K (lot 2, 2026-10-25) | RGB (964, 1799, 3870) nits, L ≈ 1 771 cd/m² with the reference march; **RGB (890, 1649, 3585) nits, L ≈ 1 628 cd/m² with the midpoint march** (a very clear sky by Kittler's zenith formula: ~2 000 at turbidity 2.5); 2^-13 doubles the bytes |
 | Earth dusk, 45° N equinox (sun 12.7°, 5.1°, 0.1°, −3.0°, −7.5°) | halo → yellowing → orange horizon under a purple vault → pink-violet → deep blue with an orange band (frames in the `sky-lab` notes) |
 | Mars | butterscotch day, a white-to-blue aureole core at sunset (tone-mapped: the core saturates) |
 
@@ -202,7 +232,8 @@ Earth, 45° N, new moon, zenith (post-processor off, the grading raised until th
 
 | Sun | 0° | −3° | −6° | −9° | −12° | −15° | −18° | −21° | −30° |
 |---|---|---|---|---|---|---|---|---|---|
-| Zenith (cd/m²) | 187 | 31 | 1.04 | 0.041 | 0.0024 | 8.7e-5 | 7.6e-6 | 3.7e-7 | 0 |
+| Zenith (cd/m²), midpoint march | 174 | 29.1 | 1.00 | 0.036 | 0.0021 | 8.6e-5 | 7.9e-6 | 3.6e-7 | 0 |
+| Zenith (cd/m²), reference march | 187 | 31 | 1.04 | 0.041 | 0.0024 | 8.7e-5 | 7.6e-6 | 3.7e-7 | 0 |
 
 Civil twilight ends at ~1 cd/m², as measured skies do. Below −18° the zenith column is in the planet's shadow up to
 327 km (the atmosphere is 100 km thick): only multiple scattering from the sunlit horizon remains, and at −30° nothing
