@@ -362,9 +362,36 @@ of its radius; the grading raised per phase until the peak reads 160–210; vali
   (2560 × 1440) measured 0.640 against 0.526 ms with the first shader (every sky pixel computed the moon's frame:
   trap below); with the analytic gradients, Linux 0.111 / 0.110 ms (on / off).
 
+**Loading.** A moon's map is a dependency of the sky material: the sky appears when the map is loaded. On a COLD
+texture cache the engine block-compresses the map first (CPU BC7): Windows-PA measured 15.6 s for the 8K on the Intel
+iGPU (8192 × 4096, 14 mips), 1.8–1.9 s for the 2K; warm, 0.23 s. Items `sky-body-surfaces-non-blocking` and
+`astronomy-maps-gpu-ready` (owner decision 2026-10-25: both).
+
 **Failure paths.** A surface that is not a store texture fails the sky's load, like any malformed manifest key. A
 surface without CPU pixels (a block-compressed store image) or with a black near side is traced and drawn with a
 uniform albedo; its light then stays uniform too.
+
+### The stars (lot S1, 2026-10-25: the catalogue)
+The stars the sky draws as points come from a **star catalogue resource** (`Graphics::StarCatalogueResource`, data store
+`StarCatalogues`, container "Star catalogue manager"), in ONE canonical schema whatever the source (owner decision
+2026-10-25: a canonical format and a converter):
+
+```json
+{ "format": "EmeraudeStarCatalogue", "version": 1, "name": "...", "source": "...", "credit": "...",
+  "frame": "ICRS / J2000 equatorial, epoch 2000.0", "fields": ["ra_deg", "dec_deg", "vmag", "bv", "id", "bvEstimated"],
+  "optionalFields": ["bvEstimated"], "stars": [[101.287083, -16.716111, -1.46, 0.0, "HR 2491"], ...] }
+```
+
+- The resource keeps, per star, the unit vector in the J2000 equatorial frame (x toward the vernal equinox, z toward the
+  north celestial pole), Johnson V and B−V; the file is a trust boundary: an entry with a missing, non-finite or
+  out-of-range position, V (−27 to 30) or B−V (−0.6 to 6) is refused, counted and traced. The neutral resource is an
+  empty catalogue.
+- projet-alpha ships `StarCatalogues/YaleBSC5` — the Yale Bright Star Catalogue, 5th revised ed. (CDS V/50, Hoffleit &
+  Warren 1991): 9 096 stars with a position, V −1.46 (Sirius) to 7.96, 310 B−V estimated from the spectral class
+  (flagged), the whole set 2.0e-4 lx above the atmosphere. Converter: projet-alpha `tools/star-catalogue/`. Loaded on
+  sky-lab through `loadResource(StarCatalogueResource, YaleBSC5)`: 9 096 stars, 0 refused, 0 VUID.
+- ⚠️ **Licences**: ESA's Hipparcos, Tycho-2 and Gaia are CC BY-NC 3.0 IGO (non-commercial) — not used (owner decision);
+  the fainter stars will come from UCAC4 (USNO, public domain). Item `dynamic-sky-stars-and-milky-way` § The plan.
 
 ### The manifest (Backgrounds store)
 `"Planet"` (a preset name, default `"Earth"`), `"Atmosphere"` (inline overrides: `GroundRadius`, `TopRadius`,
@@ -453,6 +480,12 @@ none of which the sun's scattering gives: item `dynamic-sky-stars-and-milky-way`
   integrates to 1.0014 / 1.0009 / 1.0020 at 400 / 800 / 1 600 mm (1.0023 / 1.0015 / 1.0025 before); the pixels differ
   by 0.2–0.5 of a byte inside the disc, at most 39 at the limb (the hardware's per-quad derivatives against the exact
   per-pixel ones; p · d → 0 there, clamped). The equirectangular seam (u wraps at the far side) is never on screen.
+  Checked: the chain rule matches the finite differences of the exact coordinates within 0.1–1 % (a numerical model of
+  the 1 600 mm view); the texel-scale contrast of the disc (mean squared neighbour difference) is 1.03 / 1.00 / 1.02 × the
+  hardware-derivative version on Linux (centre / middle / edge rings). The Apple M6 (MoltenVK) reads it 0.84 / 0.88 /
+  0.97: its LOD from explicit gradients differs from its own derivatives' by a few tenths of a mip, invisible at 1:1
+  (macOS-PA, 2026-10-25). Cost after the fix: the M6's `ScenePass` +0.04 ms with the Moon (median of 5 pairs, within its
+  ±0.05 ms launch noise; +0.114 ms before).
 - ⚠️ **A descriptor set allocates EVERY binding of its layout**, written or not. The sky's pool asked 4 uniform buffers /
   5 samplers / 6 storage images for four sets of a layout that needs 2 / 2 / 2 each (fixed 2026-10-25 with the moon
   binding, `SetCount × 2`); a driver that enforces the counts answers `VK_ERROR_OUT_OF_POOL_MEMORY` on the third set.

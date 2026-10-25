@@ -83,6 +83,7 @@
 #include "Graphics/Renderable/SkyBoxResource.hpp"
 #include "Graphics/Renderable/SpriteResource.hpp"
 #include "Graphics/Renderable/TerrainResource.hpp"
+#include "Graphics/StarCatalogueResource.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/AnimatedTextureCubemap.hpp"
 #include "Graphics/TextureResource/Texture1D.hpp"
@@ -830,6 +831,7 @@ namespace EmEn::Resources
 			m_containers.emplace(typeid(Audio::SoundResource), std::make_unique< Sounds >("Sound manager", m_primaryServices, *this, this->getLocalStore("Sounds")));
 			m_containers.emplace(typeid(Audio::MusicResource), std::make_unique< Musics >("Music manager", m_primaryServices, *this, this->getLocalStore("Musics")));
 			m_containers.emplace(typeid(Audio::PlaylistResource), std::make_unique< Playlists >("Playlist manager", m_primaryServices, *this, this->getLocalStore("MusicPlaylists")));
+			m_containers.emplace(typeid(Graphics::StarCatalogueResource), std::make_unique< StarCatalogues >("Star catalogue manager", m_primaryServices, *this, this->getLocalStore("StarCatalogues")));
 			m_containers.emplace(typeid(Audio::SoundfontResource), std::make_unique< Soundfonts >("Soundfont manager", m_primaryServices, *this, this->getLocalStore("SoundBanks")));
 			m_containers.emplace(typeid(Graphics::FontResource), std::make_unique< Fonts >("Font manager", m_primaryServices, *this, this->getLocalStore("Fonts")));
 			m_containers.emplace(typeid(Graphics::ImageResource), std::make_unique< Images >("Image manager", m_primaryServices, *this, this->getLocalStore("Images")));

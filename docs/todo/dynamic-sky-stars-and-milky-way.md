@@ -1,7 +1,7 @@
 ---
 id: dynamic-sky-stars-and-milky-way
 title: Dynamic sky — a night sky of catalogue stars and a Milky Way, physical with artistic controls
-status: open
+status: in-progress
 priority: unranked
 scope: Graphics/Renderable (DynamicSkyResource), Saphir (background program), Resources (star catalogue, Milky Way cubemap)
 opened: 2026-10-24
@@ -18,6 +18,33 @@ tags: [sky, stars, night, photometry, owner-decision, design]
 A dynamic sky must be starry at night. Done physically, the stars are additive and ALWAYS drawn:
 they vanish by day because the sky is ~1e6 times brighter, then reappear one by one at dusk with no
 scripted fade. This is the correct behaviour, and it costs nothing.
+
+## The plan (owner decisions 2026-10-25)
+
+- **Hybrid sources**: catalogue stars drawn as POINTS — sharp at any focal length, behind Mars at a telescope zoom —
+  and a diffuse background (the Milky Way and the fainter stars) from NASA's Deep Star Maps 2020 (SVS 4851, HDR,
+  celestial J2000) with the point-drawn stars removed (nothing counted twice).
+- ⚠️ **Licences (checked 2026-10-25; owner decision: free sources only).** ESA's catalogues are NON-commercial:
+  Hipparcos (CDS I/239 ReadMe: "License: CC-BY-NC-3.0 IGO"), Tycho-2 (I/259, the same), Gaia ("Gaia data are distributed
+  under the CC BY-NC 3.0 IGO license", cosmos.esa.int/web/gaia-users/license). So: the **Yale Bright Star Catalogue, 5th
+  revised ed.** (CDS V/50, Hoffleit & Warren 1991; no licence restriction stated; 9 110 stars to V ≈ 6.5) for the
+  naked-eye sky now; **UCAC4** (US Naval Observatory, a US-government work: public domain; ~113 M stars, APASS B/V) for
+  the fainter stars, once its bright-star supplement is checked not to come from Tycho; the Deep Star Maps are NASA's
+  (NASA media guidelines) but BUILT FROM ESA data: the inherited risk is recorded in the data's LICENSE.txt.
+- **Every planet in this lot** (Mercury to Neptune, and Pluto): real positions, magnitude, phase; a point at a normal
+  focal length — the stars' pass — that becomes the textured disc at a telescope zoom (the moons' mechanism generalised).
+- **A dedicated pass for the points**: instanced additive quads after the sky, one per star above the magnitude
+  limit, an energy-conserving Gaussian footprint of about a pixel (TAA stable), dimmed and reddened by the
+  atmosphere's transmittance; no cost per sky pixel.
+- **The night's own glow, physical first**: airglow (a thin emitting layer, the van Rhijn factor), zodiacal light, the
+  integrated starlight; then MEASURE what the exposure sees and decide the exposure ceiling / an artistic night lift
+  with the owner.
+
+**S1 done 2026-10-25** (graphics doc 42 § "The stars": `StarCatalogueResource`, the canonical schema, Yale BSC5 in
+projet-alpha's data). Lots: **S1** the catalogue (download, licence, a compact data-store format, the engine's loader); **S2** the points
+pass (magnitude → illuminance, B−V → colour, the sidereal rotation, transmittance, footprint); **S3** the planets
+(JPL J2000 elements, geocentric positions, magnitudes and phases, the point → disc); **S4** the Milky Way background;
+**S5** the night glow and the exposure measurement. Each lot measured, committed on the owner's OK, the peers after.
 
 ## What remains
 

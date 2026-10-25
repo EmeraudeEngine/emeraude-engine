@@ -290,6 +290,7 @@
 #include "Graphics/SkinnedGeometryProcessor.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
 #include "Graphics/SkyEnvironment.hpp"
+#include "Graphics/StarCatalogueResource.hpp"
 #include "Graphics/StorageTexture2D.hpp"
 #include "Graphics/StorageTexture3D.hpp"
 #include "Graphics/TextureCache.hpp"
@@ -646,6 +647,7 @@ template class EmEn::Resources::Container< EmEn::Graphics::Renderable::MultiLaye
 template class EmEn::Resources::Container< EmEn::Audio::MusicResource >;
 template class EmEn::Resources::Container< EmEn::Graphics::Material::PathResource >;
 template class EmEn::Resources::Container< EmEn::Audio::PlaylistResource >;
+template class EmEn::Resources::Container< EmEn::Graphics::StarCatalogueResource >;
 template class EmEn::Resources::Container< EmEn::Graphics::Geometry::PulledVertexResource >;
 template class EmEn::Resources::Container< EmEn::Graphics::Geometry::RawIndexedVertexResource >;
 template class EmEn::Resources::Container< EmEn::Graphics::Geometry::RawVertexResource >;
