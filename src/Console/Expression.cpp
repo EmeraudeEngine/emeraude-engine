@@ -27,12 +27,16 @@
 #include "Expression.hpp"
 
 /* STL inclusions. */
-#include <cerrno>
+#include <cerrno> // IWYU pragma: keep (errno, ERANGE: the macOS strtof() path)
 #include <charconv>
-#include <cmath>
-#include <cstdlib>
+#include <cmath> // IWYU pragma: keep (std::isfinite: the macOS strtof() path)
+#include <cstdlib> // IWYU pragma: keep (std::strtof: the macOS path)
+#include <system_error>
+#include <utility>
 
 /* Local inclusions. */
+#include "Console/Argument.hpp"
+#include "Console/Types.hpp"
 #include "String.hpp"
 
 namespace EmEn::Console
@@ -147,7 +151,10 @@ namespace EmEn::Console
 				continue;
 			}
 
-			if ( argument.find('.') != std::string::npos )
+			/* A float has a dot OR an exponent: "1e9" went to the integer parser, failed and became a string, so a
+			 * float parameter refused it (2026-10-25, found by Windows-PA). A name with an 'e' ("Eyes") fails the float
+			 * parse and stays a string, as before. */
+			if ( argument.find_first_of(".eE") != std::string::npos )
 			{
 #ifdef __APPLE__
 				/* NOTE: strtof() reports an overflow (±HUGE_VALF) or an underflow through errno only: refused, as
