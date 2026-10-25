@@ -72,6 +72,7 @@
 #include "Saphir/ShaderManager.hpp"
 #include "SelectionOutline.hpp"
 #include "SharedUBOManager.hpp"
+#include "SkyStarField.hpp" // IWYU pragma: keep (m_skyStarFieldsInFlight is a std::array of SkyStarField: a complete type)
 #include "StaticVector.hpp"
 #include "TextureCache.hpp"
 #include "TextureCompressor.hpp"
@@ -1189,6 +1190,15 @@ namespace EmEn::Graphics
 			const SkyAtmosphere * frameSkyAtmosphere () const noexcept;
 
 			/**
+			 * @brief Returns the star field THIS frame recorded with its physical sky (the sky's star catalogue and the
+			 * clock's equatorial frame), or nullptr: no submitted sky, no catalogue in its manifest, or no celestial clock.
+			 * @note RENDER THREAD, after renderSkyAtmosphere(). The slot keeps the catalogue alive for the frame.
+			 * @return const SkyStarField *
+			 */
+			[[nodiscard]]
+			const SkyStarField * frameStarField () const noexcept;
+
+			/**
 			 * @brief Returns the number of frames in flight.
 			 * @return uint32_t
 			 */
@@ -1974,6 +1984,9 @@ namespace EmEn::Graphics
 			/* The atmosphere each frame in flight recorded: kept alive until that frame's slot is reused (its fence
 			 * waited), so a background swapped meanwhile never frees tables the GPU still writes or reads. */
 			std::array< std::shared_ptr< SkyAtmosphere >, 5 > m_skyAtmospheresInFlight;
+			/* The star field each frame in flight recorded with its atmosphere (an empty catalogue: none), its catalogue
+			 * kept alive the same way. */
+			std::array< SkyStarField, 5 > m_skyStarFieldsInFlight;
 			/** @brief Semaphores signaled by the frame submission and waited on by
 			 * vkQueuePresentKHR(), indexed by ACQUIRED SWAP-CHAIN IMAGE INDEX — never by frame
 			 * index. A binary semaphore cannot be re-signaled while an operation still waits on

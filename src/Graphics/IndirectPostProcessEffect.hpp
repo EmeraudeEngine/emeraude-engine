@@ -80,6 +80,7 @@ namespace EmEn
 		class IntermediateRenderTarget;
 		class Renderer;
 		class SkyAtmosphere;
+		struct SkyStarField;
 	}
 }
 
@@ -457,6 +458,9 @@ namespace EmEn::Graphics
 				 * sky, or its submission failed —, the same "null means absent" contract. Kept alive by the renderer
 				 * for the frame. */
 				const SkyAtmosphere * atmosphere{nullptr};
+				/* The star field THIS frame recorded with that atmosphere (Renderer::frameStarField()): the sky's catalogue
+				 * and the clock's equatorial frame. Null without one — no submitted sky, no catalogue, no celestial clock. */
+				const SkyStarField * stars{nullptr};
 				/* The frame's VIEW RECONSTRUCTION (Effects/Shared/ViewReconstructionGLSL.hpp): the projection, its inverse
 				 * and the camera-relative inverse view-projection of the read state, in this frame's buffer. THE way an
 				 * effect turns a depth into a position (owner decision 2026-10-25: never a scalar linearisation; the

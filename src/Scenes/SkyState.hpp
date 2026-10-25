@@ -78,6 +78,12 @@ namespace EmEn::Scenes
 		std::array< SkyBody, MaxMoons > moons{};
 		/** @brief Unit world vector toward the northern celestial pole: the axis the stars turn around. */
 		Base::Math::Vector< 3, float > celestialPole{0.0F, 1.0F, 0.0F};
+		/** @brief The planet's EQUATORIAL frame in world vectors, the stars' frame (graphics doc 42 § "The stars"): [0] toward
+		 * right ascension 0 on the equator (the vernal equinox), [1] toward right ascension 90°, [2] toward the northern
+		 * celestial pole. A catalogue direction (x, y, z) is the world vector x [0] + y [1] + z [2].
+		 * @note ⚠️ The clock's equator of DATE is taken for the catalogue's J2000 one: the precession turns them about
+		 * 0.36° apart by 2026, under the clock's own model (no nutation, no aberration). */
+		std::array< Base::Math::Vector< 3, float >, 3 > equatorialFrame{{{1.0F, 0.0F, 0.0F}, {0.0F, 0.0F, -1.0F}, {0.0F, 1.0F, 0.0F}}};
 		/** @brief Local sidereal angle, in radians: the rotation of the celestial sphere around the pole. */
 		float siderealAngle{0.0F};
 		/** @brief Number of moons in `moons`. */

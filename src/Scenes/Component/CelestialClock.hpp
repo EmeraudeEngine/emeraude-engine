@@ -551,6 +551,18 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Returns the planet's equatorial frame in world vectors (SkyState::equatorialFrame): toward right
+			 * ascension 0 and 90° on the equator, and toward the northern celestial pole.
+			 * @return const std::array< Base::Math::Vector< 3, float >, 3 > &
+			 */
+			[[nodiscard]]
+			const std::array< Base::Math::Vector< 3, float >, 3 > &
+			equatorialFrame () const noexcept
+			{
+				return m_equatorialFrame;
+			}
+
+			/**
 			 * @brief Returns the local sidereal angle — the right ascension on the meridian — in radians, in [0, 2π).
 			 * @note The rotation of the celestial sphere around celestialPole(): what a star field turns by.
 			 * @return float
@@ -778,6 +790,7 @@ namespace EmEn::Scenes::Component
 			Base::Math::Vector< 3, float > m_north{0.0F, 0.0F, -1.0F};
 			Base::Math::Vector< 3, float > m_sunDirection{0.0F, 1.0F, 0.0F};
 			Base::Math::Vector< 3, float > m_celestialPole{0.0F, 1.0F, 0.0F};
+			std::array< Base::Math::Vector< 3, float >, 3 > m_equatorialFrame{{{1.0F, 0.0F, 0.0F}, {0.0F, 0.0F, -1.0F}, {0.0F, 1.0F, 0.0F}}};
 			Base::Math::Vector< 3, float > m_sunTransmittance{0.0F, 0.0F, 0.0F};
 			Base::Math::Vector< 3, float > m_sunColor{1.0F, 1.0F, 1.0F};
 			double m_starDistance{1.0}; ///< AU.

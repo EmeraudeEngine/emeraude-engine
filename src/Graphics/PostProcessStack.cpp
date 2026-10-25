@@ -40,6 +40,7 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Effects/Atmosphere/AerialPerspective.hpp"
+#include "Effects/Atmosphere/StarField.hpp"
 #include "Effects/Atmosphere/VolumetricClouds.hpp"
 #include "Effects/Camera/DepthOfField.hpp"
 #include "Effects/Camera/MotionBlur.hpp"
@@ -791,7 +792,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessStack::syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, Renderer & renderer) noexcept
+	PostProcessStack::syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, bool starField, Renderer & renderer) noexcept
 	{
 		bool changed = false;
 
@@ -809,6 +810,14 @@ namespace EmEn::Graphics
 			m_aerialPerspectiveResolved = true;
 
 			changed = this->fileAerialPerspectiveEffect(renderer) || changed;
+		}
+
+		/* Decided once, the first frame that sky draws a star catalogue. */
+		if ( !m_starFieldResolved && starField )
+		{
+			m_starFieldResolved = true;
+
+			changed = this->fileStarFieldEffect(renderer) || changed;
 		}
 
 		return changed;
@@ -866,6 +875,29 @@ namespace EmEn::Graphics
 		this->addEffect(std::make_shared< Effects::Atmosphere::AerialPerspective >(renderer));
 
 		TraceInfo{ClassId} << "The scene is under a physical sky: its aerial perspective joins the chain.";
+
+		return true;
+	}
+
+	bool
+	PostProcessStack::fileStarFieldEffect (Renderer & renderer) noexcept
+	{
+		/* An application that filed its own occupant of the concept keeps it. */
+		if ( !m_slots[static_cast< size_t >(EffectSlot::Stars)].empty() )
+		{
+			return false;
+		}
+
+		if ( !renderer.primaryServices().settings().getOrSetDefault< bool >(GraphicsPPStarsEnabledKey, DefaultGraphicsPPStarsEnabled) )
+		{
+			TraceInfo{ClassId} << "The physical sky draws a star catalogue, but '" << GraphicsPPStarsEnabledKey << "' is false: no stars.";
+
+			return false;
+		}
+
+		this->addEffect(std::make_shared< Effects::Atmosphere::StarField >(renderer));
+
+		TraceInfo{ClassId} << "The physical sky draws a star catalogue: its star field joins the chain.";
 
 		return true;
 	}
@@ -969,8 +1001,8 @@ namespace EmEn::Graphics
 	PostProcessStack::syncSlotPairings (const Scenes::CloudSet * clouds) const noexcept
 	{
 		/* ---- The cloud transmittance ----
-		 * The producer is the enabled Clouds occupant; the consumers are the enabled light shafts
-		 * and lens flare, which run AFTER it in the chain. ⚠️ Paired only while the scene holds
+		 * The producer is the enabled Clouds occupant; the consumers are the enabled light shafts,
+		 * stars and lens flare, which run AFTER it in the chain. ⚠️ Paired only while the scene holds
 		 * clouds: that is the executor's condition to run the producer (canOccupantRun(),
 		 * PostProcessor::execute()), so the texture handed out is always this frame's. Refreshed
 		 * every frame, and cleared otherwise, like the occlusion lane below. */
@@ -979,7 +1011,7 @@ namespace EmEn::Graphics
 			const bool producing = clouds != nullptr && !clouds->empty() && producer != nullptr && producer->isCreated();
 			const auto * transmittance = producing ? producer->cloudTransmittanceTexture() : nullptr;
 
-			for ( const auto slot : {EffectSlot::VolumetricLight, EffectSlot::LensFlare} )
+			for ( const auto slot : {EffectSlot::VolumetricLight, EffectSlot::Stars, EffectSlot::LensFlare} )
 			{
 				if ( const auto consumer = this->enabledEffect(slot); consumer != nullptr && consumer->consumesCloudTransmittance() )
 				{

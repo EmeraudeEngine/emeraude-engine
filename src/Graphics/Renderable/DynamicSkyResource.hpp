@@ -55,6 +55,7 @@ namespace EmEn::Graphics
 {
 	struct AtmosphereParameters;
 	class SkyAtmosphere;
+	class StarCatalogueResource;
 }
 
 namespace EmEn::Graphics::Geometry
@@ -85,8 +86,8 @@ namespace EmEn::Graphics::Renderable
 	 * keys override the preset: "GroundRadius", "TopRadius" and the scale heights in km, "RayleighScattering",
 	 * "MieScattering", "MieAbsorption", "AbsorptionExtinction" per km as [r, g, b], "MiePhaseG" as [r, g, b] or one
 	 * number, "AbsorptionLayerWidth" in km, "GroundAlbedo" as [r, g, b]), the material's artistic
-	 * keys (Material::SkyAtmosphereResource: "Tint", "Intensity", "Saturation", "StarDisc", "LimbDarkening") and the
-	 * background's photometry (AbstractBackground::parsePhotometry()).
+	 * keys (Material::SkyAtmosphereResource: "Tint", "Intensity", "Saturation", "StarDisc", "LimbDarkening"), the moons'
+	 * "Moons", the star catalogue "StarCatalogue" and the background's photometry (AbstractBackground::parsePhotometry()).
 	 * @extends EmEn::Graphics::Renderable::AbstractBackground The is a specialized background.
 	 */
 	class EMEN_API DynamicSkyResource final : public AbstractBackground
@@ -126,6 +127,9 @@ namespace EmEn::Graphics::Renderable
 			 * centre, east to the right — Material::SkyAtmosphereResource::setMoonSurface()). */
 			static constexpr auto JKMoons{"Moons"};
 			static constexpr auto JKSurface{"Surface"};
+			/** @brief The star catalogue the chain's star field draws (a Graphics::StarCatalogueResource of the store
+			 * `StarCatalogues`, e.g. "YaleBSC5"; graphics doc 42 § "The stars"). A dependency: the sky is loaded with it. */
+			static constexpr auto JKStarCatalogue{"StarCatalogue"};
 
 			/**
 			 * @brief Constructs a dynamic skybox resource.
@@ -273,6 +277,18 @@ namespace EmEn::Graphics::Renderable
 				return m_skyMaterial;
 			}
 
+			/**
+			 * @brief Returns the star catalogue this sky names ("StarCatalogue"), or nullptr.
+			 * @note Set while the sky loads, before its status publishes it; the catalogue is a dependency, loaded with it.
+			 * @return std::shared_ptr< const StarCatalogueResource >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< const StarCatalogueResource >
+			starCatalogue () const noexcept
+			{
+				return m_starCatalogue;
+			}
+
 		private:
 
 			/**
@@ -286,6 +302,14 @@ namespace EmEn::Graphics::Renderable
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
 			bool onDependenciesLoaded () noexcept override;
+
+			/**
+			 * @brief Requests the star catalogue the manifest names ("StarCatalogue"), a dependency of the sky.
+			 * @param data A reference to the manifest (an object).
+			 * @return bool False for a malformed key or a catalogue the store does not hold; true without the key.
+			 */
+			[[nodiscard]]
+			bool setStarCatalogue (const Json::Value & data) noexcept;
 
 			/**
 			 * @brief setGeometry
@@ -305,6 +329,7 @@ namespace EmEn::Graphics::Renderable
 			std::shared_ptr< Material::Interface > m_material;
 			std::shared_ptr< Material::SkyAtmosphereResource > m_skyMaterial;
 			std::shared_ptr< SkyAtmosphere > m_atmosphere;
+			std::shared_ptr< StarCatalogueResource > m_starCatalogue;
 	};
 }
 

@@ -78,7 +78,7 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 > before). Built in one call by `Toolkit::generateCelestialClock(name, options, sunShadows)` (the sun's movable Node
 > and light, the component suffixed "Clock", one unshadowed node + light per moon suffixed "Moon<index>").
 > ⚠️ **The sky's bodies only** (owner decision 2026-09-13): the sky, ambient and IBL stay the background's. It also
-> exposes the celestial pole and the local sidereal angle — what a star field turns by. Like `NodeAnimation` it
+> exposes the celestial pole, the local sidereal angle and the EQUATORIAL FRAME (the world vectors of right ascension 0° and 90° and of the pole: the star field's frame, graphics doc 42 § "The stars (lot S2)"). Like `NodeAnimation` it
 > holds WEAK references and asks for its own removal when the sun's node or light dies.
 > It **writes the scene's sky state** (owner decision 2026-10-24): `publishStateForRendering()` fills a
 > `Scenes::SkyState` per render state — the sun and moons with their illuminance ABOVE the atmosphere (the zenith

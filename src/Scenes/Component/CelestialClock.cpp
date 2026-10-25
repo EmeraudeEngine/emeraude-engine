@@ -474,6 +474,7 @@ namespace EmEn::Scenes::Component
 		});
 
 		state.celestialPole = m_celestialPole;
+		state.equatorialFrame = m_equatorialFrame;
 		state.siderealAngle = m_siderealAngle;
 		state.valid = true;
 	}
@@ -514,8 +515,16 @@ namespace EmEn::Scenes::Component
 
 		m_sunDirection = this->toWorld(towardStar);
 		m_sunElevation = static_cast< float >(Sky::degrees(towardStar.elevation()));
+		const auto localSiderealAngle = Sky::siderealAngle(m_options.planet, time);
+
 		m_celestialPole = this->toWorld(Sky::celestialPole(observer));
-		m_siderealAngle = static_cast< float >(Sky::siderealAngle(m_options.planet, time));
+		m_siderealAngle = static_cast< float >(localSiderealAngle);
+		/* The equatorial axes as the observer sees them now: the stars' frame (the pole is the third axis). */
+		m_equatorialFrame = {
+			this->toWorld(Sky::toHorizontal({.rightAscension = 0.0, .declination = 0.0}, localSiderealAngle, observer)),
+			this->toWorld(Sky::toHorizontal({.rightAscension = std::numbers::pi / 2.0, .declination = 0.0}, localSiderealAngle, observer)),
+			m_celestialPole
+		};
 		m_starDistance = Sky::starDistance(m_options.planet, time);
 
 		if ( m_atmosphere != nullptr )

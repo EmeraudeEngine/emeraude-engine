@@ -1021,12 +1021,13 @@ namespace EmEn::Graphics
 		);
 
 		/* The per-frame textures start in their SAMPLED layout (empty content): a material created before the first
-		 * frame records may bind them without reading an UNDEFINED image. */
+		 * frame records may bind them without reading an UNDEFINED image. The star field reads the frame texture in its
+		 * VERTEX stage (Effects::Atmosphere::StarField). */
 		for ( const auto * texture : {&m_skyView, &m_frameData} )
 		{
 			commandBuffer->pipelineBarrier(
 				Sync::ImageMemoryBarrier{*texture->image(), 0, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+				VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
 			);
 		}
 
@@ -1062,13 +1063,13 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* The previous frame's reads (fragment) before this frame's writes (compute): the barrier's first scope covers the
-		 * commands submitted earlier on the queue. */
+		/* The previous frame's reads (the sky's fragments, the star field's vertices, the environment's compute) before
+		 * this frame's writes (compute): the barrier's first scope covers the commands submitted earlier on the queue. */
 		for ( const auto * texture : {&m_skyView, &m_frameData} )
 		{
 			commandBuffer.pipelineBarrier(
 				Sync::ImageMemoryBarrier{*texture->image(), VK_ACCESS_SHADER_READ_BIT, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL},
-				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+				VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
 			);
 		}
 
@@ -1133,11 +1134,12 @@ namespace EmEn::Graphics
 		vkCmdPushConstants(commandBuffer.handle(), m_pipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants), &pushConstants);
 		commandBuffer.dispatch((SkyViewWidth + 7) / 8, (SkyViewHeight + 7) / 8, 1);
 
+		/* Read by the sky's fragments, the star field's vertices and the environment's compute. */
 		for ( const auto * texture : {&m_skyView, &m_frameData} )
 		{
 			commandBuffer.pipelineBarrier(
 				Sync::ImageMemoryBarrier{*texture->image(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
-				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
 			);
 		}
 

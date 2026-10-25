@@ -176,6 +176,18 @@ namespace EmEn::Graphics
 		 */
 		TemporalAA,
 
+		/**
+		 * @brief The stars of a physical sky (StarField, Oct 2026): the catalogue's points, each a footprint carrying
+		 * its illuminance, seen through the atmosphere, on the sky pixels only (graphics doc 42 § "The stars").
+		 * @note A SCENE-DRIVEN slot, like the aerial perspective: filed by `PostProcessStack::syncSceneEffects()` the
+		 * frame the physical sky draws a star catalogue.
+		 * @note ⚠️ AFTER the temporal anti-aliasing (owner decision 2026-10-25), drawn with the UNJITTERED projection:
+		 * a star is smaller than a pixel, and a temporal resolve smears a sub-pixel point that the jitter moves every
+		 * frame into a dim blur — or rejects it as an outlier. BEFORE the camera's optics: the defocus, the motion blur
+		 * and the glare spread a star like any other point of light.
+		 */
+		Stars,
+
 		/* ---- Photographic effects (HDR resolve), materialized by the ACTIVE CAMERA ---- */
 
 		/**
@@ -323,8 +335,8 @@ namespace EmEn::Graphics
 	/**
 	 * @brief Returns whether a slot belongs to the SCENE phase of the chain.
 	 * @note The effects that add, remove or resolve LIGHT in the scene — the lighting family, the
-	 * clouds, the light shafts, the fog, the application's own effects and the TAA that closes the
-	 * phase — as opposed to the camera's photographic chain after it (DepthOfField, MotionBlur,
+	 * clouds, the light shafts, the fog, the application's own effects, the TAA that closes the
+	 * phase and the stars drawn over its resolve — as opposed to the camera's photographic chain after it (DepthOfField, MotionBlur,
 	 * LensFlare, Glare, ToneMapping) and the display-referred effects. It is the set
 	 * `PostProcessStack::bypassSceneEffects()` switches off while the SENSOR keeps running: in a
 	 * photometric pipeline the exposure and the tone mapping are not effects, they are what turns
@@ -350,6 +362,7 @@ namespace EmEn::Graphics
 			case EffectSlot::Fog :
 			case EffectSlot::Custom :
 			case EffectSlot::TemporalAA :
+			case EffectSlot::Stars :
 				return true;
 
 			default :
@@ -396,6 +409,7 @@ namespace EmEn::Graphics
 			case EffectSlot::LensFlare : return "LensFlare";
 			case EffectSlot::Custom : return "Custom";
 			case EffectSlot::TemporalAA : return "TemporalAA";
+			case EffectSlot::Stars : return "Stars";
 			case EffectSlot::DepthOfField : return "DepthOfField";
 			case EffectSlot::MotionBlur : return "MotionBlur";
 			case EffectSlot::Glare : return "Glare";

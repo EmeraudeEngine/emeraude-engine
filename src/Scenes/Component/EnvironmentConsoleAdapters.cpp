@@ -27,6 +27,7 @@
 #include "ConsoleAdapter.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <limits>
@@ -127,6 +128,16 @@ namespace EmEn::Scenes::Component
 			state["latitudeDegrees"] = static_cast< double >(options.latitude);
 			state["siderealAngleDegrees"] = Sky::degrees(static_cast< double >(clock.siderealAngle()));
 			state["celestialPole"] = toJson(clock.celestialPole());
+
+			/* The stars' frame: the world vectors of the equatorial axes (right ascension 0 and 90°, the pole). */
+			Json::Value equatorialFrame{Json::arrayValue};
+
+			for ( const auto & axis : clock.equatorialFrame() )
+			{
+				equatorialFrame.append(toJson(axis));
+			}
+
+			state["equatorialFrame"] = equatorialFrame;
 
 			Json::Value sun{Json::objectValue};
 			sun["elevationDegrees"] = static_cast< double >(clock.sunElevation());

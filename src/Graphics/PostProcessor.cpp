@@ -1517,6 +1517,7 @@ namespace EmEn::Graphics
 			.clouds = clouds,
 			/* The renderer's own frame state, not the scene's: the atmosphere THIS frame submitted. */
 			.atmosphere = m_renderer.frameSkyAtmosphere(),
+			.stars = m_renderer.frameStarField(),
 			.view = viewData,
 			.projectionJitter = mainRT->viewMatrices().projectionJitter(),
 			.residualExposure = [this, &stack, activeCamera] {

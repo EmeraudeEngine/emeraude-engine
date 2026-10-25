@@ -1171,6 +1171,13 @@ namespace EmEn
 			constexpr auto GraphicsPPAerialPerspectiveEnabledKey{"Core/Graphics/PostProcessing/AerialPerspective/Enabled"};
 			constexpr auto DefaultGraphicsPPAerialPerspectiveEnabled{true};
 
+			/* Stars (Graphics::Effects::Atmosphere::StarField, Oct 2026) — the catalogue a physical sky names ("StarCatalogue" in
+			 * its manifest), drawn as points after the temporal anti-aliasing. A SCENE-DRIVEN effect: the stack files it
+			 * the first frame such a sky is submitted under a celestial clock (PostProcessStack::syncSceneEffects()).
+			 * 'Enabled' = false declines that filing for the session. */
+			constexpr auto GraphicsPPStarsEnabledKey{"Core/Graphics/PostProcessing/Stars/Enabled"};
+			constexpr auto DefaultGraphicsPPStarsEnabled{true};
+
 			/* Volumetric clouds (Graphics::Effects::Atmosphere::VolumetricClouds, Sep 2026) — the pass that
 			 * draws the scene's Scenes::Component::CloudVolume entities. A SCENE-DRIVEN effect: the stack
 			 * files it the first frame the scene holds a cloud (PostProcessStack::syncSceneEffects()), an

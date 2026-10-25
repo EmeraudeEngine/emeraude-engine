@@ -50,6 +50,7 @@
 #include "Graphics/Material/SkyAtmosphereResource.hpp"
 #include "Graphics/Renderable/Types.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
+#include "Graphics/StarCatalogueResource.hpp"
 #include "Graphics/TextureResource/StoreTexture.hpp"
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Logging/Severity.hpp"
@@ -267,6 +268,11 @@ namespace EmEn::Graphics::Renderable
 			}
 		}
 
+		if ( data != nullptr && !this->setStarCatalogue(*data) )
+		{
+			return false;
+		}
+
 		auto atmosphere = std::make_shared< SkyAtmosphere >(this->name(), parameters);
 
 		const auto material = this->serviceProvider().container< Material::SkyAtmosphereResource >()
@@ -304,6 +310,38 @@ namespace EmEn::Graphics::Renderable
 		m_atmosphere = material->atmosphere() != nullptr ? material->atmosphere() : std::move(atmosphere);
 
 		return true;
+	}
+
+	bool
+	DynamicSkyResource::setStarCatalogue (const Json::Value & data) noexcept
+	{
+		if ( !data.isMember(JKStarCatalogue) )
+		{
+			return true;
+		}
+
+		const auto catalogueName = FastJSON::getValue< std::string >(data, JKStarCatalogue);
+
+		if ( !catalogueName.has_value() || catalogueName->empty() )
+		{
+			TraceError{ClassId} << "The '" << JKStarCatalogue << "' key of dynamic sky '" << this->name() << "' must be a star catalogue name !";
+
+			return false;
+		}
+
+		auto catalogue = this->serviceProvider().container< StarCatalogueResource >()->getResource(catalogueName.value());
+
+		/* An absent name answers the default resource, an empty catalogue: refused like a missing moon surface. */
+		if ( catalogue == nullptr || catalogue->name() == Resources::Default )
+		{
+			TraceError{ClassId} << "The star catalogue '" << catalogueName.value() << "' of dynamic sky '" << this->name() << "' is not in the store !";
+
+			return false;
+		}
+
+		m_starCatalogue = std::move(catalogue);
+
+		return this->addDependency(m_starCatalogue);
 	}
 
 	bool

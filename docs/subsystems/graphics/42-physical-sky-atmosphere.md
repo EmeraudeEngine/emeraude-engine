@@ -61,7 +61,7 @@ the star through the air, instead of a black void under the scene's own small fl
 | `MoonSurfacePhotometry` | `Graphics/MoonSurfacePhotometry.{hpp,cpp}` | a moon map's near-side mean and its brightness table by sub-solar point, measured once from its pixels (§ "The moons") |
 | `Renderable::DynamicSkyResource` | `Graphics/Renderable/DynamicSkyResource.{hpp,cpp}` | the background: owns the atmosphere and the material, the skybox cube |
 | `Renderer::renderSkyAtmosphere()` | `Graphics/Renderer.cpp` | the per-frame sky-view submission, BEFORE the shadow maps and the render-to-textures (the probes draw the sky too) |
-| `SkyState` | `Scenes/SkyState.hpp` | the scene's sky for the render thread: the sun and moons (direction, illuminance above the atmosphere, unit-luminance LINEAR colour, angular diameter, phase), written by `CelestialClock::publishStateForRendering()`, read by `Scene::skyStateForRendering(readStateIndex)` |
+| `SkyState` | `Scenes/SkyState.hpp` | the scene's sky for the render thread: the sun and moons (direction, illuminance above the atmosphere, unit-luminance LINEAR colour, angular diameter, phase) and the equatorial frame the stars are placed by, written by `CelestialClock::publishStateForRendering()`, read by `Scene::skyStateForRendering(readStateIndex)` |
 
 ### The frame
 1. The renderer finds a `DynamicSkyResource` background, reads the scene's `SkyState` at the frame's read state
@@ -393,13 +393,61 @@ The stars the sky draws as points come from a **star catalogue resource** (`Grap
 - ⚠️ **Licences**: ESA's Hipparcos, Tycho-2 and Gaia are CC BY-NC 3.0 IGO (non-commercial) — not used (owner decision);
   the fainter stars will come from UCAC4 (USNO, public domain). Item `dynamic-sky-stars-and-milky-way` § The plan.
 
+### The stars (lot S2, 2026-10-25: the points)
+A sky whose manifest names a catalogue (`"StarCatalogue": "YaleBSC5"`, `DynamicSkyResource::JKStarCatalogue`; a
+dependency, the sky loads with it) under a celestial clock gets its stars drawn by **`Effects::Atmosphere::StarField`**,
+a chain effect in **`EffectSlot::Stars`, right after the TAA** (owner decision 2026-10-25: a star is smaller than a pixel;
+a temporal resolve smears a jittered point into a dim blur or rejects it as an outlier) and before the camera's optics
+(the defocus, the motion blur and the glare spread a star like any point of light).
+
+- **The frame**: the clock publishes the planet's equatorial axes in world vectors (`SkyState::equatorialFrame`:
+  toward right ascension 0° and 90° on the equator, and the north celestial pole; console `CelestialClock.getState` →
+  `equatorialFrame`). A catalogue direction (x, y, z) is the world vector x·[0] + y·[1] + z·[2]. The renderer records
+  the catalogue and the frame with the atmosphere each frame submits (`Renderer::frameStarField()`, one slot per frame
+  in flight keeps the catalogue alive); `FrameContext::stars` hands it to the chain; `PostProcessStack::syncSceneEffects()`
+  files the effect the first frame it exists (`Core/Graphics/PostProcessing/Stars/Enabled = false` declines it).
+- **The pass**: one instanced draw at full resolution, a quad of ±3.5σ per star (σ = 0.7 px), additive, into an RGB
+  float target (`B10G11R11_UFLOAT` when the device blends into it — 30 MB at 3840×1990 —, else `RGBA16F`). The vertex
+  stage reads the star buffer (an SSBO of `{direction, E·colour}`, built once per catalogue, retired through the deferred
+  destructor), projects the direction with the **unjittered** projection × the view rotation, and drops the star
+  behind the camera, off the screen, below the horizon (the ray meets the planet: the sky's own test) or behind the
+  star's or a moon's disc (the sky's frame texture, read in the VERTEX stage: its barriers now include that stage).
+- **The photometry**: E = E₀ 10^(−0.4 V), **E₀ = 2.69e-6 lx** — the engine's own Sun (133 800 lx at 1 AU, V −26.74), so
+  stars and Sun obey one scale (2.54e-6 lx is the figure often quoted). The colour is the black body of
+  T = 4600 (1/(0.92 (B−V) + 1.7) + 1/(0.92 (B−V) + 0.62)) K (Ballesteros, EPL 97 34008, 2012) at unit Rec.709
+  luminance. × the transmittance toward the star (the sky's table). The footprint is a unit Gaussian whose peak is
+  E / (2π σ² Ω_px), Ω_px = (2 tan(fovX/2)/W)(2 tan(fovY/2)/H) cos³θ: Σ L·Ω over the pixels is E, at any focal length
+  (a long lens raises a star's radiance, as a real one does). In chain units (× the pre-exposure), the brightest
+  channel bounded at 60 000.
+- **The combine**: `em_Color.rgb += stars` where the depth is the sky's (1.0 exactly), × the clouds' view transmittance
+  when the scene holds clouds (the cloud transmittance pairing now feeds `Stars` too; a second combine variant, the
+  signature counts the samplers). No star is drawn over the ground, a mountain or a cloud's opaque core.
+
+**Measured** (2026-10-25, Linux, RTX 3070 Ti, 1920×1080, sky-lab `0,0,0,15,2,0,0,0,0,1`, day 280 at midnight, 45° N,
+the camera on Alnilam at 35 mm; validation layer loaded, 0 VUID):
+- **Positions**: nine named stars (Orion, Sirius, Aldebaran) land within 0.2 px of the position predicted from the
+  catalogue and the clock's `equatorialFrame` (a uniform −0.5 px is the pixel-centre convention of the prediction);
+  at 200 mm the belt still lands within 0.4 px. Betelgeuse and Aldebaran orange, Rigel blue-white, Sirius white.
+- **Magnitudes**: the PNG inverted (gamma 2.2, then Narkowicz's ACES fit) on a dim frame (the curve's toe): the
+  instrumental magnitude of the 11 stars brighter than V 2.5 follows V with a slope of **1.023**, rms 0.14 mag (the
+  extinction and the colours included). On a pinned frame (f/2.8, 0.5 s, ISO 3200: exposure 1.70, the reported
+  E_pre), the transmittance each unsaturated star implies, Σx / (E / Ω_px × 1.70), **rises with its elevation: 0.80 at
+  23°, 0.83 at 30°, 0.86 at 36°, 0.92 at 42°** — the atmosphere's extinction on an absolute scale (outliers above 1 are
+  close doubles inside the 9×9 window).
+- **Daylight**: the same frame at noon (auto exposure), with and without the stars: no local excess anywhere (the
+  difference is a uniform +2 levels, the metering converging) — the stars vanish in the sky's light by themselves.
+- **Cost**: `StarFieldEffect/internal` 0.009 ms (9 096 instances, the clear included) + one more combine pass (the TAA
+  splits the overlay group): frame median 1.595 ms against 1.547 ms without stars (`0,0,0,40,2,0,0,0,0,0`), 5 windows.
+
 ### The manifest (Backgrounds store)
 `"Planet"` (a preset name, default `"Earth"`), `"Atmosphere"` (inline overrides: `GroundRadius`, `TopRadius`,
 `RayleighScaleHeight`, `MieScaleHeight`, `AbsorptionLayerWidth` in km; `RayleighScattering`, `MieScattering`,
 `MieAbsorption`, `AbsorptionExtinction` per km as `[r, g, b]`; `MiePhaseG` as `[r, g, b]` or one number;
 `GroundAlbedo`), the artistic keys (`Tint`, `Intensity`, `Saturation`, `StarDisc`, `LimbDarkening`), the moons'
 appearance (`"Moons"`: an array indexed like the clock's moons, each an object with an optional `"Surface"`, a store
-texture — § "The moons") and the background photometry (`AbstractBackground::parsePhotometry()`). From code:
+texture — § "The moons"), the star catalogue (`"StarCatalogue"`: a store `StarCatalogues` resource name — § "The
+stars"; ⚠️ NOT `"Stars"`, the photo sky's light-carrying bodies of `parsePhotometry()`) and the background photometry
+(`AbstractBackground::parsePhotometry()`). From code:
 `DynamicSkyResource::load(parameters)` (no moon map).
 
 ### The presets
@@ -446,6 +494,14 @@ Civil twilight ends at ~1 cd/m², as measured skies do. Below −18° the zenith
 none of which the sun's scattering gives: item `dynamic-sky-stars-and-milky-way` § "The night sky's own glow".
 
 ### ⚠️ Traps
+- ⚠️ **A star's manifest key is `"StarCatalogue"`, never `"Stars"`**: `AbstractBackground::parsePhotometry()` already
+  reads `"Stars"` as the array of a photo sky's light-carrying bodies, and a catalogue name there failed the sky's load
+  ("The 'Stars' key must be an array", 2026-10-25).
+- ⚠️ A pass that samples the sky's frame texture in a NEW pipeline stage must add that stage to the texture's barriers
+  (`SkyAtmosphere::recordFrame()` and the bake): the star field's vertex reads were outside a fragment/compute-only
+  dependency.
+- ⚠️ A star's brightness on a screenshot is NOT linear: invert the gamma (2.2) and the ACES fit, and measure on the
+  curve's toe — on a pinned bright frame the shoulder's 8-bit inversion compressed the magnitude slope to 0.83.
 - A background WITHOUT an environment cubemap is legitimate (`AbstractBackground::environmentCubemap()` answers
   nullptr): `Scene::getRenderableInstanceReadyForRendering()` dereferenced it on the first frame (fixed 2026-10-24,
   the scene keeps the cubemap it has). The dynamic sky publishes its own environment instead (§ "The environment").

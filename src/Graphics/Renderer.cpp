@@ -76,6 +76,8 @@
 #include "Graphics/SharedUBOManager.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
 #include "Graphics/SkyEnvironment.hpp"
+#include "Graphics/SkyStarField.hpp"
+#include "Graphics/StarCatalogueResource.hpp"
 #include "Graphics/TextureCache.hpp"
 #include "Graphics/TextureCompressor.hpp"
 #include "Graphics/Types.hpp"
@@ -2083,11 +2085,12 @@ namespace EmEn::Graphics
 			/* The SCENE's contract, the camera's sibling: a scene holding volumetric clouds gets the pass
 			 * that draws them, stack or not (PostProcessStack::syncSceneEffects(); owner decision
 			 * 2026-09-24, "placing a cloud is enough"); a scene under a physical sky gets its aerial
-			 * perspective (owner decision 2026-10-25). The new occupant brings its G-buffer
+			 * perspective (owner decision 2026-10-25), and its stars when the sky names a catalogue. The new occupant brings its G-buffer
 			 * requirements, so a change retires the scene target exactly like a camera change does.
 			 * ⚠️ AFTER renderSkyAtmosphere(): the physical sky is the one this frame submitted. */
 			const auto * clouds = sceneCloudSet(scene.get());
 			const bool physicalSky = this->frameSkyAtmosphere() != nullptr;
+			const bool starField = this->frameStarField() != nullptr;
 
 			if ( clouds != nullptr || physicalSky )
 			{
@@ -2096,7 +2099,7 @@ namespace EmEn::Graphics
 					stack = &scene->requirePostProcessStack();
 				}
 
-				if ( scene->requirePostProcessStack().syncSceneEffects(clouds, physicalSky, *this) && m_sceneTarget != nullptr )
+				if ( scene->requirePostProcessStack().syncSceneEffects(clouds, physicalSky, starField, *this) && m_sceneTarget != nullptr )
 				{
 					m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] {
 						target->destroyRenderTarget();
@@ -2785,8 +2788,11 @@ namespace EmEn::Graphics
 		/* The slot names the atmosphere THIS frame submitted (the chain's aerial perspective samples its volume only
 		 * then). Its previous use is over: this frame's fence was waited. */
 		auto & atmosphereInFlight = *std::next(m_skyAtmospheresInFlight.begin(), static_cast< std::ptrdiff_t >(frameIndex));
+		/* m_skyStarFieldsInFlight has the size of m_skyAtmospheresInFlight. */
+		auto & starFieldInFlight = *std::next(m_skyStarFieldsInFlight.begin(), static_cast< std::ptrdiff_t >(frameIndex));
 
 		atmosphereInFlight = nullptr;
+		starFieldInFlight = {};
 
 		const auto background = scene.background();
 
@@ -2809,9 +2815,16 @@ namespace EmEn::Graphics
 		/* The star of the scene's clock, else a default afternoon sun (SkyFrameInputs). The table is per lux of the
 		 * star's illuminance above the atmosphere: its colour rides along. */
 		SkyFrameInputs inputs{};
+		SkyStarField starField{};
 
 		if ( const auto skyState = scene.skyStateForRendering(readStateIndex); skyState.valid )
 		{
+			/* The sky's catalogue, placed by the clock (its equatorial frame): without a clock the stars have no place. */
+			if ( auto catalogue = dynamicSky->starCatalogue(); catalogue != nullptr && catalogue->isLoaded() && !catalogue->stars().empty() )
+			{
+				starField = {.catalogue = std::move(catalogue), .equatorialFrame = skyState.equatorialFrame};
+			}
+
 			inputs.sunDirection = skyState.sun.direction;
 			inputs.sunIlluminance = skyState.sun.color * skyState.sun.illuminance;
 			inputs.sunAngularDiameter = skyState.sun.angularDiameter;
@@ -2927,6 +2940,7 @@ namespace EmEn::Graphics
 		atmosphere->environment().onSubmitted(true);
 
 		atmosphereInFlight = atmosphere;
+		starFieldInFlight = std::move(starField);
 	}
 
 	const SkyAtmosphere *
@@ -2938,6 +2952,19 @@ namespace EmEn::Graphics
 		}
 
 		return std::next(m_skyAtmospheresInFlight.begin(), static_cast< std::ptrdiff_t >(m_currentFrameIndex))->get();
+	}
+
+	const SkyStarField *
+	Renderer::frameStarField () const noexcept
+	{
+		if ( m_currentFrameIndex >= m_skyStarFieldsInFlight.size() )
+		{
+			return nullptr;
+		}
+
+		const auto & starField = *std::next(m_skyStarFieldsInFlight.begin(), static_cast< std::ptrdiff_t >(m_currentFrameIndex));
+
+		return starField.catalogue != nullptr ? &starField : nullptr;
 	}
 
 	void
@@ -3328,6 +3355,11 @@ namespace EmEn::Graphics
 		for ( auto & atmosphere : m_skyAtmospheresInFlight )
 		{
 			atmosphere = nullptr;
+		}
+
+		for ( auto & starField : m_skyStarFieldsInFlight )
+		{
+			starField = {};
 		}
 
 		m_rendererFrameScope.clear();
