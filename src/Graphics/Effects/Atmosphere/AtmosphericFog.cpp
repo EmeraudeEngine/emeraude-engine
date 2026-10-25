@@ -27,25 +27,36 @@
 #include "AtmosphericFog.hpp"
 
 /* STL inclusions. */
-#include <cmath>
-#include <numbers>
 #include <string>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Math/Vector.hpp"
+#include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/LightSet.hpp"
 #include "Scenes/ParticipatingMedium.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 static constexpr auto TracerTag{"AtmosphericFogEffect"};
 
 /* Compile-time size check. */
-static_assert(sizeof(EmEn::Graphics::Effects::Atmosphere::AtmosphericFog::FogPushConstants) == 116, "FogPushConstants must be exactly 116 bytes !");
+static_assert(sizeof(EmEn::Graphics::Effects::Atmosphere::AtmosphericFog::FogPushConstants) == 64, "FogPushConstants must be exactly 64 bytes !");
 
 namespace
 {
@@ -53,7 +64,10 @@ namespace
 
 	/* ---- GLSL Shader Sources ---- */
 
-	constexpr auto FogFragmentShader = R"GLSL(
+	/** @brief The view reconstruction's binding (after the three samplers: getInputLayout(3, 1)). */
+	constexpr uint32_t ViewBinding{3};
+
+	constexpr auto FogHeader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -62,16 +76,11 @@ layout(location = 0) out vec4 outColor;
 layout(set = 0, binding = 0) uniform sampler2D sceneTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
 layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
+)GLSL";
 
+	constexpr auto FogFragmentShader = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
-	/* Camera basis. */
-	float cameraPosX, cameraPosY, cameraPosZ;
-	float cameraRightX, cameraRightY, cameraRightZ;
-	float cameraForwardX, cameraForwardY, cameraForwardZ;
-	/* Depth reconstruction. */
-	float nearPlane, farPlane;
-	float tanHalfFovY, aspectRatio;
 	/* Fog parameters. */
 	float fogDensity;
 	float fogHeightFalloff;
@@ -92,21 +101,14 @@ void main()
 	vec3 sceneColor = texture(sceneTex, vUV).rgb;
 	float depth = texture(depthTex, vUV).r;
 
-	/* Reconstruct ray direction (needed for both geometry and sky pixels). */
-	vec2 ndc = vUV * 2.0 - 1.0;
-	float t = tanHalfFovY;
-
-	vec3 cameraPosition = vec3(cameraPosX, cameraPosY, cameraPosZ);
-	vec3 cameraRight = vec3(cameraRightX, cameraRightY, cameraRightZ);
-	vec3 cameraForward = vec3(cameraForwardX, cameraForwardY, cameraForwardZ);
-	/* Y-UP, right-handed: cross(right, forward) = cross(+X, -Z) = +Y, a genuine UP vector.
-	 * The DOWNWARD screen direction is carried by the SIGN of tanHalfFovY (negative since the
-	 * Y-up flip), never by this vector - see the signed-contract note in PostProcessor.cpp. */
-	vec3 cameraUp = cross(cameraRight, cameraForward);
-
-	/* Unit ray direction in world space. */
-	vec3 rawDir = cameraRight * (ndc.x * abs(t) * aspectRatio) + cameraUp * (ndc.y * t) + cameraForward;
-	vec3 rayDir = normalize(rawDir);
+	/* The surface's offset from the camera, through the frame's inverse view-projection (ViewReconstructionGLSL): a sky
+	 * pixel (depth 1) reconstructs the far plane in its direction, which is all a sky pixel needs. Until 2026-10-25 the
+	 * distance came from clip planes frozen at 0.1 / 1000 (up to 2.1x too far with a wide lens) and the ray from a
+	 * signed tanHalfFovY, right for a perspective camera only. */
+	vec3 relative = emRelativePosition(vUV, depth);
+	vec3 rayDir = normalize(relative);
+	vec3 cameraPosition = emView.cameraPosition.xyz;
+	float cameraPosY = cameraPosition.y;
 
 	/* ⚠️ The sky is the clear value, 1.0 exactly: 0.9999 read every mountain past ~890 m as sky. */
 	bool isSky = (depth >= 1.0);
@@ -128,15 +130,8 @@ void main()
 	}
 	else
 	{
-		/* Geometry pixel: linearize depth to get actual distance. */
-		float z = depth * 2.0 - 1.0;
-		float linearZ = (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));
-
-		/* Reconstruct world position for accurate ray length. */
-		float vx = ndc.x * abs(t) * aspectRatio * linearZ;
-		float vy = ndc.y * t * linearZ;
-		vec3 worldPos = cameraPosition + cameraRight * vx + cameraUp * vy + cameraForward * linearZ;
-		effectiveLength = min(length(worldPos - cameraPosition), fogMaxDistance);
+		/* Geometry pixel: the Euclidean distance to the surface. */
+		effectiveLength = min(length(relative), fogMaxDistance);
 	}
 
 	/* Exponential height fog. fogHeightFalloff is a POSITIVE decay rate, so the exponent it
@@ -202,8 +197,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			return false;
 		}
 
-		/* ---- Descriptor set layout (triple-input: scene color + depth + material properties) ---- */
-		auto tripleInputLayout = this->getInputLayout(3);
+		/* ---- Descriptor set layout (scene color + depth + material properties, the view reconstruction) ---- */
+		auto tripleInputLayout = this->getInputLayout(3, 1);
 
 		if ( tripleInputLayout == nullptr )
 		{
@@ -238,7 +233,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			return false;
 		}
 
-		const auto fogFragment = this->renderer().shaderManager().getShaderModuleFromSourceCode(this->renderer().device(), "AF_Fog_MatProps_FS", Saphir::ShaderType::FragmentShader, FogFragmentShader);
+		const auto fogFragment = this->renderer().shaderManager().getShaderModuleFromSourceCode(this->renderer().device(), "AF_Fog_MatProps_FS", Saphir::ShaderType::FragmentShader, std::string{FogHeader} + ViewReconstructionGLSL::sourceGLSL(0, ViewBinding) + FogFragmentShader);
 
 		if ( fogFragment == nullptr )
 		{
@@ -278,40 +273,14 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		const auto * inputDepth = context.depth;
 		const auto * inputMaterialProperties = context.materialProperties;
 		const auto * lightSet = context.lightSet;
-		const auto & constants = context.constants;
 
+		/* The view reconstruction is made with the chain (PostProcessor::configure() fails without it). */
+		if ( context.view == nullptr )
+		{
+			return inputColor;
+		}
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
-
-		/* Extract camera basis from view matrix.
-		 * Use readStateIndex to match the view matrix that produced the depth buffer. */
-		const auto readStateIndex = this->renderer().currentReadStateIndex();
-		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
-		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
-		const auto & camPos = viewMatrices.position(readStateIndex);
-
-		/* Right = row 0 of view matrix. */
-		const auto rX = viewMat(0, 0);
-		const auto rY = viewMat(0, 1);
-		const auto rZ = viewMat(0, 2);
-
-		/* Forward = negated row 2 (row 2 stores -forward in this engine). */
-		const auto fX = -viewMat(2, 0);
-		const auto fY = -viewMat(2, 1);
-		const auto fZ = -viewMat(2, 2);
-
-		/* ⚠️ tanHalfFovY comes from the FrameContext and is NEVER recomputed here. It is a SIGNED
-		 * contract (PostProcessor.cpp: `std::tan(...) * projectionYSign`, negative since the Y-up
-		 * flip) and the sign is what carries the downward screen direction — this shader's own
-		 * header says so. Recomputing it locally threw the sign away and handed the shader a
-		 * magnitude, inverting rayDir.y and with it the height falloff, the optical-depth integral
-		 * and the inscatter cosine: the fog grew DENSER with altitude instead of thinner, most
-		 * visibly by erasing a palm's fronds while leaving its trunk clear.
-		 * The Aug 2026 signed-contract pass added abs(t) on X here but never delivered the Y half,
-		 * because t was already a positive magnitude — the abs() was a no-op. Every other consumer
-		 * forwards the context value (SSAO.cpp, SSR.cpp); do the same. */
-		const auto tanHalfFovY = constants.tanHalfFovY;
-		const auto aspectRatio = this->renderer().mainRenderTarget()->viewMatrices().getAspectRatio();
 
 		/* Read light direction and inscatter color from LightSet. */
 		const auto mainLight = lightSet != nullptr ? lightSet->mainDirectionalLight() : nullptr;
@@ -371,21 +340,10 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(2, *inputMaterialProperties));
 		}
 
+		static_cast< void >(m_fogPerFrame[frameIndex]->writeUniformBufferObject(ViewBinding, *context.view));
+
 		/* Build push constants. */
 		const FogPushConstants fogPC{
-			.cameraPosX = camPos[0],
-			.cameraPosY = camPos[1],
-			.cameraPosZ = camPos[2],
-			.cameraRightX = rX,
-			.cameraRightY = rY,
-			.cameraRightZ = rZ,
-			.cameraForwardX = fX,
-			.cameraForwardY = fY,
-			.cameraForwardZ = fZ,
-			.nearPlane = constants.nearPlane,
-			.farPlane = constants.farPlane,
-			.tanHalfFovY = tanHalfFovY,
-			.aspectRatio = aspectRatio,
 			.fogDensity = medium->density(),
 			.fogHeightFalloff = medium->heightFalloff(),
 			.fogBaseHeight = medium->baseHeight(),

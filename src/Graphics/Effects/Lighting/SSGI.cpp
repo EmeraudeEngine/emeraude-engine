@@ -35,6 +35,7 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -59,6 +60,12 @@ namespace EmEn::Vulkan
 namespace
 {
 	using namespace EmEn;
+
+	/** @brief The view reconstruction's bindings: after the horizon's two samplers; after the trace's three, or four
+	 * with the sky visibility. */
+	constexpr uint32_t HorizonViewBinding{2};
+	constexpr uint32_t TraceViewBinding{3};
+	constexpr uint32_t TraceSkyViewBinding{4};
 
 	/* SSGI sky-visibility pass: a GTAO horizon search (Jimenez, Wu, Pesce, Jarabo, "Practical
 	 * Realtime Strategies for Accurate Indirect Occlusion", SIGGRAPH 2016 courses; implementation
@@ -90,6 +97,7 @@ namespace
 	 * Descriptor set 0 (input textures — per-frame):
 	 *   binding 0: depth texture
 	 *   binding 1: normals texture (view space)
+	 *   binding 2: the view reconstruction (ViewReconstructionGLSL)
 	 */
 	constexpr auto SSGIHorizonFragmentShader = R"GLSL(
 #version 450
@@ -100,16 +108,15 @@ layout(location = 0) out vec4 outBentVisibility;
 
 layout(set = 0, binding = 0) uniform sampler2D depthTex;
 layout(set = 0, binding = 1) uniform sampler2D normalTex;
+)GLSL";
 
+	/* The horizon search's body, after its header and the view reconstruction (binding 2). */
+	constexpr auto SSGIHorizonFragmentBody = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
 	vec4 invViewCol0;	/* xyz = inverse view rotation column 0, w = search radius in world units. */
 	vec4 invViewCol1;	/* xyz = inverse view rotation column 1, w = falloff range (fraction of the radius). */
 	vec4 invViewCol2;	/* xyz = inverse view rotation column 2, w = animated-noise frame index (< 0 = frozen). */
-	float nearPlane;
-	float farPlane;
-	float tanHalfFovY;
-	float aspectRatio;
 	uint sliceCount;
 	uint stepCount;
 };
@@ -117,22 +124,15 @@ layout(push_constant) uniform PushConstants
 const float PI = 3.14159265;
 const float PI_HALF = 1.57079633;
 
-/* Linearize depth from [0,1] range (Vulkan [0,1] depth convention). */
-float linearizeDepth (float depth)
-{
-	return (nearPlane * farPlane) / (farPlane - depth * (farPlane - nearPlane));
-}
-
-/* Reconstruct the RECONSTRUCTION-space position from UV and depth: view space with Z negated
- * (linearDepth is positive, view-space Z is negative in front of the camera), which is the space
- * the whole screen-space family works in.
- * NOTE: tanHalfFovY is SIGNED and carries the projection's Y direction. Do NOT wrap it in abs(). */
+/* Reconstruct the RECONSTRUCTION-space position from UV and depth: view space with Z negated (the distance along the
+ * view axis is positive, view-space Z is negative in front of the camera), which is the space the whole screen-space
+ * family works in — through the frame's inverse projection (ViewReconstructionGLSL), never a scalar linearisation: the
+ * chain's clip planes were frozen at 0.1 / 1000, up to 2.1x off with a wide lens (2026-10-25). */
 vec3 reconstructPosition (vec2 uv, float depth)
 {
-	float linearZ = linearizeDepth(depth);
-	vec2 ndc = uv * 2.0 - 1.0;
-	float t = tanHalfFovY;
-	return vec3(ndc * vec2(abs(t) * aspectRatio, t) * linearZ, linearZ);
+	vec3 viewPosition = emViewPosition(uv, depth);
+
+	return vec3(viewPosition.xy, -viewPosition.z);
 }
 
 /* PCG integer hash -> decorrelated white noise from integer pixel coordinates (same generator as
@@ -199,6 +199,13 @@ void main()
 		noise = fract(noise + noiseFrameIndex * vec2(0.7548776662, 0.5698402909));
 	}
 
+	/* The view-space displacement of ONE whole UV unit along each screen axis, at the centre's depth-buffer value. At a
+	 * constant depth value the view Z is constant and the view XY are affine in the UV — in perspective (jittered or
+	 * not) as in orthographic — so these differences are exact, not a local approximation, and the out-of-screen UV is
+	 * only an operand of the matrix. They replace the former `2 * tanHalfFovY * aspect * z` scalars. */
+	vec2 uvToViewX = reconstructPosition(vUV + vec2(1.0, 0.0), centerDepth).xy - P.xy;
+	vec2 uvToViewY = reconstructPosition(vUV + vec2(0.0, 1.0), centerDepth).xy - P.xy;
+
 	float visibility = 0.0;
 	vec3 bentNormal = vec3(0.0);
 
@@ -208,11 +215,11 @@ void main()
 		vec2 omega = vec2(cos(phi), sin(phi));
 
 		/* The screen direction, mapped into reconstruction space at CONSTANT depth: a UV step
-		 * (du, dv) moves the point by (du * 2|t| * aspect * z, dv * 2t * z, 0), so the plane
-		 * direction is that vector normalized — and the inverse mapping gives the UV step of one
-		 * world unit, uvPerUnit below. The Y component carries the SIGN of tanHalfFovY: get it
-		 * wrong and the two horizons of a slice are attributed to the wrong sides. */
-		vec2 dirScale = vec2(omega.x * abs(tanHalfFovY) * aspectRatio, omega.y * tanHalfFovY);
+		 * (du, dv) moves the point by du * uvToViewX + dv * uvToViewY (see above the loop), so the
+		 * plane direction is that vector normalized — and the inverse mapping gives the UV step of
+		 * one world unit, uvPerUnit below. uvToViewY carries the projection's Y direction: get its
+		 * sign wrong and the two horizons of a slice are attributed to the wrong sides. */
+		vec2 dirScale = omega.x * uvToViewX + omega.y * uvToViewY;
 		float dirLength = length(dirScale);
 
 		if (dirLength < 0.000001)
@@ -221,7 +228,7 @@ void main()
 		}
 
 		vec3 directionVec = vec3(dirScale / dirLength, 0.0);
-		float uvPerUnit = 1.0 / (2.0 * dirLength * P.z);
+		float uvPerUnit = 1.0 / dirLength;
 
 		/* The slice frame: (V, sliceTangent) spans the plane, axisVec is its normal.
 		 * ⚠️ sliceTangent is NORMALIZED, where XeGTAO rotates the raw screen direction instead —
@@ -346,6 +353,7 @@ void main()
 	 *   binding 2: scene color texture (HDR, for bounce color sampling)
 	 *   binding 3: sky visibility (bent normal + V), the previous pass of this same effect —
 	 *              declared by the EMEN_SSGI_SKY_VISIBILITY variant only
+	 *   binding 3 (4 with the sky visibility): the view reconstruction (ViewReconstructionGLSL), spliced by create()
 	 *
 	 * Descriptor set 1 (bindless textures, sky-visibility variant only — BindlessTextureManager):
 	 *   binding 3: samplerCube[] whose reserved slot 1 holds the scene's baked irradiance cubemap
@@ -372,15 +380,14 @@ layout(set = 1, binding = 3) uniform samplerCube texturesCube[];
  * flag, exactly as it does for RTGI. */
 const uint IrradianceCubemapSlot = 1u;
 #endif
+)GLSL";
 
+	/* The trace's body, after its header and the view reconstruction (binding 3, or 4 with the sky visibility). */
+	constexpr auto SSGITraceFragmentShaderMain = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
 	float texelSizeX;
 	float texelSizeY;
-	float nearPlane;
-	float farPlane;
-	float tanHalfFovY;
-	float aspectRatio;
 	float maxDistance;
 	float thickness;
 	uint sampleCount;
@@ -389,27 +396,27 @@ layout(push_constant) uniform PushConstants
 	float skyLuminance;		/* Scale of the irradiance cubemap, in nits (0 = no sky). */
 };
 
-/* Linearize depth from [0,1] range (Vulkan [0,1] depth convention). */
+/* The trace's "reconstruction space": view-space X and Y, and the distance along the view axis as a POSITIVE Z — through
+ * the frame's projection and its inverse (ViewReconstructionGLSL), never a scalar linearisation: the chain's clip planes
+ * were frozen at 0.1 / 1000, up to 2.1x off with a wide lens (2026-10-25). The depth of a view position depends on its
+ * Z alone (perspective, jittered or not, and orthographic), so X = Y = 0 stand in. */
 float linearizeDepth (float depth)
 {
-	return (nearPlane * farPlane) / (farPlane - depth * (farPlane - nearPlane));
+	return emViewDepth(vec2(0.5), depth);
 }
 
-/* Reconstruct view-space position from UV and depth. */
+/* Reconstruct the position from UV and depth. */
 vec3 reconstructPosition (vec2 uv, float depth)
 {
-	float linearZ = linearizeDepth(depth);
-	vec2 ndc = uv * 2.0 - 1.0;
-	float t = tanHalfFovY;
-	return vec3(ndc * vec2(abs(t) * aspectRatio, t) * linearZ, linearZ);
+	vec3 viewPosition = emViewPosition(uv, depth);
+
+	return vec3(viewPosition.xy, -viewPosition.z);
 }
 
-/* Project view-space position back to screen UV. */
+/* Project a position back to screen UV. */
 vec2 projectToUV (vec3 viewPos)
 {
-	float t = tanHalfFovY;
-	vec2 ndc = viewPos.xy / (viewPos.z * vec2(abs(t) * aspectRatio, t));
-	return ndc * 0.5 + 0.5;
+	return emUVFromView(vec3(viewPos.xy, -viewPos.z));
 }
 
 /* PCG integer hash → decorrelated white noise from integer pixel coordinates (same
@@ -751,8 +758,9 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		/* ---- Descriptor set layouts (shared) ---- */
-		/* The trace reads depth + normals + scene colour, plus the sky visibility when it has one. */
-		auto traceInputLayout = this->getInputLayout(m_skyVisibilityActive ? 4 : 3);
+		/* The trace reads depth + normals + scene colour, plus the sky visibility when it has one, then the view
+		 * reconstruction. */
+		auto traceInputLayout = this->getInputLayout(m_skyVisibilityActive ? 4 : 3, 1);
 
 		if ( traceInputLayout == nullptr )
 		{
@@ -786,7 +794,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		if ( m_skyVisibilityActive )
 		{
-			auto horizonInputLayout = this->getInputLayout(2);
+			auto horizonInputLayout = this->getInputLayout(2, 1);
 
 			if ( horizonInputLayout == nullptr )
 			{
@@ -824,8 +832,8 @@ namespace EmEn::Graphics::Effects::Lighting
 		/* ⚠️ The variant is decided HERE, once: the sky block declares a sampler the no-sky pipeline
 		 * layout does not carry, and a `#extension` cannot live inside an `#ifdef` block. */
 		const std::string traceSource = m_skyVisibilityActive
-			? std::string{"#version 450\n#define EMEN_SSGI_SKY_VISIBILITY 1\n#extension GL_EXT_nonuniform_qualifier : require\n"} + SSGITraceFragmentShaderBody
-			: std::string{"#version 450\n"} + SSGITraceFragmentShaderBody;
+			? std::string{"#version 450\n#define EMEN_SSGI_SKY_VISIBILITY 1\n#extension GL_EXT_nonuniform_qualifier : require\n"} + SSGITraceFragmentShaderBody + ViewReconstructionGLSL::sourceGLSL(0, TraceSkyViewBinding) + SSGITraceFragmentShaderMain
+			: std::string{"#version 450\n"} + SSGITraceFragmentShaderBody + ViewReconstructionGLSL::sourceGLSL(0, TraceViewBinding) + SSGITraceFragmentShaderMain;
 
 		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, m_skyVisibilityActive ? "SSGI_TraceSky_FS" : "SSGI_Trace_FS", ShaderType::FragmentShader, traceSource);
 
@@ -846,7 +854,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		if ( m_skyVisibilityActive )
 		{
-			const auto horizonFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSGI_SkyVisibility_FS", ShaderType::FragmentShader, SSGIHorizonFragmentShader);
+			const auto horizonFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSGI_SkyVisibility_FS", ShaderType::FragmentShader, std::string{SSGIHorizonFragmentShader} + ViewReconstructionGLSL::sourceGLSL(0, HorizonViewBinding) + SSGIHorizonFragmentBody);
 
 			if ( horizonFragment == nullptr )
 			{
@@ -909,7 +917,12 @@ namespace EmEn::Graphics::Effects::Lighting
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-		const auto & constants = context.constants;
+
+		/* The view reconstruction is made with the chain (PostProcessor::configure() fails without it). */
+		if ( context.view == nullptr )
+		{
+			return;
+		}
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
@@ -925,10 +938,12 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(2, inputColor));
+		static_cast< void >(m_tracePerFrame[frameIndex]->writeUniformBufferObject(m_skyVisibilityActive ? TraceSkyViewBinding : TraceViewBinding, *context.view));
 
 		if ( m_skyVisibilityActive )
 		{
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(3, m_horizonTarget));
+			static_cast< void >(m_horizonPerFrame[frameIndex]->writeUniformBufferObject(HorizonViewBinding, *context.view));
 
 			if ( inputDepth != nullptr )
 			{
@@ -958,16 +973,11 @@ namespace EmEn::Graphics::Effects::Lighting
 			const auto readStateIndex = this->renderer().currentReadStateIndex();
 			const auto & viewMat = this->renderer().mainRenderTarget()->viewMatrices().viewMatrix(readStateIndex, false, 0);
 			const auto invView = viewMat.inverse();
-			const auto * inv = invView.data();
 
 			const HorizonPushConstants pc{
-				.invViewCol0 = {inv[0], inv[1], inv[2], m_parameters.skyVisibilityRadius},
-				.invViewCol1 = {inv[4], inv[5], inv[6], m_parameters.skyVisibilityFalloffRange},
-				.invViewCol2 = {inv[8], inv[9], inv[10], animated ? noiseFrameIndex : -1.0F},
-				.nearPlane = constants.nearPlane,
-				.farPlane = constants.farPlane,
-				.tanHalfFovY = constants.tanHalfFovY,
-				.aspectRatio = constants.frameWidth / constants.frameHeight,
+				.invViewCol0 = {invView[0], invView[1], invView[2], m_parameters.skyVisibilityRadius},
+				.invViewCol1 = {invView[4], invView[5], invView[6], m_parameters.skyVisibilityFalloffRange},
+				.invViewCol2 = {invView[8], invView[9], invView[10], animated ? noiseFrameIndex : -1.0F},
 				.sliceCount = m_parameters.skyVisibilitySliceCount,
 				.stepCount = m_parameters.skyVisibilityStepCount
 			};
@@ -988,10 +998,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			const TracePushConstants pc{
 				.texelSizeX = 1.0F / static_cast< float >(m_traceTarget.width()),
 				.texelSizeY = 1.0F / static_cast< float >(m_traceTarget.height()),
-				.nearPlane = constants.nearPlane,
-				.farPlane = constants.farPlane,
-				.tanHalfFovY = constants.tanHalfFovY,
-				.aspectRatio = constants.frameWidth / constants.frameHeight,
 				.maxDistance = m_parameters.maxDistance,
 				.thickness = m_parameters.thickness,
 				.sampleCount = m_parameters.sampleCount,

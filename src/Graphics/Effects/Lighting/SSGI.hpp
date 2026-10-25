@@ -151,10 +151,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			{
 				float texelSizeX;
 				float texelSizeY;
-				float nearPlane;
-				float farPlane;
-				float tanHalfFovY;
-				float aspectRatio;
 				float maxDistance;
 				float thickness;
 				uint32_t sampleCount;
@@ -181,10 +177,6 @@ namespace EmEn::Graphics::Effects::Lighting
 				std::array< float, 4 > invViewCol1;
 				/* xyz = inverse view rotation column 2, w = animated-noise frame index (< 0 = frozen). */
 				std::array< float, 4 > invViewCol2;
-				float nearPlane;
-				float farPlane;
-				float tanHalfFovY;
-				float aspectRatio;
 				uint32_t sliceCount;
 				uint32_t stepCount;
 			};

@@ -31,17 +31,29 @@
 #include <cmath>
 #include <string>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Math/Vector.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 static constexpr auto TracerTag{"TAAEffect"};
 
@@ -71,9 +83,6 @@ namespace
 		/* The tone mapper's RESIDUAL exposure (FrameContext::residualExposure: chain value -> display), 0 when unknown: the Karis weights and the
 		 * anti-flicker contrast are computed on the DISPLAY luminance, never on nits. */
 		float displayExposure;
-		/* The camera clip planes: the history carries the LINEAR depth of its surface in alpha. */
-		float nearPlane;
-		float farPlane;
 		/* 0 for the resolve itself. 1-3 only in the SECOND pass the debug view records into its own target
 		 * (Core/Graphics/PostProcessing/TemporalAA/DebugView): the history stays the real one. */
 		float debugView;
@@ -84,7 +93,11 @@ namespace
 		float historyRescale;
 	};
 
-	static_assert(sizeof(TAAPushConstants) == 56, "TAAPushConstants must be 56 bytes.");
+	static_assert(sizeof(TAAPushConstants) == 48, "TAAPushConstants must be 48 bytes.");
+
+	/** @brief The view reconstruction's binding (after the five samplers: getInputLayout(5, 1)). The history carries
+	 * the LINEAR depth of its surface in alpha, read through it. */
+	constexpr uint32_t ViewBinding{5};
 
 	/* ---- GLSL Shader Sources ----
 	 *
@@ -115,7 +128,7 @@ namespace
 
 	/* ⚠️ Split into adjacent raw literals (byte-identical once concatenated): MSVC caps ONE literal at 16380 bytes
 	 * (C2026, docs/caution-points.md). Keep every piece well under it when the shader grows. */
-	constexpr auto TAAResolveFragmentShader = R"GLSL(
+	constexpr auto TAAResolveHeader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -126,7 +139,9 @@ layout(set = 0, binding = 1) uniform sampler2D depthTex;
 layout(set = 0, binding = 2) uniform sampler2D velocityTex;
 layout(set = 0, binding = 3) uniform sampler2D historyTex;
 layout(set = 0, binding = 4) uniform sampler2D reactiveTex;
+)GLSL";
 
+	constexpr auto TAAResolveFragmentShader = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
 	float texelSizeX;
@@ -138,18 +153,17 @@ layout(push_constant) uniform PushConstants
 	float jitterUVY;
 	float debugNonFinite;
 	float displayExposure;
-	float nearPlane;
-	float farPlane;
 	float debugView;
 	float reactiveEnabled;
 	float historyRescale;
 };
 
+/* The distance along the view axis, through the frame's inverse projection (ViewReconstructionGLSL). It does not depend
+ * on the screen position (perspective and orthographic alike, the jitter only shifts X and Y), so a neighbour's depth is
+ * read at this pixel's uv. The frozen clip planes read it up to 2.1x too far with a wide lens (2026-10-25). */
 float linearizeDepth(float depth)
 {
-	float z = depth * 2.0 - 1.0;
-
-	return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));
+	return emViewDepth(vUV, depth);
 }
 
 float luminanceOf(vec3 color)
@@ -608,7 +622,7 @@ namespace EmEn::Graphics::Effects::Resolve
 		/* Compile shaders. */
 		const auto vertexModule = this->getFullscreenVertexShader();
 
-		const auto fragmentModule = renderer.shaderManager().getShaderModuleFromSourceCode(renderer.device(), "TAAResolveFS", Saphir::ShaderType::FragmentShader, TAAResolveFragmentShader);
+		const auto fragmentModule = renderer.shaderManager().getShaderModuleFromSourceCode(renderer.device(), "TAAResolveFS", Saphir::ShaderType::FragmentShader, std::string{TAAResolveHeader} + ViewReconstructionGLSL::sourceGLSL(0, ViewBinding) + TAAResolveFragmentShader);
 
 		if ( vertexModule == nullptr || fragmentModule == nullptr )
 		{
@@ -617,8 +631,8 @@ namespace EmEn::Graphics::Effects::Resolve
 			return false;
 		}
 
-		/* Descriptor set layout: scene color + depth + velocity + history + reactive mask samplers. */
-		auto descriptorSetLayout = this->getInputLayout(5);
+		/* Descriptor set layout: scene color + depth + velocity + history + reactive mask samplers, the view reconstruction. */
+		auto descriptorSetLayout = this->getInputLayout(5, 1);
 
 		if ( descriptorSetLayout == nullptr )
 		{
@@ -696,6 +710,12 @@ namespace EmEn::Graphics::Effects::Resolve
 	const TextureInterface &
 	TAA::execute (const CommandBuffer & commandBuffer, const TextureInterface & inputColor, const FrameContext & context) noexcept
 	{
+		/* The view reconstruction is made with the chain (PostProcessor::configure() fails without it). */
+		if ( context.view == nullptr )
+		{
+			return inputColor;
+		}
+
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		const uint32_t writeIdx = m_historyWriteIndex;
@@ -719,6 +739,7 @@ namespace EmEn::Graphics::Effects::Resolve
 		/* The reactive mask, or the input colour as a stand-in the shader never reads (reactiveEnabled = 0): the binding
 		 * is statically used, so it must always hold a valid image. */
 		static_cast< void >(m_descriptorSets[frameIndex]->writeCombinedImageSampler(4, context.reactive != nullptr ? *context.reactive : inputColor));
+		static_cast< void >(m_descriptorSets[frameIndex]->writeUniformBufferObject(ViewBinding, *context.view));
 
 		/* Without velocity there is no valid reprojection: pass the input through
 		 * (alpha 1) rather than accumulating a smear. */
@@ -740,8 +761,6 @@ namespace EmEn::Graphics::Effects::Resolve
 			.jitterUVY = context.projectionJitter.y() * 0.5F,
 			.debugNonFinite = m_parameters.debugNonFinite ? 1.0F : 0.0F,
 			.displayExposure = context.residualExposure,
-			.nearPlane = context.constants.nearPlane,
-			.farPlane = context.constants.farPlane,
 			.debugView = 0.0F,
 			.reactiveEnabled = context.reactive != nullptr ? 1.0F : 0.0F,
 			.historyRescale = historyRescale

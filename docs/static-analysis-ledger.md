@@ -369,7 +369,8 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 - **pro-bounds-constant-array-index ×129** — the per-frame descriptor sets and targets (`frameIndex <
   framesInFlight`), the ping-pong pairs (`index < 2`), the effect slots (`slot < EffectSlotCount`), the census counters.
 - **bugprone-return-const-ref-from-parameter ×9** — the chain's pass-through contract: an effect with nothing to do
-  returns its INPUT texture, owned by a render target, never a temporary.
+  returns its INPUT texture, owned by a render target, never a temporary. +2 on 2026-10-25: `DepthOfField::execute()`
+  and `TAA::execute()` return their input on a frame without the view reconstruction (`FrameContext::view` null).
 - **performance-inefficient-string-concatenation ×4** — `GIDenoiser` target names, built once per creation / resize.
 - **cppcoreguidelines-macro-usage ×2** — `EMEN_CLOUD_VOLUME_GLSL`, `GIDENOISER_REPROJECTION_GLSL`: GLSL text spliced
   by adjacent-literal concatenation at compile time, which a `constexpr` pointer cannot do. Same reason, added
@@ -386,7 +387,8 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
   cascade matrices, the XRay corners.
 - **bugprone-return-const-ref-from-parameter ×10** — the chain's pass-through contract (see 7f). +3 on 2026-10-25:
   `AerialPerspective::execute()` returns its input on a frame without a submitted atmosphere, without a depth or
-  material-properties input, or when its descriptor writes fail.
+  material-properties input, or when its descriptor writes fail. +2 the same day: `AtmosphericFog::execute()` and
+  `VolumetricScattering::execute()` return their input on a frame without the view reconstruction.
 - **readability-qualified-auto ×7** — Vulkan handles (`ProbeConvolver`, `OceanWaves`), as in 7c / 7e.
 - **pro-type-static-cast-downcast ×2** — `VolumetricClouds` / `VolumetricScattering`: the shadow map cast right after
   its type check (RTTI avoided).

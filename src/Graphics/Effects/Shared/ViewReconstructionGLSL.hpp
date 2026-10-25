@@ -37,11 +37,12 @@
  * position: through the inverse of the projection the frame was rendered with, never through a scalar linearisation.
  *
  * ⚠️ Why (owner decision 2026-10-25, option B of item post-process-depth-linearisation-wrong): the chain linearised
- * depth with the OpenGL formula `2nf / (f + n − z(f − n))` on Vulkan [0, 1] depth, and with clip planes frozen at
- * 0.1 / 1000 (`PostProcessor::setClipPlanes()` had no caller): the effects read 2.24 m for 1 m and 714 m for 1 km.
- * A scalar formula is also wrong for an orthographic camera, whatever its planes. The matrix reconstruction is the
- * clouds', the GI denoiser's and the aerial perspective's, validated; it is camera-RELATIVE (the projection times
- * the view ROTATION), so a float never carries a world position far from the origin.
+ * depth with clip planes frozen at 0.1 / 1000 (`PostProcessor::setClipPlanes()` had no caller), while the real near
+ * plane follows the field of view (`computeNearPlane()`): the labyrinth's 13 mm lens read 2.11 m for 1 m and 680 m
+ * for 1 km. (The formula itself, OpenGL's on `depth × 2 − 1`, is the Vulkan inverse in disguise.) A scalar formula is
+ * also wrong for an orthographic camera, whatever its planes. The matrix reconstruction is the clouds', the GI
+ * denoiser's and the aerial perspective's, validated; it is camera-RELATIVE (the projection times the view ROTATION),
+ * so a float never carries a world position far from the origin.
  *
  * The block is written once per frame by the PostProcessor (FrameContext::view) and read through the helpers:
  * - `emViewPosition(uv, depth)`: the view-space position (right-handed, the camera looks down −Z);

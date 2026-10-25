@@ -39,8 +39,22 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "PixelFactory/Color.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class GraphicsPipeline;
+	class PipelineLayout;
+}
 
 namespace EmEn::Graphics::Effects::Atmosphere
 {
@@ -97,25 +111,11 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			};
 
 			/**
-			 * @brief Push constants for the atmospheric fog pass (116 bytes).
+			 * @brief Push constants for the atmospheric fog pass (64 bytes). The camera and the depth reconstruction come
+			 * from the chain's view reconstruction (FrameContext::view).
 			 */
 			struct EMEN_API FogPushConstants
 			{
-				/* Camera basis — extracted from view matrix in execute(). */
-				float cameraPosX;
-				float cameraPosY;
-				float cameraPosZ;
-				float cameraRightX;
-				float cameraRightY;
-				float cameraRightZ;
-				float cameraForwardX;
-				float cameraForwardY;
-				float cameraForwardZ;
-				/* Depth reconstruction. */
-				float nearPlane;
-				float farPlane;
-				float tanHalfFovY;
-				float aspectRatio;
 				/* Fog parameters. */
 				float fogDensity;
 				float fogHeightFalloff;
@@ -143,7 +143,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			 * disappears -- invisible on NVIDIA, which exposes 256. That is exactly how RTR was dead on
 			 * min-spec until ae61e368. Over the floor, move the block to a per-frame UBO (RTR and
 			 * ContactShadows are the ported references), never trim it to squeeze back under.
-			 * 116 bytes: 12 bytes (3 floats) of headroom left. */
+			 * 64 bytes since the view reconstruction (2026-10-25): 64 bytes of headroom left. */
 			static_assert(sizeof(FogPushConstants) <= 128, "Push constant block over the 128-byte Vulkan minimum guarantee: move it to a per-frame UBO.");
 
 			/**

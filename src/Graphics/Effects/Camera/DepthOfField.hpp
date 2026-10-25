@@ -39,8 +39,22 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Vulkan/Buffer.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class GraphicsPipeline;
+	class PipelineLayout;
+}
 
 namespace EmEn::Graphics::Effects::Camera
 {
@@ -110,8 +124,6 @@ namespace EmEn::Graphics::Effects::Camera
 			 */
 			struct EMEN_API FocusPushConstants
 			{
-				float nearPlane;
-				float farPlane;
 				float focusDistance;
 				float autoFocusSpeed;
 				float time;
@@ -126,8 +138,6 @@ namespace EmEn::Graphics::Effects::Camera
 			 */
 			struct EMEN_API SetupPushConstants
 			{
-				float nearPlane;
-				float farPlane;
 				float aperture;
 				float focalLength;
 				float sensorWidth;

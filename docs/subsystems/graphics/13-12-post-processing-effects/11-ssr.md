@@ -240,7 +240,9 @@ When SSR ray finds no screen-space hit, the resolve pass reconstructs the reflec
 
 Key design:
 - Inverse view matrix (3×3 rotation) passed via push constants (3 × vec4 = 48 bytes; the whole
-  `ResolvePushConstants` block is 92 bytes, under the 128-byte floor)
+  `ResolvePushConstants` block is 80 bytes since the view reconstruction took the clip planes out of it, 2026-10-25,
+  under the 128-byte floor). Positions come from the chain's view block (`ViewReconstructionGLSL`, binding 6 of
+  `SSRResolveInputView`; binding 2 of the trace): [`41-the-view-reconstruction`](41-the-view-reconstruction-one-matrix-path-from-depth-to-position.md)
 - `envFallbackIntensity` parameter controls fallback strength (0.0 = disabled, 0.3 = default) —
   it is the TRUST in a screen-space miss ("no information", not "sky"), multiplied by the same
   Fresnel weight and roughness fade a hit carries

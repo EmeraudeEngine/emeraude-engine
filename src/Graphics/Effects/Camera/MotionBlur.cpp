@@ -35,6 +35,7 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/Renderer.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -235,7 +236,10 @@ void main()
 }
 )GLSL";
 
-	constexpr auto GatherFragmentShader = R"GLSL(
+	/** @brief The view reconstruction's binding in the gather pass (after its four samplers: getInputLayout(4, 1)). */
+	constexpr uint32_t GatherViewBinding{4};
+
+	constexpr auto GatherHeader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -245,15 +249,15 @@ layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
 layout(set = 0, binding = 2) uniform sampler2D velocityTex;
 layout(set = 0, binding = 3) uniform sampler2D neighborMaxTex;
+)GLSL";
 
+	constexpr auto GatherFragmentShader = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
 	float texelSizeX;
 	float texelSizeY;
 	float frameWidth;
 	float frameHeight;
-	float nearPlane;
-	float farPlane;
 	float shutterAngle;
 	float maxBlurRadiusPixels;
 	float softDepthExtent;
@@ -261,13 +265,6 @@ layout(push_constant) uniform PushConstants
 	float time;
 	uint sampleCount;
 };
-
-float linearizeDepth (float depth)
-{
-	float z = depth * 2.0 - 1.0;
-
-	return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));
-}
 
 /* Foreground/background classification (McGuire): 1 when 'a' is closer to the camera than 'b',
  * softened over softDepthExtent meters so a silhouette does not switch weights on one texel. */
@@ -319,7 +316,9 @@ void main()
 	/* Half a pixel floor: a still surface must still WEIGH in its own reconstruction, and it
 	 * divides the centre term below. */
 	const float centerVelocityLength = max(length(centerVelocity), 0.5);
-	const float centerDepth = linearizeDepth(texture(depthTex, vUV).r);
+	/* Distances along the view axis, through the frame's inverse projection (ViewReconstructionGLSL): the frozen clip
+	 * planes read them up to 2.1x too far with a wide lens (2026-10-25), so softDepthExtent (metres) was half as soft. */
+	const float centerDepth = emViewDepth(vUV, texture(depthTex, vUV).r);
 
 	const float jitter = interleavedGradientNoise(gl_FragCoord.xy + vec2(time * 1000.0)) - 0.5;
 
@@ -335,7 +334,7 @@ void main()
 		const vec2 offsetPixels = dominant * t * 0.5;
 		const vec2 sampleUV = vUV + offsetPixels * texel;
 
-		const float sampleDepth = linearizeDepth(texture(depthTex, sampleUV).r);
+		const float sampleDepth = emViewDepth(sampleUV, texture(depthTex, sampleUV).r);
 		const vec2 sampleVelocity = texture(velocityTex, sampleUV).rg * toPixels * shutterAngle;
 		const float sampleVelocityLength = max(length(sampleVelocity), 0.5);
 		const float d = length(offsetPixels);
@@ -421,7 +420,8 @@ namespace EmEn::Graphics::Effects::Camera
 		auto & layoutManager = renderer.layoutManager();
 
 		auto singleInputLayout = this->getInputLayout(1);
-		auto quadInputLayout = this->getInputLayout(4);
+		/* The gather reads the view reconstruction too. */
+		auto quadInputLayout = this->getInputLayout(4, 1);
 
 		if ( singleInputLayout == nullptr || quadInputLayout == nullptr )
 		{
@@ -486,7 +486,7 @@ namespace EmEn::Graphics::Effects::Camera
 		const auto tileMaxHFragment = shaderManager.getShaderModuleFromSourceCode(device, "MB_TileMaxH_FS", ShaderType::FragmentShader, TileMaxHorizontalFragmentShader);
 		const auto tileMaxFragment = shaderManager.getShaderModuleFromSourceCode(device, "MB_TileMaxV_FS", ShaderType::FragmentShader, TileMaxVerticalFragmentShader);
 		const auto neighborMaxFragment = shaderManager.getShaderModuleFromSourceCode(device, "MB_NeighborMax_FS", ShaderType::FragmentShader, NeighborMaxFragmentShader);
-		const auto gatherFragment = shaderManager.getShaderModuleFromSourceCode(device, "MB_Gather_FS", ShaderType::FragmentShader, GatherFragmentShader);
+		const auto gatherFragment = shaderManager.getShaderModuleFromSourceCode(device, "MB_Gather_FS", ShaderType::FragmentShader, std::string{GatherHeader} + ViewReconstructionGLSL::sourceGLSL(0, GatherViewBinding) + GatherFragmentShader);
 
 		if ( tileMaxHFragment == nullptr || tileMaxFragment == nullptr || neighborMaxFragment == nullptr || gatherFragment == nullptr )
 		{
@@ -586,7 +586,7 @@ namespace EmEn::Graphics::Effects::Camera
 
 		/* No velocity buffer means no motion blur: pass the colour through untouched rather
 		 * than blur by garbage. requiresVelocity() makes this a defensive branch only. */
-		if ( context.velocity == nullptr || context.depth == nullptr )
+		if ( context.velocity == nullptr || context.depth == nullptr || context.view == nullptr )
 		{
 			return inputColor;
 		}
@@ -617,6 +617,7 @@ namespace EmEn::Graphics::Effects::Camera
 		static_cast< void >(m_gatherPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 		static_cast< void >(m_gatherPerFrame[frameIndex]->writeCombinedImageSampler(1, *context.depth));
 		static_cast< void >(m_gatherPerFrame[frameIndex]->writeCombinedImageSampler(2, *context.velocity));
+		static_cast< void >(m_gatherPerFrame[frameIndex]->writeUniformBufferObject(GatherViewBinding, *context.view));
 
 		const auto maxBlurRadiusPixels = static_cast< float >(TileSize);
 
@@ -668,8 +669,6 @@ namespace EmEn::Graphics::Effects::Camera
 			.texelSizeY = 1.0F / constants.frameHeight,
 			.frameWidth = constants.frameWidth,
 			.frameHeight = constants.frameHeight,
-			.nearPlane = constants.nearPlane,
-			.farPlane = constants.farPlane,
 			.shutterAngle = shutterAngle,
 			.maxBlurRadiusPixels = maxBlurRadiusPixels,
 			.softDepthExtent = m_parameters.softDepthExtent,

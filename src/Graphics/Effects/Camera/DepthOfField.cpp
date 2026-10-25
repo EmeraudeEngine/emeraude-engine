@@ -36,6 +36,7 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/Renderer.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -62,11 +63,15 @@ namespace
 {
 	constexpr auto TracerTag{"DepthOfFieldEffect"};
 
+	/** @brief The view reconstruction's bindings: after the focus pass's two samplers, the setup pass's three. */
+	constexpr uint32_t FocusViewBinding{2};
+	constexpr uint32_t SetupViewBinding{3};
+
 	/* Auto-focus pass (1x1): measures the scene depth around the screen center and
 	 * relaxes the focus distance toward it (exponential rack focus). The 1x1 ping-pong
 	 * history stores R = focus distance, G = the write timestamp (for the frame delta).
 	 * Manual focus goes through the same relaxation: focus pulls are always smooth. */
-	constexpr auto DoFFocusFragmentShader = R"GLSL(
+	constexpr auto DoFFocusHeader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -74,11 +79,11 @@ layout(location = 0) out vec4 outFocus;
 
 layout(set = 0, binding = 0) uniform sampler2D depthTex;
 layout(set = 0, binding = 1) uniform sampler2D previousFocusTex;
+)GLSL";
 
+	constexpr auto DoFFocusFragmentShader = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
-	float nearPlane;
-	float farPlane;
 	float focusDistance;
 	float autoFocusSpeed;
 	float time;
@@ -86,12 +91,6 @@ layout(push_constant) uniform PushConstants
 	float texelSizeY;
 	uint flags; /* Bit 0 = auto-focus, bit 1 = reset history. */
 };
-
-float linearizeDepth (float depth)
-{
-	float z = depth * 2.0 - 1.0;
-	return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));
-}
 
 void main()
 {
@@ -126,7 +125,10 @@ void main()
 				}
 
 				float w = exp(-float(x * x + y * y) / 4.5);
-				totalDepth += linearizeDepth(d) * w;
+				/* The distance along the view axis, through the frame's inverse projection (ViewReconstructionGLSL):
+				 * the frozen clip planes read 1.43 m for 1 m at 24 mm, 2.11 m at 13 mm (2026-10-25), so the auto-focus
+				 * aimed that much too far. */
+				totalDepth += emViewDepth(uv, d) * w;
 				totalWeight += w;
 			}
 		}
@@ -152,7 +154,7 @@ void main()
 	/* Setup pass (half-res): downsampled color + SIGNED normalized circle of confusion.
 	 * Thin lens model; positive CoC = far field (behind the focus plane), negative =
 	 * near field (in front of it). The sky (far plane) naturally lands in the far field. */
-	constexpr auto DoFSetupFragmentShader = R"GLSL(
+	constexpr auto DoFSetupHeader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -161,11 +163,11 @@ layout(location = 0) out vec4 outSetup;
 layout(set = 0, binding = 0) uniform sampler2D colorTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
 layout(set = 0, binding = 2) uniform sampler2D focusTex;
+)GLSL";
 
+	constexpr auto DoFSetupFragmentShader = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
-	float nearPlane;
-	float farPlane;
 	float aperture;
 	float focalLength;
 	float sensorWidth;
@@ -174,16 +176,11 @@ layout(push_constant) uniform PushConstants
 	float padding;
 };
 
-float linearizeDepth (float depth)
-{
-	float z = depth * 2.0 - 1.0;
-	return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));
-}
-
 void main()
 {
 	vec3 color = texture(colorTex, vUV).rgb;
-	float linearZ = linearizeDepth(texture(depthTex, vUV).r);
+	/* The distance along the view axis (the thin lens' object distance), through the frame's inverse projection. */
+	float linearZ = emViewDepth(vUV, texture(depthTex, vUV).r);
 	float fd = texelFetch(focusTex, ivec2(0), 0).r;
 
 	/* Thin lens circle of confusion, SIGNED (positive behind the focus plane):
@@ -552,9 +549,12 @@ namespace EmEn::Graphics::Effects::Camera
 		auto singleLayout = this->getInputLayout(1);
 		auto dualLayout = this->getInputLayout(2);
 		auto tripleLayout = this->getInputLayout(3);
+		/* The focus and the setup passes read the view reconstruction too. */
+		auto focusLayout = this->getInputLayout(2, 1);
+		auto setupLayout = this->getInputLayout(3, 1);
 		auto quadLayout = this->getInputLayout(4);
 
-		if ( singleLayout == nullptr || dualLayout == nullptr || tripleLayout == nullptr || quadLayout == nullptr )
+		if ( singleLayout == nullptr || dualLayout == nullptr || tripleLayout == nullptr || quadLayout == nullptr || focusLayout == nullptr || setupLayout == nullptr )
 		{
 			TraceError{TracerTag} << "Failed to get the descriptor set layouts !";
 
@@ -565,9 +565,9 @@ namespace EmEn::Graphics::Effects::Camera
 		auto & layoutManager = renderer.layoutManager();
 
 		{
-			/* Focus: depth + previous focus. */
+			/* Focus: depth + previous focus + the view reconstruction. */
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(dualLayout);
+			sets.emplace_back(focusLayout);
 
 			m_focusLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(FocusPushConstants)}
@@ -575,9 +575,9 @@ namespace EmEn::Graphics::Effects::Camera
 		}
 
 		{
-			/* Setup: color + depth + focus. */
+			/* Setup: color + depth + focus + the view reconstruction. */
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(tripleLayout);
+			sets.emplace_back(setupLayout);
 
 			m_setupLayout = layoutManager.getPipelineLayout(sets, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(SetupPushConstants)}
@@ -634,8 +634,8 @@ namespace EmEn::Graphics::Effects::Camera
 		const auto & device = renderer.device();
 
 		const auto vertexModule = this->getFullscreenVertexShader();
-		const auto focusFragment = shaderManager.getShaderModuleFromSourceCode(device, "DoF_Focus_FS", ShaderType::FragmentShader, DoFFocusFragmentShader);
-		const auto setupFragment = shaderManager.getShaderModuleFromSourceCode(device, "DoF_Setup_FS", ShaderType::FragmentShader, DoFSetupFragmentShader);
+		const auto focusFragment = shaderManager.getShaderModuleFromSourceCode(device, "DoF_Focus_FS", ShaderType::FragmentShader, std::string{DoFFocusHeader} + ViewReconstructionGLSL::sourceGLSL(0, FocusViewBinding) + DoFFocusFragmentShader);
+		const auto setupFragment = shaderManager.getShaderModuleFromSourceCode(device, "DoF_Setup_FS", ShaderType::FragmentShader, std::string{DoFSetupHeader} + ViewReconstructionGLSL::sourceGLSL(0, SetupViewBinding) + DoFSetupFragmentShader);
 		const auto dilateFragment = shaderManager.getShaderModuleFromSourceCode(device, "DoF_Dilate_FS", ShaderType::FragmentShader, DoFDilateFragmentShader);
 		const auto farGatherFragment = shaderManager.getShaderModuleFromSourceCode(device, "DoF_FarGather_FS", ShaderType::FragmentShader, DoFFarGatherFragmentShader);
 		const auto nearGatherFragment = shaderManager.getShaderModuleFromSourceCode(device, "DoF_NearGather_FS", ShaderType::FragmentShader, DoFNearGatherFragmentShader);
@@ -666,10 +666,10 @@ namespace EmEn::Graphics::Effects::Camera
 		/* ---- Create descriptor sets ---- */
 
 		/* Focus: depth (per-frame) + previous focus (ping-pong, rewritten per frame). */
-		m_focusPerFrame = this->createPerFrameDescriptorSets(dualLayout, ClassId, "Focus_DescSet");
+		m_focusPerFrame = this->createPerFrameDescriptorSets(focusLayout, ClassId, "Focus_DescSet");
 
 		/* Setup: color + depth (per-frame) + fresh focus (ping-pong, rewritten per frame). */
-		m_setupPerFrame = this->createPerFrameDescriptorSets(tripleLayout, ClassId, "Setup_DescSet");
+		m_setupPerFrame = this->createPerFrameDescriptorSets(setupLayout, ClassId, "Setup_DescSet");
 
 		/* Composite: original color + material properties per-frame; gathers static. */
 		m_compositePerFrame = this->createPerFrameDescriptorSets(quadLayout, ClassId, "Composite_DescSet");
@@ -792,6 +792,12 @@ namespace EmEn::Graphics::Effects::Camera
 		const auto * inputMaterialProperties = context.materialProperties;
 		const auto & constants = context.constants;
 
+		/* The view reconstruction is made with the chain (PostProcessor::configure() fails without it). */
+		if ( context.view == nullptr )
+		{
+			return inputColor;
+		}
+
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		const uint32_t writeIdx = m_focusWriteIndex;
@@ -829,6 +835,9 @@ namespace EmEn::Graphics::Effects::Camera
 		static_cast< void >(m_setupPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 		static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
 
+		static_cast< void >(m_focusPerFrame[frameIndex]->writeUniformBufferObject(FocusViewBinding, *context.view));
+		static_cast< void >(m_setupPerFrame[frameIndex]->writeUniformBufferObject(SetupViewBinding, *context.view));
+
 		if ( inputMaterialProperties != nullptr )
 		{
 			static_cast< void >(m_compositePerFrame[frameIndex]->writeCombinedImageSampler(3, *inputMaterialProperties));
@@ -849,8 +858,6 @@ namespace EmEn::Graphics::Effects::Camera
 			}
 
 			const FocusPushConstants pc{
-				.nearPlane = constants.nearPlane,
-				.farPlane = constants.farPlane,
 				.focusDistance = focusDistance,
 				.autoFocusSpeed = m_parameters.autoFocusSpeed,
 				.time = constants.time,
@@ -951,8 +958,6 @@ namespace EmEn::Graphics::Effects::Camera
 		/* ---- Pass 2: CoC setup (signed, half-res) ---- */
 		{
 			const SetupPushConstants pc{
-				.nearPlane = constants.nearPlane,
-				.farPlane = constants.farPlane,
 				.aperture = aperture,
 				.focalLength = focalLength,
 				.sensorWidth = sensorWidth,

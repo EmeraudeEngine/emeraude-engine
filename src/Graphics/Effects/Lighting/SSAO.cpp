@@ -85,7 +85,7 @@ layout(push_constant) uniform PushConstants
 
 /* The "reconstruction space" of this pass: view-space X and Y, and the distance along the view axis as a POSITIVE Z.
  * Through the frame's inverse projection (ViewReconstructionGLSL), never a scalar linearisation: the chain's clip
- * planes were frozen at 0.1 / 1000 and the formula OpenGL's, so this pass read 2.24 m for 1 m (2026-10-25). */
+ * planes were frozen at 0.1 / 1000, so with a wide lens this pass read 2.11 m for 1 m (2026-10-25). */
 vec3 reconstructPosition (vec2 uv, float depth)
 {
 	vec3 viewPosition = emViewPosition(uv, depth);

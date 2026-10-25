@@ -27,26 +27,53 @@
 #include "SSR.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <bit>
 #include <cmath>
+#include <functional>
+#include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/ShaderModule.hpp"
-#include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/Image.hpp"
+#include "Vulkan/ImageView.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
+#include "Vulkan/Sampler.hpp"
+#include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/Sync/ImageMemoryBarrier.hpp"
+#include "Vulkan/TextureInterface.hpp"
 
 namespace
 {
 	using namespace EmEn;
+
+	/** @brief The view reconstruction's bindings: after the trace's two samplers, after the resolve's six. */
+	constexpr uint32_t TraceViewBinding{2};
+	constexpr uint32_t ResolveViewBinding{6};
 
 	/* Hi-Z pyramid: mip 0 = scene depth copy. */
 	constexpr auto SSRHiZCopyComputeShader = R"GLSL(
@@ -204,15 +231,14 @@ layout(location = 0) out vec4 outHit;
 
 layout(set = 0, binding = 0) uniform sampler2D normalTex;
 layout(set = 0, binding = 1) uniform sampler2D hiZTex;
+)GLSL";
 
+	/* The trace's body, after its header and the view reconstruction (binding 2). */
+	constexpr auto SSRTraceFragmentBody = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
 	float texelSizeX;
 	float texelSizeY;
-	float nearPlane;
-	float farPlane;
-	float tanHalfFovY;
-	float aspectRatio;
 	float maxDistance;
 	float thickness;
 	float fadeScreenEdge;
@@ -221,33 +247,33 @@ layout(push_constant) uniform PushConstants
 	uint padding;
 };
 
-/* Linearize depth from [0,1] range (Vulkan [0,1] depth convention). */
+/* The trace's "reconstruction space": view-space X and Y, and the distance along the view axis as a POSITIVE Z — through
+ * the frame's projection and its inverse (ViewReconstructionGLSL), never a scalar linearisation: the chain's clip planes
+ * were frozen at 0.1 / 1000, up to 2.1x off with a wide lens (2026-10-25). The depth of a view position depends on its
+ * Z alone (perspective, jittered or not, and orthographic), so X = Y = 0 stand in. */
 float linearizeDepth (float depth)
 {
-	return (nearPlane * farPlane) / (farPlane - depth * (farPlane - nearPlane));
+	return emViewDepth(vec2(0.5), depth);
 }
 
-/* Inverse of linearizeDepth: view-space Z to [0,1] depth-buffer value. */
+/* Inverse of linearizeDepth: view-space Z (positive) to the [0,1] depth-buffer value. */
 float delinearizeDepth (float viewZ)
 {
-	return (farPlane * (viewZ - nearPlane)) / (viewZ * (farPlane - nearPlane));
+	return emDepthFromView(vec3(0.0, 0.0, -viewZ));
 }
 
-/* Reconstruct view-space position from UV and depth. */
+/* Reconstruct the position from UV and depth. */
 vec3 reconstructPosition (vec2 uv, float depth)
 {
-	float linearZ = linearizeDepth(depth);
-	vec2 ndc = uv * 2.0 - 1.0;
-	float t = tanHalfFovY;
-	return vec3(ndc * vec2(abs(t) * aspectRatio, t) * linearZ, linearZ);
+	vec3 viewPosition = emViewPosition(uv, depth);
+
+	return vec3(viewPosition.xy, -viewPosition.z);
 }
 
-/* Project view-space position back to screen UV. */
+/* Project a position back to screen UV. */
 vec2 projectToUV (vec3 viewPos)
 {
-	float t = tanHalfFovY;
-	vec2 ndc = viewPos.xy / (viewPos.z * vec2(abs(t) * aspectRatio, t));
-	return ndc * 0.5 + 0.5;
+	return emUVFromView(vec3(viewPos.xy, -viewPos.z));
 }
 
 /* Screen-edge fade: 0 at edges, 1 at center. */
@@ -329,7 +355,7 @@ void main()
 	if (reflDir.z < 0.0)
 	{
 		/* Depth decreases along the ray: solve its near-plane crossing and stop just short. */
-		rayLength = clamp((nearPlane * 1.01 - viewPos.z) / reflDir.z, 0.0, rayLength);
+		rayLength = clamp((linearizeDepth(0.0) * 1.01 - viewPos.z) / reflDir.z, 0.0, rayLength);
 	}
 
 	vec3 viewEnd = viewPos + reflDir * rayLength;
@@ -505,6 +531,10 @@ layout(set = 0, binding = 4) uniform sampler2D pyramidTex;
  * ⚠️ Read .rgb only — the BASE colour; .a is the diffuse weight the GI combines apply. A diffuse
  * albedo in the rgb lanes would read 0 for every metal and kill its reflection. */
 layout(set = 0, binding = 5) uniform sampler2D albedoTex;
+)GLSL";
+
+	/* The resolve's body, after its header and the view reconstruction (binding 6). */
+	constexpr auto SSRResolveFragmentBody = R"GLSL(
 
 /* Bindless textures (set 1): the reserved cube slot 2 holds the ACTIVE SCENE's
  * GGX-prefiltered environment, re-baked at every background switch (the old dedicated
@@ -520,8 +550,6 @@ layout(push_constant) uniform PushConstants
 	vec4 invViewCol1;
 	vec4 invViewCol2;
 	float texelSizeX, texelSizeY;
-	float nearPlane, farPlane;
-	float tanHalfFovY, aspectRatio;
 	float envFallbackIntensity;
 	float intensity;
 	float pyramidLodOffset;
@@ -529,11 +557,6 @@ layout(push_constant) uniform PushConstants
 	float skyLuminance;
 	float debugNonFinite;
 };
-
-float linearizeDepth (float depth)
-{
-	return (nearPlane * farPlane) / (farPlane - depth * (farPlane - nearPlane));
-}
 
 /* ENVIRONMENT BRDF — the SECOND half of the split-sum approximation (Karis, "Real Shading in
  * Unreal Engine 4", SIGGRAPH 2013), in its analytic form (Karis' mobile fit, the one Unreal and
@@ -618,10 +641,9 @@ void main()
 		return;
 	}
 
-	/* View-space position (standard: Z negative = into screen) and the raw view-space normal. */
-	float linearZ = linearizeDepth(depth);
-	vec2 ndc = vUV * 2.0 - 1.0;
-	vec3 viewPos = vec3(ndc.x * abs(tanHalfFovY) * aspectRatio * linearZ, ndc.y * tanHalfFovY * linearZ, -linearZ);
+	/* View-space position (standard: Z negative = into screen), through the frame's inverse projection, and the raw
+	 * view-space normal. */
+	vec3 viewPos = emViewPosition(vUV, depth);
 	vec3 viewDir = normalize(viewPos);
 	vec3 normal = normalize(rawN);
 	float NdotV = max(dot(normal, -viewDir), 0.0);
@@ -814,16 +836,16 @@ namespace EmEn::Graphics::Effects::Lighting
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Trace input (normals + Hi-Z pyramid): 2 combined image samplers at bindings 0,1. */
-		auto traceInputLayout = this->getInputLayout(2);
+		/* Trace input (normals + Hi-Z pyramid): 2 combined image samplers at bindings 0,1, the view reconstruction at 2. */
+		auto traceInputLayout = this->getInputLayout(2, 1);
 
-		/* Resolve input (color + trace + depth + normals + pyramid + albedo): 6 bindings, custom. */
-		auto resolveInputLayout = layoutManager.getDescriptorSetLayout("SSRResolveInput");
+		/* Resolve input (color + trace + depth + normals + pyramid + albedo, the view reconstruction): 7 bindings, custom. */
+		auto resolveInputLayout = layoutManager.getDescriptorSetLayout("SSRResolveInputView");
 
 		if ( resolveInputLayout == nullptr )
 		{
-			resolveInputLayout = layoutManager.prepareNewDescriptorSetLayout("SSRResolveInput");
-			resolveInputLayout->setIdentifier(ClassId, "SSRResolveInput", "DescriptorSetLayout");
+			resolveInputLayout = layoutManager.prepareNewDescriptorSetLayout("SSRResolveInputView");
+			resolveInputLayout->setIdentifier(ClassId, "SSRResolveInputView", "DescriptorSetLayout");
 			resolveInputLayout->declareCombinedImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT);
 			resolveInputLayout->declareCombinedImageSampler(1, VK_SHADER_STAGE_FRAGMENT_BIT);
 			resolveInputLayout->declareCombinedImageSampler(2, VK_SHADER_STAGE_FRAGMENT_BIT);
@@ -833,6 +855,8 @@ namespace EmEn::Graphics::Effects::Lighting
 			/* Binding 5: the scene albedo — the primary-surface Fresnel COLOR (same model as
 			 * RTR: F0 = mix(0.04, albedo, metalness)) tints the resolved reflection. */
 			resolveInputLayout->declareCombinedImageSampler(5, VK_SHADER_STAGE_FRAGMENT_BIT);
+			/* Binding 6: the view reconstruction (ViewReconstructionGLSL). */
+			resolveInputLayout->declareUniformBuffer(ResolveViewBinding, VK_SHADER_STAGE_FRAGMENT_BIT);
 			/* NOTE: The environment fallback reads the bindless prefiltered slot (set 1). */
 
 			if ( !layoutManager.createDescriptorSetLayout(resolveInputLayout) )
@@ -886,8 +910,8 @@ namespace EmEn::Graphics::Effects::Lighting
 		const auto & device = renderer.device();
 
 		const auto vertexModule = this->getFullscreenVertexShader();
-		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Trace_FS", ShaderType::FragmentShader, SSRTraceFragmentShader);
-		const auto resolveFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Resolve_FS", ShaderType::FragmentShader, SSRResolveFragmentShader);
+		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Trace_FS", ShaderType::FragmentShader, std::string{SSRTraceFragmentShader} + ViewReconstructionGLSL::sourceGLSL(0, TraceViewBinding) + SSRTraceFragmentBody);
+		const auto resolveFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSR_Resolve_FS", ShaderType::FragmentShader, std::string{SSRResolveFragmentShader} + ViewReconstructionGLSL::sourceGLSL(0, ResolveViewBinding) + SSRResolveFragmentBody);
 
 		if ( vertexModule == nullptr || traceFragment == nullptr || resolveFragment == nullptr )
 		{
@@ -1430,8 +1454,12 @@ namespace EmEn::Graphics::Effects::Lighting
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-		const auto & constants = context.constants;
 
+		/* The view reconstruction is made with the chain (PostProcessor::configure() fails without it). */
+		if ( context.view == nullptr )
+		{
+			return;
+		}
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
@@ -1441,6 +1469,9 @@ namespace EmEn::Graphics::Effects::Lighting
 		{
 			static_cast< void >(m_tracePerFrame[frameIndex]->writeCombinedImageSampler(0, *inputNormals));
 		}
+
+		static_cast< void >(m_tracePerFrame[frameIndex]->writeUniformBufferObject(TraceViewBinding, *context.view));
+		static_cast< void >(m_resolvePerFrame[frameIndex]->writeUniformBufferObject(ResolveViewBinding, *context.view));
 
 		/* ---- Pass 0: Hi-Z pyramid build (compute) ---- */
 		if ( inputDepth != nullptr )
@@ -1613,10 +1644,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			const TracePushConstants pc{
 				.texelSizeX = 1.0F / static_cast< float >(m_traceTarget.width()),
 				.texelSizeY = 1.0F / static_cast< float >(m_traceTarget.height()),
-				.nearPlane = constants.nearPlane,
-				.farPlane = constants.farPlane,
-				.tanHalfFovY = constants.tanHalfFovY,
-				.aspectRatio = constants.frameWidth / constants.frameHeight,
 				.maxDistance = m_parameters.maxDistance,
 				.thickness = m_parameters.thickness,
 				.fadeScreenEdge = m_parameters.fadeScreenEdge,
@@ -1671,10 +1698,6 @@ namespace EmEn::Graphics::Effects::Lighting
 				.invViewCol2 = {inv[8], inv[9], inv[10], 0.0F},
 				.texelSizeX = 1.0F / static_cast< float >(m_resolveTarget.width()),
 				.texelSizeY = 1.0F / static_cast< float >(m_resolveTarget.height()),
-				.nearPlane = constants.nearPlane,
-				.farPlane = constants.farPlane,
-				.tanHalfFovY = constants.tanHalfFovY,
-				.aspectRatio = constants.frameWidth / constants.frameHeight,
 				.envFallbackIntensity = m_parameters.envFallbackIntensity,
 				.intensity = m_parameters.intensity,
 				/* Cone width is measured in TRACE texels; the pyramid base is half the

@@ -657,7 +657,9 @@ Traps of the CDLOD work itself:
   ⚠️ The exact size then revealed a second, older lie: the post-processing block declared 24 B while
   `PostProcessor::PushConstants` pushes 28 (`deltaTime` was missing from the GLSL) —
   `VUID-vkCmdPushConstants-offset-01795`, now declared. **A push struct and its GLSL block are mirrors:
-  change both.**
+  change both** — there are TWO GLSL mirrors (`Saphir/Generator/PostProcessing.cpp`, twice, and
+  `CombinePass.cpp`). 16 bytes since 2026-10-25 (frame size, time, deltaTime): the clip planes and `tanHalfFovY`
+  left for the view reconstruction (graphics doc 13-12 § 41).
 - ⚠️⚠️ **Saphir emitted the functions BEFORE the uniform blocks, samplers and push constants**: a
   function reading any of them did not compile. They are emitted last now, right before `main()`.
 - ⚠️⚠️ **A vertex-stage preparation asked after `generateMainUniqueInstructions()` is never emitted**

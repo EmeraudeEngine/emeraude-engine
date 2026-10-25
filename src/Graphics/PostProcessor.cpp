@@ -30,10 +30,8 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
-#include <cmath>
 #include <cstddef> // IWYU pragma: keep (std::size_t: <cstdint> provides it with libstdc++ only)
 #include <functional>
-#include <numbers>
 #include <span>
 #include <string>
 #include <utility>
@@ -1449,33 +1447,6 @@ namespace EmEn::Graphics
 
 		const auto mainRT = m_renderer.mainRenderTarget();
 		const auto & extent = mainRT->extent();
-		const auto fovDeg = mainRT->viewMatrices().fieldOfView();
-		/* ⚠️ SIGNED CONTRACT — tanHalfFovY carries the projection's Y direction, it is not a magnitude.
-		 * Consumers reconstruct view-space position as `ndc.y * tanHalfFovY * linearZ`, where ndc.y
-		 * comes from the framebuffer and therefore always points DOWN under Vulkan. So the constant
-		 * is what tells them which way view-space Y runs, and taking abs() of it — which every
-		 * consumer used to do "to handle a Y-flipped projection" — throws away exactly the
-		 * information it claims to protect.
-		 * NEGATIVE today ([Col1Row1] < 0, world Y-up): the projection carries the Y flip that
-		 * reconciles the Y-up world with Vulkan's Y-down NDC. It went negative on its own at the
-		 * Y-up flip and all nine reconstruction sites followed, with no shader edit.
-		 *
-		 * ⚠️⚠️ THE OTHER HALF OF THE CONTRACT, and it was violated for weeks: the sign belongs to
-		 * Y ALONE. The projection is `[Col0Row0] = a/aspect` (POSITIVE) against `[Col1Row1] = -a`,
-		 * so a consumer must reconstruct X from the MAGNITUDE — `ndc.x * abs(tanHalfFovY) * aspect`
-		 * — and only Y from the signed value. Writing `ndc * vec2(t * aspect, t)`, which every
-		 * consumer did, was harmless while `t` was positive and silently MIRRORED X the moment the
-		 * Y-up flip made it negative. The reconstructed positions then disagreed with the G-buffer
-		 * normals (which are not mirrored), so every reflect() and every hemisphere built from both
-		 * was wrong: SSAO and SSGI painted large dark blobs unrelated to any geometry, and SSR's
-		 * screen-space march lost most of its hits. Fixed Aug 2026 in SSAO, SSGI, SSR and
-		 * AtmosphericFog. ⚠️ ContactShadows and the RT effects were never affected — they
-		 * reconstruct through a matrix (now `inverseRelativeProjViewMatrix`/`invRelativeViewProj`),
-		 * which inherits the flip for free. Prefer the matrix form in new code — CAMERA-RELATIVE, the
-		 * inverse of projection × the infinity view (Graphics AGENTS.md axiom 5c); if you must use this
-		 * constant, X takes abs(). */
-		const auto projectionYSign = mainRT->viewMatrices().projectionMatrix()[5] < 0.0F ? -1.0F : 1.0F;
-		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F) * projectionYSign;
 
 		/* The view reconstruction of the frame (ViewReconstructionGLSL): the matrices of the READ state, the ones that
 		 * rendered the depth buffer, in this frame's buffer. The two halves of a cut frame write the same values; the
@@ -1568,9 +1539,6 @@ namespace EmEn::Graphics
 				.frameWidth = static_cast< float >(extent.width),
 				.frameHeight = static_cast< float >(extent.height),
 				.time = elapsedTime,
-				.nearPlane = m_nearPlane,
-				.farPlane = m_farPlane,
-				.tanHalfFovY = tanHalfFovY,
 				.deltaTime = deltaTime
 			}
 		};
@@ -1949,18 +1917,11 @@ namespace EmEn::Graphics
 			/* Push constants. */
 			static const auto startTime = std::chrono::steady_clock::now();
 			const auto elapsedTime = std::chrono::duration< float >(std::chrono::steady_clock::now() - startTime).count();
-			const auto fovDeg = renderTarget->viewMatrices().fieldOfView();
-			/* @see the signed contract documented at the other producer site above. */
-			const auto projectionYSign = renderTarget->viewMatrices().projectionMatrix()[5] < 0.0F ? -1.0F : 1.0F;
-			const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F) * projectionYSign;
 
 			const PushConstants pc{
 				.frameWidth = static_cast< float >(extent.width),
 				.frameHeight = static_cast< float >(extent.height),
 				.time = elapsedTime,
-				.nearPlane = m_nearPlane,
-				.farPlane = m_farPlane,
-				.tanHalfFovY = tanHalfFovY,
 				/* Direct (lens) chain: no temporal consumer, no frame delta needed. */
 				.deltaTime = 0.0F
 			};

@@ -50,7 +50,9 @@
 
 /* Local inclusions. */
 #include "Graphics/IrradianceProbeVolume.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -989,14 +991,17 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * (0 = no background, no sky light). The sky distance is how far a ray must
 		 * travel before "hit nothing" may be read as "sees the sky": the far plane is
 		 * the frame's own "nothing beyond this exists" bound, so distant geometry can
-		 * never be mistaken for open sky. */
+		 * never be mistaken for open sky.
+		 * ⚠️ The REAL far plane of the main view (Core/Graphics/ViewDistance), never the chain's former frozen
+		 * 1000 m copy: until 2026-10-25 geometry between 1 km and the view distance could not hide the sky
+		 * (item post-process-depth-linearisation-wrong). */
 		static_cast< void >(m_denoiser.updateFrameData(frameIndex, GIDenoiser::FrameInputs{
 			.traceMaxDistance = m_parameters.maxDistance,
 			.traceBias = m_parameters.bias,
 			.traceSampleCount = static_cast< float >(m_parameters.sampleCount),
 			.bounceStrength = m_parameters.multiBounceEnabled ? m_parameters.multiBounceStrength : 0.0F,
 			.skyLuminance = context.skyLuminance,
-			.skyDistance = context.constants.farPlane,
+			.skyDistance = this->renderer().mainRenderTarget()->viewMatrices().farPlane(),
 			/* Ambient-occlusion lane: the CONSUMER's range, handed over by the stack's slot
 			 * pairing (0 = no consumer this frame, the shader publishes the neutral 1.0). */
 			.occlusionMaxDistance = m_occlusionLaneRange,

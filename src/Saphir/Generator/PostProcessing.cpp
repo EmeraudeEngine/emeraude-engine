@@ -26,14 +26,31 @@
 
 #include "PostProcessing.hpp"
 
+/* STL inclusions. */
+#include <cstdint>
+
 /* Local inclusions. */
 #include "Graphics/DirectPostProcessEffect.hpp"
 #include "Graphics/PostProcessor.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Types.hpp"
 #include "Hash/FNV1a.hpp"
 #include "Saphir/Code.hpp"
+#include "Saphir/Declaration/InputAttribute.hpp"
+#include "Saphir/Declaration/PushConstantBlock.hpp"
+#include "Saphir/Declaration/Sampler.hpp"
+#include "Saphir/Declaration/StageOutput.hpp"
+#include "Saphir/Declaration/Types.hpp"
+#include "Saphir/FragmentShader.hpp"
+#include "Saphir/Generator/Abstract.hpp"
+#include "Saphir/Keys.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/VertexShader.hpp"
+#include "StaticVector.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/RenderPass.hpp"
 
 namespace EmEn::Saphir::Generator
@@ -103,10 +120,7 @@ namespace EmEn::Saphir::Generator
 			Declaration::PushConstantBlock pushConstantBlock{PushConstant::Type::PostProcessing, PushConstant::PostProcessing};
 			pushConstantBlock.addMember(Declaration::VariableType::FloatVector2, PushConstant::Component::FrameSize);
 			pushConstantBlock.addMember(Declaration::VariableType::Float, PushConstant::Component::Time);
-			pushConstantBlock.addMember(Declaration::VariableType::Float, "nearPlane");
-			pushConstantBlock.addMember(Declaration::VariableType::Float, "farPlane");
-			pushConstantBlock.addMember(Declaration::VariableType::Float, "tanHalfFovY");
-			/* NOTE: Mirror of Graphics::PostProcessor::PushConstants, which is what the CPU pushes (28 B).
+			/* NOTE: Mirror of Graphics::PostProcessor::PushConstants, which is what the CPU pushes (16 B).
 			 * Missing here, the block declared 24 B and the push overran the range — hidden until
 			 * 2026-09-22 by PushConstantBlock::bytes() counting the vec2 frame size as 16 B. */
 			pushConstantBlock.addMember(Declaration::VariableType::Float, "deltaTime");
@@ -160,10 +174,7 @@ namespace EmEn::Saphir::Generator
 			Declaration::PushConstantBlock pushConstantBlock{PushConstant::Type::PostProcessing, PushConstant::PostProcessing};
 			pushConstantBlock.addMember(Declaration::VariableType::FloatVector2, PushConstant::Component::FrameSize);
 			pushConstantBlock.addMember(Declaration::VariableType::Float, PushConstant::Component::Time);
-			pushConstantBlock.addMember(Declaration::VariableType::Float, "nearPlane");
-			pushConstantBlock.addMember(Declaration::VariableType::Float, "farPlane");
-			pushConstantBlock.addMember(Declaration::VariableType::Float, "tanHalfFovY");
-			/* NOTE: Mirror of Graphics::PostProcessor::PushConstants, which is what the CPU pushes (28 B).
+			/* NOTE: Mirror of Graphics::PostProcessor::PushConstants, which is what the CPU pushes (16 B).
 			 * Missing here, the block declared 24 B and the push overran the range — hidden until
 			 * 2026-09-22 by PushConstantBlock::bytes() counting the vec2 frame size as 16 B. */
 			pushConstantBlock.addMember(Declaration::VariableType::Float, "deltaTime");

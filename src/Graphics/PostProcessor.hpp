@@ -141,9 +141,6 @@ namespace EmEn::Graphics
 				float frameWidth;
 				float frameHeight;
 				float time;
-				float nearPlane;
-				float farPlane;
-				float tanHalfFovY;
 				/** @brief Duration of the previous RENDERED frame, in seconds. Single source of
 				 * truth for the whole chain: the velocity G-buffer holds a PER-FRAME delta, so any
 				 * effect converting it to a physical duration (the motion blur shutter angle) needs
@@ -349,18 +346,6 @@ namespace EmEn::Graphics
 				m_cachedRequiresVelocity = requiresVelocity;
 			}
 
-			/**
-			 * @brief Updates the near and far plane values for depth-based effects.
-			 * @param nearPlane The camera near plane distance.
-			 * @param farPlane The camera far plane distance.
-			 */
-			void
-			setClipPlanes (float nearPlane, float farPlane) noexcept
-			{
-				m_nearPlane = nearPlane;
-				m_farPlane = farPlane;
-			}
-
 			/* GPU execution. */
 
 			/**
@@ -505,8 +490,6 @@ namespace EmEn::Graphics
 			/** @brief One view reconstruction buffer per frame in flight (FrameContext::view, ViewReconstructionGLSL). */
 			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_viewUBOs;
 			std::shared_ptr< Geometry::IndexedVertexResource > m_quadGeometry;
-			float m_nearPlane{0.1F};
-			float m_farPlane{1000.0F};
 			/** @brief Timestamp of the previous indirect-chain execution, for PushConstants::deltaTime.
 			 * Mutable because the chain executes from a const method (same idiom as
 			 * ViewMatrices2DUBO's cached jittered projection). */

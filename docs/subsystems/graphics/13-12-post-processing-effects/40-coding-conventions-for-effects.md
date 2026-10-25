@@ -24,6 +24,9 @@ The engine provides rich types in `Base/` that should be used for all user-facin
 5. **Populating push constants from engine types** — Use accessors: `color.red()`, `color.green()`, `color.blue()`, `vec.x()`, `vec.y()`, `vec.z()`.
 6. **Normalization** — Use `vector.normalized()` instead of manual `sqrt()` + division.
 7. **Constructor** — Accept `const Parameters & parameters = {}` to allow inline initialization at construction.
+8. **Depth → position: only through the view reconstruction** (`Effects/Shared/ViewReconstructionGLSL.hpp`,
+   `FrameContext::view`) — never a scalar linearisation, never clip planes or a FOV copied into push constants. The
+   chain's copy was frozen at 0.1 / 1000 for months, unnoticed: [`41-the-view-reconstruction`](41-the-view-reconstruction-one-matrix-path-from-depth-to-position.md).
 
 **Example (AtmosphericFog):**
 ```cpp

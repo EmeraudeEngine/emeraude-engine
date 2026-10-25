@@ -29,18 +29,34 @@
 /* STL inclusions. */
 #include <sstream>
 #include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/IndirectPostProcessEffect.hpp"
+#include "Graphics/IntermediateRenderTarget.hpp"
+#include "Graphics/PostProcessor.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Hash/FNV1a.hpp"
+#include "Math/Vector.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class CommandBuffer;
+	class DescriptorSetLayout;
+	class TextureInterface;
+}
 
 static constexpr auto TracerTag{"CombinePass"};
 
@@ -178,9 +194,6 @@ namespace EmEn::Graphics
 			"\tfloat frameWidth;\n"
 			"\tfloat frameHeight;\n"
 			"\tfloat time;\n"
-			"\tfloat nearPlane;\n"
-			"\tfloat farPlane;\n"
-			"\tfloat tanHalfFovY;\n"
 			"\tfloat deltaTime;\n"
 			"};\n\n"
 			"void main()\n"

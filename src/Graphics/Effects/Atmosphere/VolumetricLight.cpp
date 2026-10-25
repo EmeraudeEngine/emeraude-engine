@@ -31,18 +31,33 @@
 #include <cmath>
 #include <string>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Saphir/ShaderManager.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 #include "PrimaryServices.hpp"
+#include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/LightSet.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 static constexpr auto TracerTag{"VolumetricLightEffect"};
 
@@ -69,8 +84,6 @@ layout(push_constant) uniform PushConstants
 	float lightScreenY;
 	float texelSizeX;
 	float texelSizeY;
-	float nearPlane;
-	float farPlane;
 	float lightColorR;
 	float lightColorG;
 	float lightColorB;
@@ -139,8 +152,6 @@ layout(push_constant) uniform PushConstants
 	float lightScreenY;
 	float texelSizeX;
 	float texelSizeY;
-	float nearPlane;
-	float farPlane;
 	float lightColorR;
 	float lightColorG;
 	float lightColorB;
@@ -378,8 +389,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 	{
 		const auto * inputDepth = context.depth;
 		const auto * lightSet = context.lightSet;
-		const auto & constants = context.constants;
-
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
@@ -457,8 +466,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			.lightScreenY = screenY,
 			.texelSizeX = 1.0F / static_cast< float >(m_occlusionTargets[0].width()),
 			.texelSizeY = 1.0F / static_cast< float >(m_occlusionTargets[0].height()),
-			.nearPlane = constants.nearPlane,
-			.farPlane = constants.farPlane,
 			.lightColorR = lightColor[Base::Math::X],
 			.lightColorG = lightColor[Base::Math::Y],
 			.lightColorB = lightColor[Base::Math::Z],

@@ -5,12 +5,14 @@
 Single-pass analytical fog using closed-form integral (no iterative sampling). Reads depth buffer to reconstruct world-space positions, applies exponential height fog with directional inscattering.
 
 **Algorithm:**
-1. Reconstruct world position from depth + camera basis vectors (push constants)
+1. Reconstruct the camera-relative position from depth through the chain's view block (`emRelativePosition()`,
+   `ViewReconstructionGLSL`, binding 3 — since 2026-10-25; it used a camera basis, `tanHalfFovY` and clip planes frozen
+   at 0.1 / 1000, [`41-the-view-reconstruction`](41-the-view-reconstruction-one-matrix-path-from-depth-to-position.md))
 2. Exponential height fog integral: `ρ(y) = density * exp(k * (y - baseHeight))` along the view ray
 3. Directional inscattering (simplified Henyey-Greenstein): bright halo when looking toward the sun
 4. Sky fog option: when `skyFogEnabled = true`, fog covers skybox pixels using `maxDistance` as fictive distance
 
-**Push constants** (116 bytes): Camera basis (pos, right, forward), depth reconstruction (near, far, tanHalfFovY, aspectRatio), fog params (density, heightFalloff, baseHeight, maxDistance, color), inscatter params (lightDir, exponent, color, intensity), skyFogEnabled.
+**Push constants** (64 bytes since 2026-10-25, 116 before): fog params (density, heightFalloff, baseHeight, maxDistance, color), inscatter params (lightDir, exponent, color, intensity), skyFogEnabled. The camera position and the ray come from the view block.
 
 **Height fog sign convention:** `Parameters::heightFalloff` is a **POSITIVE decay rate** — how fast density falls off going **UP** (`+Y`). The shader NEGATES it (`float k = -fogHeightFalloff;`) before feeding `exp(k · (y − baseHeight))`. Never pass a negative value.
 

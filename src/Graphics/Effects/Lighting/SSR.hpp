@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -38,13 +39,27 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Vulkan/ComputePipeline.hpp"
-#include "Vulkan/DescriptorPool.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/Image.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class DescriptorPool;
+	class DescriptorSetLayout;
+	class GraphicsPipeline;
+	class Image;
+	class ImageView;
+	class PipelineLayout;
+	class Sampler;
+}
 
 namespace EmEn::Graphics::Effects::Lighting
 {
@@ -100,10 +115,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			{
 				float texelSizeX;
 				float texelSizeY;
-				float nearPlane;
-				float farPlane;
-				float tanHalfFovY;
-				float aspectRatio;
 				float maxDistance;
 				float thickness;
 				float fadeScreenEdge;
@@ -125,7 +136,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 			/**
 			 * @brief Push constants for the resolve pass (cone lookup + cubemap fallback).
-			 * @note 92 bytes, under the 128-byte Vulkan minimum guarantee. Member order is the
+			 * @note 80 bytes, under the 128-byte Vulkan minimum guarantee. Member order is the
 			 * GLSL block order.
 			 */
 			struct EMEN_API ResolvePushConstants
@@ -135,10 +146,6 @@ namespace EmEn::Graphics::Effects::Lighting
 				std::array< float, 4 > invViewCol2;
 				float texelSizeX;
 				float texelSizeY;
-				float nearPlane;
-				float farPlane;
-				float tanHalfFovY;
-				float aspectRatio;
 				float envFallbackIntensity;
 				float intensity;
 				/** @brief log2(pyramid base texel / trace texel): maps a cone width measured

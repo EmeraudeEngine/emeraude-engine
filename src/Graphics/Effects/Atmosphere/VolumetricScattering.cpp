@@ -28,29 +28,46 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <string>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/CSMSamplingGLSL.hpp"
 #include "Graphics/Effects/Shared/MarchDitherGLSL.hpp"
+#include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesCascadedUBO.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
+#include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/LightSet.hpp"
 #include "Scenes/ParticipatingMedium.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 static constexpr auto TracerTag{"VolumetricScatteringEffect"};
 
 /* Compile-time size check. */
-static_assert(sizeof(EmEn::Graphics::Effects::Atmosphere::VolumetricScattering::ScatteringPushConstants) == 120, "ScatteringPushConstants must be exactly 120 bytes !");
+static_assert(sizeof(EmEn::Graphics::Effects::Atmosphere::VolumetricScattering::ScatteringPushConstants) == 80, "ScatteringPushConstants must be exactly 80 bytes !");
 
 namespace
 {
@@ -58,10 +75,13 @@ namespace
 
 	/* ---- GLSL Shader Sources ---- */
 
+	/** @brief The view reconstruction's binding (after the cascade block: getInputLayout(4, 2)). */
+	constexpr uint32_t ViewBinding{5};
+
 	/* Bindings: 0 scene colour, 1 depth, 2 material properties, 3 cascaded shadow map,
-	 * 4 the cascade block. The last two are declared by EMEN_CSM_SAMPLING_GLSL, which owns the
-	 * whole sampling convention — never restate it here. */
-	constexpr auto ScatteringFragmentShader = R"GLSL(
+	 * 4 the cascade block, 5 the view reconstruction. 3 and 4 are declared by EMEN_CSM_SAMPLING_GLSL,
+	 * which owns the whole sampling convention — never restate it here. */
+	constexpr auto ScatteringHeader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -70,16 +90,13 @@ layout(location = 0) out vec4 outColor;
 layout(set = 0, binding = 0) uniform sampler2D sceneTex;
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
 layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
+)GLSL";
 
+	constexpr auto ScatteringFragmentShader = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
-	/* Camera basis. */
-	float cameraPosX, cameraPosY, cameraPosZ;
-	float cameraRightX, cameraRightY, cameraRightZ;
+	/* The camera's forward axis: the cascade selection's view depth. */
 	float cameraForwardX, cameraForwardY, cameraForwardZ;
-	/* Depth reconstruction. */
-	float nearPlane, farPlane;
-	float tanHalfFovY, aspectRatio;
 	/* The medium. */
 	float mediumDensity;
 	float mediumHeightFalloff;
@@ -116,22 +133,14 @@ void main()
 	vec3 sceneColor = texture(sceneTex, vUV).rgb;
 	float depth = texture(depthTex, vUV).r;
 
-	vec2 ndc = vUV * 2.0 - 1.0;
-
-	/* ⚠️ tanHalfFovY comes from the FrameContext and is NEVER recomputed here. It is a SIGNED
-	 * contract (PostProcessor.cpp: `std::tan(...) * projectionYSign`, negative since the Y-up
-	 * flip) and the sign is what carries the downward screen direction. Recomputing it locally
-	 * throws the sign away and inverts rayDir.y — which, on a height-profiled medium, makes it
-	 * grow DENSER with altitude. AtmosphericFog paid for exactly that. */
-	float t = tanHalfFovY;
-
-	vec3 cameraPosition = vec3(cameraPosX, cameraPosY, cameraPosZ);
-	vec3 cameraRight = vec3(cameraRightX, cameraRightY, cameraRightZ);
+	/* The surface's offset from the camera, through the frame's inverse view-projection (ViewReconstructionGLSL): a sky
+	 * pixel (depth 1) reconstructs the far plane in its direction. Until 2026-10-25 the distance came from clip planes
+	 * frozen at 0.1 / 1000 (up to 2.1x too far with a wide lens) and the ray from a signed tanHalfFovY. */
+	vec3 relative = emRelativePosition(vUV, depth);
+	vec3 rayDir = normalize(relative);
+	vec3 cameraPosition = emView.cameraPosition.xyz;
+	float cameraPosY = cameraPosition.y;
 	vec3 cameraForward = vec3(cameraForwardX, cameraForwardY, cameraForwardZ);
-	/* Y-UP, right-handed: cross(right, forward) = cross(+X, -Z) = +Y, a genuine UP vector. */
-	vec3 cameraUp = cross(cameraRight, cameraForward);
-
-	vec3 rayDir = normalize(cameraRight * (ndc.x * abs(t) * aspectRatio) + cameraUp * (ndc.y * t) + cameraForward);
 
 	/* How far to march: to the surface, or to the medium's own reach for a sky pixel.
 	 * ⚠️ Unlike the screen-space god rays this replaces, there is NO off-screen gate: a
@@ -148,14 +157,7 @@ void main()
 	}
 	else
 	{
-		float z = depth * 2.0 - 1.0;
-		float linearZ = (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));
-
-		float vx = ndc.x * abs(t) * aspectRatio * linearZ;
-		float vy = ndc.y * t * linearZ;
-		vec3 worldPosition = cameraPosition + cameraRight * vx + cameraUp * vy + cameraForward * linearZ;
-
-		marchLength = min(length(worldPosition - cameraPosition), mediumMaxDistance);
+		marchLength = min(length(relative), mediumMaxDistance);
 	}
 
 	/* ⚠️⚠️ Cap the march by the medium's OPTICAL reach, never by its maxDistance alone. The step
@@ -274,9 +276,10 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		}
 
 		/* ---- Descriptor set layout: 4 samplers (scene, depth, material properties, shadow map)
-		 * plus 1 uniform buffer (the cascade block). Uniform buffers are laid out AFTER the
-		 * samplers, so the block lands on binding 4 — which is what the shader declares. ---- */
-		auto inputLayout = this->getInputLayout(4, 1);
+		 * plus 2 uniform buffers (the cascade block, the view reconstruction). Uniform buffers are
+		 * laid out AFTER the samplers, so the blocks land on bindings 4 and 5 — which is what the
+		 * shader declares. ---- */
+		auto inputLayout = this->getInputLayout(4, 2);
 
 		if ( inputLayout == nullptr )
 		{
@@ -311,7 +314,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			return false;
 		}
 
-		const auto scatteringFragment = this->renderer().shaderManager().getShaderModuleFromSourceCode(this->renderer().device(), "VS_Scattering_FS", Saphir::ShaderType::FragmentShader, ScatteringFragmentShader);
+		const auto scatteringFragment = this->renderer().shaderManager().getShaderModuleFromSourceCode(this->renderer().device(), "VS_Scattering_FS", Saphir::ShaderType::FragmentShader, std::string{ScatteringHeader} + ViewReconstructionGLSL::sourceGLSL(0, ViewBinding) + ScatteringFragmentShader);
 
 		if ( scatteringFragment == nullptr )
 		{
@@ -359,7 +362,12 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		const auto * inputDepth = context.depth;
 		const auto * inputMaterialProperties = context.materialProperties;
 		const auto * lightSet = context.lightSet;
-		const auto & constants = context.constants;
+
+		/* The view reconstruction is made with the chain (PostProcessor::configure() fails without it). */
+		if ( context.view == nullptr )
+		{
+			return inputColor;
+		}
 
 		/* ⚠️ No medium, no scattering. A march through an atmosphere the scene never declared is a
 		 * pass-through, not a march with invented parameters: there is exactly ONE place that
@@ -405,16 +413,11 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
-		/* Camera basis. readStateIndex matches the view matrix that produced the depth buffer. */
+		/* The camera's forward axis (the cascade selection). readStateIndex matches the view matrix that produced the
+		 * depth buffer. Forward = negated row 2 (row 2 stores -forward). */
 		const auto readStateIndex = this->renderer().currentReadStateIndex();
 		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
 		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
-		const auto & camPos = viewMatrices.position(readStateIndex);
-
-		/* Right = row 0 of the view matrix; forward = negated row 2 (row 2 stores -forward). */
-		const auto rX = viewMat(0, 0);
-		const auto rY = viewMat(0, 1);
-		const auto rZ = viewMat(0, 2);
 		const auto fX = -viewMat(2, 0);
 		const auto fY = -viewMat(2, 1);
 		const auto fZ = -viewMat(2, 2);
@@ -482,22 +485,13 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		}
 
 		static_cast< void >(m_scatteringPerFrame[frameIndex]->writeUniformBufferObject(4, *m_cascadeUBOs[frameIndex]));
+		static_cast< void >(m_scatteringPerFrame[frameIndex]->writeUniformBufferObject(ViewBinding, *context.view));
 
 		/* ---- Push constants ---- */
 		const ScatteringPushConstants scatteringPC{
-			.cameraPosX = camPos[0],
-			.cameraPosY = camPos[1],
-			.cameraPosZ = camPos[2],
-			.cameraRightX = rX,
-			.cameraRightY = rY,
-			.cameraRightZ = rZ,
 			.cameraForwardX = fX,
 			.cameraForwardY = fY,
 			.cameraForwardZ = fZ,
-			.nearPlane = constants.nearPlane,
-			.farPlane = constants.farPlane,
-			.tanHalfFovY = constants.tanHalfFovY,
-			.aspectRatio = this->renderer().mainRenderTarget()->viewMatrices().getAspectRatio(),
 			.mediumDensity = medium->density(),
 			.mediumHeightFalloff = medium->heightFalloff(),
 			.mediumBaseHeight = medium->baseHeight(),

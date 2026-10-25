@@ -38,7 +38,21 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class GraphicsPipeline;
+	class PipelineLayout;
+}
 
 namespace EmEn::Graphics::Effects::Camera
 {
@@ -153,8 +167,6 @@ namespace EmEn::Graphics::Effects::Camera
 				float texelSizeY;
 				float frameWidth;
 				float frameHeight;
-				float nearPlane;
-				float farPlane;
 				/** @brief shutterSpeed / frameTime — how many FRAMES of motion the exposure covers.
 				 * Greater than 1 is normal and wanted (a 1/60 s exposure at 500 fps covers 8.3
 				 * frames); the velocity is extrapolated linearly over that span, which is the

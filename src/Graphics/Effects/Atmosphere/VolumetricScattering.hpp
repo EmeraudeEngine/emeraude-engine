@@ -38,7 +38,22 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class GraphicsPipeline;
+	class PipelineLayout;
+}
 
 namespace EmEn::Graphics::Effects::Atmosphere
 {
@@ -129,21 +144,11 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			 */
 			struct EMEN_API ScatteringPushConstants
 			{
-				/* Camera basis — extracted from the view matrix in execute(). */
-				float cameraPosX;
-				float cameraPosY;
-				float cameraPosZ;
-				float cameraRightX;
-				float cameraRightY;
-				float cameraRightZ;
+				/* The camera's forward axis (the cascade selection's view depth); the position and the depth
+				 * reconstruction come from the chain's view reconstruction (FrameContext::view). */
 				float cameraForwardX;
 				float cameraForwardY;
 				float cameraForwardZ;
-				/* Depth reconstruction. */
-				float nearPlane;
-				float farPlane;
-				float tanHalfFovY;
-				float aspectRatio;
 				/* The medium, straight from Scenes::ParticipatingMedium. */
 				float mediumDensity;
 				float mediumHeightFalloff;
@@ -172,7 +177,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			 * its contribution silently disappears -- invisible on NVIDIA, which exposes 256. That
 			 * is exactly how RTR was dead on min-spec until ae61e368. This is also why the four
 			 * cascade matrices (256 bytes on their own) travel in a per-frame UBO instead.
-			 * 120 bytes: 8 bytes (2 floats) of headroom left. */
+			 * 80 bytes since the view reconstruction (2026-10-25): 48 bytes of headroom left. */
 			static_assert(sizeof(ScatteringPushConstants) <= 128, "Push constant block over the 128-byte Vulkan minimum guarantee: move it to a per-frame UBO.");
 
 			/**

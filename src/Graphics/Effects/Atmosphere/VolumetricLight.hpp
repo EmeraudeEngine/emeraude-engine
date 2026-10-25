@@ -40,8 +40,23 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "PixelFactory/Color.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class GraphicsPipeline;
+	class PipelineLayout;
+	class TextureInterface;
+}
 
 namespace EmEn::Graphics::Effects::Atmosphere
 {
@@ -105,8 +120,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				float lightScreenY;
 				float texelSizeX;
 				float texelSizeY;
-				float nearPlane;
-				float farPlane;
 				float lightColorR;
 				float lightColorG;
 				float lightColorB;
