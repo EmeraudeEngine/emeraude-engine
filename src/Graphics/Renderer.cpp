@@ -2815,6 +2815,22 @@ namespace EmEn::Graphics
 			inputs.sunDirection = skyState.sun.direction;
 			inputs.sunIlluminance = skyState.sun.color * skyState.sun.illuminance;
 			inputs.sunAngularDiameter = skyState.sun.angularDiameter;
+
+			/* The clock's moons, drawn by the sky material with the lunar reflectance their light is integrated from. */
+			static_assert(SkyFrameInputs::MaxMoons == Scenes::SkyState::MaxMoons, "The sky draws every moon the clock publishes.");
+
+			inputs.moonCount = std::min(skyState.moonCount, SkyFrameInputs::MaxMoons);
+
+			std::ranges::transform(std::span{skyState.moons}.first(inputs.moonCount), inputs.moons.begin(), [] (const Scenes::SkyBody & moon) {
+				return SkyMoonInputs{
+					.direction = moon.direction,
+					.pole = moon.pole,
+					.color = moon.color,
+					.angularDiameter = moon.angularDiameter,
+					.fullIlluminance = moon.fullIlluminance,
+					.earthshine = moon.earthshine
+				};
+			});
 		}
 
 		/* The world's Y = 0 is the planet's ground. The aerial perspective follows the frame's frustum: the inverse of

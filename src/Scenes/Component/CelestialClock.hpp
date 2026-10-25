@@ -51,6 +51,7 @@
 /* Forward declarations. */
 namespace EmEn::Graphics
 {
+	class MoonSurfacePhotometry;
 	class SkyAtmosphere;
 }
 
@@ -176,6 +177,13 @@ namespace EmEn::Scenes::Component
 				float temperature{DefaultMoonTemperature};
 				/** @brief Apparent angular diameter of its disc, in degrees (the Moon: 0.52°). */
 				float angularDiameter{0.52F};
+				/** @brief The illuminance the full PLANET pours on this moon, relative to the star's: the planet's
+				 * geometric albedo × (its radius / the moon's distance)². Default Earth and the Moon
+				 * (Base::Math::Astronomy::EarthshineRatio, ~1.2e-4): the earthshine on its dark side. */
+				float earthshine{static_cast< float >(Base::Math::Astronomy::EarthshineRatio)};
+				/** @brief The artistic gain on the earthshine, 1 = physical (owner, 2026-10-25: physical first, artistic on
+				 * top). */
+				float earthshineGain{1.0F};
 			};
 
 			/**
@@ -507,6 +515,23 @@ namespace EmEn::Scenes::Component
 			float moonIlluminatedFraction (size_t index) const noexcept;
 
 			/**
+			 * @brief Returns a moon's phase angle (star–moon–observer), in radians: 0 full, π new.
+			 * @param index The moon's index.
+			 * @return float 0 for an index out of range.
+			 */
+			[[nodiscard]]
+			float moonPhaseAngle (size_t index) const noexcept;
+
+			/**
+			 * @brief Returns a moon's surface brightness: its textured disc integrated, relative to a uniform one of the
+			 * same mean (Graphics::MoonSurfacePhotometry) — 1 at full, 1 without a dynamic sky or a surface map.
+			 * @param index The moon's index.
+			 * @return float 1 for an index out of range.
+			 */
+			[[nodiscard]]
+			float moonSurfaceBrightness (size_t index) const noexcept;
+
+			/**
 			 * @brief Returns the illuminance written to a moon's light, in lux (0 while it does not light the scene).
 			 * @param index The moon's index.
 			 * @return float 0 for an index out of range.
@@ -629,14 +654,21 @@ namespace EmEn::Scenes::Component
 			static float airMass (float elevationDegrees) noexcept;
 
 			/**
-			 * @brief Returns the Lambert-sphere phase function: the brightness of a diffuse sphere relative to full.
-			 * @note Φ(α) = (sin α + (π − α) cos α) / π, α the phase angle: 1 full, 1/π at quarter, 0 new. The Moon is
-			 * darker than this at quarter (~0.1, its opposition surge); a planet-generic moon takes the Lambert sphere.
-			 * @param illuminatedFraction The illuminated fraction k, in [0, 1] (cos α = 2k − 1).
+			 * @brief Returns a moon's brightness relative to full: the lunar phase law × its surface brightness, plus the
+			 * earthshine.
+			 * @note Base::Math::Astronomy::lunarPhaseLaw() — the Hapke–Lommel-Seeliger reflectance integrated over a
+			 * uniform disc, the one the sky draws the disc with (graphics doc 42 § "The moons"), 0.077 at quarter where a
+			 * Lambert sphere gave 0.32 — × the textured disc over the uniform one (the maria: a waning moon is darker
+			 * than a waxing one), plus the planet's light on the whole disc (the earthshine, at zero phase seen from the
+			 * planet: the surface's mean, already 1). Owner decisions 2026-10-25 (M2: the disc and its light from ONE
+			 * reflectance; the light follows the textured disc).
+			 * @param phaseAngle The moon's phase angle, in radians.
+			 * @param earthshine The planet's illuminance on the moon relative to the star's, at this phase.
+			 * @param surfaceBrightness The textured disc over the uniform one (MoonSurfacePhotometry::relativeBrightness()).
 			 * @return float
 			 */
 			[[nodiscard]]
-			static float lambertPhase (float illuminatedFraction) noexcept;
+			static float moonBrightness (float phaseAngle, float earthshine, float surfaceBrightness) noexcept;
 
 		private:
 
@@ -650,7 +682,15 @@ namespace EmEn::Scenes::Component
 				Base::Math::Vector< 3, float > direction{0.0F, 1.0F, 0.0F};
 				float elevation{0.0F};
 				float illuminatedFraction{0.0F};
+				/** @brief The phase angle (star–moon–observer), in radians. */
+				float phaseAngle{0.0F};
+				/** @brief The planet's illuminance on the moon relative to the star's at this phase (gain included). */
+				float earthshine{0.0F};
+				/** @brief Its textured disc integrated, relative to a uniform one (1 without a surface map). */
+				float surfaceBrightness{1.0F};
 				float illuminance{0.0F};
+				/** @brief Unit world vector along the pole of its orbit: the axis its face is oriented by. */
+				Base::Math::Vector< 3, float > pole{0.0F, 1.0F, 0.0F};
 				/** @brief The LINEAR colour written to its light with a dynamic sky, its largest component 1. */
 				Base::Math::Vector< 3, float > color{1.0F, 1.0F, 1.0F};
 				bool lit{false};
@@ -729,6 +769,9 @@ namespace EmEn::Scenes::Component
 			 * Written by the logic thread (processLogics()); the console reaches the clock under the scene's exclusive
 			 * access, like every other member. */
 			std::shared_ptr< const Graphics::SkyAtmosphere > m_atmosphere;
+			/** @brief The followed sky's moon surfaces, by moon index (null: a uniform albedo). Immutable objects, taken
+			 * with m_atmosphere from the loaded sky resource (its status published them). */
+			std::array< std::shared_ptr< const Graphics::MoonSurfacePhotometry >, SkyState::MaxMoons > m_moonSurfaces{};
 			BoundBody m_sun;
 			std::vector< BoundBody > m_moons;
 			Base::Math::Vector< 3, float > m_east{1.0F, 0.0F, 0.0F};

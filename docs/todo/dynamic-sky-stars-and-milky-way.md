@@ -66,4 +66,4 @@ scripted fade. This is the correct behaviour, and it costs nothing.
 ## References
 
 - Yale Bright Star Catalogue, 5th revised edition (Hoffleit & Warren, 1991).
-- the physical sky, lot 1 (graphics doc 42, `42-physical-sky-atmosphere.md`), `dynamic-sky-moon`; the clock: `Scenes::Component::CelestialClock` (scenes doc 02).
+- the physical sky, lot 1 (graphics doc 42, `42-physical-sky-atmosphere.md`; the moons: § "The moons"); the clock: `Scenes::Component::CelestialClock` (scenes doc 02).

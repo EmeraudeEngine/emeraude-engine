@@ -4,8 +4,9 @@
 > it is drawn as a **background material** on the skybox cube; the **CelestialClock** writes the scene's sky state;
 > **one** scattering sun; an AI-owned lab demo (`sky-lab`, projet-alpha). Lot 1 of the dynamic sky; lot 2, the sun's
 > light from the same atmosphere, is § "The light"; lot 3, the sky's own IBL, is § "The environment" (2026-10-25); lot 4a,
-> the distance haze of the same atmosphere, is § "The aerial perspective" (2026-10-25); the next lots are the engine items
-> `dynamic-sky-aerial-perspective` (4b: the clouds), `dynamic-sky-stars-and-milky-way` and `dynamic-sky-moon`.
+> the distance haze of the same atmosphere, is § "The aerial perspective" (2026-10-25); the moons' discs and their light
+> are § "The moons" (2026-10-25); the next lots are the engine items `dynamic-sky-aerial-perspective` (4b: the clouds),
+> `dynamic-sky-stars-and-milky-way`, `dynamic-sky-moonlit-sky-glow` and `dynamic-sky-moon-relief`.
 
 ### The model
 S. Hillaire, *A Scalable and Production Ready Sky and Atmosphere Rendering Technique*, EGSR 2020 (the model of UE's
@@ -33,7 +34,7 @@ and the noon zenith −8 %.
 | Transmittance | 256×64 RGBA32F | once, at creation | transmittance to the top, per (height, zenith cosine) |
 | Multiple scattering | 32×32 RGBA32F | once, at creation | Hillaire's isotropic second-order transfer f_ms, summed as a series |
 | Sky-view | 192×108 RGBA32F | **every frame** | in-scattered radiance **per lux** of the star, around the camera: x the azimuth from the star, y the zenith (non-linear near the horizon) |
-| Frame | 4×1 RGBA32F | every frame | texel 0: unit vector toward the star + cos of its angular radius; texel 1: its illuminance above the atmosphere × colour (lux) + the camera's distance to the centre (km) |
+| Frame | 16×1 RGBA32F | every frame | texel 0: unit vector toward the star + cos of its angular radius; texel 1: its illuminance above the atmosphere × colour (lux) + the camera's distance to the centre (km); texel 2: the moon count; texels 4 + 3i to 6 + 3i: moon i (§ "The moons") |
 
 ⚠️ **The three tables are RGBA32F** (2026-10-25, owner decision; `SkyAtmosphere::tableFormat()`): they hold radiance
 PER LUX of the star, and half floats flushed everything under 2^-24 per lux — ~0.008 nits once × 134 klx — to zero:
@@ -56,7 +57,8 @@ the star through the air, instead of a black void under the scene's own small fl
 | `SkyAtmosphere` | `Graphics/SkyAtmosphere.{hpp,cpp}` | the tables and their three compute passes; `createOnHardware()` (idempotent, mutexed) bakes transmittance + multiple scattering with a blocking one-time submission; `recordFrame()` records the sky-view pass |
 | `StorageTexture2D` | `Graphics/StorageTexture2D.{hpp,cpp}` | a storage + sampled 2D table (linear, clamped) |
 | `AtmosphereGLSL` | `Graphics/Effects/Shared/AtmosphereGLSL.hpp` | ONE source for the block and the functions both sides read: raw GLSL for the compute passes, Saphir declarations for the material |
-| `Material::SkyAtmosphereResource` | `Graphics/Material/SkyAtmosphereResource.{hpp,cpp}` | unlit, opaque; reads the sky-view, transmittance and frame textures; the star's disc; the artistic grading |
+| `Material::SkyAtmosphereResource` | `Graphics/Material/SkyAtmosphereResource.{hpp,cpp}` | unlit, opaque; reads the sky-view, transmittance and frame textures; the star's disc; the moons' discs and their surface maps; the artistic grading |
+| `MoonSurfacePhotometry` | `Graphics/MoonSurfacePhotometry.{hpp,cpp}` | a moon map's near-side mean and its brightness table by sub-solar point, measured once from its pixels (§ "The moons") |
 | `Renderable::DynamicSkyResource` | `Graphics/Renderable/DynamicSkyResource.{hpp,cpp}` | the background: owns the atmosphere and the material, the skybox cube |
 | `Renderer::renderSkyAtmosphere()` | `Graphics/Renderer.cpp` | the per-frame sky-view submission, BEFORE the shadow maps and the render-to-textures (the probes draw the sky too) |
 | `SkyState` | `Scenes/SkyState.hpp` | the scene's sky for the render thread: the sun and moons (direction, illuminance above the atmosphere, unit-luminance LINEAR colour, angular diameter, phase), written by `CelestialClock::publishStateForRendering()`, read by `Scene::skyStateForRendering(readStateIndex)` |
@@ -106,7 +108,8 @@ The light: `E_toa × Y(star ⊙ T_disc)` lux, its colour `star ⊙ T_disc` scale
 `AtmosphereParameters::discTransmittance()` averages the transmittance over the disc in 16 horizontal strips weighted
 by their chords, the strips under the ground's horizon counting zero: the light fades as the disc sets (the
 penumbra) and goes out once the ground hides it, at −(horizon dip + radius) ≈ −0.37° for the Sun at 10 m. The moons take
-the same change (full-moon illuminance × phase × `Y(moon ⊙ T_disc)`); a moon lights while the sun's light is off.
+the same change (full-moon illuminance × their brightness × `Y(moon ⊙ T_disc)`, § "The moons"); a moon lights while
+the sun's light is off.
 `CelestialClock.getState()` says `"model": "atmosphere"` and gives `transmittance`, `color`, `topOfAtmosphereLux`
 and the planet's `starDistanceAU`.
 
@@ -268,12 +271,107 @@ the manifest's Mie scattering.
 `AerialPerspectiveEffect` 0.067 ms at 1920×1080. 0 VUID, 0 SYNC-HAZARD (sky-lab, validation and synchronization
 validation, the layer proven loaded).
 
+### The moons (2026-10-25)
+Every moon of the clock is DRAWN by the sky material with the reflectance its light is the integral of: the phase, the
+terminator, the maria and the earthshine come out of one model, and the light on the ground is the disc in the sky.
+Owner decisions (2026-10-25):
+1. **An analytic sphere** in the sky material (M1), up to four moons (`SkyAtmosphereResource::MaxMoons`, unrolled).
+2. **One reflectance for the disc and its light** (M2): Hapke's lunar BRDF as H. W. Jensen et al. give it, *A
+   Physically-Based Night Sky Model*, SIGGRAPH 2001, eq. 2–4 — f = 2 / 3π × B(φ, g) × S(φ) × μ0 / (μ0 + μ), the
+   retrodirective function B (the opposition surge, density g = 0.6) and the particles' law S (forward scattering
+   t = 0.1). One source in emeraude-base (`Math::Astronomy::lunarReflectance()`), mirrored in GLSL
+   (`AtmosphereGLSL::LunarReflectance`).
+3. **The surface is a map** (M3), equirectangular, 0° longitude at its centre, east to the right, north up, sRGB: the
+   manifest's `"Moons": [{"Surface": "<store texture>"}]`, indexed like the clock's moons. projet-alpha ships NASA's
+   SVS CGI Moon Kit colour map (LRO LROC; credit "NASA's Scientific Visualization Studio", svs.gsfc.nasa.gov/4720) at
+   2K, 4K and 8K (`Astronomy/Moon2K`, `Moon4K`, `Moon8K`, PNG, resampled in linear light from a 14K source). Without a
+   map the albedo is uniform.
+4. **The earthshine is physical** (M4), an artistic gain on top (`CelestialClock::Moon::earthshineGain`, 1).
+5. **The light follows the TEXTURED disc** (`MoonSurfacePhotometry`): with a uniform albedo the light and the disc
+   parted by −10 % to +14 % across the month.
+
+**The disc** (per sky fragment, per moon):
+- A sphere of the moon's angular radius at a unit distance; the view ray's nearest hit gives the normal, and the edge is
+  antialiased over one pixel like the star's.
+- Its frame faces the observer always (the face toward the planet, no libration): toward = −the moon's direction, north
+  = the orbit's pole (`Math::Astronomy::moonOrbitPole()`) made perpendicular, east = north × toward. Map coordinates
+  u = 0.5 + atan2(n·east, n·toward) / 2π, v = 0.5 − asin(n·north) / π, read with `textureGrad()`.
+- Radiance = `E_full × colour / (f(1, 1, 0) × Ω)` × [f(μ0, μ, φ) + e × f(1, 1, 0)] × A(texel) / Ā × T(view):
+  - `E_full` is the moon's illuminance when full, above the atmosphere (0.3 lx, `Moon::fullIlluminance`), Ω the disc's
+    solid angle;
+  - a full disc's reflectance is UNIFORM (μ0 = μ: no limb darkening), so the disc integrated at full is `E_full`
+    exactly;
+  - `e` is the earthshine, the planet's light from the observer's side (zero phase);
+  - A / Ā is the map over its NEAR-SIDE mean, cos²(latitude) × cos(longitude)-weighted, in linear light (the projected
+    area a full moon shows);
+  - T is the transmittance along the view ray.
+- The moon covers the star's disc (an eclipse is drawn), and the sky's scattering lies in front of it.
+- The moons reach the frame texture through a uniform block (`SkyAtmosphere::m_moonBuffer`, a header + three vec4 per
+  moon), written in the frame's command stream (`vkCmdUpdateBuffer`, the previous frame's reads barred first) and
+  copied by the sky-view pass. The clock's state reaches it through `SkyState` (`pole`, `fullIlluminance`,
+  `earthshine`).
+
+**The light** = `E_full × [P(φ) × S(λs, βs) + e] × Y(colour ⊙ T_disc)` (`CelestialClock::moonBrightness()`):
+- P is the lunar phase law, f integrated over a uniform disc: `B(φ) S(φ) / B(0) S(0) × Φ_LS(φ)`, Φ_LS the exact
+  Lommel-Seeliger law (Jensen eq. 5) — no quadrature (`Math::Astronomy::lunarPhaseLaw()`). Quarter: **0.077**, the
+  Moon measures 0.083 (V −10.0 against −12.7 full); the former Lambert sphere gave 0.32.
+- e = `Moon::earthshine` × Φ_LS(π − φ) × the gain: the planet's geometric albedo × (its radius / the moon's distance)²,
+  Earth's 0.434 × (6 371 / 384 400)² ≈ 1.19e-4 (`Math::Astronomy::EarthshineRatio`), ~16 lx on the Moon under a
+  134 klx Sun when the Earth is full.
+- S is the textured disc over the uniform one at the sub-solar point (λs, βs): `MoonSurfacePhotometry`, a 73 × 37 table
+  (5° steps) measured ONCE from the map's pixels by the sky material before its creation (a loader thread: the
+  material's creation takes 54 ms with the 2K map, 148 ms with the 8K, 29–36 ms without a map; the sky is ready
+  ~1.1 s after the scene starts either way). B and S do not depend on the surface
+  element: they cancel in the ratio, only the Lommel-Seeliger kernel remains (`Math::Astronomy::lommelSeeligerKernel()`).
+  1 at full, 1 without a map. The clock takes the table with the atmosphere (`followAtmosphere()`, the sky resource
+  LOADED: its status publishes the immutable object), computes the sub-solar point in the shader's frame
+  (`MoonSurfacePhotometry::subSolarPoint()`) and gives it in `getState()` as `surfaceBrightness`.
+
+**Not in the environment.** The disc is the visible face of its moon's light — the light-face contract of
+[`13-12 § 42`](13-12-post-processing-effects/42-emission-in-the-indirect-diffuse-a-light-s-face-never-re-emits.md):
+its light reaches the scene through its directional light, and the IBL capture leaves it out like the star's disc. A
+moonlit ambient's blue-grey is the moonlit SKY — the atmosphere scattering the moon's light — which the sky-view does
+not integrate yet: item `dynamic-sky-moonlit-sky-glow`.
+
+**Measured** (sky-lab, Linux, RTX 3070 Ti, 1920 × 1080, the nits protocol below; a 400 mm lens aimed at the moon; the
+pixel's solid angle FROM THE LENS — vertical field 2 atan(12 / f) over 1 080 px — and the disc integrated within 1.08
+of its radius; the grading raised per phase until the peak reads 160–210; validation on, 0 VUID):
+
+| Moon (clock day) | φ | Elevation | S (textured ÷ uniform) | Disc ÷ light |
+|---|---|---|---|---|
+| full (1.0) | 6.3° | 41.8° | 0.995 | **1.002** |
+| waning gibbous (5.2) | 56.7° | 20.2° | 0.951 | **1.000** |
+| last quarter (8.2) | 93.7° | 13.0° | 0.911 | **0.996** |
+| waxing crescent (18.8) | 136.6° | 27.5° | 1.145 | **1.000** |
+| first quarter (22.8) | 87.9° | 65.8° | 1.092 | **1.003** |
+
+- S is what a light with a uniform albedo missed: the disc and such a light parted by −9 % to +15 % (measured 0.905 to
+  1.144 before the table, with the kit's own 2K JPEG; its S matched the PNG's within 0.005).
+- `Astronomy/Moon8K`: the full disc reads 1.002 / 1.002 / 1.003 at 400 / 800 / 1 600 mm (the kit's 2K JPEG: 0.997
+  at the three): the map's size and mip level do not bias it.
+- Its mean is 3 133 cd/m² at 41.8° (E / Ω = 3 289).
+- Mars (sky-lab option 0 = 1, no map): 0.994–1.007, S = 1.
+- The month is asymmetric, as the real one: the maria lie on the western half, lit when the moon wanes. First quarter /
+  last quarter = 1.21 here (0.2 mag). ROLO's photometry (Kieffer & Stone, *AJ* 129, 2005) shows the same sense: the
+  heterogeneity correction is larger in the waxing phases (*Remote Sensing* 11(22) 2696, 2019); no quarter figure was
+  found to compare with.
+- Earthshine, waxing crescent (φ 136.6°, 27.5°; the kit's 2K JPEG): the dark side reads a median 0.31 cd/m² (p10
+  0.18, p90 0.6 — maria and highlands), ~1e-4 of the lit side; its maria show.
+- Cost (GPU profiler, sky-lab pitched 40°, ~70 % of the screen sky, two A/B pairs, medians of 5 windows): `ScenePass`
+  0.101 ms with the Moon, 0.100 ms without (sky-lab option 8 = 0).
+
+**Failure paths.** A surface that is not a store texture fails the sky's load, like any malformed manifest key. A
+surface without CPU pixels (a block-compressed store image) or with a black near side is traced and drawn with a
+uniform albedo; its light then stays uniform too.
+
 ### The manifest (Backgrounds store)
 `"Planet"` (a preset name, default `"Earth"`), `"Atmosphere"` (inline overrides: `GroundRadius`, `TopRadius`,
 `RayleighScaleHeight`, `MieScaleHeight`, `AbsorptionLayerWidth` in km; `RayleighScattering`, `MieScattering`,
 `MieAbsorption`, `AbsorptionExtinction` per km as `[r, g, b]`; `MiePhaseG` as `[r, g, b]` or one number;
-`GroundAlbedo`), the artistic keys (`Tint`, `Intensity`, `Saturation`, `StarDisc`, `LimbDarkening`) and the
-background photometry (`AbstractBackground::parsePhotometry()`). From code: `DynamicSkyResource::load(parameters)`.
+`GroundAlbedo`), the artistic keys (`Tint`, `Intensity`, `Saturation`, `StarDisc`, `LimbDarkening`), the moons'
+appearance (`"Moons"`: an array indexed like the clock's moons, each an object with an optional `"Surface"`, a store
+texture — § "The moons") and the background photometry (`AbstractBackground::parsePhotometry()`). From code:
+`DynamicSkyResource::load(parameters)` (no moon map).
 
 ### The presets
 - **Earth**: Hillaire's / Bruneton's constants (Rayleigh 5.802, 13.558, 33.1 × 1e-3 /km, H 8 km; Mie 3.996e-3
@@ -339,3 +437,26 @@ none of which the sun's scattering gives: item `dynamic-sky-stars-and-milky-way`
   change to the other, re-measured (the light's colour against the disc, § "The light").
 - Per-channel g is not in Hillaire's paper: Earth sets one value three times; the integration is unchanged
   (`atmMiePhase()` returns a vec3).
+- ⚠️ **Two sources for the moons, too**: `Math::Astronomy::lunarReflectance()` (C++, the light's phase law and the
+  photometry table) and `AtmosphereGLSL::LunarReflectance` (the disc); `MoonSurfacePhotometry::subSolarPoint()` and the
+  material's moon frame (toward, north from the pole, east, the map's u and v). A change to one is a change to the
+  other, re-measured (the disc against the light, § "The moons").
+- ⚠️ **The moons' derivatives** (`fwidth()` of the edge, the map's `dFdx` / `dFdy`) are taken in the branch on the moon
+  COUNT, which is uniform, before the per-pixel coverage branch; the map is read with `textureGrad()`. The equirectangular
+  seam (u wraps at the far side) is never on screen: the far side faces away.
+- ⚠️ **A descriptor set allocates EVERY binding of its layout**, written or not. The sky's pool asked 4 uniform buffers /
+  5 samplers / 6 storage images for four sets of a layout that needs 2 / 2 / 2 each (fixed 2026-10-25 with the moon
+  binding, `SetCount × 2`); a driver that enforces the counts answers `VK_ERROR_OUT_OF_POOL_MEMORY` on the third set.
+- ⚠️ **Check a new surface map's ENCODING before using it.** The 14K source of projet-alpha's maps was tagged sRGB
+  but held linear values: decoded as sRGB its highlands / maria ratio read 6.1 (the Moon: ~2; the kit's own 2K JPEG
+  2.39), the maria near black and the light's month asymmetry exaggerated with them. Read as linear values it gave 2.44.
+  Compare the mean of a few maria (Tranquillitatis, Imbrium, Procellarum) with the highlands in linear light.
+- ⚠️ **Measuring a moon's disc**: the pixel's solid angle comes from the LENS (`Camera.getState()`'s
+  `fieldOfViewDegrees` is the vertical field), never from a thresholded radius — the outermost pixel above a threshold
+  overestimates the radius, and the first full-moon reading was 0.939 instead of 0.997. Dim phases need a raised
+  grading: a peak of 23 bytes quantised the crescent's integral by 1 %. And read the clock's state only once it
+  follows the sky (`getState()`'s `sun.model` is `atmosphere`): before the sky is loaded the light comes from the
+  empirical model, and an 8K run read 1.157 for 1.002.
+- The moon lights carry NO shadow map (`Toolkit::generateCelestialClock()`): two shadowing directional lights would double
+  the shadow cost at dusk; a shadowed moon would be an option to add. And a CSM directional light adds no light at all
+  when shadow mapping is off (item `sun-unlit-without-shadow-mapping`): the moons inherit it.

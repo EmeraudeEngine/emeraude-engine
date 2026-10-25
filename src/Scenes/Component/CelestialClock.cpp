@@ -38,6 +38,8 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Constants.hpp"
+#include "Graphics/Material/SkyAtmosphereResource.hpp"
+#include "Graphics/MoonSurfacePhotometry.hpp"
 #include "Graphics/Photometry.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderable/DynamicSkyResource.hpp"
@@ -229,6 +231,14 @@ namespace EmEn::Scenes::Component
 		for ( auto & moon : m_options.moons )
 		{
 			moon.fullIlluminance = std::max(0.0F, moon.fullIlluminance);
+
+			if ( !std::isfinite(moon.earthshine) || moon.earthshine < 0.0F || !std::isfinite(moon.earthshineGain) || moon.earthshineGain < 0.0F )
+			{
+				TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' declares a moon with a refused earthshine (" << moon.earthshine << " × " << moon.earthshineGain << "): the Moon's physical value is used.";
+
+				moon.earthshine = static_cast< float >(Sky::EarthshineRatio);
+				moon.earthshineGain = 1.0F;
+			}
 		}
 
 		/* ---- The observer's frame: north (horizontal), up = +Y, east = north × up. ---- */
@@ -387,6 +397,18 @@ namespace EmEn::Scenes::Component
 	}
 
 	float
+	CelestialClock::moonPhaseAngle (size_t index) const noexcept
+	{
+		return index < m_moons.size() ? m_moons[index].phaseAngle : 0.0F;
+	}
+
+	float
+	CelestialClock::moonSurfaceBrightness (size_t index) const noexcept
+	{
+		return index < m_moons.size() ? m_moons[index].surfaceBrightness : 1.0F;
+	}
+
+	float
 	CelestialClock::moonIlluminance (size_t index) const noexcept
 	{
 		return index < m_moons.size() ? m_moons[index].illuminance : 0.0F;
@@ -413,11 +435,9 @@ namespace EmEn::Scenes::Component
 	}
 
 	float
-	CelestialClock::lambertPhase (float illuminatedFraction) noexcept
+	CelestialClock::moonBrightness (float phaseAngle, float earthshine, float surfaceBrightness) noexcept
 	{
-		const auto phaseAngle = std::acos(std::clamp((2.0F * illuminatedFraction) - 1.0F, -1.0F, 1.0F));
-
-		return std::max(0.0F, (std::sin(phaseAngle) + ((std::numbers::pi_v< float > - phaseAngle) * std::cos(phaseAngle))) / std::numbers::pi_v< float >);
+		return (static_cast< float >(Sky::lunarPhaseLaw(static_cast< double >(phaseAngle))) * std::max(0.0F, surfaceBrightness)) + std::max(0.0F, earthshine);
 	}
 
 	void
@@ -443,10 +463,13 @@ namespace EmEn::Scenes::Component
 		std::ranges::transform(std::span{m_moons}.first(moonCount), std::span{m_options.moons}.first(moonCount), state.moons.begin(), [] (const BoundBody & moon, const Moon & declared) {
 			return SkyBody{
 				.direction = moon.direction,
-				.illuminance = declared.fullIlluminance * CelestialClock::lambertPhase(moon.illuminatedFraction),
+				.illuminance = declared.fullIlluminance * CelestialClock::moonBrightness(moon.phaseAngle, moon.earthshine, moon.surfaceBrightness),
 				.color = linearChromaticity(declared.temperature),
 				.angularDiameter = declared.angularDiameter,
-				.illuminatedFraction = moon.illuminatedFraction
+				.illuminatedFraction = moon.illuminatedFraction,
+				.pole = moon.pole,
+				.fullIlluminance = declared.fullIlluminance,
+				.earthshine = moon.earthshine
 			};
 		});
 
@@ -610,12 +633,14 @@ namespace EmEn::Scenes::Component
 	{
 		const auto background = scene.background();
 		std::shared_ptr< const Graphics::SkyAtmosphere > atmosphere;
+		std::shared_ptr< const Graphics::Material::SkyAtmosphereResource > material;
 
 		if ( background != nullptr && background->isLoaded() )
 		{
 			if ( const auto * dynamicSky = dynamic_cast< const Graphics::Renderable::DynamicSkyResource * >(background.get()); dynamicSky != nullptr )
 			{
 				atmosphere = dynamicSky->atmosphere();
+				material = dynamicSky->skyMaterial();
 			}
 		}
 
@@ -625,6 +650,14 @@ namespace EmEn::Scenes::Component
 		}
 
 		m_atmosphere = std::move(atmosphere);
+
+		/* The moons' surfaces come with the sky that draws them (measured before its material's creation). */
+		for ( uint32_t index = 0; auto & surface : m_moonSurfaces )
+		{
+			surface = m_atmosphere != nullptr && material != nullptr ? material->moonPhotometry(index) : nullptr;
+
+			++index;
+		}
 
 		if ( m_atmosphere != nullptr )
 		{
@@ -651,6 +684,13 @@ namespace EmEn::Scenes::Component
 		moon.direction = this->toWorld(towardMoon);
 		moon.elevation = static_cast< float >(Sky::degrees(towardMoon.elevation()));
 		moon.illuminatedFraction = static_cast< float >(Sky::illuminatedFraction(towardStar, towardMoon));
+		moon.phaseAngle = static_cast< float >(Sky::phaseAngle(towardStar, towardMoon));
+		moon.pole = this->toWorld(Sky::moonOrbitPole(m_options.planet, declared.orbit, observer, time));
+		/* The planet seen from the moon is at the supplementary phase: full when the moon is new. */
+		moon.earthshine = declared.earthshine * declared.earthshineGain * static_cast< float >(Sky::lommelSeeligerPhaseLaw(std::numbers::pi - static_cast< double >(moon.phaseAngle)));
+		/* The dynamic sky's surface map, where the star stands over it: the light is the disc the sky draws. */
+		const auto * surface = index < m_moonSurfaces.size() ? std::next(m_moonSurfaces.cbegin(), static_cast< std::ptrdiff_t >(index))->get() : nullptr;
+		moon.surfaceBrightness = surface != nullptr ? surface->relativeBrightness(Graphics::MoonSurfacePhotometry::subSolarPoint({.starDirection = this->toWorld(towardStar), .moonDirection = moon.direction, .pole = moon.pole})) : 1.0F;
 
 		/* A moon lights the scene while it is up and the sun is down: in daylight its fraction of a lux is nothing, and
 		 * one directional light less is one light pass less. */
@@ -662,14 +702,14 @@ namespace EmEn::Scenes::Component
 			const auto transmittance = m_atmosphere->parameters().discTransmittance(ObserverHeight, static_cast< float >(towardMoon.elevation()), angularRadius);
 			const Vector< 3, float > emission{moonColor[0] * transmittance[0], moonColor[1] * transmittance[1], moonColor[2] * transmittance[2]};
 
-			moon.illuminance = !m_sunLit ? declared.fullIlluminance * CelestialClock::lambertPhase(moon.illuminatedFraction) * luminance(emission) : 0.0F;
+			moon.illuminance = !m_sunLit ? declared.fullIlluminance * CelestialClock::moonBrightness(moon.phaseAngle, moon.earthshine, moon.surfaceBrightness) * luminance(emission) : 0.0F;
 			moon.color = lightColor(emission, lightColor(moonColor, {1.0F, 1.0F, 1.0F}));
 		}
 		else if ( moon.elevation > 0.0F && !m_sunLit )
 		{
 			const auto airMassExcess = CelestialClock::airMass(moon.elevation) - 1.0F;
 
-			moon.illuminance = declared.fullIlluminance * CelestialClock::lambertPhase(moon.illuminatedFraction) * std::exp(-m_options.sun.extinction * (airMassExcess + 1.0F));
+			moon.illuminance = declared.fullIlluminance * CelestialClock::moonBrightness(moon.phaseAngle, moon.earthshine, moon.surfaceBrightness) * std::exp(-m_options.sun.extinction * (airMassExcess + 1.0F));
 		}
 		else
 		{

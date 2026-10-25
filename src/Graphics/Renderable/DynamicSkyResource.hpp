@@ -121,6 +121,11 @@ namespace EmEn::Graphics::Renderable
 			static constexpr auto JKAbsorptionExtinction{"AbsorptionExtinction"};
 			static constexpr auto JKAbsorptionLayerWidth{"AbsorptionLayerWidth"};
 			static constexpr auto JKGroundAlbedo{"GroundAlbedo"};
+			/** @brief The moons' appearance, an array indexed like the scene's clock declares its moons: each an object
+			 * with an optional "Surface", a store texture (an equirectangular reflectance map, sRGB, 0° longitude at its
+			 * centre, east to the right — Material::SkyAtmosphereResource::setMoonSurface()). */
+			static constexpr auto JKMoons{"Moons"};
+			static constexpr auto JKSurface{"Surface"};
 
 			/**
 			 * @brief Constructs a dynamic skybox resource.

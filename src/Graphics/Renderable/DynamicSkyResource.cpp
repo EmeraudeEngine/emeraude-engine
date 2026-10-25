@@ -30,8 +30,13 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <array>
 #include <functional>
+#include <iterator>
+#include <memory>
 #include <optional>
+#include <string>
 
 /* Third-party inclusions. */
 #include "json/json.h"
@@ -45,6 +50,8 @@
 #include "Graphics/Material/SkyAtmosphereResource.hpp"
 #include "Graphics/Renderable/Types.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
 #include "Logging/Severity.hpp"
 #include "Math/Vector.hpp"
 #include "PixelFactory/Color.hpp"
@@ -199,13 +206,84 @@ namespace EmEn::Graphics::Renderable
 			look.limbDarkening = FastJSON::getValue< float >(*data, Material::SkyAtmosphereResource::JKLimbDarkening);
 		}
 
+		/* The moons' surfaces (sRGB store textures, their identity fixed before they load). */
+		std::array< std::shared_ptr< TextureResource::Texture2D >, Material::SkyAtmosphereResource::MaxMoons > moonSurfaces{};
+
+		if ( data != nullptr && data->isMember(JKMoons) )
+		{
+			const auto & moons = (*data)[JKMoons];
+
+			if ( !moons.isArray() )
+			{
+				TraceError{ClassId} << "The '" << JKMoons << "' key of dynamic sky '" << this->name() << "' must be an array !";
+
+				return false;
+			}
+
+			if ( moons.size() > Material::SkyAtmosphereResource::MaxMoons )
+			{
+				TraceWarning{ClassId} << "The dynamic sky '" << this->name() << "' declares " << moons.size() << " moons: the first " << Material::SkyAtmosphereResource::MaxMoons << " are drawn.";
+			}
+
+			auto & textures = *this->serviceProvider().container< TextureResource::Texture2D >();
+
+			for ( Json::ArrayIndex index = 0; index < std::min(moons.size(), static_cast< Json::ArrayIndex >(Material::SkyAtmosphereResource::MaxMoons)); ++index )
+			{
+				const auto & moon = moons[index];
+
+				if ( !moon.isObject() )
+				{
+					TraceError{ClassId} << "The moon #" << index << " of dynamic sky '" << this->name() << "' must be an object !";
+
+					return false;
+				}
+
+				if ( !moon.isMember(JKSurface) )
+				{
+					continue;
+				}
+
+				const auto surfaceName = FastJSON::getValue< std::string >(moon, JKSurface);
+
+				if ( !surfaceName.has_value() || surfaceName->empty() )
+				{
+					TraceError{ClassId} << "The surface of moon #" << index << " of dynamic sky '" << this->name() << "' must be a texture name !";
+
+					return false;
+				}
+
+				auto surface = TextureResource::getStoreTexture(textures, surfaceName.value(), TextureResource::Usage{.sRGB = true});
+
+				/* An absent name answers the default resource: never drawn as a moon. */
+				if ( surface == nullptr || surface->name() == Resources::Default )
+				{
+					TraceError{ClassId} << "The surface '" << surfaceName.value() << "' of moon #" << index << " of dynamic sky '" << this->name() << "' is not a texture of the store !";
+
+					return false;
+				}
+
+				/* index < MaxMoons: the loop's bound. */
+				*std::next(moonSurfaces.begin(), index) = std::move(surface);
+			}
+		}
+
 		auto atmosphere = std::make_shared< SkyAtmosphere >(this->name(), parameters);
 
 		const auto material = this->serviceProvider().container< Material::SkyAtmosphereResource >()
-			->getOrCreateResource(this->name() + "SkyMaterial", [atmosphere, look] (auto & materialResource) {
+			->getOrCreateResource(this->name() + "SkyMaterial", [atmosphere, look, moonSurfaces] (auto & materialResource) {
 				if ( !materialResource.setAtmosphere(atmosphere) )
 				{
 					return false;
+				}
+
+				for ( uint32_t index = 0; const auto & surface : moonSurfaces )
+				{
+					if ( surface != nullptr && !materialResource.setMoonSurface(index, surface) )
+					{
+						return false;
+					}
+
+					++index;
 				}
 
 				materialResource.setGrading(look.tint.value_or(White), look.intensity.value_or(1.0F));

@@ -29,7 +29,10 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <initializer_list>
+#include <iterator>
 #include <optional>
+#include <span>
+#include <string>
 
 /* Third-party inclusions. */
 #include "volk.h"
@@ -38,11 +41,14 @@
 #include "BlobTrait.hpp"
 #include "FastJSON.hpp"
 #include "Graphics/Effects/Shared/AtmosphereGLSL.hpp"
+#include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/Interface.hpp"
+#include "Graphics/MoonSurfacePhotometry.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
 #include "Graphics/StorageTexture2D.hpp"
+#include "Graphics/TextureResource/Texture2D.hpp"
 #include "Saphir/AbstractShader.hpp"
 #include "Saphir/AbstractVertexStage.hpp"
 #include "Saphir/Code.hpp"
@@ -77,12 +83,31 @@ namespace EmEn::Graphics::Material
 		constexpr uint32_t SkyViewBinding{2};
 		constexpr uint32_t TransmittanceBinding{3};
 		constexpr uint32_t FrameBinding{4};
+		/* The moons' surfaces: one binding per moon, from 5 (an unused one holds the transmittance table, never read). */
+		constexpr uint32_t MoonSurfaceBinding{5};
 
 		/* GLSL names. */
 		constexpr auto SkyDirection{"skyDirection"};
 		constexpr auto SkyViewLut{"skyViewLut"};
 		constexpr auto TransmittanceLut{"skyTransmittanceLut"};
 		constexpr auto FrameData{"skyFrameData"};
+		/**
+		 * @brief A moon's names in the generated shader.
+		 */
+		struct MoonShaderNames
+		{
+			/** @brief Its surface's sampler. Static storage: a Saphir declaration keeps the name's pointer (Keys::Key). */
+			const char * surface;
+			/** @brief Its lane in the SkyMoonSurfaces vector. */
+			char lane;
+		};
+
+		constexpr std::array< MoonShaderNames, SkyAtmosphereResource::MaxMoons > MoonNames{{
+			{.surface = "skyMoonSurface0", .lane = 'x'},
+			{.surface = "skyMoonSurface1", .lane = 'y'},
+			{.surface = "skyMoonSurface2", .lane = 'z'},
+			{.surface = "skyMoonSurface3", .lane = 'w'}
+		}};
 		constexpr auto SkyRadiance{"skyRadiance"};
 
 		/* The ceiling of the star's disc in the PRE-EXPOSED scene colour: under the fp16 maximum (65 504) with the sky
@@ -118,6 +143,49 @@ namespace EmEn::Graphics::Material
 			Code{function, Location::Output} << source.body;
 
 			return shader.declare(function);
+		}
+
+		/**
+		 * @brief Measures a moon's surface: its near-side mean and its photometry table (MoonSurfacePhotometry).
+		 * @param material The sky material's name, for the traces.
+		 * @param index The moon's index.
+		 * @param surface A reference to the surface texture, loaded (its pixels are leased while measured).
+		 * @return std::shared_ptr< const MoonSurfacePhotometry > Null (traced) when the surface has no measurable pixels:
+		 * the moon is then drawn with a uniform albedo.
+		 */
+		[[nodiscard]]
+		std::shared_ptr< const MoonSurfacePhotometry >
+		measureMoonSurface (const std::string & material, uint32_t index, TextureResource::Texture2D & surface) noexcept
+		{
+			const auto image = surface.localData();
+
+			if ( image == nullptr )
+			{
+				TraceError{SkyAtmosphereResource::ClassId} << "The surface '" << surface.name() << "' of moon #" << index << " of sky material '" << material << "' has no pixels to measure (a block-compressed source): the moon is drawn with a uniform albedo !";
+
+				return nullptr;
+			}
+
+			/* The pixels stay resident while measured (reloaded if a release pass took them). */
+			const auto lease = image->acquireLocalData();
+
+			if ( !lease.isValid() )
+			{
+				TraceError{SkyAtmosphereResource::ClassId} << "The pixels of the surface '" << surface.name() << "' of moon #" << index << " of sky material '" << material << "' could not be read: the moon is drawn with a uniform albedo !";
+
+				return nullptr;
+			}
+
+			const auto photometry = MoonSurfacePhotometry::measure(image->data(), surface.isSRGB());
+
+			if ( !photometry.has_value() )
+			{
+				TraceError{SkyAtmosphereResource::ClassId} << "The surface '" << surface.name() << "' of moon #" << index << " of sky material '" << material << "' has no measurable near side (empty or black): the moon is drawn with a uniform albedo !";
+
+				return nullptr;
+			}
+
+			return std::make_shared< const MoonSurfacePhotometry >(photometry.value());
 		}
 	}
 
@@ -172,6 +240,52 @@ namespace EmEn::Graphics::Material
 		m_atmosphere = atmosphere;
 
 		return true;
+	}
+
+	bool
+	SkyAtmosphereResource::setMoonSurface (uint32_t index, const std::shared_ptr< TextureResource::Texture2D > & texture) noexcept
+	{
+		if ( index >= MaxMoons )
+		{
+			TraceError{ClassId} << "The sky material '" << this->name() << "' draws " << MaxMoons << " moons: no surface for moon #" << index << " !";
+
+			return false;
+		}
+
+		if ( texture == nullptr )
+		{
+			TraceError{ClassId} << "The sky material '" << this->name() << "' refused a null surface for moon #" << index << " !";
+
+			return false;
+		}
+
+		if ( this->isCreated() )
+		{
+			TraceError{ClassId} << "The sky material '" << this->name() << "' is already created: the surface of moon #" << index << " can't change !";
+
+			return false;
+		}
+
+		*std::next(m_moonSurfaces.begin(), index) = texture;
+
+		return this->addDependency(texture);
+	}
+
+	void
+	SkyAtmosphereResource::onBeforeCreation () noexcept
+	{
+		/* The moons' surfaces: their near side's projected mean divided out, their photometry kept for the moons' light
+		 * (MoonSurfacePhotometry). Every index below is < MaxMoons, the size of the three arrays. */
+		const auto scales = std::span{m_properties}.subspan< MoonSurfacesOffset, MaxMoons >();
+
+		for ( uint32_t index = 0; index < MaxMoons; ++index )
+		{
+			const auto & surface = *std::next(m_moonSurfaces.cbegin(), index);
+			auto & photometry = *std::next(m_moonPhotometry.begin(), index);
+
+			photometry = surface != nullptr ? measureMoonSurface(this->name(), index, *surface) : nullptr;
+			scales[index] = photometry != nullptr ? 1.0F / photometry->nearSideMean() : 0.0F;
+		}
 	}
 
 	bool
@@ -282,6 +396,11 @@ namespace EmEn::Graphics::Material
 		newLayout->declareCombinedImageSampler(TransmittanceBinding, VK_SHADER_STAGE_FRAGMENT_BIT);
 		newLayout->declareCombinedImageSampler(FrameBinding, VK_SHADER_STAGE_FRAGMENT_BIT);
 
+		for ( uint32_t index = 0; index < MaxMoons; ++index )
+		{
+			newLayout->declareCombinedImageSampler(MoonSurfaceBinding + index, VK_SHADER_STAGE_FRAGMENT_BIT);
+		}
+
 		if ( !layoutManager.createDescriptorSetLayout(newLayout) )
 		{
 			return false;
@@ -333,6 +452,23 @@ namespace EmEn::Graphics::Material
 			TraceError{ClassId} << "Unable to write the atmosphere tables to the descriptor set of sky material '" << this->name() << "' !";
 
 			return false;
+		}
+
+		const auto scales = std::span{m_properties}.subspan< MoonSurfacesOffset, MaxMoons >();
+
+		for ( uint32_t index = 0; index < MaxMoons; ++index )
+		{
+			const auto & surface = *std::next(m_moonSurfaces.cbegin(), index);
+			const auto written = surface != nullptr && scales[index] > 0.0F ?
+				m_descriptorSet->writeCombinedImageSampler(MoonSurfaceBinding + index, *surface) :
+				writeTable(MoonSurfaceBinding + index, m_atmosphere->transmittance());
+
+			if ( !written )
+			{
+				TraceError{ClassId} << "Unable to write the surface of moon #" << index << " to the descriptor set of sky material '" << this->name() << "' !";
+
+				return false;
+			}
 		}
 
 		return true;
@@ -394,6 +530,7 @@ namespace EmEn::Graphics::Material
 		Declaration::UniformBlock block{set, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::SkyAtmosphereMaterial, UniformBlock::Material};
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SkyGrading);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SkyStar);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SkyMoonSurfaces);
 
 		return block;
 	}
@@ -466,7 +603,17 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		for ( const auto * function : {&AtmosphereGLSL::FromUnitToSubUv, &AtmosphereGLSL::RaySphereNearest, &AtmosphereGLSL::TransmittanceParametersToUv, &AtmosphereGLSL::SkyViewParametersToUv, &AtmosphereGLSL::SkyViewLookup, &AtmosphereGLSL::Grade} )
+		for ( uint32_t index = 0; const auto & names : MoonNames )
+		{
+			if ( !fragmentShader.declare(Declaration::Sampler{materialSet, MoonSurfaceBinding + index, GLSL::Sampler2D, names.surface}) )
+			{
+				return false;
+			}
+
+			++index;
+		}
+
+		for ( const auto * function : {&AtmosphereGLSL::FromUnitToSubUv, &AtmosphereGLSL::RaySphereNearest, &AtmosphereGLSL::TransmittanceParametersToUv, &AtmosphereGLSL::SkyViewParametersToUv, &AtmosphereGLSL::SkyViewLookup, &AtmosphereGLSL::Grade, &AtmosphereGLSL::LunarReflectance} )
 		{
 			if ( !declareAtmosphereFunction(fragmentShader, *function) )
 			{
@@ -498,6 +645,7 @@ namespace EmEn::Graphics::Material
 			"const float skyCosRadius = skyFrame0.w;" << Line::End <<
 			"const float skyCosAngle = dot(skyDir, skyStarDir);" << Line::End <<
 			"const float skyEdge = max(fwidth(skyCosAngle), 1e-7);" << Line::End <<
+			"vec3 skySunDisc = vec3(0.0);" << Line::End <<
 			"if ( " << star << ".y > 0.5 && !skyHitsGround ) {" << Line::End <<
 			"	const float skyCoverage = smoothstep(skyCosRadius - skyEdge, skyCosRadius + skyEdge, skyCosAngle);" << Line::End <<
 			"	if ( skyCoverage > 0.0 ) {" << Line::End <<
@@ -510,9 +658,73 @@ namespace EmEn::Graphics::Material
 			"		vec3 skyDisc = skyFrame1.rgb / skySolidAngle * skyLimb * skyTransmittance;" << Line::End <<
 			"		const float skyPeak = max(max(skyDisc.r, skyDisc.g), skyDisc.b) * " << ViewUB(UniformBlock::Component::PreExposure, false) << ";" << Line::End <<
 			"		if ( skyPeak > " << StarDiscCeiling << " ) { skyDisc *= " << StarDiscCeiling << " / skyPeak; }" << Line::End <<
-			"		" << SkyRadiance << " += skyDisc * skyCoverage;" << Line::End <<
+			"		skySunDisc = skyDisc * skyCoverage;" << Line::End <<
 			"	}" << Line::End <<
 			"}" << Line::End <<
+			/* The MOONS (graphics doc 42 § "The moons"): frame texels 4 + 3i (direction, cos of the angular radius), 5 + 3i
+			 * (radiance per unit reflectance × colour, earthshine), 6 + 3i (the orbit's pole). Each disc is a sphere lit by the
+			 * star with the lunar reflectance — the one its light is the integral of — plus the planet's light from the
+			 * observer's side, behind the atmosphere (× the transmittance) and in front of the star (it covers its disc). */
+			"const int skyMoonCount = int(clamp(texelFetch(" << FrameData << ", ivec2(2, 0), 0).x, 0.0, " << MaxMoons << ".0));" << Line::End <<
+			"const float skyEarthshineReflectance = atmLunarReflectance(1.0, 1.0, 0.0);" << Line::End <<
+			"float skyMoonCover = 0.0;" << Line::End <<
+			"vec3 skyMoonLight = vec3(0.0);";
+
+		for ( uint32_t index = 0; const auto & names : MoonNames )
+		{
+			const auto moon = std::string{"skyMoon"} + std::to_string(index);
+			const auto texel = [index] (uint32_t offset) {
+				return std::to_string(4 + (3 * index) + offset);
+			};
+			const auto surfaceScale = MaterialUB(UniformBlock::Component::SkyMoonSurfaces) + "." + names.lane;
+
+			/* ⚠️ The derivatives (fwidth(), the map's gradients) are taken in the branch on the moon count, which is
+			 * UNIFORM, before the per-pixel ones: implicit derivatives in non-uniform control flow are undefined. */
+			Code{fragmentShader, Location::Top} <<
+				"if ( skyMoonCount > " << index << " ) {" << Line::End <<
+				"	const vec4 " << moon << "Centre = texelFetch(" << FrameData << ", ivec2(" << texel(0) << ", 0), 0);" << Line::End <<
+				"	const vec4 " << moon << "Light = texelFetch(" << FrameData << ", ivec2(" << texel(1) << ", 0), 0);" << Line::End <<
+				"	const vec4 " << moon << "Pole = texelFetch(" << FrameData << ", ivec2(" << texel(2) << ", 0), 0);" << Line::End <<
+				"	const float " << moon << "CosAngle = dot(skyDir, " << moon << "Centre.xyz);" << Line::End <<
+				"	const float " << moon << "Edge = max(fwidth(" << moon << "CosAngle), 1e-7);" << Line::End <<
+				/* The sphere at a unit distance, of radius sin r: its nearest intersection, the limb's in the antialiased band. */
+				"	const float " << moon << "Half = sqrt(max((" << moon << "CosAngle * " << moon << "CosAngle) - (" << moon << "Centre.w * " << moon << "Centre.w), 0.0));" << Line::End <<
+				"	const vec3 " << moon << "Normal = normalize((skyDir * (" << moon << "CosAngle - " << moon << "Half)) - " << moon << "Centre.xyz);" << Line::End <<
+				/* The face toward the planet, north along the orbit's pole (perpendicular to the moon's direction by construction;
+				 * any perpendicular if degenerate): 0° longitude at the map's centre, east to the right. */
+				"	const vec3 " << moon << "Toward = -" << moon << "Centre.xyz;" << Line::End <<
+				"	vec3 " << moon << "North = " << moon << "Pole.xyz - (dot(" << moon << "Pole.xyz, " << moon << "Toward) * " << moon << "Toward);" << Line::End <<
+				"	if ( dot(" << moon << "North, " << moon << "North) < 1e-8 ) {" << Line::End <<
+				"		" << moon << "North = abs(" << moon << "Toward.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);" << Line::End <<
+				"		" << moon << "North -= dot(" << moon << "North, " << moon << "Toward) * " << moon << "Toward;" << Line::End <<
+				"	}" << Line::End <<
+				"	" << moon << "North = normalize(" << moon << "North);" << Line::End <<
+				"	const vec3 " << moon << "East = cross(" << moon << "North, " << moon << "Toward);" << Line::End <<
+				"	const vec2 " << moon << "Uv = vec2(0.5 + (atan(dot(" << moon << "Normal, " << moon << "East), dot(" << moon << "Normal, " << moon << "Toward)) / 6.28318531), 0.5 - (asin(clamp(dot(" << moon << "Normal, " << moon << "North), -1.0, 1.0)) / 3.14159265));" << Line::End <<
+				"	const vec2 " << moon << "UvDx = dFdx(" << moon << "Uv);" << Line::End <<
+				"	const vec2 " << moon << "UvDy = dFdy(" << moon << "Uv);" << Line::End <<
+				"	if ( !skyHitsGround ) {" << Line::End <<
+				"		const float " << moon << "Coverage = smoothstep(" << moon << "Centre.w - " << moon << "Edge, " << moon << "Centre.w + " << moon << "Edge, " << moon << "CosAngle);" << Line::End <<
+				"		if ( " << moon << "Coverage > 0.0 ) {" << Line::End <<
+				/* The phase angle, star–moon–observer: the star at infinity. */
+				"			const float " << moon << "Phase = acos(clamp(dot(skyStarDir, " << moon << "Toward), -1.0, 1.0));" << Line::End <<
+				"			const float " << moon << "CosEmission = max(dot(" << moon << "Normal, -skyDir), 1e-4);" << Line::End <<
+				"			float " << moon << "Reflectance = atmLunarReflectance(dot(" << moon << "Normal, skyStarDir), " << moon << "CosEmission, " << moon << "Phase) + (" << moon << "Light.w * skyEarthshineReflectance);" << Line::End <<
+				"			if ( " << surfaceScale << " > 0.0 ) {" << Line::End <<
+				"				" << moon << "Reflectance *= dot(textureGrad(" << names.surface << ", " << moon << "Uv, " << moon << "UvDx, " << moon << "UvDy).rgb, vec3(0.2126, 0.7152, 0.0722)) * " << surfaceScale << ";" << Line::End <<
+				"			}" << Line::End <<
+				"			const vec3 " << moon << "Transmittance = textureLod(" << TransmittanceLut << ", atmTransmittanceParametersToUv(skyViewHeight, skyDir.y), 0.0).rgb;" << Line::End <<
+				"			skyMoonLight += " << moon << "Light.rgb * " << moon << "Reflectance * " << moon << "Transmittance * " << moon << "Coverage;" << Line::End <<
+				"			skyMoonCover = max(skyMoonCover, " << moon << "Coverage);" << Line::End <<
+				"		}" << Line::End <<
+				"	}" << Line::End <<
+				"}";
+
+			++index;
+		}
+
+		Code{fragmentShader, Location::Top} <<
+			SkyRadiance << " += (skySunDisc * (1.0 - skyMoonCover)) + skyMoonLight;" << Line::End <<
 			/* The artistic grading, shared with the environment capture (AtmosphereGLSL::Grade). */
 			SkyRadiance << " = atmGrade(" << SkyRadiance << ", " << grading << ", " << star << ".x);";
 

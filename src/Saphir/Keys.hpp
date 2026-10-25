@@ -883,6 +883,8 @@ namespace EmEn::Saphir
 				constexpr auto SkyGrading{"skyGrading"};
 				/** @brief Sky atmosphere: (saturation, star disc on = 1, limb darkening coefficient u, unused). */
 				constexpr auto SkyStar{"skyStar"};
+				/** @brief Sky atmosphere: per moon, 1 / the mean luminance of its surface texture (0 = no surface). */
+				constexpr auto SkyMoonSurfaces{"skyMoonSurfaces"};
 				/* Material Iridescence specific */
 				constexpr auto IridescenceFactor{"iridescenceFactor"};
 				constexpr auto IridescenceIOR{"iridescenceIOR"};

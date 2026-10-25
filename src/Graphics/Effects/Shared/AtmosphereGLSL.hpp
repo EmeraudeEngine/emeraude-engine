@@ -182,6 +182,35 @@ namespace EmEn::Graphics::AtmosphereGLSL
 		"\treturn max(mix(vec3(luminance), radiance, saturation), vec3(0.0)) * tintIntensity.rgb * tintIntensity.w;\n"
 	};
 
+	/** @brief The lunar REFLECTANCE (the Hapke–Lommel-Seeliger of Jensen et al., SIGGRAPH 2001, eq. 2 to 4): the radiance
+	 * per unit albedo and per unit illuminance normal to the light, the cos of the incidence inside. ⚠️ A mirror of
+	 * Base::Math::Astronomy::lunarReflectance() — g = 0.6 (LunarSurfaceDensity), t = 0.1 (LunarForwardScattering),
+	 * 2 / 3π = 0.2122066 — whose phase law the moon's LIGHT takes (CelestialClock::moonBrightness()): change both. */
+	constexpr FunctionSource LunarReflectance{
+		.returnType = "float",
+		.name = "atmLunarReflectance",
+		.parameters = {{{.type = "float", .name = "cosIncidence"}, {.type = "float", .name = "cosEmission"}, {.type = "float", .name = "phaseAngle"}, {}}},
+		.parameterCount = 3,
+		.body = "\tif ( cosIncidence <= 0.0 || cosEmission <= 0.0 ) { return 0.0; }\n"
+		"\tfloat phase = min(abs(phaseAngle), 3.14159265);\n"
+		/* B(φ, g): 2 at zero phase (the opposition surge), 1 from a right angle on. */
+		"\tfloat retrodirective = 1.0;\n"
+		"\tif ( phase < 1.57079633 ) {\n"
+		"\t\tfloat tanPhase = tan(phase);\n"
+		"\t\tif ( tanPhase > 1e-6 ) {\n"
+		"\t\t\tfloat decay = exp(-0.6 / tanPhase);\n"
+		"\t\t\tretrodirective = 2.0 - ((tanPhase / 1.2) * (1.0 - decay) * (3.0 - decay));\n"
+		"\t\t} else {\n"
+		"\t\t\tretrodirective = 2.0;\n"
+		"\t\t}\n"
+		"\t}\n"
+		/* S(φ): the particles' scattering law with its forward lobe. */
+		"\tfloat cosPhase = cos(phase);\n"
+		"\tfloat forward = 1.0 - (0.5 * cosPhase);\n"
+		"\tfloat scattering = ((sin(phase) + ((3.14159265 - phase) * cosPhase)) / 3.14159265) + (0.1 * forward * forward);\n"
+		"\treturn 0.2122066 * retrodirective * scattering * (cosIncidence / (cosIncidence + cosEmission));\n"
+	};
+
 	/**
 	 * @brief Returns a shared function as raw GLSL (the compute sources).
 	 * @param function A reference to the function.

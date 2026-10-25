@@ -50,6 +50,14 @@ namespace EmEn::Scenes
 		float angularDiameter{0.53F};
 		/** @brief Illuminated fraction of its disc, in [0, 1] (1 for a star). */
 		float illuminatedFraction{1.0F};
+		/** @brief A moon: unit world vector along its orbit's pole, the axis its face is oriented by. */
+		Base::Math::Vector< 3, float > pole{0.0F, 1.0F, 0.0F};
+		/** @brief A moon: its illuminance when FULL above the atmosphere, in lux — the calibration of its disc (the
+		 * disc-integrated radiance at full equals it). */
+		float fullIlluminance{0.0F};
+		/** @brief A moon: the planet's illuminance on it relative to the star's at this phase (the earthshine, gain
+		 * included). */
+		float earthshine{0.0F};
 	};
 
 	/**

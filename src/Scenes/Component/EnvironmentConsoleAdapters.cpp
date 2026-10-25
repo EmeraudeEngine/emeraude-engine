@@ -31,6 +31,7 @@
 #include <cstddef>
 #include <limits>
 #include <memory>
+#include <numbers>
 #include <optional>
 #include <string>
 #include <utility>
@@ -173,6 +174,8 @@ namespace EmEn::Scenes::Component
 				moon["elevationDegrees"] = static_cast< double >(clock.moonElevation(index));
 				moon["direction"] = toJson(clock.moonDirection(index));
 				moon["illuminatedFraction"] = static_cast< double >(clock.moonIlluminatedFraction(index));
+				moon["phaseAngleDegrees"] = static_cast< double >(clock.moonPhaseAngle(index)) * (180.0 / std::numbers::pi);
+				moon["surfaceBrightness"] = static_cast< double >(clock.moonSurfaceBrightness(index));
 				moon["illuminanceLux"] = static_cast< double >(clock.moonIlluminance(index));
 
 				if ( const auto light = clock.moonLight(index); light != nullptr )

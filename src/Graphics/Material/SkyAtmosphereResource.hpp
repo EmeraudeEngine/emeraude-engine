@@ -33,6 +33,7 @@
 #include <array>
 #include <atomic>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <string>
 
@@ -40,9 +41,14 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "ScopedRegistration.hpp"
+#include "Graphics/Types.hpp"
+#include "Hash/FNV1a.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
 #include "PixelFactory/Color.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
+#include "ScopedRegistration.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -53,8 +59,20 @@ namespace EmEn::Resources
 
 namespace EmEn::Graphics
 {
+	class MoonSurfacePhotometry;
+	class Renderer;
 	class SharedUniformBuffer;
 	class SkyAtmosphere;
+}
+
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
+
+namespace EmEn::Graphics::TextureResource
+{
+	class Texture2D;
 }
 
 namespace EmEn::Graphics::Material
@@ -64,9 +82,13 @@ namespace EmEn::Graphics::Material
 	 * atmosphere seen from the camera, read from the tables of a Graphics::SkyAtmosphere, and the disc of its star.
 	 * @note Unlit, opaque: what it writes IS the sky's radiance, in nits, absolute (the scene epilogue pre-exposes it).
 	 * The direction of a fragment is the skybox vertex position (the cube is centred on the camera, never rotated).
-	 * @note Descriptor set (per model layer): 0 the material UBO (Keys SkyGrading, SkyStar), 1 the atmosphere's
-	 * parameters, 2 the sky-view table, 3 the transmittance table, 4 the frame texture (the star and the camera of the
-	 * frame, written with the sky-view table by SkyAtmosphere::recordFrame()).
+	 * @note Descriptor set (per model layer): 0 the material UBO (Keys SkyGrading, SkyStar, SkyMoonSurfaces), 1 the
+	 * atmosphere's parameters, 2 the sky-view table, 3 the transmittance table, 4 the frame texture (the star, the camera
+	 * and the moons of the frame, written with the sky-view table by SkyAtmosphere::recordFrame()), 5 to 8 the moons'
+	 * surfaces (setMoonSurface()).
+	 * @note The MOONS (graphics doc 42 § "The moons"): each disc is a sphere lit by the star, with the lunar reflectance
+	 * (Hapke–Lommel-Seeliger, Jensen et al. 2001) whose disc integral is the moon's light (CelestialClock), plus the
+	 * planet's earthshine, behind the atmosphere and in front of the star.
 	 * @note The artistic controls (tint, intensity, saturation) leave the physics untouched at their defaults.
 	 * @extends EmEn::Graphics::Material::Interface This is a material.
 	 */
@@ -81,8 +103,11 @@ namespace EmEn::Graphics::Material
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"MaterialSkyAtmosphereResource"};
 
-			/** @brief Defines the resource dependency complexity. */
-			static constexpr auto Complexity{Resources::DepComplexity::None};
+			/** @brief Defines the resource dependency complexity: the moons' surfaces. */
+			static constexpr auto Complexity{Resources::DepComplexity::Few};
+
+			/** @brief The most moons the material draws (SkyFrameInputs::MaxMoons). */
+			static constexpr uint32_t MaxMoons{4};
 
 			/* JSON keys. */
 			static constexpr auto JKTint{"Tint"};
@@ -341,6 +366,39 @@ namespace EmEn::Graphics::Material
 			void setLimbDarkening (float coefficient) noexcept;
 
 			/**
+			 * @brief Gives a moon its SURFACE: an equirectangular map of its reflectance — 0° longitude at the image's
+			 * centre, east to the right, north up — whose centre faces the planet.
+			 * @note The mean of its NEAR side as a full moon shows it — the reflectance in linear light weighted by the
+			 * projected area — is divided out (MoonSurfacePhotometry, measured once before the GPU creation): the disc
+			 * integrated at full stays exactly the moon's full illuminance, the light's calibration, and the map only
+			 * says where the surface is darker or brighter; at the other phases the moon's light follows the textured
+			 * disc through moonPhotometry(). A block-compressed source has no pixels to measure: refused at creation
+			 * (traced), the moon is then drawn with a uniform albedo, like a moon without a surface.
+			 * @pre Before the material's creation: the texture becomes one of its dependencies.
+			 * @param index The moon's index, as the clock declares it, < MaxMoons.
+			 * @param texture A reference to the texture smart pointer.
+			 * @return bool False (traced) out of range, after creation or for a null texture.
+			 */
+			[[nodiscard]]
+			bool setMoonSurface (uint32_t index, const std::shared_ptr< TextureResource::Texture2D > & texture) noexcept;
+
+			/**
+			 * @brief Returns the photometry of a moon's surface, measured before the material's creation: the moon's
+			 * light follows its textured disc with it (CelestialClock).
+			 * @note Immutable once the material is created; read it after the sky resource is loaded (its loaded status
+			 * publishes it to another thread).
+			 * @param index The moon's index.
+			 * @return std::shared_ptr< const MoonSurfacePhotometry > Null for a moon without a measured surface (or an index
+			 * out of range): a uniform albedo.
+			 */
+			[[nodiscard]]
+			std::shared_ptr< const MoonSurfacePhotometry >
+			moonPhotometry (uint32_t index) const noexcept
+			{
+				return index < MaxMoons ? *std::next(m_moonPhotometry.cbegin(), index) : nullptr;
+			}
+
+			/**
 			 * @brief Returns the tint.
 			 * @return Base::PixelFactory::Color< float >
 			 */
@@ -401,6 +459,10 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			bool create (Renderer & renderer) noexcept override;
 
+			/** @copydoc EmEn::Graphics::Material::Interface::onBeforeCreation()
+			 * @note Measures the moons' surfaces (setMoonSurface()), every texture loaded and none on the GPU yet. */
+			void onBeforeCreation () noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::destroy() noexcept */
 			void destroy () noexcept override;
 
@@ -429,18 +491,24 @@ namespace EmEn::Graphics::Material
 			 */
 			void markVideoMemoryDirty () noexcept;
 
-			/* UBO layout (std140, two vec4 — Keys SkyGrading, SkyStar). */
+			/* UBO layout (std140, three vec4 — Keys SkyGrading, SkyStar, SkyMoonSurfaces). */
 			static constexpr auto GradingOffset{0UL};
 			static constexpr auto StarOffset{4UL};
-			static constexpr auto PropertiesSize{8UL};
+			static constexpr auto MoonSurfacesOffset{8UL};
+			static constexpr auto PropertiesSize{12UL};
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::array< float, PropertiesSize > m_properties{
 				/* Tint (rgb), intensity. */
 				1.0F, 1.0F, 1.0F, 1.0F,
 				/* Saturation, star disc on, limb darkening, unused. */
-				1.0F, 1.0F, DefaultLimbDarkening, 0.0F
+				1.0F, 1.0F, DefaultLimbDarkening, 0.0F,
+				/* Per moon: 1 / the mean luminance of its surface (0 = no surface: a uniform albedo). */
+				0.0F, 0.0F, 0.0F, 0.0F
 			};
+			std::array< std::shared_ptr< TextureResource::Texture2D >, MaxMoons > m_moonSurfaces{};
+			/* Written by onBeforeCreation() (a loader thread), immutable after: the loaded status publishes them. */
+			std::array< std::shared_ptr< const MoonSurfacePhotometry >, MaxMoons > m_moonPhotometry{};
 			std::shared_ptr< SkyAtmosphere > m_atmosphere;
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
 			/* The seat in m_sharedUniformBuffer (Ave Robustus II P4): its end frees it. Declared after the buffer. */

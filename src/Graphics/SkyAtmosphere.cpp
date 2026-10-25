@@ -33,6 +33,7 @@
 #include <cstring>
 #include <initializer_list>
 #include <numbers>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -43,10 +44,12 @@
 #include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/AtmosphereGLSL.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Math/Astronomy.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Saphir/Types.hpp"
 #include "StaticVector.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/ComputePipeline.hpp"
@@ -59,6 +62,7 @@
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/Sync/BufferMemoryBarrier.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "Vulkan/Types.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
@@ -71,6 +75,13 @@ namespace
 	constexpr uint32_t MultipleScatteringBinding{2};
 	constexpr uint32_t OutputBinding{3};
 	constexpr uint32_t FrameBinding{4};
+	/* The sky-view pass only: the frame's moons (SkyAtmosphere::m_moonBuffer). */
+	constexpr uint32_t MoonBinding{5};
+
+	/** @brief The moon block (std140): a vec4 header (the moon count), then three vec4 per moon — the frame texture's
+	 * texels 4 + 3i to 6 + 3i, copied as they are. */
+	constexpr uint32_t MoonBlockVectors{1 + (3 * EmEn::Graphics::SkyFrameInputs::MaxMoons)};
+	constexpr VkDeviceSize MoonBlockBytes{static_cast< VkDeviceSize >(MoonBlockVectors) * 4 * sizeof(float)};
 
 	/** @brief The sky-view pass's push constants: the star and the camera of the frame. */
 	struct SkyViewPushConstants
@@ -372,6 +383,14 @@ layout(local_size_x = 8, local_size_y = 8) in;
 	constexpr auto SkyViewMain = R"GLSL(
 layout(set = 0, binding = 4, rgba32f) uniform writeonly image2D frameImage;
 
+/* The frame's moons (SkyAtmosphere::recordFrame()): header.x the count, then three vec4 per moon, the frame texture's
+ * layout (SkyAtmosphere::FrameTexels). */
+layout(set = 0, binding = 5, std140) uniform SkyMoons
+{
+	vec4 header;
+	vec4 texels[12];
+} moons;
+
 layout(push_constant) uniform SkyViewPushConstants
 {
 	vec4 sunDirectionHeight;
@@ -388,8 +407,13 @@ void main ()
 	{
 		imageStore(frameImage, ivec2(0, 0), vec4(frame.sunDirectionHeight.xyz, frame.sunIlluminanceCos.w));
 		imageStore(frameImage, ivec2(1, 0), vec4(frame.sunIlluminanceCos.rgb, viewHeight));
-		imageStore(frameImage, ivec2(2, 0), vec4(0.0));
+		imageStore(frameImage, ivec2(2, 0), vec4(moons.header.x, 0.0, 0.0, 0.0));
 		imageStore(frameImage, ivec2(3, 0), vec4(0.0));
+
+		for ( int index = 0; index < 12; ++index )
+		{
+			imageStore(frameImage, ivec2(4 + index, 0), moons.texels[index]);
+		}
 	}
 
 	if ( any(greaterThanEqual(texel, ivec2(AtmSkyViewSize))) )
@@ -779,6 +803,17 @@ namespace EmEn::Graphics
 			m_parametersBuffer->unmapMemory();
 		}
 
+		/* ---- The frame's moons: written in each frame's command stream (recordFrame()), read by the sky-view pass. ---- */
+		m_moonBuffer = std::make_unique< Buffer >(device, 0, MoonBlockBytes, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, false);
+		m_moonBuffer->setIdentifier(ClassId, m_name + "Moons", "Buffer");
+
+		if ( !m_moonBuffer->createOnHardware() )
+		{
+			TraceError{ClassId} << "Unable to create the moon buffer of the sky '" << m_name << "' !";
+
+			return false;
+		}
+
 		/* ---- One layout for the three passes. ---- */
 		m_descriptorSetLayout = std::make_shared< DescriptorSetLayout >(device, m_name + "SkyDSLayout");
 
@@ -796,6 +831,7 @@ namespace EmEn::Graphics
 		declare(MultipleScatteringBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		declare(OutputBinding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		declare(FrameBinding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
+		declare(MoonBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
 		if ( !m_descriptorSetLayout->createOnHardware() )
 		{
@@ -865,14 +901,19 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* ---- One set per pass. ⚠️ FREE_DESCRIPTOR_SET_BIT: DescriptorSet frees its set in its destructor. ---- */
+		/* ---- One set per pass. ⚠️ FREE_DESCRIPTOR_SET_BIT: DescriptorSet frees its set in its destructor.
+		 * ⚠️ A set allocates EVERY binding of its layout, written or not: four sets of 2 uniform buffers, 2 samplers and 2
+		 * storage images. The pool asked for 4 / 5 / 6 until 2026-10-25 — one layout of 1 / 2 / 2 already needed 4 / 8 / 8;
+		 * an implementation that enforces the counts returns VK_ERROR_OUT_OF_POOL_MEMORY on the third set. ---- */
+		constexpr uint32_t SetCount{4};
+
 		const std::vector< VkDescriptorPoolSize > poolSizes{
-			{.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 4},
-			{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 5},
-			{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 6}
+			{.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = SetCount * 2},
+			{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = SetCount * 2},
+			{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = SetCount * 2}
 		};
 
-		m_descriptorPool = std::make_shared< DescriptorPool >(device, poolSizes, 4, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+		m_descriptorPool = std::make_shared< DescriptorPool >(device, poolSizes, SetCount, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 		if ( !m_descriptorPool->createOnHardware() )
 		{
@@ -907,6 +948,7 @@ namespace EmEn::Graphics
 			sampled(*m_skyViewSet, MultipleScatteringBinding, m_multipleScattering) &&
 			m_skyViewSet->writeStorageImage(OutputBinding, *m_skyView.storageView()) &&
 			m_skyViewSet->writeStorageImage(FrameBinding, *m_frameData.storageView()) &&
+			m_skyViewSet->writeUniformBuffer(MoonBinding, m_moonBuffer->getDescriptorInfo(0, static_cast< uint32_t >(MoonBlockBytes))) &&
 			sampled(*m_aerialPerspectiveSet, TransmittanceBinding, m_transmittance) &&
 			sampled(*m_aerialPerspectiveSet, MultipleScatteringBinding, m_multipleScattering) &&
 			m_aerialPerspectiveSet->writeStorageImage(OutputBinding, *m_aerialInscatter.storageView()) &&
@@ -971,6 +1013,13 @@ namespace EmEn::Graphics
 		commandBuffer->dispatch((MultipleScatteringSize + 7) / 8, (MultipleScatteringSize + 7) / 8, 1);
 		toSampled(m_multipleScattering);
 
+		/* No moon until a frame says otherwise (recordFrame() rewrites the block before every sky-view dispatch). */
+		commandBuffer->fill(*m_moonBuffer, 0, MoonBlockBytes, 0U);
+		commandBuffer->pipelineBarrier(
+			Sync::BufferMemoryBarrier{*m_moonBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT},
+			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+		);
+
 		/* The per-frame textures start in their SAMPLED layout (empty content): a material created before the first
 		 * frame records may bind them without reading an UNDEFINED image. */
 		for ( const auto * texture : {&m_skyView, &m_frameData} )
@@ -1033,6 +1082,51 @@ namespace EmEn::Graphics
 			.sunDirectionHeight = {direction.x(), direction.y(), direction.z(), viewHeight},
 			.sunIlluminanceCos = {inputs.sunIlluminance.x(), inputs.sunIlluminance.y(), inputs.sunIlluminance.z(), std::cos(angularRadius)}
 		};
+
+		/* ---- The frame's moons (graphics doc 42 § "The moons"): the block the sky-view pass copies into the frame
+		 * texture, written in this frame's command stream — the previous frame's reads first. ---- */
+		{
+			std::array< float, static_cast< size_t >(MoonBlockVectors) * 4 > block{};
+
+			const auto count = std::min(inputs.moonCount, SkyFrameInputs::MaxMoons);
+			/* The lunar reflectance of a FULL disc is uniform (no limb darkening): a disc of radiance
+			 * scale × that reflectance over its solid angle pours exactly fullIlluminance. */
+			const auto fullReflectance = static_cast< float >(Astronomy::lunarReflectance(1.0, 1.0, 0.0));
+
+			block[0] = static_cast< float >(count);
+
+			/* After the header vector: count ≤ MaxMoons blocks of 12 floats fill it exactly. */
+			auto destination = std::span{block}.subspan(4).begin();
+
+			for ( const auto & moon : std::span{inputs.moons}.first(count) )
+			{
+				const auto moonDirection = moon.direction.lengthSquared() > 0.0F ? moon.direction.normalized() : Vector< 3, float >{0.0F, 1.0F, 0.0F};
+				const auto pole = moon.pole.lengthSquared() > 0.0F ? moon.pole.normalized() : Vector< 3, float >{0.0F, 1.0F, 0.0F};
+				const auto moonRadius = 0.5F * std::clamp(moon.angularDiameter, 0.0F, 90.0F) * (std::numbers::pi_v< float > / 180.0F);
+				const auto cosRadius = std::cos(moonRadius);
+				const auto solidAngle = 2.0F * std::numbers::pi_v< float > * (1.0F - cosRadius);
+				const auto scale = solidAngle > 0.0F && std::isfinite(moon.fullIlluminance) ? std::max(0.0F, moon.fullIlluminance) / (fullReflectance * solidAngle) : 0.0F;
+				const auto earthshine = std::isfinite(moon.earthshine) ? std::max(0.0F, moon.earthshine) : 0.0F;
+
+				const std::array< float, 12 > texels{
+					moonDirection.x(), moonDirection.y(), moonDirection.z(), cosRadius,
+					moon.color.x() * scale, moon.color.y() * scale, moon.color.z() * scale, earthshine,
+					pole.x(), pole.y(), pole.z(), 0.0F
+				};
+
+				destination = std::ranges::copy(texels, destination).out;
+			}
+
+			commandBuffer.pipelineBarrier(
+				Sync::BufferMemoryBarrier{*m_moonBuffer, VK_ACCESS_UNIFORM_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT},
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT
+			);
+			commandBuffer.update(*m_moonBuffer, 0, MoonBlockBytes, block.data());
+			commandBuffer.pipelineBarrier(
+				Sync::BufferMemoryBarrier{*m_moonBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT},
+				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+			);
+		}
 
 		commandBuffer.bind(*m_skyViewPipeline);
 		commandBuffer.bind(*m_skyViewSet, *m_pipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);

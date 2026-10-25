@@ -60,8 +60,14 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 > Young (1989) air mass** through a Beer-Lambert extinction referenced at the zenith (`SunPhotometry`, 100 klx by
 > default) and its colour from a temperature sliding 5800 K → 2000 K with the same air mass, and **disables the sun
 > while it is below the horizon**. A MOON lights the scene while it is up and the sun is down: full-moon
-> illuminance (0.3 lx above the atmosphere) × a Lambert-sphere phase function × the extinction, 4100 K, no shadow
-> map. The astronomy is emeraude-base's `Math/Astronomy.hpp` (generic two-body orbits, owner decision: no
+> illuminance (0.3 lx above the atmosphere) × its BRIGHTNESS × the extinction, 4100 K, no shadow map. The brightness
+> (`moonBrightness()`, 2026-10-25, graphics doc 42 § "The moons") is the lunar phase law — Hapke's reflectance as
+> Jensen et al. (SIGGRAPH 2001) give it, integrated over the disc: 0.077 at quarter (it was a Lambert sphere's 0.32) —
+> × the surface brightness (the dynamic sky's moon map: the textured disc over a uniform one, 1 without a map) + the
+> EARTHSHINE (`Moon::earthshine`, the planet's geometric albedo × (its radius / the moon's distance)², Earth ≈ 1.19e-4,
+> × the Lommel-Seeliger law of the planet's own phase × `Moon::earthshineGain`, 1 = physical; a non-finite or negative
+> pair is refused for the physical value). `getState()` gives each moon's `phaseAngleDegrees` and
+> `surfaceBrightness`. The astronomy is emeraude-base's `Math/Astronomy.hpp` (generic two-body orbits, owner decision: no
 > perturbation, ~1° for the Sun), unit-tested there. ⚠️ **Time** is seconds since the epoch in DOUBLE, recomputed
 > every cycle from a stored reference and an integer cycle count — never accumulated (owner rule); `timeScale`
 > simulated seconds per real second. ⚠️ **Frame**: East-North-Up mapped with `Options::northDirection` (default −Z)
@@ -77,7 +83,8 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 > It **writes the scene's sky state** (owner decision 2026-10-24): `publishStateForRendering()` fills a
 > `Scenes::SkyState` per render state — the sun and moons with their illuminance ABOVE the atmosphere (the zenith
 > illuminance × exp(extinction)), their unit-luminance colour at the zenith temperature (no horizon reddening: a
-> physical sky reddens it itself), angular diameter and phase — and the scene keeps its clock
+> physical sky reddens it itself), angular diameter and phase, and for a moon its orbit's pole, full illuminance and
+> earthshine (what the sky draws its disc with) — and the scene keeps its clock
 > (`CelestialClockCreated` / `CelestialClockDestroyed`; the last one added wins) behind
 > `Scene::skyStateForRendering(readStateIndex)`, which the renderer's physical sky reads (graphics doc 42).
 > ⚠️ **With a dynamic sky** (2026-10-25, owner decisions; graphics doc 42 § "The light"), the clock follows the scene's
