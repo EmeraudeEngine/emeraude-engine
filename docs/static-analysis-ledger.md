@@ -657,6 +657,15 @@ fixed (the ping-pong pairs read through constant-index references, the anti-lag 
 built with `+=`); cppcheck 0; IWYU brought clean, with forward-declaration blocks in the six files. Windows-PA's
 cppcheck 2.22.0 found two `accessMoved` in `SkyEnvironment.cpp` that the Linux run did not (MSVC defines): fixed with
 `std::exchange`.
+The depth-reconstruction lot, part 2 (same day; the chain's depth consumers, `PostProcessor`, `CombinePass`, the Saphir
+post-processing generator): clang-tidy 21.1.6 on the changed lines 1 fixed (SSGI's inverse-view columns read through
+`Matrix::operator[]`, not a raw pointer) and 4 kept ON PURPOSE (return-const-ref-from-parameter, § 7f / 7g); cppcheck
+0; IWYU brought clean in two passes (the second asked `CombinePass.cpp` for the forward declarations of the headers the
+first had removed). macOS-PA's IWYU (Apple libc++) also asks for `<string_view>` (`CombinePass.cpp`, `SSR.cpp`,
+`Saphir/Generator/PostProcessing.cpp`), `<ratio>` (`PostProcessor.cpp`), drops `<utility>` from `CombinePass.cpp`
+(libstdc++ needs it there for `std::pair`) and wants full includes for `PostProcessor.hpp`'s forward-declared
+`Vulkan::DescriptorSet` / `UniformBufferObject` (the build passes on both with the declarations): Apple-libc++-only
+suggestions, not applied.
 
 **First lot (2026-10-19)**: the 49 files of the engine's cppcheck lot (34 `.cpp`, 15 headers): about 800 includes added
 and 115 removed, 41 forward declarations, converged at the second pass (three residual lines applied); the three

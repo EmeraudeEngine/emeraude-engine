@@ -79,6 +79,15 @@ Linux, RTX 3070 Ti, 1920×1080, validation layers ON (0 `VUID-` in every run), t
 before (`522e9d47`) and after, the same pose and a PINNED exposure, each slot disabled in turn in ONE launch; values
 are the mean luminance LINEARISED (sRGB, then the inverse of the Narkowicz ACES fit).
 
+> [!WARNING]
+> **A clipped pixel has no inverse.** The fit saturates, so a 255 byte maps to whatever clamp the script chose: these
+> runs clamped at 0.79 (255 → 0.94), macOS-PA's at 0.9999 (255 → 7.22), and labyrinth's panel pose holds ~1 % of
+> clipped pixels (the panel, its glare, its defocus) — the two machines' absolute levels differed by ×1.9 for that
+> alone (macOS-PA, 2026-10-25). Exclude the pixels clipped in ANY of the compared states (one shared mask) and report
+> their share. Excluded, labyrinth's SSGI delta reads +0.129 on Linux; macOS-PA's ~+0.165 and SSR's +0.040 against
+> +0.027 stay higher at that pose only — both dominated by the panel double count of item
+> `labyrinth-lane-parity-indirect-diffuse`; with no panel on screen the two machines agree within 5 %.
+
 - **Depth of field** (the proof that settled the formula question): labyrinth's lamp panel 2.6 m from the eye, manual
   focus sweep at f/1.4, sharpness = 99th percentile of the panel edges' gradient. 24 mm: the old DoF is sharpest on a
   plateau 3.0–4.4 m (it believed the panel at ~3.7 m, the ×1.43 of the table); the ported one peaks at 2.6 m (74.7 at
