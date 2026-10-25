@@ -33,6 +33,19 @@ scripted fade. This is the correct behaviour, and it costs nothing.
 - [ ] **Alien skies**: the catalogue and the cubemap are DATA. A generated star field (seeded,
       with a magnitude distribution) for a fictional sky, and the pole's direction from the
       planet's axis.
+- [ ] **The planets** (owner, 2026-10-25: "je veux Mars" — zoom from WaterWorld onto Mars at night and see its
+      details). Each planet is a sky body like the moons (graphics doc 42 § "The moons": analytic disc, surface map,
+      the star's light, the atmosphere's transmittance): its direction from heliocentric Keplerian orbits (the
+      planet's minus the observer's planet), its apparent diameter from the distance (Mars 4″–25″, Jupiter ~47″,
+      Venus up to 66″ in crescent), its phase angle and phase law, its brightness from its geometric albedo. At a
+      normal focal length a planet is far below a pixel: drawn as a POINT with the stars' footprint (energy kept, TAA
+      stable), the same shader resolving into the textured disc as the focal length grows (~18 m for a 100-px Mars).
+      Maps: projet-alpha's data store `Astronomy/<Body>{2K,4K,8K}` (Mars recoloured from Viking, owner decision
+      2026-10-25). Saturn's rings: the Voyager PPS optical-depth profile. Optional: atmospheric seeing (~1″).
+      Owner, 2026-10-25: EVERY planet visible in the sky first; options to enable the surface textures come later; the
+      8K maps are kept for a space game (bodies seen up close), useless from the ground. Design points: the memory
+      (~30 maps: ~330 MB of VRAM in 2K, ~5 GB in 8K — a resolution per body or by apparent size) and the cost per sky
+      pixel (today each moon is evaluated on every sky pixel, 4 at most: a cheap proximity test before the disc).
 - [ ] **Artistic controls** (default neutral): a star brightness gain, a limiting magnitude (how
       many stars), a Milky Way gain and tint, a twinkle amount, and a **night lift**. The night
       lift is a floor on the night sky's luminance so a game night stays readable (see Traps).

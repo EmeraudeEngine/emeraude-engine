@@ -667,6 +667,10 @@ namespace EmEn::Graphics::Material
 			 * observer's side, behind the atmosphere (× the transmittance) and in front of the star (it covers its disc). */
 			"const int skyMoonCount = int(clamp(texelFetch(" << FrameData << ", ivec2(2, 0), 0).x, 0.0, " << MaxMoons << ".0));" << Line::End <<
 			"const float skyEarthshineReflectance = atmLunarReflectance(1.0, 1.0, 0.0);" << Line::End <<
+			/* The view direction's screen derivatives, in uniform control flow, once for every moon: the maps' gradients are
+			 * derived from them analytically, inside each disc only (the rest of the sky pays nothing for the moons). */
+			"const vec3 skyDirDx = dFdx(skyDir);" << Line::End <<
+			"const vec3 skyDirDy = dFdy(skyDir);" << Line::End <<
 			"float skyMoonCover = 0.0;" << Line::End <<
 			"vec3 skyMoonLight = vec3(0.0);";
 
@@ -678,45 +682,59 @@ namespace EmEn::Graphics::Material
 			};
 			const auto surfaceScale = MaterialUB(UniformBlock::Component::SkyMoonSurfaces) + "." + names.lane;
 
-			/* ⚠️ The derivatives (fwidth(), the map's gradients) are taken in the branch on the moon count, which is
-			 * UNIFORM, before the per-pixel ones: implicit derivatives in non-uniform control flow are undefined. */
+			/* ⚠️ The only implicit derivative, fwidth() of the edge, is taken in the branch on the moon count, which is
+			 * UNIFORM: implicit derivatives in non-uniform control flow are undefined. Everything else waits for a covered
+			 * pixel; the map's gradients come from skyDirDx / skyDirDy by the chain rule (sphere hit → normal → longitude,
+			 * latitude), as exact as dFdx / dFdy of the coordinates were. */
 			Code{fragmentShader, Location::Top} <<
 				"if ( skyMoonCount > " << index << " ) {" << Line::End <<
 				"	const vec4 " << moon << "Centre = texelFetch(" << FrameData << ", ivec2(" << texel(0) << ", 0), 0);" << Line::End <<
-				"	const vec4 " << moon << "Light = texelFetch(" << FrameData << ", ivec2(" << texel(1) << ", 0), 0);" << Line::End <<
-				"	const vec4 " << moon << "Pole = texelFetch(" << FrameData << ", ivec2(" << texel(2) << ", 0), 0);" << Line::End <<
 				"	const float " << moon << "CosAngle = dot(skyDir, " << moon << "Centre.xyz);" << Line::End <<
 				"	const float " << moon << "Edge = max(fwidth(" << moon << "CosAngle), 1e-7);" << Line::End <<
-				/* The sphere at a unit distance, of radius sin r: its nearest intersection, the limb's in the antialiased band. */
-				"	const float " << moon << "Half = sqrt(max((" << moon << "CosAngle * " << moon << "CosAngle) - (" << moon << "Centre.w * " << moon << "Centre.w), 0.0));" << Line::End <<
-				"	const vec3 " << moon << "Normal = normalize((skyDir * (" << moon << "CosAngle - " << moon << "Half)) - " << moon << "Centre.xyz);" << Line::End <<
+				"	const float " << moon << "Coverage = skyHitsGround ? 0.0 : smoothstep(" << moon << "Centre.w - " << moon << "Edge, " << moon << "Centre.w + " << moon << "Edge, " << moon << "CosAngle);" << Line::End <<
+				"	if ( " << moon << "Coverage > 0.0 ) {" << Line::End <<
+				"		const vec4 " << moon << "Light = texelFetch(" << FrameData << ", ivec2(" << texel(1) << ", 0), 0);" << Line::End <<
+				"		const vec4 " << moon << "Pole = texelFetch(" << FrameData << ", ivec2(" << texel(2) << ", 0), 0);" << Line::End <<
+				/* The sphere at a unit distance, of radius sin r: the ray's nearest hit t (the limb's in the antialiased band),
+				 * the point p from the centre, the unit normal n. */
+				"		const float " << moon << "Half = sqrt(max((" << moon << "CosAngle * " << moon << "CosAngle) - (" << moon << "Centre.w * " << moon << "Centre.w), 0.0));" << Line::End <<
+				"		const float " << moon << "Hit = " << moon << "CosAngle - " << moon << "Half;" << Line::End <<
+				"		const vec3 " << moon << "Point = (skyDir * " << moon << "Hit) - " << moon << "Centre.xyz;" << Line::End <<
+				"		const float " << moon << "Radius = max(length(" << moon << "Point), 1e-7);" << Line::End <<
+				"		const vec3 " << moon << "Normal = " << moon << "Point / " << moon << "Radius;" << Line::End <<
 				/* The face toward the planet, north along the orbit's pole (perpendicular to the moon's direction by construction;
 				 * any perpendicular if degenerate): 0° longitude at the map's centre, east to the right. */
-				"	const vec3 " << moon << "Toward = -" << moon << "Centre.xyz;" << Line::End <<
-				"	vec3 " << moon << "North = " << moon << "Pole.xyz - (dot(" << moon << "Pole.xyz, " << moon << "Toward) * " << moon << "Toward);" << Line::End <<
-				"	if ( dot(" << moon << "North, " << moon << "North) < 1e-8 ) {" << Line::End <<
-				"		" << moon << "North = abs(" << moon << "Toward.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);" << Line::End <<
-				"		" << moon << "North -= dot(" << moon << "North, " << moon << "Toward) * " << moon << "Toward;" << Line::End <<
-				"	}" << Line::End <<
-				"	" << moon << "North = normalize(" << moon << "North);" << Line::End <<
-				"	const vec3 " << moon << "East = cross(" << moon << "North, " << moon << "Toward);" << Line::End <<
-				"	const vec2 " << moon << "Uv = vec2(0.5 + (atan(dot(" << moon << "Normal, " << moon << "East), dot(" << moon << "Normal, " << moon << "Toward)) / 6.28318531), 0.5 - (asin(clamp(dot(" << moon << "Normal, " << moon << "North), -1.0, 1.0)) / 3.14159265));" << Line::End <<
-				"	const vec2 " << moon << "UvDx = dFdx(" << moon << "Uv);" << Line::End <<
-				"	const vec2 " << moon << "UvDy = dFdy(" << moon << "Uv);" << Line::End <<
-				"	if ( !skyHitsGround ) {" << Line::End <<
-				"		const float " << moon << "Coverage = smoothstep(" << moon << "Centre.w - " << moon << "Edge, " << moon << "Centre.w + " << moon << "Edge, " << moon << "CosAngle);" << Line::End <<
-				"		if ( " << moon << "Coverage > 0.0 ) {" << Line::End <<
-				/* The phase angle, star–moon–observer: the star at infinity. */
-				"			const float " << moon << "Phase = acos(clamp(dot(skyStarDir, " << moon << "Toward), -1.0, 1.0));" << Line::End <<
-				"			const float " << moon << "CosEmission = max(dot(" << moon << "Normal, -skyDir), 1e-4);" << Line::End <<
-				"			float " << moon << "Reflectance = atmLunarReflectance(dot(" << moon << "Normal, skyStarDir), " << moon << "CosEmission, " << moon << "Phase) + (" << moon << "Light.w * skyEarthshineReflectance);" << Line::End <<
-				"			if ( " << surfaceScale << " > 0.0 ) {" << Line::End <<
-				"				" << moon << "Reflectance *= dot(textureGrad(" << names.surface << ", " << moon << "Uv, " << moon << "UvDx, " << moon << "UvDy).rgb, vec3(0.2126, 0.7152, 0.0722)) * " << surfaceScale << ";" << Line::End <<
-				"			}" << Line::End <<
-				"			const vec3 " << moon << "Transmittance = textureLod(" << TransmittanceLut << ", atmTransmittanceParametersToUv(skyViewHeight, skyDir.y), 0.0).rgb;" << Line::End <<
-				"			skyMoonLight += " << moon << "Light.rgb * " << moon << "Reflectance * " << moon << "Transmittance * " << moon << "Coverage;" << Line::End <<
-				"			skyMoonCover = max(skyMoonCover, " << moon << "Coverage);" << Line::End <<
+				"		const vec3 " << moon << "Toward = -" << moon << "Centre.xyz;" << Line::End <<
+				"		vec3 " << moon << "North = " << moon << "Pole.xyz - (dot(" << moon << "Pole.xyz, " << moon << "Toward) * " << moon << "Toward);" << Line::End <<
+				"		if ( dot(" << moon << "North, " << moon << "North) < 1e-8 ) {" << Line::End <<
+				"			" << moon << "North = abs(" << moon << "Toward.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);" << Line::End <<
+				"			" << moon << "North -= dot(" << moon << "North, " << moon << "Toward) * " << moon << "Toward;" << Line::End <<
 				"		}" << Line::End <<
+				"		" << moon << "North = normalize(" << moon << "North);" << Line::End <<
+				"		const vec3 " << moon << "East = cross(" << moon << "North, " << moon << "Toward);" << Line::End <<
+				"		const vec3 " << moon << "Local = vec3(dot(" << moon << "Normal, " << moon << "Toward), dot(" << moon << "Normal, " << moon << "East), dot(" << moon << "Normal, " << moon << "North));" << Line::End <<
+				"		const vec2 " << moon << "Uv = vec2(0.5 + (atan(" << moon << "Local.y, " << moon << "Local.x) / 6.28318531), 0.5 - (asin(clamp(" << moon << "Local.z, -1.0, 1.0)) / 3.14159265));" << Line::End <<
+				/* d(hit) from |p| = R: dt = -t (p · dd) / (p · d); p · d → 0 at the limb (an infinite footprint, clamped). Then
+				 * dn = (dp - n (n · dp)) / R, du = (x dy - y dx) / (2π (x² + y²)), dv = -dz / (π √(1 - z²)). */
+				"		const float " << moon << "Facing = min(dot(" << moon << "Point, skyDir), -1e-3 * " << moon << "Radius);" << Line::End <<
+				"		mat2 " << moon << "Gradients;" << Line::End <<
+				"		for ( int skyAxis = 0; skyAxis < 2; ++skyAxis ) {" << Line::End <<
+				"			const vec3 skyDd = skyAxis == 0 ? skyDirDx : skyDirDy;" << Line::End <<
+				"			const vec3 skyDp = (skyDir * (-" << moon << "Hit * dot(" << moon << "Point, skyDd) / " << moon << "Facing)) + (skyDd * " << moon << "Hit);" << Line::End <<
+				"			const vec3 skyDn = (skyDp - (" << moon << "Normal * dot(" << moon << "Normal, skyDp))) / " << moon << "Radius;" << Line::End <<
+				"			const vec3 skyDl = vec3(dot(skyDn, " << moon << "Toward), dot(skyDn, " << moon << "East), dot(skyDn, " << moon << "North));" << Line::End <<
+				"			" << moon << "Gradients[skyAxis] = vec2(((" << moon << "Local.x * skyDl.y) - (" << moon << "Local.y * skyDl.x)) / (6.28318531 * max(dot(" << moon << "Local.xy, " << moon << "Local.xy), 1e-8)), -skyDl.z / (3.14159265 * sqrt(max(1.0 - (" << moon << "Local.z * " << moon << "Local.z), 1e-8))));" << Line::End <<
+				"		}" << Line::End <<
+				/* The phase angle, star–moon–observer: the star at infinity. */
+				"		const float " << moon << "Phase = acos(clamp(dot(skyStarDir, " << moon << "Toward), -1.0, 1.0));" << Line::End <<
+				"		const float " << moon << "CosEmission = max(dot(" << moon << "Normal, -skyDir), 1e-4);" << Line::End <<
+				"		float " << moon << "Reflectance = atmLunarReflectance(dot(" << moon << "Normal, skyStarDir), " << moon << "CosEmission, " << moon << "Phase) + (" << moon << "Light.w * skyEarthshineReflectance);" << Line::End <<
+				"		if ( " << surfaceScale << " > 0.0 ) {" << Line::End <<
+				"			" << moon << "Reflectance *= dot(textureGrad(" << names.surface << ", " << moon << "Uv, " << moon << "Gradients[0], " << moon << "Gradients[1]).rgb, vec3(0.2126, 0.7152, 0.0722)) * " << surfaceScale << ";" << Line::End <<
+				"		}" << Line::End <<
+				"		const vec3 " << moon << "Transmittance = textureLod(" << TransmittanceLut << ", atmTransmittanceParametersToUv(skyViewHeight, skyDir.y), 0.0).rgb;" << Line::End <<
+				"		skyMoonLight += " << moon << "Light.rgb * " << moon << "Reflectance * " << moon << "Transmittance * " << moon << "Coverage;" << Line::End <<
+				"		skyMoonCover = max(skyMoonCover, " << moon << "Coverage);" << Line::End <<
 				"	}" << Line::End <<
 				"}";
 

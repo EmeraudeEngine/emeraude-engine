@@ -358,7 +358,9 @@ of its radius; the grading raised per phase until the peak reads 160–210; vali
 - Earthshine, waxing crescent (φ 136.6°, 27.5°; the kit's 2K JPEG): the dark side reads a median 0.31 cd/m² (p10
   0.18, p90 0.6 — maria and highlands), ~1e-4 of the lit side; its maria show.
 - Cost (GPU profiler, sky-lab pitched 40°, ~70 % of the screen sky, two A/B pairs, medians of 5 windows): `ScenePass`
-  0.101 ms with the Moon, 0.100 ms without (sky-lab option 8 = 0).
+  0.101 ms with the Moon, 0.100 ms without (sky-lab option 8 = 0) on Linux (RTX 3070 Ti, 1920 × 1080). The Apple M6
+  (2560 × 1440) measured 0.640 against 0.526 ms with the first shader (every sky pixel computed the moon's frame:
+  trap below); with the analytic gradients, Linux 0.111 / 0.110 ms (on / off).
 
 **Failure paths.** A surface that is not a store texture fails the sky's load, like any malformed manifest key. A
 surface without CPU pixels (a block-compressed store image) or with a black near side is traced and drawn with a
@@ -441,9 +443,16 @@ none of which the sun's scattering gives: item `dynamic-sky-stars-and-milky-way`
   photometry table) and `AtmosphereGLSL::LunarReflectance` (the disc); `MoonSurfacePhotometry::subSolarPoint()` and the
   material's moon frame (toward, north from the pole, east, the map's u and v). A change to one is a change to the
   other, re-measured (the disc against the light, § "The moons").
-- ⚠️ **The moons' derivatives** (`fwidth()` of the edge, the map's `dFdx` / `dFdy`) are taken in the branch on the moon
-  COUNT, which is uniform, before the per-pixel coverage branch; the map is read with `textureGrad()`. The equirectangular
-  seam (u wraps at the far side) is never on screen: the far side faces away.
+- ⚠️ **The moons' derivatives.** Implicit derivatives are undefined in non-uniform control flow, and the first version
+  took the map's `dFdx` / `dFdy` in the uniform branch on the moon COUNT — so EVERY sky pixel computed the sphere hit,
+  the frame, `atan` and `asin`: +0.11 ms of `ScenePass` on the Apple M6 at 2560 × 1440 (+22 %; Linux +0.001 ms). Now
+  (owner decision 2026-10-25, analytic gradients): only `skyDir`'s screen derivatives and the edge's `fwidth()` stay in
+  uniform flow; everything else waits for a covered pixel, and the map's gradients come from the chain rule — the hit
+  (|p| = R: dt = −t (p · dd) / (p · d)), the normal (dn = (dp − n (n · dp)) / R), the longitude and latitude (du = (x dy
+  − y dx) / 2π(x² + y²), dv = −dz / π√(1 − z²)) — read with `textureGrad()`. Same anisotropic filtering: the 8K full disc
+  integrates to 1.0014 / 1.0009 / 1.0020 at 400 / 800 / 1 600 mm (1.0023 / 1.0015 / 1.0025 before); the pixels differ
+  by 0.2–0.5 of a byte inside the disc, at most 39 at the limb (the hardware's per-quad derivatives against the exact
+  per-pixel ones; p · d → 0 there, clamped). The equirectangular seam (u wraps at the far side) is never on screen.
 - ⚠️ **A descriptor set allocates EVERY binding of its layout**, written or not. The sky's pool asked 4 uniform buffers /
   5 samplers / 6 storage images for four sets of a layout that needs 2 / 2 / 2 each (fixed 2026-10-25 with the moon
   binding, `SetCount × 2`); a driver that enforces the counts answers `VK_ERROR_OUT_OF_POOL_MEMORY` on the third set.
