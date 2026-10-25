@@ -41,6 +41,7 @@
 #include <initializer_list>
 #include <limits>
 #include <iterator>
+#include <numbers>
 #include <ranges>
 #include <span>
 #include <string>
@@ -2823,6 +2824,19 @@ namespace EmEn::Graphics
 			if ( auto catalogue = dynamicSky->starCatalogue(); catalogue != nullptr && catalogue->isLoaded() && !catalogue->stars().empty() )
 			{
 				starField = {.catalogue = std::move(catalogue), .equatorialFrame = skyState.equatorialFrame};
+
+				/* The planets of a calendar clock, points of the same pass. */
+				static_assert(SkyStarField::MaxPlanets == Scenes::SkyState::MaxPlanets, "The star field draws every planet the clock publishes.");
+
+				starField.planetCount = std::min(skyState.planetCount, SkyStarField::MaxPlanets);
+
+				std::ranges::transform(std::span{skyState.planets}.first(starField.planetCount), starField.planets.begin(), [] (const Scenes::SkyBody & planet) {
+					return SkyStarField::Point{
+						.direction = planet.direction,
+						.illuminance = planet.color * planet.illuminance,
+						.angularRadius = 0.5F * planet.angularDiameter * (std::numbers::pi_v< float > / 180.0F)
+					};
+				});
 			}
 
 			inputs.sunDirection = skyState.sun.direction;

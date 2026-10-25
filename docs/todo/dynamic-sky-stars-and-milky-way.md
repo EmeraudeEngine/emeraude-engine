@@ -46,7 +46,7 @@ in `EffectSlot::Stars` after the TAA, the manifest's `"StarCatalogue"`, the cloc
 0.2 px, magnitude slope 1.02, the extinction measured; Linux only — the peers' validation pending). **S3 split
 (owner decisions 2026-10-26)**: S3a the real date first (done: item `celestial-clock-real-date-and-place`, the
 calendar clock, base `Math/SolarSystem.hpp` with the planets' JPL elements already in), S3b the planets as POINTS of the
-star pass, S3c their DISCS once a disc exceeds ~2 px (the moons' mechanism generalised, an energy-conserving cross-fade)
+star pass (done 2026-10-26: graphics doc 42 § "The planets"; Mars 7.8″ from PyEphem, the giants 1.6′–4.6′), S3c their DISCS once a disc exceeds ~2 px (the moons' mechanism generalised, an energy-conserving cross-fade)
 and Mars at zoom. Lots: **S1** the catalogue (download, licence, a compact data-store format, the engine's loader); **S2** the points
 pass (magnitude → illuminance, B−V → colour, the sidereal rotation, transmittance, footprint); **S3** the planets
 (JPL J2000 elements, geocentric positions, magnitudes and phases, the point → disc); **S4** the Milky Way background;

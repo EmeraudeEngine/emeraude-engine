@@ -312,6 +312,44 @@ namespace EmEn::Graphics::Photometry
 		return {red, green, blue};
 	}
 
+	/** @brief The illuminance of a point source of visual magnitude 0 above the atmosphere, in lux: the engine's own Sun
+	 * (Scenes::Component::CelestialClock, 133 800 lx at 1 AU) at its V = −26.74 (Allen's Astrophysical Quantities), so
+	 * that the stars, the planets and the Sun obey ONE photometric scale. 2.69e-6 lx, within 6 % of the 2.54e-6 lx often
+	 * quoted. */
+	constexpr auto MagnitudeZeroIlluminance{2.69e-6F};
+
+	/**
+	 * @brief Returns a point source's illuminance above the atmosphere from its visual magnitude: E₀ 10^(−0.4 V).
+	 * @param visualMagnitude The Johnson V magnitude.
+	 * @return float In lux.
+	 */
+	[[nodiscard]]
+	inline
+	float
+	illuminanceFromMagnitude (float visualMagnitude) noexcept
+	{
+		return MagnitudeZeroIlluminance * std::pow(10.0F, -0.4F * visualMagnitude);
+	}
+
+	/**
+	 * @brief Returns a colour temperature from a B−V colour index (Ballesteros, "New insights into black bodies", EPL 97,
+	 * 34008, 2012): T = 4600 K (1 / (0.92 (B−V) + 1.7) + 1 / (0.92 (B−V) + 0.62)).
+	 * @note The index is clamped to [−0.6, 6] (the star catalogues' accepted range), where both denominators stay
+	 * positive. A planet's B−V gives the colour of the sunlight it reflects the same way.
+	 * @param colourIndex The B−V colour index.
+	 * @return float In kelvins.
+	 */
+	[[nodiscard]]
+	inline
+	float
+	temperatureFromColourIndex (float colourIndex) noexcept
+	{
+		const auto index = std::clamp(colourIndex, -0.6F, 6.0F);
+
+		/* Both denominators are positive over the clamped range: 0.92 × (−0.6) + 0.62 = 0.068. */
+		return 4600.0F * ((1.0F / ((0.92F * index) + 1.7F)) + (1.0F / ((0.92F * index) + 0.62F)));
+	}
+
 	/**
  * @brief Returns the sRGB color of a black body at a given color temperature.
  * @note linearColorFromTemperature(), sRGB-encoded ("Color" suffix convention: sRGB). Valid from 1667 K to

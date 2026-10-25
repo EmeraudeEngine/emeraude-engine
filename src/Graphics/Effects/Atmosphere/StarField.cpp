@@ -31,6 +31,7 @@
 #include <array>
 #include <cmath>
 #include <iterator>
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
@@ -104,6 +105,7 @@ layout(push_constant) uniform PushConstants
 	constexpr auto VertexMain = R"GLSL(
 layout(location = 0) out vec2 vOffset;
 layout(location = 1) flat out vec3 vPeak;
+layout(location = 2) flat out float vSigma;
 
 const vec2 Corners[6] = vec2[6](vec2(-1.0, -1.0), vec2(1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, -1.0), vec2(1.0, 1.0), vec2(-1.0, 1.0));
 
@@ -137,9 +139,17 @@ void main ()
 {
 	vOffset = vec2(0.0);
 	vPeak = vec3(0.0);
+	vSigma = 1.0;
 	gl_Position = vec4(-2.0, -2.0, 0.0, 1.0);
 
 	const StarData star = stars[gl_InstanceIndex];
+
+	/* An empty planet slot. */
+	if ( max(max(star.illuminance.r, star.illuminance.g), star.illuminance.b) <= 0.0 )
+	{
+		return;
+	}
+
 	const vec3 equatorial = star.direction.xyz;
 	const vec3 world = normalize((pc.axisX.xyz * equatorial.x) + (pc.axisY.xyz * equatorial.y) + (pc.axisZ.xyz * equatorial.z));
 	const vec4 clip = pc.viewProjection * vec4(world, 0.0);
@@ -150,7 +160,10 @@ void main ()
 	}
 
 	const vec2 ndc = clip.xy / clip.w;
-	const float radius = pc.axisY.w;
+	/* A planet's footprint widens to its disc (σ = half its radius in pixels, on the axis): a stand-in until the disc
+	 * is drawn; a star's stays the least sigma. */
+	const float sigma = max(pc.axisX.w, 0.5 * star.direction.w * pc.viewport.y / (2.0 * pc.viewport.w));
+	const float radius = sigma * pc.axisY.w;
 	const vec2 pixelToNdc = 2.0 / pc.viewport.xy;
 
 	if ( any(greaterThan(abs(ndc), vec2(1.0) + (radius * pixelToNdc))) )
@@ -177,7 +190,6 @@ void main ()
 	const vec2 tangent = ndc * pc.viewport.zw;
 	const float cosTheta = inversesqrt(1.0 + dot(tangent, tangent));
 	const float pixelSolidAngle = (2.0 * pc.viewport.z / pc.viewport.x) * (2.0 * pc.viewport.w / pc.viewport.y) * (cosTheta * cosTheta * cosTheta);
-	const float sigma = pc.axisX.w;
 	vec3 peak = illuminance * pc.axisZ.w / (6.28318530718 * sigma * sigma * max(pixelSolidAngle, 1e-20));
 	const float brightest = max(max(peak.r, peak.g), peak.b);
 
@@ -190,6 +202,7 @@ void main ()
 
 	vOffset = corner * radius;
 	vPeak = peak;
+	vSigma = sigma;
 	gl_Position = vec4(ndc + (corner * radius * pixelToNdc), 0.0, 1.0);
 }
 )GLSL";
@@ -198,13 +211,12 @@ void main ()
 	constexpr auto FragmentMain = R"GLSL(
 layout(location = 0) in vec2 vOffset;
 layout(location = 1) flat in vec3 vPeak;
+layout(location = 2) flat in float vSigma;
 layout(location = 0) out vec4 outColor;
 
 void main ()
 {
-	const float sigma = pc.axisX.w;
-
-	outColor = vec4(vPeak * exp(-dot(vOffset, vOffset) / (2.0 * sigma * sigma)), 0.0);
+	outColor = vec4(vPeak * exp(-dot(vOffset, vOffset) / (2.0 * vSigma * vSigma)), 0.0);
 }
 )GLSL";
 
@@ -267,21 +279,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 {
 	using namespace Base;
 	using namespace Vulkan;
-
-	float
-	StarField::illuminance (float visualMagnitude) noexcept
-	{
-		return MagnitudeZeroIlluminance * std::pow(10.0F, -0.4F * visualMagnitude);
-	}
-
-	float
-	StarField::temperature (float colourIndex) noexcept
-	{
-		const auto index = std::clamp(colourIndex, StarCatalogueResource::MinimumColourIndex, StarCatalogueResource::MaximumColourIndex);
-
-		/* Both denominators are positive over the clamped range: 0.92 × (−0.6) + 0.62 = 0.068. */
-		return 4600.0F * ((1.0F / ((0.92F * index) + 1.7F)) + (1.0F / ((0.92F * index) + 0.62F)));
-	}
 
 	bool
 	StarField::create (uint32_t width, uint32_t height) noexcept
@@ -435,7 +432,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		m_pipeline.reset();
 		m_pipelineLayout.reset();
 		m_inputLayout.reset();
-		m_starBuffer.reset();
+		m_pointBuffers.clear();
 		m_uploadedCatalogue.reset();
 		m_starCount = 0;
 		m_target.destroy();
@@ -451,9 +448,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 		std::ranges::transform(stars, std::back_inserter(data), [] (const StarCatalogueResource::Star & star) {
 			/* The black body of the star's temperature at unit Rec.709 luminance, × its illuminance. */
-			const auto linear = Photometry::linearColorFromTemperature(temperature(star.colourIndex));
+			const auto linear = Photometry::linearColorFromTemperature(Photometry::temperatureFromColourIndex(star.colourIndex));
 			const auto luminance = PixelFactory::Color< float >::computeLuminance(linear[0], linear[1], linear[2], PixelFactory::GrayscaleConversionMode::LumaRec709);
-			const auto scale = luminance > 1.0e-6F ? illuminance(star.visualMagnitude) / luminance : 0.0F;
+			const auto scale = luminance > 1.0e-6F ? Photometry::illuminanceFromMagnitude(star.visualMagnitude) / luminance : 0.0F;
 
 			return GPUStar{
 				.direction = {star.direction[Math::X], star.direction[Math::Y], star.direction[Math::Z], 0.0F},
@@ -467,29 +464,65 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			return false;
 		}
 
-		auto buffer = std::make_unique< ShaderStorageBufferObject >(this->renderer().device(), data.size() * sizeof(GPUStar));
-		buffer->setIdentifier(ClassId, catalogue->name(), "ShaderStorageBufferObject");
+		/* One buffer per frame in flight: the planets' slots (empty: zero illuminance) then the stars. */
+		constexpr auto PlanetBytes = SkyStarField::MaxPlanets * sizeof(GPUStar);
+		const std::array< GPUStar, SkyStarField::MaxPlanets > noPlanets{};
+		const auto frameCount = this->renderer().framesInFlight();
 
-		if ( !buffer->createOnHardware() || !buffer->writeData(MemoryRegion{data.data(), data.size() * sizeof(GPUStar)}) )
+		std::vector< std::unique_ptr< ShaderStorageBufferObject > > buffers;
+		buffers.reserve(frameCount);
+
+		for ( uint32_t frame = 0; frame < frameCount; ++frame )
 		{
-			TraceError{ClassId} << "Unable to upload the " << data.size() << " stars of the catalogue '" << catalogue->name() << "' !";
+			auto buffer = std::make_unique< ShaderStorageBufferObject >(this->renderer().device(), PlanetBytes + (data.size() * sizeof(GPUStar)));
+			buffer->setIdentifier(ClassId, catalogue->name() + "-F" + std::to_string(frame), "ShaderStorageBufferObject");
 
-			return false;
+			if ( !buffer->createOnHardware() || !buffer->writeData(MemoryRegion{noPlanets.data(), PlanetBytes}) || !buffer->writeData(MemoryRegion{data.data(), data.size() * sizeof(GPUStar), PlanetBytes}) )
+			{
+				TraceError{ClassId} << "Unable to upload the " << data.size() << " stars of the catalogue '" << catalogue->name() << "' !";
+
+				return false;
+			}
+
+			buffers.emplace_back(std::move(buffer));
 		}
 
-		/* The frames in flight still read the previous buffer. */
-		if ( m_starBuffer != nullptr )
+		/* The frames in flight still read the previous buffers. */
+		for ( auto & previous : m_pointBuffers )
 		{
-			this->renderer().deferredDestructor().retireObject(std::move(m_starBuffer));
+			this->renderer().deferredDestructor().retireObject(std::move(previous));
 		}
 
-		m_starBuffer = std::move(buffer);
+		m_pointBuffers = std::move(buffers);
 		m_starCount = static_cast< uint32_t >(data.size());
 		m_uploadedCatalogue = catalogue;
 
 		TraceInfo{ClassId} << m_starCount << " stars of '" << catalogue->catalogueName() << "' uploaded (" << catalogue->credit() << ").";
 
 		return true;
+	}
+
+	bool
+	StarField::writePlanets (const ShaderStorageBufferObject & buffer, const SkyStarField & starField) noexcept
+	{
+		std::array< GPUStar, SkyStarField::MaxPlanets > planets{};
+		const auto & frame = starField.equatorialFrame;
+
+		/* planetCount <= MaxPlanets (the renderer's clamp). The shader turns the equatorial coordinates back into the
+		 * world through the same axes: a world direction goes in as its projections on them. */
+		std::ranges::transform(std::span{starField.planets}.first(std::min(starField.planetCount, SkyStarField::MaxPlanets)), planets.begin(), [&frame] (const SkyStarField::Point & planet) {
+			return GPUStar{
+				.direction = {
+					Math::Vector< 3, float >::dotProduct(planet.direction, frame[0]),
+					Math::Vector< 3, float >::dotProduct(planet.direction, frame[1]),
+					Math::Vector< 3, float >::dotProduct(planet.direction, frame[2]),
+					planet.angularRadius
+				},
+				.illuminance = {planet.illuminance[Math::X], planet.illuminance[Math::Y], planet.illuminance[Math::Z], 0.0F}
+			};
+		});
+
+		return buffer.writeData(MemoryRegion{planets.data(), sizeof(planets)});
 	}
 
 	void
@@ -540,7 +573,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 			commandBuffer.bind(*descriptorSet, *m_pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
 
-			commandBuffer.draw(6, m_starCount);
+			commandBuffer.draw(6, SkyStarField::MaxPlanets + m_starCount);
 		}
 
 		commandBuffer.endRenderPass();
@@ -571,12 +604,13 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 		if ( starField != nullptr && starField->catalogue != nullptr && atmosphere != nullptr && atmosphere->parametersBuffer() != nullptr && frameIndex < m_perFrame.size() )
 		{
-			const bool uploaded = m_uploadedCatalogue.lock() == starField->catalogue || this->uploadCatalogue(starField->catalogue);
+			const bool uploaded = (m_uploadedCatalogue.lock() == starField->catalogue || this->uploadCatalogue(starField->catalogue)) && frameIndex < m_pointBuffers.size();
 
 			auto & set = *m_perFrame[frameIndex];
 
 			const bool written = uploaded &&
-				set.writeStorageBuffer(StarBufferBinding, VkDescriptorBufferInfo{.buffer = m_starBuffer->handle(), .offset = 0, .range = VK_WHOLE_SIZE}) &&
+				StarField::writePlanets(*m_pointBuffers[frameIndex], *starField) &&
+				set.writeStorageBuffer(StarBufferBinding, VkDescriptorBufferInfo{.buffer = m_pointBuffers[frameIndex]->handle(), .offset = 0, .range = VK_WHOLE_SIZE}) &&
 				set.writeCombinedImageSampler(TransmittanceBinding, atmosphere->transmittance()) &&
 				set.writeCombinedImageSampler(FrameBinding, atmosphere->frameData()) &&
 				set.writeUniformBufferObject(AtmosphereBinding, *atmosphere->parametersBuffer());
@@ -590,12 +624,11 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				const auto & projection = viewMatrices.unjitteredProjectionMatrix(readStateIndex);
 				const auto viewProjection = projection * viewMatrices.viewMatrix(readStateIndex, true, 0);
 				const auto & frame = starField->equatorialFrame;
-				const auto radius = FootprintSigma * FootprintExtent;
 
 				std::copy_n(viewProjection.data(), pushConstants.viewProjection.size(), pushConstants.viewProjection.begin());
 
 				pushConstants.axisX = {frame[0][Math::X], frame[0][Math::Y], frame[0][Math::Z], FootprintSigma};
-				pushConstants.axisY = {frame[1][Math::X], frame[1][Math::Y], frame[1][Math::Z], radius};
+				pushConstants.axisY = {frame[1][Math::X], frame[1][Math::Y], frame[1][Math::Z], FootprintExtent};
 				pushConstants.axisZ = {frame[2][Math::X], frame[2][Math::Y], frame[2][Math::Z], context.preExposure};
 				pushConstants.viewport = {
 					static_cast< float >(m_target.width()),

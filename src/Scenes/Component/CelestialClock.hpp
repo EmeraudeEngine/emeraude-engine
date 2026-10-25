@@ -580,6 +580,52 @@ namespace EmEn::Scenes::Component
 			float moonPhaseAngle (size_t index) const noexcept;
 
 			/**
+			 * @brief Returns the number of planets the clock places (TimeModel::Calendar: 8, Mercury to Pluto without the
+			 * Earth; the planet model: 0).
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			planetCount () const noexcept
+			{
+				return m_calendar ? m_planets.size() : 0;
+			}
+
+			/**
+			 * @brief Returns a planet as the sky draws it (its direction, illuminance above the atmosphere, colour,
+			 * angular diameter, illuminated fraction).
+			 * @param index The planet's index, < planetCount(): Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune,
+			 * Pluto.
+			 * @return const SkyBody & The first one for an index out of range.
+			 */
+			[[nodiscard]]
+			const SkyBody &
+			planet (size_t index) const noexcept
+			{
+				return *std::next(m_planets.cbegin(), static_cast< std::ptrdiff_t >(std::min(index, m_planets.size() - 1)));
+			}
+
+			/**
+			 * @brief Returns a planet's apparent visual magnitude (Base::Math::SolarSystem::apparentMagnitude()).
+			 * @param index The planet's index, < planetCount().
+			 * @return float The first one's for an index out of range.
+			 */
+			[[nodiscard]]
+			float
+			planetMagnitude (size_t index) const noexcept
+			{
+				return *std::next(m_planetMagnitudes.cbegin(), static_cast< std::ptrdiff_t >(std::min(index, m_planetMagnitudes.size() - 1)));
+			}
+
+			/**
+			 * @brief Returns a planet's name.
+			 * @param index The planet's index.
+			 * @return const char * "" for an index out of range.
+			 */
+			[[nodiscard]]
+			static const char * planetName (size_t index) noexcept;
+
+			/**
 			 * @brief Returns a moon's apparent angular diameter, in degrees (TimeModel::Calendar: from its distance).
 			 * @param index The moon's index.
 			 * @return float 0 for an index out of range.
@@ -873,6 +919,13 @@ namespace EmEn::Scenes::Component
 			[[nodiscard]]
 			Base::Math::Astronomy::Horizontal placeCalendarSky (double time, const Base::Math::Astronomy::Observer & observer) noexcept;
 
+			/**
+			 * @brief Places the planets by the ephemerides (TimeModel::Calendar).
+			 * @param julianDayTT The instant, TT.
+			 * @param observer A reference to the observer.
+			 */
+			void placePlanets (double julianDayTT, const Base::Math::Astronomy::Observer & observer) noexcept;
+
 			/** @brief Rate of the colour-temperature slide with the air mass excess (m - 1): 5100 K at 30° of elevation, 3700 K at 11°, 2700 K at 5.5°, the horizon value at 0°. */
 			static constexpr auto ReddeningRate{0.2F};
 
@@ -895,6 +948,9 @@ namespace EmEn::Scenes::Component
 			Base::Math::Vector< 3, float > m_sunColor{1.0F, 1.0F, 1.0F};
 			/** @brief TimeModel::Calendar: the Moon seen from the Earth's centre at the current instant (mean of date). */
 			Base::Math::SolarSystem::GeocentricPosition m_calendarMoon{};
+			/** @brief TimeModel::Calendar: the planets (SkyState::planets' order) and their apparent magnitudes. */
+			std::array< SkyBody, SkyState::MaxPlanets > m_planets{};
+			std::array< float, SkyState::MaxPlanets > m_planetMagnitudes{};
 			/** @brief TimeModel::Calendar: the north pole of the ecliptic of date, a world vector (the Moon's face). */
 			Base::Math::Vector< 3, float > m_eclipticPole{0.0F, 1.0F, 0.0F};
 			double m_starDistance{1.0}; ///< AU.

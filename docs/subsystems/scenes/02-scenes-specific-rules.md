@@ -109,7 +109,9 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 > Console: `setCalendarDate(year, month, day, hour, minute, second)` (UTC) and `setNow()` (the system clock) switch a
 > clock to the calendar, `setDate()` brings it back to the planet model, `setLongitude()`; `getState()` adds
 > `timeModel`, `longitudeDegrees`, `julianDayUT` (a string: the JSON writer keeps 5 digits), `utc` (ISO 8601) and each
-> moon's `angularDiameterDegrees`. Measured from Liège (2026-10-26, sky-lab option 10) against PyEphem with the
+> moon's `angularDiameterDegrees`. The calendar also places the eight PLANETS (`planetCount()`, `planet(index)`,
+> `planetMagnitude()`, `planetName()`; `SkyState::planets`; `getState` → `planets`): position, Mallama & Hilton 2018
+> magnitude, colour, diameter, phase — drawn by the sky's star pass (graphics doc 42 § "The planets"). Measured from Liège (2026-10-26, sky-lab option 10) against PyEphem with the
 > refraction off: the Sun 11–15″, Betelgeuse through the frame 17–19″, the Moon 31″–3.8′ (Schlyter), its diameter
 > within 0.25 %; the 2026-08-12 eclipse seen from Liège (Sun and Moon 31″ apart, phase 0). The engine's birthplace,
 > the default place of a real sky: `Identification::BirthplaceLatitude` / `BirthplaceLongitude` (Liège, owner).

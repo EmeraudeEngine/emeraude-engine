@@ -412,7 +412,7 @@ a temporal resolve smears a jittered point into a dim blur or rejects it as an o
   destructor), projects the direction with the **unjittered** projection × the view rotation, and drops the star
   behind the camera, off the screen, below the horizon (the ray meets the planet: the sky's own test) or behind the
   star's or a moon's disc (the sky's frame texture, read in the VERTEX stage: its barriers now include that stage).
-- **The photometry**: E = E₀ 10^(−0.4 V), **E₀ = 2.69e-6 lx** — the engine's own Sun (133 800 lx at 1 AU, V −26.74), so
+- **The photometry**: E = E₀ 10^(−0.4 V), **E₀ = 2.69e-6 lx** (`Photometry::MagnitudeZeroIlluminance`) — the engine's own Sun (133 800 lx at 1 AU, V −26.74), so
   stars and Sun obey one scale (2.54e-6 lx is the figure often quoted). The colour is the black body of
   T = 4600 (1/(0.92 (B−V) + 1.7) + 1/(0.92 (B−V) + 0.62)) K (Ballesteros, EPL 97 34008, 2012) at unit Rec.709
   luminance. × the transmittance toward the star (the sky's table). The footprint is a unit Gaussian whose peak is
@@ -438,6 +438,28 @@ the camera on Alnilam at 35 mm; validation layer loaded, 0 VUID):
   difference is a uniform +2 levels, the metering converging) — the stars vanish in the sky's light by themselves.
 - **Cost**: `StarFieldEffect/internal` 0.009 ms (9 096 instances, the clear included) + one more combine pass (the TAA
   splits the overlay group): frame median 1.595 ms against 1.547 ms without stars (`0,0,0,40,2,0,0,0,0,0`), 5 windows.
+
+### The planets (lot S3b, 2026-10-26: points)
+A CALENDAR clock (`CelestialClock::TimeModel::Calendar`, scenes doc 02) places the eight planets (Mercury to Neptune
+and Pluto) from emeraude-base's `Math/SolarSystem.hpp` (Standish's JPL elements, the light time, the observer's
+parallax) into `SkyState::planets`: the direction, the illuminance above the atmosphere from the apparent magnitude
+(A. Mallama & J. L. Hilton, *Astronomy and Computing* 25, 2018 — with Saturn's ring opening; through
+`Photometry::illuminanceFromMagnitude()`, the stars' E₀), the colour from the planet's B−V (the stars' Ballesteros
+temperature), the angular diameter and the illuminated fraction. The renderer carries them in the frame's star field
+(`SkyStarField::planets`); the star pass draws them as POINTS like the stars — one points buffer per frame in flight,
+`[8 planets | the catalogue]`, the planets' 256 bytes rewritten each frame (their world direction projected on the
+equatorial axes), an empty slot skipped by its zero illuminance. A planet's footprint widens to its disc
+(σ = max(0.7 px, half its radius in pixels)): a stand-in until S3c draws the lit disc (the moons' mechanism) past
+~2 px. Planets need the sky to name a catalogue (the star pass is filed by it); the planet model draws none.
+Console: `CelestialClock.getState` → `planets` (name, direction, elevation, magnitude, diameter in arcseconds,
+illuminated fraction).
+
+**Measured** (2026-10-26, Liège, 2026-10-27 02:00 UTC, sky-lab `…,1,1,1`, 0 VUID), against PyEphem: positions — Mars
+7.8″, Mercury 15.6″, Venus 10.2″, Uranus 19.1″, Pluto 16.1″, Neptune 51″, **Jupiter 96″ and Saturn 4.6′** (the
+Keplerian elements' known limit on the giants: their mutual perturbations, Standish's own error table); magnitudes —
+Mars 0.91 / 0.93, Saturn 0.46 / 0.47, Uranus 5.69 / 5.60, Jupiter −1.98 / −1.84 (Mallama vs the older Almanac
+formulas PyEphem uses); diameters within 0.3 % (Pluto aside); phases identical. On screen at 50 mm Mars and Jupiter
+land on their predicted pixel (< 1 px); at 800 mm Jupiter's spot spans its 6 px disc.
 
 ### The manifest (Backgrounds store)
 `"Planet"` (a preset name, default `"Earth"`), `"Atmosphere"` (inline overrides: `GroundRadius`, `TopRadius`,

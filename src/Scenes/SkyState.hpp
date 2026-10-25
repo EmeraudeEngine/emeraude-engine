@@ -72,10 +72,16 @@ namespace EmEn::Scenes
 		/** @brief The most moons the state carries. */
 		static constexpr uint32_t MaxMoons{4};
 
+		/** @brief The most planets the state carries: Mercury to Neptune and Pluto, the Earth excepted. */
+		static constexpr uint32_t MaxPlanets{8};
+
 		/** @brief The star the atmosphere scatters (one in lot 1 of the dynamic sky, owner decision 2026-10-24). */
 		SkyBody sun{};
 		/** @brief The moons, `moonCount` of them. */
 		std::array< SkyBody, MaxMoons > moons{};
+		/** @brief The planets, `planetCount` of them (a calendar clock only: their illuminance from their apparent
+		 * magnitude, their colour from their B−V, their angular diameter and illuminated fraction). */
+		std::array< SkyBody, MaxPlanets > planets{};
 		/** @brief Unit world vector toward the northern celestial pole: the axis the stars turn around. */
 		Base::Math::Vector< 3, float > celestialPole{0.0F, 1.0F, 0.0F};
 		/** @brief The planet's EQUATORIAL frame in world vectors, the stars' frame (graphics doc 42 § "The stars"): [0] toward
@@ -88,6 +94,8 @@ namespace EmEn::Scenes
 		float siderealAngle{0.0F};
 		/** @brief Number of moons in `moons`. */
 		uint32_t moonCount{0};
+		/** @brief Number of planets in `planets`. */
+		uint32_t planetCount{0};
 		/** @brief False when no clock publishes. */
 		bool valid{false};
 	};

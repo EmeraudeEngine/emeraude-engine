@@ -95,6 +95,21 @@ namespace EmEn::Scenes::Component
 			return luma > 1.0e-6F ? color / luma : Vector< 3, float >{1.0F, 1.0F, 1.0F};
 		}
 
+		/** @brief The planets of SkyState::planets, in order (the Earth-Moon barycentre is the observer's own orbit). */
+		constexpr std::array< Base::Math::SolarSystem::Body, SkyState::MaxPlanets > PlanetBodies{
+			Base::Math::SolarSystem::Body::Mercury,
+			Base::Math::SolarSystem::Body::Venus,
+			Base::Math::SolarSystem::Body::Mars,
+			Base::Math::SolarSystem::Body::Jupiter,
+			Base::Math::SolarSystem::Body::Saturn,
+			Base::Math::SolarSystem::Body::Uranus,
+			Base::Math::SolarSystem::Body::Neptune,
+			Base::Math::SolarSystem::Body::Pluto
+		};
+
+		/** @brief Their names, in the same order. */
+		constexpr std::array< const char *, SkyState::MaxPlanets > PlanetNames{"Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"};
+
 		/**
 		 * @brief Returns a light's colour from a linear emission: the emission scaled to a largest component of 1 (the
 		 * light keeps the chromaticity, its illuminance carries the quantity).
@@ -593,6 +608,9 @@ namespace EmEn::Scenes::Component
 			};
 		});
 
+		/* The planets: a calendar clock's only. */
+		state.planetCount = static_cast< uint32_t >(this->planetCount());
+		state.planets = m_planets;
 		state.celestialPole = m_celestialPole;
 		state.equatorialFrame = m_equatorialFrame;
 		state.siderealAngle = m_siderealAngle;
@@ -734,7 +752,43 @@ namespace EmEn::Scenes::Component
 		m_calendarMoon = Solar::moon(julianDayTT);
 		m_eclipticPole = toWorldOfDate(Vector< 3, double >{0.0, -std::sin(obliquity), std::cos(obliquity)});
 
+		this->placePlanets(julianDayTT, observer);
+
 		return Solar::topocentric(sun, localSiderealAngle, observer);
+	}
+
+	void
+	CelestialClock::placePlanets (double julianDayTT, const Sky::Observer & observer) noexcept
+	{
+		namespace Solar = Base::Math::SolarSystem;
+
+		const auto centuries = Solar::julianCenturies(julianDayTT);
+
+		for ( size_t index = 0; index < PlanetBodies.size(); ++index )
+		{
+			/* index < MaxPlanets: the three arrays share that size. */
+			const auto body = *std::next(PlanetBodies.cbegin(), static_cast< std::ptrdiff_t >(index));
+			const auto position = Solar::planet(body, julianDayTT);
+			const auto magnitude = Solar::apparentMagnitude(body, position, body == Solar::Body::Saturn ? Solar::saturnRingOpening(position, centuries) : 0.0);
+			const auto colourIndex = std::next(Solar::PlanetAppearances.cbegin(), static_cast< std::ptrdiff_t >(body))->colourIndex;
+			auto & planet = *std::next(m_planets.begin(), static_cast< std::ptrdiff_t >(index));
+
+			*std::next(m_planetMagnitudes.begin(), static_cast< std::ptrdiff_t >(index)) = static_cast< float >(magnitude);
+
+			planet = SkyBody{
+				.direction = this->toWorld(Solar::topocentric(position, m_localSiderealAngle, observer)),
+				.illuminance = Graphics::Photometry::illuminanceFromMagnitude(static_cast< float >(magnitude)),
+				.color = linearChromaticity(Graphics::Photometry::temperatureFromColourIndex(static_cast< float >(colourIndex))),
+				.angularDiameter = static_cast< float >(Sky::degrees(Solar::angularDiameter(body, position.distance))),
+				.illuminatedFraction = static_cast< float >(0.5 * (1.0 + std::cos(position.phaseAngle)))
+			};
+		}
+	}
+
+	const char *
+	CelestialClock::planetName (size_t index) noexcept
+	{
+		return index < PlanetNames.size() ? *std::next(PlanetNames.cbegin(), static_cast< std::ptrdiff_t >(index)) : "";
 	}
 
 	void

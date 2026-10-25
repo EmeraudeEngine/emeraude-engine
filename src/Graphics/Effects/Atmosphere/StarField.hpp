@@ -49,6 +49,7 @@ namespace EmEn::Graphics
 {
 	class Renderer;
 	class StarCatalogueResource;
+	struct SkyStarField;
 }
 
 namespace EmEn::Vulkan
@@ -85,12 +86,6 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"StarFieldEffect"};
 
-			/** @brief The illuminance of a star of visual magnitude 0 above the atmosphere, in lux: the engine's own Sun
-			 * (Scenes::Component::CelestialClock, 133 800 lx at 1 AU) at its V = −26.74 (Allen's Astrophysical
-			 * Quantities), so that a star and the Sun obey ONE photometric scale. 2.69e-6 lx, within 6 % of the
-			 * 2.54e-6 lx often quoted. */
-			static constexpr auto MagnitudeZeroIlluminance{2.69e-6F};
-
 			/** @brief The standard deviation of a star's footprint, in pixels: wide enough that the sampled Gaussian sums
 			 * to 1 within 1e-4 wherever the star falls inside its pixel (no sub-pixel twinkling as the sky turns), and
 			 * a point still. */
@@ -107,7 +102,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			 */
 			struct GPUStar
 			{
-				/** @brief xyz: the unit J2000 direction, w: unused. */
+				/** @brief xyz: the unit direction in the equatorial frame (a star's J2000 one), w: the apparent angular
+				 * radius in radians (a planet's disc; 0 for a star). */
 				std::array< float, 4 > direction;
 				/** @brief rgb: the illuminance above the atmosphere × the unit-luminance colour, in lux; w: unused. */
 				std::array< float, 4 > illuminance;
@@ -122,8 +118,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			{
 				/** @brief The unjittered projection × the view ROTATION, column-major: a world direction to clip space. */
 				std::array< float, 16 > viewProjection;
-				/** @brief The equatorial axes in world vectors (xyz), then w: the footprint sigma (px), its half-size
-				 * (px), the frame's pre-exposure. */
+				/** @brief The equatorial axes in world vectors (xyz), then w: the footprint's least sigma (px), its
+				 * half-size in sigmas, the frame's pre-exposure. */
 				std::array< float, 4 > axisX;
 				std::array< float, 4 > axisY;
 				std::array< float, 4 > axisZ;
@@ -220,37 +216,28 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				m_cloudTransmittance = texture;
 			}
 
-			/**
-			 * @brief Returns a star's illuminance above the atmosphere, in lux: E₀ 10^(−0.4 V).
-			 * @param visualMagnitude The Johnson V magnitude.
-			 * @return float
-			 */
-			[[nodiscard]]
-			static float illuminance (float visualMagnitude) noexcept;
-
-			/**
-			 * @brief Returns a star's effective temperature from its B−V colour index (Ballesteros, "New insights into
-			 * black bodies", EPL 97, 34008, 2012): T = 4600 K (1 / (0.92 (B−V) + 1.7) + 1 / (0.92 (B−V) + 0.62)).
-			 * @note The colour index is clamped to the catalogue's accepted range (StarCatalogueResource), where both
-			 * denominators stay positive.
-			 * @param colourIndex The B−V colour index.
-			 * @return float The temperature, in kelvins.
-			 */
-			[[nodiscard]]
-			static float temperature (float colourIndex) noexcept;
-
 		private:
 
 			/**
-			 * @brief Builds the GPU stars of a catalogue into a new buffer.
-			 * @note ⚠️ RENDER THREAD. The previous buffer is retired through the deferred destructor: frames in flight
-			 * still read it.
+			 * @brief Builds the GPU points of a catalogue into new buffers, one per frame in flight: the planets' slots
+			 * first (SkyStarField::MaxPlanets, rewritten every frame), the stars after them (written once).
+			 * @note ⚠️ RENDER THREAD. The previous buffers are retired through the deferred destructor: frames in flight
+			 * still read them.
 			 * @param catalogue A reference to the loaded catalogue's pointer (kept as a weak reference: the identity of
 			 * what the buffer holds).
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool uploadCatalogue (const std::shared_ptr< const StarCatalogueResource > & catalogue) noexcept;
+
+			/**
+			 * @brief Writes this frame's planets into the first slots of a points buffer (an empty slot: zero illuminance).
+			 * @param buffer A reference to this frame's points buffer (its frame's fence waited).
+			 * @param starField A reference to the frame's star field.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool writePlanets (const Vulkan::ShaderStorageBufferObject & buffer, const SkyStarField & starField) noexcept;
 
 			/**
 			 * @brief Records the star pass into the target: the clear, then the stars when there is a set.
@@ -265,7 +252,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/* The catalogue the buffer was built from: expired or another one, the buffer is rebuilt. */
 			std::weak_ptr< const StarCatalogueResource > m_uploadedCatalogue;
 			IntermediateRenderTarget m_target;
-			std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_starBuffer;
+			/* One per frame in flight: [planets | stars]. */
+			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_pointBuffers;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_inputLayout;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_pipeline;
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;

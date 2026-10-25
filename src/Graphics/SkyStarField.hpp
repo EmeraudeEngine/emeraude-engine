@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <cstdint>
 #include <memory>
 
 /* Local inclusions for usages. */
@@ -50,9 +51,29 @@ namespace EmEn::Graphics
 	 */
 	struct SkyStarField
 	{
+		/** @brief The most planets a frame carries (Scenes::SkyState::MaxPlanets). */
+		static constexpr uint32_t MaxPlanets{8};
+
+		/**
+		 * @brief A point of the frame that is not in the catalogue: a planet.
+		 */
+		struct Point
+		{
+			/** @brief Unit world vector toward it. */
+			Base::Math::Vector< 3, float > direction{0.0F, 1.0F, 0.0F};
+			/** @brief Its illuminance above the atmosphere × its unit-luminance colour, in lux. */
+			Base::Math::Vector< 3, float > illuminance{0.0F, 0.0F, 0.0F};
+			/** @brief Its apparent angular radius, in radians (the footprint widens to its disc). */
+			float angularRadius{0.0F};
+		};
+
 		/** @brief The loaded catalogue (immutable once loaded: any thread reads it). */
 		std::shared_ptr< const StarCatalogueResource > catalogue;
 		/** @brief The planet's equatorial axes in world vectors (Scenes::SkyState::equatorialFrame). */
 		std::array< Base::Math::Vector< 3, float >, 3 > equatorialFrame{{{1.0F, 0.0F, 0.0F}, {0.0F, 0.0F, -1.0F}, {0.0F, 1.0F, 0.0F}}};
+		/** @brief The planets (a calendar clock's), `planetCount` of them. */
+		std::array< Point, MaxPlanets > planets{};
+		/** @brief Number of planets in `planets`. */
+		uint32_t planetCount{0};
 	};
 }

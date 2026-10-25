@@ -27,6 +27,7 @@
 #include "ConsoleAdapter.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -59,6 +60,7 @@
 #include "Math/Vector.hpp"
 #include "PixelFactory/Color.hpp"
 #include "Scenes/AbstractEntity.hpp"
+#include "Scenes/SkyState.hpp"
 #include "SkyFollowsSun.hpp"
 
 /* Forward declarations. */
@@ -267,6 +269,26 @@ namespace EmEn::Scenes::Component
 			}
 
 			state["moons"] = std::move(moons);
+
+			/* The planets (a calendar clock): where they stand, how bright, how large. */
+			Json::Value planets{Json::arrayValue};
+
+			for ( size_t index = 0; index < clock.planetCount(); ++index )
+			{
+				const auto & body = clock.planet(index);
+
+				Json::Value entry{Json::objectValue};
+				entry["name"] = CelestialClock::planetName(index);
+				entry["direction"] = toJson(body.direction);
+				entry["elevationDegrees"] = Sky::degrees(std::asin(std::clamp(static_cast< double >(body.direction.y()), -1.0, 1.0)));
+				entry["magnitude"] = static_cast< double >(clock.planetMagnitude(index));
+				entry["angularDiameterArcseconds"] = static_cast< double >(body.angularDiameter) * 3600.0;
+				entry["illuminatedFraction"] = static_cast< double >(body.illuminatedFraction);
+
+				planets.append(std::move(entry));
+			}
+
+			state["planets"] = std::move(planets);
 
 			return FastJSON::stringify(state);
 		}
