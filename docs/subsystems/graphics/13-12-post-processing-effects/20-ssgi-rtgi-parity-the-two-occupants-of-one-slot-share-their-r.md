@@ -35,5 +35,5 @@ adding one.
 > the concept-level key first, then looks for stale per-lane entries.
 
 > **Emission is a third shared rule (2026-10-25).** A free emitter is a source in both lanes, the visible face of a
-> light in neither: until then SSGI re-emitted every lamp panel on screen and RTGI no emitter at all, a 15–20× gap in
+> light in neither: until then SSGI re-emitted every lamp panel on screen and RTGI no emitter at all, a ~20× gap in
 > `labyrinth`. [`42-emission-in-the-indirect-diffuse`](42-emission-in-the-indirect-diffuse-a-light-s-face-never-re-emits.md).

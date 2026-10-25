@@ -673,6 +673,11 @@ changed lines 0, cppcheck 0, IWYU brought clean. ⚠️ IWYU removed `Graphics/R
 `LensFlare.cpp` had compiled through it and now include what they use (`ViewMatricesCascadedUBO.hpp`,
 `Vulkan/DescriptorSet.hpp`, `SettingKeys.hpp`, `ViewMatricesInterface.hpp`); `LensFlare.cpp` brought clean as a touched
 file. A downstream consumer that relied on the same transitive include must add its own.
+macOS-PA's IWYU (Apple libc++) on this lot: `<string_view>` (`AbstractLightEmitter.cpp`, `LightGenerator.cpp`,
+`SceneRendering.cpp`, `StandardResource.hpp`, `IrradianceProbeVolume.cpp`), `Vulkan/Device.hpp` in
+`IrradianceProbeVolume.cpp`, the `TextureResource::Abstract` forward declaration of `StandardResource.hpp` as an include,
+and `<iterator>` / `<variant>` dropped from `StandardResource.cpp` (libstdc++ needs them there): Apple-libc++-only
+suggestions, not applied. MSVC (Windows-PA): 0 warning, no MSVC-only includer broken by the `ShadowMap.hpp` removal.
 
 **First lot (2026-10-19)**: the 49 files of the engine's cppcheck lot (34 `.cpp`, 15 headers): about 800 includes added
 and 115 removed, 41 forward declarations, converged at the second pass (three residual lines applied); the three

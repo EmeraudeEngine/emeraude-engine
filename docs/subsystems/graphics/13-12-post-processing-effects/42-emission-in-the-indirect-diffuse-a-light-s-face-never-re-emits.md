@@ -3,9 +3,9 @@
 ### Emission in the indirect diffuse — a light's face never re-emits, a free emitter always does (Oct 2026)
 
 > [!CAUTION]
-> **THE DEFECT** (item `labyrinth-lane-parity-indirect-diffuse`, measured 2026-10-25). In `labyrinth` the two lanes
-> disagreed 15–20× on the indirect diffuse, and only when a lamp panel was on screen (GI ÷ direct light, clipped pixels
-> masked: SSGI 7.6, RTGI 0.42; panel off screen: both ≈ 0). The estimators did not read the same thing at a bounce hit:
+> **THE DEFECT** (measured and fixed 2026-10-25, green on the three OS). In `labyrinth` the two lanes
+> disagreed about 20× on the indirect diffuse, and only when a lamp panel was on screen (GI ÷ direct light, clipped pixels
+> masked, § 41's linearisation: SSGI 6.0, RTGI 0.26; panel off screen: both ≈ 0). The estimators did not read the same thing at a bounce hit:
 > - **SSGI** samples the final colour at the hit pixel — a panel there is 7 800 nits of emission;
 > - **RTGI** shaded the hit as `albedo / π × direct + albedo × probe feedback`, never its emission — but the
 >   **irradiance probe volume**, whose feedback RTGI reads, did add it.
@@ -63,7 +63,7 @@ the light link where it can be.
 > [!WARNING]
 > **Read the colour and the flag from the SAME texel.** The first build read the hit colour with a filtered
 > `texture()` and the flag with `texelFetch()`: at a panel's edge the flag said "wall" while the bilinear colour already
-> carried half of a 7 800-nit texel, and the panel pose still read 3.6× the direct light (against 0.04 once both reads
+> carried half of a 7 800-nit texel, and the panel pose still read 2.6× the direct light (against 0.04 once both reads
 > used `texelFetch()` at one texel). A small, very bright target makes every edge leak count: packed flags and the data
 > they qualify are fetched together, never one filtered and one not.
 
@@ -74,18 +74,21 @@ the light link where it can be.
 > 8/255 in both. Sampling the emissive triangles as lights (next-event estimation, the RTXDI / ReSTIR family) is the
 > production cure for smaller, brighter emitters: item `rt-many-lights-sampling`.
 
-**Measurements** (Linux, RTX 3070 Ti, 1920×1080, validation ON, 0 `VUID-`; `labyrinth`, exposure pinned f/2.8 ·
-1/30 s · ISO 400; GI ÷ direct light with the pixels clipped in any state masked, § 41):
+**Measurements** (`labyrinth`, exposure pinned f/2.8 · 1/30 s · ISO 400, focus pinned; GI ÷ direct light, the pixels
+clipped in any state masked and the 0.9999 clamp, § 41; validation ON, 0 `VUID-` everywhere):
 
-| Framing | before: SSGI / RTGI | after: SSGI / RTGI |
-|---|---|---|
-| a lamp panel on screen (`Act.setPosition(-6, 0, 67.3)` + `lookAt(-6, 3.9, 66)`) | 7.6 / 0.42 | **0.043 / 0.041** |
-| pitched down, no panel (`lookAt(-6, 0, 65)`) | ≈ 0 / 0.08 | ≈ 0 / ≈ 0 (noise) |
-| the exit alcove, a free emitter (`setPosition(78.6, 0, -77.5)` + `lookAt(77.6, 1, -83.7)`) | — / 0 by construction | 0.76 / 0.57 |
+| Framing | Linux before: SS / RT | Linux after: SS / RT | macOS after (SS) | Windows after: NVIDIA SS / Intel SS / NVIDIA RT |
+|---|---|---|---|---|
+| a lamp panel on screen (`Act.setPosition(-6, 0, 67.3)` + `lookAt(-6, 3.9, 66)`) | 6.0 / 0.26 | **0.041 / 0.006** | ≈ 0 | 0.045 / 0.020 / 0.038 |
+| pitched down, no panel (`lookAt(-6, 0, 65)`) | ≈ 0 / 0.08 | ≈ 0 / ≈ 0 (noise) | 0.04 (noise) | ≈ 0 / 0.03 / 0.06 |
+| the exit alcove, a free emitter (`setPosition(78.6, 0, -77.5)` + `lookAt(77.6, 1, -83.7)`) | — / 0 by construction | 1.05 / 0.60 | 1.04 | 1.04 / 1.03 / 0.59 |
 
-RTGI fell at the panel pose too: the probes no longer feed it the panels. At the exit the screen-space lane stays above
+The masked SSGI delta at the panel pose fell from +0.17 to ≈ 0 on the three systems (Windows +0.0016 / +0.0007, macOS
+−0.0007). RTGI fell there too: the probes no longer feed it the panels. At the exit the screen-space lane stays above
 the traced one — its known bias (an occluder off screen is invisible to it, § 18). `sponza` (RT lane, the four poses of
-§ 18): unchanged to the fourth decimal.
+§ 18): unchanged to the fourth decimal; sky-lab (macOS): unchanged per pixel. Firefly check at the exit, RT lane,
+Windows: 0.29 / 5.1 / 19 with the indirect diffuse, 0.22 / 4.6 / 14 without, the pixels above 8/255 in the same floor
+tile in both (the floor's own noise).
 
 **Scenes whose look may move** (free emitters that now light their surroundings in the RT lane): JungleRuins' sky dome
 (an emissive mesh: RTGI rays hitting it now return the sky's luminance), offscreen-rendering's screen,

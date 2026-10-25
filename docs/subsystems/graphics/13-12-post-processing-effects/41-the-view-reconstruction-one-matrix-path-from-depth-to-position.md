@@ -82,12 +82,16 @@ before (`522e9d47`) and after, the same pose and a PINNED exposure, each slot di
 are the mean luminance LINEARISED (sRGB, then the inverse of the Narkowicz ACES fit).
 
 > [!WARNING]
-> **A clipped pixel has no inverse.** The fit saturates, so a 255 byte maps to whatever clamp the script chose: these
-> runs clamped at 0.79 (255 → 0.94), macOS-PA's at 0.9999 (255 → 7.22), and labyrinth's panel pose holds ~1 % of
-> clipped pixels (the panel, its glare, its defocus) — the two machines' absolute levels differed by ×1.9 for that
-> alone (macOS-PA, 2026-10-25). Exclude the pixels clipped in ANY of the compared states (one shared mask) and report
-> their share. The mask fixes absolute LEVELS; a slot's delta barely moves, because the clipped set is the same in both
-> states and the clamp cancels (Windows-PA: +0.1776 masked against +0.178).
+> **Two traps of the linearisation, both met on this lot (macOS-PA, Windows-PA, 2026-10-25).**
+> - **A clipped pixel has no inverse.** The fit saturates, so a 255 byte maps to whatever clamp the script chose, and
+>   labyrinth's panel pose holds ~1 % of clipped pixels (the panel, its glare, its defocus). Exclude the pixels clipped
+>   in ANY compared state (one shared mask) and report their share.
+> - **The clamp sits at the top of the fit, never lower.** Narkowicz's curve tends to 1.033: clamp the sRGB-decoded
+>   value at 0.9999 (255 → 7.22 linear). These Linux runs first clamped at 0.79 (→ 0.94 linear), which also FLATTENED
+>   every bright unclipped pixel: labyrinth's green-lit exit alcove read a ratio of 0.76 instead of 1.05, and the SSGI
+>   delta at the panel pose +0.129 instead of +0.167 — an "unexplained platform spread" that was this clamp alone (with
+>   it right: Linux +0.167 at 1920×1080, macOS +0.165 at 2560×1440, Windows +0.178 / +0.168 at 1280×720).
+> The figures below use the mask and the 0.9999 clamp.
 
 - **Depth of field** (the proof that settled the formula question): labyrinth's lamp panel 2.6 m from the eye, manual
   focus sweep at f/1.4, sharpness = 99th percentile of the panel edges' gradient. 24 mm: the old DoF is sharpest on a
@@ -105,11 +109,11 @@ are the mean luminance LINEARISED (sRGB, then the inverse of the Narkowicz ACES 
 - **Fog** (`light-and-shadow-debug`, its medium: 0.015 /m, falloff 0.2): both occupants of the `Fog` slot integrated
   a length about twice too long with that camera's lens. VolumetricScattering's contribution −0.0247 → −0.0092,
   AtmosphericFog's +0.041 → +0.021; the near ground clears, the horizon stays white.
-- **SSGI** (labyrinth, the 13 mm player lens, SS lane): the indirect diffuse +0.106 → +0.127 (+20 %; the toggle noise
+- **SSGI** (labyrinth, the 13 mm player lens, SS lane): the indirect diffuse +0.139 → +0.166 (+20 %; the toggle noise
   of this scene is ±3 %), the walls brighter: the bounce rays (`IndirectDiffuse/MaxDistance` 8 m) and the horizon
   search (`SkyVisibilityRadius` 16 m) now cover their stated metres instead of half of them. Sponza's four
   sky-visibility poses (roof, vault, arcade, gallery; its lens is longer) move by ≤ 3 %.
-- **SSR**: labyrinth −9 % (0.0288 → 0.0263, at the edge of the noise), sponza unchanged.
+- **SSR**: labyrinth +0.041 → +0.039 (noise), sponza unchanged.
 - **TAA** (the resolve gate: `relief` parked, f/8 · 1/125 · ISO 100, `temporalCapture(16)`): peak-to-peak mean 0.590 →
   0.595, p99.9 2.93 → 2.93, 0 % > 8/255 both. Its depth test is a RATIO (±1 %, 5 %): the near-plane factor cancelled,
   the far compression did not reach this pose.
@@ -121,12 +125,9 @@ are the mean luminance LINEARISED (sRGB, then the inverse of the Narkowicz ACES 
 Windows-PA (RTX 3500 Ada and Intel iGPU, MSVC /W4 /WX Release + Debug) green — 0 `VUID-` (sync validation on macOS),
 no crash. Fog contributions within 3 % of Linux on the three (VolumetricScattering −0.0092 / −0.0094 / −0.0090..−0.0092,
 AtmosphericFog +0.021 / +0.020 / +0.020..+0.021); the depth of field sharpest at 2.6 m everywhere; the TAA gate 0 % > 8/255
-everywhere; with no panel on screen, labyrinth's levels within 5 % of Linux (macOS). At labyrinth's PANEL pose the
-deltas read higher elsewhere, masked: SSGI +0.129 Linux (1920×1080), +0.165 macOS (2560×1440), +0.178 / +0.168 Windows
-NVIDIA / Intel (1280×720); SSR +0.027–0.030 / +0.040 / +0.036 / +0.034. Not monotonic in resolution and not explained;
-that pose was dominated by the panel double count, fixed the same day
-([`42-emission-in-the-indirect-diffuse`](42-emission-in-the-indirect-diffuse-a-light-s-face-never-re-emits.md)): to
-re-compare across the platforms on the fixed code.
+everywhere; with no panel on screen, labyrinth's levels within 5 % of Linux (macOS); at the panel pose, masked and
+clamped right, the SSGI deltas agree too (the warning above). That pose was dominated by the panel double count, fixed
+the same day ([`42-emission-in-the-indirect-diffuse`](42-emission-in-the-indirect-diffuse-a-light-s-face-never-re-emits.md)).
 
 **No setting default changed**: every value these effects read in metres (`AmbientOcclusion/ScreenSpace/Radius`
 0.5, `IndirectDiffuse/MaxDistance` 8, `IndirectDiffuse/ScreenSpace/Thickness` 0.5,
