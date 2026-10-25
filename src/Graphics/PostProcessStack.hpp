@@ -35,7 +35,9 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for inheritance. */
@@ -46,6 +48,7 @@
 #include "EffectSlot.hpp"
 #include "FrameDiagnostics.hpp"
 #include "Mutex.hpp"
+#include "ThreadSafety.hpp"
 
 namespace EmEn::Graphics
 {
@@ -464,22 +467,31 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Files the SCENE-DRIVEN effects the scene's content calls for.
 			 * @note The scene counterpart of syncCameraEffects(): some effects are not an authoring
-			 * choice but a consequence of what the scene holds. Today one — the cloud pass: the first
-			 * frame the scene holds a Component::CloudVolume, a Graphics::Effects::Atmosphere::VolumetricClouds
-			 * is filed into EffectSlot::Clouds, and syncSlotSelection() materializes it (owner decision,
-			 * 2026-09-24: "placing a cloud is enough").
-			 * @note Only the ARRIVAL is handled. Once filed the occupant stays resident, and its gate
-			 * (IndirectPostProcessEffect::requiresCloudVolumes()) keeps it out of the frame while the
-			 * scene holds no cloud. An application that filed its own occupant of the slot is left alone.
-			 * `Core/Graphics/PostProcessing/Clouds/Enabled = false` declines the filing, read once.
-			 * @note ⚠️ RENDER THREAD, once per frame, BEFORE syncSlotSelection().
+			 * choice but a consequence of what the scene holds. Two today:
+			 * - the cloud pass: the first frame the scene holds a Component::CloudVolume, a
+			 *   Graphics::Effects::Atmosphere::VolumetricClouds is filed into EffectSlot::Clouds (owner decision,
+			 *   2026-09-24: "placing a cloud is enough");
+			 * - the aerial perspective: the first frame the scene's background is a physical sky
+			 *   (Renderable::DynamicSkyResource) whose frame was submitted, a
+			 *   Graphics::Effects::Atmosphere::AerialPerspective is filed into EffectSlot::AerialPerspective (owner
+			 *   decision, 2026-10-25: it owns the distance haze under a dynamic sky).
+			 * syncSlotSelection() materializes the newcomer.
+			 * @note Only the ARRIVAL is handled. Once filed an occupant stays resident: the cloud pass's gate
+			 * (IndirectPostProcessEffect::requiresCloudVolumes()) keeps it out of the frame while the scene holds
+			 * no cloud; the aerial perspective passes the chain colour through on a frame without a submitted
+			 * atmosphere. An application that filed its own occupant of a slot is left alone.
+			 * `Core/Graphics/PostProcessing/Clouds/Enabled = false` and
+			 * `Core/Graphics/PostProcessing/AerialPerspective/Enabled = false` decline the filings, read once.
+			 * @note ⚠️ RENDER THREAD, once per frame, AFTER Renderer::renderSkyAtmosphere() and BEFORE
+			 * syncSlotSelection().
 			 * @param clouds A pointer to the scene's clouds, nullptr when it holds none.
+			 * @param physicalSky Whether this frame submitted the scene's physical sky (Renderer::frameSkyAtmosphere()).
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool Whether the effect set changed (the pipeline must be reconfigured: the new
 			 * occupant brings its G-buffer requirements).
 			 */
 			[[nodiscard]]
-			bool syncSceneEffects (const Scenes::CloudSet * clouds, Renderer & renderer) noexcept;
+			bool syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, Renderer & renderer) noexcept;
 
 			/**
 			 * @brief Removes an effect from the chain.
@@ -774,6 +786,24 @@ namespace EmEn::Graphics
 			static bool materializeOccupant (IndirectPostProcessEffect & effect, Renderer & renderer) noexcept;
 
 			/**
+			 * @brief Files the cloud pass, unless the application filed its own or the settings decline it.
+			 * @note ⚠️ RENDER THREAD — syncSceneEffects() only.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool Whether it was filed.
+			 */
+			[[nodiscard]]
+			bool fileCloudEffect (Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Files the aerial perspective, unless the application filed its own or the settings decline it.
+			 * @note ⚠️ RENDER THREAD — syncSceneEffects() only.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool Whether it was filed.
+			 */
+			[[nodiscard]]
+			bool fileAerialPerspectiveEffect (Renderer & renderer) noexcept;
+
+			/**
 			 * @brief Disables every occupant of a slot — the concept is switched off.
 			 * @note ⚠️ RENDER THREAD — syncSlotSelection() only.
 			 * @param slot The slot.
@@ -845,6 +875,7 @@ namespace EmEn::Graphics
 			/* The scene-driven cloud pass was considered (filed, or declined by the settings): the
 			 * decision is taken once, on the first frame the scene holds a cloud. RENDER THREAD. */
 			bool m_cloudEffectResolved{false};
+			bool m_aerialPerspectiveResolved{false};
 			/* The scene-effects bypass (bypassSceneEffects()): written on the main thread, read by
 			 * syncSlotSelection() on the render thread. */
 			std::atomic< bool > m_sceneEffectsBypassed{false};

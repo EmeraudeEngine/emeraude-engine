@@ -31,35 +31,63 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
+#include <functional>
 #include <numbers>
 #include <span>
+#include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "CombinePass.hpp"
 #include "DenoisePass.hpp"
+#include "Effects/Camera/ToneMapping.hpp"
 #include "Geometry/IndexedVertexResource.hpp"
 #include "GrabPass.hpp"
+#include "Graphics/EffectSlot.hpp"
+#include "Graphics/Geometry/Types.hpp"
+#include "Graphics/IntermediateRenderTarget.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "IndirectPostProcessEffect.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 #include "OverflowCensus.hpp"
-#include "VertexFactory/ShapeGenerator.hpp"
 #include "PostProcessStack.hpp"
-#include "Effects/Camera/ToneMapping.hpp"
+#include "PrimaryServices.hpp"
 #include "Renderer.hpp"
 #include "Resources/Manager.hpp"
 #include "Saphir/Generator/PostProcessing.hpp"
-#include "Vulkan/GPUProfiler.hpp"
+#include "Saphir/Program.hpp"
 #include "SceneRenderTarget.hpp"
 #include "Scenes/CloudSet.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/LightSet.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
+#include "VertexFactory/ShapeGenerator.hpp"
 #include "ViewMatricesInterface.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/GPUProfiler.hpp"
+#include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
+#include "Vulkan/TextureInterface.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class DirectPostProcessEffect;
+}
 
 namespace
 {
@@ -1461,6 +1489,8 @@ namespace EmEn::Graphics
 			.ambientIlluminance = ambientIlluminance,
 			.medium = medium,
 			.clouds = clouds,
+			/* The renderer's own frame state, not the scene's: the atmosphere THIS frame submitted. */
+			.atmosphere = m_renderer.frameSkyAtmosphere(),
 			.projectionJitter = mainRT->viewMatrices().projectionJitter(),
 			.residualExposure = [this, &stack, activeCamera] {
 				const auto toneMapping = stack.cameraToneMapping();

@@ -27,6 +27,8 @@ Core/Graphics/PostProcessing/
 │                                      depth Bias, hemisphere Radius, …)
 ├── DepthOfField/Enabled               user refusal of the two expensive photographic effects;
 ├── MotionBlur/Enabled                 it OVERRIDES the camera (see below)
+├── AerialPerspective/Enabled          true (default): false DECLINES the scene-driven aerial perspective
+│                                      (read once, the first frame a physical sky is submitted; doc 42)
 ├── Clouds/Enabled                     true (default): false DECLINES the scene-driven cloud pass
 │                                      for the session (read once, the first frame a cloud exists)
 ├── Clouds/ShadowsEnabled              true (default): the clouds' Beer shadow map on the lit

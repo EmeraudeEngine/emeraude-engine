@@ -384,7 +384,9 @@ Known on purpose before this ledger: Saphir — the six warnings left on purpose
 
 - **pro-bounds-constant-array-index ×47** — per-frame sets and ping-pong pairs, the probe grid axes (`axis < 3`), the
   cascade matrices, the XRay corners.
-- **bugprone-return-const-ref-from-parameter ×10** — the chain's pass-through contract (see 7f).
+- **bugprone-return-const-ref-from-parameter ×10** — the chain's pass-through contract (see 7f). +3 on 2026-10-25:
+  `AerialPerspective::execute()` returns its input on a frame without a submitted atmosphere, without a depth or
+  material-properties input, or when its descriptor writes fail.
 - **readability-qualified-auto ×7** — Vulkan handles (`ProbeConvolver`, `OceanWaves`), as in 7c / 7e.
 - **pro-type-static-cast-downcast ×2** — `VolumetricClouds` / `VolumetricScattering`: the shadow map cast right after
   its type check (RTTI avoided).

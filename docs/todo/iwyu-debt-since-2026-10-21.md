@@ -26,7 +26,8 @@ owner orders it.
 - [ ] A removed include is checked against the file's platform branches (`#ifdef _WIN32`, macOS, `__cpp_exceptions`)
       before it goes; the peers build it.
 
-The files (as of 2026-10-25; the sky lots' files were brought clean that day):
+The files (as of 2026-10-25; the sky lots' files were brought clean that day, and the aerial perspective lot brought
+`IndirectPostProcessEffect.hpp`, `PostProcessor.cpp`, `Renderer.cpp` and `Renderer.hpp` clean):
 
 - `src/Audio/Manager.cpp`
 - `src/Audio/Manager.hpp`
@@ -73,7 +74,6 @@ The files (as of 2026-10-25; the sky lots' files were brought clean that day):
 - `src/Graphics/GPUTextureSet.hpp`
 - `src/Graphics/ImageResource.cpp`
 - `src/Graphics/ImageResource.hpp`
-- `src/Graphics/IndirectPostProcessEffect.hpp`
 - `src/Graphics/IrradianceProbeVolume.cpp`
 - `src/Graphics/KTX2Decoder.cpp`
 - `src/Graphics/KTX2Decoder.hpp`
@@ -90,7 +90,6 @@ The files (as of 2026-10-25; the sky lots' files were brought clean that day):
 - `src/Graphics/MipChain.hpp`
 - `src/Graphics/MovieResource.cpp`
 - `src/Graphics/MovieResource.hpp`
-- `src/Graphics/PostProcessor.cpp`
 - `src/Graphics/PostProcessor.hpp`
 - `src/Graphics/PostProcessStack.console.cpp`
 - `src/Graphics/Renderable/DynamicSkyResource.cpp`
@@ -101,8 +100,6 @@ The files (as of 2026-10-25; the sky lots' files were brought clean that day):
 - `src/Graphics/RenderableInstance/Multiple.hpp`
 - `src/Graphics/Renderable/SpriteResource.cpp`
 - `src/Graphics/Renderer.console.cpp`
-- `src/Graphics/Renderer.cpp`
-- `src/Graphics/Renderer.hpp`
 - `src/Graphics/RenderTarget/Texture.hpp`
 - `src/Graphics/TextureCache.cpp`
 - `src/Graphics/TextureCache.hpp`

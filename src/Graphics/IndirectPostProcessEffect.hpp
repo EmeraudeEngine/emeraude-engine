@@ -79,6 +79,7 @@ namespace EmEn
 	{
 		class IntermediateRenderTarget;
 		class Renderer;
+		class SkyAtmosphere;
 	}
 }
 
@@ -451,6 +452,11 @@ namespace EmEn::Graphics
 				/* The scene's volumetric clouds, or null when it holds none — the same "null means
 				 * absent" contract as the medium. Walked under its own mutex (Scenes::CloudSet). */
 				const Scenes::CloudSet * clouds{nullptr};
+				/* The physical sky's atmosphere whose frame THIS frame submitted (Renderer::frameSkyAtmosphere()): its
+				 * aerial perspective volume is recorded and in SHADER_READ_ONLY_OPTIMAL. Null otherwise — no physical
+				 * sky, or its submission failed —, the same "null means absent" contract. Kept alive by the renderer
+				 * for the frame. */
+				const SkyAtmosphere * atmosphere{nullptr};
 				/* Sub-pixel projection jitter of the frame being rendered, in NDC units. Zero when
 				 * no effect requires jitter. Needed by the TAA resolve to sample the source at pixel
 				 * centers; no history counterpart is exposed because nothing in the chain has to

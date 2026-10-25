@@ -115,6 +115,17 @@ namespace EmEn::Graphics
 		AmbientOcclusion,
 
 		/**
+		 * @brief The AERIAL PERSPECTIVE of a physical sky (AerialPerspective, Oct 2026): the distance haze of the same
+		 * atmosphere the sky is drawn from, `scene · T + L` per pixel from the sky's froxel volume (Hillaire 2020).
+		 * @note A SCENE-DRIVEN slot, like the clouds: filed by `PostProcessStack::syncSceneEffects()` the frame the
+		 * scene's background is a `Renderable::DynamicSkyResource`; a pass-through without one (owner decisions
+		 * 2026-10-25: it owns the distance haze under a dynamic sky, the Fog slot keeps the LOCAL medium).
+		 * @note AFTER the geometry (translucents included, at the depth they wrote: the fog's rule) and BEFORE the
+		 * clouds and the fog: a cloud and a local medium composite over an aerial-perspective scene.
+		 */
+		AerialPerspective,
+
+		/**
 		 * @brief Volumetric clouds placed in the world (VolumetricClouds, Sep 2026).
 		 * @note A SCENE-DRIVEN slot: its occupant is filed and materialized by
 		 * `PostProcessStack::syncSceneEffects()` the frame the scene holds its first
@@ -333,6 +344,7 @@ namespace EmEn::Graphics
 			case EffectSlot::IndirectDiffuse :
 			case EffectSlot::Reflections :
 			case EffectSlot::AmbientOcclusion :
+			case EffectSlot::AerialPerspective :
 			case EffectSlot::Clouds :
 			case EffectSlot::VolumetricLight :
 			case EffectSlot::Fog :
@@ -377,6 +389,7 @@ namespace EmEn::Graphics
 			case EffectSlot::AmbientOcclusion : return "AmbientOcclusion";
 			case EffectSlot::Reflections : return "Reflections";
 			case EffectSlot::ContactShadows : return "ContactShadows";
+			case EffectSlot::AerialPerspective : return "AerialPerspective";
 			case EffectSlot::Clouds : return "Clouds";
 			case EffectSlot::Fog : return "Fog";
 			case EffectSlot::VolumetricLight : return "VolumetricLight";

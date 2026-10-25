@@ -3,9 +3,9 @@
 > Owner decisions (2026-10-24): the sky is PHYSICAL and must render extraterrestrial skies (the planet is data);
 > it is drawn as a **background material** on the skybox cube; the **CelestialClock** writes the scene's sky state;
 > **one** scattering sun; an AI-owned lab demo (`sky-lab`, projet-alpha). Lot 1 of the dynamic sky; lot 2, the sun's
-> light from the same atmosphere, is § "The light"; lot 3, the sky's own IBL, is § "The environment" (2026-10-25); the
-> next lots are the engine items `dynamic-sky-stars-and-milky-way`, `dynamic-sky-moon` and
-> `dynamic-sky-aerial-perspective`.
+> light from the same atmosphere, is § "The light"; lot 3, the sky's own IBL, is § "The environment" (2026-10-25); lot 4a,
+> the distance haze of the same atmosphere, is § "The aerial perspective" (2026-10-25); the next lots are the engine items
+> `dynamic-sky-aerial-perspective` (4b: the clouds), `dynamic-sky-stars-and-milky-way` and `dynamic-sky-moon`.
 
 ### The model
 S. Hillaire, *A Scalable and Production Ready Sky and Atmosphere Rendering Technique*, EGSR 2020 (the model of UE's
@@ -141,9 +141,14 @@ a global maximum picks the glow.
 
 Mars (sky-lab option 0 = 1, 1.39 AU): 69 080 lx above the atmosphere, 30 220 lx at 30°, 7 606 lx at 10° (reference
 march: 32 320 and 8 905). The art preset's dust lets more blue through than red, so its direct sunset light turns
-blue — data, tunable. 0 VUID. **Validated on the three OS with the reference march** (2026-10-25, engine 291efb25):
-macOS M6 (MoltenVK) and Windows (MSVC, RTX 3500 Ada) gave the same sweep (to 3e-5), the same disc-vs-light colours
-(within 8-bit levels) and the same zenith.
+blue — data, tunable. 0 VUID. **Validated on the three OS**, with the reference march (engine 291efb25) and again with
+the midpoint march (engine 800aacbb, 2026-10-25):
+- macOS M6 (MoltenVK), Windows RTX 3500 Ada and the Intel iGPU give the same sweep (Intel 2 lx under at 10°);
+- the same disc-vs-light colours, within 0.003;
+- the same noon zenith, L 1 626–1 635;
+- the same night at −12°, 0.00208 cd/m²;
+- 0 VUID.
+The M6's twilight zenith reads ~1 % under Linux's, whose readings sat at 40–60 bytes: quantisation.
 
 The Earth's clean Hillaire atmosphere (aerosol depth ~0.005) is far brighter near the horizon than the empirical model
 (68 klx against ~36 klx at 10°): a hazier day is the manifest's `MieScattering` (sky-lab option 5).
@@ -189,6 +194,79 @@ A scene takes its ambient from the sky with `applyBackgroundLighting({.applyAmbi
 | Lag behind the sky | one cycle: 8 frames + one logic tick (~0.15 s at 60 FPS), every 0.25° of sun (≈ 1 min in real time). ⚠️ What follows the IBL can be slower: with SSGI owning the indirect diffuse (the ScreenSpace lane), the floor converges with an e-fold of ~1.3 s (macOS-PA, M6; IBL-only: < 0.5 s), and TAA alone smears a sudden global change over ~1 s |
 | The floor (albedo 0.5) under the sky alone, by time of day | noon neutral-warm, sunset orange, after sunset the twilight's purple, night dark (the exposure floor) — Mars: butterscotch at sunset |
 | Validation (Earth, Mars, four picture skies swapped in a row on `reflexion-debug`) | 0 VUID, 0 SYNC-HAZARD (synchronization validation requested with `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`) |
+
+### The aerial perspective (lot 4a, 2026-10-25)
+The distance haze of the SAME atmosphere: a mountain turns blue by day and pink at sunset, and it agrees with the sky
+behind it. S. Hillaire, EGSR 2020 § 5.4, after his reference code (`RenderSkyRayMarching.hlsl`, MIT). Owner
+decisions (2026-10-25):
+1. Under a dynamic sky the aerial perspective owns the distance haze; `AtmosphericFog` keeps the LOCAL medium.
+2. RGB transmittance.
+3. Its own chain slot, `EffectSlot::AerialPerspective`, after the geometry (translucents included, at the depth they
+   wrote) and before `Clouds` and `Fog`.
+4. Lot 4a = the volume, its application, sky-lab's distant targets and the horizon seam; lot 4b = the clouds lit by
+   the atmosphere (item `dynamic-sky-aerial-perspective`).
+
+**The volume** (`SkyAtmosphere::recordAerialPerspective()`, in the sky's command buffer after the sky-view, every
+frame):
+- 32 × 32 froxels over the screen and 32 slices along the view ray, in Hillaire's squared distribution: slice s ends
+  at 128 km × ((s + 0.5) / 32)², 4 km per linear slice unit.
+- Each froxel marches `atmIntegrate()` (the sky-view's integrator, Rayleigh + Mie phases, the multiple scattering)
+  from the camera to its slice, with 2 × (s + 1) samples.
+- Two 3D storage textures (`StorageTexture3D`). The in-scattering is ABSOLUTE radiance in nits, the star's
+  illuminance and the sky's grading applied like the drawn sky's, stored in the table format (RGBA32F: a night's haze
+  would lose its precision in half floats). The RGB transmittance is RGBA16F.
+- The froxel rays come from `invRelativeViewProj = (projection × view rotation)⁻¹` of the read state, the same
+  matrix the application reconstructs with.
+- The volume is left in SHADER_READ_ONLY_OPTIMAL; its barrier covers the fragment and compute stages, and the
+  scene's later submission on the same queue reads it.
+
+**The application** (`Effects/Atmosphere/AerialPerspective`, one full-res RGBA16F pass): `scene · T + L × E_pre` per
+geometry pixel; the sky pixels (depth 1) are left alone, since the drawn sky already is the whole atmosphere.
+- The distance comes from the matrix reconstruction, never from the chain's clip planes. Those are wrong: item
+  `post-process-depth-linearisation-wrong`.
+- The lookup is w = √(distance / 128 km). Under half a slice (2 km), the first sampled slice fades linearly to 0 at
+  the camera, as in Hillaire's.
+- The material's fog response (alpha's high nibble) scales it: a surface immune to the fog is immune to the haze.
+
+**Lifetime and filing.**
+- `Renderer::frameSkyAtmosphere()` names the atmosphere THIS frame submitted; its in-flight slot keeps it alive. The
+  chain's `FrameContext::atmosphere` reads it, and a null value means a pass-through.
+- `PostProcessStack::syncSceneEffects()` files the effect the first frame a physical sky is submitted, after the
+  clouds' model.
+- `Core/Graphics/PostProcessing/AerialPerspective/Enabled` (true) declines it.
+
+**Measured** (sky-lab option 7: a white (0.8) and a black (0.03) matte cube at 1, 3, 6 and 9 km to the west, 2.5 %
+of their distance wide; Linux, RTX 3070 Ti, 1920×1080).
+
+Protocol:
+- 09:00, sun behind the camera; a 150 mm lens aimed at each pair; bloom off.
+- AP on and off (`PostProcess.disable("AerialPerspective")` / `select`), three shutters each.
+- Linear values recovered through the chain by inverting the tone mapper. ACES (Hill's fit) then gamma 2.2 fit the
+  ×2 shutter series to 3e-5.
+- T = (white − black) / (white₀ − black₀) per channel, against a CPU integration of the same medium along the same
+  ray:
+
+| Distance | T measured (R, G, B) | T CPU | In-scattering / white₀ |
+|---|---|---|---|
+| 1 km | 0.996, 0.991, 0.962 | 0.990, 0.982, 0.963 | 0.004, 0.009, 0.025 |
+| 3 km | 0.980, 0.957, 0.902 | 0.970, 0.948, 0.894 | 0.012, 0.027, 0.071 |
+| 6 km | 0.947, 0.911, 0.810 | 0.941, 0.899, 0.800 | 0.025, 0.055, 0.137 |
+| 9 km | 0.917, 0.861, 0.722 | 0.914, 0.853, 0.716 | 0.039, 0.084, 0.202 |
+
+- Within ~1 % from 3 km on. Under 2 km, Hillaire's linear fade stands in for the first slices.
+- The first measurement read ~4.5 % less optical depth than the CPU. That is how the reference march's bias was
+  found (§ "The model").
+- A temporary build that drew the volume's own −ln T at the pixels confirmed it slice by slice.
+
+**The horizon seam.** The haze of a surface at distance d is, by construction, what the sky-view integrates to a
+ground hit at the same distance: the same `atmIntegrate()`, medium, star and grading. What stays visible is physical:
+a black cube at 9 km reaches 23–30 % of the horizon sky just above it, because that sky holds hundreds of kilometres
+of air. A scene's far edge stands out against the sky as a real ridge would on a clear Hillaire day. Hazier days are
+the manifest's Mie scattering.
+
+**Cost** (GPU profiler, 5 windows): `SkyAtmosphere/AerialPerspective` (the volume) 0.030–0.032 ms;
+`AerialPerspectiveEffect` 0.067 ms at 1920×1080. 0 VUID, 0 SYNC-HAZARD (sky-lab, validation and synchronization
+validation, the layer proven loaded).
 
 ### The manifest (Backgrounds store)
 `"Planet"` (a preset name, default `"Earth"`), `"Atmosphere"` (inline overrides: `GroundRadius`, `TopRadius`,

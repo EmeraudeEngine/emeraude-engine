@@ -29,32 +29,44 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <functional>
+#include <initializer_list>
+#include <iterator>
+#include <ranges>
 #include <string>
+#include <type_traits>
 #include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Effects/Atmosphere/AerialPerspective.hpp"
 #include "Effects/Atmosphere/VolumetricClouds.hpp"
-#include "Effects/Camera/VeilingGlare.hpp"
 #include "Effects/Camera/DepthOfField.hpp"
 #include "Effects/Camera/MotionBlur.hpp"
 #include "Effects/Camera/ToneMapping.hpp"
-#include "Effects/Lighting/RTContactShadows.hpp"
-#include "Effects/Lighting/SSContactShadows.hpp"
+#include "Effects/Camera/VeilingGlare.hpp"
 #include "Effects/Lighting/RTAO.hpp"
+#include "Effects/Lighting/RTContactShadows.hpp"
 #include "Effects/Lighting/RTGI.hpp"
 #include "Effects/Lighting/RTR.hpp"
 #include "Effects/Lighting/SSAO.hpp"
+#include "Effects/Lighting/SSContactShadows.hpp"
 #include "Effects/Lighting/SSGI.hpp"
 #include "Effects/Lighting/SSR.hpp"
+#include "Graphics/EffectSlot.hpp"
+#include "Graphics/FrameDiagnostics.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "IndirectPostProcessEffect.hpp"
 #include "PrimaryServices.hpp"
 #include "Renderer.hpp"
-#include "Scenes/Component/Camera.hpp"
 #include "Scenes/CloudSet.hpp"
+#include "Scenes/Component/Camera.hpp"
 #include "Scenes/LightSet.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/SwapChain.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
+#include "Vulkan/Device.hpp"
 
 namespace EmEn::Graphics
 {
@@ -779,16 +791,32 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessStack::syncSceneEffects (const Scenes::CloudSet * clouds, Renderer & renderer) noexcept
+	PostProcessStack::syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, Renderer & renderer) noexcept
 	{
+		bool changed = false;
+
 		/* Decided once, the first frame the scene holds a cloud. */
-		if ( m_cloudEffectResolved || clouds == nullptr || clouds->empty() )
+		if ( !m_cloudEffectResolved && clouds != nullptr && !clouds->empty() )
 		{
-			return false;
+			m_cloudEffectResolved = true;
+
+			changed = this->fileCloudEffect(renderer) || changed;
 		}
 
-		m_cloudEffectResolved = true;
+		/* Decided once, the first frame the scene's physical sky is submitted. */
+		if ( !m_aerialPerspectiveResolved && physicalSky )
+		{
+			m_aerialPerspectiveResolved = true;
 
+			changed = this->fileAerialPerspectiveEffect(renderer) || changed;
+		}
+
+		return changed;
+	}
+
+	bool
+	PostProcessStack::fileCloudEffect (Renderer & renderer) noexcept
+	{
 		/* An application that filed its own occupant of the concept keeps it. */
 		if ( !m_slots[static_cast< size_t >(EffectSlot::Clouds)].empty() )
 		{
@@ -815,6 +843,29 @@ namespace EmEn::Graphics
 		this->addEffect(std::make_shared< Effects::Atmosphere::VolumetricClouds >(renderer, parameters));
 
 		TraceInfo{ClassId} << "The scene holds volumetric clouds: the cloud pass joins the chain.";
+
+		return true;
+	}
+
+	bool
+	PostProcessStack::fileAerialPerspectiveEffect (Renderer & renderer) noexcept
+	{
+		/* An application that filed its own occupant of the concept keeps it. */
+		if ( !m_slots[static_cast< size_t >(EffectSlot::AerialPerspective)].empty() )
+		{
+			return false;
+		}
+
+		if ( !renderer.primaryServices().settings().getOrSetDefault< bool >(GraphicsPPAerialPerspectiveEnabledKey, DefaultGraphicsPPAerialPerspectiveEnabled) )
+		{
+			TraceInfo{ClassId} << "The scene is under a physical sky, but '" << GraphicsPPAerialPerspectiveEnabledKey << "' is false: no aerial perspective.";
+
+			return false;
+		}
+
+		this->addEffect(std::make_shared< Effects::Atmosphere::AerialPerspective >(renderer));
+
+		TraceInfo{ClassId} << "The scene is under a physical sky: its aerial perspective joins the chain.";
 
 		return true;
 	}

@@ -1164,6 +1164,13 @@ namespace EmEn
 			constexpr auto GraphicsPPVolumetricLightTemporalAlphaKey{"Core/Graphics/PostProcessing/VolumetricLight/TemporalAlpha"};
 			constexpr auto DefaultGraphicsPPVolumetricLightTemporalAlpha{0.2F};
 
+			/* Aerial perspective (Graphics::Effects::Atmosphere::AerialPerspective, Oct 2026) — the distance haze of a
+			 * physical sky (Renderable::DynamicSkyResource), from the froxel volume its atmosphere builds each frame. A
+			 * SCENE-DRIVEN effect: the stack files it the first frame the scene's background is a physical sky
+			 * (PostProcessStack::syncSceneEffects()). 'Enabled' = false declines that filing for the session. */
+			constexpr auto GraphicsPPAerialPerspectiveEnabledKey{"Core/Graphics/PostProcessing/AerialPerspective/Enabled"};
+			constexpr auto DefaultGraphicsPPAerialPerspectiveEnabled{true};
+
 			/* Volumetric clouds (Graphics::Effects::Atmosphere::VolumetricClouds, Sep 2026) — the pass that
 			 * draws the scene's Scenes::Component::CloudVolume entities. A SCENE-DRIVEN effect: the stack
 			 * files it the first frame the scene holds a cloud (PostProcessStack::syncSceneEffects()), an

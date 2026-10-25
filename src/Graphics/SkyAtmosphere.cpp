@@ -83,6 +83,23 @@ namespace
 
 	static_assert(sizeof(SkyViewPushConstants) == 32, "The sky-view push constants are two vec4.");
 
+	/** @brief The aerial perspective pass's push constants: the camera's frustum, the star and the sky's grading. */
+	struct AerialPerspectivePushConstants
+	{
+		/* The inverse of projection × view ROTATION (camera-relative), column-major: screen → view ray. */
+		std::array< float, 16 > invRelativeViewProj;
+		/* xyz: unit world vector toward the star (Y up), w: the camera's distance to the planet's centre, km. */
+		std::array< float, 4 > sunDirectionHeight;
+		/* rgb: the star's illuminance above the atmosphere × its colour (lux), w: the grading's saturation. */
+		std::array< float, 4 > sunIlluminanceSaturation;
+		/* rgb: the grading's tint, w: its intensity. */
+		std::array< float, 4 > tintIntensity;
+	};
+
+	static_assert(sizeof(AerialPerspectivePushConstants) == 112, "The aerial perspective push constants are a mat4 and three vec4.");
+	static_assert(sizeof(AerialPerspectivePushConstants) <= 128, "Over the 128-byte Vulkan minimum guarantee of maxPushConstantsSize.");
+	static_assert(sizeof(AerialPerspectivePushConstants) >= sizeof(SkyViewPushConstants), "The shared push constant range covers every pass.");
+
 	/* ---- The shared marcher (Hillaire's IntegrateScatteredLuminance), in the planet frame (+Z up at the camera). ---- */
 	constexpr auto IntegrationGLSL = R"GLSL(
 #if ATM_READS_TRANSMITTANCE
@@ -114,7 +131,7 @@ struct AtmIntegration
 
 /* Marches from `origin` along `direction` (unit) and integrates the in-scattered luminance PER LUX of the star.
  * phaseMode 0: uniform phase (the multiple-scattering table); 1: Rayleigh + Mie (the sky-view table). */
-AtmIntegration atmIntegrate (vec3 origin, vec3 direction, vec3 sunDirection, bool withGround, float sampleCount, bool variableSampleCount, int phaseMode)
+AtmIntegration atmIntegrate (vec3 origin, vec3 direction, vec3 sunDirection, bool withGround, float sampleCount, bool variableSampleCount, int phaseMode, float maxDistance)
 {
 	AtmIntegration result;
 	result.luminance = vec3(0.0);
@@ -140,7 +157,8 @@ AtmIntegration atmIntegrate (vec3 origin, vec3 direction, vec3 sunDirection, boo
 		tMax = tTop > 0.0 ? min(tTop, tBottom) : tBottom;
 	}
 
-	tMax = min(tMax, 9000000.0);
+	/* maxDistance (km): the aerial perspective marches each froxel only to its slice. */
+	tMax = min(tMax, min(maxDistance, 9000000.0));
 
 	float count = sampleCount;
 	float countFloor = sampleCount;
@@ -272,7 +290,7 @@ void main ()
 
 	vec3 origin = vec3(0.0, 0.0, viewHeight);
 	vec3 direction = vec3(0.0, sqrt(max(1.0 - (viewZenithCos * viewZenithCos), 0.0)), viewZenithCos);
-	AtmIntegration result = atmIntegrate(origin, direction, direction, false, 40.0, false, 0);
+	AtmIntegration result = atmIntegrate(origin, direction, direction, false, 40.0, false, 0, 9000000.0);
 
 	imageStore(outputImage, texel, vec4(exp(-result.opticalDepth), 1.0));
 }
@@ -324,7 +342,7 @@ void main ()
 			float theta = 2.0 * AtmPi * randA;
 			float phi = acos(1.0 - (2.0 * randB));
 			vec3 direction = vec3(cos(theta) * sin(phi), sin(theta) * sin(phi), cos(phi));
-			AtmIntegration result = atmIntegrate(origin, direction, sunDirection, true, 20.0, false, 0);
+			AtmIntegration result = atmIntegrate(origin, direction, sunDirection, true, 20.0, false, 0, 9000000.0);
 
 			luminance += result.luminance * SphereSolidAngle / (SqrtSampleCount * SqrtSampleCount);
 			multipleScatteringAs1 += result.multipleScatteringAs1 * SphereSolidAngle / (SqrtSampleCount * SqrtSampleCount);
@@ -410,9 +428,70 @@ void main ()
 
 	/* WITH the ground (unlike Hillaire's sky-view pass, which leaves the planet to the scene): a direction below the
 	 * horizon sees the planet's surface lit by the star through the air, not a black void under a small level. */
-	AtmIntegration result = atmIntegrate(origin, direction, sunDirection, true, 30.0, true, 1);
+	AtmIntegration result = atmIntegrate(origin, direction, sunDirection, true, 30.0, true, 1, 9000000.0);
 
 	imageStore(outputImage, texel, vec4(result.luminance, 1.0));
+}
+)GLSL";
+
+	/* ---- Pass 4: the AERIAL PERSPECTIVE volume for this frame's camera and star (Hillaire 2020 § 5.4; his reference
+	 * RenderCameraVolumePS): 32×32 froxels over the screen, 32 slices along the view ray in a SQUARED distribution of
+	 * 4 km slices (0 to 128 km), each marched from the camera to its slice with 2 × (slice + 1) samples. The volume holds
+	 * the in-scattered ABSOLUTE radiance (nits: the star's illuminance and the sky's grading applied, as the environment
+	 * capture — the haze of a far ridge must meet the drawn horizon) and the RGB transmittance. ---- */
+	constexpr auto AerialPerspectiveShader = R"GLSL(
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+#define ATM_READS_TRANSMITTANCE 1
+#define ATM_READS_MULTIPLE_SCATTERING 1
+)GLSL";
+
+	constexpr auto AerialPerspectiveMain = R"GLSL(
+layout(set = 0, binding = 4, rgba16f) uniform writeonly image3D transmittanceVolume;
+
+layout(push_constant) uniform AerialPerspectivePushConstants
+{
+	mat4 invRelativeViewProj;
+	vec4 sunDirectionHeight;
+	vec4 sunIlluminanceSaturation;
+	vec4 tintIntensity;
+} camera;
+
+const float AtmAerialSize = 32.0;
+const float AtmAerialKmPerSlice = 4.0;
+
+void main ()
+{
+	ivec3 texel = ivec3(gl_GlobalInvocationID);
+
+	if ( any(greaterThanEqual(texel, ivec3(AtmAerialSize))) )
+	{
+		return;
+	}
+
+	/* The froxel's view ray, through the screen point the application samples it at (vUV = this uv). */
+	vec2 uv = (vec2(texel.xy) + 0.5) / AtmAerialSize;
+	vec4 farPoint = camera.invRelativeViewProj * vec4(uv * 2.0 - 1.0, 0.5, 1.0);
+	vec3 worldDirection = normalize(farPoint.xyz / farPoint.w);
+
+	/* The planet frame (+Z up at the camera): the engine is Y up. The same mapping for the star keeps every dot product
+	 * (the phases, the star's zenith along the ray). */
+	vec3 direction = vec3(worldDirection.x, worldDirection.z, worldDirection.y);
+	vec3 sunDirection = normalize(vec3(camera.sunDirectionHeight.x, camera.sunDirectionHeight.z, camera.sunDirectionHeight.y));
+	vec3 origin = vec3(0.0, 0.0, camera.sunDirectionHeight.w);
+
+	/* The slice's distance, km: 128 × ((slice + 0.5) / 32)², the application inverts it with a square root. */
+	float slice = (float(texel.z) + 0.5) / AtmAerialSize;
+	float distance = slice * slice * AtmAerialSize * AtmAerialKmPerSlice;
+
+	AtmIntegration result = atmIntegrate(origin, direction, sunDirection, false, max(1.0, (float(texel.z) + 1.0) * 2.0), false, 1, distance);
+
+	vec3 radiance = result.luminance * camera.sunIlluminanceSaturation.rgb;
+
+	imageStore(outputVolume, texel, vec4(atmGrade(radiance, camera.tintIntensity, camera.sunIlluminanceSaturation.w), 1.0));
+	imageStore(transmittanceVolume, texel, vec4(exp(-result.opticalDepth), 1.0));
 }
 )GLSL";
 }
@@ -576,6 +655,8 @@ namespace EmEn::Graphics
 		m_multipleScattering{m_name + "MultipleScattering", {MultipleScatteringSize, MultipleScatteringSize}, VK_FORMAT_R16G16B16A16_SFLOAT},
 		m_skyView{m_name + "SkyView", {SkyViewWidth, SkyViewHeight}, VK_FORMAT_R16G16B16A16_SFLOAT},
 		m_frameData{m_name + "Frame", {FrameTexels, 1}, VK_FORMAT_R32G32B32A32_SFLOAT},
+		m_aerialInscatter{m_name + "AerialInscatter", {AerialPerspectiveSize, AerialPerspectiveSize, AerialPerspectiveSize}, VK_FORMAT_R16G16B16A16_SFLOAT},
+		m_aerialTransmittance{m_name + "AerialTransmittance", {AerialPerspectiveSize, AerialPerspectiveSize, AerialPerspectiveSize}, VK_FORMAT_R16G16B16A16_SFLOAT},
 		m_environment{std::make_unique< SkyEnvironment >(m_name)}
 	{
 
@@ -629,12 +710,12 @@ namespace EmEn::Graphics
 
 		m_tableFormat = SkyAtmosphere::tableFormat(renderer);
 
-		if ( !m_transmittance.setFormat(m_tableFormat) || !m_multipleScattering.setFormat(m_tableFormat) || !m_skyView.setFormat(m_tableFormat) )
+		if ( !m_transmittance.setFormat(m_tableFormat) || !m_multipleScattering.setFormat(m_tableFormat) || !m_skyView.setFormat(m_tableFormat) || !m_aerialInscatter.setFormat(m_tableFormat) )
 		{
 			return false;
 		}
 
-		if ( !m_transmittance.create(renderer) || !m_multipleScattering.create(renderer) || !m_skyView.create(renderer) || !m_frameData.create(renderer) )
+		if ( !m_transmittance.create(renderer) || !m_multipleScattering.create(renderer) || !m_skyView.create(renderer) || !m_frameData.create(renderer) || !m_aerialInscatter.create(renderer) || !m_aerialTransmittance.create(renderer) )
 		{
 			TraceError{ClassId} << "Unable to create the lookup tables of the sky '" << m_name << "' !";
 
@@ -726,7 +807,8 @@ namespace EmEn::Graphics
 		m_pipelineLayout = std::make_shared< PipelineLayout >(
 			device, m_name + "SkyPipelineLayout",
 			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 >{m_descriptorSetLayout},
-			StaticVector< VkPushConstantRange, 4 >{VkPushConstantRange{.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .offset = 0, .size = sizeof(SkyViewPushConstants)}}
+			/* One range for every pass: the largest block (the aerial perspective's) covers the others. */
+			StaticVector< VkPushConstantRange, 4 >{VkPushConstantRange{.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT, .offset = 0, .size = sizeof(AerialPerspectivePushConstants)}}
 		);
 
 		if ( !m_pipelineLayout->createOnHardware() )
@@ -774,14 +856,23 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* The aerial perspective: its in-scattering volume in the table format (a night's haze, ~1e-6 nits, would
+		 * lose its precision in half floats), its transmittance in RGBA16F. */
+		const auto volumeGLSL = std::string{"layout(set = 0, binding = "} + std::to_string(OutputBinding) + (m_tableFormat == VK_FORMAT_R32G32B32A32_SFLOAT ? ", rgba32f" : ", rgba16f") + ") uniform writeonly image3D outputVolume;\n";
+
+		if ( !makePipeline("SkyAerialPerspectiveCS", std::string{AerialPerspectiveShader} + atmosphereGLSL + IntegrationGLSL + volumeGLSL + AerialPerspectiveMain, m_aerialPerspectivePipeline) )
+		{
+			return false;
+		}
+
 		/* ---- One set per pass. ⚠️ FREE_DESCRIPTOR_SET_BIT: DescriptorSet frees its set in its destructor. ---- */
 		const std::vector< VkDescriptorPoolSize > poolSizes{
-			{.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 3},
-			{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 3},
-			{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 4}
+			{.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, .descriptorCount = 4},
+			{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = 5},
+			{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, .descriptorCount = 6}
 		};
 
-		m_descriptorPool = std::make_shared< DescriptorPool >(device, poolSizes, 3, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+		m_descriptorPool = std::make_shared< DescriptorPool >(device, poolSizes, 4, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 		if ( !m_descriptorPool->createOnHardware() )
 		{
@@ -796,7 +887,7 @@ namespace EmEn::Graphics
 			return set->create() && set->writeUniformBufferObject(ParametersBinding, *m_parametersBuffer);
 		};
 
-		if ( !makeSet(m_transmittanceSet) || !makeSet(m_multipleScatteringSet) || !makeSet(m_skyViewSet) )
+		if ( !makeSet(m_transmittanceSet) || !makeSet(m_multipleScatteringSet) || !makeSet(m_skyViewSet) || !makeSet(m_aerialPerspectiveSet) )
 		{
 			TraceError{ClassId} << "Unable to create the descriptor sets of the sky '" << m_name << "' !";
 
@@ -815,7 +906,11 @@ namespace EmEn::Graphics
 			sampled(*m_skyViewSet, TransmittanceBinding, m_transmittance) &&
 			sampled(*m_skyViewSet, MultipleScatteringBinding, m_multipleScattering) &&
 			m_skyViewSet->writeStorageImage(OutputBinding, *m_skyView.storageView()) &&
-			m_skyViewSet->writeStorageImage(FrameBinding, *m_frameData.storageView());
+			m_skyViewSet->writeStorageImage(FrameBinding, *m_frameData.storageView()) &&
+			sampled(*m_aerialPerspectiveSet, TransmittanceBinding, m_transmittance) &&
+			sampled(*m_aerialPerspectiveSet, MultipleScatteringBinding, m_multipleScattering) &&
+			m_aerialPerspectiveSet->writeStorageImage(OutputBinding, *m_aerialInscatter.storageView()) &&
+			m_aerialPerspectiveSet->writeStorageImage(FrameBinding, *m_aerialTransmittance.storageView());
 
 		if ( !written )
 		{
@@ -950,6 +1045,54 @@ namespace EmEn::Graphics
 				Sync::ImageMemoryBarrier{*texture->image(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
 			);
+		}
+
+		return true;
+	}
+
+	bool
+	SkyAtmosphere::recordAerialPerspective (const CommandBuffer & commandBuffer, const SkyFrameInputs & inputs, const SkyEnvironment::Grading & grading) noexcept
+	{
+		if ( !this->isCreated() )
+		{
+			return false;
+		}
+
+		/* The previous frames' reads before this frame's writes (the barrier's first scope covers the commands submitted
+		 * earlier on the queue); the content is rebuilt whole, so the old layout is discarded. */
+		for ( const auto * volume : {&m_aerialInscatter, &m_aerialTransmittance} )
+		{
+			commandBuffer.pipelineBarrier(
+				Sync::ImageMemoryBarrier{*volume->image(), 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL},
+				VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+			);
+		}
+
+		const auto direction = inputs.sunDirection.lengthSquared() > 0.0F ? inputs.sunDirection.normalized() : Vector< 3, float >{0.0F, 1.0F, 0.0F};
+		/* The sky-view's own height (recordFrame()): the same camera, the same 10 m floor. */
+		const auto viewHeight = m_parameters.groundRadius + std::max(inputs.cameraAltitude * 0.001F, 0.01F);
+
+		const AerialPerspectivePushConstants pushConstants{
+			.invRelativeViewProj = inputs.invRelativeViewProj,
+			.sunDirectionHeight = {direction.x(), direction.y(), direction.z(), viewHeight},
+			.sunIlluminanceSaturation = {inputs.sunIlluminance.x(), inputs.sunIlluminance.y(), inputs.sunIlluminance.z(), grading.saturation},
+			.tintIntensity = {grading.tint.x(), grading.tint.y(), grading.tint.z(), grading.intensity}
+		};
+
+		commandBuffer.bind(*m_aerialPerspectivePipeline);
+		commandBuffer.bind(*m_aerialPerspectiveSet, *m_pipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
+		vkCmdPushConstants(commandBuffer.handle(), m_pipelineLayout->handle(), VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants), &pushConstants);
+		commandBuffer.dispatch((AerialPerspectiveSize + 7) / 8, (AerialPerspectiveSize + 7) / 8, AerialPerspectiveSize);
+
+		for ( const auto * volume : {&m_aerialInscatter, &m_aerialTransmittance} )
+		{
+			commandBuffer.pipelineBarrier(
+				Sync::ImageMemoryBarrier{*volume->image(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+			);
+
+			/* The tracked layout a descriptor describes the volume with (the barrier above does not update it). */
+			volume->image()->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
 
 		return true;

@@ -38,6 +38,7 @@
 > that does not require a rebuild. Every one of these knobs becomes meaningless the day the medium
 > is real.
 | **AtmosphericFog** | `Effects/Atmosphere/AtmosphericFog.hpp/cpp` | 1-pass | Depth, HDR |
+| **AerialPerspective** | `Effects/Atmosphere/AerialPerspective.hpp/cpp` | 1-pass, full-res (+ the sky's 32³ froxel volume, compute, `SkyAtmosphere::recordAerialPerspective()`) | Depth, HDR, MaterialProps (fog response), **the frame's submitted physical sky** (`Renderer::frameSkyAtmosphere()`) — **scene-driven: filed the first frame a `DynamicSkyResource` is submitted**; slot `AerialPerspective`, after the geometry and before `Clouds` / `Fog` (graphics doc 42) |
 | **VolumetricClouds** | `Effects/Atmosphere/VolumetricClouds.hpp/cpp` | 1-pass, FULL-res, two shader variants (with / without cascades) | Depth, HDR, **the scene's `CloudSet`**, bindless (3D shapes + irradiance cubemap), CSM when present — **scene-driven: never added by an application** |
 | **RTR** | `Effects/Lighting/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
 | **RTGI** | `Effects/Lighting/RTGI.hpp/cpp` | SVGF chain (Trace→Temporal→Moments→NormalHistory→À-trous×N→Apply); all post-trace passes live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, Velocity, RT (TLAS+SSBOs) |

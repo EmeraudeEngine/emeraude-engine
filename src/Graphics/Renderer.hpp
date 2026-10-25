@@ -1179,6 +1179,16 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the physical sky's atmosphere whose frame (sky-view, aerial perspective volume) THIS frame
+			 * submitted, or nullptr: the chain's AerialPerspective effect samples nothing else.
+			 * @note RENDER THREAD, after renderSkyAtmosphere() (the chain, the scene-effects sync). The slot keeps the
+			 * atmosphere alive for the frame.
+			 * @return const SkyAtmosphere *
+			 */
+			[[nodiscard]]
+			const SkyAtmosphere * frameSkyAtmosphere () const noexcept;
+
+			/**
 			 * @brief Returns the number of frames in flight.
 			 * @return uint32_t
 			 */

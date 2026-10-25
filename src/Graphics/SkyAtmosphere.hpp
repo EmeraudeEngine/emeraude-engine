@@ -42,6 +42,7 @@
 /* Local inclusions for usages. */
 #include "Graphics/SkyEnvironment.hpp"
 #include "Graphics/StorageTexture2D.hpp"
+#include "Graphics/StorageTexture3D.hpp"
 #include "Math/Vector.hpp"
 #include "Mutex.hpp"
 
@@ -180,6 +181,9 @@ namespace EmEn::Graphics
 		float sunAngularDiameter{0.53F};
 		/** @brief The camera's height above the planet's ground, in metres (the engine's world Y). */
 		float cameraAltitude{0.0F};
+		/** @brief The inverse of the camera's projection × view ROTATION (camera-relative), column-major: the aerial
+		 * perspective's froxels follow the frame's screen. */
+		std::array< float, 16 > invRelativeViewProj{1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F};
 	};
 
 	/**
@@ -215,6 +219,12 @@ namespace EmEn::Graphics
 
 			/** @brief The frame texture: 4 RGBA32F texels. */
 			static constexpr uint32_t FrameTexels{4};
+
+			/** @brief The aerial perspective volume: 32 × 32 froxels × 32 slices (Hillaire 2020). */
+			static constexpr uint32_t AerialPerspectiveSize{32};
+
+			/** @brief The aerial perspective's slices: 4 km each, squared distribution, 0 to 128 km. */
+			static constexpr float AerialPerspectiveKmPerSlice{4.0F};
 
 			/**
 			 * @brief Constructs a sky atmosphere.
@@ -288,6 +298,42 @@ namespace EmEn::Graphics
 			 * @param grading The sky material's artistic grading.
 			 */
 			void recordEnvironment (Renderer & renderer, const Vulkan::CommandBuffer & commandBuffer, const SkyFrameInputs & inputs, const SkyEnvironment::Grading & grading) noexcept;
+
+			/**
+			 * @brief Records this frame's AERIAL PERSPECTIVE volume (Hillaire 2020): for each froxel of the camera's
+			 * frustum, the radiance in-scattered between the camera and its slice — ABSOLUTE (nits), the star's
+			 * illuminance and the sky's grading applied like the drawn sky's — and the RGB transmittance; left in
+			 * SHADER_READ_ONLY_OPTIMAL for the chain's AerialPerspective effect.
+			 * @note RENDER THREAD, in the sky's command buffer, submitted ahead of the scene on the same queue. Rebuilt
+			 * whole each frame (the camera moves).
+			 * @param commandBuffer A reference to the recording command buffer.
+			 * @param inputs A reference to the frame's star and camera (its frustum included).
+			 * @param grading The sky's artistic grading.
+			 * @return bool False before the tables exist.
+			 */
+			bool recordAerialPerspective (const Vulkan::CommandBuffer & commandBuffer, const SkyFrameInputs & inputs, const SkyEnvironment::Grading & grading) noexcept;
+
+			/**
+			 * @brief Returns the aerial perspective's in-scattering volume (RGB: graded absolute radiance, nits).
+			 * @return const StorageTexture3D &
+			 */
+			[[nodiscard]]
+			const StorageTexture3D &
+			aerialPerspectiveInscatter () const noexcept
+			{
+				return m_aerialInscatter;
+			}
+
+			/**
+			 * @brief Returns the aerial perspective's transmittance volume (RGB).
+			 * @return const StorageTexture3D &
+			 */
+			[[nodiscard]]
+			const StorageTexture3D &
+			aerialPerspectiveTransmittance () const noexcept
+			{
+				return m_aerialTransmittance;
+			}
 
 			/**
 			 * @brief Returns the sky's environment for the IBL (its publications, its submissions).
@@ -411,6 +457,8 @@ namespace EmEn::Graphics
 			StorageTexture2D m_multipleScattering;
 			StorageTexture2D m_skyView;
 			StorageTexture2D m_frameData;
+			StorageTexture3D m_aerialInscatter;
+			StorageTexture3D m_aerialTransmittance;
 			std::unique_ptr< Vulkan::UniformBufferObject > m_parametersBuffer;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;
@@ -418,9 +466,11 @@ namespace EmEn::Graphics
 			std::unique_ptr< Vulkan::DescriptorSet > m_transmittanceSet;
 			std::unique_ptr< Vulkan::DescriptorSet > m_multipleScatteringSet;
 			std::unique_ptr< Vulkan::DescriptorSet > m_skyViewSet;
+			std::unique_ptr< Vulkan::DescriptorSet > m_aerialPerspectiveSet;
 			std::unique_ptr< Vulkan::ComputePipeline > m_transmittancePipeline;
 			std::unique_ptr< Vulkan::ComputePipeline > m_multipleScatteringPipeline;
 			std::unique_ptr< Vulkan::ComputePipeline > m_skyViewPipeline;
+			std::unique_ptr< Vulkan::ComputePipeline > m_aerialPerspectivePipeline;
 			/** @brief The sky's environment for the IBL: built with the object (no GPU work before its first stage), so the
 			 * logic thread can take its publications without racing a lazy creation. */
 			std::unique_ptr< SkyEnvironment > m_environment;

@@ -2082,16 +2082,21 @@ namespace EmEn::Graphics
 
 			/* The SCENE's contract, the camera's sibling: a scene holding volumetric clouds gets the pass
 			 * that draws them, stack or not (PostProcessStack::syncSceneEffects(); owner decision
-			 * 2026-09-24, "placing a cloud is enough"). The new occupant brings its G-buffer
-			 * requirements, so a change retires the scene target exactly like a camera change does. */
-			if ( const auto * clouds = sceneCloudSet(scene.get()); clouds != nullptr )
+			 * 2026-09-24, "placing a cloud is enough"); a scene under a physical sky gets its aerial
+			 * perspective (owner decision 2026-10-25). The new occupant brings its G-buffer
+			 * requirements, so a change retires the scene target exactly like a camera change does.
+			 * ⚠️ AFTER renderSkyAtmosphere(): the physical sky is the one this frame submitted. */
+			const auto * clouds = sceneCloudSet(scene.get());
+			const bool physicalSky = this->frameSkyAtmosphere() != nullptr;
+
+			if ( clouds != nullptr || physicalSky )
 			{
 				if ( stack == nullptr )
 				{
 					stack = &scene->requirePostProcessStack();
 				}
 
-				if ( scene->requirePostProcessStack().syncSceneEffects(clouds, *this) && m_sceneTarget != nullptr )
+				if ( scene->requirePostProcessStack().syncSceneEffects(clouds, physicalSky, *this) && m_sceneTarget != nullptr )
 				{
 					m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] {
 						target->destroyRenderTarget();
@@ -2770,6 +2775,19 @@ namespace EmEn::Graphics
 	void
 	Renderer::renderSkyAtmosphere (RendererFrameScope & currentFrameScope, const Scenes::Scene & scene, const Queue * queue) noexcept
 	{
+		const auto frameIndex = currentFrameScope.frameIndex();
+
+		if ( frameIndex >= m_skyAtmospheresInFlight.size() || frameIndex >= m_skyCommandBuffers.size() )
+		{
+			return;
+		}
+
+		/* The slot names the atmosphere THIS frame submitted (the chain's aerial perspective samples its volume only
+		 * then). Its previous use is over: this frame's fence was waited. */
+		auto & atmosphereInFlight = *std::next(m_skyAtmospheresInFlight.begin(), static_cast< std::ptrdiff_t >(frameIndex));
+
+		atmosphereInFlight = nullptr;
+
 		const auto background = scene.background();
 
 		const auto * dynamicSky = dynamic_cast< const Renderable::DynamicSkyResource * >(background.get());
@@ -2799,17 +2817,17 @@ namespace EmEn::Graphics
 			inputs.sunAngularDiameter = skyState.sun.angularDiameter;
 		}
 
-		/* The world's Y = 0 is the planet's ground. */
+		/* The world's Y = 0 is the planet's ground. The aerial perspective follows the frame's frustum: the inverse of
+		 * projection × view ROTATION, the camera-relative reconstruction the effects use (GIDenoiser, the clouds). */
 		if ( const auto mainTarget = this->mainRenderTarget(); mainTarget != nullptr )
 		{
-			inputs.cameraAltitude = mainTarget->viewMatrices().position(readStateIndex)[Y];
-		}
+			const auto & viewMatrices = mainTarget->viewMatrices();
 
-		const auto frameIndex = currentFrameScope.frameIndex();
+			inputs.cameraAltitude = viewMatrices.position(readStateIndex)[Y];
 
-		if ( frameIndex >= m_skyCommandBuffers.size() )
-		{
-			return;
+			const auto invRelativeViewProj = (viewMatrices.projectionMatrix(readStateIndex) * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
+
+			std::copy_n(invRelativeViewProj.data(), inputs.invRelativeViewProj.size(), inputs.invRelativeViewProj.begin());
 		}
 
 		/* The frame index is < the array's size (checked above). */
@@ -2844,21 +2862,30 @@ namespace EmEn::Graphics
 			atmosphere->recordFrame(*commandBuffer, inputs);
 		}
 
+		/* The sky's artistic grading: what the drawn sky shows, the environment and the haze show too. */
+		SkyEnvironment::Grading grading{};
+
+		if ( const auto material = dynamicSky->skyMaterial(); material != nullptr )
+		{
+			const auto tint = material->tint();
+
+			grading.tint = {tint.red(), tint.green(), tint.blue()};
+			grading.intensity = material->intensity();
+			grading.saturation = material->saturation();
+		}
+
+		/* The aerial perspective volume, for the chain's AerialPerspective effect. */
+		{
+			GPUProfiler * profiler = m_GPUProfiler != nullptr && m_GPUProfiler->profilesSideSubmissions() ? m_GPUProfiler.get() : nullptr;
+			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "SkyAtmosphere", "AerialPerspective"};
+
+			static_cast< void >(atmosphere->recordAerialPerspective(*commandBuffer, inputs, grading));
+		}
+
 		/* The sky's environment for the IBL, one stage per frame, after the sky-view it captures. */
 		{
 			GPUProfiler * profiler = m_GPUProfiler != nullptr && m_GPUProfiler->profilesSideSubmissions() ? m_GPUProfiler.get() : nullptr;
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "SkyAtmosphere", "Environment"};
-
-			SkyEnvironment::Grading grading{};
-
-			if ( const auto material = dynamicSky->skyMaterial(); material != nullptr )
-			{
-				const auto tint = material->tint();
-
-				grading.tint = {tint.red(), tint.green(), tint.blue()};
-				grading.intensity = material->intensity();
-				grading.saturation = material->saturation();
-			}
 
 			atmosphere->recordEnvironment(*this, *commandBuffer, inputs, grading);
 		}
@@ -2883,7 +2910,18 @@ namespace EmEn::Graphics
 
 		atmosphere->environment().onSubmitted(true);
 
-		*std::next(m_skyAtmospheresInFlight.begin(), static_cast< std::ptrdiff_t >(frameIndex)) = atmosphere;
+		atmosphereInFlight = atmosphere;
+	}
+
+	const SkyAtmosphere *
+	Renderer::frameSkyAtmosphere () const noexcept
+	{
+		if ( m_currentFrameIndex >= m_skyAtmospheresInFlight.size() )
+		{
+			return nullptr;
+		}
+
+		return std::next(m_skyAtmospheresInFlight.begin(), static_cast< std::ptrdiff_t >(m_currentFrameIndex))->get();
 	}
 
 	void
