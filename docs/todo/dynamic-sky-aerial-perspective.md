@@ -44,7 +44,14 @@ never through the chain's clip planes (item `post-process-depth-linearisation-wr
       ambient term reads the sky (its irradiance, baked amortised since 2026-10-25: graphics doc 42 § "The
       environment"). The clouds composite AFTER the aerial perspective (slot order), so a far cloud is not hazed yet:
       apply the volume at the cloud's depth too (its own distance, read in the cloud pass).
-- [ ] Peers: the aerial perspective on macOS (MoltenVK, 3D storage images) and Windows (both GPUs), sky-lab option 7.
+- Peers GREEN (2026-10-25): macOS M6 (MoltenVK: the 3D storage images work) and Windows (RTX 3500 Ada + Intel iGPU).
+  T within 0.006 / 0.008 of Linux; 0 VUID. Cost:
+  - Intel iGPU at 720p: the volume avg 0.63 ms (max 4.6), the pass 0.36 ms, ~3.5 % of its frame;
+  - M6 at 1440p: 0.057 + 0.090 ms;
+  - RTX 3500 Ada: 0.030 + 0.029 ms.
+- [ ] **The volume's cost on an iGPU** (non-defect, owner's ranking): every froxel re-marches from the camera
+      (Hillaire's reference: Σ 2(s + 1) = 1 056 samples per column). A cumulative march per column, each slice
+      continuing the previous one, would take ~64 samples per column. Measure it before / after on the Intel iGPU.
 
 ## References
 

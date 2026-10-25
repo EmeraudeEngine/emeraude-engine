@@ -28,19 +28,31 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <string>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Scenes/Component/Camera.hpp"
+#include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
 
 static constexpr auto TracerTag{"MotionBlurEffect"};
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 namespace
 {

@@ -26,19 +26,40 @@
 
 #include "RTAO.hpp"
 
+/* STL inclusions. */
+#include <string>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
+#include "Saphir/Types.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 namespace
 {
@@ -428,7 +449,6 @@ namespace EmEn::Graphics::Effects::Lighting
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 

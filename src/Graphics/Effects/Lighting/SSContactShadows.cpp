@@ -26,26 +26,43 @@
 
 #include "SSContactShadows.hpp"
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/MarchDitherGLSL.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
+#include "Saphir/Types.hpp"
+#include "Scenes/Component/DirectionalLight.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
 #include <cstring>
+#include <string>
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
+#include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Scenes/LightSet.hpp"
 #include "SettingKeys.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
 
 static constexpr auto TracerTag{"SSContactShadowsEffect"};
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 namespace
 {

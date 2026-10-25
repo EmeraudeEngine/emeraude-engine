@@ -27,7 +27,8 @@ owner orders it.
       before it goes; the peers build it.
 
 The files (as of 2026-10-25; the sky lots' files were brought clean that day, and the aerial perspective lot brought
-`IndirectPostProcessEffect.hpp`, `PostProcessor.cpp`, `Renderer.cpp` and `Renderer.hpp` clean):
+`IndirectPostProcessEffect.hpp`, `PostProcessor.cpp`, `Renderer.cpp` and `Renderer.hpp` clean; the depth-linearisation lot,
+`ToneMapping.cpp`, `IrradianceProbeVolume.cpp`, `PostProcessor.hpp`, `SceneRendering.cpp`):
 
 - `src/Audio/Manager.cpp`
 - `src/Audio/Manager.hpp`
@@ -47,7 +48,6 @@ The files (as of 2026-10-25; the sky lots' files were brought clean that day, an
 - `src/Graphics/Effects/Atmosphere/VolumetricScattering.cpp`
 - `src/Graphics/Effects/Camera/LensFlare.cpp`
 - `src/Graphics/Effects/Camera/LensFlare.hpp`
-- `src/Graphics/Effects/Camera/ToneMapping.cpp`
 - `src/Graphics/Effects/Camera/VeilingGlare.cpp`
 - `src/Graphics/Effects/Camera/VeilingGlare.hpp`
 - `src/Graphics/Effects/Lighting/RTGI.cpp`
@@ -74,7 +74,6 @@ The files (as of 2026-10-25; the sky lots' files were brought clean that day, an
 - `src/Graphics/GPUTextureSet.hpp`
 - `src/Graphics/ImageResource.cpp`
 - `src/Graphics/ImageResource.hpp`
-- `src/Graphics/IrradianceProbeVolume.cpp`
 - `src/Graphics/KTX2Decoder.cpp`
 - `src/Graphics/KTX2Decoder.hpp`
 - `src/Graphics/KTX2Writer.cpp`
@@ -90,7 +89,6 @@ The files (as of 2026-10-25; the sky lots' files were brought clean that day, an
 - `src/Graphics/MipChain.hpp`
 - `src/Graphics/MovieResource.cpp`
 - `src/Graphics/MovieResource.hpp`
-- `src/Graphics/PostProcessor.hpp`
 - `src/Graphics/PostProcessStack.console.cpp`
 - `src/Graphics/Renderable/DynamicSkyResource.cpp`
 - `src/Graphics/Renderable/DynamicSkyResource.hpp`
@@ -133,7 +131,6 @@ The files (as of 2026-10-25; the sky lots' files were brought clean that day, an
 - `src/Resources/ResourceTrait.hpp`
 - `src/Saphir/AbstractShader.cpp`
 - `src/Saphir/Generator/Abstract.cpp`
-- `src/Saphir/Generator/SceneRendering.cpp`
 - `src/Saphir/Keys.hpp`
 - `src/Saphir/LightGenerator.cpp`
 - `src/Saphir/LightGenerator.hpp`

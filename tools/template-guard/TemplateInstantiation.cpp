@@ -167,6 +167,7 @@
 #include "Graphics/Effects/Shared/MarchDitherGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/StarMaskGLSL.hpp"
+#include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/Effects/Style/BlackAndWhite.hpp"
 #include "Graphics/Effects/Style/CRTPhosphor.hpp"
 #include "Graphics/Effects/Style/ChromaBleeding.hpp"

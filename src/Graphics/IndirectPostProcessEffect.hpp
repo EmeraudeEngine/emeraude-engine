@@ -457,6 +457,11 @@ namespace EmEn::Graphics
 				 * sky, or its submission failed —, the same "null means absent" contract. Kept alive by the renderer
 				 * for the frame. */
 				const SkyAtmosphere * atmosphere{nullptr};
+				/* The frame's VIEW RECONSTRUCTION (Effects/Shared/ViewReconstructionGLSL.hpp): the projection, its inverse
+				 * and the camera-relative inverse view-projection of the read state, in this frame's buffer. THE way an
+				 * effect turns a depth into a position (owner decision 2026-10-25: never a scalar linearisation; the
+				 * clip planes the chain used were frozen and the formula OpenGL's). Null only if its creation failed. */
+				const Vulkan::UniformBufferObject * view{nullptr};
 				/* Sub-pixel projection jitter of the frame being rendered, in NDC units. Zero when
 				 * no effect requires jitter. Needed by the TAA resolve to sample the source at pixel
 				 * centers; no history counterpart is exposed because nothing in the chain has to

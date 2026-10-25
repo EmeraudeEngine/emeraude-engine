@@ -38,7 +38,21 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class GraphicsPipeline;
+	class PipelineLayout;
+}
 
 namespace EmEn::Graphics::Effects::Lighting
 {
@@ -93,10 +107,6 @@ namespace EmEn::Graphics::Effects::Lighting
 				float radius;
 				float intensity;
 				float bias;
-				float nearPlane;
-				float farPlane;
-				float tanHalfFovY;
-				float aspectRatio;
 				uint32_t sampleCount;
 			};
 

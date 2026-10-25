@@ -1034,7 +1034,11 @@ namespace EmEn::Saphir::Generator
 
 			if ( m_hasMaterialPropertiesAttachment )
 			{
-				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 1.0, 240.0 / 255.0, 1.0);";
+				/* G = aoResponse 0 : shadowResponse 15. An unlit surface receives no light, so no ambient occlusion
+				 * either; and its normal is the placeholder (0, 0, 1) written above, so an occlusion computed around
+				 * it is wrong (2026-10-25: the labyrinth's emissive lamp panels lost ~40 % to SSAO once the chain read
+				 * true distances). It was 1.0 (aoResponse 15) until then. */
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 15.0 / 255.0, 240.0 / 255.0, 1.0);";
 			}
 
 			if ( m_hasAlbedoAttachment )
@@ -1066,7 +1070,8 @@ namespace EmEn::Saphir::Generator
 
 			if ( m_hasMaterialPropertiesAttachment )
 			{
-				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 1.0, 240.0 / 255.0, 1.0);";
+				/* aoResponse 0, as the unlit path: the normal is the same placeholder. */
+				Code{*fragmentShader, Location::Output} << ShaderVariable::OutputMaterialProperties << " = vec4(0.0, 15.0 / 255.0, 240.0 / 255.0, 1.0);";
 			}
 
 			if ( m_hasAlbedoAttachment )

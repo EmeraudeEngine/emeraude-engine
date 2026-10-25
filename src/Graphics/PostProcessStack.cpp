@@ -800,7 +800,7 @@ namespace EmEn::Graphics
 		{
 			m_cloudEffectResolved = true;
 
-			changed = this->fileCloudEffect(renderer) || changed;
+			changed = this->fileCloudEffect(renderer);
 		}
 
 		/* Decided once, the first frame the scene's physical sky is submitted. */

@@ -26,21 +26,42 @@
 
 #include "SSAO.hpp"
 
+/* STL inclusions. */
+#include <cstdint>
+#include <string>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Math/Vector.hpp"
+#include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 namespace
 {
 	using namespace EmEn;
 
-	constexpr auto SSAOComputeFragmentShader = R"GLSL(
+	/** @brief The view reconstruction's binding (after the three samplers: getInputLayout(3, 1)). */
+	constexpr uint32_t ViewBinding{3};
+
+	constexpr auto SSAOHeader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -48,7 +69,10 @@ layout(location = 0) out float outAO;
 
 layout(set = 0, binding = 0) uniform sampler2D depthTex;
 layout(set = 0, binding = 1) uniform sampler2D normalTex;
+layout(set = 0, binding = 2) uniform sampler2D materialPropsTex;
+)GLSL";
 
+	constexpr auto SSAOComputeFragmentShader = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
 	float texelSizeX;
@@ -56,29 +80,17 @@ layout(push_constant) uniform PushConstants
 	float radius;
 	float intensity;
 	float bias;
-	float nearPlane;
-	float farPlane;
-	float tanHalfFovY;
-	float aspectRatio;
 	uint sampleCount;
 };
 
-/* Linearize depth from [0,1] range. */
-float linearizeDepth (float depth)
-{
-	float z = depth * 2.0 - 1.0;
-	return (2.0 * nearPlane * farPlane) / (farPlane + nearPlane - z * (farPlane - nearPlane));
-}
-
-/* Reconstruct view-space position from depth and UV.
- * NOTE: tanHalfFovY is SIGNED and carries the projection's Y direction (see PostProcessor).
- * Do NOT wrap it in abs(): that discards exactly the information it looks like it protects. */
+/* The "reconstruction space" of this pass: view-space X and Y, and the distance along the view axis as a POSITIVE Z.
+ * Through the frame's inverse projection (ViewReconstructionGLSL), never a scalar linearisation: the chain's clip
+ * planes were frozen at 0.1 / 1000 and the formula OpenGL's, so this pass read 2.24 m for 1 m (2026-10-25). */
 vec3 reconstructPosition (vec2 uv, float depth)
 {
-	float linearZ = linearizeDepth(depth);
-	vec2 ndc = uv * 2.0 - 1.0;
-	float t = tanHalfFovY;
-	return vec3(ndc * vec2(abs(t) * aspectRatio, t) * linearZ, linearZ);
+	vec3 viewPosition = emViewPosition(uv, depth);
+
+	return vec3(viewPosition.xy, -viewPosition.z);
 }
 
 /* Hash function for pseudo-random sampling. */
@@ -103,6 +115,14 @@ void main()
 
 	/* Skip far-plane fragments. */
 	if (centerDepth >= 1.0)
+	{
+		outAO = 1.0;
+		return;
+	}
+
+	/* A surface that takes no ambient occlusion (aoResponse 0: an unlit one, whose normal is a placeholder) gets none
+	 * here, so the blur cannot spread a value computed around that placeholder onto its neighbours. */
+	if ((uint(texture(materialPropsTex, vUV).g * 255.0) >> 4u) == 0u)
 	{
 		outAO = 1.0;
 		return;
@@ -139,9 +159,8 @@ void main()
 		vec3 sampleDir = TBN * hemispherePoint(i, noiseVec);
 		vec3 samplePos = centerPos + sampleDir * radius;
 
-		/* Project sample back to screen space. */
-		float t = tanHalfFovY;
-		vec2 sampleUV = samplePos.xy / (samplePos.z * vec2(abs(t) * aspectRatio, t)) * 0.5 + 0.5;
+		/* Project sample back to screen space, through the frame's projection. */
+		vec2 sampleUV = emUVFromView(vec3(samplePos.xy, -samplePos.z));
 
 		/* Samples projected outside the frame have no depth information: treat them as
 		 * unoccluded. The clamp-to-edge sampler used to recycle the border depth, turning
@@ -153,7 +172,7 @@ void main()
 		}
 
 		/* Sample depth at projected position. */
-		float sampleDepth = linearizeDepth(texture(depthTex, sampleUV).r);
+		float sampleDepth = emViewDepth(sampleUV, texture(depthTex, sampleUV).r);
 
 		/* Range check and accumulate. */
 		float rangeCheck = smoothstep(0.0, 1.0, radius / abs(centerPos.z - sampleDepth));
@@ -218,7 +237,8 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		/* ---- Descriptor set layouts (shared) ---- */
 		auto singleLayout = this->getInputLayout(1);
-		auto dualLayout = this->getInputLayout(2);
+		/* Depth, normals, material properties and the view reconstruction. */
+		auto dualLayout = this->getInputLayout(3, 1);
 
 		if ( singleLayout == nullptr || dualLayout == nullptr )
 		{
@@ -247,7 +267,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		const auto & device = renderer.device();
 
 		const auto vertexModule = this->getFullscreenVertexShader();
-		const auto aoFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_AO_FS", Saphir::ShaderType::FragmentShader, SSAOComputeFragmentShader);
+		const auto aoFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_AO_FS", Saphir::ShaderType::FragmentShader, std::string{SSAOHeader} + ViewReconstructionGLSL::sourceGLSL(0, ViewBinding) + SSAOComputeFragmentShader);
 
 		if ( vertexModule == nullptr || aoFragment == nullptr )
 		{
@@ -289,8 +309,13 @@ namespace EmEn::Graphics::Effects::Lighting
 	{
 		const auto * inputDepth = context.depth;
 		const auto * inputNormals = context.normals;
-		const auto & constants = context.constants;
 
+		/* The view reconstruction is made with the chain (PostProcessor::configure() fails without it); the material
+		 * properties come with requiresMaterialProperties(). */
+		if ( context.view == nullptr || context.materialProperties == nullptr )
+		{
+			return;
+		}
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
@@ -305,6 +330,9 @@ namespace EmEn::Graphics::Effects::Lighting
 			static_cast< void >(m_aoPerFrame[frameIndex]->writeCombinedImageSampler(1, *inputNormals));
 		}
 
+		static_cast< void >(m_aoPerFrame[frameIndex]->writeCombinedImageSampler(2, *context.materialProperties));
+		static_cast< void >(m_aoPerFrame[frameIndex]->writeUniformBufferObject(ViewBinding, *context.view));
+
 		/* ---- Pass 1: AO Computation ---- */
 		{
 			const SSAOPushConstants pc{
@@ -313,10 +341,6 @@ namespace EmEn::Graphics::Effects::Lighting
 				.radius = m_parameters.radius,
 				.intensity = m_parameters.intensity,
 				.bias = m_parameters.bias,
-				.nearPlane = constants.nearPlane,
-				.farPlane = constants.farPlane,
-				.tanHalfFovY = constants.tanHalfFovY,
-				.aspectRatio = constants.frameWidth / constants.frameHeight,
 				.sampleCount = m_parameters.sampleCount
 			};
 

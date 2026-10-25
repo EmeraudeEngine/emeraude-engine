@@ -26,10 +26,16 @@
 
 #include "ChromaticAberration.hpp"
 
+/* STL inclusions. */
+#include <string>
+
 /* Local inclusions. */
 #include "Graphics/PostProcessor.hpp"
+#include "Randomizer.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/FragmentShader.hpp"
+#include "Saphir/Keys.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Graphics::Effects::Style
 {

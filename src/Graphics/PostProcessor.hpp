@@ -30,30 +30,25 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
-/* Local inclusions for usages. */
-#include "DirectPostProcessEffect.hpp"
-#include "PrimaryServices.hpp"
-#include "RenderTarget/Abstract.hpp"
-
 namespace EmEn
 {
-	namespace Saphir
-	{
-		class Program;
-	}
+	class PrimaryServices;
 
 	namespace Vulkan
 	{
 		class CommandBuffer;
 		class DescriptorSet;
+		class UniformBufferObject;
 		class DescriptorSetLayout;
 		class LayoutManager;
 	}
@@ -74,8 +69,8 @@ namespace EmEn
 	{
 		class CombinePass;
 		class DenoisePass;
+		class DirectPostProcessEffect;
 		class GrabPass;
-		class IndirectPostProcessEffect;
 		class OverflowCensus;
 		class PostProcessStack;
 		class Renderer;
@@ -83,6 +78,11 @@ namespace EmEn
 		namespace Geometry
 		{
 			class IndexedVertexResource;
+		}
+
+		namespace RenderTarget
+		{
+			class Abstract;
 		}
 	}
 
@@ -502,6 +502,8 @@ namespace EmEn::Graphics
 			 * the pointer, like the combine pass. */
 			std::unique_ptr< OverflowCensus > m_overflowCensus;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
+			/** @brief One view reconstruction buffer per frame in flight (FrameContext::view, ViewReconstructionGLSL). */
+			std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > m_viewUBOs;
 			std::shared_ptr< Geometry::IndexedVertexResource > m_quadGeometry;
 			float m_nearPlane{0.1F};
 			float m_farPlane{1000.0F};

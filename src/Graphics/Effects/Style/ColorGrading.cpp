@@ -28,13 +28,17 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <string>
 
 /* Local inclusions. */
 #include "Graphics/Photometry.hpp"
 #include "Graphics/PostProcessor.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/FragmentShader.hpp"
+#include "Saphir/Keys.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Graphics::Effects::Style
 {

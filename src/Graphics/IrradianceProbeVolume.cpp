@@ -36,16 +36,28 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
+#include <cstdlib> // IWYU pragma: keep (std::abs(int): libstdc++'s <cmath> declares it, the standard puts it here)
 #include <cstring>
+#include <functional>
+#include <initializer_list>
 #include <numbers>
 #include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderer.hpp"
+#include "PortableRandom.hpp"
+#include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/ComputePipeline.hpp"
@@ -55,13 +67,11 @@
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/Sampler.hpp"
 #include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "Vulkan/Sync/MemoryBarrier.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
-#include "PortableRandom.hpp"
 
 namespace
 {

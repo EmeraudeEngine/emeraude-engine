@@ -241,7 +241,7 @@ of their distance wide; Linux, RTX 3070 Ti, 1920×1080).
 Protocol:
 - 09:00, sun behind the camera; a 150 mm lens aimed at each pair; bloom off.
 - AP on and off (`PostProcess.disable("AerialPerspective")` / `select`), three shutters each.
-- Linear values recovered through the chain by inverting the tone mapper. ACES (Hill's fit) then gamma 2.2 fit the
+- Linear values recovered through the chain by inverting the tone mapper. ACES (Narkowicz's fit, the shader's `acesFilmic`) then gamma 2.2 fit the
   ×2 shutter series to 3e-5.
 - T = (white − black) / (white₀ − black₀) per channel, against a CPU integration of the same medium along the same
   ray:

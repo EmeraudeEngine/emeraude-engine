@@ -33,20 +33,32 @@
 #include <cstring>
 #include <string>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Effects/Camera/VeilingGlare.hpp"
 #include "Graphics/Photometry.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Image.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/Sync/BufferMemoryBarrier.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
+
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 namespace
 {
@@ -344,7 +356,8 @@ layout(push_constant) uniform PushConstants
 	float bloomIntensity;
 };
 
-/* ACES Filmic approximation (Stephen Hill). */
+/* ACES Filmic approximation (K. Narkowicz, "ACES Filmic Tone Mapping Curve", 2016: a rational fit of the RRT + ODT, no
+ * colour matrices; S. Hill's fit is the one with the matrices). */
 vec3 acesFilmic (vec3 x)
 {
 	const float a = 2.51;
@@ -442,7 +455,8 @@ layout(push_constant) uniform PushConstants
 	float padding1;
 };
 
-/* ACES Filmic approximation (Stephen Hill). */
+/* ACES Filmic approximation (K. Narkowicz, "ACES Filmic Tone Mapping Curve", 2016: a rational fit of the RRT + ODT, no
+ * colour matrices; S. Hill's fit is the one with the matrices). */
 vec3 acesFilmic (vec3 x)
 {
 	const float a = 2.51;

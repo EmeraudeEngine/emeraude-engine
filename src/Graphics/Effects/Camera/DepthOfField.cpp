@@ -29,23 +29,34 @@
 /* STL inclusions. */
 #include <cmath>
 #include <cstring>
+#include <string>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
+#include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
+#include "Vulkan/Image.hpp"
 #include "Vulkan/LayoutManager.hpp"
-#include "Vulkan/PipelineLayout.hpp"
-#include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/Sync/BufferMemoryBarrier.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 namespace
 {

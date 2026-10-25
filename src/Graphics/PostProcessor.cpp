@@ -31,7 +31,7 @@
 #include <cassert>
 #include <chrono>
 #include <cmath>
-#include <cstddef>
+#include <cstddef> // IWYU pragma: keep (std::size_t: <cstdint> provides it with libstdc++ only)
 #include <functional>
 #include <numbers>
 #include <span>
@@ -46,6 +46,7 @@
 #include "CombinePass.hpp"
 #include "DenoisePass.hpp"
 #include "Effects/Camera/ToneMapping.hpp"
+#include "Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Geometry/IndexedVertexResource.hpp"
 #include "GrabPass.hpp"
 #include "Graphics/EffectSlot.hpp"
@@ -79,9 +80,11 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/GPUProfiler.hpp"
 #include "Vulkan/LayoutManager.hpp"
+#include "Vulkan/MemoryRegion.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "Vulkan/TextureInterface.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Graphics
@@ -606,6 +609,7 @@ namespace EmEn::Graphics
 		}
 
 		m_descriptorSets.clear();
+		m_viewUBOs.clear();
 
 		m_quadGeometry.reset();
 
@@ -850,6 +854,30 @@ namespace EmEn::Graphics
 				}
 
 				m_descriptorSets.emplace_back(std::move(descriptorSet));
+			}
+		}
+
+		/* The view reconstruction's per-frame buffers (FrameContext::view): their size never changes, made once. */
+		if ( const auto frameCount = m_renderer.framesInFlight(); m_viewUBOs.size() != frameCount )
+		{
+			m_viewUBOs.clear();
+			m_viewUBOs.reserve(frameCount);
+
+			for ( uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex )
+			{
+				auto uniformBufferObject = std::make_unique< Vulkan::UniformBufferObject >(m_renderer.device(), sizeof(ViewReconstructionGLSL::Data));
+				uniformBufferObject->setIdentifier(ClassId, "ViewReconstruction-F" + std::to_string(frameIndex), "UniformBufferObject");
+
+				if ( !uniformBufferObject->createOnHardware() )
+				{
+					TraceError{ClassId} << "Unable to create the view reconstruction buffer of frame #" << frameIndex << " !";
+
+					m_viewUBOs.clear();
+
+					return false;
+				}
+
+				m_viewUBOs.emplace_back(std::move(uniformBufferObject));
 			}
 		}
 
@@ -1449,6 +1477,33 @@ namespace EmEn::Graphics
 		const auto projectionYSign = mainRT->viewMatrices().projectionMatrix()[5] < 0.0F ? -1.0F : 1.0F;
 		const auto tanHalfFovY = std::tan(fovDeg * std::numbers::pi_v< float > / 360.0F) * projectionYSign;
 
+		/* The view reconstruction of the frame (ViewReconstructionGLSL): the matrices of the READ state, the ones that
+		 * rendered the depth buffer, in this frame's buffer. The two halves of a cut frame write the same values; the
+		 * frame's fence was waited before its slot is reused. */
+		const Vulkan::UniformBufferObject * viewData = nullptr;
+
+		if ( const auto frameIndex = m_renderer.currentFrameIndex(); frameIndex < m_viewUBOs.size() )
+		{
+			const auto readStateIndex = m_renderer.currentReadStateIndex();
+			const auto & viewMatrices = mainRT->viewMatrices();
+			const auto & projection = viewMatrices.projectionMatrix(readStateIndex);
+			const auto inverseProjection = projection.inverse();
+			const auto inverseRelativeViewProjection = (projection * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
+			const auto & position = viewMatrices.position(readStateIndex);
+
+			ViewReconstructionGLSL::Data data{};
+
+			std::copy_n(projection.data(), data.projection.size(), data.projection.begin());
+			std::copy_n(inverseProjection.data(), data.inverseProjection.size(), data.inverseProjection.begin());
+			std::copy_n(inverseRelativeViewProjection.data(), data.inverseRelativeViewProjection.size(), data.inverseRelativeViewProjection.begin());
+			data.cameraPosition = {position[Base::Math::X], position[Base::Math::Y], position[Base::Math::Z], 0.0F};
+
+			if ( m_viewUBOs[frameIndex]->writeData(Vulkan::MemoryRegion{&data, sizeof(data)}) )
+			{
+				viewData = m_viewUBOs[frameIndex].get();
+			}
+		}
+
 		/* Execute each enabled effect in the chain.
 		 * Each effect receives the output of the previous one.
 		 * NOTE: The GrabPass implements TextureInterface for its COLOR resources.
@@ -1491,6 +1546,7 @@ namespace EmEn::Graphics
 			.clouds = clouds,
 			/* The renderer's own frame state, not the scene's: the atmosphere THIS frame submitted. */
 			.atmosphere = m_renderer.frameSkyAtmosphere(),
+			.view = viewData,
 			.projectionJitter = mainRT->viewMatrices().projectionJitter(),
 			.residualExposure = [this, &stack, activeCamera] {
 				const auto toneMapping = stack.cameraToneMapping();
