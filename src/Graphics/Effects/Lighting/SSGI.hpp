@@ -127,9 +127,11 @@ namespace EmEn::Graphics::Effects::Lighting
 				float temporalNormalThreshold{0.8F};
 				float temporalVarianceGamma{1.0F};
 				uint32_t denoiserMaxAccumulation{64};
-				/* The denoiser's anti-lag: the fast history's length (frames) and its tolerance (standard deviations). */
+				/* The denoiser's anti-lag: the fast history's length (frames), its tolerance (standard deviations) and the
+				 * weight of the temporal deviation in one frame's noise. */
 				uint32_t denoiserAntiLagFastFrames{6};
 				float denoiserAntiLagSigma{3.0F};
+				float denoiserAntiLagTemporalSigma{0.5F};
 				/* Denoiser debug view (combine draws it INSTEAD of the GI): 0 = off,
 				 * 1 = temporal variance, 2 = accumulation age. */
 				uint32_t denoiserDebugView{0};

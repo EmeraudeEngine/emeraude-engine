@@ -166,6 +166,9 @@ namespace EmEn::Graphics
 				/* ANTI-LAG: how many standard deviations of the fast mean the fast and slow histories may differ by
 				 * before the slow one is shortened (the noise must never trip it). */
 				float antiLagSigmaScale{3.0F};
+				/* ANTI-LAG: the weight of the pixel's temporal deviation in one frame's noise (max with the 3x3 spatial
+				 * one): the spatial one alone reads 0 in a sparse estimator's empty windows. */
+				float antiLagTemporalSigmaScale{0.5F};
 				/* REFLECTION mode (RTR, 2026-09-13): the input is a 4-channel premultiplied colour +
 				 * confidence accumulated as a whole; the history is reprojected through the VIRTUAL
 				 * position of the reflected point (P + V·hitT, hitT from the hit-data texture handed to

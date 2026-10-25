@@ -127,7 +127,11 @@ Validated on Sponza: the variance map matches the owner's shimmer cartography
 the age map shows saturation on stable surfaces and permanent per-frame resets exactly on
 the wind-animated ivy and on silhouette edges under the TAA jitter — the first direct
 visualisation of the "jitter is the vibrator" mechanism, and the zone the stage-2 spatial
-variance fallback must cover.
+variance fallback must cover. The key is read by SSGI too (`IndirectDiffuse/Denoiser/DebugView`). ⚠️ The views write
+nits into a chain that holds nits × pre-exposure. From pre-exposure step 6 (2026-10-24) they read white under any
+exposure, until they were multiplied by the frame's pre-exposure (2026-10-25). Read the age view at a pinned exposure
+where 100 nits is mid-scale (f/4, 1/8 s, ISO 100): 64 frames reads ~200, the anti-lag's cap (~6–15) ~60–100, young
+pixels and the sky white.
 
 **Stage 5 — ANTI-LAG (2026-10-25, owner decision: the fast/slow history of NVIDIA's RELAX / ReBLUR — D. Zhdan,
 "ReBLUR: A Hierarchical Recurrent Denoiser", Ray Tracing Gems II, 2021).** The 1/N counter's floor, 1/64, made EVERY
@@ -136,8 +140,10 @@ default: on the raw input it costs ~5 % of the GI). Counted in frames, the lag w
 iGPU at 47 FPS (a lamp switched off, the dynamic sky's IBL moving). A new pass, recorded FIRST (`GIDenoiser/antiLag`),
 keeps a FAST mean of the raw luminance (`Denoiser/AntiLagFastFrames`, 6) with the moments' reprojection and validation,
 in an RG16F ping-pong (R the fast mean, G this frame's cap); it compares it with the SLOW mean (the moments' m1) against
-the fast mean's expected noise — the raw estimate's 3x3 spatial deviation over √(frames averaged) — times
-`Denoiser/AntiLagSigma` (3) plus a 2 % relative floor. Beyond it, the slow history's age is capped to the fast length
+the fast mean's expected noise times `Denoiser/AntiLagSigma` (3), plus a 2 % relative floor. That noise is one frame's
+deviation over √(frames averaged), one frame's deviation being the LARGER of the raw estimate's 3x3 spatial deviation
+and `Denoiser/AntiLagTemporalSigma` (0.5) × the pixel's temporal deviation (the slow moments). Beyond it, the slow
+history's age is capped to the fast length
 (a ramp over one more tolerance); the colour resolve and the moments apply the cap (flag bit 4, binding 8), restart
 together, and grow back to `MaxAccumulation`. Diffuse producers only (RTGI, SSGI; the reflection mode never runs it).
 `Denoiser/AntiLag` (default true) is the A/B lever.
@@ -145,10 +151,31 @@ together, and grow back to `MaxAccumulation`. Diffuse producers only (RTGI, SSGI
 | sky-lab, Linux, RTX 3070 Ti, ~390 FPS, exposure pinned: the floor at +0.1 / 0.25 / 0.5 / 1 s after a 0.76 → 0.80 jump | RT lane | SSGI lane |
 |---|---|---|
 | Anti-lag off (the former behaviour) | 39 / 21 / 8 / 2 | 32 / 19 / 8 / 2 |
-| Anti-lag on | **19 / 4 / 1 / 0** | **21 / 5 / 1 / 0** |
+| Anti-lag on, the first detector (spatial deviation alone, 711c70a7) | 19 / 4 / 1 / 0 | 21 / 5 / 1 / 0 |
+| Anti-lag on, the safe detector (temporal weight 0.5) | **24 / 10 / 4 / 1** | **28 / 15 / 7 / 2** |
 | `IndirectDiffuse` off (the measurement chain's own latency) | 10 / 1 / 0 / 0 | — |
 
-The steady state is untouched: the floor's temporal and spatial deviation over 16 frames is identical on and off
-(RT 0.027 / 0.890 at a 30° sun, 0.169 / 1.177 at twilight; SSGI alike) — the noise never trips it. Cost: 0.037 ms
-(`GIDenoiser/antiLag`, RTX 3070 Ti, GI resolution). 0 VUID, 0 SYNC-HAZARD (sky-lab both lanes, `reflexion-debug`).
+**⚠️ The first detector fired on the noise of a SPARSE estimator** (macOS-PA, 2026-10-25, confirmed on Linux). Where
+the screen-space lane's rays mostly miss (a dim corridor), most 3x3 windows hold no hit, so the spatial deviation reads
+0 and only the 2 % floor is left. The fast mean, dipping between two hits, crossed it nearly every frame and the slow
+history was held at 6 frames. SSGI's screen-space feedback amplified that small per-frame bias into an energy loss.
+- `labyrinth`, SSGI lane, converged right wall: 39.8 instead of 88.5.
+- The age view: mean 128.6 instead of 214.9.
+- The RT lane and sky-lab were untouched: identical noise on and off, and identical age view (244.1 vs 244.5). That
+  is why the steady-state checks above passed.
+
+Any trigger correlated with the noise biases the level: firing between hits loses energy, firing on a hit's arrival
+gains it (a detector on the tracked RMS of fast − slow: +33 %). The feedback amplifies either. The safe detector keeps
+`labyrinth`'s level (86.4) and the age view (214.4). It gives up most of the screen-space acceleration: on SSGI, much of
+the first detector's speed WAS that permanently short history. A `labyrinth` lamp switch-off reads, in the panel at
++1 / 2 / 3 / 5 s:
+- off: 50 / 17 / 5.3 / 2.5;
+- first detector: 3.5 / 2.4, but the scene's level after the switch was 19.4 instead of 29.7;
+- safe detector: 53 / 20 / 6.1 / 2.6.
+
+A per-pixel 3σ test on a 6-frame mean cannot separate SSGI's per-frame noise (of the order of the mean) from a full
+drop. Owner decision 2026-10-25: the safe detector now, a neighbourhood-pooled test next (ReBLUR / RELAX); A-SVGF's
+temporal gradients (Schied et al., HPG 2018) are the reference beyond. All the detectors measured are in item
+`gi-history-keeps-a-switched-off-emitter-lit`. Cost: 0.037 ms (`GIDenoiser/antiLag`, RTX 3070 Ti, GI resolution).
+0 VUID, 0 SYNC-HAZARD (sky-lab both lanes, `reflexion-debug`).
 

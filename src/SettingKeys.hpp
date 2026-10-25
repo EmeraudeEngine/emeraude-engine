@@ -1008,6 +1008,14 @@ namespace EmEn
 			constexpr auto DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagSigma{3.0F};
 			constexpr auto MinGraphicsPPIndirectDiffuseDenoiserAntiLagSigma{0.5F}; /* Inclusive: outside the range the default applies, with a warning. */
 			constexpr auto MaxGraphicsPPIndirectDiffuseDenoiserAntiLagSigma{32.0F};
+			/* The weight of the pixel's TEMPORAL deviation (its slow moments) in one frame's noise, beside the 3x3 spatial
+			 * one: noise = max(spatial, this × temporal). The spatial deviation alone reads 0 where a sparse estimator
+			 * hits nothing in a 3x3 window (the screen-space lane in a dim corridor) and the test then fires on the noise.
+			 * 0 = the spatial deviation alone (the first detector). Measured 2026-10-25: 0.25 still fires there. */
+			constexpr auto GraphicsPPIndirectDiffuseDenoiserAntiLagTemporalSigmaKey{"Core/Graphics/PostProcessing/IndirectDiffuse/Denoiser/AntiLagTemporalSigma"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagTemporalSigma{0.5F};
+			constexpr auto MinGraphicsPPIndirectDiffuseDenoiserAntiLagTemporalSigma{0.0F}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPIndirectDiffuseDenoiserAntiLagTemporalSigma{4.0F};
 			/* Debug view of the denoiser internals, drawn by the combine pass INSTEAD of the
 			 * GI contribution: 0 = off, 1 = temporal variance (binary-amplified x1e6 — a linear
 			 * scale is unreadable under the photometric exposure), 2 = accumulation age

@@ -103,7 +103,7 @@ layout(set = 0, binding = 9, std140) uniform FrameData
 	vec4 bounceParams;	/* x = multiBounceStrength, y = pre-exposure, z = variance-clip gamma, w = accumulation cap N. */
 	vec4 skyParams;		/* The producers' (unused here). */
 	vec4 skyStarMask;	/* The producers' (unused here). */
-	vec4 antiLagParams;	/* x = the fast history's length in frames, y = the tolerance in standard deviations. */
+	vec4 antiLagParams;	/* x = the fast history's length in frames, y = the tolerance in standard deviations, z = the weight of the temporal deviation in one frame's noise. */
 };
 
 const uint FlagVarianceClip = 1u;
@@ -512,8 +512,9 @@ void main()
 	 * "ReBLUR: A Hierarchical Recurrent Denoiser", Ray Tracing Gems II, 2021). Recorded FIRST, before the colour
 	 * resolve and the moments. It keeps a FAST mean of the raw luminance (antiLagParams.x frames) with the SAME
 	 * reprojection and validation as the moments, and compares it with the SLOW mean (the moments' m1, 1/N up to
-	 * maxAccumulation). The fast mean's expected noise is the raw estimate's 3x3 spatial deviation over the root of the
-	 * frames it averages; where the two means part by more than antiLagParams.y of it, the light changed and the slow
+	 * maxAccumulation). The fast mean's expected noise is one frame's deviation over the root of the frames it
+	 * averages, one frame's deviation being the larger of the raw estimate's 3x3 SPATIAL deviation and antiLagParams.z
+	 * of the pixel's TEMPORAL one (the slow moments); where the two means part by more than antiLagParams.y of it, the light changed and the slow
 	 * history's age is capped to the fast length (a smooth ramp over one more tolerance, so the noise cannot toggle it).
 	 * The colour resolve and the moments apply the cap: both restart together and converge in a few frames, then grow
 	 * back to maxAccumulation.
@@ -594,8 +595,10 @@ void main()
 		return;
 	}
 
-	/* PRE-EXPOSURE (D5), as the moments: both means were written at the history's pre-exposure. */
+	/* PRE-EXPOSURE (D5), as the moments: both means were written at the history's pre-exposure (the second moment
+	 * is stored as its root: squared back, it scales by r²). */
 	float slowMean = momS.r * prevCamPos.w;
+	float slowSecond = (momS.g * momS.g) * (prevCamPos.w * prevCamPos.w);
 	float previousFast = fastS.r * prevCamPos.w;
 	float age = momS.b;
 
@@ -603,9 +606,25 @@ void main()
 	float fastAlpha = max(1.0 / (age + 1.0), 1.0 / fastFrames);
 	float fastMean = mix(previousFast, luma, fastAlpha);
 
+	/* One frame's noise: the larger of the 3x3 spatial deviation and antiLagParams.z (0.5) of the pixel's TEMPORAL
+	 * deviation. The spatial one protects a hit's arrival (its own window holds it), the temporal one a run without
+	 * hits.
+	 * ⚠️ The spatial deviation ALONE (the first detector, 711c70a7) is blind to a SPARSE estimator: where most rays
+	 * miss (the screen-space lane in a dim corridor), most 3x3 windows hold no hit and read 0, leaving only the 2 %
+	 * floor. The fast mean, dipping between two hits, crossed it nearly every frame, the slow history was held at the
+	 * fast length, and the SSGI's screen-space feedback amplified that small per-frame bias into an energy loss
+	 * (labyrinth, 2026-10-25: the converged right wall 40 instead of 88, the age view at 60 % of its steady value;
+	 * found by macOS-PA). ANY trigger correlated with the noise biases the level, by firing between hits (a loss) or
+	 * on a hit's arrival (a gain), and the SSGI feedback amplifies either. Measured (item
+	 * gi-history-keeps-a-switched-off-emitter-lit): a weight of 0.25 still loses 28 %; 0.5 keeps the level and, on the
+	 * screen-space lane, gives up most of the acceleration, which a per-pixel test on a 6-frame mean of SSGI's noise
+	 * cannot deliver honestly (owner decision 2026-10-25: this safe detector now, a neighbourhood-pooled test next). */
+	float temporalSigma = sqrt(max(slowSecond - (slowMean * slowMean), 0.0));
+	float noiseSigma = max(spatialSigma, antiLagParams.z * temporalSigma);
+
 	/* The fast mean's expected noise: one frame's deviation over the root of the frames it averages. A small
 	 * relative floor keeps a noiseless (flat) region from tripping on rounding. */
-	float fastSigma = spatialSigma / sqrt(min(age + 1.0, fastFrames));
+	float fastSigma = noiseSigma / sqrt(min(age + 1.0, fastFrames));
 	float tolerance = antiLagParams.y * fastSigma + 0.02 * max(slowMean, fastMean) + 1e-6;
 	float excess = abs(fastMean - slowMean) / tolerance;
 
@@ -1266,7 +1285,7 @@ namespace EmEn::Graphics
 			 * (0 = no sky term for the screen-space producers). */
 			.skyParams = {inputs.skyLuminance, inputs.skyDistance, inputs.occlusionMaxDistance, static_cast< float >(inputs.lightCount)},
 			.skyStarMask = inputs.skyStarMask,
-			.antiLagParams = {static_cast< float >(m_parameters.antiLagFastFrames), m_parameters.antiLagSigmaScale, 0.0F, 0.0F}
+			.antiLagParams = {static_cast< float >(m_parameters.antiLagFastFrames), m_parameters.antiLagSigmaScale, m_parameters.antiLagTemporalSigmaScale, 0.0F}
 		};
 
 		const auto success = IndirectPostProcessEffect::updateUniformBufferData(*m_frameUBOs[frameIndex], &ubo, sizeof(FrameUBOData));
@@ -1291,7 +1310,9 @@ namespace EmEn::Graphics
 		CombineContribution contribution;
 		contribution.prefix = prefix;
 		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Moments", .texture = &this->momentsTexture()});
-		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{static_cast< float >(mode), 0.0F, 0.0F, 0.0F});
+		/* y: the frame's PRE-EXPOSURE — the chain holds nits × E_pre: a view authored in nits written raw read as
+		 * nits / E_pre, white under any exposure since the pre-exposure (step 6, 2026-10-24). */
+		contribution.dynamics.emplace_back(Base::Math::Vector< 4, float >{static_cast< float >(mode), m_framePreExposure, 0.0F, 0.0F});
 
 		contribution.code =
 			"\tvec4 " + p + "Mom = texture(" + p + "Moments, vUV);\n"
@@ -1305,7 +1326,8 @@ namespace EmEn::Graphics
 			"\t{\n"
 			"\t\t/* Accumulation age: white = young (< 4 frames, spatial-fallback zone). */\n"
 			"\t\tem_Color.rgb = " + p + "Mom.b < 4.0 ? vec3(1e4) : vec3(" + p + "Mom.b / 64.0 * 100.0);\n"
-			"\t}\n";
+			"\t}\n"
+			"\tem_Color.rgb *= emDyn." + p + "Dynamics0.y;\n";
 
 		return contribution;
 	}

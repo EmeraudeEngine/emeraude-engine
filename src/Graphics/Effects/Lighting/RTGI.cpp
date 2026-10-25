@@ -780,6 +780,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_parameters.denoiserAntiLag = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseDenoiserAntiLagKey, DefaultGraphicsPPIndirectDiffuseDenoiserAntiLag);
 		m_parameters.denoiserAntiLagFastFrames = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPIndirectDiffuseDenoiserAntiLagFastFramesKey, DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames, MinGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames, MaxGraphicsPPIndirectDiffuseDenoiserAntiLagFastFrames);
 		m_parameters.denoiserAntiLagSigma = settings.getOrSetDefaultInRange< float >(GraphicsPPIndirectDiffuseDenoiserAntiLagSigmaKey, DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagSigma, MinGraphicsPPIndirectDiffuseDenoiserAntiLagSigma, MaxGraphicsPPIndirectDiffuseDenoiserAntiLagSigma);
+		m_parameters.denoiserAntiLagTemporalSigma = settings.getOrSetDefaultInRange< float >(GraphicsPPIndirectDiffuseDenoiserAntiLagTemporalSigmaKey, DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagTemporalSigma, MinGraphicsPPIndirectDiffuseDenoiserAntiLagTemporalSigma, MaxGraphicsPPIndirectDiffuseDenoiserAntiLagTemporalSigma);
 		m_parameters.denoiserAccumulationCounter = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseDenoiserAccumulationCounterKey, DefaultGraphicsPPIndirectDiffuseDenoiserAccumulationCounter);
 		m_parameters.temporalAlpha = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalAlphaKey, DefaultGraphicsPPIndirectDiffuseTemporalAlpha);
 		m_parameters.temporalDepthTolerance = settings.getOrSetDefault< float >(GraphicsPPIndirectDiffuseTemporalDepthToleranceKey, DefaultGraphicsPPIndirectDiffuseTemporalDepthTolerance);
@@ -816,6 +817,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			.maxAccumulation = m_parameters.denoiserMaxAccumulation,
 			.antiLagFastFrames = m_parameters.denoiserAntiLagFastFrames,
 			.antiLagSigmaScale = m_parameters.denoiserAntiLagSigma,
+			.antiLagTemporalSigmaScale = m_parameters.denoiserAntiLagTemporalSigma,
 			.temporalNeighborhoodClamp = m_parameters.temporalNeighborhoodClamp,
 			.temporalAnimatedNoise = m_parameters.temporalAnimatedNoise,
 			.accumulationCounter = m_parameters.denoiserAccumulationCounter,
