@@ -36,6 +36,19 @@
 namespace EmEn::Scenes
 {
 	/**
+	 * @brief How a body's surface scatters the star's light, for its disc (graphics doc 42 § "The planets").
+	 */
+	enum class SkyScattering : uint8_t
+	{
+		/** @brief The lunar reflectance (Hapke–Lommel-Seeliger, the moons'). */
+		Lunar,
+		/** @brief Lambert's: a cloudy body (Venus, the giants) — its limb darkens. */
+		Lambert,
+		/** @brief Lommel-Seeliger's: a bare, dusty body (Mercury, Mars, Pluto) — its disc stays flat at full. */
+		LommelSeeliger
+	};
+
+	/**
 	 * @brief A body of the sky as the renderer sees it: where it stands and what it pours ABOVE the atmosphere.
 	 */
 	struct SkyBody
@@ -58,6 +71,11 @@ namespace EmEn::Scenes
 		/** @brief A moon: the planet's illuminance on it relative to the star's at this phase (the earthshine, gain
 		 * included). */
 		float earthshine{0.0F};
+		/** @brief A planet: unit world vector from its centre toward its longitude 0 on its equator (its rotation; `pole`
+		 * is its north pole then). The direction toward east longitude 90° is pole × primeMeridian. */
+		Base::Math::Vector< 3, float > primeMeridian{1.0F, 0.0F, 0.0F};
+		/** @brief How its surface scatters (a planet's disc). */
+		SkyScattering scattering{SkyScattering::Lunar};
 	};
 
 	/**
@@ -74,6 +92,9 @@ namespace EmEn::Scenes
 
 		/** @brief The most planets the state carries: Mercury to Neptune and Pluto, the Earth excepted. */
 		static constexpr uint32_t MaxPlanets{8};
+
+		/** @brief The planets' names, in the order of `planets`. */
+		static constexpr std::array< const char *, MaxPlanets > PlanetNames{"Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"};
 
 		/** @brief The star the atmosphere scatters (one in lot 1 of the dynamic sky, owner decision 2026-10-24). */
 		SkyBody sun{};

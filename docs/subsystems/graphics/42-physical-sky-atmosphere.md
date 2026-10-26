@@ -448,9 +448,9 @@ parallax) into `SkyState::planets`: the direction, the illuminance above the atm
 temperature), the angular diameter and the illuminated fraction. The renderer carries them in the frame's star field
 (`SkyStarField::planets`); the star pass draws them as POINTS like the stars — one points buffer per frame in flight,
 `[8 planets | the catalogue]`, the planets' 256 bytes rewritten each frame (their world direction projected on the
-equatorial axes), an empty slot skipped by its zero illuminance. A planet's footprint widens to its disc
-(σ = max(0.7 px, half its radius in pixels)): a stand-in until S3c draws the lit disc (the moons' mechanism) past
-~2 px. Planets need the sky to name a catalogue (the star pass is filed by it); the planet model draws none.
+equatorial axes), an empty slot skipped by its zero illuminance. A planet's footprint widens toward its disc
+(σ = max(0.7 px, half its radius in pixels)) and hands its light over to the lit disc from 1.5 to 3 px (§ "The
+planets' discs"). Planets need the sky to name a catalogue (the star pass is filed by it); the planet model draws none.
 Console: `CelestialClock.getState` → `planets` (name, direction, elevation, magnitude, diameter in arcseconds,
 illuminated fraction).
 
@@ -460,6 +460,38 @@ Keplerian elements' known limit on the giants: their mutual perturbations, Stand
 Mars 0.91 / 0.93, Saturn 0.46 / 0.47, Uranus 5.69 / 5.60, Jupiter −1.98 / −1.84 (Mallama vs the older Almanac
 formulas PyEphem uses); diameters within 0.3 % (Pluto aside); phases identical. On screen at 50 mm Mars and Jupiter
 land on their predicted pixel (< 1 px); at 800 mm Jupiter's spot spans its 6 px disc.
+
+### The planets' discs (lot S3c, 2026-10-26)
+Past ~2 px a planet is a lit DISC drawn by the sky material (the moons' mechanism generalised, owner decision 2026-10-26:
+"point, then disc"). The clock adds each planet's orientation — its north pole and its prime meridian
+(`Base::Math::SolarSystem::orientation()`, the IAU WGCCRE models, at the instant its light left it) — and its
+scattering (`SkyScattering::Lambert` for Venus and the giants, `LommelSeeliger` for Mercury, Mars, Pluto). The sky's
+frame texture grew to 48 texels: four per planet from `SkyAtmosphere::PlanetTexels` — the direction and the **SINE** of
+the angular radius, K × colour and the scattering, the pole and K, the prime meridian; the bodies block of the sky-view
+pass carries moons and planets.
+- **The radiance** is K f(μ0, μ), f = μ0 (Lambert) or μ0 / (μ0 + μ) (Lommel-Seeliger), K the scale whose disc
+  integral is the planet's illuminance (its magnitude): the disc mean of f is (2/3) Φ_L(α) or ½ Φ_LS(α)
+  (`planetTexels()`). Seen from afar (orthographic): the normal from the perpendicular offset.
+- **The cross-fade**: the disc's weight is smoothstep(1.5, 3, diameter in px) (the pixel from the sky direction's
+  derivatives), the star pass's point weight its complement (the pixel from the projection): the light moves from one
+  to the other. The disc's antialiased edge (±1 px) adds π e² / 3 to its area — divided out.
+- **The textured planet** (one per sky in S3c): manifest `"PlanetSurfaces": {"Mars": "Astronomy/Mars4K"}`,
+  `SkyAtmosphereResource::setPlanetSurface()`; the map's sphere mean luminance (`MoonSurfacePhotometry::sphereMean()`)
+  divided out — the map's colour stays, the light stays the magnitude's —, read by the planetocentric EAST longitude
+  (atan2(n · (pole × meridian), n · meridian)) and the latitude, with the moons' analytic gradients. Planets sit behind
+  the moons and in front of the star's disc (a transit covers it). sky-lab option 10 = 2.
+- ⚠️ **A float cannot test a planet's disc by its cosine**: cos 6″ = 1 − 4e-10, under the float's 6e-8 step. The
+  texel holds the sine, the shader the perpendicular offset.
+
+**Measured** (2026-10-26, Mars on 2020-10-13 23:00 UTC from Liège, 22.3″, sky-lab `…,1,1,2`, 0 VUID, one pinned
+exposure f/16 1/125 s ISO 100 in the tone curve's linear toe): the disc-integrated light over the pixels' solid angles
+8.13e-10 (200 mm, a point), 7.73e-10 (600 mm, 2.9 px, the cross-fade), 7.96e-10 (2 m, a 10-px disc), 7.94e-10 (20 m,
+97 px) — the light conserved within 5 % (the cross-fade was +10 % before the edge's area correction). The 20-m disc against a reference projection of
+the map (Python, the clock's pole and meridian, Lommel-Seeliger shading): **correlation 0.978** at the fitted position,
+0.03 for the mirrored map, −0.05 for half a turn, the best longitude shift 0° — and the base test matches Horizons's
+central meridian to 0.03°. ⚠️ **The disc sat 5.5 px (1.2″) above the projected position at 20 m** (0.16 px at 600 mm,
+invisible): not explained yet — the hypothesis is the sky cube's interpolated direction over triangles thousands of
+times the screen (engine item `sky-direction-precision-at-long-focal-lengths`).
 
 ### The manifest (Backgrounds store)
 `"Planet"` (a preset name, default `"Earth"`), `"Atmosphere"` (inline overrides: `GroundRadius`, `TopRadius`,

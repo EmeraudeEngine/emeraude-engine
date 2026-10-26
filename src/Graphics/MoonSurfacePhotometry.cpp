@@ -274,6 +274,39 @@ namespace EmEn::Graphics
 		}
 	}
 
+	std::optional< float >
+	MoonSurfacePhotometry::sphereMean (const PixelFactory::Pixmap< uint8_t > & map, bool sRGB) noexcept
+	{
+		if ( !map.isValid() )
+		{
+			return std::nullopt;
+		}
+
+		const TexelReader texels{map, sRGB};
+		double weighted = 0.0;
+		double weights = 0.0;
+
+		for ( size_t row = 0; row < texels.height(); ++row )
+		{
+			const auto weight = std::cos(latitudeOf(row, texels.height()));
+
+			for ( size_t column = 0; column < texels.width(); ++column )
+			{
+				weighted += weight * texels.luminance(row, column);
+				weights += weight;
+			}
+		}
+
+		const auto mean = weights > 0.0 ? weighted / weights : 0.0;
+
+		if ( !(mean > 1e-4) || !std::isfinite(mean) )
+		{
+			return std::nullopt;
+		}
+
+		return static_cast< float >(mean);
+	}
+
 	std::optional< MoonSurfacePhotometry >
 	MoonSurfacePhotometry::measure (const PixelFactory::Pixmap< uint8_t > & map, bool sRGB) noexcept
 	{

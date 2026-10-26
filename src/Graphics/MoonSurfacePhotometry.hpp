@@ -110,6 +110,17 @@ namespace EmEn::Graphics
 			static std::optional< MoonSurfacePhotometry > measure (const Base::PixelFactory::Pixmap< uint8_t > & map, bool sRGB) noexcept;
 
 			/**
+			 * @brief Returns the mean luminance, in linear light, of a map over the WHOLE sphere (each texel weighted by
+			 * cos(latitude), its area): the calibration of a turning body's surface (a planet's), whose integrated light
+			 * the magnitude already gives.
+			 * @param map A reference to the map's pixels (grey, RGB or RGBA, one byte per channel; equirectangular).
+			 * @param sRGB True when the pixels are sRGB-encoded.
+			 * @return std::optional< float > Nothing for an invalid or black map.
+			 */
+			[[nodiscard]]
+			static std::optional< float > sphereMean (const Base::PixelFactory::Pixmap< uint8_t > & map, bool sRGB) noexcept;
+
+			/**
 			 * @brief Returns the sub-solar point of a moon: the frame the sky shader draws its map in (the face toward the
 			 * observer, north along the orbit's pole) — keep both in step (SkyAtmosphereResource, the moons' block).
 			 * @note A pole along the line of sight falls back to the shader's substitute (world +Y, or +X when the moon is

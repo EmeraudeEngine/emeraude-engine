@@ -36,6 +36,8 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <span>
+#include <ranges>
 #include <string>
 
 /* Third-party inclusions. */
@@ -57,6 +59,7 @@
 #include "Math/Vector.hpp"
 #include "PixelFactory/Color.hpp"
 #include "Resources/Container.hpp"
+#include "Scenes/SkyState.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Renderable
@@ -273,10 +276,50 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
+		/* The textured planet (one in lot S3c): its index among the clock's planets and its map. */
+		uint32_t planetIndex = 0;
+		std::shared_ptr< TextureResource::Texture2D > planetSurface;
+
+		if ( data != nullptr && data->isMember(JKPlanetSurfaces) )
+		{
+			const auto & surfaces = (*data)[JKPlanetSurfaces];
+
+			if ( !surfaces.isObject() || surfaces.size() != 1 )
+			{
+				TraceError{ClassId} << "The '" << JKPlanetSurfaces << "' key of dynamic sky '" << this->name() << "' must be an object naming ONE planet and its map !";
+
+				return false;
+			}
+
+			const auto planetName = surfaces.getMemberNames().front();
+			/* Through a span: an array's iterator is a pointer with libstdc++, a class with MSVC's STL. */
+			const std::span< const char * const > planetNames{Scenes::SkyState::PlanetNames};
+			const auto found = std::ranges::find(planetNames, planetName);
+			const auto mapName = FastJSON::getValue< std::string >(surfaces, planetName.c_str());
+
+			if ( found == planetNames.end() || !mapName.has_value() || mapName->empty() )
+			{
+				TraceError{ClassId} << "The planet surface '" << planetName << "' of dynamic sky '" << this->name() << "' is not a planet with a texture name (Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, Pluto) !";
+
+				return false;
+			}
+
+			planetIndex = static_cast< uint32_t >(std::distance(planetNames.begin(), found));
+			planetSurface = TextureResource::getStoreTexture(*this->serviceProvider().container< TextureResource::Texture2D >(), mapName.value(), TextureResource::Usage{.sRGB = true});
+
+			/* An absent name answers the default resource: refused like a missing moon surface. */
+			if ( planetSurface == nullptr || planetSurface->name() == Resources::Default )
+			{
+				TraceError{ClassId} << "The surface '" << mapName.value() << "' of planet '" << planetName << "' of dynamic sky '" << this->name() << "' is not a texture of the store !";
+
+				return false;
+			}
+		}
+
 		auto atmosphere = std::make_shared< SkyAtmosphere >(this->name(), parameters);
 
 		const auto material = this->serviceProvider().container< Material::SkyAtmosphereResource >()
-			->getOrCreateResource(this->name() + "SkyMaterial", [atmosphere, look, moonSurfaces] (auto & materialResource) {
+			->getOrCreateResource(this->name() + "SkyMaterial", [atmosphere, look, moonSurfaces, planetIndex, planetSurface] (auto & materialResource) {
 				if ( !materialResource.setAtmosphere(atmosphere) )
 				{
 					return false;
@@ -290,6 +333,11 @@ namespace EmEn::Graphics::Renderable
 					}
 
 					++index;
+				}
+
+				if ( planetSurface != nullptr && !materialResource.setPlanetSurface(planetIndex, planetSurface) )
+				{
+					return false;
 				}
 
 				materialResource.setGrading(look.tint.value_or(White), look.intensity.value_or(1.0F));

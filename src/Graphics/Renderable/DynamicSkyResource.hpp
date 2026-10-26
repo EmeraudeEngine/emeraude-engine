@@ -87,7 +87,7 @@ namespace EmEn::Graphics::Renderable
 	 * "MieScattering", "MieAbsorption", "AbsorptionExtinction" per km as [r, g, b], "MiePhaseG" as [r, g, b] or one
 	 * number, "AbsorptionLayerWidth" in km, "GroundAlbedo" as [r, g, b]), the material's artistic
 	 * keys (Material::SkyAtmosphereResource: "Tint", "Intensity", "Saturation", "StarDisc", "LimbDarkening"), the moons'
-	 * "Moons", the star catalogue "StarCatalogue" and the background's photometry (AbstractBackground::parsePhotometry()).
+	 * "Moons", the planets' "PlanetSurfaces", the star catalogue "StarCatalogue" and the background's photometry (AbstractBackground::parsePhotometry()).
 	 * @extends EmEn::Graphics::Renderable::AbstractBackground The is a specialized background.
 	 */
 	class EMEN_API DynamicSkyResource final : public AbstractBackground
@@ -130,6 +130,10 @@ namespace EmEn::Graphics::Renderable
 			/** @brief The star catalogue the chain's star field draws (a Graphics::StarCatalogueResource of the store
 			 * `StarCatalogues`, e.g. "YaleBSC5"; graphics doc 42 § "The stars"). A dependency: the sky is loaded with it. */
 			static constexpr auto JKStarCatalogue{"StarCatalogue"};
+			/** @brief The planets' surfaces, an object { "<planet name>": "<store texture>" } (equirectangular, planetocentric,
+			 * 0° east longitude at the centre — Material::SkyAtmosphereResource::setPlanetSurface()). ONE planet in lot S3c
+			 * (graphics doc 42 § "The planets"): more is refused. */
+			static constexpr auto JKPlanetSurfaces{"PlanetSurfaces"};
 
 			/**
 			 * @brief Constructs a dynamic skybox resource.

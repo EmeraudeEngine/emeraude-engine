@@ -2848,6 +2848,25 @@ namespace EmEn::Graphics
 
 			inputs.moonCount = std::min(skyState.moonCount, SkyFrameInputs::MaxMoons);
 
+			/* The clock's planets, their discs drawn by the sky material past ~2 px (graphics doc 42 § "The planets"). */
+			static_assert(SkyFrameInputs::MaxPlanets == Scenes::SkyState::MaxPlanets, "The sky draws every planet the clock publishes.");
+
+			inputs.planetCount = std::min(skyState.planetCount, SkyFrameInputs::MaxPlanets);
+
+			std::ranges::transform(std::span{skyState.planets}.first(inputs.planetCount), inputs.planets.begin(), [] (const Scenes::SkyBody & planet) {
+				return SkyPlanetInputs{
+					.direction = planet.direction,
+					.pole = planet.pole,
+					.primeMeridian = planet.primeMeridian,
+					.color = planet.color,
+					.illuminance = planet.illuminance,
+					.angularDiameter = planet.angularDiameter,
+					/* The illuminated fraction is (1 + cos α) / 2. */
+					.phaseAngle = std::acos(std::clamp((2.0F * planet.illuminatedFraction) - 1.0F, -1.0F, 1.0F)),
+					.lommelSeeliger = planet.scattering == Scenes::SkyScattering::LommelSeeliger
+				};
+			});
+
 			std::ranges::transform(std::span{skyState.moons}.first(inputs.moonCount), inputs.moons.begin(), [] (const Scenes::SkyBody & moon) {
 				return SkyMoonInputs{
 					.direction = moon.direction,

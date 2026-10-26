@@ -107,8 +107,18 @@ namespace EmEn::Scenes::Component
 			Base::Math::SolarSystem::Body::Pluto
 		};
 
-		/** @brief Their names, in the same order. */
-		constexpr std::array< const char *, SkyState::MaxPlanets > PlanetNames{"Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto"};
+		/** @brief How each one's surface scatters, in the same order: the cloudy ones Lambert's, the bare ones
+		 * Lommel-Seeliger's. */
+		constexpr std::array< SkyScattering, SkyState::MaxPlanets > PlanetScattering{
+			SkyScattering::LommelSeeliger,
+			SkyScattering::Lambert,
+			SkyScattering::LommelSeeliger,
+			SkyScattering::Lambert,
+			SkyScattering::Lambert,
+			SkyScattering::Lambert,
+			SkyScattering::Lambert,
+			SkyScattering::LommelSeeliger
+		};
 
 		/**
 		 * @brief Returns a light's colour from a linear emission: the emission scaled to a largest component of 1 (the
@@ -763,6 +773,11 @@ namespace EmEn::Scenes::Component
 		namespace Solar = Base::Math::SolarSystem;
 
 		const auto centuries = Solar::julianCenturies(julianDayTT);
+		const auto precession = Solar::precessionFromJ2000(centuries);
+		/* A J2000 axis of a planet, as a world vector (at infinity: its orientation, not its place). */
+		const auto axisToWorld = [this, &precession, &observer] (const Vector< 3, double > & axisJ2000) {
+			return this->toWorld(Solar::topocentric({.direction = precession(axisJ2000), .distance = std::numeric_limits< double >::infinity()}, m_localSiderealAngle, observer));
+		};
 
 		for ( size_t index = 0; index < PlanetBodies.size(); ++index )
 		{
@@ -772,6 +787,8 @@ namespace EmEn::Scenes::Component
 			const auto magnitude = Solar::apparentMagnitude(body, position, body == Solar::Body::Saturn ? Solar::saturnRingOpening(position, centuries) : 0.0);
 			const auto colourIndex = std::next(Solar::PlanetAppearances.cbegin(), static_cast< std::ptrdiff_t >(body))->colourIndex;
 			auto & planet = *std::next(m_planets.begin(), static_cast< std::ptrdiff_t >(index));
+			/* Its face as the light that reaches us left it. */
+			const auto frame = Solar::orientation(body, julianDayTT - position.lightTime);
 
 			*std::next(m_planetMagnitudes.begin(), static_cast< std::ptrdiff_t >(index)) = static_cast< float >(magnitude);
 
@@ -780,7 +797,10 @@ namespace EmEn::Scenes::Component
 				.illuminance = Graphics::Photometry::illuminanceFromMagnitude(static_cast< float >(magnitude)),
 				.color = linearChromaticity(Graphics::Photometry::temperatureFromColourIndex(static_cast< float >(colourIndex))),
 				.angularDiameter = static_cast< float >(Sky::degrees(Solar::angularDiameter(body, position.distance))),
-				.illuminatedFraction = static_cast< float >(0.5 * (1.0 + std::cos(position.phaseAngle)))
+				.illuminatedFraction = static_cast< float >(0.5 * (1.0 + std::cos(position.phaseAngle))),
+				.pole = axisToWorld(frame.pole),
+				.primeMeridian = axisToWorld(frame.primeMeridian),
+				.scattering = *std::next(PlanetScattering.cbegin(), static_cast< std::ptrdiff_t >(index))
 			};
 		}
 	}
@@ -788,7 +808,7 @@ namespace EmEn::Scenes::Component
 	const char *
 	CelestialClock::planetName (size_t index) noexcept
 	{
-		return index < PlanetNames.size() ? *std::next(PlanetNames.cbegin(), static_cast< std::ptrdiff_t >(index)) : "";
+		return index < SkyState::PlanetNames.size() ? *std::next(SkyState::PlanetNames.cbegin(), static_cast< std::ptrdiff_t >(index)) : "";
 	}
 
 	void

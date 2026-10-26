@@ -85,12 +85,17 @@ namespace EmEn::Graphics::Material
 		constexpr uint32_t FrameBinding{4};
 		/* The moons' surfaces: one binding per moon, from 5 (an unused one holds the transmittance table, never read). */
 		constexpr uint32_t MoonSurfaceBinding{5};
+		/* The textured planet's surface, after the moons' (the transmittance table when there is none, never read). */
+		constexpr uint32_t PlanetSurfaceBinding{MoonSurfaceBinding + SkyAtmosphereResource::MaxMoons};
+		/* The most planets the frame carries, and where they start in the frame texture. */
+		constexpr uint32_t MaxPlanets{SkyFrameInputs::MaxPlanets};
 
 		/* GLSL names. */
 		constexpr auto SkyDirection{"skyDirection"};
 		constexpr auto SkyViewLut{"skyViewLut"};
 		constexpr auto TransmittanceLut{"skyTransmittanceLut"};
 		constexpr auto FrameData{"skyFrameData"};
+		constexpr auto PlanetSurface{"skyPlanetSurfaceMap"};
 		/**
 		 * @brief A moon's names in the generated shader.
 		 */
@@ -187,6 +192,46 @@ namespace EmEn::Graphics::Material
 
 			return std::make_shared< const MoonSurfacePhotometry >(photometry.value());
 		}
+
+		/**
+		 * @brief Measures a planet's surface: its luminance over the whole sphere (MoonSurfacePhotometry::sphereMean()).
+		 * @param material The sky material's name, for the traces.
+		 * @param planetIndex The planet's index.
+		 * @param surface A reference to the surface texture, loaded (its pixels are leased while measured).
+		 * @return std::optional< float > Nothing (traced) when the surface has no measurable pixels: the planet keeps a
+		 * uniform albedo.
+		 */
+		[[nodiscard]]
+		std::optional< float >
+		measurePlanetSurface (const std::string & material, uint32_t planetIndex, TextureResource::Texture2D & surface) noexcept
+		{
+			const auto image = surface.localData();
+
+			if ( image == nullptr )
+			{
+				TraceError{SkyAtmosphereResource::ClassId} << "The surface '" << surface.name() << "' of planet #" << planetIndex << " of sky material '" << material << "' has no pixels to measure: the planet is drawn with a uniform albedo !";
+
+				return std::nullopt;
+			}
+
+			const auto lease = image->acquireLocalData();
+
+			if ( !lease.isValid() )
+			{
+				TraceError{SkyAtmosphereResource::ClassId} << "The pixels of the surface '" << surface.name() << "' of planet #" << planetIndex << " of sky material '" << material << "' could not be read: the planet is drawn with a uniform albedo !";
+
+				return std::nullopt;
+			}
+
+			const auto mean = MoonSurfacePhotometry::sphereMean(image->data(), surface.isSRGB());
+
+			if ( !mean.has_value() )
+			{
+				TraceError{SkyAtmosphereResource::ClassId} << "The surface '" << surface.name() << "' of planet #" << planetIndex << " of sky material '" << material << "' is black: the planet is drawn with a uniform albedo !";
+			}
+
+			return mean;
+		}
 	}
 
 	SkyAtmosphereResource::SkyAtmosphereResource (Resources::AbstractServiceProvider & serviceProvider, const std::string & name, uint32_t resourceFlags) noexcept
@@ -271,9 +316,58 @@ namespace EmEn::Graphics::Material
 		return this->addDependency(texture);
 	}
 
+	bool
+	SkyAtmosphereResource::setPlanetSurface (uint32_t planetIndex, const std::shared_ptr< TextureResource::Texture2D > & texture) noexcept
+	{
+		if ( planetIndex >= MaxPlanets )
+		{
+			TraceError{ClassId} << "The sky material '" << this->name() << "' draws " << MaxPlanets << " planets: no surface for planet #" << planetIndex << " !";
+
+			return false;
+		}
+
+		if ( texture == nullptr )
+		{
+			TraceError{ClassId} << "The sky material '" << this->name() << "' refused a null surface for planet #" << planetIndex << " !";
+
+			return false;
+		}
+
+		if ( this->isCreated() )
+		{
+			TraceError{ClassId} << "The sky material '" << this->name() << "' is already created: the surface of planet #" << planetIndex << " can't change !";
+
+			return false;
+		}
+
+		if ( m_planetSurface != nullptr )
+		{
+			TraceError{ClassId} << "The sky material '" << this->name() << "' already textures planet #" << m_planetSurfaceIndex << ": one textured planet per sky !";
+
+			return false;
+		}
+
+		m_planetSurface = texture;
+		m_planetSurfaceIndex = planetIndex;
+
+		return this->addDependency(texture);
+	}
+
 	void
 	SkyAtmosphereResource::onBeforeCreation () noexcept
 	{
+		/* The textured planet: its sphere mean divided out (the magnitude already gives its light). */
+		m_properties[PlanetSurfaceOffset] = 0.0F;
+		m_properties[PlanetSurfaceOffset + 1] = static_cast< float >(m_planetSurfaceIndex);
+
+		if ( m_planetSurface != nullptr )
+		{
+			if ( const auto mean = measurePlanetSurface(this->name(), m_planetSurfaceIndex, *m_planetSurface) )
+			{
+				m_properties[PlanetSurfaceOffset] = 1.0F / mean.value();
+			}
+		}
+
 		/* The moons' surfaces: their near side's projected mean divided out, their photometry kept for the moons' light
 		 * (MoonSurfacePhotometry). Every index below is < MaxMoons, the size of the three arrays. */
 		const auto scales = std::span{m_properties}.subspan< MoonSurfacesOffset, MaxMoons >();
@@ -401,6 +495,8 @@ namespace EmEn::Graphics::Material
 			newLayout->declareCombinedImageSampler(MoonSurfaceBinding + index, VK_SHADER_STAGE_FRAGMENT_BIT);
 		}
 
+		newLayout->declareCombinedImageSampler(PlanetSurfaceBinding, VK_SHADER_STAGE_FRAGMENT_BIT);
+
 		if ( !layoutManager.createDescriptorSetLayout(newLayout) )
 		{
 			return false;
@@ -471,6 +567,17 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
+		const auto planetWritten = m_planetSurface != nullptr && m_properties[PlanetSurfaceOffset] > 0.0F ?
+			m_descriptorSet->writeCombinedImageSampler(PlanetSurfaceBinding, *m_planetSurface) :
+			writeTable(PlanetSurfaceBinding, m_atmosphere->transmittance());
+
+		if ( !planetWritten )
+		{
+			TraceError{ClassId} << "Unable to write the planet's surface to the descriptor set of sky material '" << this->name() << "' !";
+
+			return false;
+		}
+
 		return true;
 	}
 
@@ -531,6 +638,7 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SkyGrading);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SkyStar);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SkyMoonSurfaces);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SkyPlanetSurface);
 
 		return block;
 	}
@@ -611,6 +719,11 @@ namespace EmEn::Graphics::Material
 			}
 
 			++index;
+		}
+
+		if ( !fragmentShader.declare(Declaration::Sampler{materialSet, PlanetSurfaceBinding, GLSL::Sampler2D, PlanetSurface}) )
+		{
+			return false;
 		}
 
 		for ( const auto * function : {&AtmosphereGLSL::FromUnitToSubUv, &AtmosphereGLSL::RaySphereNearest, &AtmosphereGLSL::TransmittanceParametersToUv, &AtmosphereGLSL::SkyViewParametersToUv, &AtmosphereGLSL::SkyViewLookup, &AtmosphereGLSL::Grade, &AtmosphereGLSL::LunarReflectance} )
@@ -741,8 +854,68 @@ namespace EmEn::Graphics::Material
 			++index;
 		}
 
+		/* The PLANETS (graphics doc 42 § "The planets"): frame texels PlanetTexels + 4j — the direction and the SINE of the
+		 * angular radius (a float's cos of a few arc seconds is 1: the disc is tested on the perpendicular offset), K × the
+		 * colour and the scattering, the pole and K, the prime meridian. Each disc is a sphere seen from afar (orthographic:
+		 * the normal from the offset), Lambert's or Lommel-Seeliger's radiance K f(μ0, μ) whose integral is the magnitude's
+		 * illuminance, through the atmosphere, behind the moons. Under 1.5 px the star pass draws it as a point; from 1.5 to
+		 * 3 px the two cross-fade (the same weight on both sides: the light is conserved). The textured planet reads its map
+		 * by its planetocentric east longitude and latitude, the gradients by the chain rule from skyDirDx / skyDirDy. */
+		const auto planetSurface = MaterialUB(UniformBlock::Component::SkyPlanetSurface);
+
 		Code{fragmentShader, Location::Top} <<
-			SkyRadiance << " += (skySunDisc * (1.0 - skyMoonCover)) + skyMoonLight;" << Line::End <<
+			"const int skyPlanetCount = int(clamp(texelFetch(" << FrameData << ", ivec2(2, 0), 0).y, 0.0, " << MaxPlanets << ".0));" << Line::End <<
+			"const float skyPixelAngle = max(max(length(skyDirDx), length(skyDirDy)), 1e-12);" << Line::End <<
+			"vec3 skyPlanetLight = vec3(0.0);" << Line::End <<
+			"float skyPlanetCover = 0.0;" << Line::End <<
+			"for ( int skyPlanet = 0; skyPlanet < skyPlanetCount; ++skyPlanet ) {" << Line::End <<
+			"	const int skyTexel = " << SkyAtmosphere::PlanetTexels << " + (4 * skyPlanet);" << Line::End <<
+			"	const vec4 skyPlanetCentre = texelFetch(" << FrameData << ", ivec2(skyTexel, 0), 0);" << Line::End <<
+			"	const float skyPlanetSin = max(skyPlanetCentre.w, 1e-12);" << Line::End <<
+			"	const float skyPlanetWeight = smoothstep(1.5, 3.0, 2.0 * skyPlanetSin / skyPixelAngle);" << Line::End <<
+			"	const vec3 skyOffset = skyDir - (skyPlanetCentre.xyz * dot(skyDir, skyPlanetCentre.xyz));" << Line::End <<
+			"	const float skyRho = length(skyOffset) / skyPlanetSin;" << Line::End <<
+			/* One pixel of the disc's radius, for the antialiased edge. */
+			"	const float skyRhoEdge = skyPixelAngle / skyPlanetSin;" << Line::End <<
+			"	if ( skyPlanetWeight <= 0.0 || skyHitsGround || skyRho >= 1.0 + skyRhoEdge || dot(skyDir, skyPlanetCentre.xyz) <= 0.0 ) {" << Line::End <<
+			"		continue;" << Line::End <<
+			"	}" << Line::End <<
+			"	const vec4 skyPlanetLightK = texelFetch(" << FrameData << ", ivec2(skyTexel + 1, 0), 0);" << Line::End <<
+			"	const vec4 skyPlanetPole = texelFetch(" << FrameData << ", ivec2(skyTexel + 2, 0), 0);" << Line::End <<
+			"	const vec4 skyPlanetMeridian = texelFetch(" << FrameData << ", ivec2(skyTexel + 3, 0), 0);" << Line::End <<
+			"	const float skyDepth = sqrt(max(1.0 - min(skyRho * skyRho, 1.0), 0.0));" << Line::End <<
+			"	const vec3 skyNormal = normalize((skyOffset / skyPlanetSin) - (skyPlanetCentre.xyz * skyDepth));" << Line::End <<
+			"	const float skyMu0 = max(dot(skyNormal, skyStarDir), 0.0);" << Line::End <<
+			"	const float skyMu = max(dot(skyNormal, -skyDir), 1e-4);" << Line::End <<
+			"	const float skyShape = skyPlanetLightK.w > 0.5 ? skyMu0 / (skyMu0 + skyMu) : skyMu0;" << Line::End <<
+			"	vec3 skyPlanetRadiance = skyPlanetLightK.rgb * skyShape;" << Line::End <<
+			"	if ( " << planetSurface << ".x > 0.0 && skyPlanet == int(" << planetSurface << ".y + 0.5) ) {" << Line::End <<
+			"		const vec3 skyEast = cross(skyPlanetPole.xyz, skyPlanetMeridian.xyz);" << Line::End <<
+			"		const vec3 skyLocal = vec3(dot(skyNormal, skyPlanetMeridian.xyz), dot(skyNormal, skyEast), dot(skyNormal, skyPlanetPole.xyz));" << Line::End <<
+			"		const vec2 skyUv = vec2(0.5 + (atan(skyLocal.y, skyLocal.x) / 6.28318531), 0.5 - (asin(clamp(skyLocal.z, -1.0, 1.0)) / 3.14159265));" << Line::End <<
+			/* dn = do / sin r − c d(depth), d(depth) = −(o · do) / (sin² r depth); then the moons' du, dv. */
+			"		mat2 skyGradients;" << Line::End <<
+			"		for ( int skyAxis = 0; skyAxis < 2; ++skyAxis ) {" << Line::End <<
+			"			const vec3 skyDd = skyAxis == 0 ? skyDirDx : skyDirDy;" << Line::End <<
+			"			const vec3 skyDo = skyDd - (skyPlanetCentre.xyz * dot(skyDd, skyPlanetCentre.xyz));" << Line::End <<
+			"			const float skyDdepth = -dot(skyOffset, skyDo) / (skyPlanetSin * skyPlanetSin * max(skyDepth, 1e-3));" << Line::End <<
+			"			const vec3 skyDn = (skyDo / skyPlanetSin) - (skyPlanetCentre.xyz * skyDdepth);" << Line::End <<
+			"			const vec3 skyDl = vec3(dot(skyDn, skyPlanetMeridian.xyz), dot(skyDn, skyEast), dot(skyDn, skyPlanetPole.xyz));" << Line::End <<
+			"			skyGradients[skyAxis] = vec2(((skyLocal.x * skyDl.y) - (skyLocal.y * skyDl.x)) / (6.28318531 * max(dot(skyLocal.xy, skyLocal.xy), 1e-8)), -skyDl.z / (3.14159265 * sqrt(max(1.0 - (skyLocal.z * skyLocal.z), 1e-8))));" << Line::End <<
+			"		}" << Line::End <<
+			/* The map's own colour, its sphere mean luminance divided out: K × f × the relative albedo. */
+			"		skyPlanetRadiance = skyPlanetPole.w * skyShape * textureGrad(" << PlanetSurface << ", skyUv, skyGradients[0], skyGradients[1]).rgb * " << planetSurface << ".x;" << Line::End <<
+			"	}" << Line::End <<
+			"	const float skyPlanetEdge = 1.0 - smoothstep(1.0 - skyRhoEdge, 1.0 + skyRhoEdge, skyRho);" << Line::End <<
+			"	const vec3 skyPlanetTransmittance = textureLod(" << TransmittanceLut << ", atmTransmittanceParametersToUv(skyViewHeight, skyDir.y), 0.0).rgb;" << Line::End <<
+			/* The antialiased edge, a ramp of ±1 px, adds π e² / 3 to a disc of radius 1 (e in its radius): divided out, a
+			 * 1.5-px disc keeps the light of its point. */
+			"	skyPlanetLight += skyPlanetRadiance * skyPlanetTransmittance * skyPlanetEdge * skyPlanetWeight / (1.0 + (skyRhoEdge * skyRhoEdge / 3.0));" << Line::End <<
+			"	skyPlanetCover = max(skyPlanetCover, skyPlanetEdge * skyPlanetWeight);" << Line::End <<
+			"}";
+
+		Code{fragmentShader, Location::Top} <<
+			SkyRadiance << " += (skySunDisc * (1.0 - max(skyMoonCover, skyPlanetCover))) + (skyPlanetLight * (1.0 - skyMoonCover)) + skyMoonLight;" << Line::End <<
 			/* The artistic grading, shared with the environment capture (AtmosphereGLSL::Grade). */
 			SkyRadiance << " = atmGrade(" << SkyRadiance << ", " << grading << ", " << star << ".x);";
 

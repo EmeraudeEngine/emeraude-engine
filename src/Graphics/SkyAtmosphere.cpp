@@ -75,13 +75,51 @@ namespace
 	constexpr uint32_t MultipleScatteringBinding{2};
 	constexpr uint32_t OutputBinding{3};
 	constexpr uint32_t FrameBinding{4};
-	/* The sky-view pass only: the frame's moons (SkyAtmosphere::m_moonBuffer). */
-	constexpr uint32_t MoonBinding{5};
+	/* The sky-view pass only: the frame's moons and planets (SkyAtmosphere::m_bodyBuffer). */
+	constexpr uint32_t BodyBinding{5};
 
-	/** @brief The moon block (std140): a vec4 header (the moon count), then three vec4 per moon — the frame texture's
-	 * texels 4 + 3i to 6 + 3i, copied as they are. */
-	constexpr uint32_t MoonBlockVectors{1 + (3 * EmEn::Graphics::SkyFrameInputs::MaxMoons)};
-	constexpr VkDeviceSize MoonBlockBytes{static_cast< VkDeviceSize >(MoonBlockVectors) * 4 * sizeof(float)};
+	/** @brief The bodies block (std140): a vec4 header (the moon count, the planet count), then the frame texture's
+	 * texels 4 to FrameTexels − 1 — three vec4 per moon, four per planet —, copied as they are. */
+	constexpr uint32_t BodyTexelCount{EmEn::Graphics::SkyAtmosphere::FrameTexels - 4};
+	constexpr uint32_t BodyBlockVectors{1 + BodyTexelCount};
+	constexpr VkDeviceSize BodyBlockBytes{static_cast< VkDeviceSize >(BodyBlockVectors) * 4 * sizeof(float)};
+
+	/**
+	 * @brief Returns a planet's four frame texels (SkyAtmosphere::FrameTexels): its direction and the SINE of its angular
+	 * radius (a float's cos of 6" is 1: the disc is tested on the perpendicular distance); K × its colour and its scattering; its pole and K; its prime meridian.
+	 * @note K is the radiance scale whose disc integral is the planet's illuminance: the radiance is K f(μ0, μ), and the
+	 * disc's mean of f at the phase angle α is (2/3) Φ_L(α) for Lambert's f = μ0 (Φ_L = (sin α + (π − α) cos α) / π)
+	 * and ½ Φ_LS(α) for Lommel-Seeliger's f = μ0 / (μ0 + μ) (Base::Math::Astronomy::lommelSeeligerPhaseLaw()).
+	 * @param planet A reference to the planet.
+	 * @return std::array< float, 16 >
+	 */
+	[[nodiscard]]
+	std::array< float, 16 >
+	planetTexels (const EmEn::Graphics::SkyPlanetInputs & planet) noexcept
+	{
+		using EmEn::Base::Math::Vector;
+
+		const auto direction = planet.direction.lengthSquared() > 0.0F ? planet.direction.normalized() : Vector< 3, float >{0.0F, 1.0F, 0.0F};
+		const auto pole = planet.pole.lengthSquared() > 0.0F ? planet.pole.normalized() : Vector< 3, float >{0.0F, 1.0F, 0.0F};
+		const auto meridian = planet.primeMeridian.lengthSquared() > 0.0F ? planet.primeMeridian.normalized() : Vector< 3, float >{1.0F, 0.0F, 0.0F};
+		const auto radius = 0.5 * static_cast< double >(std::clamp(planet.angularDiameter, 0.0F, 90.0F)) * (std::numbers::pi / 180.0);
+		/* 1 − cos r loses its digits under ~1": 2 sin²(r / 2) keeps them (Mars at 6", a disc of 4e-10 sr). */
+		const auto half = std::sin(0.5 * radius);
+		const auto solidAngle = 4.0 * std::numbers::pi * half * half;
+		const auto alpha = std::clamp(static_cast< double >(planet.phaseAngle), 0.0, std::numbers::pi);
+		const auto meanShape = planet.lommelSeeliger ?
+			0.5 * EmEn::Base::Math::Astronomy::lommelSeeligerPhaseLaw(alpha) :
+			(2.0 / 3.0) * (std::sin(alpha) + ((std::numbers::pi - alpha) * std::cos(alpha))) / std::numbers::pi;
+		const auto illuminance = std::isfinite(planet.illuminance) ? std::max(0.0, static_cast< double >(planet.illuminance)) : 0.0;
+		const auto scale = static_cast< float >(solidAngle > 0.0 && meanShape > 1e-9 ? illuminance / (solidAngle * meanShape) : 0.0);
+
+		return {
+			direction.x(), direction.y(), direction.z(), static_cast< float >(std::sin(radius)),
+			planet.color.x() * scale, planet.color.y() * scale, planet.color.z() * scale, planet.lommelSeeliger ? 1.0F : 0.0F,
+			pole.x(), pole.y(), pole.z(), scale,
+			meridian.x(), meridian.y(), meridian.z(), 0.0F
+		};
+	}
 
 	/** @brief The sky-view pass's push constants: the star and the camera of the frame. */
 	struct SkyViewPushConstants
@@ -383,13 +421,13 @@ layout(local_size_x = 8, local_size_y = 8) in;
 	constexpr auto SkyViewMain = R"GLSL(
 layout(set = 0, binding = 4, rgba32f) uniform writeonly image2D frameImage;
 
-/* The frame's moons (SkyAtmosphere::recordFrame()): header.x the count, then three vec4 per moon, the frame texture's
- * layout (SkyAtmosphere::FrameTexels). */
-layout(set = 0, binding = 5, std140) uniform SkyMoons
+/* The frame's moons and planets (SkyAtmosphere::recordFrame()): header.x the moon count, header.y the planet count, then
+ * the frame texture's texels from 4 on (SkyAtmosphere::FrameTexels). */
+layout(set = 0, binding = 5, std140) uniform SkyBodies
 {
 	vec4 header;
-	vec4 texels[12];
-} moons;
+	vec4 texels[AtmBodyTexels];
+} bodies;
 
 layout(push_constant) uniform SkyViewPushConstants
 {
@@ -407,12 +445,12 @@ void main ()
 	{
 		imageStore(frameImage, ivec2(0, 0), vec4(frame.sunDirectionHeight.xyz, frame.sunIlluminanceCos.w));
 		imageStore(frameImage, ivec2(1, 0), vec4(frame.sunIlluminanceCos.rgb, viewHeight));
-		imageStore(frameImage, ivec2(2, 0), vec4(moons.header.x, 0.0, 0.0, 0.0));
+		imageStore(frameImage, ivec2(2, 0), vec4(bodies.header.x, bodies.header.y, 0.0, 0.0));
 		imageStore(frameImage, ivec2(3, 0), vec4(0.0));
 
-		for ( int index = 0; index < 12; ++index )
+		for ( int index = 0; index < AtmBodyTexels; ++index )
 		{
-			imageStore(frameImage, ivec2(4 + index, 0), moons.texels[index]);
+			imageStore(frameImage, ivec2(4 + index, 0), bodies.texels[index]);
 		}
 	}
 
@@ -804,10 +842,10 @@ namespace EmEn::Graphics
 		}
 
 		/* ---- The frame's moons: written in each frame's command stream (recordFrame()), read by the sky-view pass. ---- */
-		m_moonBuffer = std::make_unique< Buffer >(device, 0, MoonBlockBytes, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, false);
-		m_moonBuffer->setIdentifier(ClassId, m_name + "Moons", "Buffer");
+		m_bodyBuffer = std::make_unique< Buffer >(device, 0, BodyBlockBytes, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, false);
+		m_bodyBuffer->setIdentifier(ClassId, m_name + "Bodies", "Buffer");
 
-		if ( !m_moonBuffer->createOnHardware() )
+		if ( !m_bodyBuffer->createOnHardware() )
 		{
 			TraceError{ClassId} << "Unable to create the moon buffer of the sky '" << m_name << "' !";
 
@@ -831,7 +869,7 @@ namespace EmEn::Graphics
 		declare(MultipleScatteringBinding, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
 		declare(OutputBinding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 		declare(FrameBinding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
-		declare(MoonBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		declare(BodyBinding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
 		if ( !m_descriptorSetLayout->createOnHardware() )
 		{
@@ -887,7 +925,7 @@ namespace EmEn::Graphics
 
 		if ( !makePipeline("SkyTransmittanceCS", std::string{TransmittanceShader} + atmosphereGLSL + IntegrationGLSL + outputGLSL + TransmittanceMain, m_transmittancePipeline) ||
 			 !makePipeline("SkyMultipleScatteringCS", std::string{MultipleScatteringShader} + atmosphereGLSL + IntegrationGLSL + outputGLSL + MultipleScatteringMain, m_multipleScatteringPipeline) ||
-			 !makePipeline("SkyViewCS", std::string{SkyViewShader} + atmosphereGLSL + IntegrationGLSL + outputGLSL + SkyViewMain, m_skyViewPipeline) )
+			 !makePipeline("SkyViewCS", std::string{SkyViewShader} + atmosphereGLSL + IntegrationGLSL + outputGLSL + "const int AtmBodyTexels = " + std::to_string(BodyTexelCount) + ";\n" + SkyViewMain, m_skyViewPipeline) )
 		{
 			return false;
 		}
@@ -948,7 +986,7 @@ namespace EmEn::Graphics
 			sampled(*m_skyViewSet, MultipleScatteringBinding, m_multipleScattering) &&
 			m_skyViewSet->writeStorageImage(OutputBinding, *m_skyView.storageView()) &&
 			m_skyViewSet->writeStorageImage(FrameBinding, *m_frameData.storageView()) &&
-			m_skyViewSet->writeUniformBuffer(MoonBinding, m_moonBuffer->getDescriptorInfo(0, static_cast< uint32_t >(MoonBlockBytes))) &&
+			m_skyViewSet->writeUniformBuffer(BodyBinding, m_bodyBuffer->getDescriptorInfo(0, static_cast< uint32_t >(BodyBlockBytes))) &&
 			sampled(*m_aerialPerspectiveSet, TransmittanceBinding, m_transmittance) &&
 			sampled(*m_aerialPerspectiveSet, MultipleScatteringBinding, m_multipleScattering) &&
 			m_aerialPerspectiveSet->writeStorageImage(OutputBinding, *m_aerialInscatter.storageView()) &&
@@ -1014,9 +1052,9 @@ namespace EmEn::Graphics
 		toSampled(m_multipleScattering);
 
 		/* No moon until a frame says otherwise (recordFrame() rewrites the block before every sky-view dispatch). */
-		commandBuffer->fill(*m_moonBuffer, 0, MoonBlockBytes, 0U);
+		commandBuffer->fill(*m_bodyBuffer, 0, BodyBlockBytes, 0U);
 		commandBuffer->pipelineBarrier(
-			Sync::BufferMemoryBarrier{*m_moonBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT},
+			Sync::BufferMemoryBarrier{*m_bodyBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT},
 			VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
 		);
 
@@ -1084,17 +1122,20 @@ namespace EmEn::Graphics
 			.sunIlluminanceCos = {inputs.sunIlluminance.x(), inputs.sunIlluminance.y(), inputs.sunIlluminance.z(), std::cos(angularRadius)}
 		};
 
-		/* ---- The frame's moons (graphics doc 42 § "The moons"): the block the sky-view pass copies into the frame
-		 * texture, written in this frame's command stream — the previous frame's reads first. ---- */
+		/* ---- The frame's moons and planets (graphics doc 42 § "The moons", "The planets"): the block the sky-view pass
+		 * copies into the frame texture, written in this frame's command stream — the previous frame's reads first. ---- */
 		{
-			std::array< float, static_cast< size_t >(MoonBlockVectors) * 4 > block{};
+			std::array< float, static_cast< size_t >(BodyBlockVectors) * 4 > block{};
 
 			const auto count = std::min(inputs.moonCount, SkyFrameInputs::MaxMoons);
 			/* The lunar reflectance of a FULL disc is uniform (no limb darkening): a disc of radiance
 			 * scale × that reflectance over its solid angle pours exactly fullIlluminance. */
 			const auto fullReflectance = static_cast< float >(Astronomy::lunarReflectance(1.0, 1.0, 0.0));
 
+			const auto planetCount = std::min(inputs.planetCount, SkyFrameInputs::MaxPlanets);
+
 			block[0] = static_cast< float >(count);
+			block[1] = static_cast< float >(planetCount);
 
 			/* After the header vector: count ≤ MaxMoons blocks of 12 floats fill it exactly. */
 			auto destination = std::span{block}.subspan(4).begin();
@@ -1118,13 +1159,23 @@ namespace EmEn::Graphics
 				destination = std::ranges::copy(texels, destination).out;
 			}
 
+			/* The planets, from the texel PlanetTexels on (the block holds the header vector first). */
+			auto planetDestination = std::span{block}.subspan(static_cast< size_t >(4) * (1 + PlanetTexels - 4)).begin();
+
+			for ( const auto & planet : std::span{inputs.planets}.first(planetCount) )
+			{
+				const auto texels = planetTexels(planet);
+
+				planetDestination = std::ranges::copy(texels, planetDestination).out;
+			}
+
 			commandBuffer.pipelineBarrier(
-				Sync::BufferMemoryBarrier{*m_moonBuffer, VK_ACCESS_UNIFORM_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT},
+				Sync::BufferMemoryBarrier{*m_bodyBuffer, VK_ACCESS_UNIFORM_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT},
 				VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT
 			);
-			commandBuffer.update(*m_moonBuffer, 0, MoonBlockBytes, block.data());
+			commandBuffer.update(*m_bodyBuffer, 0, BodyBlockBytes, block.data());
 			commandBuffer.pipelineBarrier(
-				Sync::BufferMemoryBarrier{*m_moonBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT},
+				Sync::BufferMemoryBarrier{*m_bodyBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT},
 				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
 			);
 		}

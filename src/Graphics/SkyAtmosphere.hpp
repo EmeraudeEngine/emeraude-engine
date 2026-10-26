@@ -189,12 +189,39 @@ namespace EmEn::Graphics
 	};
 
 	/**
+	 * @brief A planet of the frame, as the sky draws its disc (Scenes::SkyState's planets, graphics doc 42 § "The
+	 * planets").
+	 */
+	struct SkyPlanetInputs
+	{
+		/** @brief Unit world vector toward the planet (Y up). */
+		Base::Math::Vector< 3, float > direction{0.0F, 1.0F, 0.0F};
+		/** @brief Unit world vector along its north pole. */
+		Base::Math::Vector< 3, float > pole{0.0F, 1.0F, 0.0F};
+		/** @brief Unit world vector from its centre toward its longitude 0 (its rotation). */
+		Base::Math::Vector< 3, float > primeMeridian{1.0F, 0.0F, 0.0F};
+		/** @brief The colour of its light, a unit-luminance chromaticity (linear RGB). */
+		Base::Math::Vector< 3, float > color{1.0F, 1.0F, 1.0F};
+		/** @brief Its illuminance above the atmosphere, in lux (from its apparent magnitude): the disc's integral. */
+		float illuminance{0.0F};
+		/** @brief Apparent angular diameter of its disc, in degrees. */
+		float angularDiameter{0.0F};
+		/** @brief The phase angle (star–planet–observer), in radians. */
+		float phaseAngle{0.0F};
+		/** @brief True for Lommel-Seeliger's scattering (a bare body), false for Lambert's (a cloudy one). */
+		bool lommelSeeliger{false};
+	};
+
+	/**
 	 * @brief What the sky needs from the frame: the star above the atmosphere and where the camera stands.
 	 */
 	struct SkyFrameInputs
 	{
 		/** @brief The most moons a frame carries (Scenes::SkyState::MaxMoons). */
 		static constexpr uint32_t MaxMoons{4};
+
+		/** @brief The most planets a frame carries (Scenes::SkyState::MaxPlanets). */
+		static constexpr uint32_t MaxPlanets{8};
 
 		/** @brief Unit world vector toward the star (Y up). */
 		Base::Math::Vector< 3, float > sunDirection{0.0F, 0.5F, 0.866F};
@@ -211,6 +238,10 @@ namespace EmEn::Graphics
 		std::array< SkyMoonInputs, MaxMoons > moons{};
 		/** @brief Number of moons in `moons` (at most MaxMoons). */
 		uint32_t moonCount{0};
+		/** @brief The planets, `planetCount` of them. */
+		std::array< SkyPlanetInputs, MaxPlanets > planets{};
+		/** @brief Number of planets in `planets` (at most MaxPlanets). */
+		uint32_t planetCount{0};
 	};
 
 	/**
@@ -244,12 +275,17 @@ namespace EmEn::Graphics
 			static constexpr uint32_t SkyViewWidth{192};
 			static constexpr uint32_t SkyViewHeight{108};
 
-			/** @brief The frame texture: 16 RGBA32F texels. 0: unit vector toward the star, cos of its angular radius; 1: its
+			/** @brief The frame texture: 48 RGBA32F texels. 0: unit vector toward the star, cos of its angular radius; 1: its
 			 * illuminance above the atmosphere × its colour (lux), the camera's distance to the planet's centre (km); 2: the
-			 * moon count, then 0; 3: 0; then three per moon i, at 4 + 3i: its unit direction and the cos of its angular
+			 * moon count, the planet count; 3: 0; then three per moon i, at 4 + 3i: its unit direction and the cos of its angular
 			 * radius; its radiance per unit reflectance × its colour (fullIlluminance / (lunar reflectance at full × the
-			 * disc's solid angle)) and its earthshine; the unit vector along its orbit's pole, then 0. */
-			static constexpr uint32_t FrameTexels{4 + (3 * SkyFrameInputs::MaxMoons)};
+			 * disc's solid angle)) and its earthshine; the unit vector along its orbit's pole, then 0. Then four per planet
+			 * j, at PlanetTexels + 4j: its unit direction and the SINE of its angular radius (a float's cos of a few arc
+			 * seconds is 1); K × its colour and its
+			 * scattering (0 Lambert, 1 Lommel-Seeliger); its pole and K; its prime meridian and 0 — K the radiance scale whose
+			 * disc integral is its illuminance (the radiance K f(μ0, μ), f = μ0 or μ0 / (μ0 + μ)). */
+			static constexpr uint32_t PlanetTexels{4 + (3 * SkyFrameInputs::MaxMoons)};
+			static constexpr uint32_t FrameTexels{PlanetTexels + (4 * SkyFrameInputs::MaxPlanets)};
 
 			/** @brief The aerial perspective volume: 32 × 32 froxels × 32 slices (Hillaire 2020). */
 			static constexpr uint32_t AerialPerspectiveSize{32};
@@ -493,7 +529,7 @@ namespace EmEn::Graphics
 			std::unique_ptr< Vulkan::UniformBufferObject > m_parametersBuffer;
 			/** @brief The frame's moons for the sky-view pass (a vec4 header + 3 vec4 per moon), written in the command
 			 * stream (CommandBuffer::update()) like the tables it feeds: device-local, never mapped. */
-			std::unique_ptr< Vulkan::Buffer > m_moonBuffer;
+			std::unique_ptr< Vulkan::Buffer > m_bodyBuffer;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;

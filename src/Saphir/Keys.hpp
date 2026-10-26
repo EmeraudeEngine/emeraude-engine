@@ -885,6 +885,9 @@ namespace EmEn::Saphir
 				constexpr auto SkyStar{"skyStar"};
 				/** @brief Sky atmosphere: per moon, 1 / the mean luminance of its surface texture (0 = no surface). */
 				constexpr auto SkyMoonSurfaces{"skyMoonSurfaces"};
+				/** @brief Sky atmosphere: the textured planet (x: 1 / the sphere mean luminance of its surface, 0 = none; y: its
+				 * index in the frame's planets). */
+				constexpr auto SkyPlanetSurface{"skyPlanetSurface"};
 				/* Material Iridescence specific */
 				constexpr auto IridescenceFactor{"iridescenceFactor"};
 				constexpr auto IridescenceIOR{"iridescenceIOR"};

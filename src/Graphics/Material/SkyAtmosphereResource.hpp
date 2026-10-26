@@ -84,8 +84,8 @@ namespace EmEn::Graphics::Material
 	 * The direction of a fragment is the skybox vertex position (the cube is centred on the camera, never rotated).
 	 * @note Descriptor set (per model layer): 0 the material UBO (Keys SkyGrading, SkyStar, SkyMoonSurfaces), 1 the
 	 * atmosphere's parameters, 2 the sky-view table, 3 the transmittance table, 4 the frame texture (the star, the camera
-	 * and the moons of the frame, written with the sky-view table by SkyAtmosphere::recordFrame()), 5 to 8 the moons'
-	 * surfaces (setMoonSurface()).
+	 * and the moons and planets of the frame, written with the sky-view table by SkyAtmosphere::recordFrame()), 5 to 8 the
+	 * moons' surfaces (setMoonSurface()), 9 the textured planet's (setPlanetSurface()).
 	 * @note The MOONS (graphics doc 42 § "The moons"): each disc is a sphere lit by the star, with the lunar reflectance
 	 * (Hapke–Lommel-Seeliger, Jensen et al. 2001) whose disc integral is the moon's light (CelestialClock), plus the
 	 * planet's earthshine, behind the atmosphere and in front of the star.
@@ -383,6 +383,18 @@ namespace EmEn::Graphics::Material
 			bool setMoonSurface (uint32_t index, const std::shared_ptr< TextureResource::Texture2D > & texture) noexcept;
 
 			/**
+			 * @brief Gives a planet its surface map: an equirectangular texture, planetocentric, 0° EAST longitude at its
+			 * centre, east to the right, north up (the data store's Astronomy maps), oriented on the disc by the planet's
+			 * pole and prime meridian (Base::Math::SolarSystem::orientation()). Its sphere mean is divided out: the disc's
+			 * light stays the magnitude's (graphics doc 42 § "The planets").
+			 * @note ONE textured planet per sky (lot S3c); the others keep a uniform albedo. Before the creation only.
+			 * @param planetIndex The planet's index in the frame's planets (Scenes::SkyState::PlanetNames), < 8.
+			 * @param texture A reference to the texture (sRGB).
+			 * @return bool
+			 */
+			bool setPlanetSurface (uint32_t planetIndex, const std::shared_ptr< TextureResource::Texture2D > & texture) noexcept;
+
+			/**
 			 * @brief Returns the photometry of a moon's surface, measured before the material's creation: the moon's
 			 * light follows its textured disc with it (CelestialClock).
 			 * @note Immutable once the material is created; read it after the sky resource is loaded (its loaded status
@@ -491,11 +503,12 @@ namespace EmEn::Graphics::Material
 			 */
 			void markVideoMemoryDirty () noexcept;
 
-			/* UBO layout (std140, three vec4 — Keys SkyGrading, SkyStar, SkyMoonSurfaces). */
+			/* UBO layout (std140, four vec4 — Keys SkyGrading, SkyStar, SkyMoonSurfaces, SkyPlanetSurface). */
 			static constexpr auto GradingOffset{0UL};
 			static constexpr auto StarOffset{4UL};
 			static constexpr auto MoonSurfacesOffset{8UL};
-			static constexpr auto PropertiesSize{12UL};
+			static constexpr auto PlanetSurfaceOffset{12UL};
+			static constexpr auto PropertiesSize{16UL};
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
 			std::array< float, PropertiesSize > m_properties{
@@ -504,9 +517,13 @@ namespace EmEn::Graphics::Material
 				/* Saturation, star disc on, limb darkening, unused. */
 				1.0F, 1.0F, DefaultLimbDarkening, 0.0F,
 				/* Per moon: 1 / the mean luminance of its surface (0 = no surface: a uniform albedo). */
+				0.0F, 0.0F, 0.0F, 0.0F,
+				/* The textured planet: 1 / its surface's sphere mean (0 = none), its index, unused, unused. */
 				0.0F, 0.0F, 0.0F, 0.0F
 			};
 			std::array< std::shared_ptr< TextureResource::Texture2D >, MaxMoons > m_moonSurfaces{};
+			std::shared_ptr< TextureResource::Texture2D > m_planetSurface;
+			uint32_t m_planetSurfaceIndex{0};
 			/* Written by onBeforeCreation() (a loader thread), immutable after: the loaded status publishes them. */
 			std::array< std::shared_ptr< const MoonSurfacePhotometry >, MaxMoons > m_moonPhotometry{};
 			std::shared_ptr< SkyAtmosphere > m_atmosphere;

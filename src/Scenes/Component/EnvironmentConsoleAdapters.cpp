@@ -284,6 +284,8 @@ namespace EmEn::Scenes::Component
 				entry["magnitude"] = static_cast< double >(clock.planetMagnitude(index));
 				entry["angularDiameterArcseconds"] = static_cast< double >(body.angularDiameter) * 3600.0;
 				entry["illuminatedFraction"] = static_cast< double >(body.illuminatedFraction);
+				entry["pole"] = toJson(body.pole);
+				entry["primeMeridian"] = toJson(body.primeMeridian);
 
 				planets.append(std::move(entry));
 			}

@@ -162,7 +162,17 @@ void main ()
 	const vec2 ndc = clip.xy / clip.w;
 	/* A planet's footprint widens to its disc (σ = half its radius in pixels, on the axis): a stand-in until the disc
 	 * is drawn; a star's stays the least sigma. */
-	const float sigma = max(pc.axisX.w, 0.5 * star.direction.w * pc.viewport.y / (2.0 * pc.viewport.w));
+	const float radiusPixels = star.direction.w * pc.viewport.y / (2.0 * pc.viewport.w);
+	const float sigma = max(pc.axisX.w, 0.5 * radiusPixels);
+	/* A planet's disc takes over from 1.5 to 3 px of diameter (the sky material's own weight): the light moves, it is
+	 * not doubled. A star (radius 0) keeps its whole light. */
+	const float pointWeight = 1.0 - smoothstep(1.5, 3.0, 2.0 * radiusPixels);
+
+	if ( pointWeight <= 0.0 )
+	{
+		return;
+	}
+
 	const float radius = sigma * pc.axisY.w;
 	const vec2 pixelToNdc = 2.0 / pc.viewport.xy;
 
@@ -181,7 +191,7 @@ void main ()
 		return;
 	}
 
-	const vec3 illuminance = star.illuminance.rgb * textureLod(transmittanceLut, atmTransmittanceParametersToUv(viewHeight, zenithCos), 0.0).rgb;
+	const vec3 illuminance = star.illuminance.rgb * pointWeight * textureLod(transmittanceLut, atmTransmittanceParametersToUv(viewHeight, zenithCos), 0.0).rgb;
 
 	/* The pixel's solid angle at the star: the axis pixel (2 tan(fov / 2) / size, per axis) × cos³ of the angle off
 	 * the axis (a pinhole's tangent plane). The footprint's peak radiance makes Σ L Ω over the pixels the illuminance:
