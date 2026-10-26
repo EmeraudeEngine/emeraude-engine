@@ -30,7 +30,6 @@
 #include "emeraude_platform.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <filesystem>
 
 /* Third-party inclusions. */
@@ -234,31 +233,25 @@ namespace EmEn
 			return false;
 		}
 
+		/* NOTE: Beside the binary, or in Contents/Resources inside a macOS bundle. */
+		const auto resourcesDirectory = FileSystem::resourcesDirectory(binaryDirectory);
+
 		/* NOTE: The layers shipped with the application (the external dependencies' validation layer, copied by CMake)
 		 * are found before any installed one. Nothing is enabled here: the layers stay what the settings or
 		 * --set-vk-layers request. */
-		const std::array< std::filesystem::path, 2 > layerDirectories{
-			binaryDirectory / "vulkan" / "explicit_layer.d",
-			/* NOTE: A macOS bundle: Contents/MacOS/<binary> -> Contents/Resources/vulkan/explicit_layer.d. */
-			binaryDirectory.parent_path() / "Resources" / "vulkan" / "explicit_layer.d"
-		};
+		const auto layerDirectory = resourcesDirectory / "vulkan" / "explicit_layer.d";
 
 		bool prepared = false;
 
-		for ( const auto & layerDirectory : layerDirectories )
+		if ( IO::directoryExists(layerDirectory) )
 		{
-			if ( IO::directoryExists(layerDirectory) )
-			{
-				prepared = PlatformSpecific::prependVulkanLayerDirectory(layerDirectory);
-
-				break;
-			}
+			prepared = PlatformSpecific::prependVulkanLayerDirectory(layerDirectory);
 		}
 
 #if IS_MACOS
 		/* NOTE: The first loader call scans every driver manifest, and a MoltenVK loaded from a second manifest (the
 		 * LunarG SDK one) can never be unloaded. See pinVulkanLoaderToBundledDriver(). */
-		static_cast< void >(PlatformSpecific::pinVulkanLoaderToBundledDriver(binaryDirectory));
+		static_cast< void >(PlatformSpecific::pinVulkanLoaderToBundledDriver(resourcesDirectory));
 #endif
 
 		return prepared;

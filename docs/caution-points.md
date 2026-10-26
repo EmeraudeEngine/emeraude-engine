@@ -5843,6 +5843,18 @@ https://forums.developer.nvidia.com/t/external-monitor-freezes-when-using-dedica
 investigated as an engine defect. The item `x11-multimonitor-nvidia-freeze` stays parked until someone checks a
 current driver.
 
+### ⚠️ macOS: where the shipped resources are is answered by `FileSystem::resourcesDirectory()` ONLY (2026-10-26)
+
+Inside a bundle the binary sits in `<App>.app/Contents/MacOS` and the resources (`data/`, `vulkan/`, a consumer's own
+trees) in `<App>.app/Contents/Resources`. The rule "`../Resources` from the binary" was written four times (the
+`data/` search, the Vulkan layer and driver lookups, and a consumer's `main()` + WebModule), and it is **wrong for a
+bundle embedded in another one**: a CEF helper runs from `<App>.app/Contents/Frameworks/<Helper>.app/Contents/MacOS`,
+where `../Resources` is the HELPER's own (empty) `Resources` — the `data/` search even tried to CREATE `data/` there,
+inside a signed bundle. `FileSystem::resourcesDirectory(binaryDirectory)` is static (usable before the service, from a
+`main()`), decides from the path alone (no OS switch, no knowledge of CEF) and returns the OUTER
+`Contents/Resources` for an embedded bundle, the binary directory for anything that is not a bundle. Never rebuild
+the path by hand: call it.
+
 ### macOS: a sleeping display is woken to start, and kept awake while the window is open (Windows too) (2026-10-11)
 
 GLFW skips a sleeping display when it lists the monitors (`dependencies/glfw/src/cocoa_monitor.m`,

@@ -121,6 +121,22 @@ namespace EmEn
 			}
 
 			/**
+			 * @brief Returns the directory holding the resources shipped with the application (data/, vulkan/, …).
+			 * @note This is the ONLY place that knows where a macOS application bundle keeps them, detected from the path
+			 * alone (no OS switch, no knowledge of who embeds whom):
+			 *  - '<App>.app/Contents/MacOS' -> '<App>.app/Contents/Resources';
+			 *  - '<App>.app/Contents/Frameworks/<Embedded>.app/Contents/MacOS' (a helper bundle embedded in the main one,
+			 *    e.g. a CEF renderer) -> the OUTER '<App>.app/Contents/Resources', where the resources are installed;
+			 *  - anything else (Linux, Windows, an unbundled binary) -> the binary directory itself.
+			 * @note Static: usable before the service exists, e.g. by a main() setting the working directory.
+			 * @param binaryDirectory A reference to the RESOLVED directory of the executable
+			 * (PlatformSpecific::SystemInfo::getRealApplicationDir(), or binaryDirectory() once initialized).
+			 * @return std::filesystem::path
+			 */
+			[[nodiscard]]
+			static std::filesystem::path resourcesDirectory (const std::filesystem::path & binaryDirectory) noexcept;
+
+			/**
 			 * @brief Returns the home directory of the current user.
 			 * @return const std::filesystem::path &
 			 */

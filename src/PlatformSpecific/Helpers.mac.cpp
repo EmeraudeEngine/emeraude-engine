@@ -56,7 +56,7 @@
 namespace EmEn::PlatformSpecific
 {
 	std::string
-	pinVulkanLoaderToBundledDriver (const std::filesystem::path & binaryDirectory) noexcept
+	pinVulkanLoaderToBundledDriver (const std::filesystem::path & resourcesDirectory) noexcept
 	{
 		/* NOTE: An explicit driver choice (a developer pointing the loader at another manifest) always wins.
 		 * VK_ICD_FILENAMES is the deprecated spelling the loader still honors. */
@@ -65,30 +65,21 @@ namespace EmEn::PlatformSpecific
 			return {};
 		}
 
-		/* NOTE: The RESOLVED binary directory, the root the layers use (PlatformManager::prepareVulkanLoaderEnvironment()):
+		/* NOTE: The resources of the RESOLVED binary, the root the layers use (PlatformManager::prepareVulkanLoaderEnvironment()):
 		 * CFBundleGetMainBundle() kept a symbolic link unresolved — launched through a link, it looked beside the link,
-		 * found no manifest, and the loader found no driver at all (macOS peer, 2026-10-19). Outside a bundle the manifest
-		 * sits beside the binary, inside a bundle in Contents/Resources (what CoreFoundation answered): both are tried. */
-		if ( binaryDirectory.empty() )
+		 * found no manifest, and the loader found no driver at all (macOS peer, 2026-10-19). Outside a bundle that is the
+		 * binary directory, inside a bundle Contents/Resources (what CoreFoundation answered): FileSystem::resourcesDirectory(). */
+		if ( resourcesDirectory.empty() )
 		{
 			return {};
 		}
 
-		const std::array< std::filesystem::path, 2 > candidates{
-			binaryDirectory / "vulkan" / "icd.d" / "MoltenVK_icd.json",
-			binaryDirectory.parent_path() / "Resources" / "vulkan" / "icd.d" / "MoltenVK_icd.json"
-		};
+		const auto manifest = resourcesDirectory / "vulkan" / "icd.d" / "MoltenVK_icd.json";
 
-		const auto found = std::ranges::find_if(candidates, [] (const std::filesystem::path & candidate) {
-			return Base::IO::fileExists(candidate);
-		});
-
-		if ( found == candidates.end() )
+		if ( !Base::IO::fileExists(manifest) )
 		{
 			return {};
 		}
-
-		const auto & manifest = *found;
 
 		/* NOTE: The loader reads VK_DRIVER_FILES at each driver scan, so it only has to be set before the first one. */
 		if ( setenv("VK_DRIVER_FILES", manifest.c_str(), 0) != 0 )

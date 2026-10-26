@@ -45,6 +45,30 @@ namespace EmEn
 {
 	using namespace Base;
 
+	std::filesystem::path
+	FileSystem::resourcesDirectory (const std::filesystem::path & binaryDirectory) noexcept
+	{
+		/* NOTE: A trailing separator would leave filename() empty and hide the bundle. */
+		const auto directory = binaryDirectory.has_filename() ? binaryDirectory : binaryDirectory.parent_path();
+
+		/* NOTE: Not a bundle: the resources sit beside the binary. */
+		if ( directory.filename() != "MacOS" || directory.parent_path().filename() != "Contents" )
+		{
+			return binaryDirectory;
+		}
+
+		auto contentsDirectory = directory.parent_path();
+
+		/* NOTE: A bundle embedded in the 'Contents/Frameworks' of another one (a helper): the resources are installed
+		 * in the outer bundle only. */
+		if ( const auto frameworksDirectory = contentsDirectory.parent_path().parent_path(); frameworksDirectory.filename() == "Frameworks" && frameworksDirectory.parent_path().filename() == "Contents" )
+		{
+			contentsDirectory = frameworksDirectory.parent_path();
+		}
+
+		return contentsDirectory / "Resources";
+	}
+
 	bool
 	FileSystem::onInitialize () noexcept
 	{
@@ -437,17 +461,9 @@ namespace EmEn
 			paths.emplace_back(directoryPath);
 		}
 
-		/* Check next to binary. */
+		/* Check next to binary (inside a macOS bundle, in its Contents/Resources). */
 		{
-			std::filesystem::path nextBinaryDirectory = m_binaryDirectory;
-
-			/* NOTE: Specific to the bundle .app */
-			if constexpr ( IsMacOS )
-			{
-				nextBinaryDirectory.append("..");
-				nextBinaryDirectory.append("Resources");
-			}
-
+			auto nextBinaryDirectory = resourcesDirectory(m_binaryDirectory);
 			nextBinaryDirectory.append("data");
 
 			if ( this->checkDirectoryRequirements(nextBinaryDirectory, true, false) )

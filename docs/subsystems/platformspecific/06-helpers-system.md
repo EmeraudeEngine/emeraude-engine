@@ -42,6 +42,6 @@ macOS helpers are minimal - Objective-C provides native string handling. NSStrin
 
 | Function | Purpose |
 |----------|---------|
-| `pinVulkanLoaderToBundledDriver()` | Sets `VK_DRIVER_FILES` to the bundle's `Contents/Resources/vulkan/icd.d/MoltenVK_icd.json` (unless already set, or absent), so the loader loads that driver only. Called by `PlatformManager` before `glfwInit()`. See [18-macos-vulkan-driver-pinned-to-the-bundle.md](18-macos-vulkan-driver-pinned-to-the-bundle.md) |
+| `pinVulkanLoaderToBundledDriver()` | Sets `VK_DRIVER_FILES` to the bundle's `Contents/Resources/vulkan/icd.d/MoltenVK_icd.json` (unless already set, or absent), so the loader loads that driver only. Takes the resources directory (`FileSystem::resourcesDirectory()`). Called by `PlatformManager` before `glfwInit()`. See [18-macos-vulkan-driver-pinned-to-the-bundle.md](18-macos-vulkan-driver-pinned-to-the-bundle.md) |
 
 ---

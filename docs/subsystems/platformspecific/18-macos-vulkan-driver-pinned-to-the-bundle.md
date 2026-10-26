@@ -6,7 +6,8 @@ executable is a bundle carrying `Contents/Resources/vulkan/icd.d/MoltenVK_icd.js
 `VK_DRIVER_FILES` to that manifest, so the loader loads that driver and no other. It changes nothing
 when `VK_DRIVER_FILES` or `VK_ICD_FILENAMES` is already set (an explicit choice wins, which is how a
 developer points the engine at another driver), and nothing outside a bundle or in a bundle without
-its own manifest.
+its own manifest. The manifest is searched in `FileSystem::resourcesDirectory()` of the resolved binary directory
+(the bundle's `Contents/Resources`, or the binary directory outside a bundle), the same root as the layers.
 
 **Why.** The Vulkan loader loads **one driver per manifest it finds**, in this search order (measured
 with `VK_LOADER_DEBUG=driver`, loader 1.4.357): the bundle's `Contents/Resources/vulkan/icd.d`, then

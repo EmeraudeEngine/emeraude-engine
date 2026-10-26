@@ -571,6 +571,13 @@ Arguments > Settings > Default values
 
 **Integration**: Used by Settings and Resources to locate files
 
+**Shipped resources (2026-10-26)**: `FileSystem::resourcesDirectory(binaryDirectory)` is the only place that knows
+where the application's own resources sit: beside the binary, or in `<App>.app/Contents/Resources` inside a macOS
+bundle — the OUTER bundle's for a binary of a bundle embedded in `Contents/Frameworks` (a CEF helper). Static,
+path-only, every OS. Used by the `data/` search beside the binary, the Vulkan layer and driver lookups
+(`PlatformManager::prepareVulkanLoaderEnvironment()`), and by consumers (`chdir` in `main()`, WebModules). See
+`docs/caution-points.md` § Platform-Specific.
+
 **Forced directories (owner decision 2026-10-12)**: `--config-directory` / `--cache-directory` go through
 `FileSystem::registerForcedDirectory()`. A missing directory is CREATED when its parent exists (a mistyped parent is
 never built); a missing parent, a file at that path, a refused creation or a read-only directory stop the start with an
