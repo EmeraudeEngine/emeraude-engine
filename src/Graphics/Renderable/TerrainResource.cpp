@@ -26,15 +26,22 @@
 
 #include "TerrainResource.hpp"
 
-/* Local inclusions. */
-#include "Scenes/GroundTriangles.hpp"
+/* Project configuration. */
+#include "emeraude_config.hpp"
 
-/* STL inclusions. */
-#include <algorithm>
-#include <cmath>
-#include <utility>
+/* Local inclusions. */
+#include "BaseUtility.hpp"
+#include "Graphics/Geometry/HeightfieldDetailSurfaceResource.hpp"
+#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Renderable/MeshResource.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Base.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Scenes/GroundTriangles.hpp"
+#include "VertexFactory/Types.hpp"
 
 /* Third-party inclusions. */
+#include "json/json.h"
 #include "magic_enum/magic_enum.hpp"
 
 /* Local inclusions. */
@@ -43,9 +50,7 @@
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderer.hpp"
-#include "PrimaryServices.hpp"
 #include "Scenes/DefinitionResource.hpp"
-#include "ThreadPool.hpp"
 #include "Types.hpp"
 #include "Vulkan/Device.hpp"
 
@@ -560,6 +565,65 @@ namespace EmEn::Graphics::Renderable
 		if ( !Utility::isZero(shiftHeight) )
 		{
 			m_localData->shiftHeight(shiftHeight);
+		}
+
+		/* Create the CDLOD geometry. */
+		if ( !this->createGeometryFromLocalData() )
+		{
+			m_localData->clear();
+
+			return this->setLoadSuccess(false);
+		}
+
+		/* Set rasterization options. */
+		m_rasterizationOptions = rasterizationOptions;
+
+		/* Set material. */
+		if ( !this->setMaterial(materialResource) )
+		{
+			TraceError{ClassId} << "Unable to use material for Terrain '" << this->name() << "' !";
+
+			m_localData->clear();
+
+			return this->setLoadSuccess(false);
+		}
+
+		return this->setLoadSuccess(true);
+	}
+
+	bool
+	TerrainResource::loadFractalNoise (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const FractalNoiseParams< float > & noise, const std::optional< EdgeFalloffParams< float > > & edgeFalloff, const RasterizationOptions & rasterizationOptions, float UVMultiplier) noexcept
+	{
+		if ( !this->beginLoading() )
+		{
+			return false;
+		}
+
+		if ( !m_localData->initializeByGridSize(gridSize, gridDivision) )
+		{
+			Tracer::error(ClassId, "Unable to initialize local data !");
+
+			return this->setLoadSuccess(false);
+		}
+
+		m_localData->setUVMultiplier(UVMultiplier);
+
+		if ( !m_localData->applyFractalNoise(noise) )
+		{
+			TraceError{ClassId} << "Terrain '" << this->name() << "': invalid fractal noise (wavelength " << noise.wavelength << ", lacunarity " << noise.lacunarity << ", gain " << noise.gain << ", " << noise.octaves << " octaves) !";
+
+			m_localData->clear();
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( edgeFalloff.has_value() && !m_localData->applyEdgeFalloff(edgeFalloff.value()) )
+		{
+			TraceError{ClassId} << "Terrain '" << this->name() << "': invalid edge falloff (start " << edgeFalloff->start << ", edge height " << edgeFalloff->edgeHeight << ") !";
+
+			m_localData->clear();
+
+			return this->setLoadSuccess(false);
 		}
 
 		/* Create the CDLOD geometry. */

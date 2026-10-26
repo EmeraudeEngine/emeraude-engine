@@ -30,21 +30,44 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <algorithm>
+#include <cstdint>
 #include <memory>
+#include <optional>
+#include <string>
+#include <type_traits>
+#include <utility>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 #include "Scenes/GroundLevelInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "BlobTrait.hpp"
 #include "Graphics/Geometry/CDLODTerrainResource.hpp"
-#include "Graphics/Geometry/HeightfieldDetailSurfaceResource.hpp"
-#include "MeshResource.hpp"
+#include "Graphics/Material/Interface.hpp"
+#include "Graphics/RasterizationOptions.hpp"
+#include "Hash/FNV1a.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "Resources/Types.hpp"
+#include "Tracer.hpp"
+#include "VertexFactory/Grid.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics::Geometry
+{
+	class HeightfieldDetailSurfaceResource;
+}
+
+namespace EmEn::Graphics::Renderable
+{
+	class MeshResource;
+}
+
 namespace EmEn::Resources
 {
+	class AbstractServiceProvider;
+
 	template< typename resource_t >
 	class Container;
 }
@@ -363,6 +386,22 @@ namespace EmEn::Graphics::Renderable
 			 * @return bool
 			 */
 			bool loadPerlinNoise (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const Base::VertexFactory::PerlinNoiseParams< float > & noise, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F, float shiftHeight = 0.0F) noexcept;
+
+			/**
+			 * @brief Loads a terrain from a fractal Brownian motion of Perlin noise (sampled in world units), optionally
+			 * sunk toward a height on its border: an island or an archipelago that never ends in a cliff on the map's edge.
+			 * @note Base::VertexFactory::Grid::applyFractalNoise() then applyEdgeFalloff(): their refusals (a non-finite or
+			 * out-of-range parameter) fail the load, with a log.
+			 * @param gridSize The size of one dimension of the grid (the grid spans ±gridSize / 2).
+			 * @param gridDivision How many cells in one dimension.
+			 * @param materialResource A reference to a material smart pointer.
+			 * @param noise The fractal noise.
+			 * @param edgeFalloff The border falloff, none to keep the noise up to the border.
+			 * @param rasterizationOptions Rasterization options. Default none.
+			 * @param UVMultiplier Texture coordinates multiplier. Default 1.
+			 * @return bool
+			 */
+			bool loadFractalNoise (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, const Base::VertexFactory::FractalNoiseParams< float > & noise, const std::optional< Base::VertexFactory::EdgeFalloffParams< float > > & edgeFalloff, const RasterizationOptions & rasterizationOptions = {}, float UVMultiplier = 1.0F) noexcept;
 
 		private:
 

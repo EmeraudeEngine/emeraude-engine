@@ -279,7 +279,11 @@ scene->seaLevelPhysics()   // Returns SeaLevelInterface*
 - `Scenes/SeaLevelInterface.hpp` - Sea level interface definition
 - `Graphics/Renderable/BasicGroundResource.hpp` - Flat ground implementation
 - `Graphics/Renderable/BasicSeaResource.hpp` - Flat water implementation
-- `Graphics/Renderable/TerrainResource.hpp` - Heightmap terrain implementation
+- `Graphics/Renderable/TerrainResource.hpp` - Heightmap terrain implementation (`loadDiamondSquare()`, `loadPerlinNoise()`, and since 2026-10-26
+  `loadFractalNoise(…, FractalNoiseParams, optional EdgeFalloffParams)`: a seeded fBm sunk toward a border height, an
+  archipelago that never ends in a cliff on the map's edge — base doc source-tree 10). ⚠️ The CDLOD geometry wants a
+  POWER-OF-TWO cell count, a power-of-two multiple of its 64-quad patch: 2560 cells were refused at load (the ground
+  silently absent from the scene, one `[Error]` line) — pick the cell size from the count, not the reverse.
 
 ### Modifier System & Influence Areas
 
