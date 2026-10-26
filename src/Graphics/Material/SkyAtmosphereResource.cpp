@@ -854,9 +854,9 @@ namespace EmEn::Graphics::Material
 			++index;
 		}
 
-		/* The PLANETS (graphics doc 42 § "The planets"): frame texels PlanetTexels + 4j — the direction and the SINE of the
+		/* The PLANETS (graphics doc 42 § "The planets"): frame texels PlanetTexels + 5j — the direction and the SINE of the
 		 * angular radius (a float's cos of a few arc seconds is 1: the disc is tested on the perpendicular offset), K × the
-		 * colour and the scattering, the pole and K, the prime meridian. Each disc is a sphere seen from afar (orthographic:
+		 * colour and the scattering, the pole and K, the prime meridian, the direction toward its star. Each disc is a sphere seen from afar (orthographic:
 		 * the normal from the offset), Lambert's or Lommel-Seeliger's radiance K f(μ0, μ) whose integral is the magnitude's
 		 * illuminance, through the atmosphere, behind the moons. Under 1.5 px the star pass draws it as a point; from 1.5 to
 		 * 3 px the two cross-fade (the same weight on both sides: the light is conserved). The textured planet reads its map
@@ -869,7 +869,7 @@ namespace EmEn::Graphics::Material
 			"vec3 skyPlanetLight = vec3(0.0);" << Line::End <<
 			"float skyPlanetCover = 0.0;" << Line::End <<
 			"for ( int skyPlanet = 0; skyPlanet < skyPlanetCount; ++skyPlanet ) {" << Line::End <<
-			"	const int skyTexel = " << SkyAtmosphere::PlanetTexels << " + (4 * skyPlanet);" << Line::End <<
+			"	const int skyTexel = " << SkyAtmosphere::PlanetTexels << " + (" << SkyAtmosphere::TexelsPerPlanet << " * skyPlanet);" << Line::End <<
 			"	const vec4 skyPlanetCentre = texelFetch(" << FrameData << ", ivec2(skyTexel, 0), 0);" << Line::End <<
 			"	const float skyPlanetSin = max(skyPlanetCentre.w, 1e-12);" << Line::End <<
 			"	const float skyPlanetWeight = smoothstep(1.5, 3.0, 2.0 * skyPlanetSin / skyPixelAngle);" << Line::End <<
@@ -883,9 +883,12 @@ namespace EmEn::Graphics::Material
 			"	const vec4 skyPlanetLightK = texelFetch(" << FrameData << ", ivec2(skyTexel + 1, 0), 0);" << Line::End <<
 			"	const vec4 skyPlanetPole = texelFetch(" << FrameData << ", ivec2(skyTexel + 2, 0), 0);" << Line::End <<
 			"	const vec4 skyPlanetMeridian = texelFetch(" << FrameData << ", ivec2(skyTexel + 3, 0), 0);" << Line::End <<
+			/* ⚠️ The light from the PLANET toward its star, not the observer's star direction (Mars at 37° of phase angle
+			 * was drawn as a crescent, 2026-10-26). */
+			"	const vec3 skyPlanetLightDir = texelFetch(" << FrameData << ", ivec2(skyTexel + 4, 0), 0).xyz;" << Line::End <<
 			"	const float skyDepth = sqrt(max(1.0 - min(skyRho * skyRho, 1.0), 0.0));" << Line::End <<
 			"	const vec3 skyNormal = normalize((skyOffset / skyPlanetSin) - (skyPlanetCentre.xyz * skyDepth));" << Line::End <<
-			"	const float skyMu0 = max(dot(skyNormal, skyStarDir), 0.0);" << Line::End <<
+			"	const float skyMu0 = max(dot(skyNormal, skyPlanetLightDir), 0.0);" << Line::End <<
 			"	const float skyMu = max(dot(skyNormal, -skyDir), 1e-4);" << Line::End <<
 			"	const float skyShape = skyPlanetLightK.w > 0.5 ? skyMu0 / (skyMu0 + skyMu) : skyMu0;" << Line::End <<
 			"	vec3 skyPlanetRadiance = skyPlanetLightK.rgb * skyShape;" << Line::End <<
@@ -920,6 +923,13 @@ namespace EmEn::Graphics::Material
 			SkyRadiance << " = atmGrade(" << SkyRadiance << ", " << grading << ", " << star << ".x);";
 
 		return true;
+	}
+
+	std::string
+	SkyAtmosphereResource::reactiveMaskExpression () const noexcept
+	{
+		/* Both covers are declared at the top of the generated main (generateFragmentShaderCode()). */
+		return "max(skyMoonCover, skyPlanetCover)";
 	}
 
 	std::string

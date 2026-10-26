@@ -28,16 +28,18 @@ Moon from the ephemerides with their parallax, the precessed star frame), `setCa
 the birthplace in `Identification::Birthplace*`. Owner decisions 2026-10-26: the real date before the planets; the Moon
 from Schlyter's perturbations (measured up to 3.5′ from PyEphem — a truncated ELP-2000/82 if ever needed).
 
-- **An approximate position of the machine** — owner decision 2026-10-26: the system's TIME ZONE → its reference city
-  (the IANA `zone.tab`: offline, no permission, a few hundred km; Linux/macOS from the TZ / `/etc/localtime` link,
-  Windows from its zone id through the CLDR `windowsZones` mapping). Without one, the birthplace.
-- **Observation windows and GoTo** (owner, 2026-10-25, for WaterWorld's Mars): from the clock's ephemeris, the dates
-  and hours a body is above the horizon at the observer's place with the sun down (below −12°: a dark sky), with its
-  apparent size, the best first; and a GoTo that aims a camera at a named body and sets the focal length that frames
-  it. Console commands first (the MCP tools follow), a demo binds keys to them.
-- **Time running at the real rate** (`timeScale` 1, the clock re-synchronised to the system clock rather than
-  accumulated — the no-accumulation rule) and an acceleration a consumer can switch (WaterWorld: ×10 while a key is
-  held).
+**Done 2026-10-26** (WaterWorld lot): the machine's approximate place from its time zone
+(`PlatformSpecific::approximateLocation()`, platformspecific doc 20; `CelestialClock::observerPlace()`; console
+`useSystemLocation`), the observation windows (`findObservationWindows()`, console too), the GoTo in WaterWorld (N: aim,
+frame, track; projet-alpha builtin doc 16-14).
+
+- **A GoTo for every demo** — a console command (then the MCP tool) that aims the ACTIVE camera at a named body and frames
+  it, tracking it while on: WaterWorld's N does it from the demo (aim through the player, focal length from the disc,
+  re-aim every 16 ms); the engine has no camera-to-body command yet.
+- **The real rate re-synchronised to the system clock**: the clock advances by logic cycles × the time scale (exact while
+  the logic loop keeps its rate); a long stall would drift it from the wall clock. A `followSystemClock` option (re-anchor
+  on the system time at the real rate) if a demo must stay on the present for hours.
+- **The Windows time zone path** (`SystemLocation.windows.cpp`) is not compiled on Linux: the Windows peer's validation.
 
 ## ⚠️ Traps
 

@@ -482,6 +482,13 @@ pass carries moons and planets.
   the moons and in front of the star's disc (a transit covers it). sky-lab option 10 = 2.
 - ⚠️ **A float cannot test a planet's disc by its cosine**: cos 6″ = 1 − 4e-10, under the float's 6e-8 step. The
   texel holds the sine, the shader the perpendicular offset.
+- ⚠️ **A planet is lit from ITS direction toward the Sun** (`SkyBody::lightDirection`, the fifth texel, 2026-10-26), not
+  from the observer's: the Moon, 400 times nearer than the Sun, may use the observer's; Mars at 1.47 AU cannot — at a
+  37.6° phase angle (89 % lit) it was drawn as a CRESCENT (the elongation, 59°, made the shader's phase 121°). The 2020
+  opposition of the S3c measurement hid it (the two directions nearly coincide there).
+- **The discs are REACTIVE** (`SkyAtmosphereResource::reactiveMaskExpression()`: the moons' and planets' covers): they move
+  with the clock and the sky's motion vectors are the camera's — a tracked Mars at 78 m, or the sky at ×600, left a trail
+  through the TAA (measured 2026-10-26).
 
 **Measured** (2026-10-26, Mars on 2020-10-13 23:00 UTC from Liège, 22.3″, sky-lab `…,1,1,2`, 0 VUID, one pinned
 exposure f/16 1/125 s ISO 100 in the tone curve's linear toe): the disc-integrated light over the pixels' solid angles

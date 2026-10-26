@@ -380,6 +380,7 @@
 #include "PlatformSpecific/Helpers.hpp"
 #include "PlatformSpecific/StorageInfo.hpp"
 #include "PlatformSpecific/SystemInfo.hpp"
+#include "PlatformSpecific/SystemLocation.hpp"
 #include "PlatformSpecific/Types.hpp"
 #include "PlatformSpecific/UserInfo.hpp"
 #include "PlatformSpecific/VideoCaptureDevice.hpp"

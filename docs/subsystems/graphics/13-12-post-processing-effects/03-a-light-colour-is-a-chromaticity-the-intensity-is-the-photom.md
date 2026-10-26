@@ -14,6 +14,13 @@ ambient at 5000 lx delivered 120 lx.
   AtmosphericFog, VolumetricLight — their colour overrides are normalised the same way), the view UBOs' ambient,
   RTR's and the probes' ambient. `color()` / `ambientLightColor()` were REMOVED so the compiler lists every reader;
   `authoredColor()` / `ambientLightAuthoredColor()` are for traces and UI only.
+- ⚠️ **A DISABLED main light lights nothing** (2026-10-26): an effect that reads `LightSet::mainDirectionalLight()`
+  checks `isEnabled()` and takes a zero intensity when it is off — VolumetricScattering, VolumetricClouds, LensFlare,
+  VolumetricLight (the last one fixed that day). A celestial clock switches its sun OFF at sunset and leaves its last
+  intensity and red chromaticity on it: VolumetricLight read them as is, so every sky pixel radiated that red all
+  night and the auto exposure turned it into a saturated veil (WaterWorld's physical sky, the sun 20° down: 255 /
+  248 / 214 with the shafts, 0.1 / 0 / 0 without; after the fix both 0.1 / 0 / 0, the day unchanged, 0 VUID).
+  AtmosphericFog does not check yet (`docs/todo/atmospheric-fog-lit-by-a-disabled-sun.md`).
 - ⚠️ **A channel may exceed 1** (pure blue 13.85, a 2000 K sun 1.65 in red): carry it as floats, never through a
   clamping `Color< float >` (the probe-volume ambient did, capping every ambient above 1 lx at 1 — fixed, with its
   missing 1/π). The lens flare caps its sun luminance on the BRIGHTEST CHANNEL, not the scalar (half-float range).

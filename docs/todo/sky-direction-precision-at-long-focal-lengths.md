@@ -18,6 +18,13 @@ above** the projected position, 0.8 px to the left; the map's pattern correlates
 (longitude exact). At 600 mm the same angle is 0.16 px (invisible), so only the telescope zoom shows it — the owner's
 goal in WaterWorld is precisely to zoom onto Mars.
 
+**Re-measured 2026-10-26** (after the planets' own light direction and the depth-of-field fix): sky-lab, FIXED camera
+(`Act.lookAt`), clock frozen, Mars 2020 at 20 m — still **3.5–3.9 px (≈ 0.85″) above**, correlation 0.969 once fitted;
+WaterWorld, the PLAYER's camera re-aimed every 16 ms (`Player::aimAt()`) at 78 m — the disc **centred within 2 px**
+(0.18″). A geodesic sky of 1° triangles instead of the cube changed nothing measurable (it was reverted): the
+interpolation hypothesis is not supported. First suspects now: the fixed camera's aim path (`Act.lookAt`, the fixed
+camera's frame), then the reference's own geometry (the measurement script's camera model).
+
 ## What remains
 
 - **Find the cause** (not established): the hypothesis is the sky material's direction, a vertex attribute (the skybox

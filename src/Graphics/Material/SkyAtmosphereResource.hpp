@@ -467,6 +467,13 @@ namespace EmEn::Graphics::Material
 
 		private:
 
+			/** @copydoc EmEn::Graphics::Material::Interface::reactiveMaskExpression()
+			 * @note The moons' and the planets' discs: they move with the clock, and no motion vector says so (the sky's
+			 * velocity is the camera's). A tracked planet at a telescope focal length, or the sky at ×600, left a trail
+			 * through the temporal resolve (measured 2026-10-26, WaterWorld's GoTo on Mars). */
+			[[nodiscard]]
+			std::string reactiveMaskExpression () const noexcept override;
+
 			/** @copydoc EmEn::Graphics::Material::Interface::create() noexcept */
 			[[nodiscard]]
 			bool create (Renderer & renderer) noexcept override;

@@ -16,6 +16,7 @@ set(EMERAUDE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/StorageInfo.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.hpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemLocation.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Types.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.hpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/VideoCaptureDevice.hpp
@@ -48,6 +49,7 @@ set(EMERAUDE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/Net/UDPClient.cpp
     # PlatformSpecific
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemLocation.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/VideoCaptureDevice.cpp
     # ROOT
@@ -79,6 +81,7 @@ if ( UNIX AND NOT APPLE )
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Process.posix.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/TerminationSignals.posix.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.linux.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemLocation.posix.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.linux.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/VideoCaptureDevice.linux.cpp
     )
@@ -98,6 +101,7 @@ if ( APPLE )
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Process.posix.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/TerminationSignals.posix.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.mac.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemLocation.posix.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.mac.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/VideoCaptureDevice.mac.mm
     )
@@ -114,6 +118,7 @@ if ( MSVC )
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/StorageInfo.windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/Helpers.windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemInfo.windows.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/SystemLocation.windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/UserInfo.windows.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/src/PlatformSpecific/VideoCaptureDevice.windows.cpp
     )

@@ -38,6 +38,8 @@
 #include <iterator>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <optional>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -47,6 +49,7 @@
 #include "Constants.hpp"
 #include "Math/Astronomy.hpp"
 #include "Math/SolarSystem.hpp"
+#include "PlatformSpecific/SystemLocation.hpp"
 #include "Math/Vector.hpp"
 #include "Scenes/SkyState.hpp" // IWYU pragma: keep (m_renderStates is a std::array of SkyState: a complete type)
 
@@ -94,7 +97,7 @@ namespace EmEn::Scenes::Component
 	 * proven by emeraude-base's `MathAstronomy.AStillPlanetReproducesTheSimpleSunCourse`).
 	 * @note TIME: seconds since the epoch (the vernal equinox, at the observer's noon), in DOUBLE, recomputed every
 	 * cycle from a stored reference and an integer cycle count — never accumulated. `timeScale` simulated seconds
-	 * pass per real second.
+	 * pass per real second; a negative scale runs the sky backwards (a rewind).
 	 * @note FRAME: the observer's East-North-Up is mapped onto the world with `Options::northDirection` (horizontal)
 	 * and up = +Y; east = north × up. The default north is −Z, so east is +X and the noon sun of the northern
 	 * hemisphere stands toward +Z — the former SunCourse layout.
@@ -180,6 +183,36 @@ namespace EmEn::Scenes::Component
 				Calendar
 			};
 
+			/**
+			 * @brief When a body can be observed: above the horizon in a dark sky (findObservationWindows()).
+			 */
+			struct ObservationWindow
+			{
+				/** @brief The first and the last instant of the window, Julian days UT (the search's step apart at least). */
+				double start{0.0};
+				double end{0.0};
+				/** @brief The instant the body stands highest in it, a Julian day UT. */
+				double best{0.0};
+				/** @brief Its elevation then, in degrees (geometric, no refraction). */
+				float bestElevation{0.0F};
+				/** @brief Its apparent angular diameter then, in arc seconds. */
+				float angularDiameter{0.0F};
+				/** @brief Its apparent visual magnitude then. */
+				float magnitude{0.0F};
+			};
+
+			/** @brief A dark sky: the sun at least this far below the horizon, in degrees (astronomical twilight's end). */
+			static constexpr auto DarkSkySunElevation{-12.0F};
+
+			/** @brief The least elevation a body is worth observing at, in degrees (under it, the air mass passes 5.6). */
+			static constexpr auto MinimumObservationElevation{10.0F};
+
+			/** @brief The longest search, in days (57 600 steps of ten minutes: a fraction of a second). */
+			static constexpr auto MaxObservationSearchDays{400.0};
+
+			/** @brief The search's step, in days: ten minutes. */
+			static constexpr auto ObservationStepDays{1.0 / 144.0};
+
 			/** @brief The Moon's mean distance, in km: a declared `Moon::fullIlluminance` holds at it (Calendar). */
 			static constexpr auto MoonMeanDistanceKilometres{384400.0};
 
@@ -232,7 +265,8 @@ namespace EmEn::Scenes::Component
 				double dayOfYear{0.0};
 				/** @brief Time of day, as a fraction of the solar day: 0 midnight, 0.25 morning, 0.5 noon. Default 0.5. */
 				double timeOfDay{0.5};
-				/** @brief Simulated seconds per real second. Default 1 (real time). */
+				/** @brief Simulated seconds per real second, negative to run backwards. Default 1 (real time); a non-finite
+				 * value is refused by configure() (0, a frozen sky). */
 				float timeScale{1.0F};
 				/** @brief The sun's photometry. */
 				SunPhotometry sun{};
@@ -386,7 +420,8 @@ namespace EmEn::Scenes::Component
 
 			/**
 			 * @brief Changes how many simulated seconds pass per real second, from now on.
-			 * @param timeScale The scale, ≥ 0 (0 freezes the sky without stopping the clock).
+			 * @param timeScale The scale, finite: 0 freezes the sky without stopping the clock, a negative scale runs it
+			 * backwards. A non-finite scale is refused (logged, the scale kept).
 			 */
 			void setTimeScale (float timeScale) noexcept;
 
@@ -616,6 +651,38 @@ namespace EmEn::Scenes::Component
 			{
 				return *std::next(m_planetMagnitudes.cbegin(), static_cast< std::ptrdiff_t >(std::min(index, m_planetMagnitudes.size() - 1)));
 			}
+
+			/**
+			 * @brief Searches when a planet can be observed from the clock's place: the windows, in order, where the sun is
+			 * below DarkSkySunElevation and the planet above MinimumObservationElevation, each with its best instant (the
+			 * planet highest), its diameter and its magnitude then (the engine item celestial-clock-real-date-and-place:
+			 * WaterWorld's "when can I see Mars?").
+			 * @note TimeModel::Calendar only (a planet-model clock answers nothing). Ten-minute steps: a window's ends are
+			 * that precise. The clock is not moved.
+			 * @param planetIndex The planet's index (Scenes::SkyState::PlanetNames), < SkyState::MaxPlanets.
+			 * @param fromJulianDayUT The search's start, a Julian day UT.
+			 * @param days How many days to search, in (0, MaxObservationSearchDays].
+			 * @return std::vector< ObservationWindow > Empty when refused (traced) or when the planet is never up at night.
+			 */
+			[[nodiscard]]
+			std::vector< ObservationWindow > findObservationWindows (size_t planetIndex, double fromJulianDayUT, double days) const noexcept;
+
+			/**
+			 * @brief Returns where the observer of a real sky stands by default: the machine's approximate place (its
+			 * time zone's city, PlatformSpecific::approximateLocation()), else the engine's birthplace (Liège,
+			 * Identification::Birthplace*).
+			 * @return PlatformSpecific::ApproximateLocation Its source says which ("Europe/Brussels", "birthplace").
+			 */
+			[[nodiscard]]
+			static PlatformSpecific::ApproximateLocation observerPlace () noexcept;
+
+			/**
+			 * @brief Returns a planet's index from its name (Scenes::SkyState::PlanetNames, exact case).
+			 * @param name The planet's name.
+			 * @return std::optional< size_t >
+			 */
+			[[nodiscard]]
+			static std::optional< size_t > planetIndex (std::string_view name) noexcept;
 
 			/**
 			 * @brief Returns a planet's name.

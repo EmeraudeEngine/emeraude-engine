@@ -410,7 +410,12 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		const auto lightSource = (-mainLight->direction()).normalized();
 		/* The emitted chromaticity (unit luminance): the override is normalised the same way. */
 		const auto lightColor = m_lightColorOverride.has_value() ? m_lightColorOverride->unitLuminanceChromaticity() : mainLight->emissionChromaticity();
-		const auto lightIntensity = m_lightIntensityOverride.value_or(mainLight->intensity());
+		/* A DISABLED light casts no shaft (the convention of VolumetricScattering, VolumetricClouds and LensFlare). A
+		 * celestial clock switches its sun off at sunset and leaves its last intensity and its red chromaticity on it:
+		 * read as is, every sky pixel kept radiating that red all night, amplified by the auto exposure to a saturated
+		 * veil (measured 2026-10-26, WaterWorld's physical sky: the sun 20° down, the frame at 255 / 248 / 214 with the
+		 * shafts, 0.1 without). The passes still run: the radial target is composited every frame and must be zero. */
+		const auto lightIntensity = mainLight->isEnabled() ? m_lightIntensityOverride.value_or(mainLight->intensity()) : 0.0F;
 
 		/* Project a far point along the light source direction. */
 		const auto farPointX = camPos[0] + (lightSource.x() * 10000.0F);

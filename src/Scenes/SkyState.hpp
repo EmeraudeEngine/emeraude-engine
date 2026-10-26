@@ -76,6 +76,10 @@ namespace EmEn::Scenes
 		Base::Math::Vector< 3, float > primeMeridian{1.0F, 0.0F, 0.0F};
 		/** @brief How its surface scatters (a planet's disc). */
 		SkyScattering scattering{SkyScattering::Lunar};
+		/** @brief A planet: unit world vector from IT toward its star — the light its disc reflects. ⚠️ Not the
+		 * observer's star direction: from Mars at 1.5 AU the Sun stands tens of degrees from where Earth sees it (a moon,
+		 * 400 times nearer than its star, may use the observer's). */
+		Base::Math::Vector< 3, float > lightDirection{0.0F, 1.0F, 0.0F};
 	};
 
 	/**

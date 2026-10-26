@@ -2859,6 +2859,7 @@ namespace EmEn::Graphics
 					.pole = planet.pole,
 					.primeMeridian = planet.primeMeridian,
 					.color = planet.color,
+					.lightDirection = planet.lightDirection,
 					.illuminance = planet.illuminance,
 					.angularDiameter = planet.angularDiameter,
 					/* The illuminated fraction is (1 + cos α) / 2. */

@@ -70,7 +70,9 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 > `surfaceBrightness`. The astronomy is emeraude-base's `Math/Astronomy.hpp` (generic two-body orbits, owner decision: no
 > perturbation, ~1° for the Sun), unit-tested there. ⚠️ **Time** is seconds since the epoch in DOUBLE, recomputed
 > every cycle from a stored reference and an integer cycle count — never accumulated (owner rule); `timeScale`
-> simulated seconds per real second. ⚠️ **Frame**: East-North-Up mapped with `Options::northDirection` (default −Z)
+> simulated seconds per real second, negative = backwards (a rewind; 2026-10-26 — the time is a function of the cycle
+> count, so nothing else changes; a calendar sky rewound past 1583 leaves the ephemerides' range: their values stay
+> finite, not exact). ⚠️ **Frame**: East-North-Up mapped with `Options::northDirection` (default −Z)
 > and up +Y, east = north × up (+X by default). ⚠️ **The former `SunCourse` is `CelestialClock::simpleCourse()`**
 > (owner decision, "a special case"): a planet without tilt nor orbit, sidereal day = two day durations, observed at
 > the latitude 90° − the noon elevation — EXACTLY the old great circle (base test
@@ -114,7 +116,12 @@ cameras the toolkit builds). The orthographic near stays `min(0, near)` (the box
 > magnitude, colour, diameter, phase — drawn by the sky's star pass (graphics doc 42 § "The planets"). Measured from Liège (2026-10-26, sky-lab option 10) against PyEphem with the
 > refraction off: the Sun 11–15″, Betelgeuse through the frame 17–19″, the Moon 31″–3.8′ (Schlyter), its diameter
 > within 0.25 %; the 2026-08-12 eclipse seen from Liège (Sun and Moon 31″ apart, phase 0). The engine's birthplace,
-> the default place of a real sky: `Identification::BirthplaceLatitude` / `BirthplaceLongitude` (Liège, owner).
+> the default place of a real sky: `Identification::BirthplaceLatitude` / `BirthplaceLongitude` (Liège, owner);
+> `observerPlace()` gives the machine's approximate place (its time zone's city, platformspecific doc 20) else that.
+> `findObservationWindows(planet, from, days)` (2026-10-26) searches, in ten-minute steps over at most 400 days, when a
+> planet stands ≥ 10° high with the sun ≤ −12° at the clock's place — each window's UT start, end and best instant, the
+> elevation, diameter and magnitude then (WaterWorld's N jumps to the next one); console `findObservationWindows` (best
+> first) and `useSystemLocation`.
 >
 > `SkyFollowsSun` (2026-09-13, owner decision) is the sky's HALF, deliberately a separate component:
 > bound to a `CelestialClock`, it maps the sun's elevation through a smoothstep (`duskElevation` −6° → 0,

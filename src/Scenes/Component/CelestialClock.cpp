@@ -46,6 +46,7 @@
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderable/DynamicSkyResource.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
+#include "Identification.hpp"
 #include "Math/Base.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Math/SolarSystem.hpp"
@@ -274,7 +275,12 @@ namespace EmEn::Scenes::Component
 				m_options.moons.resize(1);
 			}
 		}
-		m_options.timeScale = std::max(0.0F, m_options.timeScale);
+		if ( !std::isfinite(m_options.timeScale) )
+		{
+			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' declares a non-finite time scale: the sky is frozen (0).";
+
+			m_options.timeScale = 0.0F;
+		}
 
 		/* ---- Photometry. ---- */
 		m_options.sun.zenithIlluminance = std::max(0.0F, m_options.sun.zenithIlluminance);
@@ -469,7 +475,7 @@ namespace EmEn::Scenes::Component
 	void
 	CelestialClock::setTimeScale (float timeScale) noexcept
 	{
-		if ( !std::isfinite(timeScale) || timeScale < 0.0F )
+		if ( !std::isfinite(timeScale) )
 		{
 			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' refused the time scale " << timeScale << ".";
 
@@ -774,6 +780,9 @@ namespace EmEn::Scenes::Component
 
 		const auto centuries = Solar::julianCenturies(julianDayTT);
 		const auto precession = Solar::precessionFromJ2000(centuries);
+		/* The Sun from the Earth's centre, in AU (equatorial of date): each planet's light comes from the Sun minus it. */
+		const auto sun = Solar::sun(julianDayTT);
+		const auto sunVector = sun.direction * sun.distance;
 		/* A J2000 axis of a planet, as a world vector (at infinity: its orientation, not its place). */
 		const auto axisToWorld = [this, &precession, &observer] (const Vector< 3, double > & axisJ2000) {
 			return this->toWorld(Solar::topocentric({.direction = precession(axisJ2000), .distance = std::numeric_limits< double >::infinity()}, m_localSiderealAngle, observer));
@@ -792,6 +801,9 @@ namespace EmEn::Scenes::Component
 
 			*std::next(m_planetMagnitudes.begin(), static_cast< std::ptrdiff_t >(index)) = static_cast< float >(magnitude);
 
+			/* From the planet toward the Sun, a direction (no parallax: at infinity, like the axes). */
+			const auto towardStar = (sunVector - (position.direction * position.distance)).normalized();
+
 			planet = SkyBody{
 				.direction = this->toWorld(Solar::topocentric(position, m_localSiderealAngle, observer)),
 				.illuminance = Graphics::Photometry::illuminanceFromMagnitude(static_cast< float >(magnitude)),
@@ -800,9 +812,106 @@ namespace EmEn::Scenes::Component
 				.illuminatedFraction = static_cast< float >(0.5 * (1.0 + std::cos(position.phaseAngle))),
 				.pole = axisToWorld(frame.pole),
 				.primeMeridian = axisToWorld(frame.primeMeridian),
-				.scattering = *std::next(PlanetScattering.cbegin(), static_cast< std::ptrdiff_t >(index))
+				.scattering = *std::next(PlanetScattering.cbegin(), static_cast< std::ptrdiff_t >(index)),
+				.lightDirection = this->toWorld(Solar::topocentric({.direction = towardStar, .distance = std::numeric_limits< double >::infinity()}, m_localSiderealAngle, observer))
 			};
 		}
+	}
+
+	std::vector< CelestialClock::ObservationWindow >
+	CelestialClock::findObservationWindows (size_t planetIndex, double fromJulianDayUT, double days) const noexcept
+	{
+		namespace Solar = Base::Math::SolarSystem;
+
+		if ( !m_calendar )
+		{
+			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' is not on the calendar: no observation window to search.";
+
+			return {};
+		}
+
+		if ( planetIndex >= PlanetBodies.size() || !Solar::calendarDate(fromJulianDayUT).has_value() || !(days > 0.0) || days > MaxObservationSearchDays )
+		{
+			TraceWarning{ClassId} << "The celestial clock '" << this->name() << "' refused an observation search (planet #" << planetIndex << ", JD " << fromJulianDayUT << ", " << days << " days): a planet index < " << PlanetBodies.size() << ", a Gregorian instant, 0 to " << MaxObservationSearchDays << " days.";
+
+			return {};
+		}
+
+		const auto body = *std::next(PlanetBodies.cbegin(), static_cast< std::ptrdiff_t >(planetIndex));
+		const Sky::Observer observer{.latitude = Sky::radians(static_cast< double >(m_options.latitude))};
+		const auto longitude = Sky::radians(static_cast< double >(m_options.longitude));
+		/* days ≤ MaxObservationSearchDays: at most 57 600 steps. */
+		const auto steps = static_cast< size_t >(std::ceil(days / ObservationStepDays));
+
+		std::vector< ObservationWindow > windows;
+		std::optional< ObservationWindow > open;
+
+		for ( size_t step = 0; step <= steps; ++step )
+		{
+			/* Recomputed from the start: no accumulated step. */
+			const auto julianDayUT = fromJulianDayUT + (static_cast< double >(step) * ObservationStepDays);
+			const auto julianDayTT = julianDayUT + (Solar::deltaT(julianDayUT) / Sky::SecondsPerDay);
+			const auto localSiderealAngle = Sky::wrapAngle(Solar::greenwichMeanSiderealAngle(julianDayUT) + longitude);
+			const auto sunElevation = Sky::degrees(Solar::topocentric(Solar::sun(julianDayTT), localSiderealAngle, observer).elevation());
+			const auto position = Solar::planet(body, julianDayTT);
+			const auto elevation = Sky::degrees(Solar::topocentric(position, localSiderealAngle, observer).elevation());
+			const bool visible = sunElevation <= static_cast< double >(DarkSkySunElevation) && elevation >= static_cast< double >(MinimumObservationElevation);
+
+			if ( visible )
+			{
+				if ( !open.has_value() )
+				{
+					open = ObservationWindow{.start = julianDayUT, .end = julianDayUT, .best = julianDayUT, .bestElevation = -90.0F, .angularDiameter = 0.0F, .magnitude = 0.0F};
+				}
+
+				open->end = julianDayUT;
+
+				if ( elevation > static_cast< double >(open->bestElevation) )
+				{
+					open->best = julianDayUT;
+					open->bestElevation = static_cast< float >(elevation);
+					open->angularDiameter = static_cast< float >(Sky::degrees(Solar::angularDiameter(body, position.distance)) * 3600.0);
+					open->magnitude = static_cast< float >(Solar::apparentMagnitude(body, position, body == Solar::Body::Saturn ? Solar::saturnRingOpening(position, Solar::julianCenturies(julianDayTT)) : 0.0));
+				}
+			}
+			else if ( open.has_value() )
+			{
+				windows.emplace_back(open.value());
+				open.reset();
+			}
+		}
+
+		if ( open.has_value() )
+		{
+			windows.emplace_back(open.value());
+		}
+
+		return windows;
+	}
+
+	PlatformSpecific::ApproximateLocation
+	CelestialClock::observerPlace () noexcept
+	{
+		if ( auto place = PlatformSpecific::approximateLocation() )
+		{
+			return place.value();
+		}
+
+		return {.latitude = Identification::BirthplaceLatitude, .longitude = Identification::BirthplaceLongitude, .source = "birthplace"};
+	}
+
+	std::optional< size_t >
+	CelestialClock::planetIndex (std::string_view name) noexcept
+	{
+		for ( size_t index = 0; index < SkyState::PlanetNames.size(); ++index )
+		{
+			if ( name == *std::next(SkyState::PlanetNames.cbegin(), static_cast< std::ptrdiff_t >(index)) )
+			{
+				return index;
+			}
+		}
+
+		return std::nullopt;
 	}
 
 	const char *

@@ -153,7 +153,7 @@ void main()
 
 	/* Setup pass (half-res): downsampled color + SIGNED normalized circle of confusion.
 	 * Thin lens model; positive CoC = far field (behind the focus plane), negative =
-	 * near field (in front of it). The sky (far plane) naturally lands in the far field. */
+	 * near field (in front of it). The sky is at infinity (the far field's limit). */
 	constexpr auto DoFSetupHeader = R"GLSL(
 #version 450
 
@@ -179,8 +179,7 @@ layout(push_constant) uniform PushConstants
 void main()
 {
 	vec3 color = texture(colorTex, vUV).rgb;
-	/* The distance along the view axis (the thin lens' object distance), through the frame's inverse projection. */
-	float linearZ = emViewDepth(vUV, texture(depthTex, vUV).r);
+	float depth = texture(depthTex, vUV).r;
 	float fd = texelFetch(focusTex, ivec2(0), 0).r;
 
 	/* Thin lens circle of confusion, SIGNED (positive behind the focus plane):
@@ -192,7 +191,18 @@ void main()
 	 * compensating for that. */
 	float focalLengthM = focalLength * 0.001; /* mm to meters. */
 	float apertureDiameterM = focalLengthM / max(aperture, 0.001);
-	float cocMeters = apertureDiameterM * focalLengthM * (linearZ - fd) / (linearZ * max(fd - focalLengthM, 0.001));
+	float cocMeters = apertureDiameterM * focalLengthM / max(fd - focalLengthM, 0.001);
+
+	/* ⚠️ The SKY (the clear depth, 1.0 exactly) is at INFINITY, the limit of the relation: A f / (fd - f). Placed at the
+	 * far plane it was in front of a focus set beyond it, and a telescope focused on infinity blurred its planet into a
+	 * bokeh flower (measured 2026-10-26: WaterWorld's GoTo on Mars, 78 m, f/8, the far plane at 600 m — a 38-px blur).
+	 * Anything else: the distance along the view axis, through the frame's inverse projection. */
+	if ( depth < 1.0 )
+	{
+		float linearZ = emViewDepth(vUV, depth);
+
+		cocMeters *= (linearZ - fd) / linearZ;
+	}
 
 	/* The CoC above is a size ON THE SENSOR, in meters. Dividing by the sensor width turns it
 	 * into a fraction of the image width — the physical normalisation that replaces an

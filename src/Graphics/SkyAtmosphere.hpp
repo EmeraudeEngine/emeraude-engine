@@ -202,6 +202,8 @@ namespace EmEn::Graphics
 		Base::Math::Vector< 3, float > primeMeridian{1.0F, 0.0F, 0.0F};
 		/** @brief The colour of its light, a unit-luminance chromaticity (linear RGB). */
 		Base::Math::Vector< 3, float > color{1.0F, 1.0F, 1.0F};
+		/** @brief Unit world vector from the planet toward its star: the light on its disc. */
+		Base::Math::Vector< 3, float > lightDirection{0.0F, 1.0F, 0.0F};
 		/** @brief Its illuminance above the atmosphere, in lux (from its apparent magnitude): the disc's integral. */
 		float illuminance{0.0F};
 		/** @brief Apparent angular diameter of its disc, in degrees. */
@@ -275,17 +277,20 @@ namespace EmEn::Graphics
 			static constexpr uint32_t SkyViewWidth{192};
 			static constexpr uint32_t SkyViewHeight{108};
 
-			/** @brief The frame texture: 48 RGBA32F texels. 0: unit vector toward the star, cos of its angular radius; 1: its
+			/** @brief The frame texture: 56 RGBA32F texels. 0: unit vector toward the star, cos of its angular radius; 1: its
 			 * illuminance above the atmosphere × its colour (lux), the camera's distance to the planet's centre (km); 2: the
 			 * moon count, the planet count; 3: 0; then three per moon i, at 4 + 3i: its unit direction and the cos of its angular
 			 * radius; its radiance per unit reflectance × its colour (fullIlluminance / (lunar reflectance at full × the
-			 * disc's solid angle)) and its earthshine; the unit vector along its orbit's pole, then 0. Then four per planet
-			 * j, at PlanetTexels + 4j: its unit direction and the SINE of its angular radius (a float's cos of a few arc
+			 * disc's solid angle)) and its earthshine; the unit vector along its orbit's pole, then 0. Then five per planet
+			 * j, at PlanetTexels + 5j: its unit direction and the SINE of its angular radius (a float's cos of a few arc
 			 * seconds is 1); K × its colour and its
-			 * scattering (0 Lambert, 1 Lommel-Seeliger); its pole and K; its prime meridian and 0 — K the radiance scale whose
-			 * disc integral is its illuminance (the radiance K f(μ0, μ), f = μ0 or μ0 / (μ0 + μ)). */
+			 * scattering (0 Lambert, 1 Lommel-Seeliger); its pole and K; its prime meridian and 0; the direction from it
+			 * toward its star and 0 — K the radiance scale whose disc integral is its illuminance (the radiance K f(μ0, μ),
+			 * f = μ0 or μ0 / (μ0 + μ)). */
 			static constexpr uint32_t PlanetTexels{4 + (3 * SkyFrameInputs::MaxMoons)};
-			static constexpr uint32_t FrameTexels{PlanetTexels + (4 * SkyFrameInputs::MaxPlanets)};
+			/** @brief The texels per planet. */
+			static constexpr uint32_t TexelsPerPlanet{5};
+			static constexpr uint32_t FrameTexels{PlanetTexels + (TexelsPerPlanet * SkyFrameInputs::MaxPlanets)};
 
 			/** @brief The aerial perspective volume: 32 × 32 froxels × 32 slices (Hillaire 2020). */
 			static constexpr uint32_t AerialPerspectiveSize{32};

@@ -59,6 +59,7 @@
 #include "Math/SolarSystem.hpp"
 #include "Math/Vector.hpp"
 #include "PixelFactory/Color.hpp"
+#include "PlatformSpecific/SystemLocation.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "Scenes/SkyState.hpp"
 #include "SkyFollowsSun.hpp"
@@ -537,6 +538,71 @@ namespace EmEn::Scenes::Component
 							});
 						});
 
+					this->bindCommand("useSystemLocation", "Places the observer of a celestial clock at the machine's approximate place — its time zone's city — else at the engine's birthplace (Liège), keeping the instant.",
+						{
+							entity,
+							component
+						},
+						[this] (const std::string & entityName, const std::string & componentName) {
+							const auto place = CelestialClock::observerPlace();
+
+							return this->act(entityName, componentName, [place] (CelestialClock & clock) {
+								auto options = clock.options();
+								options.latitude = static_cast< float >(place.latitude);
+								options.longitude = static_cast< float >(place.longitude);
+
+								reconfigureKeepingTheDate(clock, options);
+
+								return changed(clock, "Celestial clock '" + clock.name() + "' observed from " + std::to_string(place.latitude) + "°, " + std::to_string(place.longitude) + "° (" + place.source + "; sun at " + std::to_string(clock.sunElevation()) + "°).");
+							});
+						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("findObservationWindows", "Searches when a planet can be seen from a calendar clock's place, from its current instant: the sun 12° below the horizon or more, the planet 10° above it or more. JSON, the best windows first (the largest disc, then the highest), each with its UTC start, end and best instant, its elevation, diameter and magnitude then.",
+						{
+							entity,
+							component,
+							{"planet", "Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune or Pluto."},
+							{"days", "How many days to search, 1 to 400."}
+						},
+						[this] (const std::string & entityName, const std::string & componentName, const std::string & planetName, float days) {
+							const auto index = CelestialClock::planetIndex(planetName);
+
+							if ( !index.has_value() || !std::isfinite(days) || days < 1.0F || days > static_cast< float >(CelestialClock::MaxObservationSearchDays) )
+							{
+								return Console::CommandResult::error("A planet name (Mercury … Pluto) and 1 to 400 days.");
+							}
+
+							return this->act(entityName, componentName, [index, days] (CelestialClock & clock) {
+								if ( !clock.isCalendar() )
+								{
+									return Console::CommandResult::error("Celestial clock '" + clock.name() + "' is not on the calendar (setCalendarDate or setNow first).");
+								}
+
+								auto windows = clock.findObservationWindows(index.value(), clock.julianDay(), static_cast< double >(days));
+
+								std::ranges::sort(windows, [] (const auto & lhs, const auto & rhs) {
+									return lhs.angularDiameter != rhs.angularDiameter ? lhs.angularDiameter > rhs.angularDiameter : lhs.bestElevation > rhs.bestElevation;
+								});
+
+								Json::Value result{Json::arrayValue};
+
+								for ( const auto & window : windows )
+								{
+									Json::Value entry{Json::objectValue};
+									entry["start"] = utcText(window.start);
+									entry["end"] = utcText(window.end);
+									entry["best"] = utcText(window.best);
+									entry["bestElevationDegrees"] = static_cast< double >(window.bestElevation);
+									entry["angularDiameterArcseconds"] = static_cast< double >(window.angularDiameter);
+									entry["magnitude"] = static_cast< double >(window.magnitude);
+
+									result.append(std::move(entry));
+								}
+
+								return Console::CommandResult::json(FastJSON::stringify(result));
+							});
+						}, Console::CommandHint::ReadOnly);
+
 					this->bindCommand("setLongitude", "Moves the observer of a celestial clock to a longitude, keeping the instant (the calendar's local sidereal time; the planet model ignores it).",
 						{
 							entity,
@@ -559,16 +625,16 @@ namespace EmEn::Scenes::Component
 							});
 						}, Console::CommandHint::Idempotent);
 
-					this->bindCommand("setTimeScale", "Changes how many simulated seconds pass per real second, from now on (1 = real time, 720 = a day in two minutes, 0 freezes the sky).",
+					this->bindCommand("setTimeScale", "Changes how many simulated seconds pass per real second, from now on (1 = real time, 720 = a day in two minutes, 0 freezes the sky, negative runs it backwards).",
 						{
 							entity,
 							component,
-							{"timeScale", "Simulated seconds per real second, 0 or more."}
+							{"timeScale", "Simulated seconds per real second, negative to run backwards."}
 						},
 						[this] (const std::string & entityName, const std::string & componentName, float timeScale) {
-							if ( !std::isfinite(timeScale) || timeScale < 0.0F )
+							if ( !std::isfinite(timeScale) )
 							{
-								return Console::CommandResult::error("The time scale must be a finite number, 0 or more.");
+								return Console::CommandResult::error("The time scale must be a finite number.");
 							}
 
 							return this->act(entityName, componentName, [timeScale] (CelestialClock & clock) {

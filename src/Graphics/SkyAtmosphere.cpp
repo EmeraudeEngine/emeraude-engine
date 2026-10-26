@@ -85,16 +85,16 @@ namespace
 	constexpr VkDeviceSize BodyBlockBytes{static_cast< VkDeviceSize >(BodyBlockVectors) * 4 * sizeof(float)};
 
 	/**
-	 * @brief Returns a planet's four frame texels (SkyAtmosphere::FrameTexels): its direction and the SINE of its angular
-	 * radius (a float's cos of 6" is 1: the disc is tested on the perpendicular distance); K × its colour and its scattering; its pole and K; its prime meridian.
+	 * @brief Returns a planet's five frame texels (SkyAtmosphere::FrameTexels): its direction and the SINE of its angular
+	 * radius (a float's cos of 6" is 1: the disc is tested on the perpendicular distance); K × its colour and its scattering; its pole and K; its prime meridian; the direction toward its star.
 	 * @note K is the radiance scale whose disc integral is the planet's illuminance: the radiance is K f(μ0, μ), and the
 	 * disc's mean of f at the phase angle α is (2/3) Φ_L(α) for Lambert's f = μ0 (Φ_L = (sin α + (π − α) cos α) / π)
 	 * and ½ Φ_LS(α) for Lommel-Seeliger's f = μ0 / (μ0 + μ) (Base::Math::Astronomy::lommelSeeligerPhaseLaw()).
 	 * @param planet A reference to the planet.
-	 * @return std::array< float, 16 >
+	 * @return std::array< float, 20 >
 	 */
 	[[nodiscard]]
-	std::array< float, 16 >
+	std::array< float, 20 >
 	planetTexels (const EmEn::Graphics::SkyPlanetInputs & planet) noexcept
 	{
 		using EmEn::Base::Math::Vector;
@@ -102,6 +102,7 @@ namespace
 		const auto direction = planet.direction.lengthSquared() > 0.0F ? planet.direction.normalized() : Vector< 3, float >{0.0F, 1.0F, 0.0F};
 		const auto pole = planet.pole.lengthSquared() > 0.0F ? planet.pole.normalized() : Vector< 3, float >{0.0F, 1.0F, 0.0F};
 		const auto meridian = planet.primeMeridian.lengthSquared() > 0.0F ? planet.primeMeridian.normalized() : Vector< 3, float >{1.0F, 0.0F, 0.0F};
+		const auto light = planet.lightDirection.lengthSquared() > 0.0F ? planet.lightDirection.normalized() : Vector< 3, float >{0.0F, 1.0F, 0.0F};
 		const auto radius = 0.5 * static_cast< double >(std::clamp(planet.angularDiameter, 0.0F, 90.0F)) * (std::numbers::pi / 180.0);
 		/* 1 − cos r loses its digits under ~1": 2 sin²(r / 2) keeps them (Mars at 6", a disc of 4e-10 sr). */
 		const auto half = std::sin(0.5 * radius);
@@ -117,7 +118,8 @@ namespace
 			direction.x(), direction.y(), direction.z(), static_cast< float >(std::sin(radius)),
 			planet.color.x() * scale, planet.color.y() * scale, planet.color.z() * scale, planet.lommelSeeliger ? 1.0F : 0.0F,
 			pole.x(), pole.y(), pole.z(), scale,
-			meridian.x(), meridian.y(), meridian.z(), 0.0F
+			meridian.x(), meridian.y(), meridian.z(), 0.0F,
+			light.x(), light.y(), light.z(), 0.0F
 		};
 	}
 
