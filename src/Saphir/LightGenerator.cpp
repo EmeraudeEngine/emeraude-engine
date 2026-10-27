@@ -74,6 +74,32 @@ namespace EmEn::Saphir
 	}
 
 	std::string
+	LightGenerator::specularAntialiasedRoughness (const SpecularAntialiasingInput & input) noexcept
+	{
+		const std::string outputVariable{input.outputVariable};
+		const std::string normalExpression{input.normalExpression};
+		const std::string roughnessExpression{input.roughnessExpression};
+
+		/* ⚠️ Perceptual roughness in, perceptual roughness out: the kernel is added in ALPHA-SQUARED space
+		 * (alpha = perceptual²), hence the two square roots. Adding it to the perceptual value directly over-blurs
+		 * smooth surfaces badly. σ² = 0.25 and κ = 0.18 are the paper's (and Filament's) constants. */
+		constexpr auto Variance = "0.25";
+		constexpr auto Threshold = "0.18";
+
+		const auto ddx = outputVariable + "NormalDdx";
+		const auto ddy = outputVariable + "NormalDdy";
+		const auto alpha = outputVariable + "Alpha";
+
+		std::string code;
+		code += "const vec3 " + ddx + " = dFdx(" + normalExpression + ");\n";
+		code += "const vec3 " + ddy + " = dFdy(" + normalExpression + ");\n";
+		code += "const float " + alpha + " = clamp(" + roughnessExpression + ", 0.0, 1.0) * clamp(" + roughnessExpression + ", 0.0, 1.0);\n";
+		code += "const float " + outputVariable + " = sqrt(sqrt(clamp(" + alpha + " * " + alpha + " + min(2.0 * " + Variance + " * (dot(" + ddx + ", " + ddx + ") + dot(" + ddy + ", " + ddy + ")), " + Threshold + "), 0.0, 1.0)));";
+
+		return code;
+	}
+
+	std::string
 	LightGenerator::metalnessShaderExpression () const noexcept
 	{
 		if ( !m_surfaceMetalness.empty() )

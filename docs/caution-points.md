@@ -20,6 +20,31 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 
 ## Graphics/Material System
 
+### Fixed: the direct specular had no geometric specular antialiasing — sun glints burst under the motion blur (2026-10-27)
+
+**Symptom** (`water-world`, TAA off, owner): facing the sun or the moon, the glints on the water doubled in brightness
+while the camera moved — above all SLOWLY — and dimmed back when it stopped.
+**Attribution** — runtime A/B on settings copies, the owner judging the motion by hand: the RTR temporal accumulation
+off changed nothing; the MOTION BLUR off removed it; the motion blur on with the RTR accumulation off brought it back.
+⚠️ A scripted motion (`setPosition` at ~25 Hz) is NOT a camera motion for this test: it changed the framing of the
+captures, and its numbers compared two different views.
+**Cause.** The Tokuyoshi & Kaplanyan filter (σ² 0.25, κ 0.18) widened only the roughness WRITTEN TO THE G-BUFFER
+(RTR, SSR); the direct lights' BRDF (`LightGenerator.PBR.cpp`) read the material's raw roughness. On the FFT ocean's
+normal map, whose normal varies within the pixel, a sub-pixel facet at the GGX peak filled the WHOLE pixel: rare
+one-pixel glints tens of times above white, their surplus hidden by the tone curve's saturation. The motion blur is
+off below 0.5 px (`minVelocityPixels`) and gathers ±½ of the motion beyond, so the slightest motion spread each glint
+over 2-3 pixels still saturated — the visible area doubled or tripled at once. Fast motion spreads it below
+saturation, hence "above all slowly". The motion blur was right; its input was aliased.
+**Fix.** `LightGenerator::specularAntialiasedRoughness()` — the single implementation, called by the G-buffer write
+and by the direct lights (every lobe of the base layer reads `pbrFilteredRoughness`). ⚠️ Emitted at the top of the
+light pass: BEFORE the `discard` of an unlit fragment (derivatives need uniform control flow) and before the
+two-sided flip of N (a flip boundary would read as a huge variance).
+**Measured** (still camera facing the glint, 3 captures each, crop of the glint area, residual over a 9 × 9 median):
+glint pixels (> 40/255) ~19 000 → ~152 000, saturated pixels ~70 → ~3 800 — the glitter is now a SUN PATH along the
+waves instead of sparse dots; 0 `VUID-` with the validation layer loaded. Owner: "le rendu est beaucoup mieux de base"
+and no burst in motion any more. Still open: the IBL / ambient pass reads the raw roughness too (engine item
+`specular-antialiasing-at-the-source`).
+
 ### Fixed: the ocean stopped compiling — the model scale was requested for transmission EXCEPT depth-based opacity (Sep 2026)
 
 `'svModelScale' : undeclared identifier` in `RenderableInstanceAmbientPassFragmentShader` (the CEF Shader Debugger

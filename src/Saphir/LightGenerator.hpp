@@ -30,6 +30,7 @@
 #include <cstdint>
 #include <algorithm>
 #include <string>
+#include <string_view>
 
 /* Local inclusions for usages. */
 #include "Declaration/UniformBlock.hpp"
@@ -825,6 +826,31 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			std::string roughnessShaderExpression () const noexcept;
 
+			/** @brief The inputs of specularAntialiasedRoughness(), named so that a caller cannot swap two GLSL expressions. */
+			struct SpecularAntialiasingInput final
+			{
+				/** @brief The name of the `const float` declared, the filtered perceptual roughness. Also the prefix of the temporaries. */
+				std::string_view outputVariable;
+				/** @brief A GLSL expression of the unit shading normal, the normal-mapped one when there is a normal map (the detail the filter exists for). */
+				std::string_view normalExpression;
+				/** @brief A GLSL expression of the perceptual roughness. */
+				std::string_view roughnessExpression;
+			};
+
+			/**
+			 * @brief Returns the GLSL statements of the geometric specular antialiasing (Tokuyoshi & Kaplanyan,
+			 * "Improved Geometric Specular Antialiasing", I3D 2019; the Filament constants): the perceptual roughness
+			 * widened by the screen-space variance of the shading normal, so a normal varying WITHIN the pixel is rough
+			 * at pixel scale whatever the material says.
+			 * @note The single implementation: the roughness written to the G-buffer (RTR, SSR) and the roughness of
+			 * the direct lights' BRDF both come from it.
+			 * @pre Emitted in uniform control flow: it takes screen-space derivatives.
+			 * @param input The output name and the two GLSL expressions (views read during the call only).
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			static std::string specularAntialiasedRoughness (const SpecularAntialiasingInput & input) noexcept;
+
 			/**
 			 * @brief Returns a GLSL expression for the surface metalness.
 			 * @note For PBR materials, returns the metalness variable directly.
@@ -1192,6 +1218,8 @@ namespace EmEn::Saphir
 			static constexpr auto LightBlock{"LightBlock"};
 			/** @brief GLSL variable name for the combined light visibility factor (radius falloff × spot cone × shadow), applied before the BRDF. */
 			static constexpr auto LightFactor{"lightFactor"};
+			/** @brief GLSL variable name for the base layer's perceptual roughness after the geometric specular antialiasing (specularAntialiasedRoughness()), read by every direct lobe. */
+			static constexpr auto PBRFilteredRoughness{"pbrFilteredRoughness"};
 			/**
 			 * @warning Unused: no LightGenerator*.cpp file references this constant. It named the
 			 * Lambertian diffuse weight in the removed Blinn-Phong path (see AGENTS.md,

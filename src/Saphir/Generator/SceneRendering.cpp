@@ -849,18 +849,10 @@ namespace EmEn::Saphir::Generator
 					 * actually written — never on the geometric normal, or the high-frequency detail
 					 * the filter exists to tame is invisible to it.
 					 *
-					 * ⚠️ Perceptual roughness in, perceptual roughness out: the kernel is added in
-					 * ALPHA-SQUARED space (alpha = perceptual²), hence the two square roots. Adding
-					 * it to the perceptual value directly over-blurs smooth surfaces badly. */
-					constexpr auto SpecularAAVariance = "0.25";
-					constexpr auto SpecularAAThreshold = "0.18";
-
-					Code{*fragmentShader, Location::Output} <<
-						"const vec3 saaNormalDdx = dFdx(" << normalExpr << ");" << Line::End <<
-						"const vec3 saaNormalDdy = dFdy(" << normalExpr << ");" << Line::End <<
-						"const float saaVariance = " << SpecularAAVariance << " * (dot(saaNormalDdx, saaNormalDdx) + dot(saaNormalDdy, saaNormalDdy));" << Line::End <<
-						"const float saaAlpha = clamp(" << roughnessExpr << ", 0.0, 1.0) * clamp(" << roughnessExpr << ", 0.0, 1.0);" << Line::End <<
-						"const float saaFiltered = sqrt(sqrt(clamp(saaAlpha * saaAlpha + min(2.0 * saaVariance, " << SpecularAAThreshold << "), 0.0, 1.0)));";
+					 * ⚠️ The direct lights' BRDF filters its roughness with the SAME code
+					 * (LightGenerator::specularAntialiasedRoughness(), 2026-10-27): the reflections and
+					 * the direct specular read one roughness. */
+					Code{*fragmentShader, Location::Output} << LightGenerator::specularAntialiasedRoughness({.outputVariable = "saaFiltered", .normalExpression = normalExpr, .roughnessExpression = roughnessExpr});
 
 					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(" << normalExpr << ", saaFiltered + round(clamp(" << metalnessExpr << ", 0.0, 1.0)) * 2.0);";
 				}

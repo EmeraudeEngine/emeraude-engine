@@ -1,7 +1,7 @@
 ---
 id: specular-antialiasing-at-the-source
 title: Specular antialiasing in the material, so a far normal-mapped surface does not alias before the TAA
-status: open
+status: in-progress
 priority: medium
 scope: Graphics/Material/StandardResource, Saphir (lighting code), texture mip generation
 opened: 2026-09-23
@@ -18,26 +18,27 @@ the specular lobe. Without TAA (the jitter off) that aliasing is spatial and sta
 accumulation has to average. Filtering it at the source lowers what the TAA must hide, and helps every path
 without TAA (FXAA, window-less captures, reflections).
 
-## Already in the engine (found by the board audit, 2026-10-11)
+## Already in the engine
 
-Tokuyoshi & Kaplanyan's geometric specular AA (σ² 0.25, κ 0.18) has been in `Saphir/Generator/SceneRendering.cpp:804-838` since
-`30a66b88f` (2026-09-14). It applies only to the roughness WRITTEN TO THE G-BUFFER, which RTR and SSR read. The
-lighting code (`LightGenerator`: forward direct specular and IBL) still uses the unfiltered roughness. So the first
-candidate below exists, but not where this item needs it. Reuse that code: do not write a second copy.
+Tokuyoshi & Kaplanyan's geometric specular AA (σ² 0.25, κ 0.18), ONE function since 2026-10-27:
+`LightGenerator::specularAntialiasedRoughness()`. Two callers:
+- the roughness WRITTEN TO THE G-BUFFER (`Saphir/Generator/SceneRendering.cpp`, since `30a66b88f`, 2026-09-14), read by
+  RTR and SSR;
+- the DIRECT lights' BRDF (`LightGenerator.PBR.cpp`, 2026-10-27, owner decision "per pixel, in the lighting code"):
+  every lobe of the base layer reads `pbrFilteredRoughness`. It fixed the `water-world` sun glints that burst under the
+  motion blur (`docs/caution-points.md` § the direct specular had no geometric specular antialiasing).
 
 ## What remains
 
-- Measure first: the far band of `relief` with the TAA OFF, specular term alone vs diffuse alone (the part of the
-  residual that is specular), with `temporalCapture` + `tools/temporal-analysis.py`.
-- Candidates, from the state of the art:
-  - Tokuyoshi & Kaplanyan, "Improved Geometric Specular Antialiasing" (I3D 2019): roughness² += min(2·σ²·(|∂n/∂x|² +
-    |∂n/∂y|²), κ), σ² = 0.25, κ = 0.18 — screen-space derivatives of the shading normal, deferred-friendly (HDRP ships
-    it as Geometric Specular AA);
+- The IBL / ambient pass (`LightGenerator.cpp`, the split-sum `iblEnvBRDF` lookup and the reflection's roughness) still
+  reads the raw roughness: route it through the same function (the ambient pass already declares the perturbed `N`).
+- Clear coat and sheen keep their own roughness, unfiltered: decide whether they take the same kernel.
+- Measure: the far band of `relief` with the TAA OFF, specular term alone vs diffuse alone (the part of the residual
+  that is specular), with `temporalCapture` + `tools/temporal-analysis.py` — before / after the IBL step.
+- Other candidates from the state of the art, if the per-pixel kernel is not enough:
   - Toksvig, "Mipmapping Normal Maps" (JGT 2005): the length of the mip-averaged normal widens the roughness, baked
     per mip level;
   - LEAN / LEADR mapping (Olano & Baker 2010; Dupuy et al. 2013) for anisotropic filtering of slope moments.
-- Decide with the owner where it lives: the lighting code (per pixel, every material) or the mip generation of
-  the normal and roughness textures (baked, zero runtime cost).
 
 ## References
 

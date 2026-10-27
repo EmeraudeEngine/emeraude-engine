@@ -26,6 +26,11 @@
 
 #include "LightGenerator.hpp"
 
+/* STL inclusions. */
+#include <cstdint>
+#include <memory>
+#include <string>
+
 /* Local inclusions. */
 #include "Code.hpp"
 #include "Declaration/Function.hpp"
@@ -35,6 +40,15 @@
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
+#include "Graphics/Types.hpp"
+#include "Math/Base.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Saphir/AbstractVertexStage.hpp"
+#include "Saphir/Declaration/Types.hpp"
+#include "Saphir/FragmentShader.hpp"
+#include "Saphir/Keys.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/SetIndexes.hpp"
 
 namespace EmEn::Saphir
 {
@@ -491,6 +505,31 @@ namespace EmEn::Saphir
 		/* Generate the PBR BRDF helper functions. */
 		this->generatePBRBRDFFunctions(fragmentShader);
 
+		/* GEOMETRIC SPECULAR ANTIALIASING of the direct lights (2026-10-27), the G-buffer's code
+		 * (LightGenerator::specularAntialiasedRoughness()). A normal-mapped surface whose normal varies within the pixel
+		 * (the FFT ocean's ripples) put the WHOLE pixel at the lobe's peak: sub-pixel sun glints tens of times above
+		 * white. Point-sampled, they hid their surplus behind the tone curve's saturation; the motion blur spread them over
+		 * 2-3 pixels and they burst into view the moment the camera moved (water-world, TAA off, owner 2026-10-27).
+		 * ⚠️ Taken HERE, before any `discard` of an unlit fragment and before the two-sided flip of N: derivatives need
+		 * uniform control flow, and a flip boundary would read as a huge variance. The sign does not change the variance
+		 * anywhere else (the squared derivatives of N and -N are equal). */
+		{
+			const std::string surfaceRoughness = m_surfaceRoughness.empty() ? "0.5" : m_surfaceRoughness;
+
+			fragmentShader.addComment("Geometric specular antialiasing: the roughness widened by the normal's pixel variance.");
+
+			if ( m_useNormalMapping && !m_surfaceNormalVector.empty() )
+			{
+				Code{fragmentShader} << "const vec3 pbrAntialiasingNormal = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceNormalVector << ");" << Line::End;
+			}
+			else
+			{
+				Code{fragmentShader} << "const vec3 pbrAntialiasingNormal = normalize(" << ShaderVariable::NormalViewSpace << ");" << Line::End;
+			}
+
+			Code{fragmentShader} << LightGenerator::specularAntialiasedRoughness({.outputVariable = PBRFilteredRoughness, .normalExpression = "pbrAntialiasingNormal", .roughnessExpression = surfaceRoughness}) << Line::Blank;
+		}
+
 		std::string rayDirectionViewSpace;
 
 		if ( lightType == LightType::Line )
@@ -690,7 +729,8 @@ namespace EmEn::Saphir
 
 		/* Get the surface properties. */
 		const std::string albedo = m_surfaceAlbedo.empty() ? "vec3(1.0)" : m_surfaceAlbedo + ".rgb";
-		const std::string roughness = m_surfaceRoughness.empty() ? "0.5" : m_surfaceRoughness;
+		/* The antialiased roughness declared at the top of the shader (every lobe of the base layer reads it). */
+		const std::string roughness{PBRFilteredRoughness};
 		const std::string metalness = m_surfaceMetalness.empty() ? "0.0" : m_surfaceMetalness;
 
 		/* Compute the view direction and normal.
