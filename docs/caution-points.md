@@ -42,8 +42,10 @@ two-sided flip of N (a flip boundary would read as a huge variance).
 **Measured** (still camera facing the glint, 3 captures each, crop of the glint area, residual over a 9 × 9 median):
 glint pixels (> 40/255) ~19 000 → ~152 000, saturated pixels ~70 → ~3 800 — the glitter is now a SUN PATH along the
 waves instead of sparse dots; 0 `VUID-` with the validation layer loaded. Owner: "le rendu est beaucoup mieux de base"
-and no burst in motion any more. Still open: the IBL / ambient pass reads the raw roughness too (engine item
-`specular-antialiasing-at-the-source`).
+and no burst in motion any more. **Three OS** (engine `33df4a4a`, 2026-10-27): macOS M6 and Windows (RTX 3500 Ada RT lane,
+Intel iGPU screen-space lane) green — builds 0 warning, 0 `VUID-`, every light-pass pipeline compiled, the glitter a sun
+path (isolated one-pixel glints 3-7 % of the glint pixels on the M6), `relief` with 0 black / non-finite pixel. Still open:
+the IBL / ambient pass reads the raw roughness too (engine item `specular-antialiasing-at-the-source`).
 
 ### Fixed: the ocean stopped compiling — the model scale was requested for transmission EXCEPT depth-based opacity (Sep 2026)
 
