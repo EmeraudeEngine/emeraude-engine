@@ -1559,6 +1559,11 @@ namespace EmEn::Graphics::Material
 			this->setDoFMask(FastJSON::getValue< float >(data, DoFMaskString).value_or(DefaultDoFMask));
 		}
 
+		if ( data.isMember(AOResponseString) )
+		{
+			this->setAOResponse(FastJSON::getValue< float >(data, AOResponseString).value_or(DefaultAOResponse));
+		}
+
 		/* The visible face of light sources (a lamp's panel): its emission is the lights' own. Absent = a free
 		 * emitter, as before the key existed. */
 		if ( data.isMember(LightFaceString) )
@@ -2644,7 +2649,9 @@ namespace EmEn::Graphics::Material
 				1.5F, 1.0F, 0.9F, 0.0F,
 				/* Light face (1 = the visible face of light sources, unused, unused, unused): 0 = a free emitter, which
 				 * every indirect-diffuse estimator counts (setLightFace()). */
-				0.0F, 0.0F, 0.0F, 0.0F
+				0.0F, 0.0F, 0.0F, 0.0F,
+				/* AO response (post-process ambient occlusion, unused, unused, unused): fully affected (setAOResponse()). */
+				DefaultAOResponse, 0.0F, 0.0F, 0.0F
 					};
 
 		return properties;
@@ -3454,6 +3461,7 @@ namespace EmEn::Graphics::Material
 		lightGenerator.declareSurfaceFogResponse(MaterialUB(UniformBlock::Component::FogResponse));
 		lightGenerator.declareSurfaceDoFMask(MaterialUB(UniformBlock::Component::DoFMask));
 		lightGenerator.declareSurfaceLightFace(this->lightFaceExpression());
+		lightGenerator.declareSurfaceAOResponse(MaterialUB(UniformBlock::Component::AOResponseParameters) + ".x");
 
 		/* Reflectivity Map component (texture-based only) */
 		{
@@ -3837,6 +3845,7 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ShoreFoamColor);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ShoreFoamParameters);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::LightFaceParameters);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AOResponseParameters);
 
 		return block;
 	}
@@ -7077,6 +7086,14 @@ namespace EmEn::Graphics::Material
 	StandardResource::setFogResponse (float value) noexcept
 	{
 		m_materialProperties[FogResponseOffset] = clampToUnit(value);
+
+		this->markVideoMemoryDirty();
+	}
+
+	void
+	StandardResource::setAOResponse (float value) noexcept
+	{
+		m_materialProperties[AOResponseParametersOffset] = clampToUnit(value);
 
 		this->markVideoMemoryDirty();
 	}

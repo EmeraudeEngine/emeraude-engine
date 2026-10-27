@@ -245,18 +245,14 @@ namespace EmEn::Saphir
 			reflectivity = "0.0";
 		}
 
-		/* AO response (G high nibble):
-		 * PBR with AO: aoIntensity (0=no AO effect, 1=full AO).
-		 * Others: 1.0 (full AO response). */
-		std::string aoResponse;
+		/* AO response (G high nibble): the material's own response (setAOResponse(), 1.0 by default), times the AO
+		 * texture's intensity when there is one. Without a texture it was forced to 1.0 until 2026-10-27: an open water
+		 * surface could not refuse the screen-space AO's grazing-angle darkening. */
+		std::string aoResponse = m_surfaceAOResponse.empty() ? std::string{"1.0"} : "clamp(" + m_surfaceAOResponse + ", 0.0, 1.0)";
 
 		if ( m_useAmbientOcclusion && !m_surfaceAOIntensity.empty() )
 		{
-			aoResponse = "clamp(" + m_surfaceAOIntensity + ", 0.0, 1.0)";
-		}
-		else
-		{
-			aoResponse = "1.0";
+			aoResponse = "clamp(" + m_surfaceAOIntensity + ", 0.0, 1.0) * " + aoResponse;
 		}
 
 		/* Emissive mask (B low nibble):

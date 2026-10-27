@@ -500,6 +500,8 @@ namespace EmEn::Graphics
 	constexpr auto FogResponseString{"FogResponse"};
 	constexpr auto DoFMaskString{"DoFMask"};
 	constexpr auto LightFaceString{"LightFace"};
+	/** @brief Root-level material key: the post-process ambient occlusion response (1.0 = full, the default). */
+	constexpr auto AOResponseString{"AOResponse"};
 	constexpr auto SpecularKHRString{"Specular"};
 	constexpr auto SpecularColorString{"SpecularColor"};
 	constexpr auto IridescenceThicknessString{"IridescenceThickness"};

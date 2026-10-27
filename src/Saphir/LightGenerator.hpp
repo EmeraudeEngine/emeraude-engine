@@ -299,6 +299,18 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Declares the variable holding the surface's post-process ambient occlusion response.
+			 * @note Packed into the material-properties G-buffer G channel, high nibble (times the AO texture's intensity
+			 * when there is one), and read by SSAO and RTAO. Undeclared means 1.0 — fully occluded.
+			 * @param valueVariableName A reference to a string for the GLSL variable.
+			 */
+			void
+			declareSurfaceAOResponse (const std::string & valueVariableName) noexcept
+			{
+				m_surfaceAOResponse = valueVariableName;
+			}
+
+			/**
 			 * @brief Declares the variable holding the surface's depth-of-field response.
 			 * @note Packed into the material-properties G-buffer A channel, low nibble, and read
 			 * by DepthOfField. Undeclared means 1.0 — fully defocused.
@@ -1289,6 +1301,7 @@ namespace EmEn::Saphir
 			std::string m_vegetationVertexColor;
 			std::string m_surfaceAOIntensity;
 			std::string m_surfaceFogResponse;
+			std::string m_surfaceAOResponse;
 			std::string m_surfaceDoFMask;
 			std::string m_surfaceLightFace;
 			std::string m_deferredLightingCondition;

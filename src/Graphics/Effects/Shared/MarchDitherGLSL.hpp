@@ -45,6 +45,8 @@
  * rotation had to be moved to world space to escape — because what slides through the pattern here
  * is a MARCH ORIGIN along a ray, not a surface.
  *
+ * Also the SSAO kernel's per-pixel rotation (2026-10-27): a sin()-based hash there drew vendor-dependent stripes.
+ *
  * Interleaved gradient noise: J. Jimenez, *Next Generation Post Processing in Call of Duty:
  * Advanced Warfare*, SIGGRAPH 2014.
  *

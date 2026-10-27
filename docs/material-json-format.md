@@ -189,6 +189,9 @@ variables silently changes its colour space.
 `EmissiveStrength`, `FogResponse`, `DoFMask`, `BlendingMode`, `Shininess` (legacy) — plain values at
 the top level. `LightFace` (boolean, absent = false): the material is the visible face of light sources — a lamp's
 panel — so the indirect diffuse never re-emits its emission, the lights already carry it (graphics doc 13-12 § 42).
+`AOResponse` (0-1, absent = 1.0, since 2026-10-27): how much the post-process ambient occlusion (SSAO, RTAO) darkens
+the surface — times the `AmbientOcclusion` texture's `Amount` when there is one, alone otherwise (it was forced to 1.0
+without a texture). 0 for an open water surface, which sees the whole sky (`setAOResponse()`).
 
 #### `BlendingMode` — three modes, and one that was deleted
 

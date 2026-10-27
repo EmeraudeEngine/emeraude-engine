@@ -863,6 +863,8 @@ namespace EmEn::Saphir
 				constexpr auto ShoreFoamParameters{"shoreFoamParameters"};
 				/** @brief Light face: (1 = the visible face of light sources, unused, unused, unused). */
 				constexpr auto LightFaceParameters{"lightFaceParameters"};
+				/** @brief AO response: (post-process ambient occlusion response 0-1, unused, unused, unused). */
+				constexpr auto AOResponseParameters{"aoResponseParameters"};
 				/** @brief Octahedral imposter: the object's bounding sphere (centre.xyz, radius), object space. */
 				constexpr auto ImposterBounds{"imposterBounds"};
 				/** @brief Octahedral imposter: (views per side, 1 / views per side, unused, unused). */

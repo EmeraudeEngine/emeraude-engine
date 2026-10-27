@@ -1100,6 +1100,17 @@ namespace EmEn::Graphics::Material
 			void setFogResponse (float value) noexcept;
 
 			/**
+			 * @brief Changes how much the post-process ambient occlusion (SSAO, RTAO) darkens this surface.
+			 * @note A dynamic property: material UBO slot 144 (`aoResponseParameters.x`), packed into the
+			 * material-properties G-buffer (G channel, high nibble) the AO effects read. With an ambient occlusion
+			 * TEXTURE the packed response is aoIntensity × this value; without one, this value alone (it was forced to
+			 * 1.0 before 2026-10-27). JSON key "AOResponse".
+			 * @param value 1.0 = fully occluded (the default), 0.0 = immune — an open water surface, which sees the whole
+			 * sky (RTAO measures ~0 on it) but which screen-space AO darkens at grazing angles.
+			 */
+			void setAOResponse (float value) noexcept;
+
+			/**
 			 * @brief Changes how much the depth of field affects this surface.
 			 * @note This is a dynamic property, packed into the material-properties G-buffer
 			 * (A channel, low nibble) and read by DepthOfField.
@@ -2169,6 +2180,8 @@ namespace EmEn::Graphics::Material
 			 * vec4 imposterGrid			(offset 128-131) - octahedral imposter: (views per side, 1 / views per side, unused, unused)
 			 * vec4 shoreFoamColor		  (offset 132-135) - shore foam (colour.rgb linear, coverage)
 			 * vec4 shoreFoamParameters	 (offset 136-139) - shore foam (band width m, pattern cells per metre, roughness, unused)
+			 * vec4 lightFaceParameters	 (offset 140-143) - light face (1 = the visible face of light sources, unused ×3)
+			 * vec4 aoResponseParameters	(offset 144-147) - post-process AO response (1 = full, 0 = immune; unused ×3)
 			 */
 			static constexpr auto AlbedoColorOffset{0UL};
 			static constexpr auto RoughnessOffset{4UL};
@@ -2238,8 +2251,10 @@ namespace EmEn::Graphics::Material
 			static constexpr auto ShoreFoamParametersOffset{136UL};
 			/** @brief Light-face vec4: (1 = the visible face of light sources, 0 = a free emitter; unused, unused, unused). */
 			static constexpr auto LightFaceParametersOffset{140UL};
+			/** @brief AO-response vec4: (post-process ambient occlusion response 0-1, unused, unused, unused). */
+			static constexpr auto AOResponseParametersOffset{144UL};
 			/** @brief Float count of the material UBO. */
-			static constexpr auto MaterialPropertiesSize{144UL};
+			static constexpr auto MaterialPropertiesSize{148UL};
 
 			/* Default values. */
 			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo
@@ -2290,6 +2305,7 @@ namespace EmEn::Graphics::Material
 			static constexpr auto DefaultReflectionAmount{1.0F}; /* Neutral: the BRDF controls the mix (artistic override, D2). */
 			static constexpr auto DefaultRefractionAmount{1.0F}; /* Neutral: Fresnel controls the mix (artistic override, D2). */
 			static constexpr auto DefaultFogResponse{1.0F}; /* Fully affected by the atmospheric fog. */
+			static constexpr auto DefaultAOResponse{1.0F}; /* Fully affected by the post-process ambient occlusion. */
 			static constexpr auto DefaultDoFMask{1.0F}; /* Fully affected by the depth of field. */
 
 			/**

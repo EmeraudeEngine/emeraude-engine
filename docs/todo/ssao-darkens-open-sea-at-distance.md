@@ -1,7 +1,7 @@
 ---
 id: ssao-darkens-open-sea-at-distance
 title: SSAO darkens the open sea, more with distance, and draws a screen-fixed diagonal step and row streaks under the horizon
-status: open
+status: in-progress
 priority: high
 scope: Graphics/Effects/Lighting/SSAO
 opened: 2026-10-27
@@ -34,20 +34,11 @@ The ray-traced lane (RTAO) does not show it: the screen-space lane only.
 
 ## What remains
 
-- Attribute before fixing (each a hypothesis, none proven):
-  1. the constant view-space `bias` (0.025 m) and `radius` (0.5 m) against the reconstructed depth's quantization —
-     conventional D32 depth (engine item `reversed-z-depth`): far away one depth step is metres, the samples read
-     "behind" and the surface occludes itself; a bias scaled with the view depth (or with the depth's own ulp) and a
-     distance fade are the usual answers;
-  2. the per-pixel rotation from `hash(vUV)` (screen-space UV): a precision-degrading hash draws screen-FIXED patterns —
-     a fit for the diagonal at a fixed screen x and the row streaks, and the strongest suspect for Intel's periodic
-     stripes, which do NOT depend on the far plane: it IS the classic
-     `fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453)`, whose `sin` precision is vendor-dependent; an integer hash
-     (PCG, Jarzynski & Olano 2020) or interleaved gradient noise is vendor-independent;
-  3. the waves' real relief (FFT displacement + normal map) at grazing angles — legitimate occlusion, but bounded by
-     the radius; measure it against RTAO on the same frame.
-- Measure on a flat plane at 100 m … 20 km (no waves) to separate 1-2 from 3.
-- The fix with its A/B: same frame, SSAO vs RTAO vs off, 0 `VUID-`, the three OS.
+Fixed on Linux 2026-10-27 (`docs/caution-points.md` § "SSAO darkened the open sea"): the depth-precision bias, the
+interleaved gradient noise instead of the sin() hash, and `setAOResponse(0)` on the demos' ocean.
+- The peers: the Intel iGPU's 13-px stripes and the M6's diagonal step must be gone (water-world, screen-space lane,
+  the measures of their first reports), 0 `VUID-` on the three OS. Then this file is deleted.
+- The better screen-space AO is its own item: `ssao-ground-truth-horizon-based`.
 
 ## ⚠️ Traps
 

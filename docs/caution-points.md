@@ -20,6 +20,29 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 
 ## Graphics/Material System
 
+### Fixed: SSAO darkened the open sea by 20-30 % and striped it on Intel (2026-10-27)
+
+**Symptom** (`water-world`, screen-space lane; found by the macOS peer's slot sweep — only `AmbientOcclusion` removed a
+horizon "stair-step"; Windows: static 13-px row stripes on the Intel iGPU only). Linux, 400 m up, exposure pinned: the far
+sea 46.0 luma at a 25 km view distance (55.4 at 4 km) against 69.1 with the AO slot off. The ray-traced lane (RTAO):
+76.9 against 77.0 — an open sea takes no occlusion.
+**Three causes, three fixes (engine item `ssao-darkens-open-sea-at-distance`):**
+1. **The constant 0.025 m bias under the depth buffer's own step.** The occlusion test now uses `max(bias, 2 × step)`,
+   the step measured per pixel through the frame's reconstruction (`depthStepMetres()`: one float ulp of the stored depth,
+   in metres; on the sea at 1-3 km 5-25 cm). Far sea 46.0 → 61.3 (25 km), 55.4 → 65.4 (4 km). Identical by construction
+   closer than ~145 m (2 steps under the bias). ⚠️ The step was MEASURED, not computed from n/d²: the textbook estimate
+   (0.6-2.4 m at 1-2 km) overstated it ten times — a confidence fade built on it had no effect and was dropped.
+2. **The kernel rotation `fract(sin(dot(vUV, …)) * 43758.5453)`**: a sin() whose precision is the GPU's own — Intel's
+   static 13-px stripes. Now the engine's interleaved gradient noise on the pixel coordinates (`EMEN_MARCH_DITHER_GLSL`).
+3. **Screen-space AO is view-dependent**: at grazing angles the wave crests in front of a sample count as occluders —
+   the remaining ~11 %, not removed by the bias, nor by orienting the hemisphere along the depth-reconstructed normal
+   (tested: no change). Open water now REFUSES the post-process AO: `StandardResource::setAOResponse()` (new, material
+   UBO `aoResponseParameters.x`, slot 144, UBO 144 → 148 floats; JSON `AOResponse`), 0 on the demos' ocean material.
+   Far sea with SSAO 69.1 = without. The AO response was FORCED to 1.0 for a material without an AO texture before.
+**Proof** (Linux, validation layer loaded): `water-world` both lanes, `asset-loader` (DamagedHelmet, AO texture: response
+= aoIntensity × 1.0), `relief` (close AO intact: the grooves still occluded), `liminal` — 0 `VUID-`. A better
+screen-space AO (GTAO) is its own item, `ssao-ground-truth-horizon-based`.
+
 ### Fixed: the direct specular had no geometric specular antialiasing — sun glints burst under the motion blur (2026-10-27)
 
 **Symptom** (`water-world`, TAA off, owner): facing the sun or the moon, the glints on the water doubled in brightness

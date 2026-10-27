@@ -35,6 +35,7 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/Effects/Shared/MarchDitherGLSL.hpp"
 #include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Math/Vector.hpp"
@@ -93,10 +94,14 @@ vec3 reconstructPosition (vec2 uv, float depth)
 	return vec3(viewPosition.xy, -viewPosition.z);
 }
 
-/* Hash function for pseudo-random sampling. */
-float hash (vec2 p)
+/* The depth buffer's own resolution at this pixel, in metres along the view axis: the distance one step of the stored
+ * value spans (one float ulp — D32, conventional, so the step grows as the square of the distance: ~6 mm at 100 m, ~2.4 m
+ * at 2 km with a 0.1 m near plane). Through the same reconstruction as the samples: projection-agnostic. */
+float depthStepMetres (vec2 uv, float depth, float viewDepth)
 {
-	return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+	const float ulp = exp2(floor(log2(max(depth, 1.0e-30))) - 23.0);
+
+	return abs(-emViewPosition(uv, min(depth + ulp, 1.0)).z - viewDepth);
 }
 
 /* Generate a sample in a hemisphere using noise-based rotation. */
@@ -143,8 +148,16 @@ void main()
 
 	vec3 normal = normalize(vec3(rawN.x, rawN.y, -rawN.z));
 
-	/* Generate per-pixel random rotation. */
-	vec2 noiseVec = vec2(hash(vUV), hash(vUV * 2.37));
+	/* DEPTH PRECISION (2026-10-27): a sample is "behind" only beyond what the depth buffer can tell apart — two steps,
+	 * the centre's and the sample's. A constant bias under the step turned the quantization into occlusion: the open
+	 * sea far away read ~50 % occluded, in row stripes (engine item ssao-darkens-open-sea-at-distance). */
+	const float effectiveBias = max(bias, 2.0 * depthStepMetres(vUV, centerDepth, centerPos.z));
+
+	/* Per-pixel random rotation: the engine's interleaved gradient noise on the PIXEL coordinates (2026-10-27). It was
+	 * fract(sin(dot(vUV, …)) * 43758.5453) on the UV: the precision of sin() over such arguments is the GPU's own, and
+	 * Intel drew static 13-pixel row stripes with it (engine item ssao-darkens-open-sea-at-distance). Two decorrelated
+	 * draws: the second at an offset of the same pixel lattice. */
+	vec2 noiseVec = vec2(emInterleavedGradientNoise(gl_FragCoord.xy), emInterleavedGradientNoise(gl_FragCoord.xy + vec2(47.0, 17.0)));
 
 	/* Build a tangent-space basis. */
 	vec3 tangent = normalize(vec3(noiseVec.x, noiseVec.y, 0.0) - normal * dot(vec3(noiseVec.x, noiseVec.y, 0.0), normal));
@@ -176,7 +189,7 @@ void main()
 
 		/* Range check and accumulate. */
 		float rangeCheck = smoothstep(0.0, 1.0, radius / abs(centerPos.z - sampleDepth));
-		occlusion += (sampleDepth <= samplePos.z - bias ? 1.0 : 0.0) * rangeCheck;
+		occlusion += (sampleDepth <= samplePos.z - effectiveBias ? 1.0 : 0.0) * rangeCheck;
 	}
 
 	/* Pure visibility term — the user-facing intensity is applied ONCE, in the apply pass.
@@ -267,7 +280,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		const auto & device = renderer.device();
 
 		const auto vertexModule = this->getFullscreenVertexShader();
-		const auto aoFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_AO_FS", Saphir::ShaderType::FragmentShader, std::string{SSAOHeader} + ViewReconstructionGLSL::sourceGLSL(0, ViewBinding) + SSAOComputeFragmentShader);
+		const auto aoFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_AO_FS", Saphir::ShaderType::FragmentShader, std::string{SSAOHeader} + ViewReconstructionGLSL::sourceGLSL(0, ViewBinding) + EMEN_MARCH_DITHER_GLSL + SSAOComputeFragmentShader);
 
 		if ( vertexModule == nullptr || aoFragment == nullptr )
 		{
