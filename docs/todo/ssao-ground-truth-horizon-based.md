@@ -12,7 +12,7 @@ tags: [ssao, gtao, screen-space, ambient-occlusion]
 
 ## Why
 
-Owner decision 2026-10-27, after `ssao-darkens-open-sea-at-distance`: the current SSAO is a normal-oriented hemisphere
+Owner decision 2026-10-27, after the SSAO sea fix (`docs/caution-points.md` § "SSAO darkened the open sea"): the current SSAO is a normal-oriented hemisphere
 of point samples tested against the depth buffer (Crytek-style, `SSAO.cpp`). At grazing angles it counts the relief in
 FRONT of a sample (wave crests, terrain bumps) as occluders: the open sea took ~11 % of darkening where RTAO measures
 none — answered for water by `setAOResponse(0)`, not for terrain or any bumpy surface seen from afar. Ground-truth

@@ -150,12 +150,12 @@ void main()
 
 	/* DEPTH PRECISION (2026-10-27): a sample is "behind" only beyond what the depth buffer can tell apart — two steps,
 	 * the centre's and the sample's. A constant bias under the step turned the quantization into occlusion: the open
-	 * sea far away read ~50 % occluded, in row stripes (engine item ssao-darkens-open-sea-at-distance). */
+	 * sea far away read ~50 % occluded, in row stripes (docs/caution-points.md § SSAO darkened the open sea). */
 	const float effectiveBias = max(bias, 2.0 * depthStepMetres(vUV, centerDepth, centerPos.z));
 
 	/* Per-pixel random rotation: the engine's interleaved gradient noise on the PIXEL coordinates (2026-10-27). It was
 	 * fract(sin(dot(vUV, …)) * 43758.5453) on the UV: the precision of sin() over such arguments is the GPU's own, and
-	 * Intel drew static 13-pixel row stripes with it (engine item ssao-darkens-open-sea-at-distance). Two decorrelated
+	 * Intel drew static 13-pixel row stripes with it (docs/caution-points.md § SSAO darkened the open sea). Two decorrelated
 	 * draws: the second at an offset of the same pixel lattice. */
 	vec2 noiseVec = vec2(emInterleavedGradientNoise(gl_FragCoord.xy), emInterleavedGradientNoise(gl_FragCoord.xy + vec2(47.0, 17.0)));
 

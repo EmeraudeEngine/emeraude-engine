@@ -26,7 +26,7 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 horizon "stair-step"; Windows: static 13-px row stripes on the Intel iGPU only). Linux, 400 m up, exposure pinned: the far
 sea 46.0 luma at a 25 km view distance (55.4 at 4 km) against 69.1 with the AO slot off. The ray-traced lane (RTAO):
 76.9 against 77.0 — an open sea takes no occlusion.
-**Three causes, three fixes (engine item `ssao-darkens-open-sea-at-distance`):**
+**Three causes, three fixes (item `ssao-darkens-open-sea-at-distance`, closed the same day):**
 1. **The constant 0.025 m bias under the depth buffer's own step.** The occlusion test now uses `max(bias, 2 × step)`,
    the step measured per pixel through the frame's reconstruction (`depthStepMetres()`: one float ulp of the stored depth,
    in metres; on the sea at 1-3 km 5-25 cm). Far sea 46.0 → 61.3 (25 km), 55.4 → 65.4 (4 km). Identical by construction
@@ -40,8 +40,12 @@ sea 46.0 luma at a 25 km view distance (55.4 at 4 km) against 69.1 with the AO s
    UBO `aoResponseParameters.x`, slot 144, UBO 144 → 148 floats; JSON `AOResponse`), 0 on the demos' ocean material.
    Far sea with SSAO 69.1 = without. The AO response was FORCED to 1.0 for a material without an AO texture before.
 **Proof** (Linux, validation layer loaded): `water-world` both lanes, `asset-loader` (DamagedHelmet, AO texture: response
-= aoIntensity × 1.0), `relief` (close AO intact: the grooves still occluded), `liminal` — 0 `VUID-`. A better
-screen-space AO (GTAO) is its own item, `ssao-ground-truth-horizon-based`.
+= aoIntensity × 1.0), `relief` (close AO intact: the grooves still occluded), `liminal` — 0 `VUID-`. **Three OS**
+(engine `640d1f7b`): the M6's diagonal step and row streaks gone (Δ 12.3 → 1.7, streak 1.13 → 0.33, = AO off); the Intel
+iGPU's 13-px stripes gone (row RMS 2.4-2.8 → 0.6, autocorrelation 0.9 → 0.36), its far sea 51.8 → 74.1 against 74.0 without
+AO; NVIDIA screen-space lane equal on and off; `relief`'s AO intact on all three, no periodic pattern (spectrum peak at
+the cobblestone scale); MSVC Release + Debug, MoltenVK, 0 `VUID-`. A better screen-space AO (GTAO) is its own item,
+`ssao-ground-truth-horizon-based`.
 
 ### Fixed: the direct specular had no geometric specular antialiasing — sun glints burst under the motion blur (2026-10-27)
 
