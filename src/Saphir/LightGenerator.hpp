@@ -826,6 +826,9 @@ namespace EmEn::Saphir
 			[[nodiscard]]
 			std::string roughnessShaderExpression () const noexcept;
 
+			/** @brief GLSL variable name for the ambient pass's base perceptual roughness after the geometric specular antialiasing: the split-sum lookup and the G-buffer write read it (SceneRendering, hence public). */
+			static constexpr auto AmbientFilteredRoughness{"ambientFilteredRoughness"};
+
 			/** @brief The inputs of specularAntialiasedRoughness(), named so that a caller cannot swap two GLSL expressions. */
 			struct SpecularAntialiasingInput final
 			{
@@ -1220,6 +1223,8 @@ namespace EmEn::Saphir
 			static constexpr auto LightFactor{"lightFactor"};
 			/** @brief GLSL variable name for the base layer's perceptual roughness after the geometric specular antialiasing (specularAntialiasedRoughness()), read by every direct lobe. */
 			static constexpr auto PBRFilteredRoughness{"pbrFilteredRoughness"};
+			/** @brief GLSL variable name for the clear coat's perceptual roughness after the geometric specular antialiasing, along the coat's own normal (owner decision 2026-10-27: the coat yes, the sheen no). */
+			static constexpr auto PBRClearCoatFilteredRoughness{"pbrClearCoatFilteredRoughness"};
 			/**
 			 * @warning Unused: no LightGenerator*.cpp file references this constant. It named the
 			 * Lambertian diffuse weight in the removed Blinn-Phong path (see AGENTS.md,

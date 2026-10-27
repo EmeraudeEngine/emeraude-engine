@@ -4353,7 +4353,9 @@ namespace EmEn::Graphics::Material
 
 		/* The prefiltered chain maps roughness 0..1 onto its mip levels (mip 0 is an exact
 		 * copy of the environment: perfect mirrors keep their sharpness). */
-		const auto reflectionLOD = "clamp(" + roughnessExpression + ", 0.0, 1.0) * " + std::to_string(IBLTexture::PrefilteredMipLevels - 1) + ".0";
+		const auto prefilteredLOD = [] (const std::string & roughness) {
+			return "clamp(" + roughness + ", 0.0, 1.0) * " + std::to_string(IBLTexture::PrefilteredMipLevels - 1) + ".0";
+		};
 
 		/* Generate the reflection sampling code using bindless textures. */
 		if ( generator.highQualityEnabled() )
@@ -4361,8 +4363,14 @@ namespace EmEn::Graphics::Material
 			/* The environment frame (world-space normal facing the viewer + incident vector): ONE definition. */
 			this->declareEnvironmentFrame(fragmentShader);
 
+			/* The LOD follows the roughness WIDENED by the normal's pixel variance (geometric specular antialiasing,
+			 * 2026-10-27, the light passes' code): a normal-mapped surface whose normal varies within the pixel reflects
+			 * a blurrier environment than its material says. Differentiated on the UNTURNED normal. */
+			const auto reflectionLOD = prefilteredLOD(SurfaceReflectionRoughness);
+
 			/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone). */
 			Code(fragmentShader, Location::Top) <<
+				LightGenerator::specularAntialiasedRoughness({.outputVariable = SurfaceReflectionRoughness, .normalExpression = "reflectionNormalRaw", .roughnessExpression = roughnessExpression}) << Line::End <<
 				"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
 				"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = reflectDir;" << Line::End <<
 				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
@@ -4370,7 +4378,10 @@ namespace EmEn::Graphics::Material
 		else
 		{
 			/* Low quality: use pre-computed reflection coordinates from vertex shader.
-			 * NOTE: Reflection direction was already computed in vertex shader and passed via ReflectionTextureCoordinates. */
+			 * NOTE: Reflection direction was already computed in vertex shader and passed via ReflectionTextureCoordinates.
+			 * No antialiased roughness here: the low-quality path has no environment frame (no per-pixel normal). */
+			const auto reflectionLOD = prefilteredLOD(roughnessExpression);
+
 			Code(fragmentShader, Location::Top) <<
 				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
 		}
@@ -5080,8 +5091,10 @@ namespace EmEn::Graphics::Material
 						? componentIt->second->variableName()
 						: std::string{MaterialUB(UniformBlock::Component::Roughness)};
 
+					/* The antialiased roughness, as the bindless path above. */
 					Code(shader, Location::Top) <<
-						"const vec4 " << component->variableName() << " = textureLod(" << component->samplerName() << ", " << ShaderVariable::ReflectionTextureCoordinates << ", clamp(" << roughnessExpression << ", 0.0, 1.0) * " << (IBLTexture::PrefilteredMipLevels - 1) << ".0);";
+						LightGenerator::specularAntialiasedRoughness({.outputVariable = SurfaceReflectionRoughness, .normalExpression = "reflectionNormalRaw", .roughnessExpression = roughnessExpression}) << Line::End <<
+						"const vec4 " << component->variableName() << " = textureLod(" << component->samplerName() << ", " << ShaderVariable::ReflectionTextureCoordinates << ", clamp(" << SurfaceReflectionRoughness << ", 0.0, 1.0) * " << (IBLTexture::PrefilteredMipLevels - 1) << ".0);";
 				}
 				else
 				{
@@ -5285,12 +5298,15 @@ namespace EmEn::Graphics::Material
 			const auto ccRoughnessExpression = ccRoughnessIt != m_components.cend()
 				? ccRoughnessIt->second->variableName()
 				: std::string{MaterialUB(UniformBlock::Component::ClearCoatRoughness)};
-			const auto ccLOD = "clamp(" + ccRoughnessExpression + ", 0.0, 1.0) * " + std::to_string(IBLTexture::PrefilteredMipLevels - 1) + ".0";
+			/* The coat's roughness widened by its normal's pixel variance (geometric specular antialiasing, 2026-10-27,
+			 * owner decision: the coat yes, the sheen no), differentiated on the UNTURNED coat normal. */
+			const auto ccLOD = "clamp(" + std::string{SurfaceClearCoatReflectionRoughness} + ", 0.0, 1.0) * " + std::to_string(IBLTexture::PrefilteredMipLevels - 1) + ".0";
 
 			Code{fragmentShader, Location::Top} <<
 				"/* Clear coat environment reflection: the coat's OWN normal and roughness. */" << Line::End <<
 				/* World-space, and facing the viewer like the base's environment normal (declareEnvironmentFrame()). */
 				"const vec3 clearCoatNormalRaw = normalize(" << ShaderVariable::WorldTBNMatrix << " * " << SurfaceClearCoatNormal << ");" << Line::End <<
+				LightGenerator::specularAntialiasedRoughness({.outputVariable = SurfaceClearCoatReflectionRoughness, .normalExpression = "clearCoatNormalRaw", .roughnessExpression = ccRoughnessExpression}) << Line::End <<
 				"const vec3 " << SurfaceClearCoatReflectionNormal << " = dot(clearCoatNormalRaw, reflectionI) > 0.0 ? -clearCoatNormalRaw : clearCoatNormalRaw;" << Line::End <<
 				"const vec4 " << SurfaceClearCoatReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", reflect(reflectionI, " << SurfaceClearCoatReflectionNormal << "), " << ccLOD << ");";
 

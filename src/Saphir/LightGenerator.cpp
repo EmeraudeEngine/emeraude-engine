@@ -559,15 +559,16 @@ namespace EmEn::Saphir
 
 						return false;
 					}
+				}
 
-					/* Its view-space twin decides which way the geometric normal must face (the sign of a dot
-					 * product survives the rotation between the two spaces). */
-					if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalViewSpace, VariableScope::ToNextStage) )
-					{
-						Tracer::error(ClassId, "Unable to synthesize NormalViewSpace for the ambient pass IBL !");
+				/* The view-space normal, ALWAYS: it decides which way the IBL's geometric normal must face (the sign of a
+				 * dot product survives the rotation between the two spaces), and it is the normal the specular
+				 * antialiasing differentiates when there is no normal map (generateFragmentShaderCode()). */
+				if ( !vertexShader.requestSynthesizeInstruction(ShaderVariable::NormalViewSpace, VariableScope::ToNextStage) )
+				{
+					Tracer::error(ClassId, "Unable to synthesize NormalViewSpace for the ambient pass !");
 
-						return false;
-					}
+					return false;
 				}
 
 				/* TWO-SIDED: every normal this pass uses — the IBL diffuse normal and the G-buffer normal the
@@ -693,6 +694,18 @@ namespace EmEn::Saphir
 				"const mat3 ambientTangentToView = transpose(" << ShaderVariable::ViewTBNMatrix << ");" << Line::End <<
 				"const vec3 ambientPerturbedNormal = normalize(ambientTangentToView * " << m_surfaceNormalVector << ");" << Line::End <<
 				"const vec3 N = dot(ambientTangentToView[2], " << ShaderVariable::PositionViewSpace << ".xyz) > 0.0 ? -ambientPerturbedNormal : ambientPerturbedNormal;";
+		}
+
+		/* GEOMETRIC SPECULAR ANTIALIASING of the ambient pass (2026-10-27): ONE filtered roughness for the split-sum
+		 * lookup and the G-buffer write (SceneRendering), from the UNTURNED normal — a two-sided flip boundary would read
+		 * as a huge variance. Emitted here, before the pass's own code, in uniform control flow (derivatives). */
+		if ( m_renderPassType == RenderPassType::AmbientPass )
+		{
+			const std::string antialiasingNormal = m_useNormalMapping && !m_surfaceNormalVector.empty()
+				? std::string{"ambientPerturbedNormal"}
+				: std::string{"normalize("} + ShaderVariable::NormalViewSpace + ")";
+
+			Code{fragmentShader} << LightGenerator::specularAntialiasedRoughness({.outputVariable = AmbientFilteredRoughness, .normalExpression = antialiasingNormal, .roughnessExpression = this->roughnessShaderExpression()});
 		}
 
 		switch ( m_renderPassType )
@@ -1181,7 +1194,8 @@ namespace EmEn::Saphir
 				 * BRDF LUT (scale/bias on F0), completed by the Fdez-Agüera 2019 multi-scatter
 				 * energy compensation — no extra resource, the same two LUT channels. The
 				 * diffuse lobe takes what the specular did not (energy conservation). */
-				const auto roughness = m_surfaceRoughness.empty() ? "0.5" : m_surfaceRoughness;
+				/* The antialiased roughness of this pass (generateFragmentShaderCode()), the one the G-buffer gets too. */
+				const auto * const roughness = AmbientFilteredRoughness;
 
 				Code{fragmentShader, Location::Output} <<
 					"/* PBR IBL - split-sum + multi-scatter energy compensation. */" "\n" <<

@@ -168,6 +168,8 @@ namespace EmEn::Graphics::Material
 			static constexpr auto SurfaceMetalness{"SurfaceMetalness"};
 			static constexpr auto SurfaceNormalVector{"SurfaceNormalVector"};
 			static constexpr auto SurfaceReflectionColor{"SurfaceReflectionColor"};
+			/** @brief The base roughness after the geometric specular antialiasing, along the world normal: the prefiltered environment's LOD. */
+			static constexpr auto SurfaceReflectionRoughness{"SurfaceReflectionRoughness"};
 			static constexpr auto SurfaceRefractionColor{"SurfaceRefractionColor"};
 			static constexpr auto SurfaceAutoIlluminationColor{"SurfaceAutoIlluminationColor"};
 			static constexpr auto SurfaceAmbientOcclusion{"SurfaceAmbientOcclusion"};
@@ -178,6 +180,8 @@ namespace EmEn::Graphics::Material
 			 * prefiltered cubemap sampled along it at the COAT's roughness. */
 			static constexpr auto SurfaceClearCoatReflectionNormal{"SurfaceClearCoatReflectionNormal"};
 			static constexpr auto SurfaceClearCoatReflectionColor{"SurfaceClearCoatReflectionColor"};
+			/** @brief The coat roughness after the geometric specular antialiasing, along the coat's world normal: its environment LOD. */
+			static constexpr auto SurfaceClearCoatReflectionRoughness{"SurfaceClearCoatReflectionRoughness"};
 			static constexpr auto SurfaceSubsurfaceIntensity{"SurfaceSubsurfaceIntensity"};
 			static constexpr auto SurfaceSubsurfaceColor{"SurfaceSubsurfaceColor"};
 			static constexpr auto SurfaceSubsurfaceThickness{"SurfaceSubsurfaceThickness"};

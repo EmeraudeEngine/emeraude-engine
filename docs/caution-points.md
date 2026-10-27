@@ -44,8 +44,23 @@ glint pixels (> 40/255) ~19 000 → ~152 000, saturated pixels ~70 → ~3 800 �
 waves instead of sparse dots; 0 `VUID-` with the validation layer loaded. Owner: "le rendu est beaucoup mieux de base"
 and no burst in motion any more. **Three OS** (engine `33df4a4a`, 2026-10-27): macOS M6 and Windows (RTX 3500 Ada RT lane,
 Intel iGPU screen-space lane) green — builds 0 warning, 0 `VUID-`, every light-pass pipeline compiled, the glitter a sun
-path (isolated one-pixel glints 3-7 % of the glint pixels on the M6), `relief` with 0 black / non-finite pixel. Still open:
-the IBL / ambient pass reads the raw roughness too (engine item `specular-antialiasing-at-the-source`).
+path (isolated one-pixel glints 3-7 % of the glint pixels on the M6), `relief` with 0 black / non-finite pixel.
+**Completed the same day — every specular consumer of the roughness, except the sheen** (closes the item
+`specular-antialiasing-at-the-source`, opened 2026-09-23):
+- the AMBIENT pass filters ONE roughness (`LightGenerator::AmbientFilteredRoughness`) read by the split-sum lookup AND the
+  G-buffer write (SceneRendering no longer computes its own), from the UNTURNED normal (`ambientPerturbedNormal`, or the
+  view-space geometric one — which the ambient pass therefore always requests now);
+- the prefiltered environment's LOD (`StandardResource`: the bindless reflection and a dynamic probe's cubemap,
+  `SurfaceReflectionRoughness`) along the unturned world normal `reflectionNormalRaw`;
+- the CLEAR COAT, along its own normal (its map, else the base's): its direct lobe (`PBRClearCoatFilteredRoughness`) and its
+  environment LOD (`SurfaceClearCoatReflectionRoughness`). **The sheen is NOT filtered** (owner decision 2026-10-27, as
+  Filament: a soft retro-reflective Charlie lobe that hardly aliases).
+Left raw ON PURPOSE: the low-quality reflection (no per-pixel normal there), the transmission LODs (another lobe), the
+reflectivity participation mask, the ray-traced material data (no derivatives in a ray). ⚠️ Known and unchanged: the
+shore foam's roughness (`SurfaceRoughnessFoamed`) is emitted AFTER the environment sample, so the ocean's environment LOD
+reads the unfoamed roughness while its split-sum reads the foamed one; and a coat WITHOUT its own normal map still takes
+the base's environment colour. Runtime 2026-10-27, the validation layer loaded: `water-world`, `asset-loader` (CarConcept's
+clear-coated paint, DamagedHelmet), `relief`, `liminal` (clear coat) — 0 `VUID-`, every program compiled, 0 black pixel.
 
 ### Fixed: the ocean stopped compiling — the model scale was requested for transmission EXCEPT depth-based opacity (Sep 2026)
 

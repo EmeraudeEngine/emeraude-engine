@@ -852,7 +852,15 @@ namespace EmEn::Saphir::Generator
 					 * ⚠️ The direct lights' BRDF filters its roughness with the SAME code
 					 * (LightGenerator::specularAntialiasedRoughness(), 2026-10-27): the reflections and
 					 * the direct specular read one roughness. */
-					Code{*fragmentShader, Location::Output} << LightGenerator::specularAntialiasedRoughness({.outputVariable = "saaFiltered", .normalExpression = normalExpr, .roughnessExpression = roughnessExpr});
+					if ( m_renderPassType == RenderPassType::AmbientPass )
+					{
+						/* The ambient pass filtered it once already, for its split-sum lookup too (2026-10-27). */
+						Code{*fragmentShader, Location::Output} << "const float saaFiltered = " << LightGenerator::AmbientFilteredRoughness << ';';
+					}
+					else
+					{
+						Code{*fragmentShader, Location::Output} << LightGenerator::specularAntialiasedRoughness({.outputVariable = "saaFiltered", .normalExpression = normalExpr, .roughnessExpression = roughnessExpr});
+					}
 
 					Code{*fragmentShader, Location::Output} << ShaderVariable::OutputNormal << " = vec4(" << normalExpr << ", saaFiltered + round(clamp(" << metalnessExpr << ", 0.0, 1.0)) * 2.0);";
 				}

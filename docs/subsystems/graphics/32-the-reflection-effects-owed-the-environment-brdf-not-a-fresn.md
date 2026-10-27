@@ -40,8 +40,9 @@ Three smaller terms landed with it and are cumulative, but this one carried ~90 
   its keep on distant foliage. ⚠️ This line used to say "and the direct specular": FALSE until
   2026-10-27 — the direct lights read the unfiltered roughness (`docs/caution-points.md` § Geometric
   specular antialiasing). Since then the code is ONE function,
-  `LightGenerator::specularAntialiasedRoughness()`, called by the G-buffer write and by the direct
-  lights' BRDF.
+  `LightGenerator::specularAntialiasedRoughness()`, called by the direct lights' BRDF, the ambient pass
+  (split-sum lookup and G-buffer write, one variable), the prefiltered environment's LOD and the clear coat
+  (not the sheen: owner decision).
 - **Traced specular occlusion** in RTR: the mirror ray is a ONE-SAMPLE estimate of the lobe, so four
   visibility-only rays spread over `coneTan` weight the sky-miss branch. ⚠️ MISS branch only — a hit
   is already occluded and shaded as such. ⚠️ A smooth surface is untouched (`coneTan -> 0`).

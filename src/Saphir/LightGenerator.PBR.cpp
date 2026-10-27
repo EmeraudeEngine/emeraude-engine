@@ -528,6 +528,23 @@ namespace EmEn::Saphir
 			}
 
 			Code{fragmentShader} << LightGenerator::specularAntialiasedRoughness({.outputVariable = PBRFilteredRoughness, .normalExpression = "pbrAntialiasingNormal", .roughnessExpression = surfaceRoughness}) << Line::Blank;
+
+			/* The clear coat is a second GGX lobe, glossy by nature: filtered along ITS normal — its own map when it has
+			 * one, the base's otherwise, exactly the Ncc the lobe shades with below. The sheen is not filtered (owner
+			 * decision 2026-10-27, as Filament): a soft retro-reflective lobe that hardly aliases. */
+			if ( m_useClearCoat )
+			{
+				if ( !m_surfaceClearCoatNormal.empty() )
+				{
+					Code{fragmentShader} << "const vec3 pbrClearCoatAntialiasingNormal = normalize(transpose(" << ShaderVariable::ViewTBNMatrix << ") * " << m_surfaceClearCoatNormal << ");" << Line::End;
+				}
+				else
+				{
+					Code{fragmentShader} << "const vec3 pbrClearCoatAntialiasingNormal = pbrAntialiasingNormal;" << Line::End;
+				}
+
+				Code{fragmentShader} << LightGenerator::specularAntialiasedRoughness({.outputVariable = PBRClearCoatFilteredRoughness, .normalExpression = "pbrClearCoatAntialiasingNormal", .roughnessExpression = m_surfaceClearCoatRoughness}) << Line::Blank;
+			}
 		}
 
 		std::string rayDirectionViewSpace;
@@ -1089,7 +1106,7 @@ namespace EmEn::Saphir
 
 			Code{fragmentShader} <<
 				"/* Clear coat second specular lobe. */" << Line::End <<
-				"const float ccRoughness = " << m_surfaceClearCoatRoughness << ";" << Line::End <<
+				"const float ccRoughness = " << PBRClearCoatFilteredRoughness << ";" << Line::End <<
 				"const float ccFactor = " << m_surfaceClearCoatFactor << ";" << Line::End <<
 				"const vec3 Fc = fresnelSchlick(max(dot(H, V), 0.0), vec3(0.04));" << Line::End <<
 				"const float Dc = distributionGGX(Ncc, H, ccRoughness);" << Line::End <<
@@ -1138,7 +1155,7 @@ namespace EmEn::Saphir
 
 			Code{fragmentShader} <<
 				"/* Clear coat second specular lobe. */" << Line::End <<
-				"const float ccRoughness = " << m_surfaceClearCoatRoughness << ";" << Line::End <<
+				"const float ccRoughness = " << PBRClearCoatFilteredRoughness << ";" << Line::End <<
 				"const float ccFactor = " << m_surfaceClearCoatFactor << ";" << Line::End <<
 				"const vec3 Fc = fresnelSchlick(max(dot(H, V), 0.0), vec3(0.04));" << Line::End <<
 				"const float Dc = distributionGGX(Ncc, H, ccRoughness);" << Line::End <<
