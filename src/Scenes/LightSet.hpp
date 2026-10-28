@@ -234,6 +234,9 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Initializes the light set GPU resources.
+			 * @note A light added before it that cannot be created on the hardware (its shared uniform buffer full) is
+			 * refused alone, like a light added after it: reported, taken out of the set (its removal notified), and the
+			 * scene goes on without it (owner, 2026-10-28). Only a buffer that cannot be created fails the initialization.
 			 * @param scene A reference to a scene.
 			 * @return bool
 			 */
@@ -714,6 +717,28 @@ namespace EmEn::Scenes
 			 * @return std::ostream &
 			 */
 			friend EMEN_API std::ostream & operator<< (std::ostream & out, const LightSet & obj);
+
+			/** @brief The lights initialize() refused (no hardware for them): taken out of the sets under the lock, their
+			 * removal notified after it. */
+			struct RefusedLights
+			{
+				std::vector< std::shared_ptr< Component::DirectionalLight > > directional;
+				std::vector< std::shared_ptr< Component::PointLight > > point;
+				std::vector< std::shared_ptr< Component::SpotLight > > spot;
+				std::vector< std::shared_ptr< Component::LineLight > > line;
+			};
+
+			/**
+			 * @brief The locked part of initialize(): creates the light buffers, then every light already added on the
+			 * hardware. A light that cannot be created (its shared uniform buffer full) is REFUSED ALONE — taken out of the
+			 * sets, reported, the scene goes on without it — exactly what add() does with a light added after the
+			 * initialization.
+			 * @param scene A reference to the scene.
+			 * @param refused A reference to the refused lights (out), notified by initialize() after the lock.
+			 * @return bool False when a buffer itself cannot be created.
+			 */
+			[[nodiscard]]
+			bool createOnHardware (Scene & scene, RefusedLights & refused) noexcept;
 
 			/**
 			 * @brief Retires a light removed from the sets until destroyRetiredLights() proves it unreferenced.

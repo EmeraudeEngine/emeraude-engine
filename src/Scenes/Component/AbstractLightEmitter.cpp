@@ -87,6 +87,9 @@ namespace EmEn::Scenes::Component
 		{
 			TraceError{TracerTag} << "Unable to add the light in the shared uniform buffer !";
 
+			/* NOTE: No seat, no buffer: a refused light keeps no reference to it. */
+			m_sharedUniformBuffer.reset();
+
 			return false;
 		}
 

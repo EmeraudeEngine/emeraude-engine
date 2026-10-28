@@ -274,10 +274,13 @@ namespace EmEn::Graphics
 			 * writeElementData() from the logic thread while another material is still loading and
 			 * may be adding a bank — with a reallocation those readers would be indexing freed
 			 * storage. Reserved, the growth only appends, and a reader only ever indexes a bank
-			 * that already existed when it got its seat. 64 banks is 4 MiB of uniform memory at the
-			 * 64 KiB cap, and 9344 material blocks at the current 448-byte alignment.
+			 * that already existed when it got its seat. A bank is allocated only when the previous ones
+			 * are full: 256 banks is 16 MiB of uniform memory at the 64 KiB cap (the frame-in-flight
+			 * regions inside), 113 material or spot light blocks per bank (measured), 28 928 in all.
+			 * @note 64 until 2026-10-28: `city` at side 128 has 5800 street lamps and 1708 traffic
+			 * signals, 7508 spot lights against 7232 seats (owner: raise the ceiling).
 			 */
-			static constexpr uint32_t MaxBankCount{64};
+			static constexpr uint32_t MaxBankCount{256};
 
 			/**
 			 * @brief Returns the right UBO index from element index.

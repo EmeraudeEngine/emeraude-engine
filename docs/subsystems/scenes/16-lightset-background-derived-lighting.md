@@ -17,6 +17,20 @@ BEFORE the scene is enabled. Since 2026-09-25 `initialize()` WARNS when lights w
 (`… yet N light(s) were added to it: they will light nothing !`) — it used to be one Info line, and a demo's three
 fire lights were dead for an unknown time.
 
+**A light that cannot be created is refused ALONE (owner, 2026-10-28).** A light needs a seat in its type's
+`SharedUniformBuffer` (`Graphics/SharedUniformBuffer.hpp`, at most `MaxBankCount` banks: 256 since 2026-10-28, i.e.
+28 928 spot lights). `add()` after the initialization always refused a light without a seat alone (logged, not in the
+set). `initialize()` did NOT: one light without a seat among those added before it failed the WHOLE scene ("Unable to
+initialize the light set" → "Unable to activate the scene") — `city` at side 128 (5800 street lamps + 1708 traffic
+signals = 7508 spot lights, against 7232 seats at 64 banks) did not load at all. Now both paths agree:
+`LightSet::createOnHardware(scene, refused)` (the locked part of `initialize()`) takes a light that fails out of its set
+and of `m_lights`, says it (one error per light, one warning with the count per type), notifies its `…LightRemoved`
+AFTER the lock, and the scene goes on; a refused main directional light hands the role to another one. Only a buffer
+that cannot be created fails the initialization. A refused light keeps no reference to the buffer
+(`AbstractLightEmitter::addToSharedUniformBuffer()` resets it). Proven by fault injection (`MaxBankCount` forced back to
+64, `city 128,1,12,0` at night, validation layer): the scene loads, "276 spot light(s) refused by the light set of
+scene 'city'", 7232 eligible lights, 0 VUID, exit 0.
+
 **Light lifetime across the two threads (2026-09-03).** The light-set mutex guards the
 CONTAINERS, nothing else. The render thread (`renderLightedSelection()`) takes it ONCE per call to
 SNAPSHOT the three light lists, then records with the copies; the logic thread

@@ -230,6 +230,11 @@ it is — `MipChain::build()`, graphics § 39 § The mip filter — and the imag
 > safe. Remove the reservation and the growth becomes a use-after-free that only shows under
 > concurrent loading.
 >
+> **The ceiling (2026-10-28): 256 banks** (16 MiB at the 64 KiB bank, the frame-in-flight regions inside; 113 material or spot
+> light blocks per bank, 28 928 in all). It was 64 (7232 spot lights): `city` at side 128 asked 7508. A bank is
+> allocated only when the previous ones are full, so the ceiling costs nothing below it (the two vectors reserve 256
+> pointers). Beyond it a light is refused alone (`LightSet`, scenes doc 16), a material fails to load.
+>
 > **Measured after the fix**, same scene: zero `Unable to add` lines, zero VUID, and the isolated
 > seat-less spheres go from 19.8…31.1 (the backdrop) to **30.1…217.2, mean 187.9** — the grid is
 > complete, and its pastel iridescence is visible for the first time.

@@ -22,6 +22,11 @@ slots.
 The error is explicit and handled: the scene keeps running. But one large asset, or a long session that loads many
 assets, quietly loses geometry.
 
+**2026-10-28:** `MaxBankCount` was raised to 256 (owner, for `city` at side 128's 7508 spot lights): the shared
+buffers now hold four times as many elements (16 MiB, 256 banks of 113: 28 928 materials). The
+`NodePerformanceTest` measurement below has not been run again: its 10 000 materials should now fit, the cached
+materials of a long session still hold their seats.
+
 ## What remains
 
 - [ ] Measure `NodePerformanceTest` alone in a fresh instance: how many of its 10 000 materials fail.
@@ -35,7 +40,7 @@ assets, quietly loses geometry.
 
 ## References
 
-- `src/Graphics/SharedUniformBuffer.hpp:278` (`MaxBankCount{64}`), `src/Graphics/SharedUniformBuffer.cpp:192` (the
+- `src/Graphics/SharedUniformBuffer.hpp:283` (`MaxBankCount{256}`, 64 until 2026-10-28), `src/Graphics/SharedUniformBuffer.cpp:192` (the
   bank-count check) and `:240` (the "cannot grow any further" error).
 - Engine commit `050081a3` (2026-10-01), which opened this item with the corpus-run measurement above; the triad
   report holds no record of that run (its § 12 is `src/Animations`).

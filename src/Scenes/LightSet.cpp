@@ -77,6 +77,46 @@ namespace EmEn::Scenes
 	using namespace Saphir;
 	using namespace Vulkan;
 
+	namespace
+	{
+		/**
+		 * @brief Creates every light of a set on the hardware; one that cannot be created is reported, taken out of its
+		 * set and of the set of all lights, and kept in the refused list (its removal is notified by the caller, after
+		 * the lock).
+		 * @tparam light_t The light type.
+		 * @param scene A reference to the scene.
+		 * @param lights A reference to the lights of that type (m_lightsAccess held).
+		 * @param allLights A reference to the set of all lights (m_lightsAccess held).
+		 * @param refused A reference to the refused lights (out).
+		 * @param label The light type for the messages.
+		 */
+		template< typename light_t >
+		void
+		refuseUncreatedLights (Scene & scene, std::set< std::shared_ptr< light_t > > & lights, std::set< std::shared_ptr< Component::AbstractLightEmitter > > & allLights, std::vector< std::shared_ptr< light_t > > & refused, const char * label) noexcept
+		{
+			for ( auto lightIt = lights.begin(); lightIt != lights.end(); )
+			{
+				if ( (*lightIt)->createOnHardware(scene) )
+				{
+					++lightIt;
+
+					continue;
+				}
+
+				TraceError{LightSet::ClassId} << "Unable to create the " << label << " '" << (*lightIt)->name() << "' : it is refused, the scene goes on without it !";
+
+				allLights.erase(*lightIt);
+				refused.emplace_back(*lightIt);
+				lightIt = lights.erase(lightIt);
+			}
+
+			if ( !refused.empty() )
+			{
+				TraceWarning{LightSet::ClassId} << refused.size() << " " << label << "(s) refused by the light set of scene '" << scene.name() << "' : they light nothing.";
+			}
+		}
+	}
+
 	std::unique_ptr< DescriptorSet >
 	LightSet::createDescriptorSet (Renderer & renderer, const UniformBufferObject & uniformBufferObject) noexcept
 	{
@@ -180,6 +220,37 @@ namespace EmEn::Scenes
 			return true;
 		}
 
+		RefusedLights refused;
+
+		const auto created = this->createOnHardware(scene, refused);
+
+		/* NOTE: The refused lights' removal is notified AFTER the lock, like remove() does. */
+		for ( const auto & light : refused.directional )
+		{
+			this->notify(DirectionalLightRemoved, light);
+		}
+
+		for ( const auto & light : refused.point )
+		{
+			this->notify(PointLightRemoved, light);
+		}
+
+		for ( const auto & light : refused.spot )
+		{
+			this->notify(SpotLightRemoved, light);
+		}
+
+		for ( const auto & light : refused.line )
+		{
+			this->notify(LineLightRemoved, light);
+		}
+
+		return created;
+	}
+
+	bool
+	LightSet::createOnHardware (Scene & scene, RefusedLights & refused) noexcept
+	{
 		/* ⚠️⚠️ [LOCK ORDERING] This setup path calls light->createOnHardware(scene) further down, WHILE
 		 * HOLDING m_lightsAccess, and that reaches Scene::createRenderToShadowMap() /
 		 * createRenderToCascadedShadowMap(), which take m_renderToShadowMapAccess. The engine's lock
@@ -235,15 +306,12 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			/* NOTE: Register existing lights. */
-			for ( const auto & light : m_directionalLights )
-			{
-				if ( !light->createOnHardware(scene) )
-				{
-					TraceError{ClassId} << "Unable to create the directional light '" << light->name() << "' !";
+			/* NOTE: Register existing lights; one that cannot be created is refused alone. */
+			refuseUncreatedLights(scene, m_directionalLights, m_lights, refused.directional, "directional light");
 
-					return false;
-				}
+			if ( const auto main = m_mainDirectionalLight.lock(); main != nullptr && !m_directionalLights.contains(main) )
+			{
+				m_mainDirectionalLight = m_directionalLights.empty() ? std::weak_ptr< Component::DirectionalLight >{} : *m_directionalLights.begin();
 			}
 		}
 
@@ -262,16 +330,8 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			/* NOTE: Register existing lights. */
-			for ( const auto & light : m_pointLights )
-			{
-				if ( !light->createOnHardware(scene) )
-				{
-					TraceError{ClassId} << "Unable to create the point light '" << light->name() << "' !";
-
-					return false;
-				}
-			}
+			/* NOTE: Register existing lights; one that cannot be created is refused alone. */
+			refuseUncreatedLights(scene, m_pointLights, m_lights, refused.point, "point light");
 		}
 
 		/* Generate spotlight shared uniform buffer.
@@ -289,16 +349,8 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			/* NOTE: Register existing lights. */
-			for ( const auto & light : m_spotLights )
-			{
-				if ( !light->createOnHardware(scene) )
-				{
-					TraceError{ClassId} << "Unable to create the spot light '" << light->name() << "' !";
-
-					return false;
-				}
-			}
+			/* NOTE: Register existing lights; one that cannot be created is refused alone. */
+			refuseUncreatedLights(scene, m_spotLights, m_lights, refused.spot, "spot light");
 		}
 
 		/* Generate line light shared uniform buffer: its descriptor sets bind the LTC tables at binding 1. */
@@ -314,16 +366,8 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			/* NOTE: Register existing lights. */
-			for ( const auto & light : m_lineLights )
-			{
-				if ( !light->createOnHardware(scene) )
-				{
-					TraceError{ClassId} << "Unable to create the line light '" << light->name() << "' !";
-
-					return false;
-				}
-			}
+			/* NOTE: Register existing lights; one that cannot be created is refused alone. */
+			refuseUncreatedLights(scene, m_lineLights, m_lights, refused.line, "line light");
 		}
 
 		/* Push the ambient properties and the environment luminance to every render target. */
