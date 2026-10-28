@@ -50,7 +50,7 @@ namespace EmEn::TileWorld
 		float tileSize{DefaultTileSize};
 		uint32_t column{0};
 		uint32_t row{0};
-		uint32_t variationSeed{0}; /**< Derived from the world seed and the cell: a tile may vary its look with it. */
+		uint32_t variationSeed{0}; /**< Derived from the world seed and the cell, well mixed (any bits may be used): a tile may vary its look with it. */
 		Rotation rotation{Rotation::R0}; /**< How the layout turns the tile (for world-aligned texture coordinates). */
 	};
 

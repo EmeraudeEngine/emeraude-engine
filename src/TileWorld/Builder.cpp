@@ -161,12 +161,24 @@ namespace EmEn::TileWorld
 			return world;
 		}
 
-		/** @brief A seed per cell, from the world seed (unsigned arithmetic: wraps by definition). */
+		/**
+		 * @brief A seed per cell, from the world seed, mixed by MurmurHash3's 32-bit finalizer (fmix32; Austin Appleby,
+		 * public domain, https://github.com/aappleby/smhasher): every output bit depends on every input bit, so a tile
+		 * may use any bits of it (without it the low bit alternated cell to cell, a checkerboard). Unsigned arithmetic:
+		 * wraps by definition.
+		 */
 		[[nodiscard]]
 		uint32_t
 		cellSeed (uint32_t worldSeed, uint32_t column, uint32_t row) noexcept
 		{
-			return worldSeed ^ (column * 73856093U) ^ (row * 19349663U);
+			auto hash = worldSeed ^ (column * 73856093U) ^ (row * 19349663U);
+			hash ^= hash >> 16U;
+			hash *= 0x85EBCA6BU;
+			hash ^= hash >> 13U;
+			hash *= 0xC2B2AE35U;
+			hash ^= hash >> 16U;
+
+			return hash;
 		}
 
 		/** @brief A position with its texture coordinates. */

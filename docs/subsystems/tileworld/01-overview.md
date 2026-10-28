@@ -49,6 +49,9 @@ connections, zones and relief — never "a road" or "a city").
   its outer radius (a disc sector's centre ring in triangles); an INVALID arc is logged (`[Error]`, the tile's name,
   the kind) and skipped — it caught the first dead end's negative sweep. A debug view, an editor's highlight.
 - Winding: counter-clockwise around the normal (the base's convention); `addQuad()` picks the order from the facing.
+- `TileContext::variationSeed`: the world seed (`setVariationSeed()`) and the cell, mixed by MurmurHash3's `fmix32`
+  finalizer (Appleby, public domain): any bits are independent (the bare XOR of the products left the low bit
+  alternating cell to cell). `city`'s lots draw a tower's storeys and facade from it.
 
 ## Measured (`city`, Linux, 3070 Ti, 2026-10-28, validation layers on)
 
