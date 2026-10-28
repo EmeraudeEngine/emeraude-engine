@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numbers>
+#include <utility>
 
 /* Local inclusions. */
 #include "Math/RigidBody.hpp"
@@ -129,7 +130,8 @@ namespace EmEn::Physics
 				point.normalMass = effectiveMass(bodyA, bodyB, point.anchorA, point.anchorB, manifold.normal);
 				point.tangentMass1 = effectiveMass(bodyA, bodyB, point.anchorA, point.anchorB, manifold.tangent1);
 				point.tangentMass2 = effectiveMass(bodyA, bodyB, point.anchorA, point.anchorB, manifold.tangent2);
-				point.relativeVelocity = Vec3::dotProduct(manifold.normal, relativeVelocityAt(bodyA, bodyB, point.anchorA, point.anchorB));
+				point.relativeVelocityVector = relativeVelocityAt(bodyA, bodyB, point.anchorA, point.anchorB);
+				point.relativeVelocity = Vec3::dotProduct(manifold.normal, point.relativeVelocityVector);
 				point.normalImpulse = 0.0F;
 				point.tangentImpulse1 = 0.0F;
 				point.tangentImpulse2 = 0.0F;

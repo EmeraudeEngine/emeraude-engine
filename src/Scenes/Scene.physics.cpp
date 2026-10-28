@@ -26,23 +26,58 @@
 
 #include "Scene.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <cmath>
+#include <cstdint>
+#include <functional>
 #include <limits>
+#include <memory>
 #include <numeric>
+#include <ranges>
 #include <span>
+#include <thread>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 /* Local inclusions. */
-#include "Math/RigidBody.hpp"
-#include "Math/Space3D/Contacts/ContactManifold.hpp"
-#include "Physics/BodyInertia.hpp"
-#include "Physics/CapsuleCollisionModel.hpp"
-#include "Physics/CharacterController.hpp"
-#include "Physics/NarrowPhase.hpp"
-#include "Physics/TriangleMeshCollisionModel.hpp"
+#include "BlobTrait.hpp"
 #include "Component/CharacterController.hpp"
 #include "Component/Vehicle.hpp"
+#include "Constants.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Quaternion.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Capsule.hpp"
+#include "Math/Space3D/Casts/ShapeCast.hpp"
+#include "Math/Space3D/Contacts/ContactManifold.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Math/Space3D/Triangle.hpp"
+#include "Math/Vector.hpp"
+#include "Mutex.hpp"
+#include "Physics/BodyInertia.hpp"
+#include "Physics/BodyPhysicalProperties.hpp"
+#include "Physics/CapsuleCollisionModel.hpp"
+#include "Physics/CharacterController.hpp"
+#include "Physics/CollisionModelInterface.hpp"
+#include "Physics/EnvironmentPhysicalProperties.hpp"
+#include "Physics/MovableTrait.hpp"
+#include "Physics/NarrowPhase.hpp"
+#include "Physics/SoftStepSolver.hpp"
+#include "Physics/TriangleMeshCollisionModel.hpp"
+#include "Physics/Vehicle.hpp"
+#include "Scenes/AbstractEntity.hpp"
+#include "Scenes/GroundLevelInterface.hpp"
+#include "Scenes/OctreeSector.hpp"
+#include "StaticVector.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Scenes
 {
@@ -1795,15 +1830,45 @@ namespace EmEn::Scenes
 		 * ============================================================ */
 		const auto down = m_environmentPhysicalProperties.surfaceGravity().normalized();
 
-		for ( const auto & manifold : manifolds )
+		/* The IMPACTS, per pair of ENTITIES (the bodies and their keys: the static world is one body for the ground and
+		 * every static entity): the manifolds of one pair (a body against the triangles of a mesh, appended one after
+		 * the other) together. Their approach is measured along the pair's RESULTANT impulse — each manifold's
+		 * normal weighted by its points' impulses — not along one manifold's normal: a box meeting a thin faceted shape
+		 * (an octagonal lamp post) gets FACET normals at its convex edges (the internal-edge correction), oblique to the
+		 * impact, and read 2.9 m/s out of a 7.5 m/s dead stop (projet-alpha item car-crash-sound-silent-dead-stop,
+		 * 2026-10-28). The lateral parts cancel in the resultant. One impact per pair and body. */
+		for ( size_t first = 0; first < manifolds.size(); )
 		{
-			bool pushing = false;
-			float approach = 0.0F;
+			const auto & head = manifolds[first];
+			const auto bodyIndexA = head.bodyA;
+			const auto bodyIndexB = head.bodyB;
+			const auto samePair = [&head] (const SoftStepSolver::Manifold & manifold) {
+				return manifold.bodyA == head.bodyA && manifold.bodyB == head.bodyB && manifold.keyA == head.keyA && manifold.keyB == head.keyB;
+			};
+			auto end = first + 1;
 
-			for ( const auto & point : manifold.points )
+			while ( end < manifolds.size() && samePair(manifolds[end]) )
 			{
-				pushing = pushing || point.maxNormalImpulse > 0.0F || point.normalImpulse > 0.0F;
-				approach = std::max(approach, -point.relativeVelocity);
+				++end;
+			}
+
+			const auto pair = std::span{manifolds}.subspan(first, end - first);
+			first = end;
+
+			Vector< 3, float > resultant;
+			float alongNormals = 0.0F;
+			bool pushing = false;
+
+			for ( const auto & manifold : pair )
+			{
+				for ( const auto & point : manifold.points )
+				{
+					const auto impulse = std::max(point.maxNormalImpulse, point.normalImpulse);
+
+					pushing = pushing || impulse > 0.0F;
+					resultant += manifold.normal * impulse;
+					alongNormals = std::max(alongNormals, -point.relativeVelocity);
+				}
 			}
 
 			if ( !pushing )
@@ -1811,23 +1876,59 @@ namespace EmEn::Scenes
 				continue;
 			}
 
-			const bool impact = approach > ImpactSpeedThreshold;
+			/* Along the resultant when it has a direction, else (impulses cancelling out) along each normal as before. */
+			auto approach = alongNormals;
+
+			if ( const auto magnitude = resultant.length(); magnitude > std::numeric_limits< float >::epsilon() )
+			{
+				const auto direction = resultant / magnitude;
+				approach = 0.0F;
+
+				for ( const auto & manifold : pair )
+				{
+					for ( const auto & point : manifold.points )
+					{
+						approach = std::max(approach, -Vector< 3, float >::dotProduct(direction, point.relativeVelocityVector));
+					}
+				}
+			}
+
+			if ( !(approach > ImpactSpeedThreshold) )
+			{
+				continue;
+			}
+
+			auto & bodyA = bodies[bodyIndexA];
+			auto & bodyB = bodies[bodyIndexB];
+
+			/* The impact as the former pipeline reported it: mass × approach speed / step (NodeCollision). COLLECTED,
+			 * not emitted: this step holds the physics octree lock and a handler may create or remove entities. */
+			if ( bodyA.movable != nullptr && bodyA.dynamic )
+			{
+				impacts.push_back({bodyEntities[bodyIndexA], approach * bodyA.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds});
+			}
+
+			if ( bodyB.movable != nullptr && bodyB.dynamic )
+			{
+				impacts.push_back({bodyEntities[bodyIndexB], approach * bodyB.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds});
+			}
+		}
+
+		/* The GROUNDED state, per manifold. */
+		for ( const auto & manifold : manifolds )
+		{
+			const auto pushing = std::ranges::any_of(manifold.points, [] (const auto & point) {
+				return point.maxNormalImpulse > 0.0F || point.normalImpulse > 0.0F;
+			});
+
+			if ( !pushing )
+			{
+				continue;
+			}
 
 			const float alignment = Vector< 3, float >::dotProduct(manifold.normal, down);
 			auto & bodyA = bodies[manifold.bodyA];
 			auto & bodyB = bodies[manifold.bodyB];
-
-			/* The impact as the former pipeline reported it: mass × approach speed / step (NodeCollision). COLLECTED,
-			 * not emitted: this step holds the physics octree lock and a handler may create or remove entities. */
-			if ( bodyA.movable != nullptr && bodyA.dynamic && impact )
-			{
-				impacts.push_back({bodyEntities[manifold.bodyA], approach * bodyA.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds});
-			}
-
-			if ( bodyB.movable != nullptr && bodyB.dynamic && impact )
-			{
-				impacts.push_back({bodyEntities[manifold.bodyB], approach * bodyB.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds});
-			}
 
 			/* A stands on B when the normal (A → B) points down; B on A when it points up. */
 			if ( bodyA.movable != nullptr && bodyA.dynamic && alignment > SupportCosine )

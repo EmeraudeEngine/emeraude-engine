@@ -126,6 +126,9 @@ namespace EmEn::Physics
 				/** The anchors from each body's position (computed by prepare). */
 				Base::Math::Vector< 3, float > anchorA;
 				Base::Math::Vector< 3, float > anchorB;
+				/** The velocity of B relative to A at the point before the solve (prepare): the impact events measure the
+				 * approach along the pair's RESULTANT impulse with it, not along one facet's normal. */
+				Base::Math::Vector< 3, float > relativeVelocityVector;
 				/** The separation at the step's start (negative = penetrating). */
 				float separation{0.0F};
 				float adjustedSeparation{0.0F};

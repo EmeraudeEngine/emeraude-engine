@@ -59,6 +59,15 @@ ONE pipeline, once per logic cycle, under the physics octree lock:
 5. **Write back** the dynamic bodies (velocities, `moveFromPhysics()`, `rotateFromPhysics()` with a WORLD axis), then
    the impacts (an approach above 0.05 m/s) are COLLECTED and the grounded state set from the manifolds (a contact
    within ~45° of gravity), then the **world boundaries**: the former clip + bounce, after the solver.
+   ⚠️ **An impact is measured per PAIR of entities, along the pair's RESULTANT impulse** (2026-10-28): the manifolds of
+   one pair (the bodies and their keys — the static world is one body for the ground and every static entity), each
+   normal weighted by its points' impulses, the approach = the largest −(resultant direction · the point's pre-solve
+   relative velocity, `SoftStepSolver::Point::relativeVelocityVector`); one impact per pair and body. Measured along
+   each manifold's own normal, a box meeting a thin FACETED shape (an octagonal lamp post: FACET normals at its convex
+   edges, the internal-edge correction) read 2.9 m/s out of a 7.5 m/s dead stop — a car's crash was silent depending
+   on the facet met (projet-alpha, city). After: 7.6 / 6.5 / 7.6 / 7.0 m/s reported for 7.5 / 6.4 / 7.5 / 7.0 m/s at
+   four lateral offsets. The motion is unchanged: only the reported speed. The contact normal itself stays the facet's
+   at a convex edge: engine item `mesh-convex-edge-contact-normal`.
 8. **Islands and sleep** (P5, decision 13): a union-find over the step's contacts links the awake dynamic bodies (the
    static world and the kinematic bodies do not link), rebuilt EVERY step (Jolt's `IslandBuilder`, Bullet's
    `btSimulationIslandManager`). A body is slow below 5 cm/s and 0.05 rad/s; an island whose bodies have ALL been slow
