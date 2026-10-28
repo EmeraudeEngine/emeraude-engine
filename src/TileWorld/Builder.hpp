@@ -76,6 +76,7 @@ namespace EmEn::TileWorld
 		std::shared_ptr< Graphics::Material::Interface > material;
 		float bounciness{0.0F}; /**< Physics::BodyPhysicalProperties::contactMaterial(). */
 		float stickiness{0.5F};
+		bool collidable{true}; /**< False: drawn only, no collision model (road markings a centimetre above the asphalt, a debug overlay): the bodies pass through it. */
 	};
 
 	/**
@@ -171,7 +172,8 @@ namespace EmEn::TileWorld
 			std::optional< std::vector< RegionMesh > > buildGeometry (const Layout & layout, const Relief & relief) const noexcept;
 
 			/**
-			 * @brief Builds the merged geometry of ONE region (an editor rebuilds only the region of an edited cell).
+			 * @brief Builds the merged geometry of ONE region (an editor rebuilds the region of an edited cell, and the regions
+			 * of its four neighbours when they differ: a tile may read its neighbours, TileContext::neighbours).
 			 * @param region The region index, row-major over the regions (regionCount()).
 			 * @return std::optional< std::vector< RegionMesh > > One mesh per slot the region uses; nothing as buildGeometry().
 			 */

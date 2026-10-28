@@ -181,6 +181,48 @@ namespace EmEn::TileWorld
 			return hash;
 		}
 
+		/**
+		 * @brief The four cells around a cell, indexed by its tile's OWN side: the own side turned by the cell's rotation is
+		 * the world side the neighbour lies across (north −Z = the previous row, east +X = the next column…).
+		 */
+		[[nodiscard]]
+		std::array< Neighbour, 4 >
+		neighboursOf (const Layout & layout, uint32_t column, uint32_t row, Rotation rotation) noexcept
+		{
+			const auto across = [&layout, column, row, rotation] (Side side) -> Neighbour {
+				const Cell * cell = nullptr;
+
+				switch ( rotated(side, rotation) )
+				{
+					case Side::North :
+						cell = row > 0 ? layout.cell(column, row - 1) : nullptr;
+						break;
+
+					case Side::East :
+						cell = layout.cell(column + 1, row);
+						break;
+
+					case Side::South :
+						cell = layout.cell(column, row + 1);
+						break;
+
+					case Side::West :
+						cell = column > 0 ? layout.cell(column - 1, row) : nullptr;
+						break;
+				}
+
+				if ( cell == nullptr || cell->tile == nullptr )
+				{
+					return {};
+				}
+
+				return {.tile = cell->tile.get(), .rotation = cell->rotation};
+			};
+
+			/* In Side's order: north, east, south, west. */
+			return {across(Side::North), across(Side::East), across(Side::South), across(Side::West)};
+		}
+
 		/** @brief A position with its texture coordinates. */
 		struct PlinthVertex
 		{
@@ -456,7 +498,8 @@ namespace EmEn::TileWorld
 					.column = column,
 					.row = row,
 					.variationSeed = cellSeed(m_variationSeed, column, row),
-					.rotation = cell->rotation
+					.rotation = cell->rotation,
+					.neighbours = neighboursOf(layout, column, row, cell->rotation)
 				};
 
 				SlotShapes tileShapes{m_surfaces.size()};
@@ -690,15 +733,24 @@ namespace EmEn::TileWorld
 			const auto contact = Physics::BodyPhysicalProperties::contactMaterial(surface.bounciness, surface.stickiness);
 			auto name = std::string{namePrefix} + std::to_string(mesh.region) + "." + surface.name;
 
-			const auto built = toolkit
-				.setCursor(mesh.origin[X], mesh.origin[Y], mesh.origin[Z])
-				.generateTriangleMeshInstance< Scenes::StaticEntity >(name, mesh.shape, surface.material, contact);
+			toolkit.setCursor(mesh.origin[X], mesh.origin[Y], mesh.origin[Z]);
+
+			/* A drawn-only slot (road markings, a debug overlay) gets no collision model: the bodies pass through it. */
+			const auto built = surface.collidable ?
+				toolkit.generateTriangleMeshInstance< Scenes::StaticEntity >(name, mesh.shape, surface.material, contact) :
+				toolkit.generateRenderableInstance< Scenes::StaticEntity >(name, mesh.shape, surface.material, contact);
 
 			if ( !built.isValid() )
 			{
 				TraceError{TracerTag} << "instantiate(): unable to create '" << name << "' !";
 
 				continue;
+			}
+
+			/* The author's decision, final: never derived from a mass (AbstractEntity::setCollidable()). */
+			if ( !surface.collidable )
+			{
+				built.entity()->setCollidable(false);
 			}
 
 			++created;

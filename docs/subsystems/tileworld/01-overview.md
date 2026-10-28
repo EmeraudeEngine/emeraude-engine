@@ -49,6 +49,12 @@ connections, zones and relief — never "a road" or "a city").
   its outer radius (a disc sector's centre ring in triangles); an INVALID arc is logged (`[Error]`, the tile's name,
   the kind) and skipped — it caught the first dead end's negative sweep. A debug view, an editor's highlight.
 - Winding: counter-clockwise around the normal (the base's convention); `addQuad()` picks the order from the facing.
+- `TileContext::neighbours` (owner decision 2026-10-28): the four cells around, indexed by the tile's OWN side, each
+  with its tile (null at the border) and its rotation — a straight road marks its approach to a junction itself. A tile
+  reading them makes its geometry depend on its neighbours: an edit rebuilds the regions of the edited cell's
+  neighbours too.
+- `SurfaceSlot::collidable` (default true): false makes a slot DRAWN ONLY — no collision model, `setCollidable(false)`
+  as the author's final decision (road markings a centimetre above the asphalt, a debug overlay).
 - `TileContext::variationSeed`: the world seed (`setVariationSeed()`) and the cell, mixed by MurmurHash3's `fmix32`
   finalizer (Appleby, public domain): any bits are independent (the bare XOR of the products left the low bit
   alternating cell to cell). `city`'s lots draw a tower's storeys and facade from it.

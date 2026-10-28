@@ -27,6 +27,7 @@
 #pragma once
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <span>
 #include <string_view>
@@ -39,6 +40,20 @@
 
 namespace EmEn::TileWorld
 {
+	class TileInterface;
+
+	/**
+	 * @brief A cell next to the one being built, as the tile sees it (owner decision 2026-10-28: a straight road marks its
+	 * approach to a junction itself).
+	 * @note A tile reading its neighbours makes its geometry depend on them: an edit rebuilds the edited cell's region
+	 * AND the regions of its four neighbours (Builder::buildRegion()).
+	 */
+	struct Neighbour
+	{
+		const TileInterface * tile{nullptr}; /**< Null at the world's border or for an empty cell. Non-owning: valid during build() only. */
+		Rotation rotation{Rotation::R0}; /**< The neighbour's own rotation in the layout (its sides are in ITS frame). */
+	};
+
 	/**
 	 * @brief What a tile knows when it builds: its size and the heights of its corners, in its OWN frame (the rotation
 	 * already applied: CornerHeights[NorthWest] is the corner at the tile's own north-west).
@@ -52,6 +67,7 @@ namespace EmEn::TileWorld
 		uint32_t row{0};
 		uint32_t variationSeed{0}; /**< Derived from the world seed and the cell, well mixed (any bits may be used): a tile may vary its look with it. */
 		Rotation rotation{Rotation::R0}; /**< How the layout turns the tile (for world-aligned texture coordinates). */
+		std::array< Neighbour, 4 > neighbours{}; /**< Indexed by the tile's OWN side (Side): the cell across that side. */
 	};
 
 	/**
