@@ -188,6 +188,18 @@ namespace EmEn::Graphics
 		 */
 		Stars,
 
+		/**
+		 * @brief The visible SOURCES of the point and spot lights (LightGlints, Oct 2026): each a footprint of at least
+		 * 0.7 px carrying the source's light toward the camera, so that a lamp's lens smaller than a pixel neither
+		 * flickers nor vanishes (graphics doc 43).
+		 * @note A SCENE-DRIVEN slot: filed by `PostProcessStack::syncSceneEffects()` the first frame a light of the scene
+		 * declares a visible source (Scenes::Component::AbstractLightEmitter::setVisibleSourceArea()).
+		 * @note AFTER the temporal anti-aliasing, drawn with the UNJITTERED projection, BEFORE the camera's optics —
+		 * the stars' reasons: a temporal resolve rejects a sub-pixel highlight, the glare spreads a glint like any
+		 * point of light.
+		 */
+		LightGlints,
+
 		/* ---- Photographic effects (HDR resolve), materialized by the ACTIVE CAMERA ---- */
 
 		/**
@@ -336,7 +348,7 @@ namespace EmEn::Graphics
 	 * @brief Returns whether a slot belongs to the SCENE phase of the chain.
 	 * @note The effects that add, remove or resolve LIGHT in the scene — the lighting family, the
 	 * clouds, the light shafts, the fog, the application's own effects, the TAA that closes the
-	 * phase and the stars drawn over its resolve — as opposed to the camera's photographic chain after it (DepthOfField, MotionBlur,
+	 * phase and the stars and light glints drawn over its resolve — as opposed to the camera's photographic chain after it (DepthOfField, MotionBlur,
 	 * LensFlare, Glare, ToneMapping) and the display-referred effects. It is the set
 	 * `PostProcessStack::bypassSceneEffects()` switches off while the SENSOR keeps running: in a
 	 * photometric pipeline the exposure and the tone mapping are not effects, they are what turns
@@ -363,6 +375,7 @@ namespace EmEn::Graphics
 			case EffectSlot::Custom :
 			case EffectSlot::TemporalAA :
 			case EffectSlot::Stars :
+			case EffectSlot::LightGlints :
 				return true;
 
 			default :
@@ -410,6 +423,7 @@ namespace EmEn::Graphics
 			case EffectSlot::Custom : return "Custom";
 			case EffectSlot::TemporalAA : return "TemporalAA";
 			case EffectSlot::Stars : return "Stars";
+			case EffectSlot::LightGlints : return "LightGlints";
 			case EffectSlot::DepthOfField : return "DepthOfField";
 			case EffectSlot::MotionBlur : return "MotionBlur";
 			case EffectSlot::Glare : return "Glare";

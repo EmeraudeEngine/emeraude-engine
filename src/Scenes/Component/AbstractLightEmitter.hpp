@@ -673,6 +673,47 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Declares the light's VISIBLE SOURCE — a lamp's lens, a bulb — so that the camera sees it as a point of
+			 * light at any distance, without aliasing (Graphics::Effects::Lighting::LightGlints, graphics doc 43).
+			 * @note A source smaller than a pixel is drawn by a rasteriser on one frame and missed on the next: a street of
+			 * lamp lenses flickers as the camera moves (owner, 2026-10-28). The glint is a footprint of at least 0.7 px
+			 * that carries the source's light toward the camera, E = I / d² — the stars' photometry. A SPOT's source is a
+			 * flat face looking along the spot's direction (a luminaire's lens): it shows I × cos α, α the angle between
+			 * that direction and the camera, nothing from behind; a POINT light's is a sphere of that surface (a bulb),
+			 * its full intensity in every direction. The footprint takes the source's projected size when it is larger
+			 * than a pixel. Honoured for point and spot lights, while the light is enabled; logic thread, published with
+			 * the light's frame state. The light's draw distance (setDrawDistance()) does not apply to its glint.
+			 * @param area The source's area in square metres, > 0, or 0 for none (the default). A negative or non-finite
+			 * value is refused (logged), the previous one kept.
+			 */
+			void setVisibleSourceArea (float area) noexcept;
+
+			/**
+			 * @brief Returns the area of the light's visible source (setVisibleSourceArea()), 0 for none. Logic thread.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			visibleSourceArea () const noexcept
+			{
+				return m_visibleSourceArea;
+			}
+
+			/**
+			 * @brief Returns the published area of the light's visible source of a render state slot.
+			 * @note Render-thread read, the slot latched by the frame: published with publishedBlock().
+			 * @pre readStateIndex < RenderStateSlotCount.
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			publishedVisibleSourceArea (uint32_t readStateIndex) const noexcept
+			{
+				return *std::next(m_publishedVisibleSourceAreas.begin(), readStateIndex);
+			}
+
+			/**
 			 * @brief Returns whether this light type uses a cubemap for color projection.
 			 * @note Override in PointLight to return true.
 			 * @return bool
@@ -884,8 +925,12 @@ namespace EmEn::Scenes::Component
 			std::array< std::array< float, MaxUniformBlockElementCount >, RenderStateSlotCount > m_publishedBlocks{};
 			/** @brief Published copies of the draw distance, one per render state slot (filled with the blocks). */
 			std::array< DrawDistance, RenderStateSlotCount > m_publishedDrawDistances{};
+			/** @brief Published copies of the visible source's area, one per render state slot (filled with the blocks). */
+			std::array< float, RenderStateSlotCount > m_publishedVisibleSourceAreas{};
 			/** @brief Where the light is drawn (setDrawDistance()). Logic thread. */
 			DrawDistance m_drawDistance{};
+			/** @brief The visible source's area, square metres, 0 for none (setVisibleSourceArea()). Logic thread. */
+			float m_visibleSourceArea{0.0F};
 			/** @brief Logic generation each published slot was filled from. */
 			std::array< uint32_t, RenderStateSlotCount > m_publishedGeneration{};
 			/**

@@ -28,18 +28,45 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cmath>
-#include <ostream>
+#include <cstddef>
+#include <functional>
+#include <sstream>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "Any.hpp"
+#include "BlobTrait.hpp"
+#include "Constants.hpp"
 #include "Graphics/DummyShadowTexture.hpp"
 #include "Graphics/LTCTexture.hpp"
+#include "Graphics/Renderer.hpp"
+#include "Graphics/SharedUBOManager.hpp"
+#include "Graphics/Types.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scene.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
+#include "Scenes/Component/Abstract.hpp"
+#include "Scenes/Component/DirectionalLight.hpp"
+#include "Scenes/Component/LineLight.hpp"
+#include "Scenes/Component/PointLight.hpp"
+#include "Scenes/Component/SpotLight.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class UniformBufferObject;
+}
 
 namespace EmEn::Scenes
 {
@@ -618,6 +645,23 @@ namespace EmEn::Scenes
 		m_ambientLightColor = Black;
 		m_ambientEmissionChromaticity = {0.0F, 0.0F, 0.0F};
 		m_lightPercentToAmbient = DefaultLightPercentToAmbient;
+	}
+
+	bool
+	LightSet::hasVisibleSource (uint32_t readStateIndex) const noexcept
+	{
+		if ( readStateIndex >= RenderStateSlotCount )
+		{
+			return false;
+		}
+
+		const Base::MutexLock lock{m_lightsAccess};
+
+		const auto declares = [readStateIndex] (const auto & light) noexcept {
+			return light->publishedVisibleSourceArea(readStateIndex) > 0.0F;
+		};
+
+		return std::ranges::any_of(m_pointLights, declares) || std::ranges::any_of(m_spotLights, declares);
 	}
 
 	std::shared_ptr< DescriptorSetLayout >

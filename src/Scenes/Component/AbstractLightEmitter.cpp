@@ -127,6 +127,7 @@ namespace EmEn::Scenes::Component
 		this->writeUniformBlock(m_publishedBlocks[writeStateIndex].data());
 
 		*std::next(m_publishedDrawDistances.begin(), writeStateIndex) = m_drawDistance;
+		*std::next(m_publishedVisibleSourceAreas.begin(), writeStateIndex) = m_visibleSourceArea;
 		m_publishedGeneration[writeStateIndex] = m_logicGeneration;
 	}
 
@@ -146,6 +147,26 @@ namespace EmEn::Scenes::Component
 		}
 
 		m_drawDistance = {.distance = distance, .fadeRange = fadeRange};
+
+		this->requestVideoMemoryUpdate();
+	}
+
+	void
+	AbstractLightEmitter::setVisibleSourceArea (float area) noexcept
+	{
+		if ( !this->acceptsFinite("setVisibleSourceArea", area) )
+		{
+			return;
+		}
+
+		if ( area < 0.0F )
+		{
+			TraceError{TracerTag} << "setVisibleSourceArea(" << area << ") refused: the area must be >= 0 (0 for no visible source).";
+
+			return;
+		}
+
+		m_visibleSourceArea = area;
 
 		this->requestVideoMemoryUpdate();
 	}

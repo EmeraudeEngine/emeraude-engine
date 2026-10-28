@@ -1178,6 +1178,13 @@ namespace EmEn
 			constexpr auto GraphicsPPStarsEnabledKey{"Core/Graphics/PostProcessing/Stars/Enabled"};
 			constexpr auto DefaultGraphicsPPStarsEnabled{true};
 
+			/* Light glints (Graphics::Effects::Lighting::LightGlints, Oct 2026) — the visible sources of the point and
+			 * spot lights that declare one (AbstractLightEmitter::setVisibleSourceArea()), drawn as points after the
+			 * temporal anti-aliasing. A SCENE-DRIVEN effect: the stack files it the first frame such a light is published
+			 * (PostProcessStack::syncSceneEffects()). 'Enabled' = false declines that filing for the session. */
+			constexpr auto GraphicsPPLightGlintsEnabledKey{"Core/Graphics/PostProcessing/LightGlints/Enabled"};
+			constexpr auto DefaultGraphicsPPLightGlintsEnabled{true};
+
 			/* Volumetric clouds (Graphics::Effects::Atmosphere::VolumetricClouds, Sep 2026) — the pass that
 			 * draws the scene's Scenes::Component::CloudVolume entities. A SCENE-DRIVEN effect: the stack
 			 * files it the first frame the scene holds a cloud (PostProcessStack::syncSceneEffects()), an

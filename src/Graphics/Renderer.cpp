@@ -2086,21 +2086,24 @@ namespace EmEn::Graphics
 			/* The SCENE's contract, the camera's sibling: a scene holding volumetric clouds gets the pass
 			 * that draws them, stack or not (PostProcessStack::syncSceneEffects(); owner decision
 			 * 2026-09-24, "placing a cloud is enough"); a scene under a physical sky gets its aerial
-			 * perspective (owner decision 2026-10-25), and its stars when the sky names a catalogue. The new occupant brings its G-buffer
+			 * perspective (owner decision 2026-10-25), and its stars when the sky names a catalogue; a scene whose lights
+			 * show their sources gets the light glints. The new occupant brings its G-buffer
 			 * requirements, so a change retires the scene target exactly like a camera change does.
 			 * ⚠️ AFTER renderSkyAtmosphere(): the physical sky is the one this frame submitted. */
 			const auto * clouds = sceneCloudSet(scene.get());
 			const bool physicalSky = this->frameSkyAtmosphere() != nullptr;
 			const bool starField = this->frameStarField() != nullptr;
+			/* A light of the scene shows a visible source: its glints (graphics doc 43). */
+			const bool lightGlints = scene->lightSet().hasVisibleSource(scene->frameReadStateIndex());
 
-			if ( clouds != nullptr || physicalSky )
+			if ( clouds != nullptr || physicalSky || lightGlints )
 			{
 				if ( stack == nullptr )
 				{
 					stack = &scene->requirePostProcessStack();
 				}
 
-				if ( scene->requirePostProcessStack().syncSceneEffects(clouds, physicalSky, starField, *this) && m_sceneTarget != nullptr )
+				if ( scene->requirePostProcessStack().syncSceneEffects(clouds, physicalSky, starField, lightGlints, *this) && m_sceneTarget != nullptr )
 				{
 					m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] {
 						target->destroyRenderTarget();

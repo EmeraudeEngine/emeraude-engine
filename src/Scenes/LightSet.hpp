@@ -31,11 +31,12 @@
 
 /* STL inclusions. */
 #include <cstdint>
-#include <cstddef>
+#include <iosfwd>
+#include <iterator> // IWYU pragma: keep (std::pair: IWYU adds then removes it across the TUs, libstdc++ mapping)
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <set>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -44,27 +45,43 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Hash/FNV1a.hpp"
+#include "Math/Base.hpp"
+#include "Math/Vector.hpp"
 #include "Mutex.hpp"
-#include "Component/DirectionalLight.hpp"
-#include "Component/LineLight.hpp"
-#include "Component/PointLight.hpp"
-#include "Component/SpotLight.hpp"
-#include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "PixelFactory/Color.hpp"
+#include "Scenes/Component/AbstractLightEmitter.hpp"
+#include "ThreadSafety.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
+	namespace Graphics
+	{
+		class Renderer;
+		class SharedUniformBuffer;
+	}
+
 	namespace Vulkan
 	{
 		class LayoutManager;
 		class DescriptorSetLayout;
+		class UniformBufferObject;
 	}
 
 	namespace Scenes
 	{
 		class Scene;
+	}
+
+	namespace Scenes::Component
+	{
+		class DirectionalLight;
+		class LineLight;
+		class PointLight;
+		class SpotLight;
 	}
 }
 
@@ -524,6 +541,17 @@ namespace EmEn::Scenes
 
 				return !(shadowMapsEnabled && light.isShadowCastingEnabled() && light.hasShadowDescriptorSet());
 			}
+
+			/**
+			 * @brief Returns whether a point or spot light of the set declares a visible source
+			 * (AbstractLightEmitter::setVisibleSourceArea()): the scene then needs the light glints
+			 * (Graphics::Effects::Lighting::LightGlints, filed by PostProcessStack::syncSceneEffects()).
+			 * @note ⚠️ RENDER THREAD: it reads the PUBLISHED areas of a render state slot. Takes the set's lock.
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hasVisibleSource (uint32_t readStateIndex) const noexcept;
 
 			/**
 			 * @brief Returns the line light list.

@@ -476,26 +476,32 @@ namespace EmEn::Graphics
 			 *   Graphics::Effects::Atmosphere::AerialPerspective is filed into EffectSlot::AerialPerspective (owner
 			 *   decision, 2026-10-25: it owns the distance haze under a dynamic sky);
 			 * - the stars: the first frame such a sky draws a star catalogue under a celestial clock
-			 *   (Renderer::frameStarField()), a Graphics::Effects::Atmosphere::StarField is filed into EffectSlot::Stars.
+			 *   (Renderer::frameStarField()), a Graphics::Effects::Atmosphere::StarField is filed into EffectSlot::Stars;
+			 * - the light glints: the first frame a point or spot light of the scene publishes a visible source
+			 *   (Scenes::LightSet::hasVisibleSource()), a Graphics::Effects::Lighting::LightGlints is filed into
+			 *   EffectSlot::LightGlints.
 			 * syncSlotSelection() materializes the newcomer.
 			 * @note Only the ARRIVAL is handled. Once filed an occupant stays resident: the cloud pass's gate
 			 * (IndirectPostProcessEffect::requiresCloudVolumes()) keeps it out of the frame while the scene holds
 			 * no cloud; the aerial perspective passes the chain colour through on a frame without a submitted
-			 * atmosphere, the stars draw nothing on a frame without a star field. An application that filed its own
-			 * occupant of a slot is left alone. `Core/Graphics/PostProcessing/Clouds/Enabled = false`,
-			 * `Core/Graphics/PostProcessing/AerialPerspective/Enabled = false` and
-			 * `Core/Graphics/PostProcessing/Stars/Enabled = false` decline the filings, read once.
+			 * atmosphere, the stars draw nothing on a frame without a star field, the glints nothing without a lit
+			 * source. An application that filed its own occupant of a slot is left alone.
+			 * `Core/Graphics/PostProcessing/Clouds/Enabled = false`,
+			 * `Core/Graphics/PostProcessing/AerialPerspective/Enabled = false`,
+			 * `Core/Graphics/PostProcessing/Stars/Enabled = false` and
+			 * `Core/Graphics/PostProcessing/LightGlints/Enabled = false` decline the filings, read once.
 			 * @note ⚠️ RENDER THREAD, once per frame, AFTER Renderer::renderSkyAtmosphere() and BEFORE
 			 * syncSlotSelection().
 			 * @param clouds A pointer to the scene's clouds, nullptr when it holds none.
 			 * @param physicalSky Whether this frame submitted the scene's physical sky (Renderer::frameSkyAtmosphere()).
 			 * @param starField Whether that sky draws a star catalogue this frame (Renderer::frameStarField()).
+			 * @param lightGlints Whether a light of the scene publishes a visible source (Scenes::LightSet::hasVisibleSource()).
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool Whether the effect set changed (the pipeline must be reconfigured: the new
 			 * occupant brings its G-buffer requirements).
 			 */
 			[[nodiscard]]
-			bool syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, bool starField, Renderer & renderer) noexcept;
+			bool syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, bool starField, bool lightGlints, Renderer & renderer) noexcept;
 
 			/**
 			 * @brief Removes an effect from the chain.
@@ -817,6 +823,15 @@ namespace EmEn::Graphics
 			bool fileStarFieldEffect (Renderer & renderer) noexcept;
 
 			/**
+			 * @brief Files the light glints, unless the application filed its own or the settings decline it.
+			 * @note ⚠️ RENDER THREAD — syncSceneEffects() only.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool Whether it was filed.
+			 */
+			[[nodiscard]]
+			bool fileLightGlintsEffect (Renderer & renderer) noexcept;
+
+			/**
 			 * @brief Disables every occupant of a slot — the concept is switched off.
 			 * @note ⚠️ RENDER THREAD — syncSlotSelection() only.
 			 * @param slot The slot.
@@ -890,6 +905,7 @@ namespace EmEn::Graphics
 			bool m_cloudEffectResolved{false};
 			bool m_aerialPerspectiveResolved{false};
 			bool m_starFieldResolved{false};
+			bool m_lightGlintsResolved{false};
 			/* The scene-effects bypass (bypassSceneEffects()): written on the main thread, read by
 			 * syncSlotSelection() on the render thread. */
 			std::atomic< bool > m_sceneEffectsBypassed{false};

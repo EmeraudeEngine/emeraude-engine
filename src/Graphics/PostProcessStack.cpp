@@ -46,6 +46,7 @@
 #include "Effects/Camera/MotionBlur.hpp"
 #include "Effects/Camera/ToneMapping.hpp"
 #include "Effects/Camera/VeilingGlare.hpp"
+#include "Effects/Lighting/LightGlints.hpp"
 #include "Effects/Lighting/RTAO.hpp"
 #include "Effects/Lighting/RTContactShadows.hpp"
 #include "Effects/Lighting/RTGI.hpp"
@@ -792,7 +793,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessStack::syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, bool starField, Renderer & renderer) noexcept
+	PostProcessStack::syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, bool starField, bool lightGlints, Renderer & renderer) noexcept
 	{
 		bool changed = false;
 
@@ -818,6 +819,14 @@ namespace EmEn::Graphics
 			m_starFieldResolved = true;
 
 			changed = this->fileStarFieldEffect(renderer) || changed;
+		}
+
+		/* Decided once, the first frame a light of the scene publishes a visible source. */
+		if ( !m_lightGlintsResolved && lightGlints )
+		{
+			m_lightGlintsResolved = true;
+
+			changed = this->fileLightGlintsEffect(renderer) || changed;
 		}
 
 		return changed;
@@ -898,6 +907,29 @@ namespace EmEn::Graphics
 		this->addEffect(std::make_shared< Effects::Atmosphere::StarField >(renderer));
 
 		TraceInfo{ClassId} << "The physical sky draws a star catalogue: its star field joins the chain.";
+
+		return true;
+	}
+
+	bool
+	PostProcessStack::fileLightGlintsEffect (Renderer & renderer) noexcept
+	{
+		/* An application that filed its own occupant of the concept keeps it. */
+		if ( !m_slots[static_cast< size_t >(EffectSlot::LightGlints)].empty() )
+		{
+			return false;
+		}
+
+		if ( !renderer.primaryServices().settings().getOrSetDefault< bool >(GraphicsPPLightGlintsEnabledKey, DefaultGraphicsPPLightGlintsEnabled) )
+		{
+			TraceInfo{ClassId} << "A light of the scene has a visible source, but '" << GraphicsPPLightGlintsEnabledKey << "' is false: no light glints.";
+
+			return false;
+		}
+
+		this->addEffect(std::make_shared< Effects::Lighting::LightGlints >(renderer));
+
+		TraceInfo{ClassId} << "A light of the scene has a visible source: the light glints join the chain.";
 
 		return true;
 	}

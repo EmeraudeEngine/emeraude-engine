@@ -148,6 +148,7 @@
 #include "Graphics/Effects/Camera/MotionBlur.hpp"
 #include "Graphics/Effects/Camera/ToneMapping.hpp"
 #include "Graphics/Effects/Camera/VeilingGlare.hpp"
+#include "Graphics/Effects/Lighting/LightGlints.hpp"
 #include "Graphics/Effects/Lighting/RTAO.hpp"
 #include "Graphics/Effects/Lighting/RTContactShadows.hpp"
 #include "Graphics/Effects/Lighting/RTGI.hpp"
