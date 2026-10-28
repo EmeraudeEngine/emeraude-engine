@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <array>
 #include <cstdint>
+#include <numbers>
 
 /**
  * @brief TileWorld — an OPTIONAL way to build a scene: square tiles that assemble on a grid, over a slope-bounded
@@ -42,8 +43,8 @@ namespace EmEn::TileWorld
 	constexpr float DefaultTileSize{16.0F};
 
 	/**
-	 * @brief The sub-cells per tile side: the sub-grid zones and props are placed on (0.5 m for a 16 m tile; owner
-	 * 2026-10-28: a 7 m carriageway between two 4.5 m sidewalks puts the kerbs on half metres).
+	 * @brief The sub-cells per tile side: the sub-grid zones and props are placed on (0.5 m for a 16 m tile, owner
+	 * 2026-10-28: fine enough for kerbs, 1 m prop strips and the centres and radii of curves).
 	 */
 	constexpr uint8_t SubCellsPerSide{32};
 
@@ -139,14 +140,60 @@ namespace EmEn::TileWorld
 	};
 
 	/**
+	 * @brief A ring sector of a tile, in the tile's own frame: what follows a curve (a curved kerb, a bend, a turning
+	 * circle). Its centre is a sub-grid POINT (0 to SubCellsPerSide, the tile corners included), its radii are in
+	 * sub-cells, its angles in radians from +X towards +Z (clockwise seen from above, as Side).
+	 * @note An inner radius of 0 makes a disc sector. The tile keeps the sector inside itself (the engine clips nothing).
+	 */
+	struct SubArc
+	{
+		float startAngle{0.0F};
+		float sweep{0.0F}; /**< Positive: the sector runs from startAngle to startAngle + sweep. */
+		uint8_t centreX{0};
+		uint8_t centreZ{0};
+		uint8_t innerRadius{0};
+		uint8_t outerRadius{0};
+		bool facesCentre{false}; /**< What stands on it turns to the centre (true) or away from it (false). */
+	};
+
+	/**
+	 * @brief Whether a ring sector can be used: its centre on the sub-grid, inner < outer radius, a finite start angle
+	 * within two turns either way, a sweep in (0, 2π] (a NaN fails every comparison).
+	 * @param arc The sector.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	constexpr
+	bool
+	isValid (const SubArc & arc) noexcept
+	{
+		constexpr auto Turn = 2.0F * std::numbers::pi_v< float >;
+
+		return arc.centreX <= SubCellsPerSide && arc.centreZ <= SubCellsPerSide
+			&& arc.innerRadius < arc.outerRadius
+			&& arc.startAngle >= -2.0F * Turn && arc.startAngle <= 2.0F * Turn
+			&& arc.sweep > 0.0F && arc.sweep <= Turn;
+	}
+
+	/** @brief The shape of a zone. */
+	enum class ZoneShape : uint8_t
+	{
+		Rectangle = 0, /**< Zone::area. */
+		Arc = 1 /**< Zone::arc. */
+	};
+
+	/**
 	 * @brief An area of a tile with a meaning: where something may stand (a building lot, a strip for props…).
-	 * @note `kind` is the CONSUMER's (the engine never interprets it); `facing` is the side the area turns to (a lot
-	 * faces its street, a lamp post its carriageway).
+	 * @note `kind` is the CONSUMER's (the engine never interprets it). A rectangle's `facing` is the side the area turns
+	 * to (a lot faces its street, a lamp post its carriageway); an arc turns to its centre or away from it
+	 * (SubArc::facesCentre).
 	 */
 	struct Zone
 	{
-		SubRect area;
+		SubRect area; /**< The area of a ZoneShape::Rectangle zone. */
+		SubArc arc; /**< The sector of a ZoneShape::Arc zone. */
 		uint32_t kind{0};
-		Side facing{Side::North};
+		Side facing{Side::North}; /**< The facing of a ZoneShape::Rectangle zone. */
+		ZoneShape shape{ZoneShape::Rectangle};
 	};
 }

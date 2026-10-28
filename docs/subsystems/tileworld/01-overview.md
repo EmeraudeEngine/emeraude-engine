@@ -9,7 +9,7 @@ connections, zones and relief — never "a road" or "a city").
 
 | Header | Role |
 |---|---|
-| `Types.hpp` | `Side` (N = −Z, E = +X, S = +Z, W = −X), `Rotation` (quarter turns, clockwise seen from above), `NetworkMask` (one bit per network, named by the CONSUMER), `SlopeRule`, `SubRect` / `Zone` (an area on the 32 × 32 sub-grid, 0.5 m, a consumer `kind`, a facing side), `DefaultTileSize` 16 m. |
+| `Types.hpp` | `Side` (N = −Z, E = +X, S = +Z, W = −X), `Rotation` (quarter turns, clockwise seen from above), `NetworkMask` (one bit per network, named by the CONSUMER), `SlopeRule`, `SubRect` / `SubArc` / `Zone` (a zone is a RECTANGLE on the 32 × 32 sub-grid, 0.5 m, facing a side, or an ARC — a ring sector centred on a sub-grid point, radii in sub-cells, angles in radians clockwise from +X, facing its centre or away; `isValid()` checks an arc; a consumer `kind`), `DefaultTileSize` 16 m. |
 | `TileInterface.hpp` | A tile KIND: `name()`, `connections(side)`, `slopeRule()`, `zones()`, `build(context, sink)`. One shared instance per kind (no per-cell state; `build()` must not mutate it). `TileContext` gives the corner heights IN THE TILE'S OWN FRAME, the cell centre and the rotation; `worldPlanar()` turns an own-frame point into world X / Z (world-aligned texture coordinates, continuous across tiles whatever their rotations). `SurfaceSink` hands one `Shape` per surface slot. |
 | `Autotile.hpp` | `autotile(sides)` → `{Topology, Rotation}`: the 4-bit autotile (16 cases, 6 shapes: isolated, dead end, straight, corner, T, cross), canonical orientations stated, `static_assert`-checked. |
 | `Layout.hpp` | The N × M grid (≤ 512 per side), `place()`, `validate()` (every cell holds a tile; two sides sharing an edge carry the same mask; the border connects to nothing — every mismatch logged). Centred on the origin, a column along +X, a row along +Z. |
@@ -18,8 +18,12 @@ connections, zones and relief — never "a road" or "a city").
 
 ## Owner decisions (2026-10-28)
 
-- Tile 16 m (256 m²), a 0.5 m sub-grid for the zones and the props (1 m first; 0.5 m once the owner chose a 7 m
-  carriageway between two 4.5 m sidewalks: the kerbs fall on half metres).
+- Tile 16 m (256 m²), a 0.5 m sub-grid for the zones and the props (1 m first; 0.5 m for kerbs on half metres,
+  1 m prop strips and the centres and radii of curves).
+- **Curves** (owner, 2026-10-28: a bend is a curve, not a square corner; the junction corners are rounded; a dead
+  end is a turning circle): a tile writes any triangles it likes, so a curved surface needs nothing from the engine;
+  what stands along a curve is an **arc zone** (`ZoneShape::Arc`, `SubArc`) — the props of step 3 follow the curve
+  exactly, an editor can highlight it. A zone is either shape (`Zone::shape`), never both.
 - The tiles are NOT a ground: they carry their geometry; a scene may have no `GroundLevel`. The world stands on a
   **plinth**: a vertical skirt from the border tiles down to a base `depth` below the lowest corner, a low barrier
   (`barrierHeight`, `barrierThickness`) on the edge, a base facing down under every region.
@@ -40,8 +44,10 @@ connections, zones and relief — never "a road" or "a city").
 - Regions of 8 × 8 cells (128 m): each region's tiles write in their own frame, the builder rotates and places them
   (exact quarter-turn matrices: no trigonometric error) and merges them per slot into one shape (`labyrinth`'s
   pattern: few, large static meshes). The entity sits at the region centre.
-- Zone overlays (`setZoneOverlay(kind, slot)`): every zone of that kind gets sub-cell quads `ZoneOverlayLift` (3 cm)
-  above the bilinear surface of its tile — a debug view, an editor's highlight.
+- Zone overlays (`setZoneOverlay(kind, slot)`): every zone of that kind is drawn `ZoneOverlayLift` (3 cm) above the
+  bilinear surface of its tile — a rectangle in sub-cell quads, an arc in angular steps of at most one sub-cell along
+  its outer radius (a disc sector's centre ring in triangles); an INVALID arc is logged (`[Error]`, the tile's name,
+  the kind) and skipped — it caught the first dead end's negative sweep. A debug view, an editor's highlight.
 - Winding: counter-clockwise around the normal (the base's convention); `addQuad()` picks the order from the facing.
 
 ## Measured (`city`, Linux, 3070 Ti, 2026-10-28, validation layers on)

@@ -22,8 +22,9 @@ engine + projet-alpha); the concrete city tiles and the `city` demo live in proj
 - **An OPTION of the engine, never an obligation**: one more way to build a scene, beside the grounds, the
   terrain, the loaders and the hand-built geometry. Nothing else in the engine depends on it, nothing requires it;
   a scene that does not use it pays nothing for it.
-- **Tile size 16 m** (256 m²); a 0.5 m sub-grid inside a tile for zones and props (1 m first; 0.5 m since the
-  owner chose a 7 m carriageway between two 4.5 m sidewalks — the kerbs fall on half metres).
+- **Tile size 16 m** (256 m²); a 0.5 m sub-grid inside a tile for zones and props (1 m first, then 0.5 m).
+- **Curves** (owner, 2026-10-28): zones are rectangles or ARCS (`SubArc`: a ring sector centred on a sub-grid
+  point), so what stands along a curved kerb follows it; done (overview § Owner decisions).
 - **The tiles are NOT the ground**: they carry their own geometry (render + collision); a scene may have no
   `GroundLevel` at all.
 - **Relief = heights at the tile corners** ((N+1) × (N+1), shared by neighbours: continuous by construction), each
@@ -43,8 +44,8 @@ engine + projet-alpha); the concrete city tiles and the `city` demo live in proj
 
 ## What remains (step 1 of 3: the tile system)
 
-- `TileInterface`: per-side connection masks (one bit per network, road first), slope rule, zones on the 1 m
-  sub-grid (kind + rectangle + facing), `build()` emitting the tile's geometry in its own frame.
+- `TileInterface`: per-side connection masks (one bit per network, road first), slope rule, zones on the 0.5 m
+  sub-grid (kind + rectangle and facing, or arc), `build()` emitting the tile's geometry in its own frame.
 - `Layout`: the N × M grid (tile + rotation), validated (neighbouring sides must agree; refused and logged otherwise).
 - `Relief`: seeded corner heights (the base Perlin noise, `PortableRandom`-shuffled), then the tiles' constraints
   solved globally, deterministically and in bounded time; the halve-and-retry fallback (`Relief::solve()`).

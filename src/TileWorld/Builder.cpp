@@ -199,6 +199,73 @@ namespace EmEn::TileWorld
 				builder.newVertex();
 			}
 		}
+
+		/** @brief The angular steps of an arc overlay: a chord of at most one sub-cell on its outer radius. */
+		[[nodiscard]]
+		uint32_t
+		arcSteps (const SubArc & arc) noexcept
+		{
+			/* isValid(): sweep ≤ 2π and outerRadius ≤ 255, so the product stays below 1 603. */
+			return std::max(1U, static_cast< uint32_t >(std::ceil(arc.sweep * static_cast< float >(arc.outerRadius))));
+		}
+
+		/**
+		 * @brief Writes the overlay of a ring sector, in quads of one angular step by at most 4 sub-cells radially
+		 * (a disc sector's first ring as triangles), each point placed by `pointAt` (sub-cells → vertex).
+		 * @pre isValid(arc).
+		 */
+		template< typename point_t >
+		void
+		addArcOverlay (ShapeBuilder< float > & builder, const SubArc & arc, const point_t & pointAt) noexcept
+		{
+			constexpr uint32_t MaxRadialSubCells{4};
+
+			const auto steps = arcSteps(arc);
+			const auto rings = std::max(1U, (static_cast< uint32_t >(arc.outerRadius - arc.innerRadius) + MaxRadialSubCells - 1) / MaxRadialSubCells);
+			const auto ringWidth = static_cast< float >(arc.outerRadius - arc.innerRadius) / static_cast< float >(rings);
+			const auto centreX = static_cast< float >(arc.centreX);
+			const auto centreZ = static_cast< float >(arc.centreZ);
+			/* Recomputed from the start angle for every point (no accumulation). */
+			const auto at = [&] (uint32_t step, float radius) {
+				const auto angle = arc.startAngle + (arc.sweep * static_cast< float >(step) / static_cast< float >(steps));
+
+				return pointAt(centreX + (radius * std::cos(angle)), centreZ + (radius * std::sin(angle)));
+			};
+
+			for ( uint32_t ring = 0; ring < rings; ++ring )
+			{
+				const auto inner = static_cast< float >(arc.innerRadius) + (ringWidth * static_cast< float >(ring));
+				const auto outer = inner + ringWidth;
+
+				for ( uint32_t step = 0; step < steps; ++step )
+				{
+					if ( inner <= 0.0F )
+					{
+						/* The centre ring of a disc sector: a triangle per step (a quad would repeat the centre). */
+						const auto first = at(step, outer);
+						const auto second = at(step + 1, outer);
+						const auto centre = pointAt(centreX, centreZ);
+						const auto normal = Vector< 3, float >::crossProduct(second.position - first.position, centre.position - first.position);
+						const bool reversed = Vector< 3, float >::dotProduct(normal, Vector< 3, float >::positiveY()) < 0.0F;
+						const std::array< const PlinthVertex *, 3 > order = reversed ?
+							std::array< const PlinthVertex *, 3 >{&first, &centre, &second} :
+							std::array< const PlinthVertex *, 3 >{&first, &second, &centre};
+
+						for ( const auto * vertex : order )
+						{
+							builder.setPosition(vertex->position);
+							builder.setNormal(Vector< 3, float >::positiveY());
+							builder.setTextureCoordinates(vertex->u, vertex->v);
+							builder.newVertex();
+						}
+
+						continue;
+					}
+
+					addQuad(builder, {at(step, inner), at(step + 1, inner), at(step + 1, outer), at(step, outer)}, Vector< 3, float >::positiveY());
+				}
+			}
+		}
 	}
 
 	std::optional< uint32_t >
@@ -254,9 +321,14 @@ namespace EmEn::TileWorld
 		const auto & heights = context.heights;
 		const auto subCell = context.tileSize / static_cast< float >(SubCellsPerSide);
 		const auto half = context.tileSize * 0.5F;
-		/* The bilinear surface of the corners (NW, NE, SE, SW), u along +X, v along +Z, both 0 to 1. */
-		const auto surfaceAt = [&heights] (float u, float v) {
-			return (heights[0] * (1.0F - u) * (1.0F - v)) + (heights[1] * u * (1.0F - v)) + (heights[2] * u * v) + (heights[3] * (1.0F - u) * v);
+		/* A point of the tile given in sub-cells, on the bilinear surface of the corners (NW, NE, SE, SW) lifted by
+		 * ZoneOverlayLift; u along +X, v along +Z, both 0 to 1 over the tile. */
+		const auto pointAt = [&heights, subCell, half] (float subX, float subZ) {
+			const auto u = subX / static_cast< float >(SubCellsPerSide);
+			const auto v = subZ / static_cast< float >(SubCellsPerSide);
+			const auto height = (heights[0] * (1.0F - u) * (1.0F - v)) + (heights[1] * u * (1.0F - v)) + (heights[2] * u * v) + (heights[3] * (1.0F - u) * v);
+
+			return PlinthVertex{.position = {(subX * subCell) - half, height + ZoneOverlayLift, (subZ * subCell) - half}, .u = u, .v = v};
 		};
 
 		for ( const auto & zone : tile.zones() )
@@ -277,29 +349,39 @@ namespace EmEn::TileWorld
 				continue;
 			}
 
-			const auto endX = std::min< uint32_t >(static_cast< uint32_t >(zone.area.x) + zone.area.width, SubCellsPerSide);
-			const auto endZ = std::min< uint32_t >(static_cast< uint32_t >(zone.area.z) + zone.area.depth, SubCellsPerSide);
-
 			ShapeBuilder< float > builder{*shape, ShapeBuilderOptions< float >{true, true, false, false, false}};
 			builder.beginConstruction(ConstructionMode::Triangles);
 
-			for ( uint32_t subZ = zone.area.z; subZ < endZ; ++subZ )
+			switch ( zone.shape )
 			{
-				for ( uint32_t subX = zone.area.x; subX < endX; ++subX )
+				case ZoneShape::Rectangle :
 				{
-					const auto corner = [&] (uint32_t cx, uint32_t cz) {
-						const auto u = static_cast< float >(cx) / static_cast< float >(SubCellsPerSide);
-						const auto v = static_cast< float >(cz) / static_cast< float >(SubCellsPerSide);
+					const auto endX = std::min< uint32_t >(static_cast< uint32_t >(zone.area.x) + zone.area.width, SubCellsPerSide);
+					const auto endZ = std::min< uint32_t >(static_cast< uint32_t >(zone.area.z) + zone.area.depth, SubCellsPerSide);
 
-						return PlinthVertex{
-							.position = {(static_cast< float >(cx) * subCell) - half, surfaceAt(u, v) + ZoneOverlayLift, (static_cast< float >(cz) * subCell) - half},
-							.u = u,
-							.v = v
-						};
-					};
+					for ( uint32_t subZ = zone.area.z; subZ < endZ; ++subZ )
+					{
+						for ( uint32_t subX = zone.area.x; subX < endX; ++subX )
+						{
+							const auto west = static_cast< float >(subX);
+							const auto north = static_cast< float >(subZ);
 
-					addQuad(builder, {corner(subX, subZ), corner(subX + 1, subZ), corner(subX + 1, subZ + 1), corner(subX, subZ + 1)}, Vector< 3, float >::positiveY());
+							addQuad(builder, {pointAt(west, north), pointAt(west + 1.0F, north), pointAt(west + 1.0F, north + 1.0F), pointAt(west, north + 1.0F)}, Vector< 3, float >::positiveY());
+						}
+					}
 				}
+					break;
+
+				case ZoneShape::Arc :
+					if ( !isValid(zone.arc) )
+					{
+						TraceError{TracerTag} << "Tile '" << tile.name() << "': an arc zone of kind " << zone.kind << " is not valid (radii, angles or centre) ! No overlay for it.";
+
+						break;
+					}
+
+					addArcOverlay(builder, zone.arc, pointAt);
+					break;
 			}
 
 			builder.endConstruction();

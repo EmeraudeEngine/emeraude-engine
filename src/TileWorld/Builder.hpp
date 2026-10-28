@@ -237,8 +237,9 @@ namespace EmEn::TileWorld
 			void buildPlinth (const Layout & layout, const Relief & relief, const CellRange & cells, const Base::Math::Vector< 3, float > & origin, Base::VertexFactory::Shape< float > & shape) const noexcept;
 
 			/**
-			 * @brief Writes the overlays of a tile's zones into its own-frame shapes (sub-cell quads following the
-			 * bilinear surface of its corner heights).
+			 * @brief Writes the overlays of a tile's zones into its own-frame shapes, on the bilinear surface of its corner
+			 * heights: a rectangle in sub-cell quads, an arc in steps of at most one sub-cell along its outer radius (an
+			 * invalid arc is logged and skipped).
 			 */
 			void buildZoneOverlays (const TileInterface & tile, const TileContext & context, SurfaceSink & sink) const noexcept;
 
