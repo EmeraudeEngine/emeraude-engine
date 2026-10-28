@@ -38,6 +38,7 @@ foundation library [emeraude-base](dependencies/emeraude-base/AGENTS.md) (`EmEn:
 | Scene graph, components, lights, console adapters | [`src/Scenes/AGENTS.md`](src/Scenes/AGENTS.md) |
 | glTF / FBX / USD / WAD loaders | [`src/Scenes/Loaders/AGENTS.md`](src/Scenes/Loaders/AGENTS.md) |
 | Editor, AV console (virtual devices) | [`src/Scenes/Editor/AGENTS.md`](src/Scenes/Editor/AGENTS.md), [`src/Scenes/AVConsole/AGENTS.md`](src/Scenes/AVConsole/AGENTS.md) |
+| TileWorld: an OPTIONAL scene builder — square tiles on a grid, slope-bounded corner relief, plinth | [`src/TileWorld/AGENTS.md`](src/TileWorld/AGENTS.md) |
 | Physics / Audio / Input / Animations | [`src/Physics/AGENTS.md`](src/Physics/AGENTS.md), [`src/Audio/AGENTS.md`](src/Audio/AGENTS.md), [`src/Input/AGENTS.md`](src/Input/AGENTS.md), [`src/Animations/AGENTS.md`](src/Animations/AGENTS.md) |
 | Resources (async loading, stores) | [`src/Resources/AGENTS.md`](src/Resources/AGENTS.md) |
 | Console, MCP server, remote control | [`src/Console/AGENTS.md`](src/Console/AGENTS.md), operator view [`docs/ai-runtime-control.md`](docs/ai-runtime-control.md) |

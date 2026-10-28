@@ -143,6 +143,7 @@ else ()
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Resources
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Saphir
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Scenes
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/TileWorld
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Tool
         ${CMAKE_CURRENT_SOURCE_DIR}/src/Vulkan
     )
