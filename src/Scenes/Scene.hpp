@@ -3335,6 +3335,8 @@ namespace EmEn::Scenes
 			mutable std::vector< std::shared_ptr< AbstractEntity > > m_physicsBodyEntities;
 			mutable std::vector< Physics::SoftStepSolver::Manifold > m_physicsManifolds;
 			mutable std::unordered_map< const AbstractEntity *, uint32_t > m_physicsBodyIndices;
+			/** @brief Per candidate of the octree sector being paired, whether it belongs to the static world (reused storage). */
+			mutable std::vector< uint8_t > m_physicsSectorStatic;
 			/** @brief The last position of each kinematic body (creation number → position), for its velocity. */
 			mutable std::unordered_map< uint64_t, Base::Math::Vector< 3, float > > m_kinematicLastPositions;
 			/** @brief The entities the last physics step moved (relocated in the octrees after it). */

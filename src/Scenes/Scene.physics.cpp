@@ -1442,17 +1442,49 @@ namespace EmEn::Scenes
 			}
 		};
 
-		m_physicsOctree->forEachSector([&testPair] (const OctreeSector< AbstractEntity, true > & /*sector*/, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, size_t ownedOffset) {
+		/* A pair of two entities of the STATIC WORLD (body index 0: no collision model, or not movable — the rule of
+		 * step 1) never yields anything: testPair() returns at its first test. A city holds thousands of static meshes,
+		 * so every sector's pairs were almost all of them, each paying two hash lookups (owner, 2026-10-28: 2669 static
+		 * bodies at side 128, the logic thread at 100 %). They are skipped before any lookup — a sector without a single
+		 * other body entirely —, the other pairs keep their order: the step is unchanged. */
+		const auto isStaticWorld = [] (const AbstractEntity & entity) noexcept {
+			return !entity.hasCollisionModel() || !entity.hasMovableAbility() || entity.getMovableTrait() == nullptr;
+		};
+
+		auto & staticFlags = m_physicsSectorStatic;
+
+		m_physicsOctree->forEachSector([&testPair, &isStaticWorld, &staticFlags] (const OctreeSector< AbstractEntity, true > & /*sector*/, const std::vector< std::shared_ptr< AbstractEntity > > & candidates, size_t ownedOffset) {
+			staticFlags.resize(candidates.size());
+
+			bool anyBody = false;
+
+			for ( size_t index = 0; index < candidates.size(); ++index )
+			{
+				staticFlags[index] = isStaticWorld(*candidates[index]) ? 1 : 0;
+				anyBody = anyBody || staticFlags[index] == 0;
+			}
+
+			if ( !anyBody )
+			{
+				return;
+			}
+
 			for ( size_t indexA = ownedOffset; indexA < candidates.size(); ++indexA )
 			{
 				for ( size_t indexB = indexA + 1; indexB < candidates.size(); ++indexB )
 				{
-					testPair(candidates[indexA], candidates[indexB]);
+					if ( staticFlags[indexA] == 0 || staticFlags[indexB] == 0 )
+					{
+						testPair(candidates[indexA], candidates[indexB]);
+					}
 				}
 
 				for ( size_t indexB = 0; indexB < ownedOffset; ++indexB )
 				{
-					testPair(candidates[indexA], candidates[indexB]);
+					if ( staticFlags[indexA] == 0 || staticFlags[indexB] == 0 )
+					{
+						testPair(candidates[indexA], candidates[indexB]);
+					}
 				}
 			}
 		});

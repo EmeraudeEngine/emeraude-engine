@@ -2470,14 +2470,62 @@ namespace EmEn::Scenes
 		std::vector< std::shared_ptr< Component::SpotLight > > spotLights;
 		std::vector< std::shared_ptr< Component::LineLight > > lineLights;
 
+		/* Only the ENABLED lights are copied: a switched-off light draws nothing, and the batches below no longer walk
+		 * it (owner, 2026-10-28: 5800 street lamps, out by day, were walked by every batch — 14 million tests a frame,
+		 * the render thread at 100 %). */
+		const auto copyEnabled = [] (const auto & source, auto & destination) {
+			destination.reserve(source.size());
+
+			for ( const auto & light : source )
+			{
+				if ( light->isEnabled() )
+				{
+					destination.emplace_back(light);
+				}
+			}
+		};
+
 		{
 			const Base::MutexLock lock{m_lightSet.mutex()};
 
-			directionalLights.assign(m_lightSet.directionalLights().begin(), m_lightSet.directionalLights().end());
-			pointLights.assign(m_lightSet.pointLights().begin(), m_lightSet.pointLights().end());
-			spotLights.assign(m_lightSet.spotLights().begin(), m_lightSet.spotLights().end());
-			lineLights.assign(m_lightSet.lineLights().begin(), m_lightSet.lineLights().end());
+			copyEnabled(m_lightSet.directionalLights(), directionalLights);
+			copyEnabled(m_lightSet.pointLights(), pointLights);
+			copyEnabled(m_lightSet.spotLights(), spotLights);
+			copyEnabled(m_lightSet.lineLights(), lineLights);
 		}
+
+		/* The skips decided ONCE per call, outside the lock, instead of two binary searches per light per batch: a light
+		 * whose reach misses the target's frustum lights no visible pixel, whatever the material
+		 * (Graphics::DeferredLightResolve::invisibleLights()), and the resolve's lights are skipped by the batches whose
+		 * material publishes the deferred-lighting bit (Material::Interface::deferredLightingEligible()). Each kind ends
+		 * as two lists: every light left, and the part of it the resolve does not shade. */
+		const auto partition = [deferredLights, invisibleLights] (auto & lights, auto & forwardOnly) {
+			std::erase_if(lights, [invisibleLights] (const auto & light) {
+				return std::ranges::binary_search(invisibleLights, static_cast< const Component::AbstractLightEmitter * >(light.get()));
+			});
+
+			/* No resolve this call (a translucent list, a frame without one): no batch reads the second list. */
+			if ( deferredLights.empty() )
+			{
+				return;
+			}
+
+			forwardOnly.reserve(lights.size());
+
+			for ( const auto & light : lights )
+			{
+				if ( !std::ranges::binary_search(deferredLights, static_cast< const Component::AbstractLightEmitter * >(light.get())) )
+				{
+					forwardOnly.emplace_back(light);
+				}
+			}
+		};
+
+		std::vector< std::shared_ptr< Component::PointLight > > forwardPointLights;
+		std::vector< std::shared_ptr< Component::SpotLight > > forwardSpotLights;
+
+		partition(pointLights, forwardPointLights);
+		partition(spotLights, forwardSpotLights);
 
 		/* For all objects. */
 		for ( const auto & renderBatch : renderBatches | std::views::values )
@@ -2513,20 +2561,9 @@ namespace EmEn::Scenes
 				batchLightsDeferred = batchMaterial != nullptr && batchMaterial->deferredLightingEligible();
 			}
 
-			/* A light whose reach misses the target's frustum lights no visible pixel, whatever the material
-			 * (Graphics::DeferredLightResolve::invisibleLights()): both skips are "nothing to draw here". */
-			const auto isSkippedLight = [batchLightsDeferred, deferredLights, invisibleLights] (const Component::AbstractLightEmitter * light) noexcept {
-				return (batchLightsDeferred && std::ranges::binary_search(deferredLights, light)) || std::ranges::binary_search(invisibleLights, light);
-			};
-
 			/* Loop through all directional lights. */
 			for ( const auto & light : directionalLights )
 			{
-				if ( !light->isEnabled() )
-				{
-					continue;
-				}
-
 				const auto & instance = renderBatch.renderableInstance();
 
 				/* NOTE: Use shadow pass type if the light has shadow casting enabled and the instance supports shadows.
@@ -2564,13 +2601,8 @@ namespace EmEn::Scenes
 			}
 
 			/* Loop through all point lights. */
-			for ( const auto & light : pointLights )
+			for ( const auto & light : batchLightsDeferred ? forwardPointLights : pointLights )
 			{
-				if ( !light->isEnabled() || isSkippedLight(light.get()) )
-				{
-					continue;
-				}
-
 				const auto & instance = renderBatch.renderableInstance();
 
 				/* NOTE: If a light distance check is needed. Test against the instance
@@ -2607,13 +2639,8 @@ namespace EmEn::Scenes
 			}
 
 			/* Loop through all spotlights. */
-			for ( const auto & light : spotLights )
+			for ( const auto & light : batchLightsDeferred ? forwardSpotLights : spotLights )
 			{
-				if ( !light->isEnabled() || isSkippedLight(light.get()) )
-				{
-					continue;
-				}
-
 				const auto & instance = renderBatch.renderableInstance();
 
 				/* NOTE: If a light distance check is needed. Test against the instance
@@ -2653,7 +2680,7 @@ namespace EmEn::Scenes
 			for ( const auto & light : lineLights )
 			{
 				/* No descriptor set: the LTC tables could not be created (Renderer::LTCTables()) — nothing to bind. */
-				if ( !light->isEnabled() || light->descriptorSet(false) == nullptr )
+				if ( light->descriptorSet(false) == nullptr )
 				{
 					continue;
 				}

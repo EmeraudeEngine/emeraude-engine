@@ -883,15 +883,16 @@ namespace EmEn::Graphics
 					"Deferred punctual lights OFF from the next frame: every point and spot light is drawn by forward passes.");
 			}, Console::CommandHint::Idempotent);
 
-		this->bindCommand("getDeferredLightStatistics", "Returns what the last frame did with the unshadowed, unprojected point and spot lights (DeferredLightResolve): how many were eligible, how many missed the camera frustum (drawn by nobody), how many the resolve shaded (at most DeferredLightResolve::MaxLights = 1024, the closest to the camera, tile-culled), and how many visible ones were left to the forward passes.", [this] () {
+		this->bindCommand("getDeferredLightStatistics", "Returns what the last frame did with the unshadowed, unprojected point and spot lights (DeferredLightResolve): how many were eligible, how many missed the camera frustum and how many were beyond their draw distance (both drawn by nobody), how many the resolve shaded (at most DeferredLightResolve::MaxLights = 1024, the closest to the camera, tile-culled), and how many visible ones beyond that budget were dropped (the farthest, drawn by nobody).", [this] () {
 			const auto statistics = m_deferredLightResolve.statistics();
 
 			std::stringstream message;
 			message <<
 				"Deferred punctual lights (last prepared frame): " << statistics.eligible << " eligible, " <<
 				statistics.invisible << " outside the frustum, " <<
+				statistics.distant << " beyond their draw distance, " <<
 				statistics.resolved << " resolved (max " << DeferredLightResolve::MaxLights << "), " <<
-				statistics.forward << " left to the forward passes." <<
+				statistics.dropped << " dropped beyond the budget." <<
 				( m_deferredPunctualLightsEnabled.load(std::memory_order_relaxed) ? "" : " The resolve is switched OFF: these counts are from before." );
 
 			return Console::CommandResult::success(message.str());

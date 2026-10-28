@@ -126,7 +126,28 @@ namespace EmEn::Scenes::Component
 
 		this->writeUniformBlock(m_publishedBlocks[writeStateIndex].data());
 
+		*std::next(m_publishedDrawDistances.begin(), writeStateIndex) = m_drawDistance;
 		m_publishedGeneration[writeStateIndex] = m_logicGeneration;
+	}
+
+	void
+	AbstractLightEmitter::setDrawDistance (float distance, float fadeRange) noexcept
+	{
+		if ( !this->acceptsFinite("setDrawDistance", distance, fadeRange) )
+		{
+			return;
+		}
+
+		if ( distance < 0.0F || fadeRange < 0.0F || fadeRange > distance )
+		{
+			TraceError{TracerTag} << "setDrawDistance(" << distance << ", " << fadeRange << ") refused: the distance must be >= 0 (0 for no limit) and the fade range between 0 and the distance.";
+
+			return;
+		}
+
+		m_drawDistance = {.distance = distance, .fadeRange = fadeRange};
+
+		this->requestVideoMemoryUpdate();
 	}
 
 	bool

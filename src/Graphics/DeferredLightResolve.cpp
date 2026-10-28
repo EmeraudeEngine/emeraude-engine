@@ -29,35 +29,56 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
-#include <cmath>
+#include <cstddef>
 #include <cstdint>
+#include <functional>
+#include <set>
+#include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Frustum.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/SceneRenderTarget.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
+#include "Mutex.hpp"
+#include "Saphir/ShaderManager.hpp"
 #include "Saphir/Types.hpp"
+#include "Scenes/Component/AbstractLightEmitter.hpp"
 #include "Scenes/Component/PointLight.hpp"
 #include "Scenes/Component/SpotLight.hpp"
 #include "Scenes/LightSet.hpp"
-#include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/ComputePipeline.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
-#include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/RenderPass.hpp"
-#include "Vulkan/Sampler.hpp"
+#include "Vulkan/RenderSubPass.hpp"
+#include "Vulkan/ShaderModule.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Settings;
+}
 
 namespace EmEn::Graphics
 {
@@ -907,27 +928,43 @@ void main()
 		const auto & viewPosition = viewMatrices.position(readStateIndex);
 
 		size_t visibleCount = 0;
+		uint32_t invisibleCount = 0;
+		uint32_t distantCount = 0;
+		uint32_t distantOtherCount = 0;
 
 		{
 			const Base::MutexLock lock{lightSet.mutex()};
 
-			/* 1. Classify every eligible light from its published block, the frame's render state: INVISIBLE when its
-			 * reach misses the frustum (an unbounded light never does), else a candidate ranked by its distance to the
-			 * camera, minus its reach. */
+			/* 1. Classify every eligible light from its published block, the frame's render state: DISTANT beyond its
+			 * draw distance (AbstractLightEmitter::setDrawDistance()), INVISIBLE when its reach misses the frustum (an
+			 * unbounded light never does), else a candidate ranked by its distance to the camera, minus its reach, and
+			 * faded over the last metres before its draw distance. Distant and invisible lights are skipped alike. */
 			uint32_t order = 0;
 
 			const auto classify = [&] (const Scenes::Component::AbstractLightEmitter & light, const Vector< 3, float > & position, float radius, bool isSpot) {
-				if ( radius > 0.0F && !frustum.isSeeing(Space3D::Sphere< float >{radius, position}) )
+				const auto & drawDistance = light.publishedDrawDistance(readStateIndex);
+				const auto distance = (position - viewPosition).length();
+
+				if ( drawDistance.distance > 0.0F && distance >= drawDistance.distance )
 				{
 					m_invisibleLights.emplace_back(&light);
+
+					++distantCount;
+				}
+				else if ( radius > 0.0F && !frustum.isSeeing(Space3D::Sphere< float >{radius, position}) )
+				{
+					m_invisibleLights.emplace_back(&light);
+
+					++invisibleCount;
 				}
 				else
 				{
-					const auto distance = (position - viewPosition).length();
+					const auto fadeStart = drawDistance.distance - drawDistance.fadeRange;
 
 					m_candidates.emplace_back(Candidate{
 						.light = &light,
 						.rank = radius > 0.0F ? std::max(0.0F, distance - radius) : distance,
+						.fade = drawDistance.fadeRange > 0.0F && distance > fadeStart ? (drawDistance.distance - distance) / drawDistance.fadeRange : 1.0F,
 						.order = order,
 						.isSpot = isSpot
 					});
@@ -936,33 +973,58 @@ void main()
 				++order;
 			};
 
+			/* A light the resolve cannot shade (shadowed, projected) still stops at its draw distance: its forward passes
+			 * are skipped beyond it, for every opaque batch, by the same set. */
+			const auto skipWhenDistant = [&] (const Scenes::Component::AbstractLightEmitter & light, const Vector< 3, float > & position) {
+				const auto & drawDistance = light.publishedDrawDistance(readStateIndex);
+
+				if ( drawDistance.distance > 0.0F && light.isEnabled() && (position - viewPosition).length() >= drawDistance.distance )
+				{
+					m_invisibleLights.emplace_back(&light);
+
+					++distantOtherCount;
+				}
+			};
+
 			using Scenes::Component::PointLight;
 			using Scenes::Component::SpotLight;
 
 			for ( const auto & light : lightSet.pointLights() )
 			{
+				const auto & block = light->publishedBlock(readStateIndex);
+				const Vector< 3, float > position{block[PointLight::PositionOffset + 0], block[PointLight::PositionOffset + 1], block[PointLight::PositionOffset + 2]};
+
 				if ( Scenes::LightSet::isDeferredPunctualLight(*light, shadowMapsEnabled) )
 				{
-					const auto & block = light->publishedBlock(readStateIndex);
-
-					classify(*light, {block[PointLight::PositionOffset + 0], block[PointLight::PositionOffset + 1], block[PointLight::PositionOffset + 2]}, block[PointLight::RadiusOffset], false);
+					classify(*light, position, block[PointLight::RadiusOffset], false);
+				}
+				else
+				{
+					skipWhenDistant(*light, position);
 				}
 			}
 
 			for ( const auto & light : lightSet.spotLights() )
 			{
+				const auto & block = light->publishedBlock(readStateIndex);
+				const Vector< 3, float > position{block[SpotLight::PositionOffset + 0], block[SpotLight::PositionOffset + 1], block[SpotLight::PositionOffset + 2]};
+
 				if ( Scenes::LightSet::isDeferredPunctualLight(*light, shadowMapsEnabled) )
 				{
-					const auto & block = light->publishedBlock(readStateIndex);
-
-					classify(*light, {block[SpotLight::PositionOffset + 0], block[SpotLight::PositionOffset + 1], block[SpotLight::PositionOffset + 2]}, block[SpotLight::RadiusOffset], true);
+					classify(*light, position, block[SpotLight::RadiusOffset], true);
+				}
+				else
+				{
+					skipWhenDistant(*light, position);
 				}
 			}
 
 			visibleCount = m_candidates.size();
 
 			/* 2. Keep the MaxLights closest (ties by walk order: the same frame state always selects the same lights),
-			 * then put them back in walk order, so a scene under the limit fills the buffer exactly as before. */
+			 * then put them back in walk order, so a scene under the limit fills the buffer exactly as before. The others
+			 * are DROPPED (owner, 2026-10-28): skipped like the invisible ones. They used to go to the forward passes,
+			 * which re-draw the geometry once per light — 4640 of them took 461 ms of a city's scene pass. */
 			if ( m_candidates.size() > MaxLights )
 			{
 				const auto closerFirst = [] (const Candidate & lhs, const Candidate & rhs) noexcept {
@@ -972,6 +1034,11 @@ void main()
 				const auto keptEnd = m_candidates.begin() + static_cast< std::ptrdiff_t >(MaxLights);
 
 				std::ranges::nth_element(m_candidates, keptEnd, closerFirst);
+
+				for ( auto dropped = keptEnd; dropped != m_candidates.end(); ++dropped )
+				{
+					m_invisibleLights.emplace_back(dropped->light);
+				}
 
 				m_candidates.erase(keptEnd, m_candidates.end());
 
@@ -1019,16 +1086,30 @@ void main()
 					entry.cone[3] = 0.0F;
 				}
 
+				/* The fade before the draw distance (1 elsewhere). */
+				entry.colorIntensity[3] *= candidate.fade;
+
 				m_lights.emplace_back(candidate.light);
 			}
 		}
 
 		std::ranges::sort(m_invisibleLights);
 
-		m_statisticEligible.store(static_cast< uint32_t >(m_invisibleLights.size() + visibleCount), std::memory_order_relaxed);
-		m_statisticInvisible.store(static_cast< uint32_t >(m_invisibleLights.size()), std::memory_order_relaxed);
+		const auto droppedCount = static_cast< uint32_t >(visibleCount - m_lights.size());
+
+		m_statisticEligible.store(static_cast< uint32_t >(visibleCount) + invisibleCount + distantCount, std::memory_order_relaxed);
+		m_statisticInvisible.store(invisibleCount, std::memory_order_relaxed);
+		m_statisticDistant.store(distantCount + distantOtherCount, std::memory_order_relaxed);
 		m_statisticResolved.store(static_cast< uint32_t >(m_lights.size()), std::memory_order_relaxed);
-		m_statisticForward.store(static_cast< uint32_t >(visibleCount - m_lights.size()), std::memory_order_relaxed);
+		m_statisticDropped.store(droppedCount, std::memory_order_relaxed);
+
+		/* Never a silent drop: said once each time the budget starts overflowing (render thread only). */
+		if ( droppedCount > 0 && !m_overflowReported )
+		{
+			TraceWarning{ClassId} << visibleCount << " visible lights for a budget of " << MaxLights << ": the " << droppedCount << " farthest are not drawn. Give the lamps a draw distance (AbstractLightEmitter::setDrawDistance()).";
+		}
+
+		m_overflowReported = droppedCount > 0;
 
 		lightBuffer.unmapMemory();
 

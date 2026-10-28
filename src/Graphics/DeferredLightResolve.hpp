@@ -36,12 +36,6 @@
 #include <span>
 #include <vector>
 
-/* Third-party inclusions. */
-#include "volk.h"
-
-/* Local inclusions for usages. */
-#include "StaticVector.hpp"
-
 namespace EmEn
 {
 	namespace Vulkan
@@ -108,7 +102,11 @@ namespace EmEn::Graphics
 	 * rejected by distance first (owner decision); tiled culling (J. Andersson, "DirectX 11 Rendering in Battlefield 3",
 	 * GDC 2011) only if it is measured to be needed.
 	 *
-	 * The frame's selection (2026-10-06, owner decision): prepare() sorts every eligible light into ONE of three sets.
+	 * The frame's selection (2026-10-06, owner decision; DISTANT and DROPPED 2026-10-28): prepare() sorts every eligible
+	 * light into ONE of these sets.
+	 *  - DISTANT: beyond its draw distance from the camera (Scenes::Component::AbstractLightEmitter::setDrawDistance()).
+	 *    Skipped like an invisible one. A light the resolve cannot shade (shadowed, projected) is tested too: its forward
+	 *    passes stop at the same distance.
 	 *  - INVISIBLE: its reach (a sphere, radius > 0) misses the main camera's frustum. It cannot light a pixel of this
 	 *    target — the G-buffer holds only what the frustum sees — so neither the resolve nor the forward path draws it
 	 *    (invisibleLights(), skipped by Scene::renderOpaque() for every opaque batch). The light-volume culling of
@@ -116,7 +114,10 @@ namespace EmEn::Graphics
 	 *    S.T.A.L.K.E.R.", GPU Gems 2, ch. 9, 2005. An unbounded light (radius 0) is never invisible.
 	 *  - RESOLVED: the MaxLights visible lights CLOSEST to the camera, by max(0, distance - radius) (an unbounded light
 	 *    ranks by its distance). The first MaxLights in the set's order used to be taken, wherever they were.
-	 *  - FORWARD: the visible lights beyond MaxLights, shaded by the forward path as before (the same BRDF).
+	 *    A light within the fade range before its draw distance is scaled down linearly to 0 at the distance.
+	 *  - DROPPED: the visible lights beyond MaxLights, the farthest: skipped like the invisible ones, and said once in
+	 *    the log each time the budget starts overflowing. They used to go to the forward passes, which re-draw the
+	 *    geometry once per light (owner, 2026-10-28: a city's 4640 overflowing lamps cost 461 ms of its scene pass).
 	 *
 	 * TILED culling (2026-10-06, owner decision, asked by 'labyrinth': 370 lamps occluded by walls went forward): a
 	 * compute pass splits the frame into TileSize × TileSize tiles, reduces each tile's view-space depth range over the
@@ -211,10 +212,13 @@ namespace EmEn::Graphics
 				uint32_t eligible{0};
 				/** @brief Those whose reach missed the frustum: drawn by nobody. */
 				uint32_t invisible{0};
+				/** @brief Those beyond their draw distance (AbstractLightEmitter::setDrawDistance()): drawn by nobody. A
+				 * shadowed or projected light beyond its own counts here too, though not among the eligible ones. */
+				uint32_t distant{0};
 				/** @brief Those the resolve shades. */
 				uint32_t resolved{0};
-				/** @brief The visible ones beyond MaxLights, left to the forward passes. */
-				uint32_t forward{0};
+				/** @brief The visible ones beyond MaxLights, the farthest: drawn by nobody. */
+				uint32_t dropped{0};
 			};
 
 			/**
@@ -253,8 +257,9 @@ namespace EmEn::Graphics
 				return {
 					.eligible = m_statisticEligible.load(std::memory_order_relaxed),
 					.invisible = m_statisticInvisible.load(std::memory_order_relaxed),
+					.distant = m_statisticDistant.load(std::memory_order_relaxed),
 					.resolved = m_statisticResolved.load(std::memory_order_relaxed),
-					.forward = m_statisticForward.load(std::memory_order_relaxed)
+					.dropped = m_statisticDropped.load(std::memory_order_relaxed)
 				};
 			}
 
@@ -292,6 +297,8 @@ namespace EmEn::Graphics
 				const Scenes::Component::AbstractLightEmitter * light{nullptr};
 				/** @brief max(0, distance to the camera - radius), the distance for an unbounded light. */
 				float rank{0.0F};
+				/** @brief The intensity factor of the fade before the draw distance, in ]0, 1] (1 outside the fade). */
+				float fade{1.0F};
 				/** @brief The position in the light set's walk (points, then spots): the tie-break and the buffer order. */
 				uint32_t order{0};
 				/** @brief True for a spot light, false for a point light. */
@@ -338,11 +345,15 @@ namespace EmEn::Graphics
 			std::weak_ptr< Vulkan::ImageView > m_targetColorView;
 			std::atomic< uint32_t > m_statisticEligible{0};
 			std::atomic< uint32_t > m_statisticInvisible{0};
+			std::atomic< uint32_t > m_statisticDistant{0};
 			std::atomic< uint32_t > m_statisticResolved{0};
-			std::atomic< uint32_t > m_statisticForward{0};
+			std::atomic< uint32_t > m_statisticDropped{0};
 			std::atomic< bool > m_tileCullingEnabled{true};
 			uint32_t m_tileCountX{0};
 			uint32_t m_tileCountY{0};
 			bool m_sharedResourcesCreated{false};
+			/** @brief The last prepare() dropped lights: the warning is not repeated until a frame fits the budget again
+			 * (render thread only). */
+			bool m_overflowReported{false};
 	};
 }

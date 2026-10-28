@@ -28,6 +28,11 @@ ONE pipeline, once per logic cycle, under the physics octree lock:
    active one — or by a MOVING kinematic one (a platform, a character, faster than 1 mm/s) — wakes; the rest of its
    island wakes at step 1c of the next step. A body ↔ TRIANGLE MESH pair gives one manifold per triangle met
    (one-sided, internal edges corrected — `18-triangle-mesh-statics.md`).
+   A pair of two members of the STATIC WORLD (no collision model, or not movable: index 0) is skipped BEFORE its two
+   body-index lookups, and a sector holding nothing else is skipped whole — such a pair never yielded anything (the
+   active test returned), the other pairs keep their order (2026-10-28). `city` at side 128 (2669 static meshes) spent
+   its logic thread there: 100 % → 41 %; `physics-bench.py --compare` before / after: 49 stations × 1800 cycles,
+   0 differing sample.
 1c. **Islands wake as a whole** (P5, 2026-10-02): a body woken since the last step (a contact, a push, a force, a move)
    wakes every body that fell asleep with the same island key.
 1b. **Ground recovery** (2026-10-02): a dynamic body whose centre is UNDER the ground — the height on the rendered

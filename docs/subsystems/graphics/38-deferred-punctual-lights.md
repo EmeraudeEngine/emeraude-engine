@@ -51,16 +51,32 @@ ScenePass (CLEAR pass)  : opaque — ambient, sun, the NON-deferred lights' pass
 - `prepare()` makes every resource the frame needs BEFORE the scene skips a single pass; `record()` cannot fail
   afterwards (a call-order defect returns false, logged nowhere because it cannot happen in the renderer's order).
 
-## The frame's selection — invisible, resolved, forward (2026-10-06)
+## The frame's selection — distant, invisible, resolved, dropped (2026-10-06, 2026-10-28)
 
-`prepare()` sorts every eligible light, from its published block, into ONE of three sets (owner decision 2026-10-06,
-asked by the `labyrinth` demo: 548 ceiling lamps).
+`prepare()` sorts every eligible light, from its published block, into ONE of four sets (owner decision 2026-10-06,
+asked by the `labyrinth` demo: 548 ceiling lamps; DISTANT and DROPPED owner decision 2026-10-28, asked by the `city`
+demo at side 128: 5800 street lamps).
 
 | Set | Rule | Drawn by |
 |---|---|---|
+| DISTANT | beyond its draw distance from the camera (`AbstractLightEmitter::setDrawDistance()`, published with the block: `publishedDrawDistance()`) | nobody: in `invisibleLights()` |
 | INVISIBLE | radius > 0 and its sphere misses the main camera's frustum (`Frustum::isSeeing(Sphere)`, the frame's state) | nobody: `invisibleLights()`, skipped by `Scene::renderOpaque()` for EVERY opaque batch of that target, whatever its material |
-| RESOLVED | the `MaxLights` (1024 since the tiled culling; 128 before) visible ones closest to the camera, by `max(0, distance - radius)`; an unbounded light (radius 0) ranks by its distance | the resolve, tile-culled (§ Tiled culling) |
-| FORWARD | the visible ones beyond 1024 | the forward passes, as before (same BRDF) |
+| RESOLVED | the `MaxLights` (1024 since the tiled culling; 128 before) visible ones closest to the camera, by `max(0, distance - radius)`; an unbounded light (radius 0) ranks by its distance | the resolve, tile-culled (§ Tiled culling); scaled by its FADE within the fade range before its draw distance |
+| DROPPED | the visible ones beyond 1024, the farthest | nobody: in `invisibleLights()`; a warning in the log each time the budget starts overflowing |
+
+- **The draw distance** (an Unreal Engine light's "Max Draw Distance" + "Max Distance Fade Range"): measured from the
+  camera to the light's position, every frame. Default 0 = no limit. The FADE scales the resolved light's intensity
+  linearly from 1 at `distance - fadeRange` to 0 at `distance`; the forward passes have no per-view factor and CUT the
+  light at the distance (a material the resolve does not shade; a shadowed or projected light — tested too, outside the
+  eligible set: its forward passes stop at its draw distance). Honoured only while the deferred punctual lights are on;
+  the translucent lists, the cubemaps, the render-to-textures and the RT light SSBO (128 closest) ignore it.
+- **DROPPED used to be FORWARD** (2026-10-06 → 10-28): the visible lights beyond the budget were drawn by the forward
+  passes, which re-draw the geometry once per light. `city` at side 128, night, aerial view: 5800 eligible, 1024
+  resolved, **4640 forward → `ScenePass` 461 ms (2 FPS)**; street level: 1085 forward, `ScenePass` 107 ms and the
+  render thread recording them made the frame 338 ms (3 FPS). Owner decision: beyond the budget, the farthest are not
+  drawn; a scene that needs more gives its lights a draw distance. Same pinned night (time of day 0.95, RTX 3070 Ti,
+  1920×1080, RT lane, the lamps at 300 m with a 60 m fade): 55-61 FPS at the three poses, 145-152 resolved, 0 dropped,
+  `DeferredLights` 0.2-0.3 ms; with the validation layer 0 VUID (`city` side 128, `labyrinth`, `lighten-marbles`).
 
 - The INVISIBLE skip is exact: the G-buffer holds only what the frustum sees, so a light whose reach misses the
   frustum lights no visible pixel. Light-volume culling of deferred shading (S. Hargreaves, "Deferred Shading",
@@ -75,8 +91,16 @@ asked by the `labyrinth` demo: 548 ceiling lamps).
   (`Scene::updateVideoMemory()` passes `mainRenderTarget()->viewMatrices().position()`), directional lights first,
   WITHOUT a frustum test (rays leave the screen). A stopgap: light sampling is the real answer (item
   `rt-many-lights-sampling`). No main target = no ranking, the sets' order.
-- `Core.RendererService.getDeferredLightStatistics()`: eligible / outside the frustum / resolved / left to the forward
-  passes, for the last prepared frame (atomics: render thread writes, console reads).
+- `Core.RendererService.getDeferredLightStatistics()`: eligible / outside the frustum / beyond their draw distance /
+  resolved / dropped beyond the budget, for the last prepared frame (atomics: render thread writes, console reads).
+  "Beyond their draw distance" also counts the shadowed or projected lights stopped by theirs (not among the eligible).
+
+**The forward selection is decided ONCE per call** (`Scene::renderLightedSelection()`, 2026-10-28): the light lists are
+copied with their ENABLED lights only, then the invisible set is removed and the resolve's lights are split off once,
+outside the light-set lock; each batch walks the list it needs (every light left, or the ones the resolve does not
+shade). It used to walk EVERY light of the set per batch, switched off or not, with two binary searches each: `city`
+at side 128 by DAY (5800 lamps out, thousands of batches) spent its render thread there — frame 49 ms for a GPU frame of
+12 ms (aerial view), 60 FPS after (vsync).
 
 ⚠️ **A frustum is not an occlusion test.** In a maze, from the `labyrinth` spawn looking north, 498 of 548 lamps are
 INSIDE the frustum behind the walls: 128 resolved, 370 left to the forward passes. Measured (RTX 3070 Ti, 2880×1620,

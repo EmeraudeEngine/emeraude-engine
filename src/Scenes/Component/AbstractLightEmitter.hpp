@@ -32,8 +32,9 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <cstdint>
 #include <array>
+#include <cstdint>
+#include <iterator>
 #include <memory>
 #include <string>
 
@@ -619,6 +620,58 @@ namespace EmEn::Scenes::Component
 				return m_colorProjectionBoost;
 			}
 
+			/** @brief Where a light is drawn, as a distance from the camera (setDrawDistance()). */
+			struct DrawDistance
+			{
+				/** @brief Beyond this distance from the camera, in metres, the light is not drawn; 0 for no limit. */
+				float distance{0.0F};
+				/** @brief Over the last fadeRange metres before it, the light fades out (0: a hard cut). */
+				float fadeRange{0.0F};
+			};
+
+			/**
+			 * @brief Limits where the light is drawn to a distance from the camera of the main target, with a fade before
+			 * it (an Unreal Engine light's "Max Draw Distance" and "Max Distance Fade Range").
+			 * @note A city at night holds thousands of lamps; one a kilometre away lights a few pixels at most, but costs
+			 * a light like any other (owner, 2026-10-28: 5800 street lamps). The distance is measured from the camera to
+			 * the light's position, every frame, by the frame's light selection (Graphics::DeferredLightResolve::prepare()):
+			 * beyond it the light is skipped by every opaque batch of that target (its invisible set), whatever the
+			 * material. The FADE scales the light the deferred resolve shades; the forward passes (a material the resolve
+			 * does not shade, a shadowed or projected light) cut it at the distance. Honoured only while the deferred
+			 * punctual lights are on (the default); the translucent lists, the cubemaps and the render-to-textures draw
+			 * the light at every distance. Logic thread; published with the light's frame state.
+			 * @param distance The distance in metres, > 0, or 0 for no limit (the default). A negative or non-finite value
+			 * is refused (logged), the previous setting kept.
+			 * @param fadeRange The fade's length in metres, from 0 (a hard cut, the default) to the distance. Outside it,
+			 * the call is refused (logged).
+			 */
+			void setDrawDistance (float distance, float fadeRange = 0.0F) noexcept;
+
+			/**
+			 * @brief Returns where the light is drawn (setDrawDistance()). Logic thread.
+			 * @return DrawDistance
+			 */
+			[[nodiscard]]
+			DrawDistance
+			drawDistance () const noexcept
+			{
+				return m_drawDistance;
+			}
+
+			/**
+			 * @brief Returns the published draw distance of a render state slot (setDrawDistance()).
+			 * @note Render-thread read, the slot latched by the frame: published with publishedBlock().
+			 * @pre readStateIndex < RenderStateSlotCount.
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return const DrawDistance &
+			 */
+			[[nodiscard]]
+			const DrawDistance &
+			publishedDrawDistance (uint32_t readStateIndex) const noexcept
+			{
+				return *std::next(m_publishedDrawDistances.begin(), readStateIndex);
+			}
+
 			/**
 			 * @brief Returns whether this light type uses a cubemap for color projection.
 			 * @note Override in PointLight to return true.
@@ -829,6 +882,10 @@ namespace EmEn::Scenes::Component
 			Base::ScopedRegistration m_sharedUBOSeat;
 			/** @brief Published copies of the uniform block, one per render state slot. */
 			std::array< std::array< float, MaxUniformBlockElementCount >, RenderStateSlotCount > m_publishedBlocks{};
+			/** @brief Published copies of the draw distance, one per render state slot (filled with the blocks). */
+			std::array< DrawDistance, RenderStateSlotCount > m_publishedDrawDistances{};
+			/** @brief Where the light is drawn (setDrawDistance()). Logic thread. */
+			DrawDistance m_drawDistance{};
 			/** @brief Logic generation each published slot was filled from. */
 			std::array< uint32_t, RenderStateSlotCount > m_publishedGeneration{};
 			/**
