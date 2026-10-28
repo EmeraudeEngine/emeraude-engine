@@ -544,6 +544,7 @@
 #include "TileWorld/Builder.hpp"
 #include "TileWorld/Layout.hpp"
 #include "TileWorld/Relief.hpp"
+#include "TileWorld/Scatter.hpp"
 #include "TileWorld/TileInterface.hpp"
 #include "TileWorld/Types.hpp"
 #include "Tool/GeometryDataPrinter.hpp"

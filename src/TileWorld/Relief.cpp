@@ -349,6 +349,36 @@ namespace EmEn::TileWorld
 		};
 	}
 
+	std::optional< float >
+	Relief::surfaceHeight (const Layout & layout, const Base::Math::Vector< 3, float > & position) const noexcept
+	{
+		const auto x = position[Base::Math::X];
+		const auto z = position[Base::Math::Z];
+
+		if ( m_cornerColumns != layout.columns() + 1 || m_cornerRows != layout.rows() + 1 )
+		{
+			return std::nullopt;
+		}
+
+		const auto tileSize = layout.tileSize();
+		/* The grid is centred on the origin: the cell coordinates of the point, fractional. */
+		const auto column = (x / tileSize) + (static_cast< float >(layout.columns()) * 0.5F);
+		const auto row = (z / tileSize) + (static_cast< float >(layout.rows()) * 0.5F);
+
+		if ( !std::isfinite(column) || !std::isfinite(row) || column < 0.0F || row < 0.0F || column >= static_cast< float >(layout.columns()) || row >= static_cast< float >(layout.rows()) )
+		{
+			return std::nullopt;
+		}
+
+		const auto cellColumn = static_cast< uint32_t >(column);
+		const auto cellRow = static_cast< uint32_t >(row);
+		const auto u = column - static_cast< float >(cellColumn);
+		const auto v = row - static_cast< float >(cellRow);
+		const auto [northWest, northEast, southEast, southWest] = this->cellHeights(cellColumn, cellRow);
+
+		return (northWest * (1.0F - u) * (1.0F - v)) + (northEast * u * (1.0F - v)) + (southEast * u * v) + (southWest * (1.0F - u) * v);
+	}
+
 	std::pair< float, float >
 	Relief::range () const noexcept
 	{

@@ -57,6 +57,30 @@ namespace EmEn::TileWorld
 		West = 3 /**< −X. */
 	};
 
+	/**
+	 * @brief A seed per cell, from a world seed, mixed by MurmurHash3's 32-bit finalizer (fmix32; Austin Appleby, public
+	 * domain, https://github.com/aappleby/smhasher): every output bit depends on every input bit, so any bits of it may be
+	 * used (without it the low bit alternated cell to cell, a checkerboard). Unsigned arithmetic: wraps by definition.
+	 * @param worldSeed The world's seed.
+	 * @param column The cell's column.
+	 * @param row The cell's row.
+	 * @return uint32_t
+	 */
+	[[nodiscard]]
+	constexpr
+	uint32_t
+	cellSeed (uint32_t worldSeed, uint32_t column, uint32_t row) noexcept
+	{
+		auto hash = worldSeed ^ (column * 73856093U) ^ (row * 19349663U);
+		hash ^= hash >> 16U;
+		hash *= 0x85EBCA6BU;
+		hash ^= hash >> 13U;
+		hash *= 0xC2B2AE35U;
+		hash ^= hash >> 16U;
+
+		return hash;
+	}
+
 	/** @brief The four sides, in their clockwise order. */
 	constexpr std::array< Side, 4 > Sides{Side::North, Side::East, Side::South, Side::West};
 

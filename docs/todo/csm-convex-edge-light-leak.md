@@ -23,6 +23,12 @@ fragment out of the caster's own shadow. REPRODUCED on macOS (M6, the same day, 
 bottom edge (peak 242); the single-map capture at the same pose has none (max luma 29 / 13 in those columns) — the sun
 had moved ~20 min between the two captures. Not yet reproduced on Linux (reproduce with the clock paused).
 
+A related observation (macOS and Windows peers, 2026-10-28, a STATIC camera, the sun at the real rate): the
+cascades' shadow EDGES step between two captures a few seconds apart (macOS: 3690-4368 px changing by > 40/255, all on
+tower-shadow edges, a long edge's median luma 91 → 141; Windows: one edge moved once, then held) — the light-space
+snapping as the sun direction moves. To check together: whether the cascades re-snap on every sun change, and whether a
+sun moving at the real rate should update the maps less often.
+
 ## What remains
 
 - Reproduce on Linux at a fixed sun (the demo's clock paused) and measure the line (pixels, width) at a pinned

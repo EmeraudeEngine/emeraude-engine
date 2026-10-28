@@ -14,6 +14,7 @@ connections, zones and relief — never "a road" or "a city").
 | `Autotile.hpp` | `autotile(sides)` → `{Topology, Rotation}`: the 4-bit autotile (16 cases, 6 shapes: isolated, dead end, straight, corner, T, cross), canonical orientations stated, `static_assert`-checked. |
 | `Layout.hpp` | The N × M grid (≤ 512 per side), `place()`, `validate()` (every cell holds a tile; two sides sharing an edge carry the same mask; the border connects to nothing — every mismatch logged). Centred on the origin, a column along +X, a row along +Z. |
 | `Relief.hpp` | The heights at the tile corners, (N+1) × (N+1), shared by the neighbours: the surface is continuous by construction. `generate()` (two octaves of the base Perlin noise, `PortableRandom`-shuffled: the same relief on the three OS), `flatten()`, `constrain()`, `solve()`, `setHeight()` (an editor's tool). |
+| `Scatter.hpp` | `scatter(layout, relief, {zoneKind, spacing, jitter, margin, seed})` → `Placement`s (world position on the relief, facing, own seed, cell): every zone of a kind filled by a JITTERED GRID (R. L. Cook, "Stochastic Sampling in Computer Graphics", ACM TOG 5(1), 1986) — round(size / spacing) steps a side, at least one; an arc along its middle radius. Seeded PER CELL (`cellSeed()`): an edit moves its cell's points only. `MinSpacing` 0.25 m, `MaxPlacements` 2²⁰. First user: `city`'s park trees. |
 | `Builder.hpp` | Surface slots (`declareSurface()`: name, material, contact), the plinth, zone overlays; `buildGeometry()` / `buildRegion()` (pure, no scene), `instantiate()` (one solid static entity per region and slot, colliding as its triangles). |
 
 ## Owner decisions (2026-10-28)
@@ -55,8 +56,10 @@ connections, zones and relief — never "a road" or "a city").
   neighbours too.
 - `SurfaceSlot::collidable` (default true): false makes a slot DRAWN ONLY — no collision model, `setCollidable(false)`
   as the author's final decision (road markings a centimetre above the asphalt, a debug overlay).
+- `Relief::surfaceHeight(layout, x, z)`: the bilinear surface under a world point (nothing outside or for a relief not
+  sized for the layout) — what the scatter stands its points on, what a demo drops its spawn on.
 - `TileContext::variationSeed`: the world seed (`setVariationSeed()`) and the cell, mixed by MurmurHash3's `fmix32`
-  finalizer (Appleby, public domain): any bits are independent (the bare XOR of the products left the low bit
+  finalizer (Appleby, public domain; `cellSeed()` in `Types.hpp`): any bits are independent (the bare XOR of the products left the low bit
   alternating cell to cell). `city`'s lots draw a tower's storeys and facade from it.
 
 ## Measured (`city`, Linux, 3070 Ti, 2026-10-28, validation layers on)

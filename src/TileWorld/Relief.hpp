@@ -37,6 +37,7 @@
 #include <vector>
 
 /* Local inclusions for usages. */
+#include "Math/Vector.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -151,6 +152,17 @@ namespace EmEn::TileWorld
 			{
 				return m_cornerRows;
 			}
+
+			/**
+			 * @brief The height of the relief's surface under a WORLD point: the bilinear patch of the cell it falls in
+			 * (what the tiles are built over, before a tile's own offsets — a carriageway lies KerbHeight lower in a city).
+			 * @param layout The layout the relief is sized for.
+			 * @param position The world point (its Y ignored).
+			 * @return std::optional< float > Nothing outside the grid, for a non-finite point, or when the relief does not
+			 * match the layout.
+			 */
+			[[nodiscard]]
+			std::optional< float > surfaceHeight (const Layout & layout, const Base::Math::Vector< 3, float > & position) const noexcept;
 
 			/** @brief The lowest and the highest corner. */
 			[[nodiscard]]
