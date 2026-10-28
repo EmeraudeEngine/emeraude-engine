@@ -30,27 +30,33 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
+#include <utility>
 
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/Geometry/Interface.hpp"
-#include "Graphics/Material/Interface.hpp"
-#include "Graphics/RasterizationOptions.hpp"
+#include "Graphics/Geometry/Interface.hpp" // IWYU pragma: export (geometry(): the renderable interface hands its geometry to every consumer)
+#include "Graphics/Material/Interface.hpp" // IWYU pragma: export (material(): the renderable interface hands its materials to every consumer)
+#include "Graphics/RasterizationOptions.hpp" // IWYU pragma: export (layerRasterizationOptions(), and every renderable stores one by value)
 #include "Math/Space3D/AACuboid.hpp"
 #include "Math/Space3D/Sphere.hpp"
 #include "ProgramCacheKey.hpp"
 #include "SharedMutex.hpp"
+#include "ThreadSafety.hpp"
 
+/* Forward declarations. */
 namespace EmEn
 {
 	namespace Graphics
 	{
-		class Renderer;
-
 		namespace RenderTarget
 		{
 			class Abstract;
@@ -60,11 +66,6 @@ namespace EmEn
 	namespace Saphir
 	{
 		class Program;
-	}
-
-	namespace Scenes
-	{
-		class Scene;
 	}
 }
 
@@ -311,6 +312,21 @@ namespace EmEn::Graphics::Renderable
 			bool hasAnyCachedProgramsForRenderPass (const std::shared_ptr< const RenderTarget::Abstract > & renderTarget, uint64_t renderPassHandle) const noexcept;
 
 			/**
+			 * @brief Returns the generation of the program cache: bumped by every removal (clearProgramCache(),
+			 * clearAllProgramCaches()), never by an addition.
+			 * @note An instance that made its programs ready records the generation it read BEFORE preparing them; a
+			 * removal since makes it prepare again (RenderableInstance::Abstract::isReadyToRender()). A lock-free read,
+			 * the per-frame check of every instance (it used to look the cache up under its lock).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			programCacheGeneration () const noexcept
+			{
+				return m_programCacheGeneration.load(std::memory_order_acquire);
+			}
+
+			/**
 			 * @brief Returns the number of cached programs for a render target.
 			 * @param renderTarget A reference to the render target.
 			 * @return size_t
@@ -445,6 +461,8 @@ namespace EmEn::Graphics::Renderable
 			mutable Base::SharedMutex m_programCacheMutex;
 			/** @brief Cache of shader programs per render target and configuration. */
 			mutable RenderTargetProgramCache m_programCache EMEN_GUARDED_BY(m_programCacheMutex);
+			/** @brief Bumped by every removal from m_programCache (programCacheGeneration()). */
+			mutable std::atomic< uint32_t > m_programCacheGeneration{0};
 			float m_uniformScale = 1.0F;
 			uint32_t m_vegetationFoliageLayer{NoFoliageLayer};
 	};

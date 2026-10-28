@@ -35,12 +35,22 @@
 #include <memory>
 #include <ostream>
 #include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
 #include "StaticVector.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class Device;
+}
 
 namespace EmEn::Vulkan
 {
@@ -447,7 +457,9 @@ namespace EmEn::Vulkan
 			size_t
 			getHash () const noexcept
 			{
-				return DescriptorSetLayout::computeHash(m_setLayoutBindings, m_createInfo.flags);
+				/* Frozen at the creation (the bindings cannot change after it): a program cache key reads it for every
+				 * draw of every frame. */
+				return this->isCreated() ? m_hash : DescriptorSetLayout::computeHash(m_setLayoutBindings, m_createInfo.flags);
 			}
 
 			/**
@@ -472,6 +484,8 @@ namespace EmEn::Vulkan
 			std::string m_UUID;
 			Base::StaticVector< VkDescriptorSetLayoutBinding, 16 > m_setLayoutBindings;
 			Base::StaticVector< VkDescriptorBindingFlags, 16 > m_bindingFlags;
+			/** @brief The layout's hash, computed once by createOnHardware() (getHash()). */
+			size_t m_hash{0};
 	};
 
 	/**

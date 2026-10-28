@@ -66,7 +66,6 @@
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/KTX2Decoder.hpp"
 #include "Graphics/Material/StandardResource.hpp"
-#include "Graphics/RasterizationOptions.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
@@ -355,7 +354,6 @@ namespace
 /* Forward declarations. */
 namespace EmEn::Graphics::Geometry
 {
-	class Interface;
 }
 
 namespace EmEn::Scenes::Loaders
@@ -1185,8 +1183,10 @@ namespace EmEn::Scenes::Loaders
 			const auto aoStrength = glTFMaterial.occlusionTexture.has_value()
 				? static_cast< float >(glTFMaterial.occlusionTexture->strength) : 0.0F;
 
-			/* Emissive (sRGB: perceptual color data). */
-			auto emissiveTex = glTFMaterial.emissiveTexture.has_value()
+			/* Emissive (sRGB: perceptual color data). The caller may drop a material's emission
+			 * (LoaderOptions::nonEmissiveMaterialNames): its map is then not even loaded. */
+			const bool isEmissionDropped = m_options.nonEmissiveMaterialNames.contains(std::string{glTFMaterial.name.data(), glTFMaterial.name.size()});
+			auto emissiveTex = !isEmissionDropped && glTFMaterial.emissiveTexture.has_value()
 				? resolveTexture(glTFMaterial.emissiveTexture->textureIndex, {.sRGB = true}) : nullptr;
 
 			/* ⚠️⚠️ EXPERIMENT (Aug 2026) — PHOTOMETRIC ANCHOR FOR THE EMISSIVE.
@@ -1214,9 +1214,9 @@ namespace EmEn::Scenes::Loaders
 				1.0F
 			};
 
-			const bool hasEmissiveColor = glTFMaterial.emissiveFactor[0] > 0.0F
+			const bool hasEmissiveColor = !isEmissionDropped && (glTFMaterial.emissiveFactor[0] > 0.0F
 				|| glTFMaterial.emissiveFactor[1] > 0.0F
-				|| glTFMaterial.emissiveFactor[2] > 0.0F;
+				|| glTFMaterial.emissiveFactor[2] > 0.0F);
 
 			auto sheenColorTex = ( glTFMaterial.sheen != nullptr && glTFMaterial.sheen->sheenColorTexture.has_value() )
 				? resolveTexture(glTFMaterial.sheen->sheenColorTexture->textureIndex, {.sRGB = true}) : nullptr;

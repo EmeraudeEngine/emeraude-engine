@@ -60,6 +60,16 @@ namespace EmEn::Scenes::Loaders
 		 */
 		std::unordered_set< std::string > cutoutMaterialNames;
 		/**
+		 * @brief Materials (by their name in the file) loaded WITHOUT their emission (no emissive texture, no emissive
+		 * colour), whatever the file says.
+		 * @note For an asset whose emission is decoration, not light: a map whose "black" is a few levels above 0 emits
+		 * them at the loader's photometric anchor (glTF: 2000 nits per unit), invisible by day, a coloured glow at
+		 * night once the exposure opens. The owner's call per asset — Khronos' CarConcept, whose rims, mirrors and
+		 * hardware emit its logo map (a near-black (4, 2, 4) background): magenta at night (2026-10-28).
+		 * Honoured by the glTF loader.
+		 */
+		std::unordered_set< std::string > nonEmissiveMaterialNames;
+		/**
 		 * @brief Optional per-mesh hook invoked right after a mesh's renderable, geometry
 		 * and materials have been registered. Lets the caller patch the descriptor in place
 		 * (e.g. enable IBL reflection on PBR materials, override geometry, swap a renderable).

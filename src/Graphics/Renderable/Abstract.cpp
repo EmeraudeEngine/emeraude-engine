@@ -29,6 +29,15 @@
 /* STL inclusions. */
 #include <algorithm>
 
+/* Local inclusions. */
+#include "Math/Base.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics::Renderable
+{
+	struct ProgramCacheKey;
+}
+
 namespace EmEn::Graphics::Renderable
 {
 	using namespace Base;
@@ -73,6 +82,7 @@ namespace EmEn::Graphics::Renderable
 		const Base::SharedMutexWriteLock lock{m_programCacheMutex};
 
 		m_programCache.erase(renderTarget);
+		m_programCacheGeneration.fetch_add(1, std::memory_order_release);
 	}
 
 	void
@@ -81,6 +91,7 @@ namespace EmEn::Graphics::Renderable
 		const Base::SharedMutexWriteLock lock{m_programCacheMutex};
 
 		m_programCache.clear();
+		m_programCacheGeneration.fetch_add(1, std::memory_order_release);
 	}
 
 	bool

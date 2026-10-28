@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <array>
 #include <atomic>
-#include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <memory>
@@ -40,24 +39,29 @@
 #include <string>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "FlagTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Constants.hpp"
-#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/Renderable/ProgramCacheKey.hpp"
 #include "Graphics/SkinnedGeometryProcessor.hpp"
 #include "Graphics/Types.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 #include "Mutex.hpp"
-#include "RenderContext.hpp"
-#include "RenderStateTracker.hpp"
-#include "Vulkan/AccelerationStructureBuilder.hpp"
-#include "Vulkan/DescriptorPool.hpp"
-#include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/ShaderStorageBufferObject.hpp"
+#include "Graphics/RenderableInstance/RenderContext.hpp" // IWYU pragma: export (the RenderPassContext / PushConstantContext of the virtual interface every instance type implements)
+#include "Graphics/RenderableInstance/RenderStateTracker.hpp" // IWYU pragma: export (render()'s tracker, for every instance type and caller)
+#include "StaticVector.hpp"
+#include "ThreadSafety.hpp"
+#include "Vulkan/AccelerationStructureBuilder.hpp" // IWYU pragma: keep (members: std::vector< BLASGeometryInput >, std::unique_ptr< AccelerationStructure / Buffer > need the complete types)
+#include "Vulkan/DescriptorSet.hpp" // IWYU pragma: keep (member: std::vector< std::unique_ptr< DescriptorSet > > needs the complete type)
+#include "Vulkan/ShaderStorageBufferObject.hpp" // IWYU pragma: keep (member: std::unique_ptr< ShaderStorageBufferObject > needs the complete type)
 
 namespace EmEn
 {
@@ -68,16 +72,25 @@ namespace EmEn
 			class Abstract;
 		}
 
+		namespace Renderable
+		{
+			class SkeletalDataTrait;
+		}
+
+		class BindlessTextureManager;
 		class Renderer;
-		class ViewMatricesInterface;
 	}
 
 	namespace Vulkan
 	{
-		class PipelineLayout;
-		class GraphicsPipeline;
+		class AccelerationStructure;
+		class Buffer;
 		class CommandBuffer;
 		class DeferredDestructor;
+		class DescriptorPool;
+		class DescriptorSetLayout;
+		class Device;
+		class PipelineLayout;
 	}
 
 	namespace Saphir
@@ -1406,7 +1419,8 @@ namespace EmEn::Graphics::RenderableInstance
 			 */
 			Abstract (const std::shared_ptr< Renderable::Abstract > & renderable, uint32_t flagBits) noexcept
 				: FlagTrait{flagBits},
-				m_renderable{renderable}
+				m_renderable{renderable},
+				m_skeletalData{skeletalSide(renderable.get())}
 			{
 
 			}
@@ -1568,6 +1582,14 @@ namespace EmEn::Graphics::RenderableInstance
 			Renderable::ProgramCacheKey buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex, bool isMDIEnabled = false) const noexcept;
 
 			/**
+			 * @brief Returns the skeletal side of a renderable (its SkeletalDataTrait), or nullptr.
+			 * @param renderable A pointer to the renderable, or nullptr.
+			 * @return const Renderable::SkeletalDataTrait *
+			 */
+			[[nodiscard]]
+			static const Renderable::SkeletalDataTrait * skeletalSide (const Renderable::Abstract * renderable) noexcept;
+
+			/**
 			 * @brief Resolves a program from the fast instance-local cache or falls back to the Renderable cache.
 			 * @param renderTarget A reference to the render target.
 			 * @param cacheKey The program cache key.
@@ -1591,6 +1613,9 @@ namespace EmEn::Graphics::RenderableInstance
 			static constexpr size_t MaxResolvedPrograms{16};
 
 			const std::shared_ptr< Renderable::Abstract > m_renderable;
+			/** @brief m_renderable's skeletal side, or nullptr: resolved once (the renderable never changes), it was a
+			 * dynamic_cast for every draw and every readiness check. */
+			const Renderable::SkeletalDataTrait * const m_skeletalData;
 			/** @brief The author's local transformation, one per render state slot (publishTransformationMatrix()). */
 			std::array< Base::Math::Matrix< 4, float >, RenderStateSlotCount > m_transformationMatrices{};
 			/** @brief Model matrix staged at the previous rendered frame (primary view), for motion vectors. */
@@ -1607,9 +1632,15 @@ namespace EmEn::Graphics::RenderableInstance
 			{
 				const RenderTarget::Abstract * renderTarget{nullptr};
 				uint64_t renderPassHandle{0};
+				/** @brief The renderable's program cache generation read BEFORE the programs were made ready
+				 * (Renderable::Abstract::programCacheGeneration()): a removal since makes the instance prepare again. */
+				uint32_t programCacheGeneration{0};
 			};
 			/** @brief The targets getReadyForRender() succeeded for (isReadyToRender()); render thread only. */
 			std::vector< ReadyTarget > m_readyTargets;
+			/** @brief The shadow targets isReadyToCastShadows() found every shadow program for: its next calls skip the
+			 * per-layer key and cache lookups. Render thread only (the shadow lists are built there). */
+			mutable std::vector< ReadyTarget > m_shadowReadyTargets;
 			uint32_t m_animationTimeMS{0}; /**< Animation time in ms; the per-layer frame index is derived from it. */
 			/** @brief Instance transforms SSBO slot staged for the current render pass (non-instanced path). */
 			uint32_t m_instanceTransformsSlot{0};

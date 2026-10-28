@@ -26,38 +26,62 @@
 
 #include "Abstract.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
 #include <bit>
 #include <optional>
+#include <ranges>
+#include <sstream>
+#include <utility>
 
 /* Local inclusions. */
+#include "Animation/Skin.hpp"
+#include "BlobTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
-#include "Graphics/Geometry/Interface.hpp"
-#include "Graphics/RenderableInstance/PathPoints.hpp"
-#include "Graphics/Material/Interface.hpp"
+#include "Graphics/Frustum.hpp"
+#include "Graphics/Geometry/MeshShadingSurface.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
+#include "Graphics/RenderableInstance/PathPoints.hpp"
+#include "Graphics/RenderableInstance/RenderContext.hpp"
+#include "Graphics/RenderableInstance/RenderStateTracker.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Base.hpp"
 #include "PrimaryServices.hpp"
+#include "Resources/ResourceTrait.hpp"
 #include "Saphir/Generator/SceneRendering.hpp"
-#include "Saphir/Generator/SkinningLayoutHelper.hpp"
-#include "Settings.hpp"
 #include "Saphir/Generator/ShadowCasting.hpp"
+#include "Saphir/Generator/SkinningLayoutHelper.hpp"
 #include "Saphir/Generator/TBNSpaceRendering.hpp"
+#include "Saphir/Keys.hpp"
 #include "Saphir/Program.hpp"
+#include "Saphir/SetIndexes.hpp"
 #include "Scenes/Component/AbstractLightEmitter.hpp"
 #include "Scenes/SceneInstanceTransforms.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/AccelerationStructure.hpp"
+#include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/Buffer.hpp"
-#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/CommandBuffer.hpp"
-#include "Vulkan/PhysicalDevice.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
+#include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
+#include "Vulkan/IndexBufferObject.hpp"
+#include "Vulkan/MemoryRegion.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
+#include "Vulkan/PipelineLayout.hpp"
+#include "Vulkan/RenderPass.hpp"
+#include "Vulkan/ShaderStorageBufferObject.hpp"
+#include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {
@@ -684,6 +708,12 @@ namespace EmEn::Graphics::RenderableInstance
 		return true;
 	}
 
+	const Renderable::SkeletalDataTrait *
+	Abstract::skeletalSide (const Renderable::Abstract * renderable) noexcept
+	{
+		return dynamic_cast< const Renderable::SkeletalDataTrait * >(renderable);
+	}
+
 	Renderable::ProgramCacheKey
 	Abstract::buildProgramCacheKey (Renderable::ProgramType programType, RenderPassType renderPassType, uint64_t renderPassHandle, uint32_t layerIndex, bool isMDIEnabled) const noexcept
 	{
@@ -718,15 +748,7 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 		}
 
-		bool isSkeletalAnimationEnabled = false;
-
-		if ( m_renderable != nullptr )
-		{
-			if ( const auto * skeletalData = dynamic_cast< const Renderable::SkeletalDataTrait * >(m_renderable.get()) )
-			{
-				isSkeletalAnimationEnabled = skeletalData->hasSkeletalData();
-			}
-		}
+		const bool isSkeletalAnimationEnabled = m_skeletalData != nullptr && m_skeletalData->hasSkeletalData();
 
 		return Renderable::ProgramCacheKey{
 			.programType = programType,
@@ -763,18 +785,43 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
+		static_assert(sizeof(VkRenderPass) == sizeof(uint64_t), "A render pass handle is the 64-bit key of the program cache.");
+
+		const auto renderPassHandle = std::bit_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+		const auto generation = m_renderable->programCacheGeneration();
+
+		/* Found ready before, for this target, its render pass and the cache as it is: nothing removed since. */
+		if ( std::ranges::any_of(m_shadowReadyTargets, [&renderTarget, renderPassHandle, generation] (const ReadyTarget & readyTarget) {
+			return readyTarget.renderTarget == renderTarget.get() && readyTarget.renderPassHandle == renderPassHandle && readyTarget.programCacheGeneration == generation;
+		}) )
+		{
+			return true;
+		}
+
 		/* Check if all shadow casting programs exist for all layers. */
 		const auto layerCount = m_renderable->layerCount();
 
 		for ( uint32_t layerIndex = 0; layerIndex < layerCount; ++layerIndex )
 		{
-			const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 			const auto cacheKey = this->buildProgramCacheKey(Renderable::ProgramType::ShadowCasting, RenderPassType::SimplePass, renderPassHandle, layerIndex);
 
 			if ( m_renderable->findCachedProgram(renderTarget, cacheKey) == nullptr )
 			{
 				return false;
 			}
+		}
+
+		/* Remembered with the generation read BEFORE the lookups: a removal during them is caught next time. */
+		if ( const auto readyIt = std::ranges::find_if(m_shadowReadyTargets, [&renderTarget] (const ReadyTarget & readyTarget) {
+			return readyTarget.renderTarget == renderTarget.get();
+		}); readyIt != m_shadowReadyTargets.end() )
+		{
+			readyIt->renderPassHandle = renderPassHandle;
+			readyIt->programCacheGeneration = generation;
+		}
+		else
+		{
+			m_shadowReadyTargets.push_back({.renderTarget = renderTarget.get(), .renderPassHandle = renderPassHandle, .programCacheGeneration = generation});
 		}
 
 		return true;
@@ -802,13 +849,14 @@ namespace EmEn::Graphics::RenderableInstance
 		 * program": its cache is shared by instances whose keys differ (see the declaration). */
 		const auto renderPassHandle = reinterpret_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
 
-		const auto prepared = std::ranges::any_of(m_readyTargets, [&renderTarget, renderPassHandle] (const ReadyTarget & readyTarget) {
-			return readyTarget.renderTarget == renderTarget.get() && readyTarget.renderPassHandle == renderPassHandle;
-		});
+		/* NOTE: And nothing was removed from the renderable's cache since (a cleared cache makes the instance prepare again
+		 * rather than draw with nothing): its generation, a lock-free read — the cache lookup under its lock it replaced ran
+		 * for every instance of every frame. */
+		const auto generation = m_renderable->programCacheGeneration();
 
-		/* NOTE: And the renderable's cache still holds programs for that pass: a cleared cache (clearProgramCache()) makes
-		 * the instance prepare again rather than draw with nothing. */
-		return prepared && m_renderable->hasAnyCachedProgramsForRenderPass(renderTarget, renderPassHandle);
+		return std::ranges::any_of(m_readyTargets, [&renderTarget, renderPassHandle, generation] (const ReadyTarget & readyTarget) {
+			return readyTarget.renderTarget == renderTarget.get() && readyTarget.renderPassHandle == renderPassHandle && readyTarget.programCacheGeneration == generation;
+		});
 	}
 
 	bool
@@ -819,14 +867,12 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		const auto * skeletalData = dynamic_cast< const Renderable::SkeletalDataTrait * >(m_renderable.get());
-
-		if ( skeletalData == nullptr || !skeletalData->hasSkeletalData() )
+		if ( m_skeletalData == nullptr || !m_skeletalData->hasSkeletalData() )
 		{
 			return false;
 		}
 
-		return skeletalData->skin().jointCount() > 0;
+		return m_skeletalData->skin().jointCount() > 0;
 	}
 
 	bool
@@ -841,8 +887,8 @@ namespace EmEn::Graphics::RenderableInstance
 			return true;
 		}
 
-		const auto * skeletalData = dynamic_cast< const Renderable::SkeletalDataTrait * >(m_renderable.get());
-		const auto boneCount = static_cast< uint32_t >(skeletalData->skin().jointCount());
+		/* isMissingSkinningResources() answered true: m_skeletalData is not null. */
+		const auto boneCount = static_cast< uint32_t >(m_skeletalData->skin().jointCount());
 		const auto descriptorSetLayout = Generator::getSkinningDescriptorSetLayout(renderer.layoutManager());
 
 		if ( !this->createSkinningResources(renderer.device(), descriptorSetLayout, boneCount, renderer.framesInFlight()) )
@@ -946,6 +992,10 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			return true;
 		}
+
+		/* The program cache's generation BEFORE any lookup or generation below: a removal while this runs makes the
+		 * instance prepare again (isReadyToRender()). */
+		const auto programCacheGeneration = m_renderable->programCacheGeneration();
 
 		/* Skinning GPU resources, created BEFORE the first program generation (see the method). */
 		if ( !this->prepareSkinningResources(renderer) )
@@ -1064,10 +1114,11 @@ namespace EmEn::Graphics::RenderableInstance
 		}); readyIt != m_readyTargets.end() )
 		{
 			readyIt->renderPassHandle = mainRenderPassHandle;
+			readyIt->programCacheGeneration = programCacheGeneration;
 		}
 		else
 		{
-			m_readyTargets.push_back({.renderTarget = renderTarget.get(), .renderPassHandle = mainRenderPassHandle});
+			m_readyTargets.push_back({.renderTarget = renderTarget.get(), .renderPassHandle = mainRenderPassHandle, .programCacheGeneration = programCacheGeneration});
 		}
 
 		/* NOTE: A device without the geometry stage (MoltenVK) cannot build the TBN space program: never attempted. */

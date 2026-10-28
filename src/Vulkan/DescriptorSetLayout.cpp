@@ -28,8 +28,10 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <sstream>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Device.hpp"
 #include "Tracer.hpp"
 #include "Utility.hpp"
@@ -98,6 +100,8 @@ namespace EmEn::Vulkan
 		}
 
 		this->setVulkanObjectName(this->device()->handle(), VK_OBJECT_TYPE_DESCRIPTOR_SET_LAYOUT, reinterpret_cast< uint64_t >(m_handle));
+
+		m_hash = DescriptorSetLayout::computeHash(m_setLayoutBindings, m_createInfo.flags);
 
 		this->setCreated();
 

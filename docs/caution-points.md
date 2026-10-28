@@ -3230,7 +3230,10 @@ missiles alone: 0; found by macOS-PA). Now each instance records the targets its
 for (`m_readyTargets`: the target, its render pass handle — a resize prepares it again), and `isReadyToRender()` needs
 that record AND a program cached for the pass (a cleared cache prepares it again). The shadow readiness
 (`isReadyToCastShadows()`) already checked the instance's own keys. After: 0 warning; animation-debug, lighten-marbles,
-balls-of-steel, game-logic, relief, basic-scenery with validation: 0 `VUID-`, 0 `[Error]`.
+balls-of-steel, game-logic, relief, basic-scenery with validation: 0 `VUID-`, 0 `[Error]`. Since 2026-10-28 "a program
+cached for the pass" is the program cache's GENERATION recorded with the target (lock-free; graphics doc 04-4 §
+resize): a renderable whose cache is cleared must bump it — `clearProgramCache()` / `clearAllProgramCaches()` do; a new
+removal path must too, or its instances draw with nothing.
 
 ### A surface geometry (FFT ocean, CDLOD terrain) must RETIRE its GPU objects, never free them — fixed 2026-09-30
 

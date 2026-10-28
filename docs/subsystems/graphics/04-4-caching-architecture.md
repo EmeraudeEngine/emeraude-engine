@@ -293,3 +293,16 @@ bool Abstract::isReadyToRender (const std::shared_ptr< RenderTarget::Abstract > 
 - `Renderable/Abstract.cpp:hasAnyCachedProgramsForRenderPass()` - Validates render pass handle against cached keys
 - `RenderableInstance/Abstract.cpp:isReadyToRender()` - Uses handle validation
 - `Vulkan/SwapChain.cpp:recreate()` - Creates new render pass on resize
+
+**Since 2026-10-28 the per-frame readiness is lock-free** (owner: the CPU of a 3 600-instance city). Each instance
+records what ITS OWN preparation succeeded for — `m_readyTargets` for the rendering programs (`getReadyForRender()`),
+`m_shadowReadyTargets` for the shadow programs (`isReadyToCastShadows()`'s first success) — as (target, render pass
+handle, **program cache generation**). The generation (`Renderable::Abstract::programCacheGeneration()`, an atomic bumped
+by `clearProgramCache()` / `clearAllProgramCaches()`, never by an addition) is read BEFORE the preparation, so a removal
+during it prepares again. `isReadyToRender()` and the shadow fast path compare the three: no lock, no key, no cache
+lookup (they took the cache's shared lock and walked the target's programs, or built a key with a `dynamic_cast` and a
+layout hash per layer, for every instance of every list of every frame). Two more per-draw costs went the same way:
+`DescriptorSetLayout::getHash()` is computed once at creation (the bindings cannot change after it), and the instance
+resolves its renderable's `SkeletalDataTrait` once at construction (`m_skeletalData`). Measured: `city` side 128 by day,
+the render thread's CPU per frame, 5 interleaved runs each, no CEF, no layer (RTX 3070 Ti, 1920×1080): **14.42 →
+11.87 ms (median, −17.7 %)**, every pair lower, the ranges disjoint (13.8-15.0 vs 11.6-13.1).
