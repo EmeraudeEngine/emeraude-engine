@@ -57,6 +57,14 @@ namespace EmEn::TileWorld
 		uint32_t row{0};
 	};
 
+	/** @brief Which zone shapes a scatter fills. */
+	enum class ScatterShapes : uint8_t
+	{
+		All, /**< Rectangles and arcs. */
+		Rectangles, /**< ZoneShape::Rectangle only. */
+		Arcs /**< ZoneShape::Arc only. */
+	};
+
 	/** @brief How to scatter. */
 	struct ScatterParameters
 	{
@@ -65,10 +73,15 @@ namespace EmEn::TileWorld
 		float jitter{0.25F}; /**< How far a point may move from its place, a fraction of its step (0 to 0.5). */
 		float margin{0.0F}; /**< Kept free along a zone's edges, metres (≥ 0). */
 		uint32_t seed{0}; /**< Mixed with each cell (cellSeed()): an edit changes the points of its cell only. */
+		uint32_t minimumPerZone{1}; /**< The fewest points along a usable zone's LENGTH (a rectangle's longer side, an arc) (≤ MaxMinimumPerZone): 1 fills even a short zone, 0 leaves a zone shorter than half a spacing empty (lamps along short strips). Across a rectangle (its shorter side) one row at least. */
+		ScatterShapes shapes{ScatterShapes::All};
 	};
 
 	/** @brief The smallest spacing a scatter accepts, metres: it bounds the points of a zone. */
 	constexpr float MinSpacing{0.25F};
+
+	/** @brief The largest minimumPerZone a scatter accepts. */
+	constexpr uint32_t MaxMinimumPerZone{64};
 
 	/** @brief The most points one scatter returns (refused beyond: a wrong spacing, not a city). */
 	constexpr size_t MaxPlacements{1U << 20U};
@@ -78,8 +91,10 @@ namespace EmEn::TileWorld
 	 * R. L. Cook, "Stochastic Sampling in Computer Graphics", ACM Transactions on Graphics 5(1), 1986) — evenly spread
 	 * without a grid's regularity, two points never closer than step × (1 − 2 × jitter) inside a zone; on an arc, points
 	 * along its middle radius every `spacing` of arc length, jittered along it.
-	 * @note A zone's usable size (less the margins) holds round(size / spacing) steps, at least one: a 16 m tile at 8 m
-	 * holds 2 × 2 points. Deterministic on the three OS (std::mt19937 through Base::PortableRandom).
+	 * @note A zone's usable size (less the margins) holds round(size / spacing) steps a side: along its length at least
+	 * minimumPerZone (1 by default), across it at least one (a 1 m strip holds a single file): a 16 m tile at 8 m holds
+	 * 2 × 2 points; with a minimum of 0 a zone shorter than half a spacing holds none. A huge spacing with a minimum of 1
+	 * puts exactly one point in the middle of each zone. Deterministic on the three OS (std::mt19937 through Base::PortableRandom).
 	 * @param layout A validated layout.
 	 * @param relief The relief sized for it.
 	 * @param parameters How to scatter.

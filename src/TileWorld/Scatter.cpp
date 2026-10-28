@@ -73,17 +73,37 @@ namespace EmEn::TileWorld
 			return Vector< 3, float >::negativeZ();
 		}
 
-		/** @brief How many steps fit a length: round(length / spacing), at least one; 0 for nothing usable. */
+		/** @brief How many steps fit a length: round(length / spacing), at least `minimum`; 0 for nothing usable. */
 		[[nodiscard]]
 		uint32_t
-		stepsIn (float length, float spacing) noexcept
+		stepsIn (float length, float spacing, uint32_t minimum) noexcept
 		{
 			if ( length <= 0.0F )
 			{
 				return 0;
 			}
 
-			return std::max(1U, static_cast< uint32_t >(std::lround(length / spacing)));
+			return std::max(minimum, static_cast< uint32_t >(std::lround(length / spacing)));
+		}
+
+		/** @brief Whether a scatter fills a zone of this shape. */
+		[[nodiscard]]
+		bool
+		fills (ScatterShapes shapes, ZoneShape shape) noexcept
+		{
+			switch ( shapes )
+			{
+				case ScatterShapes::All :
+					return true;
+
+				case ScatterShapes::Rectangles :
+					return shape == ZoneShape::Rectangle;
+
+				case ScatterShapes::Arcs :
+					return shape == ZoneShape::Arc;
+			}
+
+			return false;
 		}
 
 		/** @brief What a scatter needs about one cell. */
@@ -168,8 +188,11 @@ namespace EmEn::TileWorld
 			const auto margin = parameters.margin / frame.subCell;
 			const auto width = static_cast< float >(zone.area.width) - (2.0F * margin);
 			const auto depth = static_cast< float >(zone.area.depth) - (2.0F * margin);
-			const auto columns = stepsIn(width * frame.subCell, parameters.spacing);
-			const auto rows = stepsIn(depth * frame.subCell, parameters.spacing);
+			/* minimumPerZone counts along the zone's LENGTH (its longer side); across it (a strip's width) one row at
+			 * least: a 1 m prop strip holds its points in a single file. */
+			const auto alongX = zone.area.width >= zone.area.depth;
+			const auto columns = stepsIn(width * frame.subCell, parameters.spacing, alongX ? parameters.minimumPerZone : 1U);
+			const auto rows = stepsIn(depth * frame.subCell, parameters.spacing, alongX ? 1U : parameters.minimumPerZone);
 
 			if ( columns == 0 || rows == 0 )
 			{
@@ -215,7 +238,7 @@ namespace EmEn::TileWorld
 
 			const Jitter unit{-1.0F, 1.0F};
 			const auto radius = 0.5F * static_cast< float >(zone.arc.innerRadius + zone.arc.outerRadius);
-			const auto steps = stepsIn((radius * zone.arc.sweep * frame.subCell) - (2.0F * parameters.margin), parameters.spacing);
+			const auto steps = stepsIn((radius * zone.arc.sweep * frame.subCell) - (2.0F * parameters.margin), parameters.spacing, parameters.minimumPerZone);
 
 			if ( steps == 0 )
 			{
@@ -251,11 +274,12 @@ namespace EmEn::TileWorld
 	scatter (const Layout & layout, const Relief & relief, const ScatterParameters & parameters) noexcept
 	{
 		const auto valid = std::isfinite(parameters.spacing) && std::isfinite(parameters.jitter) && std::isfinite(parameters.margin)
-			&& parameters.spacing >= MinSpacing && parameters.jitter >= 0.0F && parameters.jitter <= 0.5F && parameters.margin >= 0.0F;
+			&& parameters.spacing >= MinSpacing && parameters.jitter >= 0.0F && parameters.jitter <= 0.5F && parameters.margin >= 0.0F
+			&& parameters.minimumPerZone <= MaxMinimumPerZone;
 
 		if ( !valid || relief.cornerColumns() != layout.columns() + 1 || relief.cornerRows() != layout.rows() + 1 )
 		{
-			TraceError{TracerTag} << "scatter(): refused (spacing ≥ " << MinSpacing << " m, jitter 0 to 0.5, a margin ≥ 0, the relief sized for the layout) !";
+			TraceError{TracerTag} << "scatter(): refused (spacing ≥ " << MinSpacing << " m, jitter 0 to 0.5, a margin ≥ 0, a minimum per zone ≤ " << MaxMinimumPerZone << ", the relief sized for the layout) !";
 
 			return std::nullopt;
 		}
@@ -284,7 +308,7 @@ namespace EmEn::TileWorld
 
 				for ( const auto & zone : cell->tile->zones() )
 				{
-					if ( zone.kind != parameters.zoneKind )
+					if ( zone.kind != parameters.zoneKind || !fills(parameters.shapes, zone.shape) )
 					{
 						continue;
 					}
