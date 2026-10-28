@@ -26,17 +26,30 @@
 
 #include "SoundEmitter.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <functional>
 #include <iterator>
 #include <memory>
 
 /* Local inclusions. */
+#include "Animations/AnimationInterface.hpp"
 #include "Audio/Manager.hpp"
+#include "Audio/SoundResource.hpp"
+#include "Audio/Types.hpp"
+#include "BlobTrait.hpp"
+#include "CoreTypes.hpp"
+#include "ObservableTrait.hpp"
+#include "Physics/MovableTrait.hpp"
+#include "Resources/ResourceTrait.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "Tracer.hpp"
+#include "Variant.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -413,6 +426,7 @@ namespace EmEn::Scenes::Component
 			this->updateSource(*m_source, this->getWorldCoordinates());
 
 			m_source->setGain(m_gain);
+			m_source->setPitch(m_pitch);
 			m_source->play(m_attachedSound, this->isFlagEnabled(Loop) ? PlayMode::Loop : PlayMode::Once);
 		}
 	}
@@ -431,5 +445,6 @@ namespace EmEn::Scenes::Component
 		}
 
 		m_gain = 8.0F;
+		m_pitch = 1.0F;
 	}
 }

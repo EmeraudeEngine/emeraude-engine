@@ -28,14 +28,29 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "json/json.h"
 
 /* Local inclusions. */
+#include "Audio/SoundResource.hpp"
+#include "Console/CommandResult.hpp"
+#include "Console/ControllableTrait.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
 #include "FastJSON.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "SoundEmitter.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Scenes
+{
+	class Manager;
+}
 
 namespace EmEn::Scenes::Component
 {

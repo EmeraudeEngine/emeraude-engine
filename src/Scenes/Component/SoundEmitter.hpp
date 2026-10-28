@@ -31,7 +31,10 @@
 
 /* STL inclusions. */
 #include <array>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <memory>
 #include <string>
 
@@ -40,8 +43,22 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Audio/SoundResource.hpp"
 #include "Audio/Source.hpp"
+#include "Math/CartesianFrame.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Audio
+	{
+		class SoundResource;
+	}
+
+	namespace Scenes
+	{
+		class AbstractEntity;
+	}
+}
 
 namespace EmEn::Scenes::Component
 {
@@ -196,6 +213,38 @@ namespace EmEn::Scenes::Component
 			gain () const noexcept
 			{
 				return m_gain;
+			}
+
+			/**
+			 * @brief Changes the pitch of the emitter's own sound (an engine following its RPM), applied at once when it
+			 * plays and kept for its next play. The one-shot voices keep their own pitch (playOneShot()).
+			 * @param pitch The pitch, clamped by the source to [0.5, 2]. A non-finite value is refused (traced).
+			 */
+			void
+			setPitch (float pitch) noexcept
+			{
+				if ( !this->acceptsFinite("setPitch", pitch) )
+				{
+					return;
+				}
+
+				m_pitch = pitch;
+
+				if ( this->isPlaying() )
+				{
+					m_source->setPitch(m_pitch);
+				}
+			}
+
+			/**
+			 * @brief Returns the pitch of the emitter's own sound (setPitch(), 1 by default).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			pitch () const noexcept
+			{
+				return m_pitch;
 			}
 
 			/**
@@ -394,5 +443,6 @@ namespace EmEn::Scenes::Component
 			size_t m_nextOneShotVoice{0};
 			std::shared_ptr< Audio::SoundResource > m_attachedSound;
 			float m_gain{1.0F};
+			float m_pitch{1.0F};
 	};
 }

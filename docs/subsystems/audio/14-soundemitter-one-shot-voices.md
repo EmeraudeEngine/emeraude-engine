@@ -63,3 +63,11 @@ its smoke grenade lost its ignition hiss at once (the grenade, and its emitter, 
 Measured (projet-alpha, Linux Release, test ports, 2026-10-24): citadel, 5 rockets in 0.4 s → 5 world blasts, released
 as they end; 8 smoke grenades → their hisses (2-3 at once) now heard to the end; lighten-marbles, 14 marble explosions
 as world sounds in a 6-pass sample. 0 `VUID-`, 0 refusal, no `SourceRequest` held at the audio shutdown.
+
+### The emitter's own pitch (2026-10-28)
+
+`SoundEmitter::setPitch(pitch)` / `pitch()`: the pitch of the emitter's OWN sound (an engine loop following its RPM),
+applied at once when it plays and kept for its next play (`playAttachedSound()` sets it with the gain); clamped by the
+source to [0.5, 2], a non-finite value refused (traced); `clear()` resets it to 1. The one-shot voices keep their own
+pitch (`playOneShot()`). A pooled source comes back to its defaults when released (`Audio::Manager::releaseSource()`):
+no pitch leaks from a former user. First user: a downstream car's engine loop.
