@@ -509,6 +509,12 @@ namespace EmEn::Resources
 						TraceInfo{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") has no more dependency to wait for loading !";
 					}
 
+					/* NOTE: Every dependency is loaded: none is waited for any more. A dependency reports isLoaded() BEFORE
+					 * it notifies this resource (dependencyLoaded()), so one may still be listed here; its notification
+					 * would then reach a LOADED resource with a non-empty list and log a false error (a city's region
+					 * meshes sharing seventeen materials, 2026-10-29: 263 such errors). */
+					m_dependenciesToWaitFor.clear();
+
 					/* NOTE: Mark that we need to call onDependenciesLoaded() outside the lock, and claim it. */
 					m_dependenciesFinalizing = true;
 					pendingAction = Action::CallOnDependenciesLoaded;
