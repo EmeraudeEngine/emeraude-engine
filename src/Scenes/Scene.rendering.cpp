@@ -1013,12 +1013,6 @@ namespace EmEn::Scenes
 
 		m_preparedBindlessManager = bindlessManager.usable() ? &bindlessManager : nullptr;
 
-		/* Cache the instance transforms descriptor set for the current frame-in-flight,
-		 * consumed by the render(step) calls recorded until the next prepareRender(). */
-		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
-
-		m_preparedInstanceTransformsDS = m_instanceTransforms.descriptorSet(frameIndex);
-
 		const bool renderListsPopulated = this->populateRenderLists(renderTarget, m_preparedReadStateIndex);
 
 		/* The frame's statistics: the shadow maps were cast BEFORE this (Renderer::renderFrame), so the
@@ -1075,6 +1069,13 @@ namespace EmEn::Scenes
 		{
 			Tracer::error(ClassId, "Unable to update the instance transforms SSBO to the video memory !");
 		}
+
+		/* Cache the instance transforms descriptor set for the current frame-in-flight, consumed by the render(step)
+		 * calls recorded until the next prepareRender(). ⚠️ AFTER the upload: a growth there gives the frame a NEW set
+		 * (SceneInstanceTransforms::updateVideoMemory()), and the old one only holds the entries staged before it. */
+		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
+
+		m_preparedInstanceTransformsDS = m_instanceTransforms.descriptorSet(frameIndex);
 
 		if ( !renderListsPopulated )
 		{

@@ -1858,6 +1858,27 @@ logo gone; Windows NVIDIA — the same. 0 `VUID-`.
 
 ⚠️ Per the spec, an emissive texture with the default factor (0, 0, 0) emits NOTHING now.
 
+### Fixed: a per-frame descriptor set rewritten after the frame's first passes were recorded (2026-10-29)
+
+**Rule: the frame-in-flight fence only covers the PREVIOUS use of a frame slot.** Inside the frame, the shadow maps
+and the render-to-textures are recorded BEFORE the main view's `prepareRender()`; a descriptor set they bound must
+not be updated afterwards (`VUID-vkUpdateDescriptorSets-None-03047`, no `UPDATE_AFTER_BIND` on it).
+`SceneInstanceTransforms::updateVideoMemory()` grew the frame's SSBO when the main view staged more entries than it
+held, and REWROTE the frame's set. The validation layer then SKIPS the faulty update (that is what its "skip" does), so
+the set kept the retired buffer, the deferred destructor destroyed it, and every later draw read a destroyed buffer:
+`VUID-vkCmdDrawIndexed-None-08114` on `ubInstanceTransforms` on every draw (21 million on macOS-PA's M6 with the
+duplicate limit at 0) and the scene stopped drawing — only under the validation layer; without it the driver took the
+update (undefined behaviour that happened to work). Reproduced on Linux: projet-alpha `city 128,1,12,0`, the HLOD
+proxies forced everywhere, night, restored, day, a teleport to (0, 60, −700) — 18 × 03047 + 20 × 08114.
+
+Fix (owner's choice among: a new set at growth / UPDATE_AFTER_BIND on that set / pre-sizing): a growth gives the frame
+a NEW descriptor set (`replaceDescriptorSet()`), the old set and the old buffers are retired through the deferred
+destructor, never rewritten. The passes recorded earlier keep the old set, whose buffer holds the entries they read
+(they were uploaded there by their own `prepareRender()`); `Scene::prepareRender()` re-reads the set AFTER the upload.
+A growth is traced (`Frame slot N: the instance transforms grew to … bytes`). Measured: the same sequence, 3 launches
+(2 with the duplicate limit at 0), 0 VUID; the growth ran 6 times in one launch (1719 then 2267 entries, the 3 slots)
+and the city drew whole.
+
 ### Fixed: a glow switched off read black — the G-buffer's emissive mask ignored the strength (2026-10-29)
 
 The material-properties G-buffer's emissive mask (B low nibble) was `autoIlluminationAmount` alone. RTGI, SSGI, RTAO

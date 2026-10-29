@@ -42,8 +42,6 @@
 /* Local inclusions for usages. */
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
-#include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/ShaderStorageBufferObject.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -56,9 +54,12 @@ namespace EmEn
 	namespace Vulkan
 	{
 		class DeferredDestructor;
+		class DescriptorPool;
+		class DescriptorSet;
 		class DescriptorSetLayout;
 		class Device;
 		class LayoutManager;
+		class ShaderStorageBufferObject;
 	}
 }
 
@@ -403,6 +404,9 @@ namespace EmEn::Scenes
 			 * the whole staged range from the frame start, so successive calls within one frame
 			 * are cumulative and idempotent. Grows the buffer when the staged range exceeds its
 			 * capacity, retiring the previous buffer through the deferred destructor.
+			 * @warning A growth gives the frame a NEW descriptor set (the old one and the old buffers are retired, never
+			 * rewritten): the passes recorded earlier in the frame (shadow maps, render-to-textures) keep the set they
+			 * bound, whose buffer holds the entries they read. Re-read descriptorSet() after this call.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -465,6 +469,16 @@ namespace EmEn::Scenes
 			bool writeBufferToDescriptorSet (uint32_t frameIndex) noexcept;
 
 			/**
+			 * @brief Gives a frame a new descriptor set pointing at its current buffers, retiring the previous set.
+			 * @note A set bound by a command buffer already recorded must never be updated (VUID-vkUpdateDescriptorSets-
+			 * None-03047): a growth inside a frame happens after its shadow maps and render-to-textures were recorded.
+			 * @param frameIndex The frame-in-flight index.
+			 * @return bool False when the new set could not be made (the old one is kept).
+			 */
+			[[nodiscard]]
+			bool replaceDescriptorSet (uint32_t frameIndex) noexcept;
+
+			/**
 			 * @brief Makes a frame buffer hold at least `requiredBytes`, retiring the old one (power-of-two growth).
 			 * @param buffer The frame's buffer.
 			 * @param requiredBytes The size needed.
@@ -479,9 +493,12 @@ namespace EmEn::Scenes
 			std::shared_ptr< Vulkan::Device > m_device;
 			/** @brief Deferred-destruction queue for in-flight-safe buffer retirement. */
 			Vulkan::DeferredDestructor * m_deferredDestructor{nullptr};
+			/** @brief The pool and the layout the per-frame descriptor sets come from (a growth makes a new set). */
+			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
+			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			/** @brief Per-frame instance transforms SSBOs (one per frame-in-flight). */
 			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_buffers;
-			/** @brief Per-frame descriptor sets (binding 0 = the frame's SSBO, 1 = the path directory, 2 = the path points); rewritten on buffer growth. */
+			/** @brief Per-frame descriptor sets (binding 0 = the frame's SSBO, 1 = the path directory, 2 = the path points); replaced on buffer growth. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			/** @brief Per-frame path directory SSBOs (binding 1: a PathSpan per entry slot). */
 			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_pathDirectoryBuffers;

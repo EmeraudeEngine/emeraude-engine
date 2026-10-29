@@ -30,14 +30,20 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <initializer_list>
+#include <string>
+#include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DeferredDestructor.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/LayoutManager.hpp"
+#include "Vulkan/ShaderStorageBufferObject.hpp"
 
 namespace EmEn::Scenes
 {
@@ -120,6 +126,8 @@ namespace EmEn::Scenes
 
 		const auto frameCount = renderer.framesInFlight();
 
+		m_descriptorPool = renderer.descriptorPool();
+		m_descriptorSetLayout = descriptorSetLayout;
 		m_buffers.resize(frameCount);
 		m_pathDirectoryBuffers.resize(frameCount);
 		m_pathPointBuffers.resize(frameCount);
@@ -190,6 +198,39 @@ namespace EmEn::Scenes
 		return m_descriptorSets[frameIndex]->writeStorageBuffer(0, bufferInfo) &&
 			m_descriptorSets[frameIndex]->writeStorageBuffer(1, pathDirectoryInfo) &&
 			m_descriptorSets[frameIndex]->writeStorageBuffer(2, pathPointInfo);
+	}
+
+	bool
+	SceneInstanceTransforms::replaceDescriptorSet (uint32_t frameIndex) noexcept
+	{
+		if ( m_descriptorPool == nullptr || m_descriptorSetLayout == nullptr )
+		{
+			return false;
+		}
+
+		auto descriptorSet = std::make_unique< DescriptorSet >(m_descriptorPool, m_descriptorSetLayout);
+
+		if ( !descriptorSet->create() )
+		{
+			return false;
+		}
+
+		/* The previous set stays alive (and untouched) for the command buffers already recorded with it. */
+		auto previous = std::exchange(m_descriptorSets[frameIndex], std::move(descriptorSet));
+
+		if ( !this->writeBufferToDescriptorSet(frameIndex) )
+		{
+			m_descriptorSets[frameIndex] = std::move(previous);
+
+			return false;
+		}
+
+		if ( m_deferredDestructor != nullptr )
+		{
+			m_deferredDestructor->retireObject(std::move(previous));
+		}
+
+		return true;
 	}
 
 	void
@@ -361,9 +402,12 @@ namespace EmEn::Scenes
 
 		const VkDeviceSize requiredBytes = sizeof(Header) + (m_stagedEntries.size() * sizeof(Entry));
 
-		/* NOTE: Grow the current frame buffers when the staged ranges exceed their capacity, then repoint the frame's
-		 * descriptor set at the new ones. Legal here: the frame-in-flight fence guarantees no in-flight command buffer
-		 * references them. */
+		/* NOTE: Grow the current frame buffers when the staged ranges exceed their capacity, then give the frame a NEW
+		 * descriptor set pointing at them. ⚠️ Never rewrite the frame's set: the fence only covers the PREVIOUS use of this
+		 * frame slot, while the shadow maps and the render-to-textures of THIS frame were already recorded with the set
+		 * bound — updating it is VUID-vkUpdateDescriptorSets-None-03047, and the validation layer then SKIPS the update, so
+		 * the set kept the retired buffer and every later draw read a destroyed one (city 128, 2026-10-29: the scene
+		 * stopped drawing). Those passes keep the old set and the old buffers, which hold the entries they read. */
 		bool grown = false;
 
 		if ( !this->ensureCapacity(buffer, requiredBytes, sizeof(Header) + (InitialEntryCapacity * sizeof(Entry)), grown) ||
@@ -375,11 +419,16 @@ namespace EmEn::Scenes
 			return false;
 		}
 
-		if ( grown && m_stagedFrameIndex < m_descriptorSets.size() && m_descriptorSets[m_stagedFrameIndex] != nullptr && !this->writeBufferToDescriptorSet(m_stagedFrameIndex) )
+		if ( grown && m_stagedFrameIndex < m_descriptorSets.size() && !this->replaceDescriptorSet(m_stagedFrameIndex) )
 		{
-			Tracer::error(ClassId, "Unable to rewrite the instance transforms descriptor set after buffer growth !");
+			Tracer::error(ClassId, "Unable to make the instance transforms descriptor set after buffer growth !");
 
 			return false;
+		}
+
+		if ( grown )
+		{
+			TraceInfo{ClassId} << "Frame slot " << m_stagedFrameIndex << ": the instance transforms grew to " << buffer->bytes() << " bytes (" << m_stagedEntries.size() << " entries staged), a new descriptor set.";
 		}
 
 		auto * destination = buffer->mapMemoryAs< uint8_t >();
