@@ -1,5 +1,5 @@
 # ThreadSanitizer suppressions: uninstrumented third-party code only, never a frame of the cascade
-# (docs/caution-points.md § "The ThreadSanitizer build of the engine"). Run with OMP_NUM_THREADS=1 (libgomp).
+# (docs/caution-points.md § "The ThreadSanitizer build of the engine").
 race:libnvidia*
 race:libvulkan*
 race:libglib-2.0*

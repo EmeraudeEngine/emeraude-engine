@@ -367,7 +367,7 @@ include(SetupCPUFeatures)
 include(SetupHWLOC)
 
 if ( NOT EMERAUDE_BUILD_SERVICES_ONLY )
-	# Threads + OpenMP are provided by emeraude::base (used by its ThreadPool / VertexFactory) and inherited transitively.
+	# Threads are provided by emeraude::base (its ThreadPool) and inherited transitively.
 
 	include(SetupVulkan) # Using add_subdirectory()
 

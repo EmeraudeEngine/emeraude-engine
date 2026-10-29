@@ -8776,7 +8776,7 @@ Measured on Linux (GCC 14, NVIDIA 3070 Ti):
 - **The bundled Vulkan loader was opened with `RTLD_DEEPBIND`**, which the ASan / TSan runtimes refuse: a sanitized build
   loads it without (`Vulkan/Loader.cpp`, `__SANITIZE_THREAD__` / `__SANITIZE_ADDRESS__`).
 - **Uninstrumented code reads as races**: OpenAL Soft (a prebuilt static library inside libEmeraude: `Voice::mix`,
-  `Voice::prepare`), glib / gio, Mesa / LLVM, and libgomp (run with `OMP_NUM_THREADS=1`). They are in
+  `Voice::prepare`), glib / gio, Mesa / LLVM (libgomp too until OpenMP left the base, 2026-10-29). They are in
   `resources/tsan_suppressions.txt`; never suppress a frame of the cascade.
 - `ALSOFT_DRIVERS=null` keeps OpenAL silent; `--window-less` needs no display.
 - **macOS (M6, Apple clang)**: MoltenVK runs under TSan without crashing, so no software device is needed. But the stress
