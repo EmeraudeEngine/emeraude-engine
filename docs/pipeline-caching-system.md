@@ -191,6 +191,16 @@ size_t GraphicsPipeline::getHash(const RenderPass& renderPass) const noexcept
 }
 ```
 
+> [!CAUTION]
+> **Every pipeline state that changes the result belongs in `getHash()`, VALUES included.** The renderer
+> shares one pipeline among every request with the same hash (`Renderer::finalizeGraphicsPipeline()`), and the
+> shader modules are shared by source: two layers whose generated sources are identical get the SAME pipeline when a
+> state they differ in is left out of the hash. Until 2026-10-29 the rasterization part hashed `depthBiasEnable` but not
+> the bias factors: a decal layer (`RasterizationOptions::setDepthBias()`) and the wall under it, whose light-pass
+> sources are identical, shared the wall's light-pass pipeline — the decal drew its light passes with the wall's bias,
+> behind its own ambient depth, and stayed UNLIT (a city's HLOD proxies: their windows black by day on the three OS).
+> The depth-bias constant, clamp and slope and the line width are hashed now.
+
 ## Required Includes
 
 When implementing `computeProgramCacheKey()` in generators:

@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <functional>
 #include <vector>
@@ -1221,6 +1222,18 @@ namespace EmEn::Vulkan
 			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.cullMode));
 			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.frontFace));
 			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.depthBiasEnable));
+
+			/* ⚠️ The bias VALUES too: two pipelines with the same shaders and different biases (a decal layer and
+			 * the wall under it, whose light-pass sources are identical) shared one entry, the decal drew its light
+			 * passes with the wall's bias, behind its own ambient depth, and stayed unlit (2026-10-29). */
+			if ( m_rasterizationState.depthBiasEnable == VK_TRUE )
+			{
+				hashCombine(hash, std::bit_cast< uint32_t >(m_rasterizationState.depthBiasConstantFactor));
+				hashCombine(hash, std::bit_cast< uint32_t >(m_rasterizationState.depthBiasClamp));
+				hashCombine(hash, std::bit_cast< uint32_t >(m_rasterizationState.depthBiasSlopeFactor));
+			}
+
+			hashCombine(hash, std::bit_cast< uint32_t >(m_rasterizationState.lineWidth));
 		}
 
 		/* Hash multisample state. */

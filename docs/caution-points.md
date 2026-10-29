@@ -360,7 +360,7 @@ often traced:
 | 6 | normalScale | float | 0-1 |
 | 8 | ior | float | 1.0-3.0 (clamped by `setIOR()`) |
 | 9 | iblIntensity | float | 0-1 |
-| 10 | autoIlluminationAmount | float | 0-1 (emissive MASK, not a brightness) |
+| 10 | autoIlluminationAmount | float | 0-1 (emissive MASK, not a brightness; the G-buffer mask is 0 while `emissiveStrength` is 0) |
 | 12-15 | autoIlluminationColor | vec4 | RGBA |
 | 48 | emissiveStrength | float | nits — the actual emissive brightness |
 | 50 | opacity | float | 0-1 |
@@ -1857,6 +1857,15 @@ Accepted (engine `cdcf68e7`): macOS M2 by A/B — DamagedHelmet 0 pixels changed
 logo gone; Windows NVIDIA — the same. 0 `VUID-`.
 
 ⚠️ Per the spec, an emissive texture with the default factor (0, 0, 0) emits NOTHING now.
+
+### Fixed: a glow switched off read black — the G-buffer's emissive mask ignored the strength (2026-10-29)
+
+The material-properties G-buffer's emissive mask (B low nibble) was `autoIlluminationAmount` alone. RTGI, SSGI, RTAO
+and SSAO reject an emissive pixel (`× (1 − mask)`): a material whose emission is SWITCHED OFF
+(`setEmissiveStrengthValue(0)`, a lit window by day) kept the mask at 1 and lost its indirect light. The mask is now
+`amount × (emissiveStrength > 0)` (`Saphir::LightGenerator`). Measured (a city's HLOD proxy, a shaded facade, RT lane):
+window / wall luminance 0.23 → 0.60 and 0.67 → 0.82. The same day, `GraphicsPipeline::getHash()` learned the depth-bias
+values (`docs/pipeline-caching-system.md`): the same windows were also drawn unlit by the light passes.
 
 ⚠️ The logo is now FAINTER than on Khronos' reference, where it shows through half-way. That is not
 the factor: the loader anchors emissive 1.0 at 2000 nits (`EmissiveLuminanceAnchor`, an Aug 2026

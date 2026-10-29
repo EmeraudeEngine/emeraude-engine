@@ -47,6 +47,7 @@
 #include "Saphir/Program.hpp"
 #include "Saphir/SetIndexes.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/AbstractObject.hpp"
 
 namespace EmEn::Saphir
 {
@@ -256,13 +257,20 @@ namespace EmEn::Saphir
 		}
 
 		/* Emissive mask (B low nibble):
-		 * Any material with autoIllumination: amount (0=not emissive, 1=fully emissive).
+		 * Any material with autoIllumination: amount (0=not emissive, 1=fully emissive), and 0 while its emissive
+		 * strength is 0 — the indirect lighting and the AO reject an emissive pixel (× (1 − mask)), so a glow switched
+		 * off by day (a lit window, a sign) lost its sky and bounce light and read black (2026-10-29).
 		 * Others: 0 (not emissive). */
 		std::string emissiveMask;
 
 		if ( m_useAutoIllumination && !m_surfaceAutoIlluminationAmount.empty() )
 		{
 			emissiveMask = "clamp(" + m_surfaceAutoIlluminationAmount + ", 0.0, 1.0)";
+
+			if ( !m_surfaceEmissiveStrength.empty() )
+			{
+				emissiveMask += " * (" + m_surfaceEmissiveStrength + " > 0.0 ? 1.0 : 0.0)";
+			}
 		}
 		else
 		{
