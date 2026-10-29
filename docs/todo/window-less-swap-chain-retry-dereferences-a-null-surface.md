@@ -2,7 +2,7 @@
 id: window-less-swap-chain-retry-dereferences-a-null-surface
 title: In window-less mode, the degraded swap-chain retry dereferences a null window surface
 status: open
-priority: unranked
+priority: high
 scope: engine Graphics::Renderer, Vulkan::Surface (window-less mode)
 opened: 2026-10-29
 tags: [crash, window-less, swap-chain]
