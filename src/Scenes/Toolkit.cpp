@@ -27,8 +27,12 @@
 #include "Toolkit.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstddef>
+#include <iterator>
+#include <limits>
 #include <memory>
 #include <span>
 #include <vector>
@@ -49,12 +53,15 @@
 #include "Scenes/Component/MultipleVisuals.hpp"
 #include "Scenes/DirectionalShadowOptions.hpp"
 #include "Settings.hpp"
+#include "VertexFactory/ShapeAssembler.hpp"
+#include "VertexFactory/ShapeBuilder.hpp"
 #include "VertexFactory/ShapeBuilderOptions.hpp"
+#include "VertexFactory/ShapeTriangle.hpp"
+#include "VertexFactory/ShapeVertex.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Graphics::Renderable
 {
-	class Abstract;
 }
 
 namespace EmEn::Scenes
@@ -187,6 +194,148 @@ namespace EmEn::Scenes
 
 			return material.setManualLoadSuccess(true);
 		});
+	}
+
+	namespace
+	{
+		/**
+		 * @brief Appends a range of a shape's triangles to a builder in construction, each vertex tinted with a colour.
+		 * @param builder A reference to the builder (triangles, vertex colours enabled).
+		 * @param shape A reference to the source shape.
+		 * @param first The first triangle.
+		 * @param end Past the last triangle (<= the shape's triangle count).
+		 * @param colour The vertex colour.
+		 */
+		void
+		appendTinted (ShapeBuilder< float > & builder, const Shape< float > & shape, size_t first, size_t end, const Color< float > & colour) noexcept
+		{
+			const auto & triangles = shape.triangles();
+
+			for ( size_t index = first; index < end; ++index )
+			{
+				const auto & triangle = triangles[index];
+
+				for ( uint32_t corner = 0; corner < 3; ++corner )
+				{
+					const auto & vertex = shape.vertex(triangle.vertexIndex(corner));
+
+					builder.setPosition(vertex.position());
+					builder.setNormal(vertex.normal());
+					builder.setVertexColor(colour);
+					builder.newVertex();
+				}
+			}
+		}
+	}
+
+	BuiltEntity< StaticEntity, Component::Visual >
+	Toolkit::generateHLODProxy (const std::string & entityName, const Shape< float > & layered, std::span< const HLODLayer > layers, const HLODOptions & options) noexcept
+	{
+		const auto & groups = layered.groups();
+
+		if ( layered.empty() || groups.size() != layers.size() )
+		{
+			TraceError{ClassId} << "generateHLODProxy(): '" << entityName << "' has " << groups.size() << " layers but " << layers.size() << " descriptions !";
+
+			return {};
+		}
+
+		/* The two parts, normals and vertex colours (no texture coordinates: the proxy has no texture). */
+		Shape< float > body;
+		Shape< float > glow;
+		const ShapeBuilderOptions< float > builderOptions{true, false, true, false, false};
+		ShapeBuilder< float > bodyBuilder{body, builderOptions};
+		ShapeBuilder< float > glowBuilder{glow, builderOptions};
+		const auto & triangles = layered.triangles();
+
+		bodyBuilder.beginConstruction(ConstructionMode::Triangles);
+		glowBuilder.beginConstruction(ConstructionMode::Triangles);
+
+		for ( size_t group = 0; group < groups.size(); ++group )
+		{
+			const auto & layer = *std::next(layers.begin(), static_cast< std::ptrdiff_t >(group));
+			const auto first = static_cast< size_t >(groups[group].first);
+
+			if ( layer.role == HLODRole::Omit || (layer.role == HLODRole::Glow && options.glowMaterial == nullptr) )
+			{
+				continue;
+			}
+
+			auto & builder = layer.role == HLODRole::Glow ? glowBuilder : bodyBuilder;
+			/* A group runs from its first triangle to the next group's (the last one: to the end). */
+			const auto end = std::min< size_t >(triangles.size(), group + 1 < groups.size() ? static_cast< size_t >(groups[group + 1].first) : triangles.size());
+
+			appendTinted(builder, layered, first, end, layer.colour);
+		}
+
+		bodyBuilder.endConstruction();
+		glowBuilder.endConstruction();
+
+		/* One renderable: the body, then the glow, each a layer. */
+		Shape< float > proxy;
+		ShapeAssembler< float > assembler{proxy};
+		std::vector< std::shared_ptr< Material::Interface > > materials;
+
+		if ( !body.empty() && assembler.merge(body, true) )
+		{
+			materials.emplace_back(m_resourceManager.container< Material::StandardResource >()->getOrCreateResourceSync("+HLODVertexColour", [] (Material::StandardResource & material) {
+				/* The vertex colour IS the albedo (the neutral white factor, no texture), matte. */
+				material.enableVertexColor();
+				material.setRoughnessComponent(0.9F);
+
+				return material.setManualLoadSuccess(true);
+			}));
+		}
+
+		if ( !glow.empty() && assembler.merge(glow, true) )
+		{
+			materials.emplace_back(options.glowMaterial);
+		}
+
+		if ( materials.empty() || std::ranges::any_of(materials, [] (const auto & material) { return material == nullptr; }) )
+		{
+			TraceError{ClassId} << "generateHLODProxy(): '" << entityName << "' has nothing to draw or a material failed !";
+
+			return {};
+		}
+
+		const Geometry::ResourceGenerator generator{m_resourceManager, Geometry::EnableNormal | Geometry::EnableVertexColor};
+		const auto geometry = generator.shape(proxy, entityName + "HLOD");
+
+		if ( geometry == nullptr )
+		{
+			TraceError{ClassId} << "generateHLODProxy(): unable to build the geometry of '" << entityName << "' !";
+
+			return {};
+		}
+
+		const auto renderable = m_resourceManager.container< Renderable::MultiLayerMeshResource >()->getOrCreateResource(entityName + "HLOD", [geometry, materials] (Renderable::MultiLayerMeshResource & mesh) {
+			return mesh.load(geometry, materials);
+		});
+
+		if ( renderable == nullptr )
+		{
+			return {};
+		}
+
+		auto built = this->generateRenderableInstance< StaticEntity >(entityName, renderable);
+
+		if ( !built.isValid() )
+		{
+			return {};
+		}
+
+		built.entity()->setCollidable(false);
+
+		auto instance = built.component()->getRenderableInstance();
+		instance->setDrawDistanceRange(options.switchDistance, std::numeric_limits< float >::max());
+
+		if ( !options.castShadows )
+		{
+			instance->disableShadowCasting();
+		}
+
+		return built;
 	}
 
 	Toolkit::TreeImposter

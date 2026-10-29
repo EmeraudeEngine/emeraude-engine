@@ -31,29 +31,92 @@
 
 /* STL inclusions. */
 #include <atomic>
-#include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
+#include <optional>
+#include <span>
+#include <sstream>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for usages. */
+#include "BlobTrait.hpp"
+#include "Constants.hpp"
+#include "Graphics/CloudShapeResource.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
-#include "VertexFactory/TreeMesh.hpp"
-#include "Graphics/ImposterAtlas.hpp"
+#include "Graphics/Geometry/Types.hpp"
+#include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
-#include "Physics/SphereCollisionModel.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Graphics/RenderTarget/Texture.hpp"
+#include "Graphics/Types.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Base.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
+#include "Physics/BodyPhysicalProperties.hpp"
+#include "Physics/Physics.hpp"
+#include "Physics/SphereCollisionModel.hpp" // IWYU pragma: keep (a template body builds one: complete type)
+#include "Physics/SurfacePhysicalProperties.hpp"
 #include "Physics/TriangleMeshCollisionModel.hpp"
-#include "Graphics/CloudShapeResource.hpp"
-#include "Scenes/Component/Camera.hpp"
-#include "Scenes/Component/CloudVolume.hpp"
-#include "Scenes/Component/SphericalPushModifier.hpp"
-#include "Scenes/Component/CelestialClock.hpp"
-#include "Scenes/EffectsToolkit/CameraPresets.hpp"
-#include "Scenes/Scene.hpp"
+#include "PixelFactory/Color.hpp"
+#include "Randomizer.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
+#include "Scenes/AbstractEntity.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
+#include "Scenes/Component/AbstractLightEmitter.hpp"
+#include "Scenes/Component/CelestialClock.hpp"
+#include "Scenes/Component/CloudVolume.hpp"
+#include "Scenes/Component/Visual.hpp"
+#include "Scenes/EffectsToolkit/CameraPresets.hpp"
+#include "Scenes/Node.hpp"
+#include "Scenes/Scene.hpp"
+#include "Scenes/StaticEntity.hpp"
+#include "SettingKeys.hpp"
+#include "Tracer.hpp"
+#include "VertexFactory/Shape.hpp"
+#include "VertexFactory/TreeMesh.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Settings;
+}
+
+namespace EmEn::Graphics
+{
+	class ImposterAtlas;
+	class ViewMatrices2DUBO;
+	class ViewMatrices3DUBO;
+}
+
+namespace EmEn::Graphics::Geometry
+{
+	class IndexedVertexResource;
+}
+
+namespace EmEn::Scenes
+{
+	struct DirectionalShadowOptions;
+}
+
+namespace EmEn::Scenes::Component
+{
+	class Abstract;
+	class Camera;
+	class DirectionalLight;
+	class PointLight;
+	class SphericalPushModifier;
+	class SpotLight;
+}
 
 namespace EmEn::Scenes
 {
@@ -1192,6 +1255,54 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			TreeImposter bakeTreeImposter (const std::string & label, const std::shared_ptr< Graphics::Renderable::Abstract > & tree, const Base::Math::Space3D::Sphere< float > & bounds) noexcept;
+
+			/** @brief The role of a layer of a multi-layer static mesh in its HLOD proxy (generateHLODProxy()). */
+			enum class HLODRole : uint8_t
+			{
+				Omit, /**< Left out of the proxy (a detail lost at its distance). */
+				Body, /**< Merged into the proxy's body, tinted by its colour. */
+				Glow /**< Merged into the proxy's glow layer (drawn with HLODOptions::glowMaterial). */
+			};
+
+			/** @brief How one layer of a multi-layer static mesh enters its HLOD proxy. */
+			struct HLODLayer
+			{
+				HLODRole role{HLODRole::Body};
+				/** @brief The layer's average albedo, LINEAR (e.g. its texture's ImageResource::averageColor() through
+				 * sRGBToLinear()): the proxy's vertex colour. */
+				Base::PixelFactory::Color< float > colour{Base::PixelFactory::White};
+			};
+
+			/** @brief The options of an HLOD proxy. */
+			struct HLODOptions
+			{
+				/** @brief The proxy is drawn from this distance from the camera, metres; the caller draws the detailed
+				 * mesh up to it (RenderableInstance::Abstract::setDrawDistanceRange()). */
+				float switchDistance{300.0F};
+				/** @brief The material of the glow layer (an emissive one the caller switches); null: the Glow layers are
+				 * left out. */
+				std::shared_ptr< Graphics::Material::Interface > glowMaterial;
+				bool castShadows{true};
+			};
+
+			/**
+			 * @brief Generates the HLOD proxy of a multi-layer static mesh (hierarchical level of detail: one proxy per
+			 * cluster, drawn beyond a distance in place of its parts — Epic, "Hierarchical Level of Detail",
+			 * https://dev.epicgames.com/documentation/unreal-engine/hierarchical-level-of-detail-overview-in-unreal-engine ;
+			 * Unity HLODSystem, https://github.com/Unity-Technologies/HLODSystem): an entity at the cursor whose ONE
+			 * renderable has at most two layers — the Body layers merged and tinted per vertex by their colour (one
+			 * vertex-colour material, no texture), the Glow layers merged on the caller's glow material — drawn from
+			 * HLODOptions::switchDistance. A city region of seventeen material layers draws in one or two calls.
+			 * @note Static, never collides (the detailed mesh keeps the collision); the geometry is the layers' own (no
+			 * decimation: the cost it removes is the draw calls, not the triangles).
+			 * @param entityName The entity's name (the resources derive from it).
+			 * @param layered The detailed mesh's shape, one GROUP per layer, in the space of the entity at the cursor.
+			 * @param layers One per group of `layered`, in order.
+			 * @param options A reference to the options.
+			 * @return BuiltEntity< StaticEntity, Component::Visual > Invalid when nothing is left or a resource failed (traced).
+			 */
+			[[nodiscard]]
+			BuiltEntity< StaticEntity, Component::Visual > generateHLODProxy (const std::string & entityName, const Base::VertexFactory::Shape< float > & layered, std::span< const HLODLayer > layers, const HLODOptions & options) noexcept;
 
 			/**
 			 * @brief Generates a tree instance in the scene from a generated tree.
