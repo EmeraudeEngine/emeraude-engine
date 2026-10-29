@@ -30,3 +30,12 @@ after the frustum in both render-list branches (static entities, nodes) and boun
 `isBakeOnly()` instances are rejected by `checkRenderableInstanceForRendering()` unless they are the target's bake
 subject, and never reach a shadow list or the TLAS; a BAKE target (`bakeSubject() != nullptr`) never rebuilds the
 TLAS from its one-subject lists. `Toolkit::bakeTreeImposter()` uses both (Graphics `AGENTS.md` § 15e).
+
+### The draw distance range gates the shadow casters too (2026-10-29)
+
+An instance outside its `setDrawDistanceRange()` measured from the VIEWER (the main camera, as for
+`setShadowCastingDistance()`) casts no shadow: whatever replaces it at that distance (an imposter, an HLOD proxy,
+scenes doc 26) casts its own. Until then only the view lists honoured the range: a city's buildings cast twice, the
+detailed meshes and their proxies, at every distance (Windows-PA, 3773 shadow batches from an aerial pose). Measured
+after (`city 128,1,12,0`, Linux): aerial pose 3904 → 1426 shadow batches, spawn 3782 → 1908.
+

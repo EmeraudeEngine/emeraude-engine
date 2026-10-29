@@ -1282,6 +1282,9 @@ namespace EmEn::Scenes
 				/** @brief The material of the glow layer (an emissive one the caller switches); null: the Glow layers are
 				 * left out. */
 				std::shared_ptr< Graphics::Material::Interface > glowMaterial;
+				/** @brief The glow layer's rasterization: a depth bias when it lies on the body like a decal (lit windows a
+				 * few centimetres off a wall fight with it at a distance otherwise). */
+				Graphics::RasterizationOptions glowRasterization;
 				bool castShadows{true};
 			};
 

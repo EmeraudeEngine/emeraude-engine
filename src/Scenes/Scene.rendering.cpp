@@ -55,15 +55,12 @@
 #include "BlobTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Frustum.hpp"
-#include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Geometry/Types.hpp"
-#include "Graphics/Material/Interface.hpp"
 #include "Graphics/MDI/BatchBuilder.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderable/Types.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
-#include "Graphics/RenderableInstance/RenderStateTracker.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/RenderTarget/ImposterBake.hpp"
@@ -1709,6 +1706,15 @@ namespace EmEn::Scenes
 				}
 
 				if ( beyondShadowCastingDistance(*renderableInstance, worldCoordinates.position()) )
+				{
+					continue;
+				}
+
+				/* An instance the VIEWER does not draw at its distance casts no shadow either: whatever replaces it there
+				 * (an imposter, an HLOD proxy) casts its own. Until 2026-10-29 only the view lists honoured the draw
+				 * distance range, and a city's buildings cast twice — the detailed meshes AND their proxies, at every
+				 * distance (Windows-PA: 3773 shadow batches from an aerial pose). */
+				if ( renderableInstance->isOutsideDrawDistanceRange(Vector< 3, float >::distance(viewerPosition, worldCoordinates.position())) )
 				{
 					continue;
 				}

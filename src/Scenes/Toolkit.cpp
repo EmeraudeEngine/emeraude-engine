@@ -275,6 +275,7 @@ namespace EmEn::Scenes
 		Shape< float > proxy;
 		ShapeAssembler< float > assembler{proxy};
 		std::vector< std::shared_ptr< Material::Interface > > materials;
+		std::vector< RasterizationOptions > rasterization;
 
 		if ( !body.empty() && assembler.merge(body, true) )
 		{
@@ -285,11 +286,13 @@ namespace EmEn::Scenes
 
 				return material.setManualLoadSuccess(true);
 			}));
+			rasterization.emplace_back();
 		}
 
 		if ( !glow.empty() && assembler.merge(glow, true) )
 		{
 			materials.emplace_back(options.glowMaterial);
+			rasterization.emplace_back(options.glowRasterization);
 		}
 
 		if ( materials.empty() || std::ranges::any_of(materials, [] (const auto & material) { return material == nullptr; }) )
@@ -309,8 +312,8 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		const auto renderable = m_resourceManager.container< Renderable::MultiLayerMeshResource >()->getOrCreateResource(entityName + "HLOD", [geometry, materials] (Renderable::MultiLayerMeshResource & mesh) {
-			return mesh.load(geometry, materials);
+		const auto renderable = m_resourceManager.container< Renderable::MultiLayerMeshResource >()->getOrCreateResource(entityName + "HLOD", [geometry, materials, rasterization] (Renderable::MultiLayerMeshResource & mesh) {
+			return mesh.load(geometry, materials, rasterization);
 		});
 
 		if ( renderable == nullptr )
