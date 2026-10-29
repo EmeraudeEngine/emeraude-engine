@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 #include <numbers>
 
 namespace EmEn::Physics
@@ -45,6 +46,9 @@ namespace EmEn::Physics
 
 		/** @brief A unit vector within this of length 1. */
 		constexpr float VehicleUnitTolerance{1.0e-3F};
+
+		/** @brief A steering wheel must stand this far ahead of the non-steering axle for the Ackermann geometry (m). */
+		constexpr float AckermannMinimumWheelbase{0.05F};
 
 		[[nodiscard]]
 		bool
@@ -121,6 +125,17 @@ namespace EmEn::Physics
 			return false;
 		}
 
+		if ( !std::isfinite(ackermann) || ackermann < 0.0F || ackermann > 1.0F )
+		{
+			return false;
+		}
+
+		/* The Ackermann geometry takes a tangent of the lock. */
+		if ( ackermann > 0.0F && std::ranges::any_of(wheels, [] (const WheelSettings & wheel) { return !(wheel.maxSteerAngle < Radian(90.0F)); }) )
+		{
+			return false;
+		}
+
 		for ( const auto & wheel : wheels )
 		{
 			if ( !isFiniteVector(wheel.attachment) || !isUnit(wheel.suspensionDirection) || !isUnit(wheel.forward) ||
@@ -172,6 +187,11 @@ namespace EmEn::Physics
 
 		m_settings = settings;
 		m_wheels.clear();
+		m_geometry.clear();
+
+		/* The wheels' places for the Ackermann geometry: ahead along their rolling direction, right along forward × up. */
+		float rearAxle = 0.0F;
+		uint32_t rearWheels = 0;
 
 		for ( const auto & wheel : m_settings.wheels )
 		{
@@ -179,6 +199,39 @@ namespace EmEn::Physics
 
 			state.suspensionLength = wheel.suspensionMaxLength;
 			m_wheels.push_back(state);
+
+			const auto right = Vector< 3, float >::crossProduct(wheel.forward, -wheel.suspensionDirection);
+			const auto ahead = Vector< 3, float >::dotProduct(wheel.attachment, wheel.forward);
+
+			m_geometry.push_back({.ahead = ahead, .right = Vector< 3, float >::dotProduct(wheel.attachment, right)});
+
+			if ( wheel.maxSteerAngle == 0.0F )
+			{
+				rearAxle += ahead;
+				++rearWheels;
+			}
+		}
+
+		m_ackermann = false;
+
+		if ( m_settings.ackermann > 0.0F && rearWheels > 0 )
+		{
+			rearAxle /= static_cast< float >(rearWheels);
+
+			for ( auto & geometry : m_geometry )
+			{
+				geometry.ahead -= rearAxle;
+			}
+
+			m_ackermann = true;
+
+			for ( size_t index = 0; index < m_geometry.size(); ++index )
+			{
+				if ( m_settings.wheels[index].maxSteerAngle > 0.0F && !(m_geometry[index].ahead > AckermannMinimumWheelbase) )
+				{
+					m_ackermann = false;
+				}
+			}
 		}
 
 		m_engineRPM = m_settings.engine.minRPM;
@@ -242,7 +295,36 @@ namespace EmEn::Physics
 	float
 	VehicleController::targetSteerAngle (size_t wheelIndex) const noexcept
 	{
-		return -m_right * m_settings.wheels[wheelIndex].maxSteerAngle;
+		const auto & wheel = m_settings.wheels[wheelIndex];
+		const auto parallel = -m_right * wheel.maxSteerAngle;
+
+		if ( !m_ackermann || wheel.maxSteerAngle <= 0.0F || m_right == 0.0F )
+		{
+			return parallel;
+		}
+
+		/* Lateral places measured towards the turn's side: the inner wheel is the steering wheel farthest that way. */
+		const auto side = m_right > 0.0F ? 1.0F : -1.0F;
+		size_t inner = wheelIndex;
+		auto innerPlace = side * m_geometry[wheelIndex].right;
+
+		for ( size_t index = 0; index < m_geometry.size(); ++index )
+		{
+			if ( m_settings.wheels[index].maxSteerAngle > 0.0F && side * m_geometry[index].right > innerPlace )
+			{
+				inner = index;
+				innerPlace = side * m_geometry[index].right;
+			}
+		}
+
+		/* The inner wheel takes the input's angle (< π/2, VehicleSettings::isValid()); the turn centre lies on the
+		 * non-steering axle, where its axle line crosses it; every steering wheel aims its own axle at that centre. */
+		const auto innerAngle = std::abs(m_right) * m_settings.wheels[inner].maxSteerAngle;
+		const auto centre = innerPlace + (m_geometry[inner].ahead / std::tan(innerAngle));
+		const auto ownAngle = std::atan2(m_geometry[wheelIndex].ahead, centre - (side * m_geometry[wheelIndex].right));
+		const auto ackermann = -side * std::min(ownAngle, wheel.maxSteerAngle);
+
+		return parallel + ((ackermann - parallel) * m_settings.ackermann);
 	}
 
 	bool

@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
 #include <cstdint>
 
 /* Local inclusions for usages. */
@@ -140,6 +141,16 @@ namespace EmEn::Physics
 		 * four wheels in contact — their casts start inside the ground, which they took for a road).
 		 */
 		float maxSlopeAngle{Base::Math::Radian(80.0F)};
+		/**
+		 * @brief The Ackermann steering geometry, in [0, 1]. 0 (the default): every steering wheel turns by the same
+		 * angle (parallel steering). 1: every steering wheel aims at ONE turn centre on the axle of the wheels that do
+		 * not steer — the inner wheel takes the input's angle (up to its maxSteerAngle), the outer one less; in
+		 * between, a blend of the two. Without a wheel that does not steer, or with a steering wheel on or behind that
+		 * axle, the steering stays parallel. Two parallel wheels at a large lock fight each other: the car turns wider
+		 * than its lock and, at a low throttle, hardly moves (projet-alpha's city, 2026-10-29). Model: R. Ackermann's
+		 * steering linkage (1818); the strength factor: NVIDIA PhysX 5 PxVehicleAckermannParams (BSD-3) — no code taken.
+		 */
+		float ackermann{0.0F};
 
 		/**
 		 * @brief Fills the curves and the gear ratios with Jolt's defaults (a road car).
@@ -149,7 +160,7 @@ namespace EmEn::Physics
 		/**
 		 * @brief Checks the settings: at least one wheel, every value finite, radius, travel, frequencies and inertias
 		 * positive, unit directions, a ratio for every gear, the differentials' wheels existing, the slope angle in
-		 * [0, π/2].
+		 * [0, π/2], the Ackermann factor in [0, 1] (then every maxSteerAngle under π/2).
 		 * @return bool
 		 */
 		[[nodiscard]]
@@ -316,8 +327,18 @@ namespace EmEn::Physics
 			/** @brief Starts a shift to a gear. */
 			void shiftTo (int32_t gear) noexcept;
 
+			/** @brief A wheel's place for the Ackermann geometry, in the chassis' frame (m). */
+			struct WheelGeometry final
+			{
+				/** How far ahead of the axle of the wheels that do not steer. */
+				float ahead{0.0F};
+				/** How far to the right of the chassis' origin. */
+				float right{0.0F};
+			};
+
 			VehicleSettings m_settings;
 			Base::StaticVector< WheelState, 8 > m_wheels;
+			Base::StaticVector< WheelGeometry, 8 > m_geometry;
 			float m_forward{0.0F};
 			float m_right{0.0F};
 			float m_brake{0.0F};
@@ -329,5 +350,7 @@ namespace EmEn::Physics
 			float m_clutchReleaseLeft{0.0F};
 			float m_sinceShift{0.0F};
 			int32_t m_gear{0};
+			/** Whether the Ackermann geometry applies (VehicleSettings::ackermann > 0 and a usable axle, setup()). */
+			bool m_ackermann{false};
 	};
 }

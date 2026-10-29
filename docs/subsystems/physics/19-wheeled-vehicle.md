@@ -16,6 +16,18 @@ Bullet's `btRaycastVehicle` (zlib) as references — no code taken. Work item: `
   strength), differentials (a left and a right wheel, a ratio, the left / right split, a limited-slip ratio, the share
   of the engine torque).
 - Inputs: forward (−1…1, the throttle; negative: reverse), right (−1…1, the steering), brake (0…1), hand brake (0…1).
+- **Ackermann steering** (`VehicleSettings::ackermann`, 0 to 1, 2026-10-29): 0, the default, turns every steering wheel by
+  the same angle (parallel). 1 aims every steering wheel at ONE turn centre on the axle of the wheels that do not steer:
+  the inner wheel takes the input's angle (up to its `maxSteerAngle`, then the inner wheel's lock), the outer one less
+  (`cot δo − cot δi = track / wheelbase`); in between, a blend (PhysX 5's `PxVehicleAckermannParams` strength — model,
+  no code). The geometry comes from the wheels themselves (`setup()`: ahead along `forward`, right along
+  `forward × up`); without a non-steering wheel, or with a steering wheel less than 5 cm ahead of that axle, the
+  steering stays parallel. `isValid()` refuses a factor outside [0, 1], and with a factor every `maxSteerAngle` must stay
+  under 90° (a tangent of the lock). Measured (projet-alpha's city car, wheelbase 2.80 m, track 1.95 m; the outer front
+  wheel's swept diameter): 30° parallel 14.2-15.1 m; 38° parallel 12.6 m at throttle 0.25 and the car HARDLY MOVED at
+  0.12 (the two front wheels fighting each other); 38° Ackermann 12.6 m and the car moves; 45° Ackermann (outer 30.5°)
+  11.2-11.4 m. Factor 0 changes nothing: the `collision-debug` bench, 49 stations (the four car stations included),
+  1800 physics cycles, before / after identical to the bit.
 
 ### One physics step
 1. **Wheel casts** (the scene, before the pairs): each wheel sweeps a sphere of its radius from its attachment along the

@@ -21,6 +21,14 @@ projet-alpha `city 128,1,12,0` with the validation layer (Linux, 2026-10-29, eng
 - 20 × `VUID-vkCmdDrawIndexed-None-08114`: "the storage buffer descriptor [Set 1, Binding 0, variable
   "ubInstanceTransforms"] is using buffer … that is invalid or has been destroyed".
 
+macOS-PA (M6, 2026-10-29, engine 31f549ba, `city 128`), 2 launches of 2: the same 9 × 03047 + `08114` on the same
+set and buffer after a sequence of HLOD draw-range changes (every region `setDrawDistance(0, 0.01)` and every proxy
+`(0, 0)`, then restored), a night → day switch and a teleport to (0, 60, −700) with the physics off. With
+`VK_KHRONOS_VALIDATION_DUPLICATE_MESSAGE_LIMIT=0`: **21 203 998 × 08114, never stopping** — the frames from then on are
+black (mean 0.4 / 255): only the stars, the glow sprites; buildings, ground and props are NOT drawn. The defect is not
+a transient: the destroyed buffer stays bound. (Excerpts: macOS-PA's scratchpad, `KEEP-vuid-08114-city128-v35p-excerpt.log`
+and `-v35b-`.)
+
 The teleport makes many more instances visible at once: `SceneInstanceTransforms::updateVideoMemory()` grows the
 frame's SSBO (`ensureCapacity()`, the old one retired through the deferred destructor) and rewrites the frame's descriptor
 set (`writeBufferToDescriptorSet()`). Its comment states "the frame-in-flight fence guarantees no in-flight command
