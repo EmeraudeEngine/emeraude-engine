@@ -52,6 +52,14 @@ does not exist indoors.
   confidence): the reading above is code only.
 - `labyrinth`'s black ceiling on the Intel iGPU (no RT, so no RTGI) may be the same mechanism; unchecked.
 
+### A real case: a glossy shop window in daylight (2026-10-29)
+
+projet-alpha `city`, by day, the shopfront glass (dark, roughness 0.25) seen from a roundabout: three owner captures a few
+degrees of camera rotation apart (`1793277803/25/45.png`) — each window flips between a bright blurred reflection and
+flat black from one capture to the next (the owner read it as z-fighting "by day, with the reflection"). Every small turn
+moves the reflected rays between screen hits and misses. The demo made the glass matte (roughness 0.9) as a stop-gap; a
+stable miss (an edge fade, the sky's prefiltered environment at its own luminance) would let a glossy one back.
+
 ## What remains
 
 1. **Owner decision — what should a screen-space miss show?** Options:
