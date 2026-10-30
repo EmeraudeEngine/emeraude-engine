@@ -75,6 +75,9 @@
 #include "Scenes/Component/AbstractLightEmitter.hpp"
 #include "Scenes/Component/CelestialClock.hpp"
 #include "Scenes/Component/CloudVolume.hpp"
+#include "Scenes/Component/DirectionalLight.hpp" // IWYU pragma: keep (a template body builds one: complete type)
+#include "Scenes/Component/PointLight.hpp" // IWYU pragma: keep (a template body builds one: complete type)
+#include "Scenes/Component/SpotLight.hpp" // IWYU pragma: keep (a template body builds one: complete type)
 #include "Scenes/Component/Visual.hpp"
 #include "Scenes/EffectsToolkit/CameraPresets.hpp"
 #include "Scenes/Node.hpp"
@@ -112,10 +115,7 @@ namespace EmEn::Scenes::Component
 {
 	class Abstract;
 	class Camera;
-	class DirectionalLight;
-	class PointLight;
 	class SphericalPushModifier;
-	class SpotLight;
 }
 
 namespace EmEn::Scenes
