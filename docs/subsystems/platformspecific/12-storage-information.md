@@ -30,6 +30,6 @@ namespace EmEn::PlatformSpecific::StorageInfo
 | macOS | `getmntinfo()` | `statfs` struct | DiskArbitration framework |
 | Windows | `GetLogicalDriveStringsW()` | `GetDiskFreeSpaceExW()` | `GetDriveTypeW()` (DRIVE_REMOVABLE/DRIVE_CDROM) |
 
-**Filtering**: Virtual/pseudo filesystems excluded. Linux skips `/dev/loop*` (snaps). Windows skips network/unknown drives.
+**Filtering**: Virtual/pseudo filesystems excluded. Linux skips `/dev/loop*` (snaps). Windows skips network/unknown drives and drives whose `GetDiskFreeSpaceExW()` fails (removable without media).
 
 ---

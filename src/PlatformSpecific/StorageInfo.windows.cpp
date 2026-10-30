@@ -86,12 +86,15 @@ namespace EmEn::PlatformSpecific::StorageInfo
 			ULARGE_INTEGER totalBytes{};
 			ULARGE_INTEGER freeBytes{};
 
-			if ( GetDiskFreeSpaceExW(drive, &freeBytesAvailable, &totalBytes, &freeBytes) )
+			/* NOTE: Fails on a removable drive without media (empty card reader): not mounted, skipped. */
+			if ( GetDiskFreeSpaceExW(drive, &freeBytesAvailable, &totalBytes, &freeBytes) == FALSE )
 			{
-				info.totalBytes = totalBytes.QuadPart;
-				info.availableBytes = freeBytesAvailable.QuadPart;
-				info.usedBytes = totalBytes.QuadPart - freeBytes.QuadPart;
+				continue;
 			}
+
+			info.totalBytes = totalBytes.QuadPart;
+			info.availableBytes = freeBytesAvailable.QuadPart;
+			info.usedBytes = totalBytes.QuadPart - freeBytes.QuadPart;
 
 			/* Get volume info (name, filesystem type). */
 			wchar_t volumeName[MAX_PATH]{};
