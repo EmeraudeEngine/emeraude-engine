@@ -1130,6 +1130,24 @@ This is the AI's primary mechanism for understanding the 3D world. The AI:
 6. **Screenshot** -- verify the view
 7. **Iterate** until the desired composition is achieved
 
+### Measurement traps (reading numbers off a running instance)
+
+- `getFrameDiagnostics().metering.meteredLuminance` is the ADAPTED value and lags 12 s or more: compare brightness
+  at a pinned exposure, never on an auto-exposed camera.
+- There is no FPS field. Derive FPS from the change of `renderedFrame` over an 8 s wall-clock window, with at least
+  3 alternated A/B pairs; a per-pass cost A/B needs at least 5 alternated pairs (launch noise of ±0.05 ms measured on
+  an Apple M6).
+- `PostProcess.getStatus` right after a load omits late effects and shows FALLBACK lanes: wait about 5 s.
+- The first launch after a shader change compiles pipelines for seconds. The auto-exposure start transient waits
+  until the scene is fully drawn: a blown AUTO frame 8–13 s after "Scene loaded" is that transient, not a defect.
+- `--cache-directory=<empty dir>` keeps the pipeline cache but forces texture and movie re-compression, so the
+  shutdown is long.
+- `CelestialClock` `setDate(day, time)` with a FRACTIONAL day shifts the time of day: bisect on an integer day. A
+  temporal-filter A/B compares CONVERGED levels (about 12 s), not only the decay.
+- Count Vulkan validation messages (`VUID-…`) and `[Error]` lines in BOTH stdout and stderr: which stream carries
+  them depends on the platform, and neither necessarily reaches the `--enable-log` file. Place a VUID in time by
+  polling one stream against the other.
+
 ---
 
 ## 7. Node System
@@ -1171,6 +1189,10 @@ python3 tools/remote-console.py "Core.SceneManagerService.destroyNode(MyNode)"
 captures from wherever the fall is — and each `remote-console.py` call costs its own start-up (≈ 2.1 s measured on the
 Windows peer, 2026-09-30), so a slow client always captures from the ground. For a height-dependent measurement (grazing
 angles), time the capture from one persistent console connection, or pose a non-physical camera.
+
+- `setNodePosition` keeps the node's velocity: bring a physical body to rest before every scripted teleport.
+- No console command returns a CHILD node's world position (`getNode` / `getNodePhysics` address root-level nodes
+  only; see item `list-entities-positions`).
 
 ---
 

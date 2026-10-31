@@ -344,6 +344,15 @@ absent row reads as "never tried", which is not the same claim.
   ⚠️ And the near plane alone was not enough — `+ModelViewer` held two more decimetre floors (the
   framing radius, and the orbit controller's lower distance limit, which `setDistance()` clamps
   against). **One scale floor is never alone.**
+- **⚠️ Never conclude an ABSENCE from a truncated listing.** A `grep | head` cut `set` off the settings
+  commands, and a whole plan was built on "there is no `set()`". Enumerate a console level with `<path>.lsfunc()`.
+- **⚠️ Never loosen a safety net in the same change it watches.** `clamp_distance()` was made subject-relative in
+  the batch that changed the engine's near plane, so the regression arrived as two silently EMPTY captures instead
+  of a warning. Keep the guard absolute until the watched change has been measured; after two wrong hypotheses,
+  instrument (a temporary trace) instead of reasoning further.
+- **⚠️ Derive a control partition from the ASSETS**, never from memory of them: probe each model for `TANGENT`,
+  `normalTexture` and the extension under test (two remembered "controls" were wrong). Count changed PIXELS, not
+  a rounded percentage: "0.000 %" with a max delta of 22 was 18 pixels out of 4.6 M (silhouette jitter).
 
 ## Files
 

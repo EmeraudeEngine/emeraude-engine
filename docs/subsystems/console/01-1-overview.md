@@ -23,6 +23,11 @@ A TCP server listens on a configurable port (default **7777**, setting: `Core/Co
 > `Connection refused` must **enable the key and relaunch**, not retry. Why: the channel has **no
 > authentication** and reaches `Core.quit()`, settings, scene loading and screenshots; applications
 > built on the engine ship to end users.
+>
+> **Owner decision (2026-08-27):** every consumer keeps `Core/Console/EnableRemoteListener = false`, and there is
+> NO per-application default mechanism — a `Core` constructor parameter, a `settings.defaults.json` and a CMake
+> option were proposed and refused. The listener is turned on only by the machine's `settings.json` (edited by its
+> owner, never by an agent) or for one session with Shift+F10 / `Core.restartRemoteConsole()`.
 
 Once enabled, any AI agent or external tool on an allowed host can connect and:
 

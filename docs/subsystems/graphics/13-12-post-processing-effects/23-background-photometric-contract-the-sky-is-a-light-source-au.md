@@ -398,6 +398,12 @@ real luminance or it contributes nothing. The manifest carries both halves:
   `BasicResource` / `StandardResource` and the glTF extension `KHR_materials_emissive_strength`;
   the emitted quantity is `autoIlluminationColor * autoIlluminationAmount * emissiveStrength`.
 
+**glTF emissive — owner decision (2026-07-26):** a glTF material's emission is read in the specification's unit
+(`emissiveFactor` × `KHR_materials_emissive_strength`, in nits), with **no import multiplier**, and the engine never
+compensates the Blender exporter defect that writes wrong strengths (glTF-Blender-IO#1766). The
+`EmissiveLuminanceAnchor` (2000 nits per unit, `GLTFLoader.cpp`) is an August 2026 experiment that contradicts this
+decision; its removal is tracked by item `remove-emissive-luminance-anchor`.
+
 ⚠️ **The key was added in Aug 2026 and its absence was a hard limit, not an oversight to work
 around in the application**: before it, `SpriteResource::load()` parsed the amount only, so every
 sprite emitted exactly 1 nit and the fire and explosions of `game-logic`-style scenes were

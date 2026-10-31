@@ -242,3 +242,12 @@ without a texture). 0 for an open water surface, which sees the whole sky (`setA
 glasses) that the `geometry-loader` demo cycles by reading the store. Adding one is adding a JSON
 file: no rebuild, no code. It replaced the `MaterialDebug` demo, which had to be edited and
 recompiled to show a new material.
+
+⚠️ **Editing the index and counting keys:**
+- `ResourcesIndex.000.json` is written by an encoder that escapes `/`. Re-encoding it with a stock JSON writer
+  rewrites ~19 000 lines. To add entries, insert one contiguous block at its alphabetical place and move no other
+  entry.
+- The committed index can lag behind the store: regenerating it with the index tool gives a ~10 000-line diff. Add
+  entries by hand unless the owner asks for a regeneration.
+- To find which material keys are actually used, parse the files and count TOP-LEVEL keys. Never grep:
+  `"Anisotropy": true` is also a sampler key inside a texture block, and grep counts it.

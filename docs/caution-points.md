@@ -1891,8 +1891,10 @@ values (`docs/pipeline-caching-system.md`): the same windows were also drawn unl
 ⚠️ The logo is now FAINTER than on Khronos' reference, where it shows through half-way. That is not
 the factor: the loader anchors emissive 1.0 at 2000 nits (`EmissiveLuminanceAnchor`, an Aug 2026
 experiment), so 0.118 × 2000 ≈ 240 nits disappears against a fur lit by the viewer's sunny-16
-exposure. Khronos' viewer adds the emissive in display units. The emissive's photometric unit is an
-open design question, separate from this fix.
+exposure. Khronos' viewer adds the emissive in display units. **The emissive's unit is decided (owner,
+2026-07-26):** glTF emissive is read as the specification's nits, with no import multiplier, and the engine never
+compensates the Blender exporter defect (glTF-Blender-IO#1766). The anchor is an experiment to remove (item
+`remove-emissive-luminance-anchor`).
 
 ### A half-float target silently turns a physical luminance into NaN (Sep 2026)
 
@@ -5006,6 +5008,16 @@ Four builds, each answering one question. Guessing at the engine cost more than 
 
 **Rule:** before adding ANY field to a push constant block, sum the struct size; at
 > 128 B, migrate to a UBO/SSBO instead. Never rely on the 256 B NVIDIA limit.
+
+**Verification traps:**
+- ⚠️ A size guard (`static_assert(sizeof(Block) <= 128)`) proves nothing until it has been seen firing: add one
+  `float` to the block, check that the build breaks with the guard's message, then remove the probe.
+  `RTAO::TracePushConstants` ends exactly on byte 128 — zero margin.
+- ⚠️ A quiet log does not prove an effect was created or ran: the RT trace programs are never named in the log. The
+  positive proof is the effect's per-pass line in `Core.RendererService.getGPUTimings()` (e.g. `RTAOEffect/trace`
+  with a non-zero sample count).
+- A mask written to the scene colour for inspection still goes through exposure and tone mapping: normalise the
+  capture (min/max) before reading it.
 
 ### GLSL smoothstep Undefined Behavior
 

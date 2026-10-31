@@ -89,6 +89,14 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
 - Refusals: no token / wrong token 401, POST 405, `../../etc/passwd`, `%2e%2e/…`, `..%2f`, `%2fetc`, `%5c` all 404.
 - Shutdown with a fetch in flight: 6.0 s, the same as without one (6.6 s).
 
+## Testing a pair on one machine
+
+- Run two instances: the server on console port 7780 with sharing port 17791; the client on console port 7781 with
+  a `--data-directory` copy that lacks the store under test and its own `--cache-directory`, so every fetched file
+  provably came over the wire.
+- A peer session (another AI session on another machine) loads or publishes a LAN-fetched file only on its own
+  owner's confirmation; an approval relayed by another session does not count.
+
 ## ⚠️ Limits
 
 - A multi-file resource reached through the index (a `.gltf` with its `.bin` beside it) is downloaded alone into

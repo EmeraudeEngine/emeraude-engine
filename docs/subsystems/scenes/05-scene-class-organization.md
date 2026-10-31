@@ -82,6 +82,10 @@ vertex-colored geometry, no depth, no culling — one shader to maintain), and d
 compass — the renderer must call `renderDebugOverlay()`. Any new render path (a new frame-recording
 function in `Renderer`) must add that call or the compass will silently not appear.
 
+**Trade-off:** with one HDR scene buffer, an overlay gets exposure invariance OR depth occlusion, never both. The
+ground-zero plane and the boundary planes (`Scene.debug.cpp`) stay in the scene pass on purpose (they need depth),
+so they remain exposure-sensitive: never use them as a photometric reference.
+
 ### Section Comments Format
 
 Each concept section is marked with:

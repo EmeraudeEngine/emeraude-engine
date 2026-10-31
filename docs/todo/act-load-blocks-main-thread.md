@@ -24,8 +24,14 @@ connection*), and it still leaves the compositor's `xdg_wm_base.ping` unanswered
 - Load the act on a worker while the main loop runs (a loading state the stage shows), then enable the scene;
   or pump the window events between the loader's steps — the second is simpler but runs input callbacks in the
   middle of a load (re-entrancy to check).
-- Owner decision needed between the two. Still synchronous on 2026-10-13; the decision also says which repository
-  carries the change (the downstream loader, or an engine loading contract it calls).
+- Still synchronous on 2026-10-13. The choice of form has a precedent (owner, 2026-08-09, USD stage load): the
+  least invasive form was chosen and is in use — the loader runs on the resource thread pool
+  (`Scenes::Loaders::Interface::loadAsync()`) while the caller waits pumping the window
+  (`AbstractDemo::pumpEventsUntil()` → `Window::pumpEvents()`, used by projet-alpha's `WorldLobby` and
+  `JungleRuins` demos). The pumping lives on the caller side, never in the loader (no loader ↔ windowing
+  coupling); rewriting the demo lifecycle (`AbstractDemo::create()`) as asynchronous was rejected as too broad.
+  Applying the same split here is the default; confirm with the owner which repository carries the change (the
+  downstream loader, or an engine loading contract it calls).
 
 ## References
 

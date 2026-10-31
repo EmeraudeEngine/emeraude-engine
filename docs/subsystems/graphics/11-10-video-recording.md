@@ -190,6 +190,13 @@ content shift hues on playback.
   stream — 1280×720 was aligned by luck, 2880×1620 was not) and a bench with a STRUCTURED
   test pattern is mandatory — corruption is invisible in noise (the M3 "clean" validation
   was noise-blind).
+  **The SPS VUI timing is mandatory.** A raw H.265 elementary stream carries no clock: without
+  `vui_timing_info_present_flag` + `num_units_in_tick` / `time_scale` the NVIDIA driver writes its own timing
+  (60/120 Hz) and players run 900 frames in about 1.3 s. ⚠️ A muxed audio track hides the bug (playback realigns on
+  the audio): validate on a video-only file (`ffprobe` `r_frame_rate` and duration). The VUI also carries the BT.709
+  colour description (`VideoEncoderH265.cpp`).
+  Diagnostic: an IVF whose header frame count is 0 while payload frames exist means `finalize()` never ran;
+  `ffmpeg -i x.ivf -c copy y.webm` rebuilds the index without loss.
 - **HDR10 lookahead (owner request)**: keep the profile/bit-depth parametric — Main 10 +
   P010 planes (16-bit containers) + BT.2020/PQ shader variant sourcing the PRE-tonemap HDR
   buffer + mastering-display SEI. Nothing in M2/M3 may hardcode 8-bit assumptions in the API.

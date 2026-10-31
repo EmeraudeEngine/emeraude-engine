@@ -22,6 +22,11 @@ The AI is the implementor and analyst — writing code, measuring performance, d
 pipelines, iterating at industrial speed. This is a new model of engine development where
 every rendering decision is backed by data, not intuition.
 
+**A general-purpose 3D application runtime, not a game-only engine.** It already powers desktop
+creative/industrial tools (3D-printer preparation software). The hardware utilities (serial port,
+SSDP discovery, Wi-Fi scan, disk information) are first-class components, not experiments. Weigh
+tool and industrial use cases beside game ones in every architectural decision.
+
 Every architectural decision, every rendering technique, every optimization in this engine
 must be measured against this mission.
 

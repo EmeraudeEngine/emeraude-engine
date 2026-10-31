@@ -50,7 +50,7 @@ python3 tools/remote-console.py "Core.SceneManagerService.createNode(MyObject, 5
 # Move a node
 python3 tools/remote-console.py "Core.SceneManagerService.setNodePosition(Observer, 0.0, 10.0, 20.0)"
 
-# Orient a node to look at a point (convention under investigation)
+# Orient a node to look at a world-space point (Y-up; see docs/ai-runtime-control.md § How orientation works)
 python3 tools/remote-console.py "Core.SceneManagerService.setNodeLookAt(Observer, 50.0, 0.0, 50.0)"
 
 # Inspect a node
