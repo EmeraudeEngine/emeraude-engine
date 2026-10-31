@@ -4797,6 +4797,19 @@ non-PBR material (`BasicResource`) is gone. They were deleted in `03608b66` (ren
 ⚠️ Do not resurrect them: the chain is ordered by quality tier only (high-quality legs first, then the low-quality
 fallbacks), never by material model. The low-quality leg's own gap is item `low-quality-pbr-glass-loses-refraction`.
 
+### A cache keyed by a bare hash serves one program for another — the renderer's program cache is exact now (2026-10-31)
+
+`Renderer::m_programs` mapped a `size_t` (each generator's `computeProgramCacheKey()`, a boost-style `hashCombine`) to a
+program, with no equality behind the hash; its only guard compared the material set layout, identical for the passes of
+one layer. Every lit layer gets a program for EVERY pass type at load (`Scene.rendering.cpp`: directional, point, spot
+shadow passes and the cascades), and the hash folds in the render pass handle — an address, so the collisions changed
+from run to run. A temporary probe (each program is named `"RenderableInstance" + passType`) caught it on `city 32`:
+`RenderableInstanceSpotLightPassShadowMap` drawn for `DirectionalLightPassCSM` (`CityBuildings6`, layer 8), the sun's
+2D-array shadow view bound to a `sampler2D` — `VUID-vkCmdDrawIndexed-viewType-07752`, 1 run in 6 then 1 in 12; a cube
+variant on macOS. `Saphir::Generator::ProgramKey` replaces the `size_t`: the bytes of every input, compared exactly.
+⚠️ Never key a cache that SERVES an object by a hash alone; a hash only places a key. The pipeline cache
+(`Renderer::m_graphicsPipelines`) is still keyed that way (`docs/pipeline-caching-system.md`).
+
 ### A generator never spells its own model-view-projection matrix; a `mat4` varying takes FOUR locations (2026-10-31)
 
 The TBN debug view (`TBNSpaceRendering`) failed to compile for EVERY instanced renderable (Windows-PA and Linux,

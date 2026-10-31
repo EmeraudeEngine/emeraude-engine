@@ -26,11 +26,36 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <memory>
+#include <string>
+#include <vector>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/DirectPostProcessEffect.hpp"
+#include "Graphics/Geometry/Interface.hpp"
+#include "Saphir/SetIndexes.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class DirectPostProcessEffect;
+}
+
+namespace EmEn::Graphics::RenderTarget
+{
+	class Abstract;
+}
+
+namespace EmEn::Saphir
+{
+	class Program;
+}
 
 namespace EmEn::Saphir::Generator
 {
@@ -58,7 +83,7 @@ namespace EmEn::Saphir::Generator
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::computeProgramCacheKey() */
 			[[nodiscard]]
-			size_t computeProgramCacheKey () const noexcept override;
+			ProgramKey computeProgramCacheKey () const noexcept override;
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::generatorClassId() */
 			[[nodiscard]]

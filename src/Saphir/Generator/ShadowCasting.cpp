@@ -26,20 +26,38 @@
 
 #include "ShadowCasting.hpp"
 
-/* Local inclusions. */
-#include "MeshShadingSurfaceHelper.hpp"
-#include "Graphics/Geometry/MeshShadingSurface.hpp"
+/* STL inclusions. */
+#include <array>
 
 /* Local inclusions. */
-#include "Graphics/Material/Interface.hpp"
+#include "Graphics/Geometry/MeshShadingSurface.hpp"
+#include "Graphics/Types.hpp"
+#include "MeshShadingSurfaceHelper.hpp"
+#include "Saphir/AbstractVertexStage.hpp"
+#include "Saphir/Declaration/InputAttribute.hpp"
+#include "Saphir/Declaration/ShaderStorageBlock.hpp"
+#include "Saphir/Declaration/Types.hpp"
+#include "Saphir/FragmentShader.hpp"
+#include "Saphir/Generator/Abstract.hpp"
+#include "Saphir/Generator/ProgramKey.hpp"
+#include "Saphir/Keys.hpp"
+#include "Saphir/MeshShader.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/SetIndexes.hpp"
+#include "Saphir/TaskShader.hpp"
+#include "Saphir/VertexShader.hpp"
+#include "StaticVector.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/GraphicsPipeline.hpp"
+
+/* Local inclusions. */
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Hash/FNV1a.hpp"
 #include "HeightfieldSurfaceHelper.hpp"
 #include "OceanSurfaceHelper.hpp"
 #include "Saphir/Code.hpp"
 #include "Scenes/SceneInstanceTransforms.hpp"
-#include "SkinningLayoutHelper.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/RenderPass.hpp"
 
@@ -659,15 +677,10 @@ namespace EmEn::Saphir::Generator
 		return true;
 	}
 
-	size_t
+	ProgramKey
 	ShadowCasting::computeProgramCacheKey () const noexcept
 	{
-		/* NOTE: Helper function to combine hash values (boost::hash_combine style). */
-		const auto hashCombine = [] (size_t & seed, size_t value) noexcept {
-			seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		};
-
-		size_t hash = Hash::FNV1a(ClassId);
+		ProgramKey key{ClassId};
 
 		/* NOTE: Fetched once — renderTarget() returns a shared_ptr by value, so each call
 		 * pays for an atomic refcount increment/decrement on top of the virtual dispatch. */
@@ -676,14 +689,14 @@ namespace EmEn::Saphir::Generator
 		/* 1. Render pass handle (critical for pipeline compatibility). */
 		if ( const auto * framebuffer = renderTarget->framebuffer(); framebuffer != nullptr )
 		{
-			hashCombine(hash, reinterpret_cast< size_t >(framebuffer->renderPass()->handle()));
+			key.add(static_cast< const void * >(framebuffer->renderPass()->handle()));
 		}
 
 		/* 2. Render target type (cubemap vs single layer vs CSM). */
-		hashCombine(hash, static_cast< size_t >(renderTarget->isCubemap()));
-		hashCombine(hash, static_cast< size_t >(renderTarget->isCascadedShadowMap()));
+		key.add(renderTarget->isCubemap());
+		key.add(renderTarget->isCascadedShadowMap());
 		/* The selection depth drops the bias and the clamp (onGraphicsPipelineConfiguration()). */
-		hashCombine(hash, static_cast< size_t >(renderTarget->renderType()));
+		key.add(renderTarget->renderType());
 
 		/* 3. Renderable identity (geometry combination via resource name). */
 		if ( this->isRenderableInstanceAvailable() )
@@ -692,31 +705,31 @@ namespace EmEn::Saphir::Generator
 
 			if ( renderable != nullptr )
 			{
-				hashCombine(hash, Hash::FNV1a(renderable->name()));
+				key.add(renderable->name());
 
 				/* The wind changes the vertex stage AND adds a descriptor set to the layout, so it
 				 * changes the program. The name alone would already separate a tree from anything
 				 * else, but a key must state what it depends on rather than rely on that. */
-				hashCombine(hash, static_cast< size_t >(renderable->hasVegetationWind()));
-				hashCombine(hash, static_cast< size_t >(renderable->isVegetationFoliageLayer(this->layerIndex())));
+				key.add(renderable->hasVegetationWind());
+				key.add(renderable->isVegetationFoliageLayer(this->layerIndex()));
 			}
 
 			/* A heightfield surface: another vertex stage and another PerModel layout. */
-			hashCombine(hash, static_cast< size_t >(this->isHeightfieldSurfaceEnabled()));
-			hashCombine(hash, static_cast< size_t >(this->isOceanSurfaceEnabled()));
+			key.add(this->isHeightfieldSurfaceEnabled());
+			key.add(this->isOceanSurfaceEnabled());
 
 			/* A mesh-shading surface: task + mesh stages and the material set. */
-			hashCombine(hash, static_cast< size_t >(this->isMeshShadingSurfaceEnabled()));
+			key.add(this->isMeshShadingSurfaceEnabled());
 
 			/* A pulled-vertex geometry (a path): the ribbon, the view and instance-transforms sets. */
-			hashCombine(hash, static_cast< size_t >(this->isPulledVertexGeometry()));
+			key.add(this->isPulledVertexGeometry());
 		}
 
 		/* 4. Layer index. */
-		hashCombine(hash, static_cast< size_t >(this->layerIndex()));
+		key.add(this->layerIndex());
 
 		/* 5. Generator flags (instancing, facing camera). */
-		hashCombine(hash, static_cast< size_t >(this->flags()));
+		key.add(this->flags());
 
 		/* 6. Alpha-tested shadows state and material layout.
 		 * NOTE: The material interface is fetched once and reused below (descriptor set
@@ -724,19 +737,19 @@ namespace EmEn::Saphir::Generator
 		 * repeatedly, which would each re-walk the same renderable/layer lookup. */
 		if ( const auto * material = this->getMaterialInterface(); material != nullptr && material->requiresAlphaTestedShadows() )
 		{
-			hashCombine(hash, 1ULL);
+			key.add(true);
 
 			/* Include material layout signature for alpha-tested shadows. */
 			if ( const auto & layout = material->descriptorSetLayout(); layout != nullptr )
 			{
-				hashCombine(hash, layout->getHash());
+				key.add(layout->getHash());
 			}
 
 			/* Material codegen flag bits: same layout, structurally different shadow GLSL
 			 * (e.g. which alpha source feeds the discard) must not share a cached program. */
-			hashCombine(hash, static_cast< size_t >(material->flags()));
+			key.add(material->flags());
 		}
 
-		return hash;
+		return key;
 	}
 }

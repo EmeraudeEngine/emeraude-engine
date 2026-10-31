@@ -28,9 +28,23 @@
 
 /* Local inclusions. */
 #include "Graphics/RenderTarget/Abstract.hpp"
-#include "Hash/FNV1a.hpp"
+#include "Graphics/Types.hpp"
+#include "Saphir/AbstractShader.hpp"
 #include "Saphir/Code.hpp"
+#include "Saphir/Declaration/InputAttribute.hpp"
+#include "Saphir/Declaration/PushConstantBlock.hpp"
+#include "Saphir/Declaration/StageOutput.hpp"
+#include "Saphir/Declaration/Types.hpp"
+#include "Saphir/FragmentShader.hpp"
+#include "Saphir/Generator/Abstract.hpp"
+#include "Saphir/Generator/ProgramKey.hpp"
+#include "Saphir/Keys.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/VertexShader.hpp"
+#include "StaticVector.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/RenderPass.hpp"
 
 namespace EmEn::Saphir::Generator
@@ -253,14 +267,10 @@ namespace EmEn::Saphir::Generator
 		return true;
 	}
 
-	size_t
+	ProgramKey
 	GizmoRendering::computeProgramCacheKey () const noexcept
 	{
-		const auto hashCombine = [] (size_t & seed, size_t value) noexcept {
-			seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		};
-
-		size_t hash = Hash::FNV1a(ClassId);
+		ProgramKey key{ClassId};
 
 		/* 1. Render pass handle (critical for pipeline compatibility). */
 		{
@@ -273,13 +283,13 @@ namespace EmEn::Saphir::Generator
 
 			if ( fb != nullptr )
 			{
-				hashCombine(hash, reinterpret_cast< size_t >(fb->renderPass()->handle()));
+				key.add(static_cast< const void * >(fb->renderPass()->handle()));
 			}
 		}
 
 		/* 2. Render target type. */
-		hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCubemap()));
+		key.add(this->renderTarget()->isCubemap());
 
-		return hash;
+		return key;
 	}
 }

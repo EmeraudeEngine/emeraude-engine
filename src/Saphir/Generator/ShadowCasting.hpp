@@ -26,11 +26,31 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <cstdint>
+#include <memory>
+#include <string>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics::RenderTarget
+{
+	class Abstract;
+}
+
+namespace EmEn::Saphir
+{
+	class Program;
+}
 
 namespace EmEn::Saphir::Generator
 {
@@ -72,7 +92,7 @@ namespace EmEn::Saphir::Generator
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::computeProgramCacheKey() */
 			[[nodiscard]]
-			size_t computeProgramCacheKey () const noexcept override;
+			ProgramKey computeProgramCacheKey () const noexcept override;
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::generatorClassId() */
 			[[nodiscard]]

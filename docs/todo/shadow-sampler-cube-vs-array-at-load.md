@@ -1,7 +1,7 @@
 ---
 id: shadow-sampler-cube-vs-array-at-load
 title: A cube-sampling shadow program is drawn once with a 2D-array shadow view during loading (intermittent)
-status: open
+status: in-progress
 priority: high
 scope: Graphics shadow maps (point / CSM descriptor sets), RenderableInstance light passes, loading order
 opened: 2026-10-29
@@ -48,10 +48,13 @@ Program generation runs on the render thread only (`getReadyForRender`, the shad
 ## What remains
 
 - [x] Reproduce; find which light pass draws with the wrong program (above).
-- [ ] Owner decision — make the renderer's program cache exact: key it by a full structure with `operator==` (as
-  `Renderable::ProgramCacheKey`), or keep the `size_t` and store the full key beside the program to verify a hit, or
-  drop the renderer-level cache for scene programs (the per-renderable cache already shares a program between the
-  instances of a renderable). Then prove: the hash of the two colliding keys, and N runs with 0 VUID.
+- [x] Owner decision (2026-10-31): option (a), an exact key — `Saphir::Generator::ProgramKey` (the bytes of every
+  input, compared exactly), the six generators converted, `Renderer::m_programs` keyed by it (caution-points,
+  `docs/pipeline-caching-system.md`). Linux: the item's sequence 12 runs with the probe re-applied, 0 VUID, 0 program
+  served for another pass (the defect showed 1 run in 6 to 12 before; the guarantee is structural).
+- [ ] Peers: macOS-PA and Windows-PA, the same sequence N times (0 VUID 07752), then delete this item.
+- [ ] Follow-up to rank: the pipeline cache (`Renderer::m_graphicsPipelines`, `GraphicsPipeline::getHash()`) is still
+  keyed by a bare `size_t` — the same class of risk.
 - [ ] Rule out the 3fd1d465 change (`ResourceTrait::checkDependencies()` clears the waiting list when every dependency
   is loaded): it only runs once every dependency reports `isLoaded()`.
 - [ ] Fix, prove (N launches, 0 VUID).

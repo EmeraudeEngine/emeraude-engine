@@ -42,6 +42,7 @@
 #include "Saphir/Declaration/Types.hpp"
 #include "Saphir/FragmentShader.hpp"
 #include "Saphir/Generator/Abstract.hpp"
+#include "Saphir/Generator/ProgramKey.hpp"
 #include "Saphir/Keys.hpp"
 #include "Saphir/MeshShader.hpp"
 #include "Saphir/Program.hpp"
@@ -60,7 +61,6 @@
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Hash/FNV1a.hpp"
 #include "HeightfieldSurfaceHelper.hpp"
 #include "OceanSurfaceHelper.hpp"
 #include "Saphir/Code.hpp"
@@ -1321,24 +1321,19 @@ namespace EmEn::Saphir::Generator
 		return true;
 	}
 
-	size_t
+	ProgramKey
 	SceneRendering::computeProgramCacheKey () const noexcept
 	{
-		/* NOTE: Helper function to combine hash values (boost::hash_combine style). */
-		const auto hashCombine = [] (size_t & seed, size_t value) noexcept {
-			seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		};
-
-		size_t hash = 0;
+		ProgramKey key{ClassId};
 
 		/* 1. Render pass handle (critical for pipeline compatibility). */
 		if ( const auto * framebuffer = this->renderTarget()->framebuffer(); framebuffer != nullptr )
 		{
-			hashCombine(hash, reinterpret_cast< size_t >(framebuffer->renderPass()->handle()));
+			key.add(static_cast< const void * >(framebuffer->renderPass()->handle()));
 		}
 
 		/* 2. Render target type (cubemap vs single layer). */
-		hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCubemap()));
+		key.add(this->renderTarget()->isCubemap());
 
 		/* 3. Renderable identity (geometry + material combination via resource name). */
 		if ( this->isRenderableInstanceAvailable() )
@@ -1347,49 +1342,49 @@ namespace EmEn::Saphir::Generator
 
 			if ( renderable != nullptr )
 			{
-				hashCombine(hash, Hash::FNV1a(renderable->name()));
+				key.add(renderable->name());
 
 				/* The wind changes the vertex stage, so it changes the program; so does the flutter of the foliage layer. */
-				hashCombine(hash, static_cast< size_t >(renderable->hasVegetationWind()));
-				hashCombine(hash, static_cast< size_t >(renderable->isVegetationFoliageLayer(this->layerIndex())));
+				key.add(renderable->hasVegetationWind());
+				key.add(renderable->isVegetationFoliageLayer(this->layerIndex()));
 			}
 
 			/* So does a heightfield surface: another vertex stage, another fragment prelude, another
 			 * PerModel layout. */
-			hashCombine(hash, static_cast< size_t >(this->isHeightfieldSurfaceEnabled()));
-			hashCombine(hash, static_cast< size_t >(this->isOceanSurfaceEnabled()));
-			hashCombine(hash, static_cast< size_t >(this->isMeshShadingSurfaceEnabled()));
+			key.add(this->isHeightfieldSurfaceEnabled());
+			key.add(this->isOceanSurfaceEnabled());
+			key.add(this->isMeshShadingSurfaceEnabled());
 		}
 
 		/* 4. Layer index. */
-		hashCombine(hash, static_cast< size_t >(this->layerIndex()));
+		key.add(this->layerIndex());
 
 		/* 5. Render pass type. */
-		hashCombine(hash, static_cast< size_t >(m_renderPassType));
+		key.add(m_renderPassType);
 
 		/* 6. Generator flags (instancing, lighting, facing camera, etc.). */
-		hashCombine(hash, static_cast< size_t >(this->flags()));
+		key.add(this->flags());
 
 		/* 6b. ⚠️ The G-buffer debug lane CHANGES THE GENERATED SOURCE, so it belongs in the key.
 		 * The cache keys on the descriptor layout and the flag bits, never on plain values — a
 		 * value that alters the emitted GLSL and is left out of the key means the cached program of
 		 * the previous run is served and the change never appears. Which is exactly what happened
 		 * the first time this instrument was switched on: the frame came back untouched, twice. */
-		hashCombine(hash, static_cast< size_t >(this->debugMaterialPropertiesLane()));
+		key.add(this->debugMaterialPropertiesLane());
 
 		/* 7. Material layout signature to separate incompatible pipelines (e.g. Standard Refl/Refract). */
 		if ( this->materialEnabled() )
 		{
 			if ( const auto & layout = this->getMaterialInterface()->descriptorSetLayout(); layout != nullptr )
 			{
-				hashCombine(hash, layout->getHash());
+				key.add(layout->getHash());
 			}
 
 			/* 8. Material codegen flag bits: two materials can share a descriptor layout yet
 			 * generate structurally different GLSL (e.g. the alpha-test discard). */
-			hashCombine(hash, static_cast< size_t >(this->getMaterialInterface()->flags()));
+			key.add(this->getMaterialInterface()->flags());
 		}
 
-		return hash;
+		return key;
 	}
 }

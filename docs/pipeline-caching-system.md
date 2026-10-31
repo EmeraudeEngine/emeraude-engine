@@ -82,7 +82,7 @@ if (program) {
 ### Step 3: Renderer-Level Program Cache
 ```cpp
 // File: Graphics/Renderer.cpp
-size_t cacheKey = generator->computeProgramCacheKey();
+const auto cacheKey = generator->computeProgramCacheKey(); // Saphir::Generator::ProgramKey, compared EXACTLY
 
 // Lookup in Renderer::m_programs
 auto it = m_programs.find(cacheKey);
@@ -161,20 +161,30 @@ struct ProgramCacheKey {
 #### 2. computeProgramCacheKey() (Generator level)
 ```cpp
 // File: Saphir/Generator/*.cpp
-size_t MyGenerator::computeProgramCacheKey() const noexcept
+ProgramKey MyGenerator::computeProgramCacheKey() const noexcept
 {
-    size_t hash = Hash::FNV1a(ClassId);
+    ProgramKey key{ClassId};
 
-    // MANDATORY: First hash component
+    // MANDATORY: First component after the class identifier
     if (const auto* fb = this->renderTarget()->framebuffer(); fb != nullptr)
     {
-        hashCombine(hash, reinterpret_cast<size_t>(fb->renderPass()->handle()));
+        key.add(static_cast<const void*>(fb->renderPass()->handle()));
     }
 
-    // ... other components
-    return hash;
+    // ... every other input that changes the generated GLSL (values, enums, the renderable's name)
+    return key;
 }
 ```
+
+> [!CAUTION]
+> **The renderer's program cache compares its keys EXACTLY (2026-10-31).** `Renderer::m_programs` was keyed by a bare
+> `size_t` (a boost-style `hashCombine` of the inputs, the render pass handle — an address — among them) with no
+> equality behind it, and `SceneRendering` did not even start from its class identifier. Two programs whose hashes met
+> shared one entry: the first one generated was served for both. On projet-alpha's `city` a spot-shadow program
+> (`sampler2D`) was drawn for the sun's cascaded pass (a 2D-array view), `VUID-vkCmdDrawIndexed-viewType-07752` in
+> 1 run in 6 to 12 (Linux), a cube one on macOS. `Saphir::Generator::ProgramKey` is the byte sequence of every input
+> (fixed-width values, length-prefixed texts) and compares byte for byte; the hash only places it. The pipeline cache
+> (`m_graphicsPipelines`, `GraphicsPipeline::getHash()`) is still keyed by a bare `size_t` — the same class of risk.
 
 #### 3. getHash() (Pipeline level)
 ```cpp

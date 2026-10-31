@@ -69,6 +69,7 @@
 #include "PostProcessor.hpp"
 #include "Recorder.hpp"
 #include "RendererFrameScope.hpp"
+#include "Saphir/Generator/ProgramKey.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "SelectionOutline.hpp"
 #include "SharedUBOManager.hpp"
@@ -209,7 +210,8 @@ namespace EmEn::Graphics
 	 * **Optimized caches:**
 	 * - `m_samplers`: Sampler cache (O(log S) → O(1))
 	 * - `m_pipelines`: GraphicsPipeline cache (O(log G) → O(1))
-	 * - `m_programs`: Saphir Program cache (O(log P) → O(1))
+	 * - `m_programs`: Saphir Program cache (O(log P) → O(1)), keyed by the EXACT Saphir::Generator::ProgramKey
+	 *   (a bare size_t hash until 2026-10-31 served one pass's program for another on a collision)
 	 *
 	 * **Expected performance impact:** 10-20% improvement on Graphics hot paths.
 	 *
@@ -1502,7 +1504,7 @@ namespace EmEn::Graphics
 			 * @return std::shared_ptr< Saphir::Program > The cached program or nullptr if not found.
 			 */
 			[[nodiscard]]
-			std::shared_ptr< Saphir::Program > findCachedProgram (size_t programKey) const noexcept;
+			std::shared_ptr< Saphir::Program > findCachedProgram (const Saphir::Generator::ProgramKey & programKey) const noexcept;
 
 			/**
 			 * @brief Caches a shader program for future reuse.
@@ -1510,7 +1512,7 @@ namespace EmEn::Graphics
 			 * @param program The program to cache.
 			 * @return bool True if the program was successfully cached.
 			 */
-			bool cacheProgram (size_t programKey, const std::shared_ptr< Saphir::Program > & program) noexcept;
+			bool cacheProgram (const Saphir::Generator::ProgramKey & programKey, const std::shared_ptr< Saphir::Program > & program) noexcept;
 
 			/**
 			 * @brief Notifies that a cached program was reused.
@@ -2007,7 +2009,7 @@ namespace EmEn::Graphics
 			 * lens effect removed from the camera can never be destroyed while an in-flight
 			 * command buffer still references its pipeline. Indexed by currentFrameIndex(). */
 			std::array< std::shared_ptr< const DirectEffectList >, 5 > m_lensEffectsSnapshots{};
-			std::unordered_map< size_t, std::shared_ptr< Saphir::Program > > m_programs;
+			std::unordered_map< Saphir::Generator::ProgramKey, std::shared_ptr< Saphir::Program > > m_programs;
 			std::unordered_map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
 			/* NOTE: Keyed by the HASH OF THE CREATE-INFO CONTENT, not by the identifier passed to
 			 * getSampler() — see the ⚠️ block there. The identifier is a debug label only. */

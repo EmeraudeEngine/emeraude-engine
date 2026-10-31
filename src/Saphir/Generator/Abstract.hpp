@@ -38,8 +38,9 @@
 /* Local inclusions for usages. */
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
-#include "StaticVector.hpp"
+#include "Saphir/Generator/ProgramKey.hpp"
 #include "Saphir/Program.hpp"
+#include "StaticVector.hpp"
 
 namespace EmEn
 {
@@ -638,16 +639,17 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
-			 * @brief Computes a unique cache key for the shader program configuration.
+			 * @brief Computes the exact key of the shader program configuration (the renderer's program cache).
 			 * @note This allows early lookup before shader generation to avoid redundant work.
-			 * @warning Implementations must fold in flags() (see GeneratorFlagBits) along with every
+			 * @warning Implementations must add flags() (see GeneratorFlagBits) along with every
 			 * other input that changes the generated GLSL (render pass, material layout/flags,
-			 * layer index, ...); an input left out of the hash lets two structurally different
-			 * programs collide on the same key and one silently reuses the other's pipeline.
-			 * @return size_t The unique hash identifying this program configuration.
+			 * layer index, ...); an input left out of the key lets two structurally different
+			 * programs share it and one silently reuses the other's pipeline. The key compares
+			 * exactly (ProgramKey): a forgotten input is the only way left to share a program.
+			 * @return ProgramKey
 			 */
 			[[nodiscard]]
-			virtual size_t computeProgramCacheKey () const noexcept = 0;
+			virtual ProgramKey computeProgramCacheKey () const noexcept = 0;
 
 			/**
 			 * @brief Returns the concrete generator's class identifier.

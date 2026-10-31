@@ -1663,7 +1663,7 @@ namespace EmEn::Graphics
 	}
 
 	std::shared_ptr< Saphir::Program >
-	Renderer::findCachedProgram (size_t programKey) const noexcept
+	Renderer::findCachedProgram (const Saphir::Generator::ProgramKey & programKey) const noexcept
 	{
 		if ( const auto programIt = m_programs.find(programKey); programIt != m_programs.cend() )
 		{
@@ -1674,7 +1674,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	Renderer::cacheProgram (size_t programKey, const std::shared_ptr< Program > & program) noexcept
+	Renderer::cacheProgram (const Saphir::Generator::ProgramKey & programKey, const std::shared_ptr< Program > & program) noexcept
 	{
 		if ( program == nullptr )
 		{

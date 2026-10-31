@@ -434,6 +434,7 @@
 #include "Saphir/Generator/OceanSurfaceHelper.hpp"
 #include "Saphir/Generator/OverlayRendering.hpp"
 #include "Saphir/Generator/PostProcessing.hpp"
+#include "Saphir/Generator/ProgramKey.hpp"
 #include "Saphir/Generator/SceneRendering.hpp"
 #include "Saphir/Generator/ShadowCasting.hpp"
 #include "Saphir/Generator/SkinningLayoutHelper.hpp"

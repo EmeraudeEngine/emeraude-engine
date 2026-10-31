@@ -26,13 +26,24 @@
 
 #pragma once
 
+/* STL inclusions. */
+#include <cstdint>
+#include <memory>
+#include <string>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Types.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/RenderPass.hpp"
 
@@ -40,6 +51,17 @@
 namespace EmEn::Scenes
 {
 	class Scene;
+}
+
+namespace EmEn::Graphics::RenderableInstance
+{
+	class Abstract;
+}
+
+namespace EmEn::Saphir
+{
+	class AbstractVertexStage;
+	class Program;
 }
 
 namespace EmEn::Saphir::Generator
@@ -128,7 +150,7 @@ namespace EmEn::Saphir::Generator
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::computeProgramCacheKey() */
 			[[nodiscard]]
-			size_t computeProgramCacheKey () const noexcept override;
+			ProgramKey computeProgramCacheKey () const noexcept override;
 
 			/** @copydoc EmEn::Saphir::Generator::Abstract::generatorClassId() */
 			[[nodiscard]]

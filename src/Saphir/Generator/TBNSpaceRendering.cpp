@@ -30,7 +30,6 @@
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Types.hpp"
-#include "Hash/FNV1a.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/Declaration/InputAttribute.hpp"
 #include "Saphir/Declaration/InputPrimitive.hpp"
@@ -39,6 +38,7 @@
 #include "Saphir/Declaration/Types.hpp"
 #include "Saphir/FragmentShader.hpp"
 #include "Saphir/Generator/Abstract.hpp"
+#include "Saphir/Generator/ProgramKey.hpp"
 #include "Saphir/GeometryShader.hpp"
 #include "Saphir/Keys.hpp"
 #include "Saphir/Program.hpp"
@@ -338,24 +338,19 @@ namespace EmEn::Saphir::Generator
 		return true;
 	}
 
-	size_t
+	ProgramKey
 	TBNSpaceRendering::computeProgramCacheKey () const noexcept
 	{
-		/* NOTE: Helper function to combine hash values (boost::hash_combine style). */
-		const auto hashCombine = [] (size_t & seed, size_t value) noexcept {
-			seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		};
-
-		size_t hash = Hash::FNV1a(ClassId);
+		ProgramKey key{ClassId};
 
 		/* 1. Render pass handle (critical for pipeline compatibility). */
 		if ( const auto * framebuffer = this->renderTarget()->framebuffer(); framebuffer != nullptr )
 		{
-			hashCombine(hash, reinterpret_cast< size_t >(framebuffer->renderPass()->handle()));
+			key.add(static_cast< const void * >(framebuffer->renderPass()->handle()));
 		}
 
 		/* 2. Render target type (cubemap vs single layer). */
-		hashCombine(hash, static_cast< size_t >(this->renderTarget()->isCubemap()));
+		key.add(this->renderTarget()->isCubemap());
 
 		/* 3. Renderable identity (geometry combination via resource name). */
 		if ( this->isRenderableInstanceAvailable() )
@@ -364,16 +359,16 @@ namespace EmEn::Saphir::Generator
 
 			if ( renderable != nullptr )
 			{
-				hashCombine(hash, Hash::FNV1a(renderable->name()));
+				key.add(renderable->name());
 			}
 		}
 
 		/* 4. Layer index. */
-		hashCombine(hash, static_cast< size_t >(this->layerIndex()));
+		key.add(this->layerIndex());
 
 		/* 5. Generator flags (instancing, facing camera). */
-		hashCombine(hash, static_cast< size_t >(this->flags()));
+		key.add(this->flags());
 
-		return hash;
+		return key;
 	}
 }

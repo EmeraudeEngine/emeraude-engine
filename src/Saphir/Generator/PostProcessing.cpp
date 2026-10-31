@@ -35,7 +35,6 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Types.hpp"
-#include "Hash/FNV1a.hpp"
 #include "Saphir/Code.hpp"
 #include "Saphir/Declaration/InputAttribute.hpp"
 #include "Saphir/Declaration/PushConstantBlock.hpp"
@@ -44,6 +43,7 @@
 #include "Saphir/Declaration/Types.hpp"
 #include "Saphir/FragmentShader.hpp"
 #include "Saphir/Generator/Abstract.hpp"
+#include "Saphir/Generator/ProgramKey.hpp"
 #include "Saphir/Keys.hpp"
 #include "Saphir/Program.hpp"
 #include "Saphir/VertexShader.hpp"
@@ -350,14 +350,10 @@ namespace EmEn::Saphir::Generator
 		return true;
 	}
 
-	size_t
+	ProgramKey
 	PostProcessing::computeProgramCacheKey () const noexcept
 	{
-		const auto hashCombine = [] (size_t & seed, size_t value) noexcept {
-			seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		};
-
-		size_t hash = Hash::FNV1a(ClassId);
+		ProgramKey key{ClassId};
 
 		/* Render pass handle (critical for pipeline compatibility). */
 		{
@@ -370,7 +366,7 @@ namespace EmEn::Saphir::Generator
 
 			if ( fb != nullptr )
 			{
-				hashCombine(hash, reinterpret_cast< size_t >(fb->renderPass()->handle()));
+				key.add(static_cast< const void * >(fb->renderPass()->handle()));
 			}
 		}
 
@@ -378,13 +374,13 @@ namespace EmEn::Saphir::Generator
 		 * Using the object address guarantees uniqueness: each call to setEffectsList()
 		 * creates new shared_ptr instances, so different parameter sets always produce
 		 * different cache keys — even when the effect types are identical. */
-		hashCombine(hash, m_effectsList.size());
+		key.add(m_effectsList.size());
 
 		for ( const auto & effect : m_effectsList )
 		{
-			hashCombine(hash, reinterpret_cast< size_t >(effect.get()));
+			key.add(static_cast< const void * >(effect.get()));
 		}
 
-		return hash;
+		return key;
 	}
 }
