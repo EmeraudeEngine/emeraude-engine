@@ -4809,7 +4809,8 @@ from run to run. A temporary probe (each program is named `"RenderableInstance" 
 `RenderableInstanceSpotLightPassShadowMap` drawn for `DirectionalLightPassCSM` (`CityBuildings6`, layer 8), the sun's
 2D-array shadow view bound to a `sampler2D` — `VUID-vkCmdDrawIndexed-viewType-07752`, 1 run in 6 then 1 in 12; a cube
 variant on macOS. `Saphir::Generator::ProgramKey` replaces the `size_t`: the bytes of every input, compared exactly (engine 607cca23;
-the same sequence clean on the three OS: Linux 12 runs, macOS 6, Windows 8 — 0 VUID, 0 program served for another pass).
+the same sequence clean on the three OS: Linux 12 runs, macOS 6, Windows 8 — 0 VUID, 0 program served for another pass;
+Windows never showed the pre-fix VUID-07752, so its runs prove no regression there, not the fix).
 ⚠️ Never key a cache that SERVES an object by a hash alone; a hash only places a key. The pipeline cache
 (`Renderer::m_graphicsPipelines`) is still keyed that way (item `pipeline-cache-keyed-by-a-bare-hash`).
 
