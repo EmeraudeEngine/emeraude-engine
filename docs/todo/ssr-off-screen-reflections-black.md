@@ -52,13 +52,22 @@ does not exist indoors.
   confidence): the reading above is code only.
 - `labyrinth`'s black ceiling on the Intel iGPU (no RT, so no RTGI) may be the same mechanism; unchecked.
 
-### A real case: a glossy shop window in daylight (2026-10-29)
+### A real case: a glossy shop window in daylight (2026-10-29, corrected 2026-10-31)
 
-projet-alpha `city`, by day, the shopfront glass (dark, roughness 0.25) seen from a roundabout: three owner captures a few
-degrees of camera rotation apart (`1793277803/25/45.png`) — each window flips between a bright blurred reflection and
-flat black from one capture to the next (the owner read it as z-fighting "by day, with the reflection"). Every small turn
-moves the reflected rays between screen hits and misses. The demo made the glass matte (roughness 0.9) as a stop-gap; a
-stable miss (an edge fade, the sky's prefiltered environment at its own luminance) would let a glossy one back.
+projet-alpha `city`, by day, the shopfront glass (dark, roughness 0.25): three owner captures a few degrees of camera
+rotation apart (`1793277803/25/45.png`) flipped a window between a bright reflection and black; it was blamed on SSR.
+⚠️ Corrected 2026-10-31: the owner's machine runs the RAY-TRACING lane there (`LightingLane = Auto`,
+`PostProcess.getStatus()`: Reflections = RTREffect), so these captures were never SSR; on RTR the flip was not
+reproduced (smooth glass 0.08, a 5-step yaw sweep and a 12-frame drive). On the SCREEN-SPACE lane the same smooth window
+stays grey from the street: everything it mirrors is behind the camera, every ray misses, and the miss gives the sky at
+`envFallbackIntensity` 0.3 — this item's question, met outdoors.
+
+A candidate change, written and NOT adopted (2026-10-31, kept off the tree): the resolve BLENDS the hit and the miss —
+the environment takes the part of the lobe a hit's confidence (distance, edge, facing fades) leaves, instead of a pixel
+being either a hit or a miss (Stachowiak, "Stochastic Screen-Space Reflections", SIGGRAPH 2015 Advances: SSR confidence
+over the reflection probes). It leaves a full-trust hit bit-identical (confidence <= roughness fade). Its A/B on the city
+shop window (screen-space lane, 5 poses) measured no difference (±1 level): that pose's rays all miss. To adopt it, find a
+bench where hits fade at the screen edge under a sky, and measure.
 
 ## What remains
 
