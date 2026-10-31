@@ -42,3 +42,21 @@
 > there is nothing to migrate there, and a Y-sign "fix" applied to them is a regression. The only
 > Y-dependent boundary decision is which wall grounds an entity, and it lives in
 > `Scene::resolveCollisions()`.
+
+### The world boundaries hold the kinematic characters too (2026-10-31)
+
+The boundary step of `Scene::resolveCollisions()` (clip + bounce) walks the DYNAMIC bodies only, and a kinematic
+character (`CharacterController`, the player's capsule) is moved before it, by its own collide and slide. Until
+2026-10-31 nothing held a character: it walked through the boundary, and once its capsule was entirely outside, the
+physics octree dropped it — `checkEntityLocationInOctrees()` re-files a moved entity with `updateOrInsert()`, which
+erases it then fails to insert it outside the root (`OctreeSector::insert()` refuses an element outside its bounds).
+The step gathers its bodies from that octree, so the character was never stepped again: frozen, walking back included
+(owner report; reproduced on `game-logic`, boundary 100 m: the player stopped at x = 100.28 and S no longer moved it).
+- `Scene::insideBoundaries()` now clamps the position the controller reached, axis by axis, so the capsule's world box
+  stays in `[-boundary, +boundary]³`: the boundary is a wall, the motion along it is kept (sliding). Measured on
+  `game-logic`: the player stops at x = 99.75 (100 − the 0.25 m radius), slides along the wall, walks back.
+- The `Capsule` case of `clipInsideBoundaries()` / `accumulateBoundaryCorrection()` (an empty `TODO`) now shares the
+  box case: against an axis-aligned plane the capsule's world box touches exactly where the capsule does.
+- ⚠️ Still true for any entity moved ENTIRELY outside by other means (a teleport, a script): it leaves the physics
+  octree silently (the rendering octree keeps an overflow set, the physics one does not) — engine item
+  `physics-octree-drops-an-entity-outside-the-boundary`.

@@ -965,7 +965,7 @@ namespace EmEn::Scenes
 
 			SceneCharacterWorld world{bodyEntities, index, m_groundLevel.get(), m_kinematicLastPositions, PhysicsStepSeconds};
 			const auto feet = entity->getWorldCoordinates().position();
-			const auto reached = controller.step(world, feet, upward, gravityLength, PhysicsStepSeconds);
+			const auto reached = this->insideBoundaries(*entity, controller.step(world, feet, upward, gravityLength, PhysicsStepSeconds));
 
 			if ( (reached - feet).lengthSquared() > 0.0F )
 			{
@@ -2215,9 +2215,11 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			/* A mesh is clamped by its world box, as a box (it moves only as a kinematic node). */
+			/* A mesh is clamped by its world box, as a box (it moves only as a kinematic node). A capsule too: against an
+			 * axis-aligned plane its world box touches exactly where the capsule does. */
 			case CollisionModelType::TriangleMesh :
 			case CollisionModelType::Box :
+			case CollisionModelType::Capsule :
 			{
 				const auto aabb = model->getAABB(worldCoords);
 
@@ -2248,10 +2250,6 @@ namespace EmEn::Scenes
 					entity->moveZ(-m_boundary - aabb.minimum(Z), TransformSpace::World);
 				}
 			}
-				break;
-
-			case CollisionModelType::Capsule :
-				/* TODO: Implement Capsule boundary clipping. */
 				break;
 		}
 	}
@@ -2349,9 +2347,11 @@ namespace EmEn::Scenes
 			}
 				break;
 
-			/* A mesh is clamped by its world box, as a box (it moves only as a kinematic node). */
+			/* A mesh is clamped by its world box, as a box (it moves only as a kinematic node). A capsule too: against an
+			 * axis-aligned plane its world box touches exactly where the capsule does. */
 			case CollisionModelType::TriangleMesh :
 			case CollisionModelType::Box :
+			case CollisionModelType::Capsule :
 			{
 				const auto aabb = model->getAABB(worldCoords);
 
@@ -2383,11 +2383,41 @@ namespace EmEn::Scenes
 				}
 			}
 				break;
-
-			case CollisionModelType::Capsule :
-				/* TODO: Implement Capsule boundary correction. */
-				break;
 		}
 	}
 
+	Vector< 3, float >
+	Scene::insideBoundaries (const AbstractEntity & entity, const Vector< 3, float > & position) const noexcept
+	{
+		/* The box the entity would occupy at that position: its model's world box, moved by the step's displacement. */
+		const auto current = entity.getWorldCoordinates().position();
+		const auto * model = entity.collisionModel();
+		Vector< 3, float > minimum = position;
+		Vector< 3, float > maximum = position;
+
+		if ( model != nullptr )
+		{
+			const auto aabb = model->getAABB(entity.getWorldCoordinates());
+			const auto displacement = position - current;
+
+			minimum = aabb.minimum() + displacement;
+			maximum = aabb.maximum() + displacement;
+		}
+
+		auto corrected = position;
+
+		for ( const auto axis : std::array{X, Y, Z} )
+		{
+			if ( maximum[axis] > m_boundary )
+			{
+				corrected[axis] -= maximum[axis] - m_boundary;
+			}
+			else if ( minimum[axis] < -m_boundary )
+			{
+				corrected[axis] += -m_boundary - minimum[axis];
+			}
+		}
+
+		return corrected;
+	}
 }

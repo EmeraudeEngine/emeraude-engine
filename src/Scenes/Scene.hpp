@@ -3113,6 +3113,21 @@ namespace EmEn::Scenes
 			 */
 			void accumulateBoundaryCorrection (const std::shared_ptr< AbstractEntity > & entity, Base::Math::Vector< 3, float > & positionCorrection, Base::Math::Vector< 3, float > & dominantNormal, float & maxPenetration) const noexcept;
 
+			/**
+			 * @brief Returns where a kinematic character may stand: the position its controller reached, moved back so its
+			 * collision model's world box stays inside [-m_boundary, +m_boundary] on every axis.
+			 * @note The world boundaries are walls for a character too: its controller steps it (collide and slide), then
+			 * this clamps each axis apart, so the motion along a wall is kept. Without it a character walked through the
+			 * boundary, left the physics octree once its capsule was entirely outside (`OctreeSector::insert()` refuses
+			 * it), and was never stepped again — frozen, even when walking back.
+			 * @param entity A reference to the character entity (its collision model sets the box; none: the position as a
+			 * point).
+			 * @param position A reference to the position the controller reached (the feet).
+			 * @return Base::Math::Vector< 3, float >
+			 */
+			[[nodiscard]]
+			Base::Math::Vector< 3, float > insideBoundaries (const AbstractEntity & entity, const Base::Math::Vector< 3, float > & position) const noexcept;
+
 			/* ============================================================
 			 * [PRIVATE: CONSTANTS]
 			 * ============================================================ */
