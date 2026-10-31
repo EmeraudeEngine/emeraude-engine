@@ -1004,6 +1004,10 @@ namespace EmEn::Saphir
 			constexpr auto BinormalViewSpace{"svBinormalViewSpace"};
 			constexpr auto NormalWorldSpace{"svNormalWorldSpace"};
 			constexpr auto NormalViewSpace{"svNormalViewSpace"};
+			/* The TBN debug view's tangent frame, projected (TBNSpaceRendering: directions, w = 0 before projection). */
+			constexpr auto TangentClipSpace{"svTangentClipSpace"};
+			constexpr auto BinormalClipSpace{"svBinormalClipSpace"};
+			constexpr auto NormalClipSpace{"svNormalClipSpace"};
 			constexpr auto ModelScale{"svModelScale"};
 			constexpr auto RestPositionModelSpace{"svRestPositionModelSpace"};
 			/* Octahedral imposter billboard (AbstractVertexStage::enableImposterBillboarding()): the three atlas

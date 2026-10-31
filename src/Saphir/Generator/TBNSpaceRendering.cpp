@@ -27,11 +27,26 @@
 #include "TBNSpaceRendering.hpp"
 
 /* Local inclusions. */
+#include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Types.hpp"
 #include "Hash/FNV1a.hpp"
-#include "SourceCodeParser.hpp"
 #include "Saphir/Code.hpp"
+#include "Saphir/Declaration/InputAttribute.hpp"
+#include "Saphir/Declaration/InputPrimitive.hpp"
+#include "Saphir/Declaration/OutputPrimitive.hpp"
+#include "Saphir/Declaration/StageOutput.hpp"
+#include "Saphir/Declaration/Types.hpp"
+#include "Saphir/FragmentShader.hpp"
+#include "Saphir/Generator/Abstract.hpp"
+#include "Saphir/GeometryShader.hpp"
+#include "Saphir/Keys.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/VertexShader.hpp"
+#include "StaticVector.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/RenderPass.hpp"
 
 namespace EmEn::Saphir::Generator
@@ -120,43 +135,51 @@ namespace EmEn::Saphir::Generator
 		}
 
 		/* Input declarations. */
-		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position});
-		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Tangent});
-		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Binormal});
-		vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Normal});
+		if ( !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Position}) ||
+			 !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Tangent}) ||
+			 !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Binormal}) ||
+			 !vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::Normal}) )
+		{
+			return false;
+		}
 
 		if ( !this->declareMatrixPushConstantBlock(*vertexShader) )
 		{
 			return false;
 		}
 
-		if ( this->isFlagEnabled(IsInstancingEnabled) )
+		/* NOTE: An instanced draw binds the view block at set 0 (renderTBNSpace()): the program layout must carry it. */
+		if ( this->isFlagEnabled(IsInstancingEnabled) && !this->declareViewUniformBlock(*vertexShader) )
 		{
-			const auto isCubemap = this->renderTarget()->isCubemap();
+			return false;
+		}
 
-			/* Declare the view uniform block. */
-			if ( !this->declareViewUniformBlock(*vertexShader) )
-			{
-				return false;
-			}
+		/* ⚠️ The vertex and its tangent frame are projected HERE, through the stage's own model-view-projection
+		 * matrix, whatever the instancing path: the geometry stage gets clip-space data and no matrix. Until
+		 * 2026-10-31 this generator spelled the instanced matrix itself (the view block's view-projection) and every
+		 * instanced program failed to compile once that matrix moved to the push constants (426 programs on the
+		 * city demo) — on top of a mat4 output given one location instead of four. */
+		std::string modelViewProjectionMatrix;
 
-			vertexShader->declare(Declaration::InputAttribute{VertexAttributeType::ModelMatrixR0});
-			vertexShader->declare(Declaration::StageOutput{this->getNextShaderVariableLocation(), GLSL::Matrix4, ShaderVariable::ModelViewProjectionMatrix, GLSL::Flat});
-
-			Code{*vertexShader, Location::Output} << ShaderVariable::ModelViewProjectionMatrix << " = " << ViewUB(UniformBlock::Component::ViewProjectionMatrix, isCubemap) << " * " << Attribute::ModelMatrix << ';';
+		if ( !vertexShader->modelViewProjectionMatrixExpression(modelViewProjectionMatrix) )
+		{
+			return false;
 		}
 
 		/* Output declarations. */
-		vertexShader->declare(Declaration::StageOutput{this->getNextShaderVariableLocation(), GLSL::FloatVector4, ShaderVariable::TangentWorldSpace});
-		vertexShader->declare(Declaration::StageOutput{this->getNextShaderVariableLocation(), GLSL::FloatVector4, ShaderVariable::BinormalWorldSpace});
-		vertexShader->declare(Declaration::StageOutput{this->getNextShaderVariableLocation(), GLSL::FloatVector4, ShaderVariable::NormalWorldSpace});
+		if ( !vertexShader->declare(Declaration::StageOutput{this->getNextShaderVariableLocation(), GLSL::FloatVector4, ShaderVariable::TangentClipSpace}) ||
+			 !vertexShader->declare(Declaration::StageOutput{this->getNextShaderVariableLocation(), GLSL::FloatVector4, ShaderVariable::BinormalClipSpace}) ||
+			 !vertexShader->declare(Declaration::StageOutput{this->getNextShaderVariableLocation(), GLSL::FloatVector4, ShaderVariable::NormalClipSpace}) )
+		{
+			return false;
+		}
 
 		/* Instructions. */
 		Code{*vertexShader, Location::Output} <<
-			"gl_Position = vec4(" << Attribute::Position << ", 1.0);" << Line::End <<
-			ShaderVariable::TangentWorldSpace << " = vec4(" << Attribute::Tangent << ", 0.0);" << Line::End <<
-			ShaderVariable::BinormalWorldSpace << " = vec4(" << Attribute::Binormal << ", 0.0);" << Line::End <<
-			ShaderVariable::NormalWorldSpace << " = vec4(" << Attribute::Normal << ", 0.0);";
+			"gl_Position = " << modelViewProjectionMatrix << " * vec4(" << Attribute::Position << ", 1.0);" << Line::End <<
+			ShaderVariable::TangentClipSpace << " = " << modelViewProjectionMatrix << " * vec4(" << Attribute::Tangent << ", 0.0);" << Line::End <<
+			ShaderVariable::BinormalClipSpace << " = " << modelViewProjectionMatrix << " * vec4(" << Attribute::Binormal << ", 0.0);" << Line::End <<
+			ShaderVariable::NormalClipSpace << " = " << modelViewProjectionMatrix << " * vec4(" << Attribute::Normal << ", 0.0);";
 
 		return vertexShader->generateSourceCode(*this);
 	}
@@ -183,17 +206,6 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		std::string modelViewProjectionMatrix{};
-
-		if ( this->isFlagEnabled(IsInstancingEnabled) )
-		{
-			modelViewProjectionMatrix = (std::stringstream{} << ShaderVariable::ModelViewProjectionMatrix << "[index]").str();
-		}
-		else
-		{
-			modelViewProjectionMatrix = MatrixPC(PushConstant::Component::ModelViewProjectionMatrix);
-		}
-
 		/* Output declarations. */
 		geometryShader->declare(Declaration::StageOutput{this->getNextShaderVariableLocation(), GLSL::FloatVector4, ShaderVariable::PrimaryVertexColor, GLSL::Smooth});
 
@@ -207,11 +219,11 @@ namespace EmEn::Saphir::Generator
 
 				"for ( int index = 0; index < gl_in.length(); index++ )" << Line::End <<
 				"{" << Line::End <<
-				"	vec4 baseClipPos = " << modelViewProjectionMatrix << " * gl_in[index].gl_Position;" << Line::End <<
+				"	vec4 baseClipPos = gl_in[index].gl_Position;" << Line::End <<
 				"	float ndcScale = TargetNDCLength * baseClipPos.w;" << Line::Blank <<
 
 				/* Tangent (X-Axis -> R) */
-				"	vec4 tangentClip = " << modelViewProjectionMatrix << " * " << ShaderVariable::TangentWorldSpace << "[index];" << Line::End <<
+				"	vec4 tangentClip = " << ShaderVariable::TangentClipSpace << "[index];" << Line::End <<
 				"	float tangentLen = length(tangentClip.xy);" << Line::End <<
 				"	float tangentScale = (tangentLen > 0.0001) ? ndcScale / tangentLen : 0.0;" << Line::Blank <<
 
@@ -226,7 +238,7 @@ namespace EmEn::Saphir::Generator
 				"	EndPrimitive();" << Line::Blank <<
 
 				/* Binormal (Y-Axis -> G) */
-				"	vec4 binormalClip = " << modelViewProjectionMatrix << " * " << ShaderVariable::BinormalWorldSpace << "[index];" << Line::End <<
+				"	vec4 binormalClip = " << ShaderVariable::BinormalClipSpace << "[index];" << Line::End <<
 				"	float binormalLen = length(binormalClip.xy);" << Line::End <<
 				"	float binormalScale = (binormalLen > 0.0001) ? ndcScale / binormalLen : 0.0;" << Line::Blank <<
 
@@ -241,7 +253,7 @@ namespace EmEn::Saphir::Generator
 				"	EndPrimitive();" << Line::Blank <<
 
 				/* Normal (Z-Axis -> B) */
-				"	vec4 normalClip = " << modelViewProjectionMatrix << " * " << ShaderVariable::NormalWorldSpace << "[index];" << Line::End <<
+				"	vec4 normalClip = " << ShaderVariable::NormalClipSpace << "[index];" << Line::End <<
 				"	float normalLen = length(normalClip.xy);" << Line::End <<
 				"	float normalScale = (normalLen > 0.0001) ? ndcScale / normalLen : 0.0;" << Line::Blank <<
 

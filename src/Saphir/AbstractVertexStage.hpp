@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <iosfwd>
+#include <iterator> // IWYU pragma: keep (std::pair: IWYU adds then removes it across the TUs, libstdc++ mapping)
 #include <set>
 #include <string>
 #include <utility>
@@ -431,6 +432,19 @@ namespace EmEn::Saphir
 			 */
 			[[nodiscard]]
 			const char * vertexPositionExpression () const noexcept;
+
+			/**
+			 * @brief Gives the GLSL expression of this stage's model-view-projection matrix, whatever path builds it
+			 * (the pushed matrix, or the local one prepared for instancing, MDI, the instance-transforms SSBO, the
+			 * advanced matrices, a cubemap or the cascades).
+			 * @note ⚠️ The ONE place that chooses it: synthesizeVertexPositionInScreenSpace() and a generator that
+			 * projects more than the vertex (TBNSpaceRendering, its tangent frame) both go through here. The TBN view
+			 * spelled its own and broke when the view-projection matrix left the view block for the push constants.
+			 * @param expression A reference to the string receiving the expression.
+			 * @return bool False when the local matrix cannot be prepared (its declarations report why).
+			 */
+			[[nodiscard]]
+			bool modelViewProjectionMatrixExpression (std::string & expression) noexcept;
 
 			/**
 			 * @brief Returns the GLSL expression holding the object-space vertex position of the

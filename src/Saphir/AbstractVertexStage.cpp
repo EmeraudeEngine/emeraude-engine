@@ -975,15 +975,8 @@ namespace EmEn::Saphir
 	}
 
 	bool
-	AbstractVertexStage::synthesizeVertexPositionInScreenSpace (std::string & outputInstructions) noexcept
+	AbstractVertexStage::modelViewProjectionMatrixExpression (std::string & expression) noexcept
 	{
-		if ( !this->declarePositionAttribute() )
-		{
-			return false;
-		}
-
-		std::string MVPMatrix;
-
 		/* NOTE: When rendering to a cubemap or CSM, we MUST always prepare the ModelViewProjectionMatrix
 		 * because the push constant contains only the Model matrix, and Projection/View come from the UBO
 		 * indexed by gl_ViewIndex. Without this, the shader would try to read a non-existent MVP from push constants. */
@@ -994,11 +987,29 @@ namespace EmEn::Saphir
 				return false;
 			}
 
-			MVPMatrix = ShaderVariable::ModelViewProjectionMatrix;
+			expression = ShaderVariable::ModelViewProjectionMatrix;
 		}
 		else
 		{
-			MVPMatrix = MatrixPC(PushConstant::Component::ModelViewProjectionMatrix);
+			expression = MatrixPC(PushConstant::Component::ModelViewProjectionMatrix);
+		}
+
+		return true;
+	}
+
+	bool
+	AbstractVertexStage::synthesizeVertexPositionInScreenSpace (std::string & outputInstructions) noexcept
+	{
+		if ( !this->declarePositionAttribute() )
+		{
+			return false;
+		}
+
+		std::string MVPMatrix;
+
+		if ( !this->modelViewProjectionMatrixExpression(MVPMatrix) )
+		{
+			return false;
 		}
 
 		const auto * const posExpr = this->vertexPositionExpression();

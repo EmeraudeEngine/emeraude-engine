@@ -19,3 +19,18 @@ be codegen-neutral.
 What stays VertexShader-only on purpose: `FragmentShader`/`GeometryShader`/`TesselationControlShader::connectFromPreviousShader(const VertexShader &)`,
 `VertexBufferFormatManager::getVertexBufferFormat()` (only a vertex shader has vertex attributes) and
 `Program::vertexShader()`.
+
+### The model-view-projection matrix has ONE spelling — `modelViewProjectionMatrixExpression()` (2026-10-31)
+
+The matrix that projects a vertex depends on the path: the pushed MVP, or a local `svModelViewProjectionMatrix`
+prepared for vertex-attribute instancing, MDI, the instance-transforms SSBO, the advanced matrices, a cubemap or the
+cascades (`prepareModelViewProjectionMatrix()`). `AbstractVertexStage::modelViewProjectionMatrixExpression()` is the
+one place that chooses it: `synthesizeVertexPositionInScreenSpace()` goes through it, and so must any generator that
+projects MORE than the vertex. ⚠️ `TBNSpaceRendering` spelled its own instanced MVP (`ViewUB(ViewProjectionMatrix)`
+× the model-matrix attribute) and every instanced TBN program stopped compiling when the view-projection matrix moved
+from the view block to the push constants (426 programs on projet-alpha's `city 32`, glslang "'viewProjectionMatrix'
+: no such field in structure 'ubView'"). It now projects the vertex and its tangent frame in the vertex stage through
+this accessor (`svTangentClipSpace`, `svBinormalClipSpace`, `svNormalClipSpace`), and its geometry stage reads clip-space
+data with no matrix. The extraction is codegen-neutral: the 547 GLSL sources of `city 32` are byte-identical before and
+after (`EnableSourceCodeDump`, both caches off, `--cache-directory` per run, `diff -r`).
+

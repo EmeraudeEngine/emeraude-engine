@@ -4797,6 +4797,20 @@ non-PBR material (`BasicResource`) is gone. They were deleted in `03608b66` (ren
 ⚠️ Do not resurrect them: the chain is ordered by quality tier only (high-quality legs first, then the low-quality
 fallbacks), never by material model. The low-quality leg's own gap is item `low-quality-pbr-glass-loses-refraction`.
 
+### A generator never spells its own model-view-projection matrix; a `mat4` varying takes FOUR locations (2026-10-31)
+
+The TBN debug view (`TBNSpaceRendering`) failed to compile for EVERY instanced renderable (Windows-PA and Linux,
+projet-alpha `city 32` + `SceneManager.enableTBN(1)`: 426 programs refused, the trees, their imposters and the street
+props without their tangent frame). Two defects, the second hidden by the first:
+- its instanced `flat out mat4` took `getNextShaderVariableLocation()` — ONE location — so the next varying overlapped
+  it (glslang "overlapping use of location 1"). A matrix varying reserves its columns: `getNextShaderVariableLocation(4)`
+  for a `mat4`, `(3)` for a `mat3` (the vertex stage's TBN matrices already did);
+- it read the view-projection matrix from the VIEW BLOCK, which no longer has it (it is pushed now).
+The fix removed both at the root: the generator projects through `AbstractVertexStage::modelViewProjectionMatrixExpression()`
+(Saphir doc 05) and passes clip-space vectors, no matrix varying at all. ⚠️ A generator that writes its own matrix
+expression breaks silently on the next change of where a matrix lives — only the programs of that generator fail, at
+the first time a renderable asks for them.
+
 ### Read the GENERATED GLSL — a variable computed and never used is two subsystems never connected (Aug 2026)
 
 The engine writes its shaders. When a rendering feature looks half-present, the fastest instrument
