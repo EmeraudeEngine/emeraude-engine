@@ -32,8 +32,11 @@
 #include <cmath>
 #include <cstddef>
 #include <limits>
+#include <sstream>
 
 /* Local inclusions. */
+#include "Any.hpp"
+#include "BlobTrait.hpp"
 #include "Constants.hpp"
 #include "FastJSON.hpp"
 #include "Math/Base.hpp"
@@ -334,6 +337,21 @@ namespace EmEn::Physics
 	void
 	BodyPhysicalProperties::merge (const BodyPhysicalProperties & other) noexcept
 	{
+		/* Two explicit centres of mass: averaged by mass (before the masses add up); one is kept. */
+		if ( other.m_centerOfMass.has_value() )
+		{
+			const auto totalMass = m_mass + other.m_mass;
+
+			if ( m_centerOfMass.has_value() && totalMass > 0.0F )
+			{
+				m_centerOfMass = ((m_centerOfMass.value() * m_mass) + (other.m_centerOfMass.value() * other.m_mass)) / totalMass;
+			}
+			else if ( !m_centerOfMass.has_value() )
+			{
+				m_centerOfMass = other.m_centerOfMass;
+			}
+		}
+
 		m_mass += other.m_mass;
 		/* The setMass() rule: a null mass has a null inverse (two massless bodies made 1/0 = +inf). */
 		m_inverseMass = m_mass > 0.0F ? 1.0F / m_mass : 0.0F;
@@ -389,6 +407,51 @@ namespace EmEn::Physics
 	}
 
 	bool
+	BodyPhysicalProperties::setCenterOfMass (const Base::Math::Vector< 3, float > & centerOfMass, bool fireEvents) noexcept
+	{
+		if ( !std::isfinite(centerOfMass[X]) || !std::isfinite(centerOfMass[Y]) || !std::isfinite(centerOfMass[Z]) )
+		{
+			Tracer::warning(ClassId, "The centre of mass must be finite !");
+
+			return false;
+		}
+
+		if ( m_centerOfMass.has_value() && m_centerOfMass.value() == centerOfMass )
+		{
+			return false;
+		}
+
+		m_centerOfMass = centerOfMass;
+
+		if ( fireEvents )
+		{
+			this->notify(CenterOfMassChanged);
+			this->notify(PropertiesChanged);
+		}
+
+		return true;
+	}
+
+	bool
+	BodyPhysicalProperties::resetCenterOfMass (bool fireEvents) noexcept
+	{
+		if ( !m_centerOfMass.has_value() )
+		{
+			return false;
+		}
+
+		m_centerOfMass.reset();
+
+		if ( fireEvents )
+		{
+			this->notify(CenterOfMassChanged);
+			this->notify(PropertiesChanged);
+		}
+
+		return true;
+	}
+
+	bool
 	BodyPhysicalProperties::resetInertiaTensor (bool fireEvents) noexcept
 	{
 		if ( !m_inertiaTensor.has_value() )
@@ -421,10 +484,21 @@ namespace EmEn::Physics
 
 		if ( obj.m_inertiaTensor.has_value() )
 		{
-			return out << obj.m_inertiaTensor.value() << '\n';
+			out << obj.m_inertiaTensor.value() << '\n';
+		}
+		else
+		{
+			out << "derived from the collision shape" "\n";
 		}
 
-		return out << "derived from the collision shape" "\n";
+		out << "Centre of mass : ";
+
+		if ( obj.m_centerOfMass.has_value() )
+		{
+			return out << obj.m_centerOfMass.value() << '\n';
+		}
+
+		return out << "the collision shape's centroid" "\n";
 	}
 
 	std::string

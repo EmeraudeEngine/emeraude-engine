@@ -797,7 +797,7 @@ namespace EmEn::Scenes
 					{
 						const auto frame = entity->getWorldCoordinates();
 						const auto rotation = frame.getRotationMatrix3();
-						const auto centre = frame.position() + (rotation * entity->collisionModel()->centerOfMassOffset(frame.scalingFactor()));
+						const auto centre = frame.position() + (rotation * localCenterOfMass(properties, entity->collisionModel(), frame.scalingFactor()));
 						const auto inverseInertia = worldInverseInertia(localInverseInertia(properties, entity->collisionModel(), frame.scalingFactor()), rotation);
 
 						movable->setAngularVelocity(movable->angularVelocity() + (inverseInertia * Vector< 3, float >::crossProduct(point - centre, impulse)));
@@ -1011,8 +1011,8 @@ namespace EmEn::Scenes
 			const auto rotation = frame.getRotationMatrix3();
 			const auto * model = entity->collisionModel();
 			SoftStepSolver::Body body;
-			/* P3: the body turns about the centroid of its shape (decision 8b). */
-			body.centerOffset = model != nullptr ? rotation * model->centerOfMassOffset(frame.scalingFactor()) : Vector< 3, float >{};
+			/* P3: the body turns about its centre of mass: the explicit one, else the centroid of its shape (decision 8b). */
+			body.centerOffset = rotation * localCenterOfMass(movable->getBodyPhysicalProperties(), model, frame.scalingFactor());
 			body.position = frame.position() + body.centerOffset;
 			body.orientation = frame.toQuaternion();
 
@@ -1551,6 +1551,9 @@ namespace EmEn::Scenes
 			state.contactPoint = wheel.contactPoint;
 			state.contactNormal = wheel.normal;
 			state.suspensionLength = wheel.suspensionLength;
+			state.longitudinalSpeed = wheel.contact ? wheel.longitudinalSpeed : 0.0F;
+			/* The load: the suspension's impulse is its last sub-step's. */
+			state.load = wheel.contact ? wheel.suspensionImpulse * (static_cast< float >(SoftStepSolver::SubStepCount) / PhysicsStepSeconds) : 0.0F;
 			state.slipRatio = wheel.slipRatio;
 			state.slipAngle = wheel.slipAngle;
 			state.suspensionImpulse = wheel.suspensionImpulse;

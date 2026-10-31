@@ -1460,7 +1460,7 @@ namespace EmEn::Scenes
 				return Console::CommandResult::success("'" + shapeName + "' textured with '" + imageName + "' added as '" + entityName + "'.");
 			});
 
-		this->bindCommand("getNodePhysics", "Returns the physics state of a root-level node of the active scene as JSON: world/local position, world orientation (upward and backward vectors), linear and angular velocity, movable, simulation paused (asleep), grounded and WHICH surface it rests on (Ground/Boundary/Entity), and the scene's physics cycle the state belongs to.",
+		this->bindCommand("getNodePhysics", "Returns the physics state of a root-level node of the active scene as JSON: world/local position, world orientation (upward and backward vectors), linear and angular velocity, the world centre of mass (the point the physics turns it about), movable, simulation paused (asleep), grounded and WHICH surface it rests on (Ground/Boundary/Entity), and the scene's physics cycle the state belongs to.",
 			{
 				{"name", "The node name."}
 			},
@@ -1512,6 +1512,9 @@ namespace EmEn::Scenes
 				writeJSONVector(info, velocity);
 				info << ",\"angularVelocity\":";
 				writeJSONVector(info, node->angularVelocity());
+				/* The point the physics turns the body about: the explicit centre of mass, else its shape's centroid. */
+				info << ",\"worldCenterOfMass\":";
+				writeJSONVector(info, node->getWorldCenterOfMass());
 				info << ",";
 				info << "\"movable\":" << (node->isMovable() ? "true" : "false") << ",";
 				info << "\"simulationPaused\":" << (node->isSimulationPaused() ? "true" : "false") << ",";
@@ -1550,7 +1553,8 @@ namespace EmEn::Scenes
 						info << R"(,"suspensionLength":)" << jsonNumber(wheel.suspensionLength) << R"(,"angularVelocity":)" << jsonNumber(wheel.angularVelocity);
 						info << R"(,"steerAngle":)" << jsonNumber(wheel.steerAngle) << R"(,"slipRatio":)" << jsonNumber(wheel.slipRatio) << R"(,"slipAngle":)" << jsonNumber(wheel.slipAngle);
 						info << R"(,"suspensionImpulse":)" << jsonNumber(wheel.suspensionImpulse) << R"(,"longitudinalImpulse":)" << jsonNumber(wheel.longitudinalImpulse) << R"(,"lateralImpulse":)" << jsonNumber(wheel.lateralImpulse);
-						info << R"(,"driveTorque":)" << jsonNumber(wheel.driveTorque) << R"(,"brakeTorque":)" << jsonNumber(wheel.brakeTorque) << '}';
+						info << R"(,"driveTorque":)" << jsonNumber(wheel.driveTorque) << R"(,"brakeTorque":)" << jsonNumber(wheel.brakeTorque);
+						info << R"(,"longitudinalSpeed":)" << jsonNumber(wheel.longitudinalSpeed) << R"(,"load":)" << jsonNumber(wheel.load) << R"(,"tractionFactor":)" << jsonNumber(wheel.tractionFactor) << R"(,"brakeFactor":)" << jsonNumber(wheel.brakeFactor) << '}';
 					}
 
 					info << "]}";

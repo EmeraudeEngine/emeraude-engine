@@ -142,6 +142,7 @@ namespace EmEn::Scenes
 		auto bounciness = 0.0F;
 		auto stickiness = 0.0F;
 		std::optional< Matrix< 3, float > > inertiaTensor;
+		std::optional< Vector< 3, float > > centerOfMass;
 
 		auto masslessShapeCount = 0;
 		auto masslessBounciness = 0.0F;
@@ -208,6 +209,8 @@ namespace EmEn::Scenes
 					/* An explicit tensor is kept for a single physical component; several components leave it to the
 					 * physics, derived from the entity's collision shape and its total mass (P3, decision 8c). */
 					inertiaTensor = physicalEntityCount == 0 ? physicalProperties.inertiaTensor() : std::nullopt;
+					/* The explicit centre of mass the same way: a single physical component's, else the shape's. */
+					centerOfMass = physicalEntityCount == 0 ? physicalProperties.centerOfMass() : std::nullopt;
 
 					physicalEntityCount++;
 				}
@@ -280,6 +283,15 @@ namespace EmEn::Scenes
 				clampToUnit(stickiness / div),
 				inertiaTensor
 			);
+
+			if ( centerOfMass.has_value() )
+			{
+				m_bodyPhysicalProperties.setCenterOfMass(centerOfMass.value(), false);
+			}
+			else
+			{
+				m_bodyPhysicalProperties.resetCenterOfMass(false);
+			}
 		}
 		else
 		{

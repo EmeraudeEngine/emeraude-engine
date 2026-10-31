@@ -20,6 +20,19 @@ the node about its origin. A model whose origin is at its base (most glTF props,
 its middle, not about its feet. Box: the local box's centroid × the frame scaling; sphere: the origin; capsule: the
 middle of its axis (unscaled, as the narrow phase uses them). `Node::getWorldCenterOfMass()` answers the same point.
 
+**An explicit centre of mass** (2026-10-31): `BodyPhysicalProperties::setCenterOfMass(Vector3)` (in the entity's frame,
+metres, scaled with it like the shape; finite or refused with a warning) / `resetCenterOfMass()` / `centerOfMass()`
+(a `std::optional`, nothing = the shape's centroid). For a body whose mass is not spread like its shape: a car's chassis
+box has its centroid 0.70 m up and 55 % on the front axle, a mid-engined supercar's mass sits 0.45 m up and 55 % on the
+rear (projet-alpha's CarConcept). ONE source: `Physics::localCenterOfMass(properties, model, scaling)`
+(`BodyInertia.hpp`) — the explicit one, else `centerOfMassOffset(scaling)`, else the origin — read by the solver's body
+(`Body::centerOffset`), the contact impulses and `Node::getWorldCenterOfMass()`; a vehicle's wheels act about it. The
+derived inertia tensor stays the shape's, taken about this point (set an explicit tensor for an exact one). Like the
+tensor: kept from a single massive component, else the shape's; `merge()` averages two explicit centres by mass;
+`setProperties(other)` copies it; the JSON never sets it. Console: `getNodePhysics` → `worldCenterOfMass`, a `Weight`'s
+`getState` → `centerOfMass` (null when derived). Unset, nothing changes: the `collision-debug` bench's 49 stations
+before / after identical to the bit.
+
 ### Inertia: explicit, or derived from the shape
 
 - `BodyPhysicalProperties::inertiaTensor()` is a `std::optional`: an author sets one with `setInertiaTensor()` (or a

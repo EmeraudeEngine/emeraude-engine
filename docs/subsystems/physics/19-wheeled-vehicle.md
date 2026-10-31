@@ -43,15 +43,19 @@ Bullet's `btRaycastVehicle` (zlib) as references — no code taken. Work item: `
    - the SUSPENSION: a soft constraint along the contact normal (Box2D's soft-step formulation with the wheel's
      frequency and damping ratio), pushing only (a non-negative impulse), towards the rest length; a hard stop when
      compressed past the minimum length (the chassis' own contacts catch the rest);
+   - the wheel's spin integrates its drive torque and its angular damping;
    - the LONGITUDINAL friction: the contact point's velocity along the wheel's forward direction (in the contact plane)
      driven to the wheel's surface speed ω·r; its impulse spins the wheel back (I·Δω = −r·λ), bounded by
      μ_long(slip ratio) × the suspension impulse;
    - the LATERAL friction: the contact point's side velocity driven to 0, bounded by μ_lat(slip angle) × the suspension
-     impulse; both bounded together by the friction circle;
-   - the wheel's spin integrates its drive torque and its angular damping, then the BRAKE (Jolt's model): a brake
-     stronger than what stops the wheel within the sub-step (|ω| · I / h) LOCKS it — ω = 0, and its surplus
-     ((T − |ω| I / h) · h / r) bounds the tyre's rolling impulse, solved between the ground and the chassis alone (the
-     wheel's inertia out); a weaker brake slows the wheel. A dynamic ground body takes the reactions.
+     impulse; both bounded together by the friction ELLIPSE on the curves' PEAKS (what the tyre gives at most). The
+     slips and the coefficients are taken every sub-step, for the surface speed of the case solved (2026-10-31);
+   - the BRAKE (2026-10-31): a braked wheel is first solved HELD still (the slip against a wheel that does not turn, the
+     bodies alone along the rolling direction), kept only when the brake can give the angular impulse that holds it,
+     the road's included: β' = β − I·ω + Δλ·r, |β'| ≤ T·h. Otherwise the wheel TURNS: the friction with its spin taking
+     part, then the brake as a constraint driving the spin to 0, its accumulated angular impulse bounded by T·h (Box2D's
+     wheel joint motor at speed 0) — a brake weaker than the road lets the wheel roll. Both impulses are warm-started
+     over the sub-steps. A dynamic ground body takes the reactions.
 4. **After the solver**: the wheels' spin and rotation angle, the engine RPM, the visual wheels (the component moves the
    nodes attached to it: suspension offset, steering, spin).
 
@@ -80,10 +84,28 @@ earliest hit with the static world's ties broken as in step 4b.
 - A chassis is woken by a throttle or by a steering its wheels have not reached (`VehicleController::wantsToMove()`):
   a parked car steered shows its wheels turned, then sleeps again.
 
+### Electronic aids (2026-10-31, `VehicleSettings::aids`, off by default)
+- **Traction control** (`tractionControl`): each driven wheel's drive torque at most `tractionGripShare` (0.8) of what
+  its tyre transmits at its peak: μ_peak(longitudinal curve) × its load × its radius. **Anti-lock brakes**
+  (`antiLockBrakes`): each wheel's SERVICE brake at most `brakeGripShare` (0.8) of the same, at a ground speed of
+  `minimumSpeed` (1 m/s) or more (below it the car stops and holds); the hand brake is never capped (a hand-brake turn).
+- Both shares stay under the SLIDING torque (Jolt's curves: 1.0 / 1.2 = 0.83 of the peak): a wheel past its peak slip
+  gets less from the road, so a drive above it runs away and a brake above it stays held.
+- A CAP from the load, not a slip feedback: a 0.9 kg·m² wheel under 1250 N·m changes its spin by ~50 rad/s in one
+  step; a factor driven by the last step's slip only chattered between 0 and full (measured: 0-100 km/h not reached,
+  braking 0.2-0.5 g). The load is the last step's (`WheelState::load`): at the brake's onset after a hard launch the
+  front's is low for one step (the ABS lets 0.1-0.6 g through for 0.1 s).
+- `WheelState::tractionFactor` / `brakeFactor`: the share of the requested torque the wheel got (1: untouched).
+- Measured on projet-alpha's CarConcept (1888 kg, 1250 N·m, all-wheel drive, μ 1.4, `city` straight, Linux, 0 VUID):
+  0-100 km/h 3.03 s (wheelspin under 0.3 of slip; without the aids the wheels spun at a slip of 3-30 to the limiter),
+  braking from 100 km/h at 1.03-1.18 g over 42.2 m with no wheel held (without: the front wheels held from 0.1 s,
+  0.73-0.8 g); shares at 0.7: 3.29 s and 44.7 m.
+
 ### Console / MCP
 - `getNodePhysics(name)` gains a `vehicle` object: `engineRPM`, `gear`, `clutch` and per wheel `contact`,
   `suspensionLength`, `angularVelocity`, `steerAngle`, `slipRatio`, `slipAngle`, the suspension / longitudinal /
-  lateral impulses and the contact point.
+  lateral impulses and the contact point; since 2026-10-31 `driveTorque`, `brakeTorque`, `longitudinalSpeed` (the
+  ground speed at the contact), `load` (N) and the aids' `tractionFactor` / `brakeFactor`.
 - `setVehicleInput(name, forward, right, brake, handBrake)`.
 
 ### Measured (`collision-debug` ROW 9, z +62 to +85; Linux RTX 3070 Ti, 2026-10-02)
@@ -94,8 +116,8 @@ bit-identical to the reference of decision 14 (the cars do not disturb them).
 | Station | Inputs | Result |
 |---|---|---|
 | `BenchCarIdle` | none | settles on its suspension at y 0.8207 (0.371 m of suspension, 12.9 cm of sag), then SLEEPS (no drift) |
-| `BenchCarStraight` | full throttle from cycle 60, full brake from cycle 300 | 2.1 / 6.5 / 10.8 / 14.85 m/s after 1 / 2 / 3 / 4 s, squatting 1.4°; stops in 2.33 s over 17.4 m (≈ 6.4 m/s², 0.65 g, the wheels locked) diving 2.2°; at rest straight, asleep |
-| `BenchCarTurn` | half throttle, half steering to the RIGHT from cycle 60 | a steady circle to the right: 9.28 m/s, yaw rate −0.860 rad/s (R = v / ω = 10.8 m), the body rolled 7.5° OUTWARDS; the mirror of the left turn measured before the sign fix (+0.860, the same speed and roll) |
+| `BenchCarStraight` | full throttle from cycle 60, full brake from cycle 300 | 2.1 / 6.5 / 10.8 / 14.85 m/s after 1 / 2 / 3 / 4 s, squatting 1.4°; stops in 2.33 s over 17.4 m (≈ 6.4 m/s², 0.65 g, the wheels locked) diving 2.2°; at rest straight, asleep. **Since 2026-10-31** (the ellipse on the peaks, the held / turning brake): 17.55 m/s at cycle 300 (the spinning rear tyres transmit their grip), stops at cycle 430 over 18.46 m (0.85 g, the wheels rolling), then holds |
+| `BenchCarTurn` | half throttle, half steering to the RIGHT from cycle 60 | a steady circle to the right: 9.28 m/s, yaw rate −0.860 rad/s (R = v / ω = 10.8 m), the body rolled 7.5° OUTWARDS; the mirror of the left turn measured before the sign fix (+0.860, the same speed and roll). **Since 2026-10-31**: 9.47 m/s, −0.832 rad/s, R 11.4 m, roll 7.6° |
 | `BenchCarFlipped` (2026-10-03) | none; built turned 180° about its forward | falls on its roof and rests at y 0.25 (up (0, −1, 0)), its four wheels in the air (`contact` false, suspension 0.5). Without `maxSlopeAngle`: two wheels in contact at a suspension length of 0 (their casts start inside the ground); the CarConcept on its roof reported all four (macOS) |
 
 The visuals were checked on screenshots: the wheels on the ground at the idle sag, the spokes left at their spin
@@ -131,11 +153,23 @@ and Windows; 0 `VUID-`.
   Without the adjustment the spring saw the full anchor offset (0.95 m) as a compression and launched the chassis.
 - **The gearbox shifts on the GROUND speed, the clutch closed**: shifting on the wheels' spin made it cycle 1-2-1 under
   wheelspin. The bench car spins its rear wheels in first gear at full throttle (Jolt's 500 N·m through 2.66 × 3.42
-  exceeds the rear tyres' grip): it stays in first until 16 m/s. Realistic for the gearing; no traction control.
+  exceeds the rear tyres' grip): it stays in first until 16 m/s. Realistic for the gearing; the traction control is
+  optional (`VehicleSettings::aids`, off on the bench).
 - **A braked wheel must be solved INSIDE the solve** (found in citadel, 2026-10-02): applied once per sub-step before
   the friction, the brake stopped the wheel, then the friction impulse (its effective mass mostly the light wheel's,
   ≈ 7 kg) spun it back up every iteration: a parked car with its hand brake pulled crept down a 6° slope at 0.24 m/s
   for good. With the lock and the surplus impulse it holds (3 cm while dropping onto its suspension, then asleep).
+  A brake as a pure spin constraint after the friction (2026-10-31, first attempt) crept again (city's parked car,
+  63 mm/s): the held solve (the bodies alone) must stay.
+- **The lock test must include the road** (2026-10-31): the lock was `T > |ω| · I / h`, the wheel's own spin alone.
+  Once stopped (ω = 0, a threshold of 0) any brake torque locked it again every sub-step: a wheel NEVER rolled again
+  while the pedal was pressed, whatever the road's torque — no anti-lock brakes possible. The held case is now kept only
+  while |β − I·ω + Δλ·r| ≤ T·h.
+- **The friction ellipse goes on the curves' PEAKS** (2026-10-31): on the slip-dependent bounds, the lateral one is tiny
+  at a small slip angle (μ 0.33 at 0.7° on Jolt's curve); the lateral impulse saturated it and the ellipse cut the
+  rolling friction to ~0.7 of its bound — a spinning tyre transmitted 0.82 × its load instead of 1.17, a braked wheel
+  stayed held by a brake weaker than the road. And the coefficients were taken once at the step's start: a light wheel
+  crosses its whole curve within a step.
 - **The slip floor is 1 mm/s, not 0.5 m/s**: under the floor the slip ratio is measured against it, so a 0.5 m/s floor
   made a creep of a few mm/s a tiny slip, a tiny grip (the curves start at (0, 0)) — the same creep.
 - **A chassis on its wheels is not `grounded`** (`groundedSource` None): the wheels hold it, not its own contacts. A

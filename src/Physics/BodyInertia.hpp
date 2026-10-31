@@ -71,6 +71,31 @@ namespace EmEn::Physics
 	}
 
 	/**
+	 * @brief Returns a body's centre of mass in its frame, scaled with it: the explicit one of the properties
+	 * (BodyPhysicalProperties::setCenterOfMass()), else the collision shape's centroid, else the origin.
+	 * @note The one source of the centre of mass of the physics: the solver's body, the contact impulses and
+	 * Scenes::Node::getWorldCenterOfMass() all read it here.
+	 * @param properties A reference to the body's physical properties.
+	 * @param model A pointer to the collision model. May be nullptr.
+	 * @param scaling A reference to the scaling factor of the body's world frame.
+	 * @return Base::Math::Vector< 3, float >
+	 */
+	[[nodiscard]]
+	inline
+	Base::Math::Vector< 3, float >
+	localCenterOfMass (const BodyPhysicalProperties & properties, const CollisionModelInterface * model, const Base::Math::Vector< 3, float > & scaling) noexcept
+	{
+		if ( const auto & explicitCentre = properties.centerOfMass(); explicitCentre.has_value() )
+		{
+			const auto & centre = explicitCentre.value();
+
+			return {centre[0] * scaling[0], centre[1] * scaling[1], centre[2] * scaling[2]};
+		}
+
+		return model != nullptr ? model->centerOfMassOffset(scaling) : Base::Math::Vector< 3, float >{};
+	}
+
+	/**
 	 * @brief Turns a body-axes inverse inertia tensor into world space: R · I⁻¹ · Rᵀ.
 	 * @param localInverse A reference to the inverse inertia in the body's axes.
 	 * @param rotation A reference to the body's world rotation (body axes → world).

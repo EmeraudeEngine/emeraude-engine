@@ -126,6 +126,28 @@ namespace EmEn::Physics
 	};
 
 	/**
+	 * @brief The vehicle's electronic aids, each wheel on its own (both off by default: the raw vehicle).
+	 * @note Each one CAPS a wheel's torque at a share of what its tyre can transmit: the peak of its longitudinal
+	 * friction curve × its load (the last step's, WheelState::load) × its radius. The share stays under the tyre's
+	 * SLIDING torque (Jolt's curves: 1.0 / 1.2 = 0.83 of the peak), so a wheel past its peak slip — which then gives less
+	 * — is always brought back by the road: a drive above it runs away, a brake above it stays held. A cap, not a slip
+	 * feedback: the wheel's dynamics are far faster than the physics rate (1250 N·m on a 0.9 kg·m² wheel spins it
+	 * 50 rad/s in one step), and a slip-driven factor only chattered between 0 and full (2026-10-31).
+	 */
+	struct VehicleAidSettings final
+	{
+		/** Traction control: a driven wheel's drive torque at most this share of its tyre's peak torque. */
+		float tractionGripShare{0.8F};
+		/** Anti-lock brakes: a wheel's service brake at most this share of its tyre's peak torque (the hand brake is
+		 * never capped). */
+		float brakeGripShare{0.8F};
+		/** The anti-lock brakes stay off below this ground speed at the wheel (m/s): the car stops and holds. */
+		float minimumSpeed{1.0F};
+		bool tractionControl{false};
+		bool antiLockBrakes{false};
+	};
+
+	/**
 	 * @brief A whole vehicle.
 	 */
 	struct EMEN_API VehicleSettings final
@@ -151,6 +173,8 @@ namespace EmEn::Physics
 		 * steering linkage (1818); the strength factor: NVIDIA PhysX 5 PxVehicleAckermannParams (BSD-3) — no code taken.
 		 */
 		float ackermann{0.0F};
+		/** @brief The electronic aids: traction control and anti-lock brakes (off by default). */
+		VehicleAidSettings aids{};
 
 		/**
 		 * @brief Fills the curves and the gear ratios with Jolt's defaults (a road car).
@@ -160,7 +184,8 @@ namespace EmEn::Physics
 		/**
 		 * @brief Checks the settings: at least one wheel, every value finite, radius, travel, frequencies and inertias
 		 * positive, unit directions, a ratio for every gear, the differentials' wheels existing, the slope angle in
-		 * [0, π/2], the Ackermann factor in [0, 1] (then every maxSteerAngle under π/2).
+		 * [0, π/2], the Ackermann factor in [0, 1] (then every maxSteerAngle under π/2), the aids' grip shares in
+		 * (0, 1] and their minimum speed positive.
 		 * @return bool
 		 */
 		[[nodiscard]]
@@ -187,10 +212,16 @@ namespace EmEn::Physics
 				float steerAngle{0.0F};
 				/** The suspension's length (the maximum when in the air). */
 				float suspensionLength{0.0F};
-				/** This step's drive and brake torques (N·m). */
+				/** This step's drive and brake torques (N·m), the aids' factors included. */
 				float driveTorque{0.0F};
 				float brakeTorque{0.0F};
-				/** The last step's slips and impulses (what the solver gave). */
+				/** The aids' share of its requested drive torque and service brake it got, in [0, 1] (1: untouched). */
+				float tractionFactor{1.0F};
+				float brakeFactor{1.0F};
+				/** The last step's ground speed at the contact along the wheel's forward (m/s), its load (the suspension's
+				 * force, N), slips and impulses (what the solver gave; the impulses are its last sub-step's). */
+				float longitudinalSpeed{0.0F};
+				float load{0.0F};
 				float slipRatio{0.0F};
 				float slipAngle{0.0F};
 				float suspensionImpulse{0.0F};
@@ -326,6 +357,14 @@ namespace EmEn::Physics
 
 			/** @brief Starts a shift to a gear. */
 			void shiftTo (int32_t gear) noexcept;
+
+			/**
+			 * @brief The electronic aids on this step's torques (VehicleAidSettings): each driven wheel's drive torque
+			 * capped by its tyre's grip, and each wheel's brake factor for its service brake.
+			 * @param serviceBrakes Each wheel's service brake torque this step (N·m), before the aid; the hand brake is
+			 * added after it.
+			 */
+			void applyAids (const Base::StaticVector< float, 8 > & serviceBrakes) noexcept;
 
 			/** @brief A wheel's place for the Ackermann geometry, in the chassis' frame (m). */
 			struct WheelGeometry final

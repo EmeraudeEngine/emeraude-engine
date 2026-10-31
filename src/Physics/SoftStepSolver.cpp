@@ -41,6 +41,11 @@ namespace EmEn::Physics
 
 	namespace
 	{
+		/* Under this rolling speed (m/s) the slip ratio is measured against it (a wheel spinning at a standstill). Jolt's
+		 * 1 mm/s: a 0.5 m/s floor made a few mm/s of creep a tiny slip, hence a tiny grip — a braked car crept down a
+		 * 6° slope at 0.24 m/s. */
+		constexpr float WheelSlipSpeedFloor{1.0e-3F};
+
 		using Vec3 = Vector< 3, float >;
 
 		/** @brief The effective mass along a direction at a point: 1 / (mA + mB + (rA × d)·IA(rA × d) + (rB × d)·IB(rB × d)). */
@@ -253,18 +258,12 @@ namespace EmEn::Physics
 	void
 	SoftStepSolver::prepareWheels (const std::vector< Body > & bodies, std::vector< Wheel > & wheels) noexcept
 	{
-		/* Under this rolling speed (m/s) the slip ratio is measured against it (a wheel spinning at a standstill). Jolt's
-		 * 1 mm/s: a 0.5 m/s floor made a few mm/s of creep a tiny slip, hence a tiny grip — a braked car crept down a
-		 * 6° slope at 0.24 m/s. */
-		constexpr float WheelSlipSpeedFloor{1.0e-3F};
-
 		for ( auto & wheel : wheels )
 		{
 			wheel.suspensionImpulse = 0.0F;
 			wheel.longitudinalImpulse = 0.0F;
 			wheel.lateralImpulse = 0.0F;
 			wheel.brakeImpulse = 0.0F;
-			wheel.locked = false;
 
 			if ( !wheel.contact )
 			{
@@ -292,10 +291,29 @@ namespace EmEn::Physics
 			const auto longitudinal = Vec3::dotProduct(velocity, wheel.forward);
 			const auto lateral = Vec3::dotProduct(velocity, wheel.side);
 
+			wheel.longitudinalSpeed = longitudinal;
 			wheel.slipRatio = ((wheel.angularVelocity * wheel.radius) - longitudinal) / std::max(std::abs(longitudinal), WheelSlipSpeedFloor);
 			wheel.slipAngle = std::abs(longitudinal) > 0.0F || std::abs(lateral) > 0.0F ? std::atan2(std::abs(lateral), std::abs(longitudinal)) * (180.0F / std::numbers::pi_v< float >) : 0.0F;
 			wheel.longitudinalCoefficient = wheel.longitudinalFriction != nullptr ? std::max(0.0F, wheel.longitudinalFriction->value(std::abs(wheel.slipRatio))) : 0.0F;
 			wheel.lateralCoefficient = wheel.lateralFriction != nullptr ? std::max(0.0F, wheel.lateralFriction->value(wheel.slipAngle)) : 0.0F;
+			wheel.longitudinalPeak = 0.0F;
+			wheel.lateralPeak = 0.0F;
+
+			if ( wheel.longitudinalFriction != nullptr )
+			{
+				for ( const auto & [slip, friction] : wheel.longitudinalFriction->points() )
+				{
+					wheel.longitudinalPeak = std::max(wheel.longitudinalPeak, friction);
+				}
+			}
+
+			if ( wheel.lateralFriction != nullptr )
+			{
+				for ( const auto & [slip, friction] : wheel.lateralFriction->points() )
+				{
+					wheel.lateralPeak = std::max(wheel.lateralPeak, friction);
+				}
+			}
 		}
 	}
 
@@ -304,6 +322,9 @@ namespace EmEn::Physics
 	{
 		for ( auto & wheel : wheels )
 		{
+			/* The brake's accumulated impulse on the spin, in the air too. */
+			wheel.angularVelocity += wheel.brakeImpulse / wheel.inertia;
+
 			if ( !wheel.contact )
 			{
 				continue;
@@ -315,46 +336,49 @@ namespace EmEn::Physics
 
 			applyImpulse(ground, chassis, wheel.anchorGround, wheel.anchorChassis, impulse);
 
-			/* A locked wheel's rolling impulse went through its brake, not its spin. */
-			if ( !wheel.locked )
-			{
-				wheel.angularVelocity -= wheel.longitudinalImpulse * wheel.radius / wheel.inertia;
-			}
+			wheel.angularVelocity -= wheel.longitudinalImpulse * wheel.radius / wheel.inertia;
 		}
 	}
 
 	void
 	SoftStepSolver::solveWheels (std::vector< Body > & bodies, std::vector< Wheel > & wheels, float subStep, bool integrateSpin) noexcept
 	{
+		/* The brake: a constraint driving the wheel's spin to 0, its accumulated angular impulse bounded by the brake
+		 * torque × the sub-step (Box2D's wheel joint motor at speed 0, its maximum torque the brake), warm-started.
+		 * A wheel on the ground is first solved HELD still by its brake (the bodies alone along the rolling direction —
+		 * a light wheel solved against a heavy chassis by sequential impulses let a parked car creep): kept only when
+		 * the brake can give the angular impulse that holds it, the road's included (β' = β − I·ω + Δλ·r, |β'| ≤ T·h).
+		 * Otherwise the wheel turns: the tyre with its spin taking part, then this constraint — a brake weaker than the
+		 * road's torque lets it roll, so a skidding wheel rolls again once the brake drops under the tyre's sliding torque.
+		 * ⚠️ Until 2026-10-31 the lock test was the wheel's own spin alone (T > |ω| · I / h): once stopped (ω = 0, that
+		 * threshold 0), any brake locked it again every sub-step, and a wheel never rolled again while the pedal was
+		 * pressed (no anti-lock brakes possible). */
+		const auto solveBrake = [subStep] (Wheel & wheel) {
+			if ( !(wheel.brakeTorque > 0.0F) )
+			{
+				return;
+			}
+
+			const auto maximum = wheel.brakeTorque * subStep;
+			const auto previous = wheel.brakeImpulse;
+
+			wheel.brakeImpulse = std::clamp(previous - (wheel.inertia * wheel.angularVelocity), -maximum, maximum);
+			wheel.angularVelocity += (wheel.brakeImpulse - previous) / wheel.inertia;
+		};
+
 		for ( auto & wheel : wheels )
 		{
-			/* The spin: its torques and damping, then the brake. A brake stronger than what stops the wheel within the
-			 * sub-step LOCKS it: its spin 0, its surplus the bound of the tyre's rolling impulse (Jolt's model: the
-			 * brake inside the solve; applied outside it, the light wheel spun back up every iteration and the car
-			 * crept). Otherwise the brake slows the wheel. */
+			/* The spin: its drive torque and its damping (the brake is a constraint, below). */
 			if ( integrateSpin )
 			{
 				wheel.angularVelocity += wheel.driveTorque / wheel.inertia * subStep;
 				wheel.angularVelocity /= 1.0F + (wheel.angularDamping * subStep);
-
-				const auto lockTorque = std::abs(wheel.angularVelocity) * wheel.inertia / subStep;
-
-				if ( wheel.brakeTorque > 0.0F && wheel.brakeTorque > lockTorque )
-				{
-					wheel.angularVelocity = 0.0F;
-					wheel.brakeImpulse = (wheel.brakeTorque - lockTorque) * subStep / wheel.radius;
-					wheel.locked = true;
-				}
-				else
-				{
-					wheel.angularVelocity -= std::copysign(wheel.brakeTorque / wheel.inertia * subStep, wheel.angularVelocity);
-					wheel.brakeImpulse = 0.0F;
-					wheel.locked = false;
-				}
 			}
 
 			if ( !wheel.contact )
 			{
+				solveBrake(wheel);
+
 				continue;
 			}
 
@@ -382,21 +406,36 @@ namespace EmEn::Physics
 			}
 
 			/* The tyre: the contact point's rolling speed to the wheel's surface speed (the impulse spins the wheel), the
-			 * side speed to 0; each bounded by its coefficient × the load, both by the friction ellipse. */
-			{
-				const Vec3 velocity = relativeVelocityAt(ground, chassis, wheel.anchorGround, wheel.anchorChassis);
-				const auto rollingSlip = Vec3::dotProduct(velocity, wheel.forward) - (wheel.angularVelocity * wheel.radius);
-				const auto sideSlip = Vec3::dotProduct(velocity, wheel.side);
-				/* A locked wheel holds the contact still through its brake: the bodies' mass alone, at most the brake's
-				 * surplus. A free one rolls: its spin takes part (the impulse spins it). */
-				const auto maxLongitudinal = wheel.locked ? std::min(wheel.longitudinalCoefficient * wheel.suspensionImpulse, wheel.brakeImpulse) : wheel.longitudinalCoefficient * wheel.suspensionImpulse;
-				const auto maxLateral = wheel.lateralCoefficient * wheel.suspensionImpulse;
-				auto longitudinal = std::clamp(wheel.longitudinalImpulse - ((wheel.locked ? wheel.rollingMass : wheel.longitudinalMass) * rollingSlip), -maxLongitudinal, maxLongitudinal);
-				auto lateral = std::clamp(wheel.lateralImpulse - (wheel.lateralMass * sideSlip), -maxLateral, maxLateral);
+			 * side speed to 0; each bounded by its coefficient × the load, both by the friction ellipse. The slips and
+			 * the coefficients are taken HERE, every sub-step, for the wheel's surface speed in the case solved: a light
+			 * wheel changes its slip far within a step (taken once at the step's start, a braked wheel met a low
+			 * coefficient, the brake crushed it to a stop inside the step and it stayed held). */
+			const Vec3 velocity = relativeVelocityAt(ground, chassis, wheel.anchorGround, wheel.anchorChassis);
+			const auto contactSpeed = Vec3::dotProduct(velocity, wheel.forward);
+			const auto sideSlip = Vec3::dotProduct(velocity, wheel.side);
 
-				if ( maxLongitudinal > 0.0F && maxLateral > 0.0F )
+			/* The accumulated impulses for a surface speed through a mass: its slips and coefficients, each bounded by
+			 * its coefficient × the load, then the friction ellipse on the curves' PEAKS (what the tyre gives at most).
+			 * ⚠️ The ellipse was on the slip-dependent bounds until 2026-10-31: at a small slip angle the lateral bound is
+			 * tiny (μ 0.33 at 0.7° on Jolt's curve), the lateral impulse saturated it, and the ellipse cut the rolling
+			 * friction to ~0.7 of its bound — a spinning tyre transmitted 0.82 × its load instead of 1.17, and a braked
+			 * wheel was held by a brake weaker than the road. */
+			const auto tyreImpulses = [&wheel, contactSpeed, sideSlip] (float mass, float surfaceSpeed) {
+				wheel.slipRatio = (surfaceSpeed - contactSpeed) / std::max(std::abs(contactSpeed), WheelSlipSpeedFloor);
+				wheel.slipAngle = std::abs(contactSpeed) > 0.0F || std::abs(sideSlip) > 0.0F ? std::atan2(std::abs(sideSlip), std::abs(contactSpeed)) * (180.0F / std::numbers::pi_v< float >) : 0.0F;
+				wheel.longitudinalCoefficient = wheel.longitudinalFriction != nullptr ? std::max(0.0F, wheel.longitudinalFriction->value(std::abs(wheel.slipRatio))) : 0.0F;
+				wheel.lateralCoefficient = wheel.lateralFriction != nullptr ? std::max(0.0F, wheel.lateralFriction->value(wheel.slipAngle)) : 0.0F;
+
+				const auto maxLongitudinal = wheel.longitudinalCoefficient * wheel.suspensionImpulse;
+				const auto maxLateral = wheel.lateralCoefficient * wheel.suspensionImpulse;
+				auto longitudinal = std::clamp(wheel.longitudinalImpulse - (mass * (contactSpeed - surfaceSpeed)), -maxLongitudinal, maxLongitudinal);
+				auto lateral = std::clamp(wheel.lateralImpulse - (wheel.lateralMass * sideSlip), -maxLateral, maxLateral);
+				const auto peakLongitudinal = wheel.longitudinalPeak * wheel.suspensionImpulse;
+				const auto peakLateral = wheel.lateralPeak * wheel.suspensionImpulse;
+
+				if ( peakLongitudinal > 0.0F && peakLateral > 0.0F )
 				{
-					const auto ellipse = ((longitudinal / maxLongitudinal) * (longitudinal / maxLongitudinal)) + ((lateral / maxLateral) * (lateral / maxLateral));
+					const auto ellipse = ((longitudinal / peakLongitudinal) * (longitudinal / peakLongitudinal)) + ((lateral / peakLateral) * (lateral / peakLateral));
 
 					if ( ellipse > 1.0F )
 					{
@@ -407,17 +446,42 @@ namespace EmEn::Physics
 					}
 				}
 
+				return std::pair{longitudinal, lateral};
+			};
+
+			/* Held still by its brake: the slip of the contact against a wheel that does not turn. */
+			if ( wheel.brakeTorque > 0.0F )
+			{
+				const auto [longitudinal, lateral] = tyreImpulses(wheel.rollingMass, 0.0F);
+				const auto appliedLongitudinal = longitudinal - wheel.longitudinalImpulse;
+				const auto holding = wheel.brakeImpulse - (wheel.inertia * wheel.angularVelocity) + (appliedLongitudinal * wheel.radius);
+
+				if ( std::abs(holding) <= wheel.brakeTorque * subStep )
+				{
+					applyImpulse(ground, chassis, wheel.anchorGround, wheel.anchorChassis, (wheel.forward * appliedLongitudinal) + (wheel.side * (lateral - wheel.lateralImpulse)));
+
+					wheel.angularVelocity = 0.0F;
+					wheel.brakeImpulse = holding;
+					wheel.longitudinalImpulse = longitudinal;
+					wheel.lateralImpulse = lateral;
+
+					continue;
+				}
+			}
+
+			/* Turning: its spin takes part, then the brake. */
+			{
+				const auto [longitudinal, lateral] = tyreImpulses(wheel.longitudinalMass, wheel.angularVelocity * wheel.radius);
 				const auto appliedLongitudinal = longitudinal - wheel.longitudinalImpulse;
 
 				applyImpulse(ground, chassis, wheel.anchorGround, wheel.anchorChassis, (wheel.forward * appliedLongitudinal) + (wheel.side * (lateral - wheel.lateralImpulse)));
 
-				if ( !wheel.locked )
-				{
-					wheel.angularVelocity -= appliedLongitudinal * wheel.radius / wheel.inertia;
-				}
+				wheel.angularVelocity -= appliedLongitudinal * wheel.radius / wheel.inertia;
 				wheel.longitudinalImpulse = longitudinal;
 				wheel.lateralImpulse = lateral;
 			}
+
+			solveBrake(wheel);
 		}
 	}
 

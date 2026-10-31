@@ -28,17 +28,36 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <memory>
 #include <optional>
+#include <string>
+#include <utility>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "json/json.h"
 
 /* Local inclusions. */
+#include "Console/CommandResult.hpp"
+#include "Console/ControllableTrait.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
 #include "DirectionalPushModifier.hpp"
 #include "FastJSON.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
+#include "Physics/BodyPhysicalProperties.hpp"
 #include "Scenes/AbstractEntity.hpp"
+#include "Scenes/Component/AbstractModifier.hpp"
 #include "SphericalPushModifier.hpp"
 #include "Weight.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Scenes
+{
+	class Manager;
+}
 
 namespace EmEn::Scenes::Component
 {
@@ -135,6 +154,8 @@ namespace EmEn::Scenes::Component
 			state["angularDragCoefficient"] = static_cast< double >(physics.angularDragCoefficient());
 			state["bounciness"] = static_cast< double >(physics.bounciness());
 			state["stickiness"] = static_cast< double >(physics.stickiness());
+			/* The explicit centre of mass (the entity's frame), null when it is the collision shape's centroid. */
+			state["centerOfMass"] = physics.centerOfMass().has_value() ? toJSON(physics.centerOfMass().value()) : Json::Value{Json::nullValue};
 
 			/* An unset bound is reported as null, never as its reset sentinel (±FLT_MAX for a box). */
 			if ( const auto & sphere = weight.localBoundingSphere(); sphere.isValid() )
@@ -342,7 +363,7 @@ namespace EmEn::Scenes::Component
 					const Console::Parameter entity{entityParameter("the weight")};
 					const Console::Parameter component{componentParameter(Weight::ClassId)};
 
-					this->bindCommand("getState", "Returns the state of a weight as JSON: the physical properties it gives its entity (mass in kg, surface in m², drag, bounciness, stickiness) and its collision bounds (metres).",
+					this->bindCommand("getState", "Returns the state of a weight as JSON: the physical properties it gives its entity (mass in kg, surface in m², drag, bounciness, stickiness, the explicit centre of mass or null) and its collision bounds (metres).",
 						{entity, component},
 						[this] (const std::string & entityName, const std::string & componentName) {
 							return this->act(entityName, componentName, [] (Weight & weight) {

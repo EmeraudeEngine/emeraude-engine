@@ -28,15 +28,26 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <iterator>
 #include <memory>
 #include <ranges>
 #include <vector>
 
 /* Local inclusions. */
-#include "Math/OrientedCuboid.hpp"
-#include "Scenes/Component/AbstractModifier.hpp"
+#include "BlobTrait.hpp"
+#include "Graphics/Frustum.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "ObservableTrait.hpp"
+#include "Physics/BodyInertia.hpp"
+#include "Physics/BodyPhysicalProperties.hpp"
+#include "Physics/CollisionModelInterface.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Scenes/Component/Abstract.hpp"
+#include "Scenes/Component/AbstractModifier.hpp" // IWYU pragma: keep (used through the generic lambda given to Scene::forEachModifiers())
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
+#include "Variant.hpp"
+#include "VertexFactory/GridQuad.hpp"
 
 namespace EmEn::Scenes
 {
@@ -1132,13 +1143,11 @@ namespace EmEn::Scenes
 
 		const auto worldFrame = this->parent()->isRoot() ? m_logicStateCoordinates : this->getWorldCoordinates();
 
-		if ( !this->hasCollisionModel() )
-		{
-			return worldFrame.position();
-		}
+		/* The explicit centre of mass, else the centroid of the collision shape (P3, decision 8b): the point the physics
+		 * turns the body about. */
+		const auto * model = this->hasCollisionModel() ? this->collisionModel() : nullptr;
 
-		/* The centroid of the collision shape (P3, decision 8b): the point the physics turns the body about. */
-		return worldFrame.position() + (worldFrame.getRotationMatrix3() * this->collisionModel()->centerOfMassOffset(worldFrame.scalingFactor()));
+		return worldFrame.position() + (worldFrame.getRotationMatrix3() * Physics::localCenterOfMass(this->getBodyPhysicalProperties(), model, worldFrame.scalingFactor()));
 	}
 
 	bool

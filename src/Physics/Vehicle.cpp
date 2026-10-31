@@ -31,6 +31,7 @@
 #include <cmath>
 #include <initializer_list>
 #include <numbers>
+#include <utility>
 
 namespace EmEn::Physics
 {
@@ -126,6 +127,15 @@ namespace EmEn::Physics
 		}
 
 		if ( !std::isfinite(ackermann) || ackermann < 0.0F || ackermann > 1.0F )
+		{
+			return false;
+		}
+
+		const auto validShare = [] (float share) {
+			return std::isfinite(share) && share > 0.0F && share <= 1.0F;
+		};
+
+		if ( !validShare(aids.tractionGripShare) || !validShare(aids.brakeGripShare) || !isPositive(aids.minimumSpeed) )
 		{
 			return false;
 		}
@@ -496,11 +506,66 @@ namespace EmEn::Physics
 			m_wheels[differential.rightWheel].driveTorque += torque * (1.0F - leftShare);
 		}
 
+		Base::StaticVector< float, 8 > serviceBrakes;
+
 		for ( size_t index = 0; index < m_wheels.size(); ++index )
 		{
-			const auto & wheelSettings = settings.wheels[index];
+			serviceBrakes.push_back(m_brake * settings.wheels[index].maxBrakeTorque);
+		}
 
-			m_wheels[index].brakeTorque = (m_brake * wheelSettings.maxBrakeTorque) + (m_handBrake * wheelSettings.maxHandBrakeTorque);
+		this->applyAids(serviceBrakes);
+
+		for ( size_t index = 0; index < m_wheels.size(); ++index )
+		{
+			auto & wheel = m_wheels[index];
+
+			wheel.brakeTorque = (serviceBrakes[index] * wheel.brakeFactor) + (m_handBrake * settings.wheels[index].maxHandBrakeTorque);
+		}
+	}
+
+	void
+	VehicleController::applyAids (const Base::StaticVector< float, 8 > & serviceBrakes) noexcept
+	{
+		const auto & aids = m_settings.aids;
+
+		for ( size_t index = 0; index < m_wheels.size(); ++index )
+		{
+			auto & wheel = m_wheels[index];
+			const auto & wheelSettings = m_settings.wheels[index];
+
+			wheel.tractionFactor = 1.0F;
+			wheel.brakeFactor = 1.0F;
+
+			if ( !wheel.contact )
+			{
+				continue;
+			}
+
+			/* What the tyre can transmit at its peak: μ_peak × its load × its radius. */
+			float peakFriction = 0.0F;
+
+			for ( const auto & [slip, friction] : wheelSettings.longitudinalFriction.points() )
+			{
+				peakFriction = std::max(peakFriction, friction);
+			}
+
+			const auto peakTorque = peakFriction * std::max(wheel.load, 0.0F) * wheelSettings.radius;
+
+			/* Traction control: the drive torque capped, its sign kept. */
+			if ( aids.tractionControl && wheel.driveTorque != 0.0F )
+			{
+				const auto requested = std::abs(wheel.driveTorque);
+				const auto granted = std::min(requested, aids.tractionGripShare * peakTorque);
+
+				wheel.tractionFactor = granted / requested;
+				wheel.driveTorque = std::copysign(granted, wheel.driveTorque);
+			}
+
+			/* Anti-lock brakes: the service brake capped, at speed only. */
+			if ( aids.antiLockBrakes && serviceBrakes[index] > 0.0F && std::abs(wheel.longitudinalSpeed) >= aids.minimumSpeed )
+			{
+				wheel.brakeFactor = std::min(1.0F, aids.brakeGripShare * peakTorque / serviceBrakes[index]);
+			}
 		}
 	}
 

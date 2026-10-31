@@ -30,8 +30,9 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
+#include <iosfwd>
 #include <optional>
 #include <string>
 
@@ -45,7 +46,9 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Hash/FNV1a.hpp"
 #include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 #include "Physics.hpp"
 
 namespace EmEn::Physics
@@ -89,6 +92,7 @@ namespace EmEn::Physics
 				BouncinessChanged,
 				StickinessChanged,
 				InertiaTensorChanged,
+				CenterOfMassChanged,
 				PropertiesChanged,
 				/* Enumeration boundary. */
 				MaxEnum
@@ -340,6 +344,39 @@ namespace EmEn::Physics
 			}
 
 			/**
+			 * @brief Sets an EXPLICIT centre of mass, in the body's frame (metres, the entity's local axes, scaled with
+			 * its frame like the collision shape).
+			 * @note Without one, the centre of mass is the collision shape's centroid
+			 * (CollisionModelInterface::centerOfMassOffset()). Set one for a body whose mass is not spread like its shape
+			 * (a car: low, and behind or ahead of its box's middle): the body turns about it, and gravity, the contacts and
+			 * a vehicle's wheels act about it (`Physics::localCenterOfMass()`). The derived inertia tensor stays the
+			 * shape's, taken about this point: set an explicit one (setInertiaTensor()) for an exact tensor.
+			 * @param centerOfMass The centre of mass, finite (else refused with a warning).
+			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
+			 * @return bool Whether it changed.
+			 */
+			bool setCenterOfMass (const Base::Math::Vector< 3, float > & centerOfMass, bool fireEvents = true) noexcept;
+
+			/**
+			 * @brief Removes the explicit centre of mass: the collision shape's centroid again.
+			 * @param fireEvents Controls whether event are fired or not when setting the property. Default true.
+			 * @return bool Whether there was an explicit centre of mass.
+			 */
+			bool resetCenterOfMass (bool fireEvents = true) noexcept;
+
+			/**
+			 * @brief Returns the explicit centre of mass (the body's frame, unscaled), or nothing when it is the
+			 * collision shape's centroid.
+			 * @return const std::optional< Base::Math::Vector< 3, float > > &
+			 */
+			[[nodiscard]]
+			const std::optional< Base::Math::Vector< 3, float > > &
+			centerOfMass () const noexcept
+			{
+				return m_centerOfMass;
+			}
+
+			/**
 			 * @brief Sets physical properties at once.
 			 * @param mass The mass in kilograms.
 			 * @param surface The average surface in square meters.
@@ -363,20 +400,28 @@ namespace EmEn::Physics
 			bool setProperties (const Json::Value & data) noexcept;
 
 			/**
-			 * @brief Sets physical properties at once from another one.
+			 * @brief Sets physical properties at once from another one, its explicit centre of mass included.
 			 * @param other A reference to another properties.
 			 * @return bool
 			 */
 			bool
 			setProperties (const BodyPhysicalProperties & other) noexcept
 			{
-				return this->setProperties(other.m_mass, other.m_surface, other.m_dragCoefficient, other.m_angularDragCoefficient, other.m_bounciness, other.m_stickiness, other.m_inertiaTensor);
+				auto changes = this->setProperties(other.m_mass, other.m_surface, other.m_dragCoefficient, other.m_angularDragCoefficient, other.m_bounciness, other.m_stickiness, other.m_inertiaTensor);
+
+				if ( other.m_centerOfMass.has_value() ? this->setCenterOfMass(other.m_centerOfMass.value()) : this->resetCenterOfMass() )
+				{
+					changes = true;
+				}
+
+				return changes;
 			}
 
 			/**
 			 * @brief Merges physical properties. Mass will be summed, the bigger surface will be kept and the drag coefficient, bounciness and stickiness will be averaged.
 			 * @note Two explicit inertia tensors are summed (exact for a common centre of mass); one explicit tensor
-			 * is kept; none stays derived.
+			 * is kept; none stays derived. Two explicit centres of mass are averaged by mass; one is kept; none stays the
+			 * shape's.
 			 * @warning  This is an approximation method.
 			 * @note This method do not trigger any notification.
 			 * @param other A reference to PhysicalProperties.
@@ -395,6 +440,7 @@ namespace EmEn::Physics
 				m_bounciness = DefaultBounciness;
 				m_stickiness = DefaultStickiness;
 				m_inertiaTensor.reset();
+				m_centerOfMass.reset();
 			}
 
 		private:
@@ -416,6 +462,8 @@ namespace EmEn::Physics
 			float m_stickiness{DefaultStickiness};
 			/** Nothing = derived from the collision shape and the mass (P3). */
 			std::optional< Base::Math::Matrix< 3, float > > m_inertiaTensor;
+			/** Nothing = the collision shape's centroid. */
+			std::optional< Base::Math::Vector< 3, float > > m_centerOfMass;
 	};
 
 	/**

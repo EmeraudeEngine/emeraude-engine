@@ -8901,3 +8901,20 @@ guard; registered now, `Texture3D` checks the pointer). A new resource type is r
 `OceanResource` and `CDLODTerrainResource` have a `Container` alias or friend but no registered container (nothing asks
 for them; the first two cannot even be built by the container's generic members).
 
+
+## Physics — a wheel's brake and friction (2026-10-31)
+
+### ⚠️ A braked wheel never rolled again while the pedal was pressed
+
+The solver locked a wheel when its brake exceeded the wheel's OWN spin (`T > |ω| · I / h`); once stopped that threshold
+is 0, so any brake torque locked it again every sub-step whatever the road's torque — no anti-lock brakes possible, and a
+supercar's front wheels stayed held from 0.1 s (0.73-0.8 g). The held case must weigh the road too: kept only while
+|β − I·ω + Δλ·r| ≤ T·h, else the wheel turns and the brake is a bounded spin constraint. The held solve itself must stay
+(a pure spin constraint let a parked car creep at 63 mm/s). `docs/subsystems/physics/19-wheeled-vehicle.md` § Traps.
+
+### ⚠️ A friction ellipse on slip-dependent bounds starves the other direction
+
+`μ_lat(slip angle)` is tiny at a small angle (0.33 at 0.7° on Jolt's curve): the lateral impulse saturated that bound and
+the ellipse cut the rolling friction to ~0.7 of its own — a spinning tyre transmitted 0.82 × its load instead of 1.17. The
+ellipse goes on the curves' PEAKS; each impulse keeps its slip-dependent bound, taken every sub-step (a light wheel crosses
+its whole curve within one step).

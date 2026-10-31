@@ -200,21 +200,26 @@ namespace EmEn::Physics
 				float brakeTorque{0.0F};
 				/** The solver's: effective masses, slips (degrees for the angle), friction coefficients, impulses. */
 				float suspensionMass{0.0F};
-				/** Along the rolling direction: with the wheel's spin (a free wheel), and the bodies' alone (a locked one). */
+				/** Along the rolling direction: with the wheel's spin (a turning wheel), and the bodies' alone (a wheel its
+				 * brake holds still). */
 				float longitudinalMass{0.0F};
 				float rollingMass{0.0F};
 				float lateralMass{0.0F};
+				/** The ground speed at the contact along the wheel's forward, at the step's start (m/s). */
+				float longitudinalSpeed{0.0F};
 				float slipRatio{0.0F};
 				float slipAngle{0.0F};
 				float longitudinalCoefficient{0.0F};
 				float lateralCoefficient{0.0F};
+				/** The peaks of the friction curves: the friction ellipse's axes (what the tyre gives at most). */
+				float longitudinalPeak{0.0F};
+				float lateralPeak{0.0F};
 				float suspensionImpulse{0.0F};
 				float longitudinalImpulse{0.0F};
 				float lateralImpulse{0.0F};
-				/** A wheel its brake stops within the sub-step is LOCKED (its spin 0): the brake's surplus becomes this
-				 * impulse bound on the tyre's rolling friction, between the ground and the chassis (Jolt's model). */
+				/** The brake's accumulated ANGULAR impulse on the wheel's spin (N·m·s): a constraint driving the spin to 0,
+				 * bounded by the brake torque × the sub-step, warm-started like the tyre's impulses. */
 				float brakeImpulse{0.0F};
-				bool locked{false};
 				bool contact{false};
 			};
 
