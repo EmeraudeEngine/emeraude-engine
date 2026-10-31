@@ -106,6 +106,13 @@ Other guarantees, each exercised on a disposable bench (two local remotes, no ne
   not move, but **an upstream refactor of the input internals will conflict** — that is the expected
   failure mode of the rebase, and the resolution is to re-express the same bulk copy, never to drop
   the patch. Note that resolving a conflict *changes the patch-id*: record the new one here.
+- **Slow interactive resize on GNOME Wayland = libdecor** (2026-07-22), not the render path. The window
+  frame lags the cursor because libdecor's per-configure decoration redraw and commit round-trips gate
+  the drag (mutter refuses server-side decorations). `Core/Video/Window/GLFW/Wayland/EnableLibDecor =
+  false` fixes it: the window is undecorated but still edge-resizable. The swapchain recreation
+  (`vkDeviceWaitIdle`) was measured innocent: removing it changed nothing. The engine default stays
+  `true`; going frameless is the application's choice, and the application then owns move, minimise,
+  maximise and close.
 
 ## 4. Build integration
 
