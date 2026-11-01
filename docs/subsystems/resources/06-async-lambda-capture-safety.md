@@ -102,8 +102,9 @@ after the command, quit in 0.55-0.91 s, 0 VUID, exit 0.
 A load task's stop token used to be dropped by the container (`[...] (const std::stop_token &) { loadingTask(request); }`),
 and the work a completion starts runs at the END of the dependency chain, on the thread of the dependency that completed
 last: a movie loads → its animated texture's `onDependenciesLoaded()` → `createTexture()` compresses 124 frames. Nothing
-there could see the stop: `water-world` on a cold texture cache made a shutdown wait for the whole compression (item
-`movie-load-ignores-the-stop`: 46 s on macOS; 106 s on Linux limited to 4 cores).
+there could see the stop: `water-world` on a cold texture cache made a shutdown wait for the whole compression (the
+former item `movie-load-ignores-the-stop`, closed 2026-11-01: 46.5 s on macOS, ~70 s on Windows, 106 s on Linux limited
+to 4 cores).
 
 - **`ResourceTrait::LoadStopScope`** (RAII): the container's load task and its manual-creation task hold one around the
   load; it hands the task's token to the resource (`m_loadStopToken`, under `m_dependenciesAccess`) and takes it back at
@@ -126,6 +127,21 @@ there could see the stop: `water-world` on a cold texture cache made a shutdown 
   (`TextureCache::getOrCompress()` stores nothing), and `Texture2D` does not fall back to its uncompressed upload.
   Linux, `water-world` cold, 4 cores, shutdown 2 s after load: exit 1.5-1.9 s (7.4-7.9 s with the frame checks alone; the
   'Image manager' under 10 ms); a cold load without a stop still encodes all 122 frames, 0 error.
+- **The three OS and AMD** (cold `water-world --demo-options 0`, shutdown ~2 s after load, validation layer, 0 VUID,
+  0 `[Error]` everywhere):
+
+  | Machine | Before (6b14c46a) | Frame checks (03b92fb7) | + stop order (81d0f2b3) | + per-row check (e6c626e4) |
+  |---|---|---|---|---|
+  | Windows, RTX 3500 Ada, MSVC | ~70 s (2026-10-24) | 18.44 s (Image manager 13.6 s first) | 11.54 s (one 2048² BC5) | **2.99 s** (Image manager 21 ms; the encoding cut 0.21 s after the command) |
+  | macOS, M6, AppleClang | 46.5 s (2026-10-24) | 3.75 s (Movie manager 662 ms) | — | — |
+  | AMD laptop, RADV | — | 4.72 s (Movie 224 ms, Image 3.7 s) | — | — |
+  | Linux, 4 cores (taskset) | 111.4 s | 7.4 s | 7.9 s | 1.5-1.9 s |
+
+  Without a stop the cold load is unchanged by the per-row check (Windows: the lagoon's material 19.26 s after the
+  scene, 19.00 s before; 121 frames). The parallel encoding: the cold `city` sea 116.9 s → 2.9 s after the scene on the
+  AMD laptop, before the scene on Linux; 12.9 s on the M6, 19 s on Windows for the lagoon.
+- ⚠️ MSVC: `LoadStopScope` is a NESTED class with out-of-line members: it carries its own `EMEN_LEAN_API` (engine
+  03b92fb7 did not link on Windows; docs/windows-export-api.md § 3).
 - The token is requested at `Resources::Manager::stopBackgroundWork()`, after the logic and render threads are joined
   (~2.9 s of encodings on macOS before it), not at the shutdown request: owner, 2026-11-01, keep that order (an act's
   loads stop earlier through the item `act-removal-stops-its-pending-loads`).
