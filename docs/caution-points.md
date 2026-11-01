@@ -4811,8 +4811,13 @@ from run to run. A temporary probe (each program is named `"RenderableInstance" 
 variant on macOS. `Saphir::Generator::ProgramKey` replaces the `size_t`: the bytes of every input, compared exactly (engine 607cca23;
 the same sequence clean on the three OS: Linux 12 runs, macOS 6, Windows 8 — 0 VUID, 0 program served for another pass;
 Windows never showed the pre-fix VUID-07752, so its runs prove no regression there, not the fix).
-⚠️ Never key a cache that SERVES an object by a hash alone; a hash only places a key. The pipeline cache
-(`Renderer::m_graphicsPipelines`) is still keyed that way (item `pipeline-cache-keyed-by-a-bare-hash`).
+⚠️ Never key a cache that SERVES an object by a hash alone; a hash only places a key. The pipeline cache followed
+(2026-11-01): `Renderer::m_graphicsPipelines` is keyed by `Base::ExactKey` (`GraphicsPipeline::getKey()`, the base's
+generic exact key, `ProgramKey` now an alias of it — base `docs/subsystems/source-tree/27-exact-key.md`). A/B against
+the bare-hash build, alternated, 3 runs each, Linux RTX 3070 Ti, validation layer loaded: `city` 396 pipelines built /
+7830 reused, `sponza` 176 / 6998, on both builds in every run, 0 VUID, 0 `[Error]` — the same sharing, so no collision
+was hiding there. Still keyed by a bare hash: the sampler cache and the combine / denoise pass variants (item
+`caches-keyed-by-a-bare-hash`).
 
 ### A generator never spells its own model-view-projection matrix; a `mat4` varying takes FOUR locations (2026-10-31)
 

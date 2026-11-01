@@ -59,12 +59,12 @@ When a `RenderableInstance` needs to be drawn, the system follows this exact seq
 │ 5. RENDERER-LEVEL PIPELINE CACHE                                    │
 │    File: Graphics/Renderer.cpp → finalizeGraphicsPipeline()         │
 │                                                                     │
-│    → GraphicsPipeline::getHash(renderPass) computes hash with:      │
+│    → GraphicsPipeline::getKey(renderPass) builds the EXACT key of:  │
 │      - renderPassHandle (!)                                         │
 │      - shader stages, vertex input, topology                        │
 │      - rasterization, depth/stencil, color blend states...          │
 │                                                                     │
-│    → Looks up Renderer::m_graphicsPipelines[pipelineHash]           │
+│    → Looks up Renderer::m_graphicsPipelines[key] (Base::ExactKey)   │
 │                                                                     │
 │    ✓ HIT  → Use this pipeline                                       │
 │    ✗ MISS → Continue to step 6                                      │
@@ -96,7 +96,7 @@ When a `RenderableInstance` needs to be drawn, the system follows this exact seq
 > ALL THREE cache levels must include renderPassHandle:
 > 1. `ProgramCacheKey::renderPassHandle` (Renderable level)
 > 2. `Generator::computeProgramCacheKey()` (Renderer program cache)
-> 3. `GraphicsPipeline::getHash(renderPass)` (Renderer pipeline cache)
+> 3. `GraphicsPipeline::getKey(renderPass)` (Renderer pipeline cache)
 >
 > Missing renderPassHandle in ANY cache causes Vulkan validation errors:
 > - "sample count mismatch"
@@ -110,7 +110,7 @@ The `Renderer` maintains global caches for performance optimization:
 | Cache | Member | Key Source | Purpose |
 |-------|--------|------------|---------|
 | Programs | `m_programs` | `Generator::computeProgramCacheKey()` | Saphir Program cache (biggest gain) |
-| Pipelines | `m_graphicsPipelines` | `GraphicsPipeline::getHash(renderPass)` | Vulkan GraphicsPipeline cache |
+| Pipelines | `m_graphicsPipelines` | `GraphicsPipeline::getKey(renderPass)` — a `Base::ExactKey`, compared byte for byte | Vulkan GraphicsPipeline cache |
 | Samplers | `m_samplers` | `hashSamplerCreateInfo()` — the **content** of the `VkSamplerCreateInfo` | Texture sampler cache |
 
 > [!CAUTION]

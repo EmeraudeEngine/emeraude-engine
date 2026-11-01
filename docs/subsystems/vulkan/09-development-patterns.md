@@ -15,10 +15,10 @@
 4. Integrate with `LayoutManager`
 
 > [!CRITICAL]
-> **Pipeline Caching Rule**: `GraphicsPipeline::getHash()` MUST include the `RenderPass` handle!
+> **Pipeline Caching Rule**: `GraphicsPipeline::getKey()` MUST include the `RenderPass` handle!
 >
-> Vulkan pipelines are tied to specific render passes. The hash function takes a `RenderPass&` parameter
-> and MUST include `renderPass.handle()` as its first hash component.
+> Vulkan pipelines are tied to specific render passes. The key function takes a `RenderPass&` parameter
+> and MUST add `renderPass.handle()` as its first key component (a `Base::ExactKey`, compared exactly).
 >
 > See [`docs/pipeline-caching-system.md`](../../pipeline-caching-system.md) for complete caching architecture.
 >

@@ -30,7 +30,6 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -43,6 +42,7 @@
 #include "AbstractDeviceDependentObject.hpp"
 
 /* Local inclusions for usages. */
+#include "ExactKey.hpp"
 #include "PixelFactory/Color.hpp"
 #include "StaticVector.hpp"
 #include "ShaderModule.hpp"
@@ -406,13 +406,17 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns a hash for this graphics pipeline according to configured states.
+			 * @brief Returns the EXACT key of this graphics pipeline according to configured states, for the renderer's
+			 * pipeline cache (Graphics::Renderer::finalizeGraphicsPipeline()).
 			 * @note This should be called after all configure*() methods but before finalize().
+			 * @note ⚠️ Every state that changes the pipeline belongs in the key, VALUES included (the depth-bias factors:
+			 * docs/pipeline-caching-system.md). The key compares exactly (Base::ExactKey); until 2026-10-31 it was a bare
+			 * size_t hash, so two pipelines whose hashes met shared one cache entry.
 			 * @param renderPass The render pass that will be used with this pipeline.
-			 * @return size_t
+			 * @return Base::ExactKey
 			 */
 			[[nodiscard]]
-			size_t getHash (const RenderPass & renderPass) const noexcept;
+			Base::ExactKey getKey (const RenderPass & renderPass) const noexcept;
 
 			/**
 			 * @brief Names the pipeline for the slow-creation report (reportPipelineCreation()): kept in Release, where the

@@ -4,7 +4,7 @@
 > [!CRITICAL]
 > **Before modifying ANY cache-related code, READ [`docs/pipeline-caching-system.md`](../../docs/pipeline-caching-system.md) FIRST!**
 >
-> This includes: `ProgramCacheKey`, `computeProgramCacheKey()`, `getHash()`, `m_programs`, `m_graphicsPipelines`, or any code involving render pass compatibility.
+> This includes: `ProgramCacheKey`, `computeProgramCacheKey()`, `GraphicsPipeline::getKey()`, `m_programs`, `m_graphicsPipelines`, or any code involving render pass compatibility.
 >
 > **Common AI mistake**: Forgetting `renderPassHandle` in cache keys causes Vulkan validation errors that are extremely difficult to debug.
 

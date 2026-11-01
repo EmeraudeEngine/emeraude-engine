@@ -16,7 +16,7 @@ stages (source dump / SPIR-V binary cache / `VkPipelineCache`) — see
 |-------|--------|----------|-----------|---------|
 | 1 | `ShaderModule` | `ShaderManager` | Source code hash | Reuse compiled SPIR-V between programs |
 | 2 | `Program` | `Renderer::m_programs` | `computeProgramCacheKey()` | Skip entire shader generation |
-| 3 | `GraphicsPipeline` | `Renderer::m_graphicsPipelines` | `getHash(renderPass)` | Reuse Vulkan pipeline objects |
+| 3 | `GraphicsPipeline` | `Renderer::m_graphicsPipelines` | `getKey(renderPass)` (exact) | Reuse Vulkan pipeline objects |
 
 **Program cache** (Level 2) provides the biggest gain - it short-circuits before any shader code generation when an identical configuration exists. See: `Generator::Abstract::generateShaderProgram()`
 

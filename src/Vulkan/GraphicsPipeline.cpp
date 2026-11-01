@@ -30,7 +30,7 @@
 #include <algorithm>
 #include <bit>
 #include <chrono>
-#include <functional>
+#include <span>
 #include <vector>
 
 /* Local inclusions. */
@@ -56,22 +56,6 @@ namespace EmEn::Vulkan
 	using namespace Base;
 	using namespace Graphics;
 	using namespace Saphir;
-
-	namespace
-	{
-		/**
-		 * @brief Combines a hash value with another value using a mixing function.
-		 * @tparam T The type of value to hash.
-		 * @param seed Reference to the current hash value that will be updated.
-		 * @param value The value to combine into the hash.
-		 */
-		template< typename T >
-		void
-		hashCombine (size_t & seed, const T & value) noexcept
-		{
-			seed ^= std::hash< T >{}(value) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		}
-	}
 
 	bool
 	GraphicsPipeline::configureShaderStages (const StaticVector< std::shared_ptr< ShaderModule >, 5 > & shaderModules) noexcept
@@ -1124,162 +1108,192 @@ namespace EmEn::Vulkan
 		return true;
 	}
 
-	size_t
-	GraphicsPipeline::getHash (const RenderPass & renderPass) const noexcept
+	namespace
 	{
-		size_t hash = 0;
+		/**
+		 * @brief Adds a shader stage to a pipeline key: its stage, its module, its specialization constants (map and
+		 * data).
+		 * @param key A reference to the key.
+		 * @param stage A reference to the stage create info.
+		 */
+		void
+		addShaderStage (ExactKey & key, const VkPipelineShaderStageCreateInfo & stage) noexcept
+		{
+			key.add(static_cast< uint32_t >(stage.stage));
+			key.add(static_cast< const void * >(stage.module));
 
-		/* Hash the render pass handle to ensure pipelines are not shared across incompatible render passes. */
-		hashCombine(hash, reinterpret_cast< uintptr_t >(renderPass.handle()));
+			if ( stage.pSpecializationInfo == nullptr )
+			{
+				return;
+			}
 
-		/* Hash the pipeline layout. CRITICAL: two pipelines that differ ONLY by their layout —
+			const auto & specialization = *stage.pSpecializationInfo;
+
+			key.add(specialization.mapEntryCount);
+			key.add(specialization.dataSize);
+
+			if ( specialization.pMapEntries != nullptr )
+			{
+				for ( const auto & entry : std::span{specialization.pMapEntries, specialization.mapEntryCount} )
+				{
+					key.add(entry.constantID);
+					key.add(entry.offset);
+					key.add(entry.size);
+				}
+			}
+
+			if ( specialization.pData != nullptr )
+			{
+				for ( const auto byte : std::span{static_cast< const uint8_t * >(specialization.pData), specialization.dataSize} )
+				{
+					key.add(byte);
+				}
+			}
+		}
+
+		/**
+		 * @brief Adds a vertex input state to a pipeline key: every binding and every attribute.
+		 * @param key A reference to the key.
+		 * @param state A reference to the vertex input state.
+		 */
+		void
+		addVertexInputState (ExactKey & key, const VkPipelineVertexInputStateCreateInfo & state) noexcept
+		{
+			key.add(state.vertexBindingDescriptionCount);
+			key.add(state.vertexAttributeDescriptionCount);
+
+			if ( state.pVertexBindingDescriptions != nullptr )
+			{
+				for ( const auto & binding : std::span{state.pVertexBindingDescriptions, state.vertexBindingDescriptionCount} )
+				{
+					key.add(binding.binding);
+					key.add(binding.stride);
+					key.add(static_cast< uint32_t >(binding.inputRate));
+				}
+			}
+
+			if ( state.pVertexAttributeDescriptions != nullptr )
+			{
+				for ( const auto & attribute : std::span{state.pVertexAttributeDescriptions, state.vertexAttributeDescriptionCount} )
+				{
+					key.add(attribute.location);
+					key.add(attribute.binding);
+					key.add(static_cast< uint32_t >(attribute.format));
+					key.add(attribute.offset);
+				}
+			}
+		}
+	}
+
+	Base::ExactKey
+	GraphicsPipeline::getKey (const RenderPass & renderPass) const noexcept
+	{
+		Base::ExactKey key{ClassId};
+
+		/* The render pass handle to ensure pipelines are not shared across incompatible render passes. */
+		key.add(static_cast< const void * >(renderPass.handle()));
+
+		/* The pipeline layout. CRITICAL: two pipelines that differ ONLY by their layout —
 		 * e.g. same shaders/state but different push-constant range (billboard PC[0,132) vs simple
 		 * PC[0,68)) or a different descriptor-set-layout set — MUST NOT share a cache entry.
 		 * Without this, the cache returns a pipeline created with an incompatible layout, and a
 		 * draw then trips VUID-vkCmdDrawIndexed-None-08600 ("set 0 is not compatible with the
 		 * pipeline layout bound") — seen on sprites whose billboard layout collided with a simpler
 		 * one. The layout handle is content-stable (deduplicated by the LayoutManager). */
-		hashCombine(hash, reinterpret_cast< uintptr_t >(m_createInfo.layout));
+		key.add(static_cast< const void * >(m_createInfo.layout));
 
-		/* Hash shader stages. */
+		/* The shader stages, their specialization constants included. */
 		for ( const auto & stage : m_shaderStages )
 		{
-			hashCombine(hash, static_cast< uint32_t >(stage.stage));
-			hashCombine(hash, reinterpret_cast< uintptr_t >(stage.module));
-
-			/* Hash specialization constants to distinguish pipelines with different spec constant values. */
-			if ( stage.pSpecializationInfo != nullptr )
-			{
-				const auto * specInfo = stage.pSpecializationInfo;
-				hashCombine(hash, specInfo->mapEntryCount);
-				hashCombine(hash, specInfo->dataSize);
-
-				/* Hash each map entry. */
-				for ( uint32_t index = 0; index < specInfo->mapEntryCount; ++index )
-				{
-					const auto & entry = specInfo->pMapEntries[index];
-					hashCombine(hash, entry.constantID);
-					hashCombine(hash, entry.offset);
-					hashCombine(hash, entry.size);
-				}
-
-				/* Hash the actual specialization data bytes. */
-				if ( specInfo->pData != nullptr && specInfo->dataSize > 0 )
-				{
-					const auto * dataBytes = static_cast< const uint8_t * >(specInfo->pData);
-
-					for ( size_t index = 0; index < specInfo->dataSize; ++index )
-					{
-						hashCombine(hash, dataBytes[index]);
-					}
-				}
-			}
+			addShaderStage(key, stage);
 		}
 
-		/* Hash vertex input state. */
+		/* The vertex input state. */
 		if ( m_createInfo.pVertexInputState != nullptr )
 		{
-			hashCombine(hash, m_vertexInputState.vertexBindingDescriptionCount);
-			hashCombine(hash, m_vertexInputState.vertexAttributeDescriptionCount);
-
-			for ( uint32_t index = 0; index < m_vertexInputState.vertexBindingDescriptionCount; ++index )
-			{
-				const auto & binding = m_vertexInputState.pVertexBindingDescriptions[index];
-				hashCombine(hash, binding.binding);
-				hashCombine(hash, binding.stride);
-				hashCombine(hash, static_cast< uint32_t >(binding.inputRate));
-			}
-
-			for ( uint32_t index = 0; index < m_vertexInputState.vertexAttributeDescriptionCount; ++index )
-			{
-				const auto & attribute = m_vertexInputState.pVertexAttributeDescriptions[index];
-				hashCombine(hash, attribute.location);
-				hashCombine(hash, attribute.binding);
-				hashCombine(hash, static_cast< uint32_t >(attribute.format));
-				hashCombine(hash, attribute.offset);
-			}
+			addVertexInputState(key, m_vertexInputState);
 		}
 
-		/* Hash input assembly state. */
+		/* The input assembly state. */
 		if ( m_createInfo.pInputAssemblyState != nullptr )
 		{
-			hashCombine(hash, static_cast< uint32_t >(m_inputAssemblyState.topology));
-			hashCombine(hash, static_cast< uint32_t >(m_inputAssemblyState.primitiveRestartEnable));
+			key.add(static_cast< uint32_t >(m_inputAssemblyState.topology));
+			key.add(static_cast< uint32_t >(m_inputAssemblyState.primitiveRestartEnable));
 		}
 
-		/* Hash tessellation state. */
+		/* The tessellation state. */
 		if ( m_createInfo.pTessellationState != nullptr )
 		{
-			hashCombine(hash, m_tessellationState.patchControlPoints);
+			key.add(m_tessellationState.patchControlPoints);
 		}
 
-		/* Hash rasterization state. */
+		/* The rasterization state. */
 		if ( m_createInfo.pRasterizationState != nullptr )
 		{
-			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.depthClampEnable));
-			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.rasterizerDiscardEnable));
-			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.polygonMode));
-			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.cullMode));
-			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.frontFace));
-			hashCombine(hash, static_cast< uint32_t >(m_rasterizationState.depthBiasEnable));
+			key.add(static_cast< uint32_t >(m_rasterizationState.depthClampEnable));
+			key.add(static_cast< uint32_t >(m_rasterizationState.rasterizerDiscardEnable));
+			key.add(static_cast< uint32_t >(m_rasterizationState.polygonMode));
+			key.add(static_cast< uint32_t >(m_rasterizationState.cullMode));
+			key.add(static_cast< uint32_t >(m_rasterizationState.frontFace));
+			key.add(static_cast< uint32_t >(m_rasterizationState.depthBiasEnable));
 
 			/* ⚠️ The bias VALUES too: two pipelines with the same shaders and different biases (a decal layer and
 			 * the wall under it, whose light-pass sources are identical) shared one entry, the decal drew its light
 			 * passes with the wall's bias, behind its own ambient depth, and stayed unlit (2026-10-29). */
 			if ( m_rasterizationState.depthBiasEnable == VK_TRUE )
 			{
-				hashCombine(hash, std::bit_cast< uint32_t >(m_rasterizationState.depthBiasConstantFactor));
-				hashCombine(hash, std::bit_cast< uint32_t >(m_rasterizationState.depthBiasClamp));
-				hashCombine(hash, std::bit_cast< uint32_t >(m_rasterizationState.depthBiasSlopeFactor));
+				key.add(std::bit_cast< uint32_t >(m_rasterizationState.depthBiasConstantFactor));
+				key.add(std::bit_cast< uint32_t >(m_rasterizationState.depthBiasClamp));
+				key.add(std::bit_cast< uint32_t >(m_rasterizationState.depthBiasSlopeFactor));
 			}
 
-			hashCombine(hash, std::bit_cast< uint32_t >(m_rasterizationState.lineWidth));
+			key.add(std::bit_cast< uint32_t >(m_rasterizationState.lineWidth));
 		}
 
-		/* Hash multisample state. */
+		/* The multisample state. */
 		if ( m_createInfo.pMultisampleState != nullptr )
 		{
-			hashCombine(hash, static_cast< uint32_t >(m_multisampleState.rasterizationSamples));
-			hashCombine(hash, static_cast< uint32_t >(m_multisampleState.sampleShadingEnable));
-			hashCombine(hash, static_cast< uint32_t >(m_multisampleState.alphaToCoverageEnable));
-			hashCombine(hash, static_cast< uint32_t >(m_multisampleState.alphaToOneEnable));
+			key.add(static_cast< uint32_t >(m_multisampleState.rasterizationSamples));
+			key.add(static_cast< uint32_t >(m_multisampleState.sampleShadingEnable));
+			key.add(static_cast< uint32_t >(m_multisampleState.alphaToCoverageEnable));
+			key.add(static_cast< uint32_t >(m_multisampleState.alphaToOneEnable));
 		}
 
-		/* Hash depth stencil state. */
+		/* The depth stencil state. */
 		if ( m_createInfo.pDepthStencilState != nullptr )
 		{
-			hashCombine(hash, static_cast< uint32_t >(m_depthStencilState.depthTestEnable));
-			hashCombine(hash, static_cast< uint32_t >(m_depthStencilState.depthWriteEnable));
-			hashCombine(hash, static_cast< uint32_t >(m_depthStencilState.depthCompareOp));
-			hashCombine(hash, static_cast< uint32_t >(m_depthStencilState.depthBoundsTestEnable));
-			hashCombine(hash, static_cast< uint32_t >(m_depthStencilState.stencilTestEnable));
+			key.add(static_cast< uint32_t >(m_depthStencilState.depthTestEnable));
+			key.add(static_cast< uint32_t >(m_depthStencilState.depthWriteEnable));
+			key.add(static_cast< uint32_t >(m_depthStencilState.depthCompareOp));
+			key.add(static_cast< uint32_t >(m_depthStencilState.depthBoundsTestEnable));
+			key.add(static_cast< uint32_t >(m_depthStencilState.stencilTestEnable));
 		}
 
-		/* Hash color blend state. */
+		/* The color blend state. */
 		if ( m_createInfo.pColorBlendState != nullptr )
 		{
-			hashCombine(hash, static_cast< uint32_t >(m_colorBlendState.logicOpEnable));
-			hashCombine(hash, static_cast< uint32_t >(m_colorBlendState.logicOp));
+			key.add(static_cast< uint32_t >(m_colorBlendState.logicOpEnable));
+			key.add(static_cast< uint32_t >(m_colorBlendState.logicOp));
 
 			for ( const auto & attachment : m_colorBlendAttachments )
 			{
-				hashCombine(hash, static_cast< uint32_t >(attachment.blendEnable));
-				hashCombine(hash, static_cast< uint32_t >(attachment.srcColorBlendFactor));
-				hashCombine(hash, static_cast< uint32_t >(attachment.dstColorBlendFactor));
-				hashCombine(hash, static_cast< uint32_t >(attachment.colorBlendOp));
-				hashCombine(hash, static_cast< uint32_t >(attachment.srcAlphaBlendFactor));
-				hashCombine(hash, static_cast< uint32_t >(attachment.dstAlphaBlendFactor));
-				hashCombine(hash, static_cast< uint32_t >(attachment.alphaBlendOp));
-				hashCombine(hash, static_cast< uint32_t >(attachment.colorWriteMask));
+				key.add(static_cast< uint32_t >(attachment.blendEnable));
+				key.add(static_cast< uint32_t >(attachment.srcColorBlendFactor));
+				key.add(static_cast< uint32_t >(attachment.dstColorBlendFactor));
+				key.add(static_cast< uint32_t >(attachment.colorBlendOp));
+				key.add(static_cast< uint32_t >(attachment.srcAlphaBlendFactor));
+				key.add(static_cast< uint32_t >(attachment.dstAlphaBlendFactor));
+				key.add(static_cast< uint32_t >(attachment.alphaBlendOp));
+				key.add(static_cast< uint32_t >(attachment.colorWriteMask));
 			}
 		}
 
-		/* Hash dynamic states. */
+		/* dynamic states. */
 		for ( const auto & dynamicState : m_dynamicStates )
 		{
-			hashCombine(hash, static_cast< uint32_t >(dynamicState));
+			key.add(static_cast< uint32_t >(dynamicState));
 		}
 
-		return hash;
+		return key;
 	}
 }

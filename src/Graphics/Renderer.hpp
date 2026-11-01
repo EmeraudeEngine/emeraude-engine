@@ -57,6 +57,7 @@
 #include "BindlessTextureManager.hpp"
 #include "Constants.hpp"
 #include "DeferredLightResolve.hpp"
+#include "ExactKey.hpp"
 #include "ExternalInput.hpp"
 #include "FrameCapture.hpp"
 #include "FrameDiagnostics.hpp"
@@ -209,7 +210,8 @@ namespace EmEn::Graphics
 	 *
 	 * **Optimized caches:**
 	 * - `m_samplers`: Sampler cache (O(log S) → O(1))
-	 * - `m_pipelines`: GraphicsPipeline cache (O(log G) → O(1))
+	 * - `m_pipelines`: GraphicsPipeline cache (O(log G) → O(1)), keyed by the EXACT Base::ExactKey of
+	 *   GraphicsPipeline::getKey() (a bare size_t until 2026-10-31)
 	 * - `m_programs`: Saphir Program cache (O(log P) → O(1)), keyed by the EXACT Saphir::Generator::ProgramKey
 	 *   (a bare size_t hash until 2026-10-31 served one pass's program for another on a collision)
 	 *
@@ -2010,7 +2012,7 @@ namespace EmEn::Graphics
 			 * command buffer still references its pipeline. Indexed by currentFrameIndex(). */
 			std::array< std::shared_ptr< const DirectEffectList >, 5 > m_lensEffectsSnapshots{};
 			std::unordered_map< Saphir::Generator::ProgramKey, std::shared_ptr< Saphir::Program > > m_programs;
-			std::unordered_map< size_t, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
+			std::unordered_map< Base::ExactKey, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
 			/* NOTE: Keyed by the HASH OF THE CREATE-INFO CONTENT, not by the identifier passed to
 			 * getSampler() — see the ⚠️ block there. The identifier is a debug label only. */
 			std::unordered_map< size_t, std::shared_ptr< Vulkan::Sampler > > m_samplers;

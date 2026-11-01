@@ -44,7 +44,7 @@ With caching:
 ┌────────────────────────────────────────────────────────────────┐
 │                    LEVEL 3: GraphicsPipeline                   │
 │                    Location: Renderer::m_graphicsPipelines     │
-│                    Key: GraphicsPipeline::getHash(renderPass)  │
+│                    Key: GraphicsPipeline::getKey(renderPass)   │
 │                                                                │
 │  Benefit: Reuse Vulkan pipeline objects                        │
 │  Example: Same program with same states → share pipeline       │
@@ -104,10 +104,11 @@ generator->onCreateDataLayouts(...);          // Descriptor layouts
 ```cpp
 // File: Graphics/Renderer.cpp → finalizeGraphicsPipeline()
 const auto& renderPass = renderTarget.framebuffer()->renderPass();
-size_t hash = graphicsPipeline->getHash(*renderPass);  // Includes renderPass!
+auto key = graphicsPipeline->getKey(*renderPass);  // Base::ExactKey, the renderPass included!
+key.add(static_cast< const void * >(program.pipelineLayout()->handle()));
 
-// Lookup in Renderer::m_graphicsPipelines
-auto it = m_graphicsPipelines.find(hash);
+// Lookup in Renderer::m_graphicsPipelines (compared byte for byte, the hash only places it)
+auto it = m_graphicsPipelines.find(key);
 if (it != m_graphicsPipelines.end()) {
     // HIT: Use existing pipeline
 }
@@ -184,26 +185,28 @@ ProgramKey MyGenerator::computeProgramCacheKey() const noexcept
 > (`sampler2D`) was drawn for the sun's cascaded pass (a 2D-array view), `VUID-vkCmdDrawIndexed-viewType-07752` in
 > 1 run in 6 to 12 (Linux), a cube one on macOS. `Saphir::Generator::ProgramKey` is the byte sequence of every input
 > (fixed-width values, length-prefixed texts) and compares byte for byte; the hash only places it. The pipeline cache
-> (`m_graphicsPipelines`, `GraphicsPipeline::getHash()`) is still keyed by a bare `size_t` — the same class of risk.
+> followed the same day: `m_graphicsPipelines` is keyed by `Base::ExactKey` (`GraphicsPipeline::getKey()`, a bare
+> `size_t` `getHash()` before). `ProgramKey` is now an alias of that base class. The sampler cache and the combine /
+> denoise pass variants are still keyed by a bare hash: item `caches-keyed-by-a-bare-hash`.
 
-#### 3. getHash() (Pipeline level)
+#### 3. getKey() (Pipeline level)
 ```cpp
 // File: Vulkan/GraphicsPipeline.cpp
-size_t GraphicsPipeline::getHash(const RenderPass& renderPass) const noexcept
+Base::ExactKey GraphicsPipeline::getKey(const RenderPass& renderPass) const noexcept
 {
-    size_t hash = 0;
+    Base::ExactKey key{ClassId};
 
-    // MANDATORY: First hash component
-    hashCombine(hash, reinterpret_cast<uintptr_t>(renderPass.handle()));
+    // MANDATORY: the render pass handle first
+    key.add(static_cast< const void * >(renderPass.handle()));
 
-    // ... other components
-    return hash;
+    // ... the layout, the shader stages (specialization constants included), every state, by value
+    return key;
 }
 ```
 
 > [!CAUTION]
-> **Every pipeline state that changes the result belongs in `getHash()`, VALUES included.** The renderer
-> shares one pipeline among every request with the same hash (`Renderer::finalizeGraphicsPipeline()`), and the
+> **Every pipeline state that changes the result belongs in `getKey()`, VALUES included.** The renderer
+> shares one pipeline among every request with the same key (`Renderer::finalizeGraphicsPipeline()`), and the
 > shader modules are shared by source: two layers whose generated sources are identical get the SAME pipeline when a
 > state they differ in is left out of the hash. Until 2026-10-29 the rasterization part hashed `depthBiasEnable` but not
 > the bias factors: a decal layer (`RasterizationOptions::setDepthBias()`) and the wall under it, whose light-pass

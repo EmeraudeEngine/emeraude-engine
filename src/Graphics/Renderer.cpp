@@ -1621,16 +1621,16 @@ namespace EmEn::Graphics
 	Renderer::finalizeGraphicsPipeline (const Framebuffer & framebuffer, const Program & program, std::shared_ptr< GraphicsPipeline > & graphicsPipeline) noexcept
 	{
 		const auto & renderPass = framebuffer.renderPass();
-		auto hash = graphicsPipeline->getHash(*renderPass);
+		auto key = graphicsPipeline->getKey(*renderPass);
 
-		/* Include the pipeline layout handle in the hash to prevent sharing
-		 * pipelines across programs with different descriptor set layouts. */
+		/* The program's pipeline layout too, to never share a pipeline across programs with different descriptor set
+		 * layouts. */
 		if ( const auto & pipelineLayout = program.pipelineLayout(); pipelineLayout != nullptr )
 		{
-			hash ^= reinterpret_cast< uintptr_t >(pipelineLayout->handle()) + 0x9e3779b9 + (hash << 6U) + (hash >> 2U);
+			key.add(static_cast< const void * >(pipelineLayout->handle()));
 		}
 
-		if ( const auto pipelineIt = m_graphicsPipelines.find(hash); pipelineIt != m_graphicsPipelines.cend() )
+		if ( const auto pipelineIt = m_graphicsPipelines.find(key); pipelineIt != m_graphicsPipelines.cend() )
 		{
 			graphicsPipeline = pipelineIt->second;
 
@@ -1646,7 +1646,7 @@ namespace EmEn::Graphics
 
 		m_pipelineBuiltCount++;
 
-		return m_graphicsPipelines.emplace(hash, graphicsPipeline).second;
+		return m_graphicsPipelines.emplace(std::move(key), graphicsPipeline).second;
 	}
 
 	[[nodiscard]]
