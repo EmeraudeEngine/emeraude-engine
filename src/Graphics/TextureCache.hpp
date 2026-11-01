@@ -33,6 +33,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -120,10 +121,12 @@ namespace EmEn::Graphics
 			 * @param maxMipLevels Maximum number of mip levels (0 = full chain).
 			 * @param format The block format (TextureCompressor::selectFormat()).
 			 * @param sRGB Whether the texture is a colour (sRGB) one: its chain is filtered in linear light.
-			 * @return Vector of compressed mip levels, empty on failure.
+			 * @param stopToken The stop token of the load task (TextureCompressor::compress()): a stopped compression
+			 * returns nothing and stores nothing.
+			 * @return Vector of compressed mip levels, empty on failure or on a stop.
 			 */
 			[[nodiscard]]
-			std::vector< CompressedMipLevel > getOrCompress (const std::string & resourceName, const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format, bool sRGB) const noexcept;
+			std::vector< CompressedMipLevel > getOrCompress (const std::string & resourceName, const Base::PixelFactory::Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format, bool sRGB, const std::stop_token & stopToken) const noexcept;
 
 			/**
 			 * @brief Erases every cache entry from disk.

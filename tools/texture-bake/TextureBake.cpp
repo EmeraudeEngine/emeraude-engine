@@ -36,6 +36,7 @@
 #include <optional>
 #include <ranges>
 #include <span>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -423,7 +424,8 @@ namespace EmEn::TextureBake
 		 * written, so it records the answer (graphics § 40, L6). Only BC7 keeps an alpha: a BC5 / BC4 container never
 		 * claims one. */
 		const auto binaryAlphaMask = format == Graphics::BlockFormat::BC7 && Graphics::AlphaCoverage::isBinaryMask(packed);
-		const auto levels = compressor.compress(packed, 0, format, arguments.colour);
+		/* NOTE: An offline tool: a stop token that never stops. */
+		const auto levels = compressor.compress(packed, 0, format, arguments.colour, std::stop_token{});
 
 		if ( levels.empty() )
 		{

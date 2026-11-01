@@ -50,7 +50,12 @@ within a bounded latency through its `std::stop_token`.
       first and waits for its tasks queued behind the ocean's frame encodings on the shared pool, so the Movie manager's
       token (which stops those encodings) is requested only once they are ~96 % done. Split the container's stop
       (request, then wait) and request every container's stop before waiting for any.
-- [ ] The REST of the stop is the Image manager (same AMD run: 3744 ms): a single `Texture2D` BC5 encoding has no stop
+- [x] Windows re-measured on 81d0f2b3 (link clean, 0 warning, 0 VUID): cold `water-world` shutdown → exit 11.54 s (was
+      18.44 s); 26 ocean frames encoded after the command (was 120) and the ocean's texture, material and sea never
+      complete (cut off); the 'Image manager' waited 7248 ms — for ONE 2048² BC5 `Texture2D` encoding running to its end
+      (below), the Movie manager under 10 ms after it.
+- [x] (done 2026-11-01, owner: a check per block row in `TextureCompressor::compress()`; the request stays at
+      `stopBackgroundWork()`, owner: keep the order — resources doc 06) The REST of the stop is the Image manager (same AMD run: 3744 ms): a single `Texture2D` BC5 encoding has no stop
       check inside (one 2048² normal map ≈ 1.75 s on that CPU), and four plain normal maps were still encoded after the
       command — whether the last one STARTED after the stop request is not provable from the log (the encode line names
       no time of start). To decide with the owner: a stop token down to `TextureCompressor::compress()` (checked per mip

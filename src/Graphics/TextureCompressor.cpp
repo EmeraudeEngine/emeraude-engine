@@ -32,6 +32,7 @@
 #include <chrono>
 #include <cstddef>
 #include <span>
+#include <stop_token>
 #include <string>
 #include <utility>
 
@@ -85,11 +86,12 @@ namespace EmEn::Graphics
 		 * this takes no thread pool: the one it used to receive was never used.
 		 * @param pixmap A reference to the source RGBA8 pixel data for this mip level.
 		 * @param format The block format.
-		 * @return CompressedMipLevel
+		 * @param stopToken The load's stop token, checked before each row of blocks.
+		 * @return CompressedMipLevel Its data empty on a stop.
 		 */
 		[[nodiscard]]
 		CompressedMipLevel
-		compressLevel (const Pixmap< uint8_t > & pixmap, BlockFormat format) noexcept
+		compressLevel (const Pixmap< uint8_t > & pixmap, BlockFormat format, const std::stop_token & stopToken) noexcept
 		{
 			constexpr auto BlockSize = TextureCompressor::BlockSize;
 			const auto bytesPerBlock = TextureCompressor::blockBytes(format);
@@ -126,6 +128,14 @@ namespace EmEn::Graphics
 			{
 				const auto blockX = static_cast< uint32_t >(blockIndex % blocksX);
 				const auto blockY = static_cast< uint32_t >(blockIndex / blocksX);
+
+				/* NOTE: The load's stop, before each row of blocks: the latency is one row (512 blocks of a 2048² level). */
+				if ( blockX == 0 && stopToken.stop_requested() )
+				{
+					result.data.clear();
+
+					return result;
+				}
 				const auto pixelX = blockX * BlockSize;
 				const auto pixelY = blockY * BlockSize;
 
@@ -212,7 +222,7 @@ namespace EmEn::Graphics
 	}
 
 	std::vector< CompressedMipLevel >
-	TextureCompressor::compress (const Pixmap< uint8_t > & source, uint32_t maxMipLevels, BlockFormat format, bool sRGB) const noexcept
+	TextureCompressor::compress (const Pixmap< uint8_t > & source, uint32_t maxMipLevels, BlockFormat format, bool sRGB, const std::stop_token & stopToken) const noexcept
 	{
 		if ( !source.isValid() || (source.colorCount() != 4 && source.colorCount() != 1) )
 		{
@@ -232,13 +242,17 @@ namespace EmEn::Graphics
 			.alpha = format == BlockFormat::BC7
 		};
 
-		/* NOTE: A level that fails to compress ends the chain: the levels before it are kept. */
-		static_cast< void >(MipChain::build(source, maxMipLevels, treatment, [&result, format] (uint32_t level, const Pixmap< uint8_t > & pixmap) {
-			auto compressed = compressLevel(pixmap, format);
+		/* NOTE: A level that fails to compress ends the chain: the levels before it are kept. A stop ends it too, but
+		 * nothing is kept (below). */
+		static_cast< void >(MipChain::build(source, maxMipLevels, treatment, [&result, format, &stopToken] (uint32_t level, const Pixmap< uint8_t > & pixmap) {
+			auto compressed = compressLevel(pixmap, format, stopToken);
 
 			if ( compressed.data.empty() )
 			{
-				TraceError{ClassId} << "Failed to compress mip level " << level << " !";
+				if ( !stopToken.stop_requested() )
+				{
+					TraceError{ClassId} << "Failed to compress mip level " << level << " !";
+				}
 
 				return false;
 			}
@@ -247,6 +261,12 @@ namespace EmEn::Graphics
 
 			return true;
 		}));
+
+		/* NOTE: A stopped compression returns nothing, silently: a partial chain would be stored by the cache. */
+		if ( stopToken.stop_requested() )
+		{
+			return {};
+		}
 
 		if ( result.empty() )
 		{
@@ -281,7 +301,8 @@ namespace EmEn::Graphics
 			return {};
 		}
 
-		return compressLevel(pixmap, BlockFormat::BC7);
+		/* NOTE: One level, outside any load task: a token that never stops. */
+		return compressLevel(pixmap, BlockFormat::BC7, std::stop_token{});
 	}
 
 	bool

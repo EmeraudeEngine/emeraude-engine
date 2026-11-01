@@ -31,6 +31,7 @@
 #include <bit>
 #include <cstddef>
 #include <fstream>
+#include <stop_token>
 #include <string_view>
 #include <system_error>
 #include <utility>
@@ -345,7 +346,7 @@ namespace EmEn::Graphics
 	}
 
 	std::vector< CompressedMipLevel >
-	TextureCache::getOrCompress (const std::string & resourceName, const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format, bool sRGB) const noexcept
+	TextureCache::getOrCompress (const std::string & resourceName, const Pixmap< uint8_t > & pixmap, uint32_t maxMipLevels, BlockFormat format, bool sRGB, const std::stop_token & stopToken) const noexcept
 	{
 		const auto cacheEnabled = !m_cacheDirectory.empty();
 		const auto key = cacheEnabled ? TextureCache::cacheKey(pixmap, maxMipLevels, format, sRGB) : 0;
@@ -362,7 +363,7 @@ namespace EmEn::Graphics
 			}
 		}
 
-		auto compressed = m_compressor.compress(pixmap, maxMipLevels, format, sRGB);
+		auto compressed = m_compressor.compress(pixmap, maxMipLevels, format, sRGB, stopToken);
 
 		if ( compressed.empty() || !cacheEnabled )
 		{

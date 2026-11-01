@@ -138,7 +138,7 @@ namespace EmEn::Graphics::TextureResource
 			}
 
 			/* NOTE: index < sourceFrames.size() == frames.size() (parallelFor()'s range). */
-			frames[index] = renderer.textureCache().getOrCompress(this->name() + "#layer" + std::to_string(index), sourceFrames[index].pixmap(), mipLevels, blockFormat, this->isSRGB());
+			frames[index] = renderer.textureCache().getOrCompress(this->name() + "#layer" + std::to_string(index), sourceFrames[index].pixmap(), mipLevels, blockFormat, this->isSRGB(), stopToken);
 		};
 
 		if ( const auto threadPool = renderer.primaryServices().threadPool(); threadPool != nullptr )
@@ -153,8 +153,9 @@ namespace EmEn::Graphics::TextureResource
 			}
 		}
 
-		/* NOTE: The stop wins over a failure: nothing is published, and no fallback runs. */
-		if ( stopped.load(std::memory_order_relaxed) )
+		/* NOTE: The stop wins over a failure: nothing is published, and no fallback runs. A stop that came during a frame's
+		 * compression emptied that frame (TextureCompressor::compress()): checked again here. */
+		if ( stopped.load(std::memory_order_relaxed) || stopToken.stop_requested() )
 		{
 			return CompressionOutcome::Stopped;
 		}

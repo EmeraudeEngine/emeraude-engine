@@ -120,7 +120,15 @@ there could see the stop: `water-world` on a cold texture cache made a shutdown 
   rule of `abandonLoading()`.
 - Who checks it: `AnimatedTexture2D` before each frame (its frames are now encoded IN PARALLEL on the pool,
   `ThreadPool::parallelFor()`, the calling worker taking its share — no deadlock from a pool worker; a stop waits for one
-  frame's encoding at most) and before each frame's uncompressed chain; `Texture2D` before its one encoding.
+  frame's encoding at most) and before each frame's uncompressed chain; `Texture2D` before its one encoding; and
+  `TextureCompressor::compress()` itself before each ROW of blocks (owner, 2026-11-01 — one 2048² BC5 held the Windows
+  shutdown 7.2 s): a stopped compression returns NOTHING, silently, never a partial chain the cache would store
+  (`TextureCache::getOrCompress()` stores nothing), and `Texture2D` does not fall back to its uncompressed upload.
+  Linux, `water-world` cold, 4 cores, shutdown 2 s after load: exit 1.5-1.9 s (7.4-7.9 s with the frame checks alone; the
+  'Image manager' under 10 ms); a cold load without a stop still encodes all 122 frames, 0 error.
+- The token is requested at `Resources::Manager::stopBackgroundWork()`, after the logic and render threads are joined
+  (~2.9 s of encodings on macOS before it), not at the shutdown request: owner, 2026-11-01, keep that order (an act's
+  loads stop earlier through the item `act-removal-stops-its-pending-loads`).
 - Measured (Linux, RTX 3070 Ti, `water-world --demo-options 0`, texture cache OFF in a settings copy, the process limited
   to 4 cores with `taskset` so the compression outlasts the load, `Core.shutdown()` 2 s after the act is loaded,
   validation layer): before (projet-alpha 1a13702f, engine 6b14c46a) shutdown → exit 111.4 s, "the 'Movie manager' tasks

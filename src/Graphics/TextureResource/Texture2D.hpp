@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
+#include <stop_token>
 #include <string>
 #include <utility>
 
@@ -42,6 +43,7 @@
 #include "Graphics/CompressedImageResource.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Hash/FNV1a.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "Resources/ResourceTrait.hpp"
 #include "Resources/Types.hpp"
 #include "Vulkan/TextureInterface.hpp"
@@ -460,11 +462,56 @@ namespace EmEn::Graphics::TextureResource
 			 * amortise the cost), and falls back to a plain uncompressed upload otherwise.
 			 *
 			 * @param renderer A reference to the renderer.
+			 * @param stopToken The stop token of the load task: a stop during the compression ends the creation (no
+			 * fallback to the uncompressed upload).
 			 * @return bool
 			 * @version 0.8.36
 			 */
 			[[nodiscard]]
-			bool createFromPixelData (Renderer & renderer) noexcept;
+			bool createFromPixelData (Renderer & renderer, const std::stop_token & stopToken) noexcept;
+
+			/** @brief The mip levels of a creation: how many are built from the full resolution, how many the upload skips. */
+			struct MipLevels
+			{
+				/** @brief The levels built (and compressed, cached) from the full resolution, the skipped ones included. */
+				uint32_t chainLevels{1};
+				/** @brief The top levels the upload skips (D5: at least one level kept). */
+				uint32_t skipped{0};
+			};
+
+			/**
+			 * @brief Creates the image uncompressed (the fallback, or no BC support): the chain built on the CPU
+			 * (MipChain::build()), the skipped levels dropped, one channel for an opaque grey image where supported.
+			 * @param renderer A reference to the renderer.
+			 * @param pixels The pixels (flipped already when FlipNormalMapY is on).
+			 * @param mips The mip levels.
+			 * @return bool False when the chain or the upload failed.
+			 */
+			[[nodiscard]]
+			bool createUncompressedImage (Renderer & renderer, const Base::PixelFactory::Pixmap< uint8_t > & pixels, const MipLevels & mips) noexcept;
+
+			/** @brief What the block-compressed path did (createCompressedImage()). */
+			enum class CompressionOutcome : uint8_t
+			{
+				/** @brief The block-compressed image is created. */
+				Created,
+				/** @brief The compression or the upload failed: the caller falls back to the uncompressed upload. */
+				Failed,
+				/** @brief The load's stop was requested during the compression: nothing is created, no fallback. */
+				Stopped
+			};
+
+			/**
+			 * @brief Creates the image block-compressed (graphics § 39): the chain through the texture cache (disk lookup,
+			 * compression on a miss, storing), in the format of the texture's kind (D8), uploaded from its first kept level.
+			 * @param renderer A reference to the renderer.
+			 * @param pixels The pixels to compress (flipped already when FlipNormalMapY is on).
+			 * @param mips The mip levels.
+			 * @param stopToken The stop token of the load task (TextureCompressor::compress(): checked per block row).
+			 * @return CompressionOutcome
+			 */
+			[[nodiscard]]
+			CompressionOutcome createCompressedImage (Renderer & renderer, const Base::PixelFactory::Pixmap< uint8_t > & pixels, const MipLevels & mips, const std::stop_token & stopToken) noexcept;
 
 			/**
 			 * @brief Returns the top mip levels this texture skips at upload for its kind's GPU footprint setting

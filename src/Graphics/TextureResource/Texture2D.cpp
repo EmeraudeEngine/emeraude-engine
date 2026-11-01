@@ -105,7 +105,7 @@ namespace EmEn::Graphics::TextureResource
 				return false;
 			}
 		}
-		else if ( !this->createFromPixelData(renderer) )
+		else if ( !this->createFromPixelData(renderer, stopToken) )
 		{
 			return false;
 		}
@@ -287,8 +287,158 @@ namespace EmEn::Graphics::TextureResource
 		return true;
 	}
 
+	Texture2D::CompressionOutcome
+	Texture2D::createCompressedImage (Renderer & renderer, const Base::PixelFactory::Pixmap< uint8_t > & pixels, const MipLevels & mips, const std::stop_token & stopToken) noexcept
+	{
+		const auto chainLevels = mips.chainLevels;
+		const auto skipped = mips.skipped;
+		/* Compressed path: the format follows the texture's kind (graphics § 39, D8 — BC5 for a normal map, BC4 for an
+		 * opaque grey map, BC7 otherwise); the texture cache service owns it end to end -- disk lookup, compression on
+		 * a miss, and storing the result. */
+		const auto blockFormat = TextureCompressor::selectFormat(pixels, this->isSRGB(), this->isNormalMap());
+		/* NOTE: The chain is compressed (and cached) from the full resolution, the skipped levels included: changing
+		 * the footprint settings re-encodes nothing, the upload starts lower. */
+		const auto compressedMips = renderer.textureCache().getOrCompress(this->name(), pixels, chainLevels, blockFormat, this->isSRGB(), stopToken);
+
+		/* NOTE: A stop during the compression: no fallback to the uncompressed upload (the load ends abandoned). */
+		if ( compressedMips.empty() && stopToken.stop_requested() )
+		{
+			return CompressionOutcome::Stopped;
+		}
+
+		if ( !compressedMips.empty() )
+		{
+			const auto first = std::min(static_cast< size_t >(skipped), compressedMips.size() - 1);
+			const auto & top = compressedMips[first];
+
+			m_image = std::make_shared< Vulkan::Image >(
+				renderer.device(),
+				VK_IMAGE_TYPE_2D,
+				TextureCompressor::vulkanFormat(blockFormat, this->isSRGB()),
+				VkExtent3D{top.width, top.height, 1U},
+				VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+				0,
+				static_cast< uint32_t >(compressedMips.size() - first)
+			);
+			m_image->setIdentifier(ClassId, this->name(), "Image");
+
+			/* Build MipLevelData descriptors for the upload. */
+			std::vector< Vulkan::Image::MipLevelData > mipDescs;
+			mipDescs.reserve(compressedMips.size() - first);
+
+			for ( const auto & mip : std::span{compressedMips}.subspan(first) )
+			{
+				mipDescs.push_back({mip.data.data(), static_cast< uint32_t >(mip.data.size()), mip.width, mip.height});
+			}
+
+			if ( m_image->createFromMipChain(renderer.transferManager(), mipDescs) )
+			{
+				return CompressionOutcome::Created;
+			}
+
+			TraceWarning{ClassId} << to_cstring(blockFormat) << " upload failed for '" << this->name() << "', falling back to uncompressed.";
+
+			m_image.reset();
+
+			return CompressionOutcome::Failed;
+		}
+
+		TraceWarning{ClassId} << to_cstring(blockFormat) << " compression failed for '" << this->name() << "', falling back to uncompressed.";
+
+		return CompressionOutcome::Failed;
+	}
+
 	bool
-	Texture2D::createFromPixelData (Renderer & renderer) noexcept
+	Texture2D::createUncompressedImage (Renderer & renderer, const Base::PixelFactory::Pixmap< uint8_t > & pixels, const MipLevels & mips) noexcept
+	{
+		/* Uncompressed path (fallback or no BC support): the compressed path's chain, built on the CPU
+		 * (MipChain::build(): the Kaiser, an sRGB colour in linear light, the dilated holes, the held coverage, the unit
+		 * normals) and uploaded as it is, nothing blitted — the skipped levels (D5) dropped. */
+		const auto chainLevels = mips.chainLevels;
+		const auto skipped = mips.skipped;
+		const auto greyColourSupported = !this->isSRGB() || supportsGreyScaleColour(renderer);
+		/* NOTE: An image grey and opaque by its CONTENT but stored in RGB(A) (a palette PNG, a grey RGB file) goes up as
+		 * one channel, as the BC path chooses BC4 by content (TextureCompressor::isOpaqueGrey(); owner, 2026-10-21) —
+		 * a colour only where the device supports R8_SRGB. */
+		std::optional< Base::PixelFactory::Pixmap< uint8_t > > greyPixels;
+
+		if ( pixels.colorCount() == 4 && !this->isNormalMap() && greyColourSupported && TextureCompressor::isOpaqueGrey(pixels) )
+		{
+			greyPixels.emplace(Base::PixelFactory::Processor< uint8_t >::extractChannel(pixels, Base::PixelFactory::Channel::Red));
+		}
+
+		const auto & chainBase = greyPixels.has_value() ? *greyPixels : pixels;
+		/* NOTE: A one-channel colour (a grey-scale sRGB image) needs R8_SRGB, whose sampling is optional in Vulkan:
+		 * without it every level is uploaded as its RGBA expansion (graphics § 39, D8 step 2). */
+		const auto expandGreyColour = chainBase.colorCount() == 1 && !greyColourSupported;
+		const MipChain::Treatment treatment{
+			.sRGB = this->isSRGB(),
+			.normalMap = this->isNormalMap(),
+			.alpha = !this->isNormalMap()
+		};
+
+		std::vector< Base::PixelFactory::Pixmap< uint8_t > > levels;
+		levels.reserve(chainLevels - skipped);
+
+		const auto chainBuilt = MipChain::build(chainBase, chainLevels, treatment, [&levels, skipped, expandGreyColour] (uint32_t level, const Base::PixelFactory::Pixmap< uint8_t > & pixmap) {
+			if ( level >= skipped )
+			{
+				levels.emplace_back(expandGreyColour ? Base::PixelFactory::Processor< uint8_t >::toRGBA(pixmap) : pixmap);
+			}
+
+			return true;
+		});
+
+		if ( !chainBuilt || levels.empty() )
+		{
+			TraceError{ClassId} << "Unable to build the mip chain of the texture '" << this->name() << "' !";
+
+			return false;
+		}
+
+		std::vector< Vulkan::Image::MipLevelData > mipDescs;
+		mipDescs.reserve(levels.size());
+
+		for ( const auto & level : levels )
+		{
+			/* NOTE: A level of 4 GiB or more (a 32768² RGBA base) does not fit the upload descriptor. */
+			if ( !std::in_range< uint32_t >(level.data().size()) )
+			{
+				TraceError{ClassId} << "The texture '" << this->name() << "' is too large to upload (" << level.width() << "x" << level.height() << ") !";
+
+				return false;
+			}
+
+			mipDescs.push_back({level.data().data(), static_cast< uint32_t >(level.data().size()), level.width(), level.height()});
+		}
+
+		const auto & top = levels.front();
+
+		m_image = std::make_shared< Vulkan::Image >(
+			renderer.device(),
+			VK_IMAGE_TYPE_2D,
+			Image::getFormat< uint8_t >(top.colorCount(), this->isSRGB()),
+			VkExtent3D{top.width(), top.height(), 1U},
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			0,
+			static_cast< uint32_t >(levels.size())
+		);
+		m_image->setIdentifier(ClassId, this->name(), "Image");
+
+		if ( !m_image->createFromMipChain(renderer.transferManager(), mipDescs) )
+		{
+			Tracer::error(ClassId, "Unable to create an image !");
+
+			m_image.reset();
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Texture2D::createFromPixelData (Renderer & renderer, const std::stop_token & stopToken) noexcept
 	{
 		/* NOTE: The upload reads the pixels: they stay resident until it ends, a released copy
 		 * is reloaded first (docs/subsystems/resources/03 § CPU Copies). */
@@ -327,146 +477,31 @@ namespace EmEn::Graphics::TextureResource
 		/* D5: the top levels this texture's kind skips (at least one level kept). */
 		const auto skipped = std::min(this->skippedMipLevels(settings), fullChain - 1);
 
+		/* NOTE: The chain is built (and compressed, cached) from the full resolution, the skipped levels included. */
+		const MipLevels mipRange{.chainLevels = std::min(fullChain, mipLevels + skipped), .skipped = skipped};
+
 		/* Block-compressed when the device supports BC and Core/Graphics/Texture/BlockCompression allows it. */
 		const auto useBlockCompression = renderer.device()->physicalDevice()->featuresVK10().textureCompressionBC == VK_TRUE && settings.getOrSetDefault< bool >(GraphicsTextureBlockCompressionKey, DefaultGraphicsTextureBlockCompression);
 		bool imageCreated = false;
 
 		if ( useBlockCompression )
 		{
-			/* Compressed path: the format follows the texture's kind (graphics § 39, D8 — BC5 for a normal map, BC4 for an
-			 * opaque grey map, BC7 otherwise); the texture cache service owns it end to end -- disk lookup, compression on
-			 * a miss, and storing the result. */
-			const auto blockFormat = TextureCompressor::selectFormat(pixels, this->isSRGB(), this->isNormalMap());
-			/* NOTE: The chain is compressed (and cached) from the full resolution, the skipped levels included: changing
-			 * the footprint settings re-encodes nothing, the upload starts lower. */
-			const auto compressedMips = renderer.textureCache().getOrCompress(this->name(), pixels, std::min(fullChain, mipLevels + skipped), blockFormat, this->isSRGB());
+			const auto outcome = this->createCompressedImage(renderer, pixels, mipRange, stopToken);
 
-			if ( !compressedMips.empty() )
+			/* NOTE: The load's stop: no fallback, nothing published (the load ends abandoned). */
+			if ( outcome == CompressionOutcome::Stopped )
 			{
-				const auto first = std::min(static_cast< size_t >(skipped), compressedMips.size() - 1);
-				const auto & top = compressedMips[first];
-
-				m_image = std::make_shared< Vulkan::Image >(
-					renderer.device(),
-					VK_IMAGE_TYPE_2D,
-					TextureCompressor::vulkanFormat(blockFormat, this->isSRGB()),
-					VkExtent3D{top.width, top.height, 1U},
-					VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-					0,
-					static_cast< uint32_t >(compressedMips.size() - first)
-				);
-				m_image->setIdentifier(ClassId, this->name(), "Image");
-
-				/* Build MipLevelData descriptors for the upload. */
-				std::vector< Vulkan::Image::MipLevelData > mipDescs;
-				mipDescs.reserve(compressedMips.size() - first);
-
-				for ( const auto & mip : std::span{compressedMips}.subspan(first) )
-				{
-					mipDescs.push_back({mip.data.data(), static_cast< uint32_t >(mip.data.size()), mip.width, mip.height});
-				}
-
-				if ( m_image->createFromMipChain(renderer.transferManager(), mipDescs) )
-				{
-					imageCreated = true;
-				}
-				else
-				{
-					TraceWarning{ClassId} << to_cstring(blockFormat) << " upload failed for '" << this->name() << "', falling back to uncompressed.";
-
-					m_image.reset();
-				}
+				return false;
 			}
-			else
-			{
-				TraceWarning{ClassId} << to_cstring(blockFormat) << " compression failed for '" << this->name() << "', falling back to uncompressed.";
-			}
+
+			imageCreated = outcome == CompressionOutcome::Created;
 		}
 
-		if ( !imageCreated )
+		if ( !imageCreated && !this->createUncompressedImage(renderer, pixels, mipRange) )
 		{
-			/* Uncompressed path (fallback or no BC support): the compressed path's chain, built on the CPU
-			 * (MipChain::build(): the Kaiser, an sRGB colour in linear light, the dilated holes, the held coverage, the unit
-			 * normals) and uploaded as it is, nothing blitted — the skipped levels (D5) dropped. */
-			const auto chainLevels = std::min(fullChain, mipLevels + skipped);
-			const auto greyColourSupported = !this->isSRGB() || supportsGreyScaleColour(renderer);
-			/* NOTE: An image grey and opaque by its CONTENT but stored in RGB(A) (a palette PNG, a grey RGB file) goes up as
-			 * one channel, as the BC path chooses BC4 by content (TextureCompressor::isOpaqueGrey(); owner, 2026-10-21) —
-			 * a colour only where the device supports R8_SRGB. */
-			std::optional< Base::PixelFactory::Pixmap< uint8_t > > greyPixels;
-
-			if ( pixels.colorCount() == 4 && !this->isNormalMap() && greyColourSupported && TextureCompressor::isOpaqueGrey(pixels) )
-			{
-				greyPixels.emplace(Base::PixelFactory::Processor< uint8_t >::extractChannel(pixels, Base::PixelFactory::Channel::Red));
-			}
-
-			const auto & chainBase = greyPixels.has_value() ? *greyPixels : pixels;
-			/* NOTE: A one-channel colour (a grey-scale sRGB image) needs R8_SRGB, whose sampling is optional in Vulkan:
-			 * without it every level is uploaded as its RGBA expansion (graphics § 39, D8 step 2). */
-			const auto expandGreyColour = chainBase.colorCount() == 1 && !greyColourSupported;
-			const MipChain::Treatment treatment{
-				.sRGB = this->isSRGB(),
-				.normalMap = this->isNormalMap(),
-				.alpha = !this->isNormalMap()
-			};
-
-			std::vector< Base::PixelFactory::Pixmap< uint8_t > > levels;
-			levels.reserve(chainLevels - skipped);
-
-			const auto chainBuilt = MipChain::build(chainBase, chainLevels, treatment, [&levels, skipped, expandGreyColour] (uint32_t level, const Base::PixelFactory::Pixmap< uint8_t > & pixmap) {
-				if ( level >= skipped )
-				{
-					levels.emplace_back(expandGreyColour ? Base::PixelFactory::Processor< uint8_t >::toRGBA(pixmap) : pixmap);
-				}
-
-				return true;
-			});
-
-			if ( !chainBuilt || levels.empty() )
-			{
-				TraceError{ClassId} << "Unable to build the mip chain of the texture '" << this->name() << "' !";
-
-				return false;
-			}
-
-			std::vector< Vulkan::Image::MipLevelData > mipDescs;
-			mipDescs.reserve(levels.size());
-
-			for ( const auto & level : levels )
-			{
-				/* NOTE: A level of 4 GiB or more (a 32768² RGBA base) does not fit the upload descriptor. */
-				if ( !std::in_range< uint32_t >(level.data().size()) )
-				{
-					TraceError{ClassId} << "The texture '" << this->name() << "' is too large to upload (" << level.width() << "x" << level.height() << ") !";
-
-					return false;
-				}
-
-				mipDescs.push_back({level.data().data(), static_cast< uint32_t >(level.data().size()), level.width(), level.height()});
-			}
-
-			const auto & top = levels.front();
-
-			m_image = std::make_shared< Vulkan::Image >(
-				renderer.device(),
-				VK_IMAGE_TYPE_2D,
-				Image::getFormat< uint8_t >(top.colorCount(), this->isSRGB()),
-				VkExtent3D{top.width(), top.height(), 1U},
-				VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-				0,
-				static_cast< uint32_t >(levels.size())
-			);
-			m_image->setIdentifier(ClassId, this->name(), "Image");
-
-			if ( !m_image->createFromMipChain(renderer.transferManager(), mipDescs) )
-			{
-				Tracer::error(ClassId, "Unable to create an image !");
-
-				m_image.reset();
-
-				return false;
-			}
+			return false;
 		}
+
 		/* The upload consumed the pixels: their CPU copy may be released. */
 		m_localData->markLocalDataReleasable();
 

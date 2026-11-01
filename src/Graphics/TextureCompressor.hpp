@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <stop_token>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -132,11 +133,14 @@ namespace EmEn::Graphics
 			 * @param format The block format.
 			 * @param sRGB Whether the texture is a colour (sRGB) one: its colour channels are filtered in linear light, the
 			 * alpha always linear. Read for BC7 only (BC5 holds normals, BC4 a linear grey map).
-			 * @return Vector of compressed mip levels, empty on failure.
+			 * @param stopToken The stop token of the load task (Resources::ResourceTrait::LoadStopScope), checked before each
+			 * row of blocks (owner, 2026-11-01: a 2048² BC5 held a shutdown 7.2 s on Windows): a stop ends the compression
+			 * with an EMPTY result, silently — never a partial chain, which the cache would store.
+			 * @return Vector of compressed mip levels, empty on failure or on a stop.
 			 * @note Non-multiple-of-4 dimensions are padded by repeating edge pixels.
 			 */
 			[[nodiscard]]
-			std::vector< CompressedMipLevel > compress (const Base::PixelFactory::Pixmap< uint8_t > & source, uint32_t maxMipLevels, BlockFormat format, bool sRGB) const noexcept;
+			std::vector< CompressedMipLevel > compress (const Base::PixelFactory::Pixmap< uint8_t > & source, uint32_t maxMipLevels, BlockFormat format, bool sRGB, const std::stop_token & stopToken) const noexcept;
 
 			/**
 			 * @brief Compresses a single RGBA8 pixmap to BC7 (no mipchain).
