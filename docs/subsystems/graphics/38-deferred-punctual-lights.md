@@ -69,7 +69,8 @@ demo at side 128: 5800 street lamps).
   linearly from 1 at `distance - fadeRange` to 0 at `distance`; the forward passes have no per-view factor and CUT the
   light at the distance (a material the resolve does not shade; a shadowed or projected light — tested too, outside the
   eligible set: its forward passes stop at its draw distance). Honoured only while the deferred punctual lights are on;
-  the translucent lists, the cubemaps, the render-to-textures and the RT light SSBO (128 closest) ignore it.
+  the cubemaps, the render-to-textures and the RT light SSBO (128 closest) ignore it (the translucent lists honour it
+  since 2026-11-01, below).
 - **DROPPED used to be FORWARD** (2026-10-06 → 10-28): the visible lights beyond the budget were drawn by the forward
   passes, which re-draw the geometry once per light. `city` at side 128, night, aerial view: 5800 eligible, 1024
   resolved, **4640 forward → `ScenePass` 461 ms (2 FPS)**; street level: 1085 forward, `ScenePass` 107 ms and the
@@ -81,9 +82,31 @@ demo at side 128: 5800 street lamps).
 - The INVISIBLE skip is exact: the G-buffer holds only what the frustum sees, so a light whose reach misses the
   frustum lights no visible pixel. Light-volume culling of deferred shading (S. Hargreaves, "Deferred Shading",
   GDC 2004; O. Shishkovtsov, GPU Gems 2 ch. 9, 2005). An unbounded light is never invisible.
-- It applies to the opaque lists of the MAIN scene target only — the one `prepare()` was given. Cubemaps, render to
-  textures and the translucent lists keep every forward pass. It is passed even on a frame with nothing to resolve
+- It applies to the opaque AND translucent lists of the MAIN scene target only — the one `prepare()` was given.
+  Cubemaps and render to textures keep every forward pass. It is passed even on a frame with nothing to resolve
   (`Renderer`: `prepare()` ran, answered false, the invisible set is still this target's).
+- **The translucent lists skip it too (2026-11-01)**: `Scene::renderTranslucent()` and `renderTranslucentGB()` take the
+  same `invisibleLights()` as `renderOpaque()`. Before, they took none: every enabled light of the scene drew its forward
+  pass of every translucent batch. `city` at side 128 with its island sea (one full-screen translucent ocean, 1708
+  traffic signals): `TranslucentGBPass` 294 ms, 3.4 FPS at the aerial pose, 9 FPS at the spawn; with the skip
+  76 / 46.5 FPS (82 / 50 without the sea). The skip is exact for a translucent surface too: a light out of the frustum or
+  beyond its draw distance lights no visible pixel. The DEFERRED skip (the resolve's lights) still applies to the opaque
+  lists only: the resolve shades the opaque G-buffer, a translucent batch is drawn after it.
+
+### Keeping a surface out of the punctual lights (2026-11-01)
+
+`RenderableInstance::Abstract::setPunctualLightingEnabled(false)` (flag `DisablePunctualLighting`): the instance gets no
+point, spot or line light pass in `renderLightedSelection()`; the directional lights, the ambient and the sky still
+light it. A scene's SEA is reached through `Scene::setSeaLevelPunctualLighting(false)`: the scene records it and applies
+it every time it creates the sea's instance (`registerSceneVisualComponents()`, at the first `enable()` and again when
+the background changes) — the instance does not exist before the scene is enabled, AFTER every demo hook (a demo calling
+the instance setter in `onBuilding()` found no instance, and the A/B ran without it).
+
+- Owner, 2026-11-01 ("the ocean is discarded from the city's lighting"): lit forward, the sea was redrawn once per lamp
+  in reach. `city` night park pose (time 0.95): `TranslucentGBPass` 9.9 → 0.18 ms (side 32), 8.4 → 0.18 ms (side 128);
+  81 / 65 FPS against 84 / 70 without the sea (RTX 3070 Ti, 1920×1080, VSync off, no validation layer).
+- ⚠️ The FORWARD passes only: an opaque instance whose material the deferred resolve shades still receives the resolved
+  lights. A layer system that says which lights light which surfaces is the open item `light-layers`.
 - The 128 used to be the first 128 of the light SET's order — a `std::set` of `shared_ptr`, i.e. ADDRESS order,
   wherever the lamps were. Ties are broken by the walk order, and the kept ones are put back in that order: a scene
   under 128 visible lights fills the buffer exactly as before.

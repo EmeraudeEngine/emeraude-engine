@@ -27,13 +27,15 @@
 #include "SoundResource.hpp"
 
 /* Local inclusions. */
+#include "Audio/Buffer.hpp"
+#include "BlobTrait.hpp"
+#include "Manager.hpp"
+#include "Tracer.hpp"
 #include "WaveFactory/FileIO.hpp"
 #include "WaveFactory/Processor.hpp"
 #include "WaveFactory/SFXScript.hpp"
 #include "WaveFactory/Synthesizer.hpp"
-#include "Manager.hpp"
-#include "Resources/Manager.hpp"
-#include "Tracer.hpp"
+#include "WaveFactory/Types.hpp"
 
 namespace EmEn::Audio
 {
@@ -214,7 +216,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundResource::onDependenciesLoaded () noexcept
+	SoundResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		m_buffer = std::make_shared< Buffer >();
 

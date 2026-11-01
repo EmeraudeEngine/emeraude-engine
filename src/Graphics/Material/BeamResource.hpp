@@ -30,8 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <atomic>
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -40,11 +40,26 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
-#include "ScopedRegistration.hpp"
+#include "Graphics/Types.hpp"
+#include "Hash/FNV1a.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
 #include "PixelFactory/Color.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
+#include "ScopedRegistration.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
+
 namespace EmEn::Resources
 {
 	template< typename resource_t >
@@ -499,7 +514,7 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::create() */
 			[[nodiscard]]
-			bool create (Renderer & renderer) noexcept override;
+			bool create (Renderer & renderer, const std::stop_token & stopToken) noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::destroy() */
 			void destroy () noexcept override;

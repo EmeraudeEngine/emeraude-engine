@@ -29,13 +29,34 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/VolumetricImageResource.hpp"
+#include "Hash/FNV1a.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
+#include "Vulkan/TextureInterface.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class VolumetricImageResource;
+}
+
+namespace EmEn::Vulkan
+{
+	class Image;
+	class ImageView;
+	class Sampler;
+}
+
 namespace EmEn::Resources
 {
 	template< typename resource_t >
@@ -296,7 +317,7 @@ namespace EmEn::Graphics::TextureResource
 			 * @note Requires that load() has been called successfully before creation.
 			 * @version 0.8.35
 			 */
-			bool createTexture (Renderer & renderer) noexcept override;
+			bool createTexture (Renderer & renderer, const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @copydoc EmEn::Graphics::TextureResource::Abstract::destroyTexture()

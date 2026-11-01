@@ -30,20 +30,19 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
+#include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <optional>
 #include <stop_token>
 #include <string>
 #include <type_traits>
 #include <typeindex>
+#include <utility>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -58,10 +57,11 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "BaseInformation.hpp"
 #include "ConditionVariable.hpp"
 #include "Mutex.hpp"
-#include "BaseInformation.hpp"
 #include "ThreadPool.hpp"
+#include "ThreadSafety.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -638,6 +638,42 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @class LoadStopScope
+			 * @brief Hands a load task's stop token to the resource it loads, for the duration of that load (RAII: the
+			 * constructor sets it, the destructor clears it).
+			 * @note Owner decision 2026-11-01 (the explicit stop token, its narrow form): the container's load task holds
+			 * one around load() and around a manual creation function; from there the token is an explicit parameter of
+			 * the completion chain — checkDependencies(), a parent's dependencyLoaded(), onDependenciesLoaded() — so the
+			 * work a completion starts on that thread (a texture's compression, frame by frame) can stop. A load outside a
+			 * container task (synchronous, manual on the caller's thread) has none: its completion gets a token that never
+			 * stops.
+			 * @note Not copyable, not movable: one scope, one load, on the load's own thread.
+			 */
+			class LoadStopScope final
+			{
+				public:
+
+					/**
+					 * @brief Hands the token to the resource.
+					 * @param resource A reference to the resource the task loads.
+					 * @param stopToken The task's stop token.
+					 */
+					LoadStopScope (ResourceTrait & resource, const std::stop_token & stopToken) noexcept;
+
+					/** @brief Takes the token back: a completion after the load (another thread) gets none. */
+					~LoadStopScope ();
+
+					LoadStopScope (const LoadStopScope & copy) = delete;
+					LoadStopScope (LoadStopScope && other) = delete;
+					LoadStopScope & operator= (const LoadStopScope & copy) = delete;
+					LoadStopScope & operator= (LoadStopScope && other) = delete;
+
+				private:
+
+					ResourceTrait * m_resource;
+			};
+
+			/**
 			 * @brief Puts a resource that will never get its data into the terminal Failed state.
 			 * The automatic protocol in one step: the resource enters the loading stage and fails it
 			 * at once, so observers receive LoadFailed and dependants see a Failed dependency, exactly
@@ -1200,17 +1236,21 @@ namespace EmEn::Resources
 			 * tasks that require all dependencies to be available (e.g., combining textures,
 			 * building GPU resources, validating complete resource graphs).
 			 *
+			 * @param stopToken The stop token of the load task this completion runs on (LoadStopScope): a long
+			 * finalization checks it with a bounded latency and returns false once it is requested (the load then ends
+			 * ABANDONED, silently, as abandonLoading()). A token that never stops outside a container task.
 			 * @return true if finalization succeeded, false to mark resource as Failed
 			 * @post Resource will transition to Loaded if this returns true, Failed otherwise
 			 * @note Default implementation returns true (no finalization needed)
-			 * @note This is called from within a mutex-protected section
+			 * @note Called OUTSIDE the resource's lock, on the thread of the dependency that completed last (or of the
+			 * resource's own setLoadSuccess()).
 			 * @note All dependencies are guaranteed to be in Loaded state when this is called
 			 * @see checkDependencies(), setLoadSuccess()
 			 */
 			[[nodiscard]]
 			virtual
 			bool
-			onDependenciesLoaded () noexcept
+			onDependenciesLoaded ([[maybe_unused]] const std::stop_token & stopToken) noexcept
 			{
 				return true;
 			}
@@ -1263,35 +1303,48 @@ namespace EmEn::Resources
 			 * and triggers a dependency check to see if all dependencies are now satisfied.
 			 *
 			 * @param dependency Shared pointer to the dependency that just finished loading
+			 * @param stopToken The stop token of the load task the completion runs on (LoadStopScope).
 			 * @post dependency is removed from m_dependenciesToWaitFor
 			 * @post checkDependencies() is called to evaluate overall loading status
 			 * @note Thread-safe: uses m_dependenciesAccess mutex
 			 * @see addDependency(), checkDependencies(), m_dependenciesToWaitFor
 			 */
-			void dependencyLoaded (const std::shared_ptr< ResourceTrait > & dependency) noexcept;
+			void dependencyLoaded (const std::shared_ptr< ResourceTrait > & dependency, const std::stop_token & stopToken) noexcept;
 
 			/**
 			 * @brief Notification callback invoked by a child dependency that FAILED to load.
 			 * @note Removes it from the waited list, asks onDependencyFailed(), then goes on (checkDependencies()) or fails
 			 * in turn (releaseLinksAfterFailure(), which propagates up).
 			 * @param dependency Shared pointer to the dependency that failed.
+			 * @param stopToken The stop token of the load task the failure runs on (LoadStopScope).
 			 */
-			void dependencyFailed (const std::shared_ptr< ResourceTrait > & dependency) noexcept;
+			void dependencyFailed (const std::shared_ptr< ResourceTrait > & dependency, const std::stop_token & stopToken) noexcept;
 
 			/**
 			 * @brief Releases every dependency link of a resource that just failed, and tells its parents.
 			 * @note Called on every failure path (setLoadSuccess(false), a failed onDependenciesLoaded(), a failed file
 			 * parse, a failed dependency): the waited children are dropped and each parent gets dependencyFailed().
+			 * @param stopToken The stop token of the load task the failure runs on (LoadStopScope): a parent that goes on
+			 * without the failed resource completes with it.
 			 */
-			void releaseLinksAfterFailure () noexcept;
+			void releaseLinksAfterFailure (const std::stop_token & stopToken) noexcept;
 
 			/**
 			 * @brief Asks onDependencyFailed() and, when this resource cannot go on, fails it (links released, parents told).
 			 * @param dependency A reference to the dependency that failed.
+			 * @param stopToken The stop token of the load task the failure runs on (LoadStopScope).
 			 * @return bool True when this resource goes on without it.
 			 */
 			[[nodiscard]]
-			bool goOnAfterDependencyFailure (const ResourceTrait & dependency) noexcept;
+			bool goOnAfterDependencyFailure (const ResourceTrait & dependency, const std::stop_token & stopToken) noexcept;
+
+			/**
+			 * @brief Returns the stop token of the container task loading this resource right now (LoadStopScope), or a
+			 * token that never stops.
+			 * @return std::stop_token A copy, taken under the resource's lock.
+			 */
+			[[nodiscard]]
+			std::stop_token loadStopToken () const noexcept;
 
 			/**
 			 * @brief Checks if all dependencies are loaded and propagates notifications.
@@ -1301,14 +1354,33 @@ namespace EmEn::Resources
 			 * and recursively notifies parent resources. This implements the core dependency
 			 * resolution algorithm.
 			 *
+			 * @param stopToken The stop token of the load task this check runs on (LoadStopScope), handed to
+			 * onDependenciesLoaded() and to the parents.
 			 * @post If all dependencies loaded: Status becomes Loaded, parents notified, observers notified
 			 * @post If any dependency pending: No state change, waits for more dependencyLoaded() calls
-			 * @post If onDependenciesLoaded() fails: Status becomes Failed, LoadFailed notification emitted
+			 * @post If onDependenciesLoaded() fails: Status becomes Failed, LoadFailed notification emitted (ABANDONED,
+			 * without an error line, when the stop was requested meanwhile)
 			 * @note Thread-safe: uses m_dependenciesAccess mutex
 			 * @note Only acts when status is Loading; ignores calls in other states
 			 * @see dependencyLoaded(), onDependenciesLoaded(), setLoadSuccess()
 			 */
-			void checkDependencies () noexcept;
+			void checkDependencies (const std::stop_token & stopToken) noexcept;
+
+			/**
+			 * @brief The decision half of checkDependencies(), under the resource's lock: claims the finalization when the
+			 * resource is Loading, no other thread finalizes it, and every dependency is loaded.
+			 * @return bool True when THIS thread must call finalizeDependencies() (m_dependenciesFinalizing is set).
+			 */
+			[[nodiscard]]
+			bool claimDependenciesFinalization () noexcept;
+
+			/**
+			 * @brief The finalization half of checkDependencies(), outside the lock: onDependenciesLoaded(), then Loaded or
+			 * Failed (abandoned when the stop cut it short), the observers and the parents told.
+			 * @pre claimDependenciesFinalization() answered true on this thread.
+			 * @param stopToken The stop token of the load task this check runs on (LoadStopScope).
+			 */
+			void finalizeDependencies (const std::stop_token & stopToken) noexcept;
 
 			/**
 			 * @brief Internal method that initiates the enqueuing phase of resource loading.
@@ -1416,6 +1488,9 @@ namespace EmEn::Resources
 			bool m_localDataRetained EMEN_GUARDED_BY(m_localDataAccess){false};
 			bool m_localDataReleased EMEN_GUARDED_BY(m_localDataAccess){false};
 			bool m_localDataReloading EMEN_GUARDED_BY(m_localDataAccess){false};
+			/* NOTE: The stop token of the container task loading this resource right now (LoadStopScope); empty (never
+			 * stops) outside it. */
+			std::stop_token m_loadStopToken EMEN_GUARDED_BY(m_dependenciesAccess);
 			/* NOTE: True while ONE thread runs onDependenciesLoaded() (checkDependencies()). */
 			bool m_dependenciesFinalizing EMEN_GUARDED_BY(m_dependenciesAccess){false};
 			/* NOTE: Atomic: set by the thread that stops the loads, read by a parent on any thread. */

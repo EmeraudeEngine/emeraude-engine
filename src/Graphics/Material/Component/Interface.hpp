@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
+#include <stop_token>
 #include <string>
 
 /* Local inclusions for usages. */
@@ -111,7 +112,7 @@ namespace EmEn::Graphics::Material::Component
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool create (Renderer & renderer, uint32_t & binding) noexcept = 0;
+			virtual bool create (Renderer & renderer, uint32_t & binding, const std::stop_token & stopToken) noexcept = 0;
 
 			/**
 			 * @brief Return the variable name.

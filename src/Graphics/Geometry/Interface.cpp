@@ -30,13 +30,23 @@
 #include <algorithm>
 #include <iterator>
 #include <numeric>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/Geometry/SubGeometry.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Math/Base.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/DeferredDestructor.hpp"
+#include "Vulkan/IndexBufferObject.hpp"
 #include "Vulkan/TransferManager.hpp"
+#include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Graphics::Geometry
 {
@@ -328,7 +338,7 @@ namespace EmEn::Graphics::Geometry
 	}
 
 	bool
-	Interface::onDependenciesLoaded () noexcept
+	Interface::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		if ( !this->isCreated() && !this->createOnHardware(this->serviceProvider().graphicsRenderer().transferManager()) )
 		{

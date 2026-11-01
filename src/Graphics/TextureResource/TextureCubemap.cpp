@@ -26,15 +26,30 @@
 
 #include "TextureCubemap.hpp"
 
+/* STL inclusions. */
+#include <functional>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/CubemapResource.hpp"
 #include "Graphics/Photometry.hpp"
+#include "Graphics/Types.hpp"
+#include "Logging/Severity.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "Resources/Container.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/Sampler.hpp"
 
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
-#include "Resources/Manager.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
-#include "Vulkan/Instance.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {
@@ -63,7 +78,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	TextureCubemap::createTexture (Renderer & renderer) noexcept
+	TextureCubemap::createTexture (Renderer & renderer, const std::stop_token & /*stopToken*/) noexcept
 	{
 		/* NOTE: The upload reads the faces: they stay resident until it ends, a released copy
 		 * is reloaded first (docs/subsystems/resources/03 § CPU Copies). */

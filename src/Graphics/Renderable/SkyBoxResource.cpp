@@ -26,12 +26,26 @@
 
 #include "SkyBoxResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
+/* STL inclusions. */
+#include <functional>
+#include <optional>
+
 /* Local inclusions. */
-#include "Graphics/Material/StandardResource.hpp"
-#include "Graphics/TextureResource/TextureCubemap.hpp"
-#include "Graphics/TextureResource/StoreTexture.hpp"
-#include "Resources/Container.hpp"
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/TextureResource/StoreTexture.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Base.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Resources/Container.hpp"
+#include "Tracer.hpp"
 #include "Types.hpp"
 
 namespace EmEn::Graphics::Renderable
@@ -250,7 +264,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SkyBoxResource::onDependenciesLoaded () noexcept
+	SkyBoxResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		/* The default ambient illuminance follows the MEASURED sky, not the uniform-dome pi
 		 * (owner decision, Jul 2026): the cubemap pixels are final here. An explicit

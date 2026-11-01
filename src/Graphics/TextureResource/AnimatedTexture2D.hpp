@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
+#include <stop_token>
 #include <string>
 #include <utility>
 #include <vector>
@@ -253,7 +254,7 @@ namespace EmEn::Graphics::TextureResource
 			}
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::createTexture() */
-			bool createTexture (Renderer & renderer) noexcept override;
+			bool createTexture (Renderer & renderer, const std::stop_token & stopToken) noexcept override;
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::destroyTexture() */
 			bool destroyTexture () noexcept override;
@@ -301,16 +302,44 @@ namespace EmEn::Graphics::TextureResource
 
 		private:
 
+			/** @brief What the block-compressed path did (createCompressedImage()). */
+			enum class CompressionOutcome : uint8_t
+			{
+				/** @brief The block-compressed image is created. */
+				Created,
+				/** @brief A frame failed to compress, or the upload failed: the caller falls back to RGBA8. */
+				Failed,
+				/** @brief The load's stop was requested: nothing is created, the caller gives up (no fallback). */
+				Stopped
+			};
+
 			/**
 			 * @brief Creates the image block-compressed (graphics § 39): every frame through the texture cache, uploaded as
 			 * the layers of one block-compressed array, in the format of the texture's kind (D8: BC5 for a normal map).
 			 * @note An uncompressed image was 640 MiB for the ocean's 120 × 1024² normal map; BC7 or BC5 is a quarter of it.
+			 * @note The frames are encoded in PARALLEL on the thread pool (ThreadPool::parallelFor(): the calling worker
+			 * takes its share, so no deadlock from a pool worker), each worker checking the stop before its next frame:
+			 * a stop waits for one frame's encoding at most (owner, 2026-11-01 — on a cold cache the ocean's 124 frames
+			 * took ~2 minutes one after another on a laptop, and a shutdown waited for them).
 			 * @param renderer A reference to the graphics renderer.
 			 * @param mipLevels The mip levels asked of each frame.
-			 * @return bool False when a frame failed to compress or the upload failed: the caller falls back to RGBA8.
+			 * @param stopToken The stop token of the load task (Resources::ResourceTrait::LoadStopScope).
+			 * @return CompressionOutcome
 			 */
 			[[nodiscard]]
-			bool createCompressedImage (Renderer & renderer, uint32_t mipLevels) noexcept;
+			CompressionOutcome createCompressedImage (Renderer & renderer, uint32_t mipLevels, const std::stop_token & stopToken) noexcept;
+
+			/**
+			 * @brief Creates the image uncompressed (RGBA8, or one channel for grey frames): every frame's mip chain built on
+			 * the CPU (MipChain::build(), like Texture2D), uploaded as the layers of one array. The fallback of
+			 * createCompressedImage(), and the path when block compression is off or unsupported.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param mipLevels The mip levels asked of each frame.
+			 * @param stopToken The stop token of the load task, checked before each frame's chain.
+			 * @return bool False when a chain or the upload failed, or the stop was requested.
+			 */
+			[[nodiscard]]
+			bool createUncompressedImage (Renderer & renderer, uint32_t mipLevels, const std::stop_token & stopToken) noexcept;
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependencyFailed() */
 			[[nodiscard]]

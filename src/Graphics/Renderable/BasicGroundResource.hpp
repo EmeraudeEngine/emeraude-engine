@@ -30,16 +30,32 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <type_traits>
+#include <utility>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 #include "Scenes/GroundLevelInterface.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Geometry/VertexGridResource.hpp"
+#include "Hash/FNV1a.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "Resources/Types.hpp"
+#include "Tracer.hpp"
+#include "VertexFactory/Grid.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Resources
+{
+	class AbstractServiceProvider;
+}
+
 namespace EmEn::Resources
 {
 	template< typename resource_t >
@@ -65,8 +81,6 @@ namespace EmEn::Graphics::Renderable
 			static constexpr auto DefaultSize{1024.0F};
 			static constexpr auto DefaultDivision{16};
 			static constexpr uint32_t DefaultGeometryFlags{Geometry::EnableTangentSpace | Geometry::EnableVertexColor | Geometry::EnablePrimaryTextureCoordinates | Geometry::EnablePrimitiveRestart};
-
-
 
 			/** @brief Defines the resource dependency complexity. */
 			static constexpr auto Complexity{Resources::DepComplexity::Complex};
@@ -315,7 +329,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Sets the geometry resource.

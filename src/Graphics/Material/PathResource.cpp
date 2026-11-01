@@ -29,19 +29,27 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
-#include <sstream>
+#include <optional>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Saphir/AbstractVertexStage.hpp"
 #include "Saphir/Code.hpp"
-#include "Saphir/PathGLSL.hpp"
+#include "Saphir/Declaration/Types.hpp"
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/FragmentShader.hpp"
 #include "Saphir/Generator/Abstract.hpp"
 #include "Saphir/Keys.hpp"
+#include "Saphir/PathGLSL.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/SetIndexes.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
@@ -98,7 +106,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	PathResource::create (Renderer & renderer) noexcept
+	PathResource::create (Renderer & renderer, const std::stop_token & /*stopToken*/) noexcept
 	{
 		/* The renderer flushes the look changes made after creation. */
 		m_renderer = &renderer;
@@ -269,7 +277,6 @@ namespace EmEn::Graphics::Material
 		/* LOCAL offset within the element's bank (see StandardResource::UBOOffset()). */
 		return static_cast< uint32_t >(m_sharedUniformBuffer->getByteOffsetForElement(m_sharedUBOIndex, 0));
 	}
-
 
 	Declaration::UniformBlock
 	PathResource::getUniformBlock (uint32_t set, uint32_t binding) const noexcept

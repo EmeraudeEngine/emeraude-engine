@@ -30,10 +30,10 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -41,9 +41,18 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Hash/FNV1a.hpp"
 #include "Math/Vector.hpp"
+#include "Resources/Types.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class Image;
+	class ImageView;
+	class Sampler;
+}
+
 namespace EmEn
 {
 	namespace Resources
@@ -402,7 +411,7 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Grows the shape and fills the voxel grid from m_parameters.

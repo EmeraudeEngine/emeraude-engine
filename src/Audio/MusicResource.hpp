@@ -29,15 +29,26 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <vector>
+
 /* Local inclusions for inheritances. */
 #include "PlayableInterface.hpp"
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Audio/Buffer.hpp"
+#include "Hash/FNV1a.hpp"
+#include "Resources/Types.hpp"
+#include "WaveFactory/Types.hpp"
 #include "WaveFactory/Wave.hpp"
 
 /* Forward declarations. */
-struct tsf;
 
 namespace EmEn::Resources
 {
@@ -241,7 +252,7 @@ namespace EmEn::Audio
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Reads the music file metadata.

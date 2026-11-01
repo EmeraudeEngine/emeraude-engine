@@ -31,8 +31,9 @@
 #include <functional>
 #include <optional>
 #include <span>
-#include <utility>
+#include <stop_token>
 #include <string>
+#include <utility>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -89,8 +90,14 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture2D::createTexture (Renderer & renderer) noexcept
+	Texture2D::createTexture (Renderer & renderer, const std::stop_token & stopToken) noexcept
 	{
+		/* NOTE: The load's stop (Resources::ResourceTrait::LoadStopScope): one texture is one encoding, checked before it. */
+		if ( stopToken.stop_requested() )
+		{
+			return false;
+		}
+
 		if ( m_compressedData != nullptr )
 		{
 			if ( !this->createFromCompressedData(renderer) )

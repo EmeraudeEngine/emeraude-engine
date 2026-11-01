@@ -30,11 +30,23 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <mutex>
+#include <string>
+#include <utility>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
+
+/* Local inclusions for usages. */
+#include "Hash/FNV1a.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
+#include "Tracer.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -273,7 +285,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Prepares the geometry resource for the sprite.

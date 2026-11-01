@@ -476,7 +476,7 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::create() noexcept */
 			[[nodiscard]]
-			bool create (Renderer & renderer) noexcept override;
+			bool create (Renderer & renderer, const std::stop_token & stopToken) noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::onBeforeCreation()
 			 * @note Measures the moons' surfaces (setMoonSurface()), every texture loaded and none on the GPU yet. */

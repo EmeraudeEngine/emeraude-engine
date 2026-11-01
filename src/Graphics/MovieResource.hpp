@@ -478,7 +478,7 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Loads a movie based on a numerical sequence of files.

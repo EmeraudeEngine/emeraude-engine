@@ -3215,6 +3215,16 @@ Registrations are tokens and a dispatch never walks a shrinking list since 2026-
 
 ## Scene Rendering
 
+### A demo hook runs BEFORE the scene's ground, sea and background instances exist (2026-11-01)
+
+`Scene::seaLevelRenderableInstance()` / `groundLevelRenderableInstance()` answer nullptr until `Scene::enable()`
+(`registerSceneVisualComponents()`), and a downstream application's scene builders all run before it (projet-alpha:
+`AbstractDemo::create()`, `onEnabled()` included, then `Stage::loadActiveAct()` → `enableScene()`). A per-instance
+switch set on them from a builder is LOST (it finds no instance), and `setBackground()` re-creates the three instances
+anyway. `city` first set its sea's punctual-lighting switch that way: its A/B ran without it. Record such a setting on the
+SCENE and let `registerSceneVisualComponents()` apply it each time (`Scene::setSeaLevelPunctualLighting()`, graphics
+doc 38 § Keeping a surface out of the punctual lights).
+
 ### A background may have NO environment cubemap: never take its answer unchecked (fixed 2026-10-24)
 
 `AbstractBackground::environmentCubemap()` answers nullptr by contract (a physical sky, `DynamicSkyResource`, has no

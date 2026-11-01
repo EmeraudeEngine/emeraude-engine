@@ -26,9 +26,18 @@
 
 #include "BasicSeaResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
+#include "Math/Base.hpp"
 #include "Resources/Container.hpp"
+#include "Tracer.hpp"
+#include "VertexFactory/Grid.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
@@ -217,7 +226,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicSeaResource::onDependenciesLoaded () noexcept
+	BasicSeaResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		if constexpr ( IsDebug )
 		{

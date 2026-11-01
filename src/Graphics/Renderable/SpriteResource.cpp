@@ -44,7 +44,6 @@
 #include "BlobTrait.hpp"
 #include "FastJSON.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
-#include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Material/Helpers.hpp"
 #include "Graphics/Material/StandardResource.hpp"
@@ -473,7 +472,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	SpriteResource::onDependenciesLoaded () noexcept
+	SpriteResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		if constexpr ( IsDebug )
 		{

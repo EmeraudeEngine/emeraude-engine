@@ -31,7 +31,10 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -39,10 +42,12 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "json/json.h"
 #include "CubemapResource.hpp"
+#include "Hash/FNV1a.hpp"
+#include "json/json.h"
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Pixmap.hpp"
+#include "Resources/Types.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -460,7 +465,7 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Loads a cubemap movie based on a numerical sequence of cubemap resources.

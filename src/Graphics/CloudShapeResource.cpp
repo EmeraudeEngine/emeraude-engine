@@ -522,7 +522,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CloudShapeResource::onDependenciesLoaded () noexcept
+	CloudShapeResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		if ( !this->isCreated() && !this->createOnHardware(this->serviceProvider().graphicsRenderer()) )
 		{

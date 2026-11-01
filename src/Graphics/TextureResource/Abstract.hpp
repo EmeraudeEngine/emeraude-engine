@@ -33,6 +33,7 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
+#include <stop_token>
 #include <string>
 #include <utility>
 
@@ -165,7 +166,7 @@ namespace EmEn::Graphics::TextureResource
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool createTexture (Renderer & renderer) noexcept = 0;
+			virtual bool createTexture (Renderer & renderer, const std::stop_token & stopToken) noexcept = 0;
 
 			/**
 			 * @brief Destroys the texture objects from the video memory.
@@ -438,7 +439,7 @@ namespace EmEn::Graphics::TextureResource
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Tells whether an identity property (colour space, normal map flip) may still be set.

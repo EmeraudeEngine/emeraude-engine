@@ -36,8 +36,8 @@
 #include <iterator>
 #include <memory>
 #include <optional>
-#include <span>
 #include <ranges>
+#include <span>
 #include <string>
 
 /* Third-party inclusions. */
@@ -427,7 +427,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	DynamicSkyResource::onDependenciesLoaded () noexcept
+	DynamicSkyResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		if constexpr ( IsDebug )
 		{

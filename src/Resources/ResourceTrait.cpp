@@ -36,6 +36,7 @@
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <stop_token>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -185,7 +186,7 @@ namespace EmEn::Resources
 			}
 
 			/* NOTE: The dependencies already added and the parents are released (no link may cycle once failed). */
-			this->releaseLinksAfterFailure();
+			this->releaseLinksAfterFailure(this->loadStopToken());
 
 			return false;
 		}
@@ -202,7 +203,7 @@ namespace EmEn::Resources
 				m_status = Status::Failed;
 			}
 
-			this->releaseLinksAfterFailure();
+			this->releaseLinksAfterFailure(this->loadStopToken());
 
 			return false;
 		}
@@ -331,19 +332,19 @@ namespace EmEn::Resources
 
 		if ( failed )
 		{
-			this->releaseLinksAfterFailure();
+			this->releaseLinksAfterFailure(this->loadStopToken());
 		}
 
 		if ( dependencyAlreadyFailed )
 		{
-			return this->goOnAfterDependencyFailure(*dependency);
+			return this->goOnAfterDependencyFailure(*dependency, this->loadStopToken());
 		}
 
 		return added;
 	}
 
 	void
-	ResourceTrait::dependencyLoaded (const std::shared_ptr< ResourceTrait > & dependency) noexcept
+	ResourceTrait::dependencyLoaded (const std::shared_ptr< ResourceTrait > & dependency, const std::stop_token & stopToken) noexcept
 	{
 		if ( s_showInformation )
 		{
@@ -366,11 +367,11 @@ namespace EmEn::Resources
 		}
 
 		/* Launch an overall check for dependency loading. */
-		this->checkDependencies();
+		this->checkDependencies(stopToken);
 	}
 
 	void
-	ResourceTrait::dependencyFailed (const std::shared_ptr< ResourceTrait > & dependency) noexcept
+	ResourceTrait::dependencyFailed (const std::shared_ptr< ResourceTrait > & dependency, const std::stop_token & stopToken) noexcept
 	{
 		/* NOTE: Already failed (another dependency first): its links are released already. */
 		if ( m_status == Status::Failed )
@@ -384,14 +385,14 @@ namespace EmEn::Resources
 			std::erase(m_dependenciesToWaitFor, dependency);
 		}
 
-		if ( this->goOnAfterDependencyFailure(*dependency) )
+		if ( this->goOnAfterDependencyFailure(*dependency, stopToken) )
 		{
-			this->checkDependencies();
+			this->checkDependencies(stopToken);
 		}
 	}
 
 	bool
-	ResourceTrait::goOnAfterDependencyFailure (const ResourceTrait & dependency) noexcept
+	ResourceTrait::goOnAfterDependencyFailure (const ResourceTrait & dependency, const std::stop_token & stopToken) noexcept
 	{
 		/* NOTE: A dependency the application's stop cancelled is no failure to report (owner decision 2026-10-15): the
 		 * container's stop summarises the cancelled loads in one line. */
@@ -421,13 +422,13 @@ namespace EmEn::Resources
 
 		this->notify(LoadFailed, this->name());
 
-		this->releaseLinksAfterFailure();
+		this->releaseLinksAfterFailure(stopToken);
 
 		return false;
 	}
 
 	void
-	ResourceTrait::releaseLinksAfterFailure () noexcept
+	ResourceTrait::releaseLinksAfterFailure (const std::stop_token & stopToken) noexcept
 	{
 		std::vector< std::shared_ptr< ResourceTrait > > parents;
 
@@ -451,23 +452,25 @@ namespace EmEn::Resources
 
 		for ( const auto & parent : parents )
 		{
-			parent->dependencyFailed(self);
+			parent->dependencyFailed(self, stopToken);
 		}
 	}
 
 	void
-	ResourceTrait::checkDependencies () noexcept
+	ResourceTrait::checkDependencies (const std::stop_token & stopToken) noexcept
 	{
-		/* NOTE: We need to track what actions to take outside the lock to avoid
-		 * calling virtual methods (onDependenciesLoaded) and observer notifications
-		 * while holding the mutex, which could cause deadlocks. */
-		enum class Action : uint8_t
+		/* NOTE: The decision is taken under the lock, the finalization outside it: onDependenciesLoaded() (virtual) and
+		 * the notifications never run while the mutex is held (they could take it again). */
+		if ( this->claimDependenciesFinalization() )
 		{
-			None,
-			CallOnDependenciesLoaded
-		};
+			this->finalizeDependencies(stopToken);
+		}
+	}
 
-		auto pendingAction = Action::None;
+	bool
+	ResourceTrait::claimDependenciesFinalization () noexcept
+	{
+		bool claimed = false;
 
 		{
 			const Base::MutexLock lock{m_dependenciesAccess};
@@ -495,13 +498,13 @@ namespace EmEn::Resources
 					 * creating (vkBindImageMemory on VK_NULL_HANDLE, 2026-10-07). */
 					if ( m_dependenciesFinalizing )
 					{
-						return;
+						return false;
 					}
 
 					/* NOTE: If any of the dependencies are in a loading state. */
 					if ( std::ranges::any_of(m_dependenciesToWaitFor, [] (const auto & dependency) {return !dependency->isLoaded();}) )
 					{
-						return;
+						return false;
 					}
 
 					if ( s_showInformation )
@@ -517,7 +520,7 @@ namespace EmEn::Resources
 
 					/* NOTE: Mark that we need to call onDependenciesLoaded() outside the lock, and claim it. */
 					m_dependenciesFinalizing = true;
-					pendingAction = Action::CallOnDependenciesLoaded;
+					claimed = true;
 				}
 					break;
 
@@ -538,63 +541,71 @@ namespace EmEn::Resources
 			}
 		}
 
-		/* NOTE: Execute pending actions outside the lock to prevent deadlocks.
-		 * Virtual method calls and observer notifications happen here. */
-		if ( pendingAction == Action::CallOnDependenciesLoaded )
+		return claimed;
+	}
+
+	void
+	ResourceTrait::finalizeDependencies (const std::stop_token & stopToken) noexcept
+	{
+		const bool success = this->onDependenciesLoaded(stopToken);
+
+		/* NOTE: A completion the stop cut short is ABANDONED, not failed (owner decision 2026-10-15, as
+		 * abandonLoading()): no error line here nor in its parents. Set before the parents are told below. */
+		if ( !success && stopToken.stop_requested() )
 		{
-			const bool success = this->onDependenciesLoaded();
+			m_loadAbandoned.store(true, std::memory_order_release);
+		}
 
-			/* NOTE: We need to re-acquire the lock to update status and get parents list. */
-			std::vector< std::shared_ptr< ResourceTrait > > parentsToNotifyCopy;
+		/* NOTE: We need to re-acquire the lock to update status and get parents list. */
+		std::vector< std::shared_ptr< ResourceTrait > > parentsToNotifyCopy;
 
-			{
-				const Base::MutexLock lock{m_dependenciesAccess};
+		{
+			const Base::MutexLock lock{m_dependenciesAccess};
 
-				m_dependenciesFinalizing = false;
+			m_dependenciesFinalizing = false;
 
-				if ( success )
-				{
-					m_status = Status::Loaded;
-
-					if ( s_showInformation )
-					{
-						TraceSuccess{TracerTag} << "Resource '" << this->name() << "' (" << this->classLabel() << ") is successfully loaded !";
-					}
-
-					/* NOTE: The list itself (the lock is held here; isTopResource() takes it). */
-					if ( !m_parentsToNotify.empty() )
-					{
-						/* Copy parents list to notify outside lock. */
-						parentsToNotifyCopy = std::exchange(m_parentsToNotify, {});
-					}
-				}
-				else
-				{
-					m_status = Status::Failed;
-
-					if ( s_showInformation )
-					{
-						TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this->classLabel() << ") failed to load !";
-					}
-				}
-			}
-
-			/* NOTE: Notify observers and parents outside the lock. */
 			if ( success )
 			{
-				this->notify(LoadFinished, this->name());
+				m_status = Status::Loaded;
 
-				for ( const auto & parent : parentsToNotifyCopy )
+				if ( s_showInformation )
 				{
-					parent->dependencyLoaded(this->shared_from_this());
+					TraceSuccess{TracerTag} << "Resource '" << this->name() << "' (" << this->classLabel() << ") is successfully loaded !";
+				}
+
+				/* NOTE: The list itself (the lock is held here; isTopResource() takes it). */
+				if ( !m_parentsToNotify.empty() )
+				{
+					/* Copy parents list to notify outside lock. */
+					parentsToNotifyCopy = std::exchange(m_parentsToNotify, {});
 				}
 			}
 			else
 			{
-				this->notify(LoadFailed, this->name());
+				m_status = Status::Failed;
 
-				this->releaseLinksAfterFailure();
+				if ( s_showInformation && !this->loadAbandoned() )
+				{
+					TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this->classLabel() << ") failed to load !";
+				}
 			}
+		}
+
+		/* NOTE: Notify observers and parents outside the lock. */
+		if ( success )
+		{
+			this->notify(LoadFinished, this->name());
+
+			for ( const auto & parent : parentsToNotifyCopy )
+			{
+				parent->dependencyLoaded(this->shared_from_this(), stopToken);
+			}
+		}
+		else
+		{
+			this->notify(LoadFailed, this->name());
+
+			this->releaseLinksAfterFailure(stopToken);
 		}
 	}
 
@@ -645,9 +656,9 @@ namespace EmEn::Resources
 			 * NOTE: No more sub-resource enqueuing is possible after this point. */
 			m_status = Status::Loading;
 
-			/* We want to check every dependency status.
+			/* We want to check every dependency status, with the stop token of the task loading this resource.
 			 * NOTE: This will eventually fire up the 'LoadFinished' event. */
-			this->checkDependencies();
+			this->checkDependencies(this->loadStopToken());
 		}
 		else
 		{
@@ -657,10 +668,33 @@ namespace EmEn::Resources
 
 			TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this << ") failed to load ...";
 
-			this->releaseLinksAfterFailure();
+			this->releaseLinksAfterFailure(this->loadStopToken());
 		}
 
 		return status;
+	}
+
+	ResourceTrait::LoadStopScope::LoadStopScope (ResourceTrait & resource, const std::stop_token & stopToken) noexcept
+		: m_resource{&resource}
+	{
+		const Base::MutexLock lock{resource.m_dependenciesAccess};
+
+		resource.m_loadStopToken = stopToken;
+	}
+
+	ResourceTrait::LoadStopScope::~LoadStopScope ()
+	{
+		const Base::MutexLock lock{m_resource->m_dependenciesAccess};
+
+		m_resource->m_loadStopToken = {};
+	}
+
+	std::stop_token
+	ResourceTrait::loadStopToken () const noexcept
+	{
+		const Base::MutexLock lock{m_dependenciesAccess};
+
+		return m_loadStopToken;
 	}
 
 	bool
@@ -678,7 +712,7 @@ namespace EmEn::Resources
 
 		this->notify(LoadFailed, this->name());
 
-		this->releaseLinksAfterFailure();
+		this->releaseLinksAfterFailure(this->loadStopToken());
 
 		return true;
 	}
@@ -711,7 +745,7 @@ namespace EmEn::Resources
 
 			this->notify(LoadFailed, this->name());
 
-			this->releaseLinksAfterFailure();
+			this->releaseLinksAfterFailure(this->loadStopToken());
 
 			return false;
 		}
@@ -726,7 +760,7 @@ namespace EmEn::Resources
 
 			this->notify(LoadFailed, this->name());
 
-			this->releaseLinksAfterFailure();
+			this->releaseLinksAfterFailure(this->loadStopToken());
 
 			return false;
 		}

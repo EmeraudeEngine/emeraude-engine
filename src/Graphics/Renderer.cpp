@@ -268,6 +268,12 @@ namespace
 	}
 }
 
+/* Forward declarations. */
+namespace EmEn::Scenes::Component
+{
+	class AbstractLightEmitter;
+}
+
 namespace EmEn::Graphics
 {
 	using namespace Base;
@@ -2582,7 +2588,9 @@ namespace EmEn::Graphics
 				scenePtr->renderOpaque(m_sceneTarget, *commandBuffer);
 			}
 
-			scenePtr->renderTranslucent(m_sceneTarget, *commandBuffer);
+			/* The lights the opaque pass skipped (distant, or out of the frustum) are skipped by the translucent batches
+			 * too: each forward light pass redraws the whole batch. */
+			scenePtr->renderTranslucent(m_sceneTarget, *commandBuffer, deferredLightsPrepared ? m_deferredLightResolve.invisibleLights() : std::span< const Scenes::Component::AbstractLightEmitter * const >{});
 
 			if ( m_TBNSpaceRenderingEnabled )
 			{
@@ -2664,7 +2672,9 @@ namespace EmEn::Graphics
 			/* Every attachment LOADS here: the values are unused, but one is owed per attachment. */
 			commandBuffer->beginRenderPass(*m_sceneTarget->postProcessFramebuffer(), m_sceneTarget->renderArea(), std::span< const VkClearValue >{sceneClearValues.data(), sceneClearValues.size()}, VK_SUBPASS_CONTENTS_INLINE);
 
-			scenePtr->renderTranslucentGB(m_sceneTarget, *commandBuffer);
+			/* The same skipped lights as the opaque and translucent passes (prepare() classified them for this target):
+			 * an ocean is redrawn once per light it is lit by. */
+			scenePtr->renderTranslucentGB(m_sceneTarget, *commandBuffer, deferredLightsPrepared ? m_deferredLightResolve.invisibleLights() : std::span< const Scenes::Component::AbstractLightEmitter * const >{});
 
 			commandBuffer->endRenderPass();
 		}

@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <stop_token>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -1670,7 +1671,7 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::create() noexcept */
 			[[nodiscard]]
-			bool create (Renderer & renderer) noexcept override;
+			bool create (Renderer & renderer, const std::stop_token & stopToken) noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::updateVideoMemory() */
 			bool updateVideoMemory () noexcept override;
@@ -1700,10 +1701,24 @@ namespace EmEn::Graphics::Material
 			 * texture shares that binding and that sampler (graphics § 39, D1).
 			 * @note Fills m_textureBindings in binding order (binding 0 is the UBO, the textures start at 1).
 			 * @param renderer A reference to the graphics renderer.
+			 * @param stopToken The stop token of the load task (Resources::ResourceTrait::LoadStopScope).
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createTextureComponents (Renderer & renderer) noexcept;
+			bool createTextureComponents (Renderer & renderer, const std::stop_token & stopToken) noexcept;
+
+			/**
+			 * @brief Creates one texture component (createTextureComponents()): the first to show its texture leads a new
+			 * binding (nextBinding, then incremented), a later one shares the leader's binding and sampler.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param componentType The component's type.
+			 * @param component A reference to the texture component.
+			 * @param nextBinding A reference to the next free binding.
+			 * @param stopToken The stop token of the load task (Resources::ResourceTrait::LoadStopScope).
+			 * @return bool False when the component could not be created (or the stop cut it short).
+			 */
+			[[nodiscard]]
+			bool createTextureComponent (Renderer & renderer, ComponentType componentType, Component::Texture & component, uint32_t & nextBinding, const std::stop_token & stopToken) noexcept;
 
 			/**
 			 * @brief Parses the components of a material definition, from the albedo to the iridescence; each failure

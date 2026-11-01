@@ -32,7 +32,7 @@
 /* Local inclusions. */
 #include "BaseUtility.hpp"
 #include "Graphics/Geometry/HeightfieldDetailSurfaceResource.hpp"
-#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Logging/Severity.hpp"
 #include "Math/Base.hpp"
@@ -651,7 +651,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	TerrainResource::onDependenciesLoaded () noexcept
+	TerrainResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		if constexpr ( IsDebug )
 		{

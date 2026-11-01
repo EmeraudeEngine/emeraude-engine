@@ -1154,7 +1154,7 @@ namespace EmEn::Scenes
 	}
 
 	void
-	Scene::renderTranslucent (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	Scene::renderTranslucent (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, std::span< const Component::AbstractLightEmitter * const > invisibleLights) noexcept
 	{
 		if ( !m_renderLists[Translucent].empty() )
 		{
@@ -1166,12 +1166,12 @@ namespace EmEn::Scenes
 
 		if ( m_lightSet.isEnabled() && !m_renderLists[TranslucentLighted].empty() )
 		{
-			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[TranslucentLighted], m_preparedBindlessManager, m_preparedInstanceTransformsDS);
+			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[TranslucentLighted], m_preparedBindlessManager, m_preparedInstanceTransformsDS, {}, invisibleLights);
 		}
 	}
 
 	void
-	Scene::renderTranslucentGB (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept
+	Scene::renderTranslucentGB (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, std::span< const Component::AbstractLightEmitter * const > invisibleLights) noexcept
 	{
 		if ( !m_renderLists[TranslucentGB].empty() )
 		{
@@ -1183,7 +1183,7 @@ namespace EmEn::Scenes
 
 		if ( m_lightSet.isEnabled() && !m_renderLists[TranslucentGBLighted].empty() )
 		{
-			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[TranslucentGBLighted], m_preparedBindlessManager, m_preparedInstanceTransformsDS);
+			this->renderLightedSelection(renderTarget, m_preparedReadStateIndex, commandBuffer, m_renderLists[TranslucentGBLighted], m_preparedBindlessManager, m_preparedInstanceTransformsDS, {}, invisibleLights);
 		}
 	}
 
@@ -1425,6 +1425,9 @@ namespace EmEn::Scenes
 			 * ambient only, so dark that no water colour could make a shallow lagoon look clear (water-world,
 			 * 2026-09-28). The sea only ever shadows what lies under it, so nothing above the water loses a shadow. */
 			renderableInstance->disableShadowCasting();
+
+			/* The scene's setting, applied every time the sea's instance is (re)created (setSeaLevelPunctualLighting()). */
+			renderableInstance->setPunctualLightingEnabled(m_seaLevelPunctualLighting.load(std::memory_order_acquire));
 		}
 	}
 
@@ -2605,6 +2608,13 @@ namespace EmEn::Scenes
 				}
 
 				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
+			}
+
+			/* An instance kept out of the punctual lights (RenderableInstance::Abstract::setPunctualLightingEnabled()): the
+			 * directional lights above are its only light passes. */
+			if ( renderBatch.renderableInstance()->isPunctualLightingDisabled() )
+			{
+				continue;
 			}
 
 			/* Loop through all point lights. */

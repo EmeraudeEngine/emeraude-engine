@@ -30,20 +30,34 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <memory>
 #include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
 #include <stop_token>
+#include <string>
+#include <utility>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 #include "SkeletalDataTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Geometry/Types.hpp"
+#include "Hash/FNV1a.hpp"
 #include "Mutex.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
+#include "StaticVector.hpp"
 #include "ThreadPool.hpp"
+#include "ThreadSafety.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics::Geometry
+{
+	class IndexedVertexResource;
+}
+
 namespace EmEn::Resources
 {
 	template< typename resource_t >
@@ -223,7 +237,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Attaches the geometry resource.
@@ -248,6 +262,21 @@ namespace EmEn::Graphics::Renderable
 			 * @note Runs on the LOD job (a pool worker).
 			 */
 			void generateLODLevel (const std::shared_ptr< Geometry::IndexedVertexResource > & sourceGeometry, uint32_t LODLevel, float ratio, const std::stop_token & stopToken) noexcept;
+
+			/**
+			 * @brief Starts the automatic LOD generation of a mesh whose dependencies are loaded (onDependenciesLoaded()):
+			 * when enabled by the settings and the mesh carries a single level, decimates its indexed geometry into as many
+			 * levels as its triangle count allows, in the mesh's own LOD job (m_LODJob).
+			 */
+			void startAutomaticLOD () noexcept;
+
+			/**
+			 * @brief Counts the automatic levels a source geometry allows and submits the mesh's LOD job (m_LODJob) that
+			 * decimates them (startAutomaticLOD()).
+			 * @param sourceGeometry The LOD 0 indexed geometry.
+			 * @param sourceLease The lease keeping its local data resident while the job reads it (moved into the job).
+			 */
+			void submitLODJob (const std::shared_ptr< Geometry::IndexedVertexResource > & sourceGeometry, Resources::ResourceTrait::LocalDataLease sourceLease) noexcept;
 
 			/**
 			 * @brief Appends a level of detail and publishes it to the lock-free readers.

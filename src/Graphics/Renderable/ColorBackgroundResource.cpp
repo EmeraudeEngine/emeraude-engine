@@ -26,6 +26,9 @@
 
 #include "ColorBackgroundResource.hpp"
 
+/* STL inclusions. */
+#include <optional>
+
 /* Local inclusions. */
 #include "FastJSON.hpp"
 #include "Types.hpp"
@@ -71,7 +74,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	ColorBackgroundResource::onDependenciesLoaded () noexcept
+	ColorBackgroundResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		this->setReadyForInstantiation(true);
 

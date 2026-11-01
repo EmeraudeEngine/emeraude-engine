@@ -26,12 +26,29 @@
 
 #include "Texture3D.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <functional>
+#include <vector>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Resources/Manager.hpp"
+#include "Graphics/VolumetricImageResource.hpp"
+#include "Logging/Severity.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/MemoryRegion.hpp"
+#include "Vulkan/Sampler.hpp"
 
 namespace EmEn::Graphics::TextureResource
 {
@@ -60,7 +77,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture3D::createTexture (Renderer & renderer) noexcept
+	Texture3D::createTexture (Renderer & renderer, const std::stop_token & /*stopToken*/) noexcept
 	{
 		if ( m_localData == nullptr || !m_localData->isValid() )
 		{

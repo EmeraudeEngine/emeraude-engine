@@ -89,5 +89,37 @@ after the command, quit in 0.55-0.91 s, 0 VUID, exit 0.
 - TSan stress `EmeraudeResourceJobsStress` (projet-alpha `docs/unit-testing.md` § ThreadSanitizer): 0 report.
 - Peers: Windows, base suites green (2531 tests); macOS, `sponza` quit at 2 s in 0.48-0.71 s.
 
+### The stop reaches the completion chain (owner decision 2026-11-01, the explicit token in its narrow form)
+
+A load task's stop token used to be dropped by the container (`[...] (const std::stop_token &) { loadingTask(request); }`),
+and the work a completion starts runs at the END of the dependency chain, on the thread of the dependency that completed
+last: a movie loads → its animated texture's `onDependenciesLoaded()` → `createTexture()` compresses 124 frames. Nothing
+there could see the stop: `water-world` on a cold texture cache made a shutdown wait for the whole compression (item
+`movie-load-ignores-the-stop`: 46 s on macOS; 106 s on Linux limited to 4 cores).
+
+- **`ResourceTrait::LoadStopScope`** (RAII): the container's load task and its manual-creation task hold one around the
+  load; it hands the task's token to the resource (`m_loadStopToken`, under `m_dependenciesAccess`) and takes it back at
+  the end. A completion after the load (another thread) or a load outside a container task gets a token that never
+  stops.
+- From there the token is an EXPLICIT parameter: `setLoadSuccess()` → `checkDependencies(token)` → each parent's
+  `dependencyLoaded(dependency, token)` (and `dependencyFailed()` / `releaseLinksAfterFailure()` /
+  `goOnAfterDependencyFailure()` on the failure side) → `onDependenciesLoaded(const std::stop_token &)` (every resource
+  class) → `Material::Interface::create(renderer, token)` → `Component::Interface::create(renderer, binding, token)` →
+  `TextureResource::Abstract::createTexture(renderer, token)`. The 73 `load()` overloads and the 395 `setLoadSuccess()`
+  calls are unchanged (owner: the narrow form, not the literal one).
+- **A completion the stop cuts short is ABANDONED**: `onDependenciesLoaded()` returns false with the stop requested →
+  `m_loadAbandoned`, no error line (here, in the texture and material creations, nor in the parents) — the 2026-10-15
+  rule of `abandonLoading()`.
+- Who checks it: `AnimatedTexture2D` before each frame (its frames are now encoded IN PARALLEL on the pool,
+  `ThreadPool::parallelFor()`, the calling worker taking its share — no deadlock from a pool worker; a stop waits for one
+  frame's encoding at most) and before each frame's uncompressed chain; `Texture2D` before its one encoding.
+- Measured (Linux, RTX 3070 Ti, `water-world --demo-options 0`, texture cache OFF in a settings copy, the process limited
+  to 4 cores with `taskset` so the compression outlasts the load, `Core.shutdown()` 2 s after the act is loaded,
+  validation layer): before (projet-alpha 1a13702f, engine 6b14c46a) shutdown → exit 111.4 s, "the 'Movie manager' tasks
+  took 106305 ms to stop", 122 BC5 encodes; after 7.6 s, 2799 ms, 2 encodes; 0 VUID, 0 `[Error]`, exit 0 both. On all
+  32 threads, `city`'s 124 frames are encoded before its scene finishes loading (sea material at 9.2 s, scene 10.3 s):
+  the flat sea of a cold cache is gone there. ⚠️ The parallel encoding takes the whole pool: other loads queue behind it
+  for those seconds (on 2 cores `city`'s whole load took ~95 s, the sea material still before the scene).
+
 ⚠️ Since 2026-10-15 `ResourceTrait.hpp` includes `ThreadPool.hpp` (the provider's `TaskGroup` member): every resource
 header pays for it (compile time, the lowest priority).

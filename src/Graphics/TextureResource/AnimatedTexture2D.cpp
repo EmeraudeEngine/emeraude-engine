@@ -28,9 +28,11 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <atomic>
 #include <functional>
 #include <optional>
 #include <span>
+#include <stop_token>
 #include <string>
 #include <utility>
 #include <vector>
@@ -55,6 +57,7 @@
 #include "Resources/Container.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
+#include "ThreadPool.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Image.hpp"
@@ -88,8 +91,8 @@ namespace EmEn::Graphics::TextureResource
 		return true;
 	}
 
-	bool
-	AnimatedTexture2D::createCompressedImage (Renderer & renderer, uint32_t mipLevels) noexcept
+	AnimatedTexture2D::CompressionOutcome
+	AnimatedTexture2D::createCompressedImage (Renderer & renderer, uint32_t mipLevels, const std::stop_token & stopToken) noexcept
 	{
 		const auto frameCount = m_localData->frameCount();
 
@@ -107,27 +110,63 @@ namespace EmEn::Graphics::TextureResource
 			}
 		}
 
-		/* NOTE: Each frame through the texture cache (its pixels are its key): compressed once, read back afterwards. */
-		std::vector< std::vector< CompressedMipLevel > > frames;
-		frames.reserve(frameCount);
+		const auto & sourceFrames = m_localData->frames();
 
-		for ( const auto & frame : m_localData->frames() )
+		if ( sourceFrames.empty() )
 		{
-			auto mips = renderer.textureCache().getOrCompress(this->name() + "#layer" + std::to_string(frames.size()), frame.pixmap(), mipLevels, blockFormat, this->isSRGB());
-
-			if ( mips.empty() || (!frames.empty() && mips.size() != frames.front().size()) )
-			{
-				TraceWarning{ClassId} << to_cstring(blockFormat) << " compression failed for frame " << frames.size() << " of '" << this->name() << "', falling back to uncompressed.";
-
-				return false;
-			}
-
-			frames.push_back(std::move(mips));
+			return CompressionOutcome::Failed;
 		}
 
-		if ( frames.empty() )
+		/* NOTE: Each frame through the texture cache (its pixels are its key): compressed once, read back afterwards. The
+		 * frames are independent: encoded in parallel, each one into its own slot; a worker checks the stop before each
+		 * frame it takes. The lambda runs only inside parallelFor(), which returns when every frame is done: the
+		 * references it captures outlive it. */
+		std::vector< std::vector< CompressedMipLevel > > frames(sourceFrames.size());
+		std::atomic_bool stopped{false};
+
+		const auto encodeFrame = [&] (size_t index) noexcept {
+			if ( stopped.load(std::memory_order_relaxed) )
+			{
+				return;
+			}
+
+			if ( stopToken.stop_requested() )
+			{
+				stopped.store(true, std::memory_order_relaxed);
+
+				return;
+			}
+
+			/* NOTE: index < sourceFrames.size() == frames.size() (parallelFor()'s range). */
+			frames[index] = renderer.textureCache().getOrCompress(this->name() + "#layer" + std::to_string(index), sourceFrames[index].pixmap(), mipLevels, blockFormat, this->isSRGB());
+		};
+
+		if ( const auto threadPool = renderer.primaryServices().threadPool(); threadPool != nullptr )
 		{
-			return false;
+			threadPool->parallelFor(size_t{0}, sourceFrames.size(), encodeFrame);
+		}
+		else
+		{
+			for ( size_t index = 0; index < sourceFrames.size(); ++index )
+			{
+				encodeFrame(index);
+			}
+		}
+
+		/* NOTE: The stop wins over a failure: nothing is published, and no fallback runs. */
+		if ( stopped.load(std::memory_order_relaxed) )
+		{
+			return CompressionOutcome::Stopped;
+		}
+
+		for ( size_t index = 0; index < frames.size(); ++index )
+		{
+			if ( frames[index].empty() || frames[index].size() != frames.front().size() )
+			{
+				TraceWarning{ClassId} << to_cstring(blockFormat) << " compression failed for frame " << index << " of '" << this->name() << "', falling back to uncompressed.";
+
+				return CompressionOutcome::Failed;
+			}
 		}
 
 		/* NOTE: Layer-major: the chain of frame 0, then frame 1's… (Vulkan::Image::createFromMipChain()). */
@@ -160,6 +199,98 @@ namespace EmEn::Graphics::TextureResource
 
 			m_image.reset();
 
+			return CompressionOutcome::Failed;
+		}
+
+		return CompressionOutcome::Created;
+	}
+
+	bool
+	AnimatedTexture2D::createUncompressedImage (Renderer & renderer, uint32_t mipLevels, const std::stop_token & stopToken) noexcept
+	{
+		/* NOTE: The compressed path's chain, built on the CPU for every frame (MipChain::build(), like Texture2D) and
+		 * uploaded layer by layer, nothing blitted. One-channel colour frames (grey-scale sRGB images) need R8_SRGB,
+		 * whose sampling is optional in Vulkan: without it every level is uploaded as its RGBA expansion. */
+		const auto greyColourSupported = !this->isSRGB() || Texture2D::supportsGreyScaleColour(renderer);
+		/* NOTE: Frames grey and opaque by their CONTENT but stored in RGB(A) go up as one channel when EVERY frame is
+		 * (the BC path's BC4 rule, Texture2D's uncompressed path; owner, 2026-10-21). */
+		const auto reduceToGrey = m_localData->data(0).colorCount() == 4 && !this->isNormalMap() && greyColourSupported &&
+			std::ranges::all_of(m_localData->frames(), [] (const auto & frame) { return TextureCompressor::isOpaqueGrey(frame.pixmap()); });
+		const auto expandGreyColour = m_localData->data(0).colorCount() == 1 && !greyColourSupported;
+		const MipChain::Treatment treatment{
+			.sRGB = this->isSRGB(),
+			.normalMap = this->isNormalMap(),
+			.alpha = !this->isNormalMap()
+		};
+
+		/* NOTE: Layer-major: the chain of frame 0, then frame 1's… (Vulkan::Image::createFromMipChain()). */
+		std::vector< Base::PixelFactory::Pixmap< uint8_t > > levels;
+		levels.reserve(static_cast< size_t >(m_localData->frameCount()) * mipLevels);
+
+		for ( const auto & frame : m_localData->frames() )
+		{
+			/* NOTE: The load's stop, checked before each frame's chain. */
+			if ( stopToken.stop_requested() )
+			{
+				return false;
+			}
+
+			std::optional< Base::PixelFactory::Pixmap< uint8_t > > grey;
+
+			if ( reduceToGrey )
+			{
+				grey.emplace(Base::PixelFactory::Processor< uint8_t >::extractChannel(frame.pixmap(), Base::PixelFactory::Channel::Red));
+			}
+
+			const auto chainBuilt = MipChain::build(grey.has_value() ? *grey : frame.pixmap(), mipLevels, treatment, [&levels, expandGreyColour] (uint32_t /*level*/, const Base::PixelFactory::Pixmap< uint8_t > & pixmap) {
+				levels.emplace_back(expandGreyColour ? Base::PixelFactory::Processor< uint8_t >::toRGBA(pixmap) : pixmap);
+
+				return true;
+			});
+
+			if ( !chainBuilt )
+			{
+				TraceError{ClassId} << "Unable to build the mip chain of a frame of the animated texture '" << this->name() << "' !";
+
+				return false;
+			}
+		}
+
+		std::vector< Vulkan::Image::MipLevelData > mipDescs;
+		mipDescs.reserve(levels.size());
+
+		for ( const auto & level : levels )
+		{
+			/* NOTE: A level of 4 GiB or more does not fit the upload descriptor. */
+			if ( !std::in_range< uint32_t >(level.data().size()) )
+			{
+				TraceError{ClassId} << "The animated texture '" << this->name() << "' is too large to upload (" << level.width() << "x" << level.height() << ") !";
+
+				return false;
+			}
+
+			mipDescs.push_back({level.data().data(), static_cast< uint32_t >(level.data().size()), level.width(), level.height()});
+		}
+
+		/* Create a Vulkan image. */
+		m_image = std::make_shared< Vulkan::Image >(
+			renderer.device(),
+			VK_IMAGE_TYPE_2D,
+			Image::getFormat< uint8_t >(levels.front().colorCount(), this->isSRGB()),
+			VkExtent3D{m_localData->width(), m_localData->height(), 1},
+			VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+			0,
+			mipLevels,
+			m_localData->frameCount()
+		);
+		m_image->setIdentifier(ClassId, this->name(), "Image");
+
+		if ( !m_image->createFromMipChain(renderer.transferManager(), mipDescs, m_localData->frameCount()) )
+		{
+			Tracer::error(ClassId, "Unable to create an image !");
+
+			m_image.reset();
+
 			return false;
 		}
 
@@ -167,7 +298,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	AnimatedTexture2D::createTexture (Renderer & renderer) noexcept
+	AnimatedTexture2D::createTexture (Renderer & renderer, const std::stop_token & stopToken) noexcept
 	{
 		/* NOTE: The upload reads the images the movie's frames show: they stay resident until it ends, a released copy
 		 * is reloaded first (docs/subsystems/resources/03 § CPU Copies). */
@@ -203,87 +334,24 @@ namespace EmEn::Graphics::TextureResource
 		 * is off; RGBA8 otherwise, or when a frame fails. */
 		const auto useBlockCompression = renderer.device()->physicalDevice()->featuresVK10().textureCompressionBC == VK_TRUE && settings.getOrSetDefault< bool >(GraphicsTextureBlockCompressionKey, DefaultGraphicsTextureBlockCompression);
 
-		if ( !useBlockCompression || !this->createCompressedImage(renderer, mipLevels) )
+		auto compressed = false;
+
+		if ( useBlockCompression )
 		{
-			/* NOTE: The compressed path's chain, built on the CPU for every frame (MipChain::build(), like Texture2D) and
-			 * uploaded layer by layer, nothing blitted. One-channel colour frames (grey-scale sRGB images) need R8_SRGB,
-			 * whose sampling is optional in Vulkan: without it every level is uploaded as its RGBA expansion. */
-			const auto greyColourSupported = !this->isSRGB() || Texture2D::supportsGreyScaleColour(renderer);
-			/* NOTE: Frames grey and opaque by their CONTENT but stored in RGB(A) go up as one channel when EVERY frame is
-			 * (the BC path's BC4 rule, Texture2D's uncompressed path; owner, 2026-10-21). */
-			const auto reduceToGrey = m_localData->data(0).colorCount() == 4 && !this->isNormalMap() && greyColourSupported &&
-				std::ranges::all_of(m_localData->frames(), [] (const auto & frame) { return TextureCompressor::isOpaqueGrey(frame.pixmap()); });
-			const auto expandGreyColour = m_localData->data(0).colorCount() == 1 && !greyColourSupported;
-			const MipChain::Treatment treatment{
-				.sRGB = this->isSRGB(),
-				.normalMap = this->isNormalMap(),
-				.alpha = !this->isNormalMap()
-			};
+			const auto outcome = this->createCompressedImage(renderer, mipLevels, stopToken);
 
-			/* NOTE: Layer-major: the chain of frame 0, then frame 1's… (Vulkan::Image::createFromMipChain()). */
-			std::vector< Base::PixelFactory::Pixmap< uint8_t > > levels;
-			levels.reserve(static_cast< size_t >(m_localData->frameCount()) * mipLevels);
-
-			for ( const auto & frame : m_localData->frames() )
+			/* NOTE: The load's stop: no fallback, nothing published (the load ends abandoned). */
+			if ( outcome == CompressionOutcome::Stopped )
 			{
-				std::optional< Base::PixelFactory::Pixmap< uint8_t > > grey;
-
-				if ( reduceToGrey )
-				{
-					grey.emplace(Base::PixelFactory::Processor< uint8_t >::extractChannel(frame.pixmap(), Base::PixelFactory::Channel::Red));
-				}
-
-				const auto chainBuilt = MipChain::build(grey.has_value() ? *grey : frame.pixmap(), mipLevels, treatment, [&levels, expandGreyColour] (uint32_t /*level*/, const Base::PixelFactory::Pixmap< uint8_t > & pixmap) {
-					levels.emplace_back(expandGreyColour ? Base::PixelFactory::Processor< uint8_t >::toRGBA(pixmap) : pixmap);
-
-					return true;
-				});
-
-				if ( !chainBuilt )
-				{
-					TraceError{ClassId} << "Unable to build the mip chain of a frame of the animated texture '" << this->name() << "' !";
-
-					return false;
-				}
-			}
-
-			std::vector< Vulkan::Image::MipLevelData > mipDescs;
-			mipDescs.reserve(levels.size());
-
-			for ( const auto & level : levels )
-			{
-				/* NOTE: A level of 4 GiB or more does not fit the upload descriptor. */
-				if ( !std::in_range< uint32_t >(level.data().size()) )
-				{
-					TraceError{ClassId} << "The animated texture '" << this->name() << "' is too large to upload (" << level.width() << "x" << level.height() << ") !";
-
-					return false;
-				}
-
-				mipDescs.push_back({level.data().data(), static_cast< uint32_t >(level.data().size()), level.width(), level.height()});
-			}
-
-			/* Create a Vulkan image. */
-			m_image = std::make_shared< Vulkan::Image >(
-				renderer.device(),
-				VK_IMAGE_TYPE_2D,
-				Image::getFormat< uint8_t >(levels.front().colorCount(), this->isSRGB()),
-				VkExtent3D{m_localData->width(), m_localData->height(), 1},
-				VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-				0,
-				mipLevels,
-				m_localData->frameCount()
-			);
-			m_image->setIdentifier(ClassId, this->name(), "Image");
-
-			if ( !m_image->createFromMipChain(renderer.transferManager(), mipDescs, m_localData->frameCount()) )
-			{
-				Tracer::error(ClassId, "Unable to create an image !");
-
-				m_image.reset();
-
 				return false;
 			}
+
+			compressed = outcome == CompressionOutcome::Created;
+		}
+
+		if ( !compressed && !this->createUncompressedImage(renderer, mipLevels, stopToken) )
+		{
+			return false;
 		}
 
 		/* Create a Vulkan image view. */

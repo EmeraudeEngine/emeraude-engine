@@ -27,26 +27,31 @@
 #include "MusicResource.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
 #include <mutex>
 
 /* Third-party inclusions. */
 #include "taglib/fileref.h"
 #include "taglib/tag.h"
+#include <taglib/tstring.h>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Buffer.hpp"
 #include "IO/IO.hpp"
-#include "WaveFactory/FileIO.hpp"
-#include "WaveFactory/Processor.hpp"
-#include "WaveFactory/SFXScript.hpp"
-#include "WaveFactory/Synthesizer.hpp"
+#include "Logging/Severity.hpp"
 #include "Manager.hpp"
-#include "Resources/Manager.hpp"
+#include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
 #include "SoundfontResource.hpp"
 #include "Tracer.hpp"
+#include "WaveFactory/FileIO.hpp"
+#include "WaveFactory/Processor.hpp"
+#include "WaveFactory/SFXScript.hpp"
+#include "WaveFactory/Synthesizer.hpp"
 
 namespace EmEn::Audio
 {
@@ -60,7 +65,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::onDependenciesLoaded () noexcept
+	MusicResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		/* If we have a pending MIDI file, render it now that the soundfont is loaded. */
 		if ( !m_pendingMidiPath.empty() )
@@ -123,7 +128,6 @@ namespace EmEn::Audio
 
 		return true;
 	}
-
 
 	void
 	MusicResource::readMetaData (const std::filesystem::path & filepath) noexcept

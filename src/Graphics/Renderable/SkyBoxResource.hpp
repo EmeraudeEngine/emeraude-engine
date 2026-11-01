@@ -30,12 +30,36 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <utility>
 
 /* Local inclusions for inheritances. */
 #include "AbstractBackground.hpp"
 
+/* Local inclusions for usages. */
+#include "Hash/FNV1a.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
+
 /* Forward declarations. */
+namespace EmEn::Graphics::Geometry
+{
+	class Interface;
+}
+
+namespace EmEn::Graphics::Material
+{
+	class Interface;
+}
+
+namespace EmEn::Graphics::TextureResource
+{
+	class TextureCubemap;
+}
+
 namespace EmEn::Graphics::Material
 {
 	class StandardResource;
@@ -241,7 +265,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Sets the geometry resource.

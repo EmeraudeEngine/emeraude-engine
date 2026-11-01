@@ -80,7 +80,7 @@ namespace EmEn::Graphics::TextureResource
 	}
 
 	bool
-	Texture1D::createTexture (Renderer & renderer) noexcept
+	Texture1D::createTexture (Renderer & renderer, const std::stop_token & /*stopToken*/) noexcept
 	{
 		/* NOTE: The upload reads the pixels: they stay resident until it ends, a released copy
 		 * is reloaded first (docs/subsystems/resources/03 § CPU Copies). */

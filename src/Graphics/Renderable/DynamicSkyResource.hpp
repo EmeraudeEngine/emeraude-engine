@@ -305,7 +305,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Requests the star catalogue the manifest names ("StarCatalogue"), a dependency of the sky.

@@ -337,7 +337,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	MovieResource::onDependenciesLoaded () noexcept
+	MovieResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		/* NOTE: The frames of a definition come from image resources, loaded only now: the same checks as load(frames). */
 		if ( !this->checkFramesAreUniform(m_frames) )

@@ -44,8 +44,6 @@
 /* Local inclusions for usages. */
 #include "BlobTrait.hpp"
 #include "Graphics/Geometry/CDLODTerrainResource.hpp"
-#include "Graphics/Material/Interface.hpp"
-#include "Graphics/RasterizationOptions.hpp"
 #include "Hash/FNV1a.hpp"
 #include "Math/Vector.hpp"
 #include "PixelFactory/Pixmap.hpp"
@@ -407,7 +405,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Sets a material.

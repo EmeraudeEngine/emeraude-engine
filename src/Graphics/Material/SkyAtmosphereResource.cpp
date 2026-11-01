@@ -384,7 +384,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	SkyAtmosphereResource::create (Renderer & renderer) noexcept
+	SkyAtmosphereResource::create (Renderer & renderer, const std::stop_token & /*stopToken*/) noexcept
 	{
 		/* The renderer flushes the look changes made after creation. */
 		m_renderer = &renderer;

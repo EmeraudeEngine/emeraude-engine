@@ -315,7 +315,7 @@ namespace EmEn::Graphics::TextureResource
 			 * @note Requires that load() has been called successfully before creation.
 			 * @version 0.8.35
 			 */
-			bool createTexture (Renderer & renderer) noexcept override;
+			bool createTexture (Renderer & renderer, const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @copydoc EmEn::Graphics::TextureResource::Abstract::destroyTexture()

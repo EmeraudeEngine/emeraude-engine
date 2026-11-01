@@ -26,18 +26,44 @@
 
 #include "MeshResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
+/* STL inclusions. */
+#include <algorithm>
+#include <filesystem>
+#include <optional>
+#include <type_traits>
+#include <vector>
+
+/* Third-party inclusions. */
+#include "json/json.h"
+
 /* Local inclusions. */
-#include "IO/IO.hpp"
-#include "Scenes/Loaders/SceneData.hpp"
-#include "Scenes/Loaders/GLTFLoader.hpp"
-#include "Graphics/Geometry/Geometries.hpp"
-#include "Graphics/Material/Materials.hpp"
-#include "Graphics/Renderer.hpp"
+#include "Animation/Skin.hpp"
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
-#include "VertexFactory/ShapeDecimator.hpp"
+#include "Graphics/Geometry/Geometries.hpp"
+#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/Geometry/VertexResource.hpp"
+#include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/Renderable/SkeletalDataTrait.hpp"
+#include "Graphics/Renderable/Types.hpp"
+#include "IO/IO.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Base.hpp"
 #include "MultiLayerMeshResource.hpp"
+#include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
+#include "Scenes/Loaders/GLTFLoader.hpp"
+#include "Scenes/Loaders/SceneData.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Tracer.hpp"
+#include "VertexFactory/Shape.hpp"
+#include "VertexFactory/ShapeDecimator.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
@@ -359,7 +385,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	MeshResource::onDependenciesLoaded () noexcept
+	MeshResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		if constexpr ( IsDebug )
 		{
@@ -383,7 +409,16 @@ namespace EmEn::Graphics::Renderable
 		/* LOD 0 is ready — mark the renderable as instantiable immediately. */
 		this->setReadyForInstantiation(true);
 
-		/* Attempt automatic LOD generation for IndexedVertexResource with sufficient detail.
+		/* Attempt automatic LOD generation (startAutomaticLOD()). */
+		this->startAutomaticLOD();
+
+		return true;
+	}
+
+	void
+	MeshResource::startAutomaticLOD () noexcept
+	{
+		/* Automatic LOD generation for IndexedVertexResource with sufficient detail.
 		 * Each LOD level reduces the triangle count by the reduction ratio. We only generate
 		 * a level if the result would still have at least MinTriangleCount triangles. */
 		auto & settings = this->serviceProvider().primaryServices().settings();
@@ -419,62 +454,68 @@ namespace EmEn::Graphics::Renderable
 			}
 			else if ( sourceGeometry != nullptr )
 			{
-				const auto triangleCount = sourceGeometry->localData().triangles().size();
-				const auto minTriangleCount = static_cast< size_t >(settings.getOrSetDefault< uint32_t >(GraphicsLODMinTriangleCountKey, DefaultGraphicsLODMinTriangleCount));
-				const auto reductionRatio = settings.getOrSetDefault< float >(GraphicsLODReductionRatioKey, DefaultGraphicsLODReductionRatio);
-
-				/* Determine how many LOD levels to generate based on available detail. */
-				uint32_t levelsToGenerate = 0;
-				float ratio = reductionRatio;
-
-				/* NOTE: The VIEW ladder: the automatic levels exist for the view to select (Renderable::MaxLODLevels). */
-				while ( levelsToGenerate < Renderable::MaxLODLevels - 1 && static_cast< size_t >(static_cast< float >(triangleCount) * ratio) >= minTriangleCount )
-				{
-					levelsToGenerate++;
-
-					ratio *= reductionRatio;
-				}
-
-				if ( levelsToGenerate > 0 )
-				{
-					TraceInfo{ClassId} << "Generating " << levelsToGenerate << " LOD level(s) for '" << this->name() << "' (" << triangleCount << " triangles).";
-
-					/* NOTE: The mesh OWNS its LOD job (Ave Robustus II): m_LODJob, declared last, is destroyed first — it stops
-					 * the job and waits for it. So the job reads `this` safely and holds NO reference to the mesh: a job
-					 * dropping the mesh's last reference would destroy the mesh on its own thread, waiting for itself (a
-					 * contract fault, aborted: base decision D2). Before 2026-10-15 the job locked a weak reference and
-					 * Core cancelled and drained the pool for it (item lod-job-outlives-its-mesh, 2026-10-07). */
-					const auto threadPool = this->serviceProvider().primaryServices().threadPool();
-
-					if ( threadPool != nullptr )
-					{
-						m_LODJob = threadPool->submit([this, sourceGeometry, sourceLease, levelsToGenerate, reductionRatio] (const std::stop_token & stopToken) {
-							float levelRatio = reductionRatio;
-
-							for ( uint32_t level = 1; level <= levelsToGenerate; level++ )
-							{
-								/* The mesh is going away: the remaining levels are not worth the wait. */
-								if ( stopToken.stop_requested() )
-								{
-									return;
-								}
-
-								this->generateLODLevel(sourceGeometry, level, levelRatio, stopToken);
-
-								levelRatio *= reductionRatio;
-							}
-						});
-					}
-
-					if ( !m_LODJob.valid() )
-					{
-						TraceWarning{ClassId} << "The thread pool refused the LOD job of '" << this->name() << "' (no pool, or it is stopping): no automatic LOD.";
-					}
-				}
+				this->submitLODJob(sourceGeometry, std::move(sourceLease));
 			}
 		}
+	}
 
-		return true;
+	void
+	MeshResource::submitLODJob (const std::shared_ptr< IndexedVertexResource > & sourceGeometry, Resources::ResourceTrait::LocalDataLease sourceLease) noexcept
+	{
+		auto & settings = this->serviceProvider().primaryServices().settings();
+
+		const auto triangleCount = sourceGeometry->localData().triangles().size();
+		const auto minTriangleCount = static_cast< size_t >(settings.getOrSetDefault< uint32_t >(GraphicsLODMinTriangleCountKey, DefaultGraphicsLODMinTriangleCount));
+		const auto reductionRatio = settings.getOrSetDefault< float >(GraphicsLODReductionRatioKey, DefaultGraphicsLODReductionRatio);
+
+		/* Determine how many LOD levels to generate based on available detail. */
+		uint32_t levelsToGenerate = 0;
+		float ratio = reductionRatio;
+
+		/* NOTE: The VIEW ladder: the automatic levels exist for the view to select (Renderable::MaxLODLevels). */
+		while ( levelsToGenerate < Renderable::MaxLODLevels - 1 && static_cast< size_t >(static_cast< float >(triangleCount) * ratio) >= minTriangleCount )
+		{
+			levelsToGenerate++;
+
+			ratio *= reductionRatio;
+		}
+
+		if ( levelsToGenerate > 0 )
+		{
+			TraceInfo{ClassId} << "Generating " << levelsToGenerate << " LOD level(s) for '" << this->name() << "' (" << triangleCount << " triangles).";
+
+			/* NOTE: The mesh OWNS its LOD job (Ave Robustus II): m_LODJob, declared last, is destroyed first — it stops
+			 * the job and waits for it. So the job reads `this` safely and holds NO reference to the mesh: a job
+			 * dropping the mesh's last reference would destroy the mesh on its own thread, waiting for itself (a
+			 * contract fault, aborted: base decision D2). Before 2026-10-15 the job locked a weak reference and
+			 * Core cancelled and drained the pool for it (item lod-job-outlives-its-mesh, 2026-10-07). */
+			const auto threadPool = this->serviceProvider().primaryServices().threadPool();
+
+			if ( threadPool != nullptr )
+			{
+				m_LODJob = threadPool->submit([this, sourceGeometry, jobLease = std::move(sourceLease), levelsToGenerate, reductionRatio] (const std::stop_token & stopToken) {
+					float levelRatio = reductionRatio;
+
+					for ( uint32_t level = 1; level <= levelsToGenerate; level++ )
+					{
+						/* The mesh is going away: the remaining levels are not worth the wait. */
+						if ( stopToken.stop_requested() )
+						{
+							return;
+						}
+
+						this->generateLODLevel(sourceGeometry, level, levelRatio, stopToken);
+
+						levelRatio *= reductionRatio;
+					}
+				});
+			}
+
+			if ( !m_LODJob.valid() )
+			{
+				TraceWarning{ClassId} << "The thread pool refused the LOD job of '" << this->name() << "' (no pool, or it is stopping): no automatic LOD.";
+			}
+		}
 	}
 
 	void

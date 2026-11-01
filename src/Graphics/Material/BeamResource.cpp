@@ -28,19 +28,28 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <optional>
 #include <sstream>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Saphir/AbstractVertexStage.hpp"
 #include "Saphir/BeamGLSL.hpp"
 #include "Saphir/Code.hpp"
+#include "Saphir/Declaration/Types.hpp"
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/FragmentShader.hpp"
 #include "Saphir/Generator/Abstract.hpp"
 #include "Saphir/Keys.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/SetIndexes.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
@@ -114,7 +123,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	BeamResource::create (Renderer & renderer) noexcept
+	BeamResource::create (Renderer & renderer, const std::stop_token & /*stopToken*/) noexcept
 	{
 		/* The renderer flushes the look changes made after creation. */
 		m_renderer = &renderer;

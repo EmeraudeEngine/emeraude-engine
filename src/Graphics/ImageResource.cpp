@@ -528,7 +528,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	ImageResource::onDependenciesLoaded () noexcept
+	ImageResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		if ( !m_packRecipe.has_value() )
 		{

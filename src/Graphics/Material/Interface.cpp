@@ -26,9 +26,14 @@
 
 #include "Interface.hpp"
 
+/* STL inclusions. */
+#include <optional>
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "GPURTMaterialData.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/SharedUBOManager.hpp"
 #include "Helpers.hpp"
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Tracer.hpp"
@@ -53,7 +58,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	Interface::onDependenciesLoaded () noexcept
+	Interface::onDependenciesLoaded (const std::stop_token & stopToken) noexcept
 	{
 		if ( this->isCreated() )
 		{
@@ -66,9 +71,13 @@ namespace EmEn::Graphics::Material
 		 * may still change its flags after measuring a texture it depends on. */
 		this->onBeforeCreation();
 
-		if ( !this->create(this->serviceProvider().graphicsRenderer()) )
+		if ( !this->create(this->serviceProvider().graphicsRenderer(), stopToken) )
 		{
-			TraceError{TracerTag} << "Unable to load the material resource '" << this->name() << "' into the GPU!";
+			/* NOTE: A creation the load's stop cut short is no error (the load ends abandoned, silently). */
+			if ( !stopToken.stop_requested() )
+			{
+				TraceError{TracerTag} << "Unable to load the material resource '" << this->name() << "' into the GPU!";
+			}
 
 			return false;
 		}

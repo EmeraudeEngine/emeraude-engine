@@ -26,7 +26,23 @@
 
 #include "BasicGroundResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
+/* STL inclusions. */
+#include <optional>
+
+/* Third-party inclusions. */
+#include "json/json.h"
+
 /* Local inclusions. */
+#include "BaseUtility.hpp"
+#include "BlobTrait.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Base.hpp"
+#include "Math/Vector.hpp"
+#include "Resources/ResourceTrait.hpp"
 #include "Scenes/GroundTriangles.hpp"
 
 /* Local inclusions. */
@@ -495,7 +511,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	BasicGroundResource::onDependenciesLoaded () noexcept
+	BasicGroundResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		if constexpr ( IsDebug )
 		{

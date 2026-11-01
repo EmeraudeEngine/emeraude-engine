@@ -196,7 +196,14 @@ namespace EmEn::Graphics::RenderableInstance
 		BakeOnly = 1U << 14,
 		/** @brief The instance never enters the ray-tracing lists (TLAS): an imposter's quad would trace as a frozen,
 		 * wrongly facing card. */
-		DisableRayTracing = 1U << 15
+		DisableRayTracing = 1U << 15,
+		/**
+		 * @brief The instance gets no forward pass of a point, spot or line light: lit by the directional lights, the
+		 * ambient and the sky only (setPunctualLightingEnabled(false)).
+		 * @note A large surface lit forward is redrawn once per light: an island city's ocean under 1708 traffic signals
+		 * (owner, 2026-11-01: "the ocean is discarded from the city's lighting").
+		 */
+		DisablePunctualLighting = 1U << 16
 	};
 
 	/**
@@ -770,6 +777,43 @@ namespace EmEn::Graphics::RenderableInstance
 			isLightDistanceCheckEnabled () const noexcept
 			{
 				return this->isFlagDisabled(DisableLightDistanceCheck);
+			}
+
+			/**
+			 * @brief Keeps the instance out of the point, spot and line lights (false), or lets them light it (true, the
+			 * default). Out of them, its forward light passes are the directional lights' only
+			 * (Scenes::Scene::renderLightedSelection()), the ambient and the sky unchanged.
+			 * @note The FORWARD passes only: an opaque instance whose material the deferred resolve shades
+			 * (Material::Interface::deferredLightingEligible()) still receives the resolved lights. Meant for the
+			 * translucent surfaces lit forward, an ocean first (a scene's sea: Scenes::Scene::setSeaLevelPunctualLighting()).
+			 * @note Set it before the instance is drawn (build time): the render thread reads it every frame.
+			 * @param state The state.
+			 * @return Abstract *
+			 */
+			Abstract *
+			setPunctualLightingEnabled (bool state) noexcept
+			{
+				if ( state )
+				{
+					this->disableFlag(DisablePunctualLighting);
+				}
+				else
+				{
+					this->enableFlag(DisablePunctualLighting);
+				}
+
+				return this;
+			}
+
+			/**
+			 * @brief Returns whether the instance is kept out of the point, spot and line lights (setPunctualLightingEnabled()).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isPunctualLightingDisabled () const noexcept
+			{
+				return this->isFlagEnabled(DisablePunctualLighting);
 			}
 
 			/**

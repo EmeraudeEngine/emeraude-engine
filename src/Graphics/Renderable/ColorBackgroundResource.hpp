@@ -29,8 +29,20 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <utility>
+
 /* Local inclusions for inheritances. */
 #include "AbstractBackground.hpp"
+
+/* Local inclusions for usages. */
+#include "Hash/FNV1a.hpp"
+#include "PixelFactory/Color.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -179,7 +191,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 	};
 }
 

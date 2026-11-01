@@ -30,7 +30,11 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
+#include <cstdint>
 #include <memory>
+#include <string>
+#include <utility>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
@@ -38,6 +42,10 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/VertexGridResource.hpp"
+#include "Hash/FNV1a.hpp"
+#include "Math/Vector.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -297,7 +305,7 @@ namespace EmEn::Graphics::Renderable
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/**
 			 * @brief Attaches the geometry resource.

@@ -26,22 +26,32 @@
 
 #include "CubemapMovieResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
-#include <charconv>
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <numeric>
-#include <ranges>
+#include <optional>
+#include <system_error>
 
 /* Local inclusions. */
-#include "Resources/Container.hpp"
-#include "IO/IO.hpp"
-#include "CubemapResource.hpp"
 #include "Algorithms/PerlinNoise.hpp"
 #include "Algorithms/VoronoiNoise.hpp"
+#include "BlobTrait.hpp"
+#include "CubemapResource.hpp"
 #include "FastJSON.hpp"
+#include "Graphics/Types.hpp"
+#include "IO/IO.hpp"
+#include "Logging/Severity.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Resources/Container.hpp"
+#include "String.hpp"
 #include "ThreadPool.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {
@@ -342,7 +352,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	CubemapMovieResource::onDependenciesLoaded () noexcept
+	CubemapMovieResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		this->updateDuration();
 

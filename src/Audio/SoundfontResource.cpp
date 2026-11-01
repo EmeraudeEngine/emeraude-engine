@@ -30,18 +30,18 @@
 #include <cstdint>
 #include <fstream>
 #include <limits>
+#include <optional>
 
-/* Third-party inclusions. */
 /* TinySoundFont implementation (must be defined in exactly one .cpp file). */
 #define TSF_IMPLEMENTATION
 #include "tsf.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
 #include "PrimaryServices.hpp"
-#include "Resources/Manager.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio
@@ -206,7 +206,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	SoundfontResource::onDependenciesLoaded () noexcept
+	SoundfontResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		/* No additional processing needed after dependencies are loaded.
 		 * The soundfont is already parsed and ready for use. */

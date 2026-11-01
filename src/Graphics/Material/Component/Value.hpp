@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <stop_token>
 #include <string>
 
 /* Local inclusions for inheritances. */
@@ -65,7 +66,7 @@ namespace EmEn::Graphics::Material::Component
 			/** @copydoc EmEn::Graphics::Material::Component::Interface::create() */
 			[[nodiscard]]
 			bool
-			create (Renderer & /*renderer*/, uint32_t & /*binding*/) noexcept override
+			create (Renderer & /*renderer*/, uint32_t & /*binding*/, const std::stop_token & /*stopToken*/) noexcept override
 			{
 				return true;
 			}

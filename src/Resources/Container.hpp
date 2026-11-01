@@ -1504,8 +1504,11 @@ namespace EmEn::Resources
 					return this->getDefaultResourceUnlocked();
 				}
 
-				if ( !ServiceAccess::submitTask(m_primaryServices, m_tasks, [createFunction, newResource, guard = std::make_shared< ServiceAccess::DiscardedTaskGuard >(newResource, m_discardCount)] (const std::stop_token &) {
+				if ( !ServiceAccess::submitTask(m_primaryServices, m_tasks, [createFunction, newResource, guard = std::make_shared< ServiceAccess::DiscardedTaskGuard >(newResource, m_discardCount)] (const std::stop_token & stopToken) {
 					guard->markRan();
+
+					/* NOTE: The task's stop token rides the creation's completion chain (ResourceTrait::LoadStopScope). */
+					const ResourceTrait::LoadStopScope stopScope{*newResource, stopToken};
 
 					if ( createFunction(*newResource) ) {
 						switch ( newResource->status() )
@@ -1986,8 +1989,11 @@ namespace EmEn::Resources
 			submitLoadingTask (const LoadingRequest & request) noexcept
 			{
 				/* NOTE: `this` is safe: the container owns the task (m_tasks, destroyed first), and its stop waits for it. */
-				return ServiceAccess::submitTask(m_primaryServices, m_tasks, [this, request, guard = std::make_shared< ServiceAccess::DiscardedTaskGuard >(request.resource(), m_discardCount)] (const std::stop_token &) {
+				return ServiceAccess::submitTask(m_primaryServices, m_tasks, [this, request, guard = std::make_shared< ServiceAccess::DiscardedTaskGuard >(request.resource(), m_discardCount)] (const std::stop_token & stopToken) {
 					guard->markRan();
+
+					/* NOTE: The task's stop token rides the load's completion chain (ResourceTrait::LoadStopScope). */
+					const ResourceTrait::LoadStopScope stopScope{*request.resource(), stopToken};
 
 					this->loadingTask(request);
 				});

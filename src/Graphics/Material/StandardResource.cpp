@@ -36,6 +36,7 @@
 #include <ranges>
 #include <span>
 #include <sstream>
+#include <stop_token>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -1604,7 +1605,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::create (Renderer & renderer) noexcept
+	StandardResource::create (Renderer & renderer, const std::stop_token & stopToken) noexcept
 	{
 		/* The renderer flushes the dynamic properties this material changes after creation. */
 		m_renderer = &renderer;
@@ -1617,7 +1618,7 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Component creation (optional). */
-		if ( this->usingTexture() && !this->createTextureComponents(renderer) )
+		if ( this->usingTexture() && !this->createTextureComponents(renderer, stopToken) )
 		{
 			return false;
 		}
@@ -1903,7 +1904,7 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	StandardResource::createTextureComponents (Renderer & renderer) noexcept
+	StandardResource::createTextureComponents (Renderer & renderer, const std::stop_token & stopToken) noexcept
 	{
 		m_textureBindings.clear();
 
@@ -1923,53 +1924,66 @@ namespace EmEn::Graphics::Material
 			}
 
 			auto * component = static_cast< Texture * >(componentIt->second.get());
-			const auto * texture = component->texture().get();
-			auto * sharedBinding = m_textureBindings.end();
 
-			if ( texture != nullptr )
+			if ( !this->createTextureComponent(renderer, componentType, *component, nextBinding, stopToken) )
 			{
-				sharedBinding = std::ranges::find_if(m_textureBindings, [texture] (const TextureBinding & binding) {
-					return binding.leader->texture().get() == texture;
-				});
-			}
-
-			if ( sharedBinding == m_textureBindings.end() )
-			{
-				if ( !component->create(renderer, nextBinding) )
-				{
-					TraceError{ClassId} << "Unable to create component '" << to_cstring(componentType) << "' of PBR material resource '" << this->name() << "' !";
-
-					return false;
-				}
-
-				/* NOTE: In capacity: one entry at most per component type, MaxTextureBindings types. */
-				m_textureBindings.push_back({.leader = component, .readByMeshStage = componentType == ComponentType::Displacement});
-			}
-			else
-			{
-				/* NOTE: create() assigns the binding it receives: the leader's (the copy's increment is dropped). */
-				auto leaderBinding = sharedBinding->leader->binding();
-
-				if ( !component->create(renderer, leaderBinding) )
-				{
-					TraceError{ClassId} << "Unable to create component '" << to_cstring(componentType) << "' of PBR material resource '" << this->name() << "' !";
-
-					return false;
-				}
-
-				component->shareSamplerOf(*sharedBinding->leader);
-
-				if ( componentType == ComponentType::Displacement )
-				{
-					sharedBinding->readByMeshStage = true;
-				}
+				return false;
 			}
 
 			/* Check if this texture component is animated. */
-			if ( texture != nullptr && texture->duration() > 0 )
+			if ( const auto * texture = component->texture().get(); texture != nullptr && texture->duration() > 0 )
 			{
 				this->enableFlag(IsAnimated);
 			}
+		}
+
+		return true;
+	}
+
+	bool
+	StandardResource::createTextureComponent (Renderer & renderer, ComponentType componentType, Texture & component, uint32_t & nextBinding, const std::stop_token & stopToken) noexcept
+	{
+		const auto * texture = component.texture().get();
+		auto * sharedBinding = m_textureBindings.end();
+
+		if ( texture != nullptr )
+		{
+			sharedBinding = std::ranges::find_if(m_textureBindings, [texture] (const TextureBinding & binding) {
+				return binding.leader->texture().get() == texture;
+			});
+		}
+
+		const bool leads = sharedBinding == m_textureBindings.end();
+
+		/* NOTE: create() assigns the binding it receives: a leader takes the next one (and increments it), a component
+		 * sharing a texture takes its leader's (the copy's increment is dropped). */
+		auto leaderBinding = leads ? 0U : sharedBinding->leader->binding();
+		auto & binding = leads ? nextBinding : leaderBinding;
+
+		if ( !component.create(renderer, binding, stopToken) )
+		{
+			/* NOTE: A creation the load's stop cut short is no error (the load ends abandoned, silently). */
+			if ( !stopToken.stop_requested() )
+			{
+				TraceError{ClassId} << "Unable to create component '" << to_cstring(componentType) << "' of PBR material resource '" << this->name() << "' !";
+			}
+
+			return false;
+		}
+
+		if ( leads )
+		{
+			/* NOTE: In capacity: one entry at most per component type, MaxTextureBindings types. */
+			m_textureBindings.push_back({.leader = &component, .readByMeshStage = componentType == ComponentType::Displacement});
+
+			return true;
+		}
+
+		component.shareSamplerOf(*sharedBinding->leader);
+
+		if ( componentType == ComponentType::Displacement )
+		{
+			sharedBinding->readByMeshStage = true;
 		}
 
 		return true;

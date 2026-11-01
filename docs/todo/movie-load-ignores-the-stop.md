@@ -1,7 +1,7 @@
 ---
 id: movie-load-ignores-the-stop
 title: A movie resource's frame-by-frame load and compression ignores the stop, so a shutdown waits for it (46 s)
-status: open
+status: in-progress
 priority: high
 scope: src/Graphics/MovieResource.cpp, Resources (the 'Movie manager' container), TextureCompressorService
 opened: 2026-10-24
@@ -26,14 +26,12 @@ within a bounded latency through its `std::stop_token`.
 
 ## What remains
 
-- [ ] Find the per-frame loop that loads and compresses (`MovieResource.cpp`, the frame loops) and the task that
-      runs it. Check the stop token between frames, and end the load as cancelled: not "loaded", and nothing
-      half-published.
-- [ ] Check that the compressor's own per-frame work cannot outlast one frame (one BC5 1024² with its mips is the
-      bound).
-- [ ] Repro and gate: `water-world` with an empty `--cache-directory`, `Core.shutdown()` ~2 s after the act
-      activates. The stop of the 'Movie manager' tasks must take at most about one frame's compression, not
-      46 s. Every platform (the peers).
+- Done on Linux (2026-11-01, owner decision: the explicit token, narrow form): the container's task token reaches the
+  completion chain (`ResourceTrait::LoadStopScope`, `onDependenciesLoaded(stopToken)`, `createTexture(renderer,
+  stopToken)`); `AnimatedTexture2D` encodes its frames in parallel and checks the stop before each one. Contract and
+  measurements: `docs/subsystems/resources/06-async-lambda-capture-safety.md` § The stop reaches the completion chain
+  (`water-world` cold, 4 cores, shutdown 2 s after load: 111.4 s → 7.6 s, the 'Movie manager' tasks 106 s → 2.8 s).
+- [ ] The peers: the same repro on macOS (`--cache-directory` empty) and Windows; the base suites; then delete this item.
 
 ## ⚠️ Traps
 

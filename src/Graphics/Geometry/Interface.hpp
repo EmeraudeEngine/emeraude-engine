@@ -33,24 +33,38 @@
 #include "Resources/ResourceTrait.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <atomic>
+#include <cstdint>
+#include <memory>
 #include <optional>
+#include <string>
+#include <vector>
 
 /* Local inclusions for usages. */
-#include "CoreTypes.hpp"
+#include "Graphics/Geometry/SubGeometry.hpp" // IWYU pragma: export (every geometry holds its sub-geometries through this interface)
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Types.hpp"
 #include "Math/CartesianFrame.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
+#include "MeshShadingSurface.hpp"
 #include "VertexFactory/Grid.hpp"
 #include "VertexFactory/Shape.hpp"
-#include "MeshShadingSurface.hpp"
-#include "SubGeometry.hpp"
-#include "Vulkan/AccelerationStructure.hpp"
-#include "Vulkan/IndexBufferObject.hpp"
-#include "Vulkan/VertexBufferObject.hpp"
+#include "VertexFactory/Types.hpp"
+#include "Vulkan/AccelerationStructure.hpp" // IWYU pragma: export (the derived geometries own their GPU buffers by unique_ptr)
+#include "Vulkan/IndexBufferObject.hpp" // IWYU pragma: export (idem)
+#include "Vulkan/VertexBufferObject.hpp" // IWYU pragma: export (idem)
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class TransferManager;
+}
 
 namespace EmEn::Vulkan
 {
-	class AccelerationStructureBuilder;
 	class DescriptorSet;
 }
 
@@ -922,10 +936,9 @@ namespace EmEn::Graphics::Geometry
 
 		private:
 
-
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			/** @brief The last rendered frame that drew the synthesized surface. @see markSurfaceDrawn() */
 			mutable std::atomic< uint64_t > m_surfaceDrawnFrame{0};

@@ -41,12 +41,16 @@ namespace EmEn::Graphics::TextureResource
 	constexpr auto TracerTag{"AbstractTextureResource"};
 
 	bool
-	Abstract::onDependenciesLoaded () noexcept
+	Abstract::onDependenciesLoaded (const std::stop_token & stopToken) noexcept
 	{
 		/* NOTE: Ensure the texture is on the video memory. */
-		if ( !this->isCreated() && !this->createTexture(this->serviceProvider().graphicsRenderer()) )
+		if ( !this->isCreated() && !this->createTexture(this->serviceProvider().graphicsRenderer(), stopToken) )
 		{
-			TraceError{TracerTag} << "Unable to load texture resource (" << this->classLabel() << ") '" << this->name() << "' !";
+			/* NOTE: A creation the load's stop cut short is no error (the load ends abandoned, silently). */
+			if ( !stopToken.stop_requested() )
+			{
+				TraceError{TracerTag} << "Unable to load texture resource (" << this->classLabel() << ") '" << this->name() << "' !";
+			}
 
 			return false;
 		}

@@ -30,7 +30,9 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -39,6 +41,10 @@
 
 /* Forward declaration for TinySoundFont. */
 struct tsf;
+
+/* Local inclusions for usages. */
+#include "Hash/FNV1a.hpp"
+#include "Resources/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -215,7 +221,7 @@ namespace EmEn::Audio
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			tsf * m_tsf{nullptr};
 			std::vector< char > m_fileData;

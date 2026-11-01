@@ -30,16 +30,28 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
+#include <memory>
+#include <stop_token>
 #include <string>
 #include <vector>
+
+/* Third-party inclusions. */
+#include "json/json.h"
 
 /* Local inclusions for inheritances. */
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/Types.hpp" // BlendingMode
-#include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSet;
+	class UniformBufferObject;
+}
 
 namespace EmEn::Graphics::Material
 {
@@ -84,7 +96,6 @@ namespace EmEn
 
 		namespace TextureResource
 		{
-			class TextureCubemap;
 		}
 	}
 }
@@ -880,7 +891,7 @@ namespace EmEn::Graphics::Material
 			 * @return bool
 			 */
 			[[nodiscard]]
-			virtual bool create (Renderer & renderer) noexcept = 0;
+			virtual bool create (Renderer & renderer, const std::stop_token & stopToken) noexcept = 0;
 
 			/**
 			 * @brief Destroys the material objects from the video memory.
@@ -944,6 +955,6 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Resources::ResourceTrait::onDependenciesLoaded() noexcept */
 			[[nodiscard]]
-			bool onDependenciesLoaded () noexcept override;
+			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 	};
 }

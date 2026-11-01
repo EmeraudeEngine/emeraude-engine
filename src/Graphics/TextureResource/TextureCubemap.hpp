@@ -29,13 +29,34 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <cstdint>
+#include <memory>
+#include <string>
+#include <utility>
+
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 
 /* Local inclusions for usages. */
-#include "Graphics/CubemapResource.hpp"
+#include "Hash/FNV1a.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
+#include "Vulkan/TextureInterface.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class CubemapResource;
+}
+
+namespace EmEn::Vulkan
+{
+	class Image;
+	class ImageView;
+	class Sampler;
+}
+
 namespace EmEn::Resources
 {
 	template< typename resource_t >
@@ -196,7 +217,7 @@ namespace EmEn::Graphics::TextureResource
 			}
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::createTexture() */
-			bool createTexture (Renderer & renderer) noexcept override;
+			bool createTexture (Renderer & renderer, const std::stop_token & stopToken) noexcept override;
 
 			/** @copydoc EmEn::Graphics::TextureResource::Abstract::destroyTexture() */
 			bool destroyTexture () noexcept override;

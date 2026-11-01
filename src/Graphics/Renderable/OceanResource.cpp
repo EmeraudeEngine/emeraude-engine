@@ -27,8 +27,12 @@
 #include "OceanResource.hpp"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/Material/Interface.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Math/Base.hpp"
 #include "Resources/Container.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Graphics::Renderable
 {
@@ -93,7 +97,7 @@ namespace EmEn::Graphics::Renderable
 	}
 
 	bool
-	OceanResource::onDependenciesLoaded () noexcept
+	OceanResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{
 		this->setReadyForInstantiation(true);
 

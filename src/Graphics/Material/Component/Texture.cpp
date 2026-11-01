@@ -296,7 +296,7 @@ namespace EmEn::Graphics::Material::Component
 	}
 
 	bool
-	Texture::create (Renderer & renderer, uint32_t & binding) noexcept
+	Texture::create (Renderer & renderer, uint32_t & binding, const std::stop_token & stopToken) noexcept
 	{
 		m_binding = binding++;
 
@@ -315,7 +315,7 @@ namespace EmEn::Graphics::Material::Component
 				return true;
 			}
 
-			return m_textureResource->createTexture(renderer);
+			return m_textureResource->createTexture(renderer, stopToken);
 		}
 
 		return m_texture->isCreated();

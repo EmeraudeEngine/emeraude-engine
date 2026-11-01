@@ -1530,6 +1530,24 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Keeps the sea level out of the point, spot and line lights (false), or lets them light it (true, the
+			 * default): the sun, the ambient and the sky still light it (RenderableInstance::Abstract::
+			 * setPunctualLightingEnabled()).
+			 * @note Owner, 2026-11-01 (an island city): lit forward, a sea is redrawn once per lamp in reach — 9 ms a frame
+			 * at night in `city`. The scene RECORDS it and applies it every time it creates the sea's instance
+			 * (registerSceneVisualComponents(): at the first enable(), and again when the background changes). That
+			 * instance does not exist before the scene is enabled.
+			 * @pre Called while the scene is built (before enable()): a sea instance already created keeps its state until
+			 * it is re-created (the render thread reads the flag; changing it live would race).
+			 * @param enabled The state.
+			 */
+			void
+			setSeaLevelPunctualLighting (bool enabled) noexcept
+			{
+				m_seaLevelPunctualLighting.store(enabled, std::memory_order_release);
+			}
+
+			/**
 			 * @brief Sets the scene water level surface.
 			 *
 			 * SeaLevel provides water plane rendering with reflections
@@ -2197,16 +2215,23 @@ namespace EmEn::Scenes
 			 * @note Must be called after prepareRender().
 			 * @param renderTarget The destination (View, Texture, or SwapChain).
 			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
+			 * @param invisibleLights The lights beyond their draw distance or whose reach misses THIS target's frustum
+			 * (Graphics::DeferredLightResolve::invisibleLights()), as renderOpaque() takes them: their forward passes are
+			 * skipped for every translucent batch. Sorted by address. Empty (the default) keeps every forward pass.
 			 */
-			void renderTranslucent (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
+			void renderTranslucent (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, std::span< const Component::AbstractLightEmitter * const > invisibleLights = {}) noexcept;
 
 			/**
 			 * @brief Renders all translucent objects requiring a grab pass (refraction, etc.).
 			 * @note Must be called after prepareRender() and after the grab pass blit.
 			 * @param renderTarget The destination (View, Texture, or SwapChain).
 			 * @param commandBuffer The Vulkan command buffer for recording draw calls.
+			 * @param invisibleLights The lights beyond their draw distance or whose reach misses THIS target's frustum
+			 * (see renderTranslucent()): their forward passes are skipped. Empty (the default) keeps every forward pass.
+			 * ⚠️ Without it a large translucent surface (an ocean) is redrawn once per light of the whole scene: the city's
+			 * 1708 traffic signals cost 294 ms a frame (2026-11-01).
 			 */
-			void renderTranslucentGB (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer) noexcept;
+			void renderTranslucentGB (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget, const Vulkan::CommandBuffer & commandBuffer, std::span< const Component::AbstractLightEmitter * const > invisibleLights = {}) noexcept;
 
 			/**
 			 * @brief Replaces the highlighted SET by one entity: the renderer draws the selection OUTLINE
@@ -3465,6 +3490,9 @@ namespace EmEn::Scenes
 			/** @brief Raised from any thread (applyBackgroundLighting), honored by
 			 * processLogics() once the background resource is loaded. */
 			std::atomic_bool m_backgroundLightingRequested{false};
+			/** @brief Whether the punctual lights light the sea (setSeaLevelPunctualLighting()), applied when the scene
+			 * creates the sea's instance; set while building, read by registerSceneVisualComponents() (any thread). */
+			std::atomic_bool m_seaLevelPunctualLighting{true};
 			/** @brief True when the sky drives the ambient (applyAmbient): the baked
 			 * irradiance is published and the scalar ambient pushed to the view UBOs is
 			 * zeroed (see refreshAmbientLightProperties / updateEnvironmentIBL). */
