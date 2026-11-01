@@ -339,8 +339,16 @@ namespace EmEn::Resources
 		m_releaseLocalData = false;
 		m_localDataReleasePass.reset();
 
-		/* Every container refuses new loads, discards the queued ones (their resource fails) and waits for the running
-		 * ones. */
+		/* Every container refuses new loads, discards the queued ones (their resource fails) and stops the running ones
+		 * FIRST, then the running ones are waited for, container by container (owner, 2026-11-01: request all, then wait
+		 * all). Stopping and waiting one container at a time, in the map's order (implementation-defined), made a container
+		 * wait behind work another one's token had not been asked to stop yet: on Windows the Image manager waited 13.6 s
+		 * behind the ocean's frames, encoded under the Movie manager's token. */
+		for ( const auto & container : m_containers | std::views::values )
+		{
+			container->requestBackgroundWorkStop();
+		}
+
 		for ( const auto & container : m_containers | std::views::values )
 		{
 			const auto containerStart = Clock::now();

@@ -44,7 +44,8 @@ within a bounded latency through its `std::stop_token`.
       class, was not exported: fixed by `EMEN_LEAN_API` on it, docs/windows-export-api.md § 3); with the fix 0 warning,
       0 VUID. `water-world` cold, shutdown → exit 18.44 s: the 'Image manager' tasks took 13564 ms, the 'Movie manager'
       485 ms AFTER them — all 120 frames encoded anyway (below).
-- [ ] **The stop order** (owner decision 2026-11-01: request all, then wait all): `Manager::stopBackgroundWork()` stops
+- [x] **The stop order** (owner decision 2026-11-01: request all, then wait all; done the same day, resources doc 06 —
+      Windows to re-measure): `Manager::stopBackgroundWork()` stops
       the containers one after another (request + wait each) in `unordered_map` order — on MSVC the Image manager comes
       first and waits for its tasks queued behind the ocean's frame encodings on the shared pool, so the Movie manager's
       token (which stops those encodings) is requested only once they are ~96 % done. Split the container's stop

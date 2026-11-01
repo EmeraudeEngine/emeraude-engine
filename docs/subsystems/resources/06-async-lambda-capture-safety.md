@@ -55,6 +55,14 @@ No resource job is fire-and-forget any more, and `Core` neither cancels nor drai
 Vulkan device. So `Core::terminate()` first calls `Resources::Manager::stopBackgroundWork()` — the manager stops its
 OWN jobs (release pass, every container, the provider's jobs) and waits for them, once the logic and rendering threads
 are joined, before any service they touch goes. Idempotent; `Manager::onTerminate()` calls it again.
+**Request every stop, then wait (owner decision 2026-11-01).** The manager first calls every container's
+`requestBackgroundWorkStop()` (new loads refused, queued ones discarded, running ones see their token), THEN waits for
+each (`stopBackgroundWork()`), then the provider's jobs. It used to stop and wait one container at a time, in the
+`unordered_map` order (implementation-defined): on Windows the 'Image manager' came first and waited 13.6 s for tasks
+queued behind the ocean's frames, which run under the 'Movie manager''s token — not yet requested; the cold
+`water-world` shutdown took 18.4 s there (3.75 s on macOS, 4.7 s on AMD, whose order put the movies first). TSan stress
+`EmeraudeResourceJobsStress` (projet-alpha `docs/unit-testing.md`, loads + LODs + reloads in flight at the stop), Linux,
+lavapipe, 3 runs: 0 report, 0 assertion, exit 0, every resource job stopped in 5-86 ms.
 
 **A job that never runs.** A job stopped before it starts never runs (base `TaskGroup` / `TaskHandle` contract,
 2026-10-15). A loading task or a manual creation discarded that way puts its resource in the Failed state through

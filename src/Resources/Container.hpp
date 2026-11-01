@@ -349,6 +349,17 @@ namespace EmEn::Resources
 			virtual void stopBackgroundWork () noexcept = 0;
 
 			/**
+			 * @brief Requests the stop of the container's tasks WITHOUT waiting for them: new loads are refused, the queued
+			 * ones are discarded (their resource Failed), the running ones see their stop token. stopBackgroundWork() then
+			 * waits. Final. Idempotent.
+			 * @note Resources::Manager::stopBackgroundWork() requests EVERY container's stop before waiting for any (owner,
+			 * 2026-11-01): one container's running task may be the work another container's tasks wait behind on the shared
+			 * pool (the ocean's frames encoded under the Movie manager's token while the Image manager waited 13.6 s on
+			 * Windows).
+			 */
+			virtual void requestBackgroundWorkStop () noexcept = 0;
+
+			/**
 			 * @brief Returns the total memory consumed by all loaded resources.
 			 *
 			 * Calculates the sum of memory occupied by all resources currently loaded in the container,
@@ -660,10 +671,18 @@ namespace EmEn::Resources
 				return true;
 			}
 
+			/** @copydoc EmEn::Resources::ContainerInterface::requestBackgroundWorkStop() noexcept */
+			void
+			requestBackgroundWorkStop () noexcept override
+			{
+				m_tasks.requestStop();
+			}
+
 			/** @copydoc EmEn::Resources::ContainerInterface::stopBackgroundWork() noexcept */
 			void
 			stopBackgroundWork () noexcept override
 			{
+				/* NOTE: Final and idempotent: a stop already requested (requestBackgroundWorkStop()) is not requested twice. */
 				m_tasks.requestStop();
 				m_tasks.waitForAll();
 
