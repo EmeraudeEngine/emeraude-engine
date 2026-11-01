@@ -4816,8 +4816,11 @@ Windows never showed the pre-fix VUID-07752, so its runs prove no regression the
 generic exact key, `ProgramKey` now an alias of it — base `docs/subsystems/source-tree/27-exact-key.md`). A/B against
 the bare-hash build, alternated, 3 runs each, Linux RTX 3070 Ti, validation layer loaded: `city` 396 pipelines built /
 7830 reused, `sponza` 176 / 6998, on both builds in every run, 0 VUID, 0 `[Error]` — the same sharing, so no collision
-was hiding there. Still keyed by a bare hash: the sampler cache and the combine / denoise pass variants (item
-`caches-keyed-by-a-bare-hash`).
+was hiding there. The peers at engine 0c15dca6 / base e87b53f: Windows (RTX 3500 Ada, MSVC /W4 /WX) the same
+396 / 7830 and 176 / 6998, 2 runs each; macOS (M6, MoltenVK, no RT lane) city 396 / 5415 twice, sponza 176 / 4613 on
+three warm-cache runs — its first, COLD-cache run gave 172 / 4175 (90 slow pipeline creations in the 10 s before the
+shutdown: the counters count what was requested by then, so compare them on warm runs only). 0 VUID everywhere. Still
+keyed by a bare hash: the sampler cache and the combine / denoise pass variants (item `caches-keyed-by-a-bare-hash`).
 
 ### A generator never spells its own model-view-projection matrix; a `mat4` varying takes FOUR locations (2026-10-31)
 
