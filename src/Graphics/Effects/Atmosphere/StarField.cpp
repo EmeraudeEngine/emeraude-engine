@@ -58,6 +58,7 @@
 #include "Saphir/Types.hpp"
 #include "StaticVector.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
@@ -623,7 +624,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				set.writeStorageBuffer(StarBufferBinding, VkDescriptorBufferInfo{.buffer = m_pointBuffers[frameIndex]->handle(), .offset = 0, .range = VK_WHOLE_SIZE}) &&
 				set.writeCombinedImageSampler(TransmittanceBinding, atmosphere->transmittance()) &&
 				set.writeCombinedImageSampler(FrameBinding, atmosphere->frameData()) &&
-				set.writeUniformBufferObject(AtmosphereBinding, *atmosphere->parametersBuffer());
+				set.writeUniformBuffer(AtmosphereBinding, atmosphere->parametersBuffer()->getDescriptorInfo(0, SkyAtmosphere::parametersBlockSize()));
 
 			if ( written )
 			{

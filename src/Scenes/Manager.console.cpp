@@ -945,7 +945,7 @@ namespace EmEn::Scenes
 			return std::static_pointer_cast< Graphics::Renderable::DynamicSkyResource >(background)->skyMaterial();
 		};
 
-		this->bindCommand("getDynamicSky", "Returns the physical sky of the active scene as JSON: its planet's name and radii and its look (tint, intensity, saturation, star disc, limb darkening).", [dynamicSkyMaterial] () {
+		this->bindCommand("getDynamicSky", "Returns the physical sky of the active scene as JSON: its planet's name and radii, its ground albedo and its look (tint, intensity, saturation, star disc, limb darkening).", [dynamicSkyMaterial] () {
 			const auto material = dynamicSkyMaterial();
 
 			if ( material == nullptr )
@@ -961,6 +961,12 @@ namespace EmEn::Scenes
 				state["planet"] = atmosphere->parameters().planet;
 				state["groundRadiusKm"] = static_cast< double >(atmosphere->parameters().groundRadius);
 				state["topRadiusKm"] = static_cast< double >(atmosphere->parameters().topRadius);
+
+				const auto albedo = atmosphere->groundAlbedo();
+				state["groundAlbedo"] = Json::Value{Json::arrayValue};
+				state["groundAlbedo"].append(static_cast< double >(albedo.x()));
+				state["groundAlbedo"].append(static_cast< double >(albedo.y()));
+				state["groundAlbedo"].append(static_cast< double >(albedo.z()));
 			}
 
 			const auto tint = material->tint();
@@ -994,6 +1000,35 @@ namespace EmEn::Scenes
 				material->setGrading(Base::PixelFactory::Color< float >{red, green, blue, 1.0F}, intensity);
 
 				return Console::CommandResult::success("Dynamic sky grading set.");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("setDynamicSkyGroundAlbedo", "Sets the ground albedo of the physical sky: the planet's surface shown under the horizon, lit by the star through the air (it also feeds the sky's multiple scattering). Linear reflectances in [0, 1]; the next frame applies it.",
+			{
+				{"red", "Linear reflectance, red, 0-1."},
+				{"green", "Linear reflectance, green, 0-1."},
+				{"blue", "Linear reflectance, blue, 0-1."}
+			},
+			[dynamicSkyMaterial] (float red, float green, float blue) {
+				const auto material = dynamicSkyMaterial();
+
+				if ( material == nullptr )
+				{
+					return Console::CommandResult::error("The active scene has no dynamic sky !");
+				}
+
+				const auto atmosphere = material->atmosphere();
+
+				if ( atmosphere == nullptr )
+				{
+					return Console::CommandResult::error("The dynamic sky has no atmosphere !");
+				}
+
+				if ( !atmosphere->setGroundAlbedo(Base::Math::Vector< 3, float >{red, green, blue}) )
+				{
+					return Console::CommandResult::error("The ground albedo takes a finite linear reflectance in [0, 1] per channel !");
+				}
+
+				return Console::CommandResult::success("Dynamic sky ground albedo set.");
 			}, Console::CommandHint::Idempotent);
 
 		this->bindCommand("setDynamicSkySaturation", "Sets the saturation of the physical sky (artistic): 0 grey, 1 physical.",

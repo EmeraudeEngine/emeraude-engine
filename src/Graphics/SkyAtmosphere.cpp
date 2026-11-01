@@ -30,7 +30,6 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <cstring>
 #include <initializer_list>
 #include <numbers>
 #include <span>
@@ -65,7 +64,6 @@
 #include "Vulkan/Sync/BufferMemoryBarrier.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "Vulkan/Types.hpp"
-#include "Vulkan/UniformBufferObject.hpp"
 
 namespace
 {
@@ -721,7 +719,8 @@ namespace EmEn::Graphics
 		m_frameData{m_name + "Frame", {FrameTexels, 1}, VK_FORMAT_R32G32B32A32_SFLOAT},
 		m_aerialInscatter{m_name + "AerialInscatter", {AerialPerspectiveSize, AerialPerspectiveSize, AerialPerspectiveSize}, VK_FORMAT_R16G16B16A16_SFLOAT},
 		m_aerialTransmittance{m_name + "AerialTransmittance", {AerialPerspectiveSize, AerialPerspectiveSize, AerialPerspectiveSize}, VK_FORMAT_R16G16B16A16_SFLOAT},
-		m_environment{std::make_unique< SkyEnvironment >(m_name)}
+		m_environment{std::make_unique< SkyEnvironment >(m_name)},
+		m_groundAlbedo{m_parameters.groundAlbedo}
 	{
 
 	}
@@ -733,6 +732,7 @@ namespace EmEn::Graphics
 	{
 		const auto & p = m_parameters;
 		const auto mieExtinction = p.mieScattering + p.mieAbsorption;
+		const auto albedo = this->groundAlbedo();
 
 		return {
 			/* radii */
@@ -748,10 +748,87 @@ namespace EmEn::Graphics
 			/* absorptionExtinction, absorbing layer above: constant */
 			p.absorptionExtinction.x(), p.absorptionExtinction.y(), p.absorptionExtinction.z(), p.absorptionAboveConstant,
 			/* groundAlbedo, absorbing layer above: linear */
-			p.groundAlbedo.x(), p.groundAlbedo.y(), p.groundAlbedo.z(), p.absorptionAboveLinear,
+			albedo.x(), albedo.y(), albedo.z(), p.absorptionAboveLinear,
 			/* Mie g per channel, unused */
 			std::clamp(p.miePhaseG.x(), -0.999F, 0.999F), std::clamp(p.miePhaseG.y(), -0.999F, 0.999F), std::clamp(p.miePhaseG.z(), -0.999F, 0.999F), 0.0F
 		};
+	}
+
+	bool
+	SkyAtmosphere::setGroundAlbedo (const Vector< 3, float > & albedo) noexcept
+	{
+		for ( const auto channel : {albedo.x(), albedo.y(), albedo.z()} )
+		{
+			if ( !std::isfinite(channel) || channel < 0.0F || channel > 1.0F )
+			{
+				TraceError{ClassId} << "The ground albedo of the sky '" << m_name << "' takes a finite reflectance in [0, 1] per channel, not " << albedo << " !";
+
+				return false;
+			}
+		}
+
+		{
+			const MutexLock lock{m_groundAlbedoAccess};
+
+			m_groundAlbedo = albedo;
+			m_groundAlbedoPending = true;
+		}
+
+		TraceInfo{ClassId} << "Sky atmosphere '" << m_name << "': ground albedo " << albedo << " requested, applied by the next frame.";
+
+		return true;
+	}
+
+	Vector< 3, float >
+	SkyAtmosphere::groundAlbedo () const noexcept
+	{
+		const MutexLock lock{m_groundAlbedoAccess};
+
+		return m_groundAlbedo;
+	}
+
+	void
+	SkyAtmosphere::recordGroundAlbedo (const CommandBuffer & commandBuffer) noexcept
+	{
+		{
+			const MutexLock lock{m_groundAlbedoAccess};
+
+			if ( !std::exchange(m_groundAlbedoPending, false) )
+			{
+				return;
+			}
+		}
+
+		/* A request landing between the exchange and the packing is packed here AND applied again next frame: harmless. */
+		const auto packed = this->packParameters();
+
+		/* Every earlier reader of the block on the queue (the sky's fragments, the star field, the environment's and the
+		 * tables' compute) before its rewrite; every later one after it. */
+		constexpr VkPipelineStageFlags Readers = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+
+		commandBuffer.pipelineBarrier(
+			Sync::BufferMemoryBarrier{*m_parametersBuffer, VK_ACCESS_UNIFORM_READ_BIT, VK_ACCESS_TRANSFER_WRITE_BIT},
+			Readers, VK_PIPELINE_STAGE_TRANSFER_BIT
+		);
+		commandBuffer.update(*m_parametersBuffer, 0, parametersBlockSize(), packed.data());
+		commandBuffer.pipelineBarrier(
+			Sync::BufferMemoryBarrier{*m_parametersBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT},
+			VK_PIPELINE_STAGE_TRANSFER_BIT, Readers
+		);
+
+		/* The multiple-scattering table, read by the sky-view and aerial-perspective compute only: rebuilt whole after
+		 * the earlier reads, so its old content is discarded. The transmittance does not depend on the ground. */
+		commandBuffer.pipelineBarrier(
+			Sync::ImageMemoryBarrier{*m_multipleScattering.image(), 0, VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL},
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+		);
+		commandBuffer.bind(*m_multipleScatteringPipeline);
+		commandBuffer.bind(*m_multipleScatteringSet, *m_pipelineLayout, VK_PIPELINE_BIND_POINT_COMPUTE, 0);
+		commandBuffer.dispatch((MultipleScatteringSize + 7) / 8, (MultipleScatteringSize + 7) / 8, 1);
+		commandBuffer.pipelineBarrier(
+			Sync::ImageMemoryBarrier{*m_multipleScattering.image(), VK_ACCESS_SHADER_WRITE_BIT, VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL},
+			VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+		);
 	}
 
 	bool
@@ -818,29 +895,16 @@ namespace EmEn::Graphics
 	{
 		const auto & device = renderer.device();
 
-		/* ---- The atmosphere's uniform buffer, written once. ---- */
-		m_parametersBuffer = std::make_unique< UniformBufferObject >(device, parametersBlockSize());
-		m_parametersBuffer->setIdentifier(ClassId, m_name, "UniformBufferObject");
+		/* ---- The atmosphere's uniform block: written in the command stream, by the bake then by each accepted ground
+		 * albedo (recordGroundAlbedo()), like the moons' block below. ---- */
+		m_parametersBuffer = std::make_unique< Buffer >(device, 0, parametersBlockSize(), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, false);
+		m_parametersBuffer->setIdentifier(ClassId, m_name + "Parameters", "Buffer");
 
 		if ( !m_parametersBuffer->createOnHardware() )
 		{
 			TraceError{ClassId} << "Unable to create the uniform buffer of the sky '" << m_name << "' !";
 
 			return false;
-		}
-
-		{
-			const auto packed = this->packParameters();
-			auto * pointer = m_parametersBuffer->mapMemoryAs< uint8_t >(0, VK_WHOLE_SIZE);
-
-			if ( pointer == nullptr )
-			{
-				return false;
-			}
-
-			std::memcpy(pointer, packed.data(), packed.size() * sizeof(float));
-
-			m_parametersBuffer->unmapMemory();
 		}
 
 		/* ---- The frame's moons: written in each frame's command stream (recordFrame()), read by the sky-view pass. ---- */
@@ -965,7 +1029,7 @@ namespace EmEn::Graphics
 		const auto makeSet = [this] (std::unique_ptr< DescriptorSet > & set) {
 			set = std::make_unique< DescriptorSet >(m_descriptorPool, m_descriptorSetLayout);
 
-			return set->create() && set->writeUniformBufferObject(ParametersBinding, *m_parametersBuffer);
+			return set->create() && set->writeUniformBuffer(ParametersBinding, m_parametersBuffer->getDescriptorInfo(0, parametersBlockSize()));
 		};
 
 		if ( !makeSet(m_transmittanceSet) || !makeSet(m_multipleScatteringSet) || !makeSet(m_skyViewSet) || !makeSet(m_aerialPerspectiveSet) )
@@ -1040,6 +1104,17 @@ namespace EmEn::Graphics
 			);
 		};
 
+		/* The atmosphere's block first: every table reads it. */
+		{
+			const auto packed = this->packParameters();
+
+			commandBuffer->update(*m_parametersBuffer, 0, parametersBlockSize(), packed.data());
+			commandBuffer->pipelineBarrier(
+				Sync::BufferMemoryBarrier{*m_parametersBuffer, VK_ACCESS_TRANSFER_WRITE_BIT, VK_ACCESS_UNIFORM_READ_BIT},
+				VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
+			);
+		}
+
 		/* Transmittance, then the multiple scattering that reads it. */
 		toGeneral(m_transmittance);
 		commandBuffer->bind(*m_transmittancePipeline);
@@ -1102,6 +1177,9 @@ namespace EmEn::Graphics
 		{
 			return false;
 		}
+
+		/* A new ground albedo first: the sky-view pass below reads the block and the table it rewrites. */
+		this->recordGroundAlbedo(commandBuffer);
 
 		/* The previous frame's reads (the sky's fragments, the star field's vertices, the environment's compute) before
 		 * this frame's writes (compute): the barrier's first scope covers the commands submitted earlier on the queue. */

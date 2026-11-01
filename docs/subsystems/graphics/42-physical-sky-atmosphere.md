@@ -48,7 +48,30 @@ optimal tiling); a device without it falls back to RGBA16F with a warning. Cost 
 matches on the three OS and both Windows GPUs within 0.3 %.
 
 The sky-view pass integrates WITH the ground (unlike Hillaire's): below the horizon the planet's surface shows, lit by
-the star through the air, instead of a black void under the scene's own small floor.
+the star through the air, instead of a black void under the scene's own small floor. Its colour is the atmosphere's
+`groundAlbedo` (a linear reflectance per channel; Earth 0.3 grey, Mars 0.25 / 0.15 / 0.08): the manifest's
+`"Atmosphere": { "GroundAlbedo": [r, g, b] }`, or live with `setDynamicSkyGroundAlbedo(r, g, b)` (§ "The live ground
+albedo"). What shows is that albedo × the star's light reaching the ground, plus the haze between the camera and the
+ground, which dominates near the horizon.
+
+### The live ground albedo (2026-11-01)
+`SkyAtmosphere::setGroundAlbedo(albedo)` (any thread) refuses a channel that is not finite or outside [0, 1] (a trust
+boundary: console, MCP; logged), else stores it under its own mutex as PENDING. The next `recordFrame()` (render thread,
+the sky's command buffer on the graphics queue, before the sky-view dispatch) applies it in the command stream, with no
+wait on the device: the atmosphere's uniform block, a device-local `Vulkan::Buffer` (`UNIFORM | TRANSFER_DST`, never
+mapped, like the moons' block; the bake writes its first content), is rewritten with `CommandBuffer::update()` between
+two barriers (every earlier vertex / fragment / compute reader, then every later one), and the multiple-scattering table, the only table that
+depends on the ground (its bounce), is rebuilt whole (the bake's 32 × 32 dispatch). The transmittance does not depend on
+it. `parameters().groundAlbedo` stays the value the sky was built with; the live one is `groundAlbedo()`.
+- What it changes: the false ground under the horizon, the sky's multiple scattering (slightly: the ground's bounce
+  tints the whole sky), and through the environment (§ "The environment") the scene's ambient light from below.
+- Verified 2026-11-01 (Linux, RTX 3070 Ti, `city`, validation layer loaded, then again with
+  `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`): 0 VUID, 0 `SYNC-HAZARD`; `getDynamicSky()` reports the value set; a
+  refused `(-0.1, 0.5, 0.5)` leaves it unchanged (the one `[Error]`, the refusal's own); at the demo's start pose
+  (the city hides the horizon) `(0.9, 0.1, 0.1)` moves the image mean by +1.1 red / -0.3 to -0.4 green / -0.4 to
+  -0.5 blue (8-bit, two runs; the ambient from below), and back to 0.3 grey returns it within 0.1 (the real clock's
+  drift). MCP conformance: 2005
+  checks passed, the new tool `SceneManager_setDynamicSkyGroundAlbedo` among them.
 
 ### The pieces
 | Piece | File | Role |
@@ -520,8 +543,9 @@ stars"; ⚠️ NOT `"Stars"`, the photo sky's light-carrying bodies of `parsePho
   makes the blue aureole of its sunsets. A single scalar g (Hillaire's, UE's) cannot.
 
 ### Console (`Core.SceneManagerService.*`)
-`getDynamicSky()` (JSON: planet, radii, tint, intensity, saturation, star disc, limb darkening),
-`setDynamicSkyGrading(r, g, b, intensity)`, `setDynamicSkySaturation(s)`, `setDynamicSkyStar(enabled, u)`. The sun's
+`getDynamicSky()` (JSON: planet, radii, ground albedo, tint, intensity, saturation, star disc, limb darkening),
+`setDynamicSkyGrading(r, g, b, intensity)`, `setDynamicSkySaturation(s)`, `setDynamicSkyStar(enabled, u)`,
+`setDynamicSkyGroundAlbedo(r, g, b)` (linear reflectances in [0, 1], refused otherwise; the next frame applies it). The sun's
 elevation and illuminance: `CelestialClock.getState(...)`.
 
 ### Measuring a sky in nits (the protocol)

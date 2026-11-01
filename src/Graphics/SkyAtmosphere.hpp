@@ -45,6 +45,7 @@
 #include "Graphics/StorageTexture3D.hpp"
 #include "Math/Vector.hpp"
 #include "Mutex.hpp"
+#include "ThreadSafety.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
@@ -56,7 +57,6 @@ namespace EmEn::Vulkan
 	class DescriptorSet;
 	class DescriptorSetLayout;
 	class PipelineLayout;
-	class UniformBufferObject;
 }
 
 namespace EmEn::Graphics
@@ -420,6 +420,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns the atmosphere.
+			 * @note Its groundAlbedo is the one the sky was built with: the live one is groundAlbedo().
 			 * @return const AtmosphereParameters &
 			 */
 			[[nodiscard]]
@@ -430,11 +431,34 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the uniform buffer holding the atmosphere (the GLSL block of AtmosphereGLSL.hpp).
-			 * @return const Vulkan::UniformBufferObject * Null before createOnHardware().
+			 * @brief Requests a new ground albedo: the planet's surface the sky shows under the horizon, and its bounce in
+			 * the multiple scattering. The next recordFrame() applies it in that frame's command stream (the uniform block
+			 * rewritten, the multiple-scattering table rebuilt): no wait on the device.
+			 * @note Any thread. A trust boundary (console, MCP): refused, and logged, unless every channel is finite and in
+			 * [0, 1].
+			 * @param albedo The linear reflectance of each channel.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			const Vulkan::UniformBufferObject *
+			bool setGroundAlbedo (const Base::Math::Vector< 3, float > & albedo) noexcept;
+
+			/**
+			 * @brief Returns the ground albedo: the last one setGroundAlbedo() accepted, else the atmosphere's.
+			 * @note Any thread.
+			 * @return Base::Math::Vector< 3, float >
+			 */
+			[[nodiscard]]
+			Base::Math::Vector< 3, float > groundAlbedo () const noexcept;
+
+			/**
+			 * @brief Returns the uniform buffer holding the atmosphere (the GLSL block of AtmosphereGLSL.hpp, its
+			 * parametersBlockSize() bytes): device-local, written in the command stream (the bake, then
+			 * recordGroundAlbedo()). Bind it with DescriptorSet::writeUniformBuffer() and
+			 * Buffer::getDescriptorInfo(0, parametersBlockSize()).
+			 * @return const Vulkan::Buffer * Null before createOnHardware().
+			 */
+			[[nodiscard]]
+			const Vulkan::Buffer *
 			parametersBuffer () const noexcept
 			{
 				return m_parametersBuffer.get();
@@ -517,11 +541,19 @@ namespace EmEn::Graphics
 			static VkFormat tableFormat (Renderer & renderer) noexcept;
 
 			/**
-			 * @brief Packs the atmosphere into its std140 block.
+			 * @brief Packs the atmosphere into its std140 block, with the live ground albedo.
 			 * @return std::array< float, 32 >
 			 */
 			[[nodiscard]]
 			std::array< float, 32 > packParameters () const noexcept;
+
+			/**
+			 * @brief Applies a ground albedo setGroundAlbedo() requested: the uniform block rewritten and the
+			 * multiple-scattering table rebuilt in this command stream, after every earlier reader on the queue.
+			 * @note Render thread, outside a render pass, before the sky-view dispatch. Nothing when none is pending.
+			 * @param commandBuffer A reference to the frame's sky command buffer.
+			 */
+			void recordGroundAlbedo (const Vulkan::CommandBuffer & commandBuffer) noexcept;
 
 			std::string m_name;
 			AtmosphereParameters m_parameters;
@@ -531,7 +563,9 @@ namespace EmEn::Graphics
 			StorageTexture2D m_frameData;
 			StorageTexture3D m_aerialInscatter;
 			StorageTexture3D m_aerialTransmittance;
-			std::unique_ptr< Vulkan::UniformBufferObject > m_parametersBuffer;
+			/** @brief The atmosphere's uniform block, written in the command stream (CommandBuffer::update()): the bake, then
+			 * each accepted ground albedo. Device-local, never mapped. */
+			std::unique_ptr< Vulkan::Buffer > m_parametersBuffer;
 			/** @brief The frame's moons for the sky-view pass (a vec4 header + 3 vec4 per moon), written in the command
 			 * stream (CommandBuffer::update()) like the tables it feeds: device-local, never mapped. */
 			std::unique_ptr< Vulkan::Buffer > m_bodyBuffer;
@@ -551,6 +585,11 @@ namespace EmEn::Graphics
 			std::unique_ptr< SkyEnvironment > m_environment;
 			VkFormat m_tableFormat{VK_FORMAT_R16G16B16A16_SFLOAT};
 			mutable Base::Mutex m_creationAccess;
+			/** @brief Guards the live ground albedo: written by any thread (setGroundAlbedo()), applied by the render thread. */
+			mutable Base::Mutex m_groundAlbedoAccess;
+			Base::Math::Vector< 3, float > m_groundAlbedo EMEN_GUARDED_BY(m_groundAlbedoAccess);
 			bool m_created{false};
+			/** @brief A ground albedo waits for the next recordFrame(). */
+			bool m_groundAlbedoPending EMEN_GUARDED_BY(m_groundAlbedoAccess){false};
 	};
 }

@@ -50,6 +50,7 @@
 #include "Saphir/Types.hpp"
 #include "StaticVector.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/ComputePipeline.hpp"
 #include "Vulkan/DescriptorPool.hpp"
@@ -247,7 +248,7 @@ namespace EmEn::Graphics
 
 			const bool written =
 				set.captureSet->create() &&
-				set.captureSet->writeUniformBufferObject(ParametersBinding, *atmosphere.parametersBuffer()) &&
+				set.captureSet->writeUniformBuffer(ParametersBinding, atmosphere.parametersBuffer()->getDescriptorInfo(0, SkyAtmosphere::parametersBlockSize())) &&
 				set.captureSet->writeCombinedImageSampler(SkyViewBinding, *skyView.imageView(), *skyView.sampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) &&
 				set.captureSet->writeCombinedImageSampler(FrameBinding, *frameData.imageView(), *frameData.sampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) &&
 				set.captureSet->writeStorageImage(CaptureBinding, *set.capture->storageView(0));

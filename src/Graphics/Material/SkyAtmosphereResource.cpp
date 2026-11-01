@@ -63,6 +63,7 @@
 #include "Saphir/Program.hpp"
 #include "Saphir/SetIndexes.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Buffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/LayoutManager.hpp"
@@ -528,7 +529,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !m_descriptorSet->writeUniformBufferObject(AtmosphereBinding, *m_atmosphere->parametersBuffer()) )
+		if ( !m_descriptorSet->writeUniformBuffer(AtmosphereBinding, m_atmosphere->parametersBuffer()->getDescriptorInfo(0, SkyAtmosphere::parametersBlockSize())) )
 		{
 			TraceError{ClassId} << "Unable to write the atmosphere parameters to the descriptor set of sky material '" << this->name() << "' !";
 
