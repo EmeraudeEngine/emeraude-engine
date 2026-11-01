@@ -71,9 +71,25 @@ filtered) decides whether the history is still valid.
     sea is translucent, absent from the depth buffer: TAA used to average its sun glints over ~20 frames,
     the test lets them live. **Owner verdict 2026-11-01, eye A/B at the quay: "sur B les reflets sont plus
     nets" — B validated, the test on by default.**
-  - ⚠️ **It unmasks what TAA used to average away**: three near-black frames (~75 ms) right after a
-    time-of-day jump, with `IndirectDiffuse` off, one jump out of two on Linux (macOS-PA saw one with TAA off).
-    They are upstream of TAA: engine item `time-jump-renders-black-frames`.
+  - **Peers (engine 3c25c355, 2026-11-01)**, the city sunset with GI off, threshold 1 against 0.25, the land's mean:
+    - macOS-PA (M6, MoltenVK, 2560×1440, 34-35 FPS): 180.8 / 85.0 / 26.0 / 16.0 at +0.5 / 1 / 2 / 3 s against
+      13.1 / 13.5 / 13.6 / 13.6. With SSGI: about 1 s ahead (172 / 83 / 27 at +0.5 / 1 / 2 s against
+      225 / 173 / 85). Opaque surfaces unchanged (façade 0.39 / 0.39, walkway 0.94 / 0.94), the sea 41.5 → 79.2.
+      Cost +0.42 ms (`TAAEffect` 0.94 → 1.36 ms).
+    - LinuxB-PA (AMD RADV Renoir, 17-26 FPS): 211.9 / 170.5 / 85.2 / 38.8 against 14.2 / 14.0 / 13.8 / 13.8;
+      with SSGI 233 / 205 / 135 / 73 against 201 / 125 / 45 / 24. RADV compiles the shader. In A, the washed-out
+      day frame at +0.5 s carries BLACK OUTLINES along every depth edge: only the depth-change pixels were
+      clipped to the new light. The test removes them.
+    - Windows-PA: MSVC Release 303/303 and Debug 366/366, 0 warning. Intel iGPU (13-19 FPS): 222 / 194 / 130 / 75
+      (20.8 at +6 s) against 14.4 / 14.2 / 13.9 / 13.8. RTX 3500 Ada (~100 FPS): A settles at ~+2.5 s.
+    - 0 VUID everywhere.
+  - ⚠️ **It unmasks what TAA used to average away: a time-of-day jump is not applied in one frame.** With the test,
+    the frames right after `setTimeOfDay` show the input as it is: the sky switches to night at once, the land's light
+    follows ~90-180 ms later, then a few near-black frames, then the emissive windows. Without the test, TAA averaged
+    the order away. In A, the sky decays smoothly from white (254.9 → 221.7 over 15 frames) while the input is
+    already black. macOS-PA first read B's black sky in those frames as a defect of the test (it is not), and on the
+    RTX the black frames leave an undershoot that climbs back at the stationary alpha. The cause is upstream of
+    TAA: engine item `time-jump-renders-black-frames`.
 - **Cross-OS (2026-09-23)**: macOS (M2, TAA forced on) whole frame > 8 = 0.01 %, max 11 — the Linux
   figure; Windows (RTX 3060, 720p, RayTracing lane) 0.30 % against 1.21 % with its TAA OFF; Linux in
   the RayTracing lane 0.27 %. The ScreenSpace/RayTracing gap is the lane, not the machine. ⚠️ OPEN: in

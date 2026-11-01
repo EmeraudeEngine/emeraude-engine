@@ -48,11 +48,11 @@ Two causes, measured:
 
 ## What remains
 
-- **TAA: done in the working tree (2026-11-01), awaiting the commit and the peers.** The owner chose the graphics
+- **TAA: done** (engine 3c25c355, validated on the three OS and AMD, 2026-11-01). The owner chose the graphics
   doc's own note: a colour test reserved to LARGE changes (5×5 pooled exposed luminance, variance clip ramped,
-  `TemporalAA/LargeChangeThreshold` 0.25), not an alpha in seconds. Graphics doc 13-12 § "The TAA resolve" § The
-  LARGE-CHANGE test holds the measurements. On Linux at 40 FPS with GI off, the sunset is final from +0.2 s instead of
-  ~4 s. The peers must re-run round 3's V0 (GI off, TAA on) on the M6 and the AMD laptop.
+  `TemporalAA/LargeChangeThreshold` 0.25), not an alpha in seconds. With GI off the sunset is final from +0.2-0.5 s
+  on every machine, the M6 and the AMD laptop included. Graphics doc 13-12 § "The TAA resolve" § The LARGE-CHANGE test
+  holds the measurements and the peers' verdicts.
 - **The GI windows** (owner decision still open: frame counts or seconds). With RTGI on and the TAA test on, Linux at
   40 FPS reads 230 / 66 / 22 / 17 at +0.2 / 1 / 2 / 3 s (final ~15): that tail is the GI denoiser's history. Re-read
   the anti-lag's cap on a slow GPU with `TemporalAA` off (round 2's age view was smeared by TAA), then decide.
