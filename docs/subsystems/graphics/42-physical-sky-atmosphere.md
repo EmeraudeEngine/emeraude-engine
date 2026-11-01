@@ -70,7 +70,17 @@ it. `parameters().groundAlbedo` stays the value the sky was built with; the live
   refused `(-0.1, 0.5, 0.5)` leaves it unchanged (the one `[Error]`, the refusal's own); at the demo's start pose
   (the city hides the horizon) `(0.9, 0.1, 0.1)` moves the image mean by +1.1 red / -0.3 to -0.4 green / -0.4 to
   -0.5 blue (8-bit, two runs; the ambient from below), and back to 0.3 grey returns it within 0.1 (the real clock's
-  drift). MCP conformance: 2005
+  drift) — a weak proof, `city` being animated (traffic, the wall-clock sun: on AMD its A → C drift was as large as the
+  change). THE proof is `sky-lab` (`--demo-options 0,165,0,-10,500,0,0,0,0,0,0`: the clock frozen, the camera at 500 m
+  looking 10° under the horizon, beyond the 40 m floor): `(0.9, 0.1, 0.1)` turns the false ground from brown (the 0.3
+  grey lit by a 16:30 sun through the air) to red — bottom third 106 / 82 / 60 → 183 / 41 / 33 — and tints the sky above
+  (top third 101 / 125 / 156 → 111 / 121 / 154, the ground's bounce); back to 0.3 grey, the image is IDENTICAL to the
+  first one (0 pixel differs). Peers at engine 5bd1f440 (`city`, the same console sequence): Windows RTX 3500 Ada
+  (MSVC /W4 /WX, synchronization validation proven armed), AMD RADV Renoir (armed too) and macOS M6 (MoltenVK; the
+  layer prints no proof that the variable armed it) — builds clean, 0 VUID, 0 `SYNC-HAZARD`, every answer as expected
+  (the fr-BE locale parses `0.9`), MCP 2005 / 0; the same direction on the image (red up, green and blue down), city's
+  drift as large as the change on AMD and Windows. ⚠️ On macOS the first ~15 s after the load are the auto-exposure's
+  start transient: measure after 30 s. MCP conformance: 2005
   checks passed, the new tool `SceneManager_setDynamicSkyGroundAlbedo` among them.
 
 ### The pieces
