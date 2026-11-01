@@ -31,7 +31,7 @@
 
 /* STL inclusions. */
 #include <memory>
-#include <unordered_map>
+#include <string>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -49,12 +49,8 @@ namespace EmEn
 		class Instance;
 		class Device;
 		class DescriptorPool;
-		class DescriptorSet;
-		class DescriptorSetLayout;
 		class CommandPool;
 		class CommandBuffer;
-		class PipelineLayout;
-		class ComputePipeline;
 	}
 
 	class PrimaryServices;
@@ -185,8 +181,6 @@ namespace EmEn::Physics
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::shared_ptr< Vulkan::CommandPool > m_commandPool;
 			std::vector< std::shared_ptr< Vulkan::CommandBuffer > > m_commandBuffers;
-			std::unordered_map< size_t, std::shared_ptr< Vulkan::PipelineLayout > > m_pipelineLayouts;
-			std::unordered_map< size_t, std::shared_ptr< Vulkan::ComputePipeline > > m_computePipelines;
 			bool m_accelerationAvailable{false};
 	};
 }

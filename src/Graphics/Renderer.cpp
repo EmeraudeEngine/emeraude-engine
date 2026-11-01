@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
-#include <bit>
 #include <cmath>
 #include <compare>
 #include <cstddef>
@@ -1490,45 +1489,41 @@ namespace EmEn::Graphics
 	namespace
 	{
 	/**
-	 * @brief Hashes the effective content of a sampler creation info.
-	 * @note Every field that differentiates two VkSampler objects is mixed in explicitly:
-	 * hashing the raw bytes would be hostage to the structure padding, and hashing a name
-	 * would reintroduce the very defect this function exists to remove.
+	 * @brief Builds the exact key of a sampler creation info.
+	 * @note Every field that differentiates two VkSampler objects is added explicitly, the floats by their bits: the
+	 * raw bytes would be hostage to the structure padding, and a name would reintroduce the very defect getSampler()
+	 * documents. The equality of the key decides (a bare size_t hash of these fields until 2026-11-01).
 	 * @param createInfo A reference to the creation info.
-	 * @return size_t
+	 * @return Base::ExactKey
 	 */
 	[[nodiscard]]
-	size_t
-	hashSamplerCreateInfo (const VkSamplerCreateInfo & createInfo) noexcept
+	ExactKey
+	samplerKey (const VkSamplerCreateInfo & createInfo) noexcept
 	{
-		size_t hash = 0;
-
-		const auto mix = [&hash] (size_t value) noexcept {
-			hash ^= value + 0x9e3779b9 + (hash << 6U) + (hash >> 2U);
-		};
+		ExactKey key{Sampler::ClassId};
 
 		/* NOTE: pNext takes part as a POINTER. No caller uses an extension chain today; should one
-		 * appear, two distinct chains hash differently (an extra sampler, never a wrong one) while
+		 * appear, two distinct chains give two keys (an extra sampler, never a wrong one) while
 		 * two identical chains at the same address still share — conservative in the safe direction. */
-		mix(reinterpret_cast< uintptr_t >(createInfo.pNext));
-		mix(createInfo.flags);
-		mix(createInfo.magFilter);
-		mix(createInfo.minFilter);
-		mix(createInfo.mipmapMode);
-		mix(createInfo.addressModeU);
-		mix(createInfo.addressModeV);
-		mix(createInfo.addressModeW);
-		mix(std::bit_cast< uint32_t >(createInfo.mipLodBias));
-		mix(createInfo.anisotropyEnable);
-		mix(std::bit_cast< uint32_t >(createInfo.maxAnisotropy));
-		mix(createInfo.compareEnable);
-		mix(createInfo.compareOp);
-		mix(std::bit_cast< uint32_t >(createInfo.minLod));
-		mix(std::bit_cast< uint32_t >(createInfo.maxLod));
-		mix(createInfo.borderColor);
-		mix(createInfo.unnormalizedCoordinates);
+		key.add(createInfo.pNext);
+		key.add(createInfo.flags);
+		key.add(createInfo.magFilter);
+		key.add(createInfo.minFilter);
+		key.add(createInfo.mipmapMode);
+		key.add(createInfo.addressModeU);
+		key.add(createInfo.addressModeV);
+		key.add(createInfo.addressModeW);
+		key.add(createInfo.mipLodBias);
+		key.add(createInfo.anisotropyEnable);
+		key.add(createInfo.maxAnisotropy);
+		key.add(createInfo.compareEnable);
+		key.add(createInfo.compareOp);
+		key.add(createInfo.minLod);
+		key.add(createInfo.maxLod);
+		key.add(createInfo.borderColor);
+		key.add(createInfo.unnormalizedCoordinates);
 
-		return hash;
+		return key;
 	}
 	}
 
@@ -1584,9 +1579,9 @@ namespace EmEn::Graphics
 			}
 		}
 
-		const auto hash = hashSamplerCreateInfo(createInfo);
+		auto key = samplerKey(createInfo);
 
-		if ( const auto samplerIt = m_samplers.find(hash); samplerIt != m_samplers.cend() )
+		if ( const auto samplerIt = m_samplers.find(key); samplerIt != m_samplers.cend() )
 		{
 			return samplerIt->second;
 		}
@@ -1601,7 +1596,7 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		const auto [samplerPair, success] = m_samplers.emplace(hash, sampler);
+		const auto [samplerPair, success] = m_samplers.emplace(std::move(key), sampler);
 
 		if constexpr ( IsDebug )
 		{

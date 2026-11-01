@@ -111,7 +111,14 @@ The `Renderer` maintains global caches for performance optimization:
 |-------|--------|------------|---------|
 | Programs | `m_programs` | `Generator::computeProgramCacheKey()` | Saphir Program cache (biggest gain) |
 | Pipelines | `m_graphicsPipelines` | `GraphicsPipeline::getKey(renderPass)` — a `Base::ExactKey`, compared byte for byte | Vulkan GraphicsPipeline cache |
-| Samplers | `m_samplers` | `hashSamplerCreateInfo()` — the **content** of the `VkSamplerCreateInfo` | Texture sampler cache |
+| Samplers | `m_samplers` | `samplerKey()` — a `Base::ExactKey` of the **content** of the `VkSamplerCreateInfo` (every field, the floats by their bits) | Texture sampler cache |
+
+The post-process passes keep their own variant caches, keyed the same way: `CombinePass::m_variants` and
+`DenoisePass::m_variants` (a generated fragment shader, its pipeline and per-frame sets per group of effects). They are
+looked up once a frame, so the key is a member rebuilt by `buildLookupKey()` through `Base::ExactKey::reset()`, which
+keeps its storage. It holds every input of the generated shader (the ordered prefixes, sampler names, context needs and
+GLSL snippets; for the denoise pass each target's format and the group's extent). Before 2026-11-01 all three were
+keyed by a bare `size_t` hash (caution-points § "A cache keyed by a bare hash").
 
 > [!CAUTION]
 > **The sampler cache key is the create-info CONTENT, not the identifier.** It used to be the

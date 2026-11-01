@@ -27,8 +27,10 @@
 #include "CombinePass.hpp"
 
 /* STL inclusions. */
+#include <ranges>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <utility>
 
 /* Third-party inclusions. */
@@ -40,7 +42,6 @@
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Graphics/PostProcessor.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Hash/FNV1a.hpp"
 #include "Math/Vector.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Saphir/Types.hpp"
@@ -112,7 +113,7 @@ namespace EmEn::Graphics
 	void
 	CombinePass::destroy () noexcept
 	{
-		for ( auto & [signature, variant] : m_variants )
+		for ( auto & variant : m_variants | std::views::values )
 		{
 			variant.descriptorSetsPerFrame.clear();
 			variant.uniformBuffersPerFrame.clear();
@@ -212,31 +213,34 @@ namespace EmEn::Graphics
 		return source.str();
 	}
 
-	size_t
-	CombinePass::computeSignature (const std::vector< GroupEntry > & contributions) noexcept
+	const ExactKey &
+	CombinePass::buildLookupKey (const std::vector< GroupEntry > & contributions) noexcept
 	{
-		const auto hashCombine = [] (size_t & seed, size_t value) noexcept {
-			seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		};
-
-		size_t hash = Hash::FNV1a(ClassId);
+		m_lookupKey.reset(ClassId).add(contributions.size());
 
 		for ( const auto & contribution : contributions )
 		{
-			hashCombine(hash, Hash::FNV1a(contribution.prefix));
-			hashCombine(hash, contribution.samplers.size());
-			hashCombine(hash, static_cast< size_t >(contribution.needsDepth) | (static_cast< size_t >(contribution.needsNormals) << 1U) | (static_cast< size_t >(contribution.needsMaterialProperties) << 2U) | (static_cast< size_t >(contribution.needsAlbedo) << 3U));
+			m_lookupKey.add(std::string_view{contribution.prefix});
+			m_lookupKey.add(contribution.samplers.size());
+
+			for ( const auto & sampler : contribution.samplers )
+			{
+				m_lookupKey.add(std::string_view{sampler.nameSuffix});
+			}
+
+			m_lookupKey.add(contribution.needsDepth).add(contribution.needsNormals).add(contribution.needsMaterialProperties).add(contribution.needsAlbedo);
+			m_lookupKey.add(std::string_view{contribution.code});
 		}
 
-		return hash;
+		return m_lookupKey;
 	}
 
 	/* ---- Variant management ---- */
 
 	CombinePass::Variant *
-	CombinePass::getOrCreateVariant (size_t signature, const std::vector< GroupEntry > & contributions) noexcept
+	CombinePass::getOrCreateVariant (const ExactKey & key, const std::vector< GroupEntry > & contributions) noexcept
 	{
-		const auto existing = m_variants.find(signature);
+		const auto existing = m_variants.find(key);
 
 		if ( existing != m_variants.end() )
 		{
@@ -244,7 +248,7 @@ namespace EmEn::Graphics
 		}
 
 		auto & renderer = this->renderer();
-		auto & variant = m_variants[signature];
+		auto & variant = m_variants[key];
 
 		/* Sampler count: chain color + required context samplers + per-effect samplers. */
 		uint32_t samplerCount = 1;
@@ -270,7 +274,7 @@ namespace EmEn::Graphics
 
 		variant.samplerCount = samplerCount;
 
-		/* Shader module: name derived from the signature (ShaderManager caches by name). */
+		/* Shader module: a debug name from the prefixes (ShaderManager compiles source code without any cache). */
 		const auto source = buildFragmentShaderSource(contributions);
 
 		std::stringstream shaderName;
@@ -318,9 +322,11 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		variant.pipeline = this->createFullscreenPipeline(ClassId, shaderName.str(), vertexModule, fragmentModule, variant.pipelineLayout, m_targets[0]);
+		/* The pipeline joins the variant LAST: a variant is served only with its pipeline set, so a failure below must not
+		 * leave one without its sets. */
+		auto pipeline = this->createFullscreenPipeline(ClassId, shaderName.str(), vertexModule, fragmentModule, variant.pipelineLayout, m_targets[0]);
 
-		if ( variant.pipeline == nullptr )
+		if ( pipeline == nullptr )
 		{
 			return nullptr;
 		}
@@ -353,6 +359,8 @@ namespace EmEn::Graphics
 			}
 		}
 
+		variant.pipeline = std::move(pipeline);
+
 		return &variant;
 	}
 
@@ -366,7 +374,7 @@ namespace EmEn::Graphics
 			return inputColor;
 		}
 
-		auto * variant = this->getOrCreateVariant(computeSignature(contributions), contributions);
+		auto * variant = this->getOrCreateVariant(this->buildLookupKey(contributions), contributions);
 
 		if ( variant == nullptr )
 		{

@@ -667,8 +667,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Tex", .texture = &m_target});
 
 		/* ⚠️ The sky is the clear value, 1.0 exactly (the lens flare's probe, the aerial perspective). Behind a cloud a
-		 * star is worth the cloud's transmittance: a second sampler, so a second combine variant (the signature counts
-		 * the samplers). */
+		 * star is worth the cloud's transmittance: a second sampler, so a second combine variant (its exact key holds
+		 * the samplers and the snippet). */
 		if ( m_cloudTransmittance != nullptr )
 		{
 			contribution.samplers.emplace_back(CombineSamplerInput{.nameSuffix = "Clouds", .texture = m_cloudTransmittance});

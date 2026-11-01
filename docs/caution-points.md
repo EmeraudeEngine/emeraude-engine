@@ -4819,8 +4819,17 @@ the bare-hash build, alternated, 3 runs each, Linux RTX 3070 Ti, validation laye
 was hiding there. The peers at engine 0c15dca6 / base e87b53f: Windows (RTX 3500 Ada, MSVC /W4 /WX) the same
 396 / 7830 and 176 / 6998, 2 runs each; macOS (M6, MoltenVK, no RT lane) city 396 / 5415 twice, sponza 176 / 4613 on
 three warm-cache runs — its first, COLD-cache run gave 172 / 4175 (90 slow pipeline creations in the 10 s before the
-shutdown: the counters count what was requested by then, so compare them on warm runs only). 0 VUID everywhere. Still
-keyed by a bare hash: the sampler cache and the combine / denoise pass variants (item `caches-keyed-by-a-bare-hash`).
+shutdown: the counters count what was requested by then, so compare them on warm runs only). 0 VUID everywhere.
+The last ones followed (2026-11-01): `Renderer::m_samplers` (every field of the create info, the floats by their bits)
+and the `m_variants` of `CombinePass` / `DenoisePass`. Those two are looked up ONCE A FRAME per group: their key is a
+member rebuilt with `Base::ExactKey::reset()`, which keeps its storage (no allocation once it reached its size). It
+holds every input of the generated shader, the GLSL snippets included — the old signature saw only the prefixes, the
+sampler count and the needs, and relied on a snippet being a function of those — plus, for the denoise pass, each
+target's format and the group's extent. A/B against engine 8c538fc6 (bare hash there), one-off shutdown traces in both
+builds, alternated, 3 runs each, Linux RTX 3070 Ti, layer loaded: `city` 15 samplers, 3 combine and 2 denoise variants,
+`sponza` 14 / 1 / 1, the pipelines unchanged (396 / 7830, 176 / 6998), the same on both builds in every run, 0 VUID,
+0 `[Error]`. The two `Physics::Manager` maps (`m_pipelineLayouts`, `m_computePipelines`, `size_t`-keyed) were never
+filled, only cleared: removed (owner). No cache of the engine is keyed by a bare hash any more. Found on the way: both passes set a variant's pipeline BEFORE its descriptor sets and uniform buffers, and serve a variant whose pipeline is set — a failure in between left a variant served the next frame with EMPTY per-frame vectors, indexed by the frame index. The pipeline now joins the variant last. After that change (and `DenoisePass` reusing the multi-target `createFullscreenPipeline()`), one more alternated pair each: `sponza` 14 / 1 / 1 and 176 / 6998 again, `city` 15 / 3 / 2 with 402 pipelines built / 8340 reused on BOTH builds — the city's pipeline counters moved between the two sessions (cause not established) while A and B stayed equal in every pair; 0 VUID, 0 `[Error]`.
 
 ### A generator never spells its own model-view-projection matrix; a `mat4` varying takes FOUR locations (2026-10-31)
 

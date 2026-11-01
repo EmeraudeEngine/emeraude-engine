@@ -180,7 +180,8 @@ They implement the OVERLAY protocol of `IndirectPostProcessEffect`:
 
 `PostProcessor::executeIndirectPostProcessEffects()` groups CONTIGUOUS overlay effects
 and applies each group in ONE generated full-res pass (`Graphics/CombinePass`, shader +
-pipeline cached per group signature, two ping-pong output targets). Sequential
+pipeline cached per group under the exact key of every input of the generated shader — `Base::ExactKey`, the
+snippets included, since 2026-11-01 — two ping-pong output targets). Sequential
 exactness is preserved by the **flush rule**: the group is flushed (combine emitted)
 before any non-overlay effect, and before any overlay effect whose UPSTREAM passes
 sample the chain color — `readsChainColorUpstream(context)`: SSGI (trace gather), SSR

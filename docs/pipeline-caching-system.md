@@ -186,8 +186,13 @@ ProgramKey MyGenerator::computeProgramCacheKey() const noexcept
 > 1 run in 6 to 12 (Linux), a cube one on macOS. `Saphir::Generator::ProgramKey` is the byte sequence of every input
 > (fixed-width values, length-prefixed texts) and compares byte for byte; the hash only places it. The pipeline cache
 > followed the same day: `m_graphicsPipelines` is keyed by `Base::ExactKey` (`GraphicsPipeline::getKey()`, a bare
-> `size_t` `getHash()` before). `ProgramKey` is now an alias of that base class. The sampler cache and the combine /
-> denoise pass variants are still keyed by a bare hash: item `caches-keyed-by-a-bare-hash`.
+> `size_t` `getHash()` before). `ProgramKey` is now an alias of that base class. On 2026-11-01 the last ones followed:
+> `Renderer::m_samplers` (every field of the `VkSamplerCreateInfo`, the floats by their bits) and the `m_variants` of
+> `CombinePass` and `DenoisePass`. Those two are looked up ONCE A FRAME per group, so their key is a MEMBER rebuilt
+> with `Base::ExactKey::reset()` (it keeps its storage: no allocation once it reached its size). It holds every input
+> of the generated shader, the GLSL snippets included — the old signature saw only the prefixes, the sampler count
+> and the needs, and relied on a snippet being a function of those — and, for the denoise pass, each target's format
+> and the group's extent (the variant's framebuffers take it). No cache of the engine is keyed by a bare hash any more.
 
 #### 3. getKey() (Pipeline level)
 ```cpp

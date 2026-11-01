@@ -209,7 +209,8 @@ namespace EmEn::Graphics
 	 * lookup performance instead of O(log n) with std::map.
 	 *
 	 * **Optimized caches:**
-	 * - `m_samplers`: Sampler cache (O(log S) → O(1))
+	 * - `m_samplers`: Sampler cache (O(log S) → O(1)), keyed by the EXACT Base::ExactKey of the create-info content
+	 *   (a bare size_t hash of it until 2026-11-01)
 	 * - `m_pipelines`: GraphicsPipeline cache (O(log G) → O(1)), keyed by the EXACT Base::ExactKey of
 	 *   GraphicsPipeline::getKey() (a bare size_t until 2026-10-31)
 	 * - `m_programs`: Saphir Program cache (O(log P) → O(1)), keyed by the EXACT Saphir::Generator::ProgramKey
@@ -2013,9 +2014,9 @@ namespace EmEn::Graphics
 			std::array< std::shared_ptr< const DirectEffectList >, 5 > m_lensEffectsSnapshots{};
 			std::unordered_map< Saphir::Generator::ProgramKey, std::shared_ptr< Saphir::Program > > m_programs;
 			std::unordered_map< Base::ExactKey, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
-			/* NOTE: Keyed by the HASH OF THE CREATE-INFO CONTENT, not by the identifier passed to
-			 * getSampler() — see the ⚠️ block there. The identifier is a debug label only. */
-			std::unordered_map< size_t, std::shared_ptr< Vulkan::Sampler > > m_samplers;
+			/* NOTE: Keyed by the EXACT CREATE-INFO CONTENT (every field, Base::ExactKey), not by the identifier passed
+			 * to getSampler() — see the ⚠️ block there. The identifier is a debug label only. */
+			std::unordered_map< Base::ExactKey, std::shared_ptr< Vulkan::Sampler > > m_samplers;
 			Base::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			/* Layout: [0]=color, [1]=normals, [2]=materialProperties, [3]=albedo, [4]=velocity, [5]=depth, [6]=reactive
 			 * (appended last so the depth keeps its index). The scene target picks its own subset, in attachment order

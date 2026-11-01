@@ -420,8 +420,8 @@ a temporal resolve smears a jittered point into a dim blur or rejects it as an o
   (a long lens raises a star's radiance, as a real one does). In chain units (× the pre-exposure), the brightest
   channel bounded at 60 000.
 - **The combine**: `em_Color.rgb += stars` where the depth is the sky's (1.0 exactly), × the clouds' view transmittance
-  when the scene holds clouds (the cloud transmittance pairing now feeds `Stars` too; a second combine variant, the
-  signature counts the samplers). No star is drawn over the ground, a mountain or a cloud's opaque core.
+  when the scene holds clouds (the cloud transmittance pairing now feeds `Stars` too; a second combine variant, its
+  key holds the samplers and the snippet). No star is drawn over the ground, a mountain or a cloud's opaque core.
 
 **Measured** (2026-10-25, Linux, RTX 3070 Ti, 1920×1080, sky-lab `0,0,0,15,2,0,0,0,0,1`, day 280 at midnight, 45° N,
 the camera on Alnilam at 35 mm; validation layer loaded, 0 VUID):

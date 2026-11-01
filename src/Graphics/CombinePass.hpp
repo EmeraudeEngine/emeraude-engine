@@ -33,6 +33,7 @@
 #include <array>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -40,7 +41,28 @@
 #include "IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "ExactKey.hpp"
+#include "Graphics/EffectSlot.hpp"
 #include "IntermediateRenderTarget.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Graphics
+	{
+		class Renderer;
+	}
+
+	namespace Vulkan
+	{
+		class CommandBuffer;
+		class GraphicsPipeline;
+		class PipelineLayout;
+		class TextureInterface;
+	}
+}
 
 namespace EmEn::Graphics
 {
@@ -52,9 +74,10 @@ namespace EmEn::Graphics
 	 * the chain color in ONE generated full-resolution fragment shader — reproducing the
 	 * exact sequential math while paying a single full-res read/write instead of one
 	 * apply/composite pass per effect.
-	 * The generated shader (and its pipeline) is cached per group SIGNATURE (the ordered
-	 * effect prefixes + context sampler needs); per-frame scalars travel through a small
-	 * uniform buffer, textures are rebound every frame.
+	 * The generated shader (and its pipeline) is cached per group under the EXACT key of every
+	 * input of the generated shader (Base::ExactKey: the ordered prefixes, sampler names, context
+	 * needs and GLSL snippets); per-frame scalars travel through a small uniform buffer, textures
+	 * are rebound every frame.
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect Reuses the shared fullscreen pass
 	 * infrastructure (pipeline creation, pass recording, descriptor helpers) — it is never
 	 * inserted into a stack itself.
@@ -150,7 +173,7 @@ namespace EmEn::Graphics
 
 		private:
 
-			/** @brief GPU objects for one group signature (ordered prefixes + context needs). */
+			/** @brief GPU objects for one group key (every input of the generated shader). */
 			struct Variant
 			{
 				std::shared_ptr< Vulkan::GraphicsPipeline > pipeline;
@@ -161,13 +184,15 @@ namespace EmEn::Graphics
 			};
 
 			/**
-			 * @brief Returns (creating on first use) the pipeline variant for a group signature.
-			 * @param signature The group signature hash.
+			 * @brief Returns (creating on first use) the pipeline variant for a group key.
+			 * @note A variant is served only once complete (its pipeline is set last): a creation that failed stays in the
+			 * map without a pipeline and returns nullptr from then on, never a half-built variant.
+			 * @param key The exact key of the group (buildLookupKey()).
 			 * @param contributions The ordered contributions (source of the generated GLSL).
 			 * @return Variant * nullptr on creation failure.
 			 */
 			[[nodiscard]]
-			Variant * getOrCreateVariant (size_t signature, const std::vector< GroupEntry > & contributions) noexcept;
+			Variant * getOrCreateVariant (const Base::ExactKey & key, const std::vector< GroupEntry > & contributions) noexcept;
 
 			/**
 			 * @brief Builds the combine fragment shader source for a group.
@@ -178,15 +203,23 @@ namespace EmEn::Graphics
 			static std::string buildFragmentShaderSource (const std::vector< GroupEntry > & contributions) noexcept;
 
 			/**
-			 * @brief Computes the signature hash of a group.
+			 * @brief Rebuilds m_lookupKey for a group: every input of the generated shader — the ordered prefixes, each
+			 * sampler's name, the context needs and the GLSL snippets. The textures and the dynamics are bound per frame
+			 * and take no part.
+			 * @note Once a frame per group: the member key keeps its storage (Base::ExactKey::reset()), so it allocates
+			 * only while it grows.
+			 * @pre Every contribution's prefix and every sampler's name suffix are non-null.
 			 * @param contributions The ordered contributions.
-			 * @return size_t
+			 * @return const Base::ExactKey &
 			 */
 			[[nodiscard]]
-			static size_t computeSignature (const std::vector< GroupEntry > & contributions) noexcept;
+			const Base::ExactKey & buildLookupKey (const std::vector< GroupEntry > & contributions) noexcept;
 
 			/* Two full-res HDR targets: consecutive groups ping-pong between them. */
 			std::array< IntermediateRenderTarget, 2 > m_targets;
-			std::unordered_map< size_t, Variant > m_variants;
+			/* ⚠️ Keyed EXACTLY: a bare size_t hash of the prefixes and the needs until 2026-11-01 served one group's
+			 * shader for another's on a collision, and never saw the snippet itself. */
+			std::unordered_map< Base::ExactKey, Variant > m_variants;
+			Base::ExactKey m_lookupKey;
 	};
 }

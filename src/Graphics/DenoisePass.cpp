@@ -28,25 +28,39 @@
 
 /* STL inclusions. */
 #include <array>
+#include <functional>
+#include <ranges>
 #include <sstream>
 #include <string>
+#include <string_view>
+#include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/IndirectPostProcessEffect.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Hash/FNV1a.hpp"
+#include "Math/Vector.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Framebuffer.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
+#include "Vulkan/ImageView.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/RenderPass.hpp"
-#include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/RenderSubPass.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 static constexpr auto TracerTag{"DenoisePass"};
 
@@ -69,7 +83,7 @@ namespace EmEn::Graphics
 	void
 	DenoisePass::destroy () noexcept
 	{
-		for ( auto & [signature, variant] : m_variants )
+		for ( auto & variant : m_variants | std::views::values )
 		{
 			variant.framebufferH.reset();
 			variant.framebufferV.reset();
@@ -160,31 +174,91 @@ namespace EmEn::Graphics
 		return source.str();
 	}
 
-	size_t
-	DenoisePass::computeSignature (const std::vector< GroupEntry > & contributions) noexcept
+	const ExactKey &
+	DenoisePass::buildLookupKey (const std::vector< GroupEntry > & contributions) noexcept
 	{
-		const auto hashCombine = [] (size_t & seed, size_t value) noexcept {
-			seed ^= value + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-		};
-
-		size_t hash = Hash::FNV1a(ClassId);
+		m_lookupKey.reset(ClassId).add(contributions.size());
+		m_lookupKey.add(contributions.front().targetH->width()).add(contributions.front().targetH->height());
 
 		for ( const auto & contribution : contributions )
 		{
-			hashCombine(hash, Hash::FNV1a(contribution.prefix));
-			hashCombine(hash, static_cast< size_t >(contribution.targetH != nullptr ? contribution.targetH->format() : VK_FORMAT_UNDEFINED));
-			hashCombine(hash, static_cast< size_t >(contribution.needsDepth) | (static_cast< size_t >(contribution.needsNormals) << 1U));
+			m_lookupKey.add(std::string_view{contribution.prefix});
+			m_lookupKey.add(contribution.targetH->format());
+			m_lookupKey.add(contribution.needsDepth).add(contribution.needsNormals);
+			m_lookupKey.add(std::string_view{contribution.code});
 		}
 
-		return hash;
+		return m_lookupKey;
 	}
 
 	/* ---- Variant management ---- */
 
-	DenoisePass::Variant *
-	DenoisePass::getOrCreateVariant (size_t signature, const std::vector< GroupEntry > & contributions) noexcept
+	std::shared_ptr< RenderPass >
+	DenoisePass::createRenderPass (const std::vector< GroupEntry > & contributions) const noexcept
 	{
-		const auto existing = m_variants.find(signature);
+		/* Render pass: one color attachment per contribution, same conventions as the
+		 * IntermediateRenderTarget single-attachment pass — DONT_CARE load, STORE, ends
+		 * SHADER_READ_ONLY, and FULL (non-by-region) external dependencies: consumers
+		 * sample these targets NON-LOCALLY (the V pass reads an H neighbourhood, the
+		 * combine upsamples), so the whole write must complete before any read. */
+		auto renderPass = std::make_shared< RenderPass >(this->renderer().device());
+		renderPass->setIdentifier(ClassId, "SharedDenoise", "RenderPass");
+
+		RenderSubPass subPass;
+
+		for ( size_t index = 0; index < contributions.size(); ++index )
+		{
+			renderPass->addAttachmentDescription(VkAttachmentDescription{
+				.flags = 0,
+				.format = contributions[index].targetH->format(),
+				.samples = VK_SAMPLE_COUNT_1_BIT,
+				.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+				.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+				.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+				.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+				.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+			});
+
+			subPass.addColorAttachment(static_cast< uint32_t >(index), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		}
+
+		renderPass->addSubPass(subPass);
+
+		renderPass->addSubPassDependency(VkSubpassDependency{
+			.srcSubpass = VK_SUBPASS_EXTERNAL,
+			.dstSubpass = 0,
+			.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
+			.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			.dependencyFlags = 0
+		});
+
+		renderPass->addSubPassDependency(VkSubpassDependency{
+			.srcSubpass = 0,
+			.dstSubpass = VK_SUBPASS_EXTERNAL,
+			.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+			.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+			.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+			.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+			.dependencyFlags = 0
+		});
+
+		if ( !renderPass->createOnHardware() )
+		{
+			TraceError{TracerTag} << "Failed to create the shared denoise render pass !";
+
+			return nullptr;
+		}
+
+		return renderPass;
+	}
+
+	DenoisePass::Variant *
+	DenoisePass::getOrCreateVariant (const ExactKey & key, const std::vector< GroupEntry > & contributions) noexcept
+	{
+		const auto existing = m_variants.find(key);
 
 		if ( existing != m_variants.end() )
 		{
@@ -192,7 +266,7 @@ namespace EmEn::Graphics
 		}
 
 		auto & renderer = this->renderer();
-		auto & variant = m_variants[signature];
+		auto & variant = m_variants[key];
 
 		bool needsDepth = false;
 		bool needsNormals = false;
@@ -207,67 +281,14 @@ namespace EmEn::Graphics
 		variant.width = contributions.front().targetH->width();
 		variant.height = contributions.front().targetH->height();
 
-		/* Render pass: one color attachment per contribution, same conventions as the
-		 * IntermediateRenderTarget single-attachment pass — DONT_CARE load, STORE, ends
-		 * SHADER_READ_ONLY, and FULL (non-by-region) external dependencies: consumers
-		 * sample these targets NON-LOCALLY (the V pass reads an H neighbourhood, the
-		 * combine upsamples), so the whole write must complete before any read. */
+		variant.renderPass = this->createRenderPass(contributions);
+
+		if ( variant.renderPass == nullptr )
 		{
-			auto renderPass = std::make_shared< RenderPass >(renderer.device());
-			renderPass->setIdentifier(ClassId, "SharedDenoise", "RenderPass");
-
-			RenderSubPass subPass;
-
-			for ( size_t index = 0; index < contributions.size(); ++index )
-			{
-				renderPass->addAttachmentDescription(VkAttachmentDescription{
-					.flags = 0,
-					.format = contributions[index].targetH->format(),
-					.samples = VK_SAMPLE_COUNT_1_BIT,
-					.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-					.storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-					.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-					.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-					.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-					.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-				});
-
-				subPass.addColorAttachment(static_cast< uint32_t >(index), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-			}
-
-			renderPass->addSubPass(subPass);
-
-			renderPass->addSubPassDependency(VkSubpassDependency{
-				.srcSubpass = VK_SUBPASS_EXTERNAL,
-				.dstSubpass = 0,
-				.srcStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-				.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-				.srcAccessMask = VK_ACCESS_SHADER_READ_BIT,
-				.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-				.dependencyFlags = 0
-			});
-
-			renderPass->addSubPassDependency(VkSubpassDependency{
-				.srcSubpass = 0,
-				.dstSubpass = VK_SUBPASS_EXTERNAL,
-				.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-				.dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-				.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-				.dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-				.dependencyFlags = 0
-			});
-
-			if ( !renderPass->createOnHardware() )
-			{
-				TraceError{TracerTag} << "Failed to create the shared denoise render pass !";
-
-				return nullptr;
-			}
-
-			variant.renderPass = std::move(renderPass);
+			return nullptr;
 		}
 
-		/* Shader module (cached by signature-derived name). */
+		/* Shader module: a debug name from the prefixes (ShaderManager compiles source code without any cache). */
 		std::stringstream shaderName;
 		shaderName << "DenoiseFS";
 
@@ -312,87 +333,13 @@ namespace EmEn::Graphics
 			return nullptr;
 		}
 
-		/* Graphics pipeline: same fullscreen configuration as
-		 * IndirectPostProcessEffect::createFullscreenPipeline(), with one blend
-		 * attachment per render target. */
+		/* Graphics pipeline: the fullscreen configuration, one opaque blend state per render target. It joins the variant
+		 * LAST: a variant is served only with its pipeline set, so a failure below must not leave one without its sets. */
+		auto pipeline = this->createFullscreenPipeline(ClassId, shaderName.str(), vertexModule, fragmentModule, variant.pipelineLayout, variant.renderPass, variant.width, variant.height, static_cast< uint32_t >(contributions.size()));
+
+		if ( pipeline == nullptr )
 		{
-			auto pipeline = std::make_shared< GraphicsPipeline >(renderer.device());
-			pipeline->setIdentifier(ClassId, shaderName.str(), "GraphicsPipeline");
-
-			StaticVector< std::shared_ptr< ShaderModule >, 5 > shaderModules;
-			shaderModules.emplace_back(vertexModule);
-			shaderModules.emplace_back(fragmentModule);
-
-			if ( !pipeline->configureShaderStages(shaderModules) || !pipeline->configureEmptyVertexInputState() || !pipeline->configureInputAssemblyState(VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST) )
-			{
-				return nullptr;
-			}
-
-			StaticVector< VkDynamicState, 16 > dynamicStates;
-			dynamicStates.emplace_back(VK_DYNAMIC_STATE_VIEWPORT);
-			dynamicStates.emplace_back(VK_DYNAMIC_STATE_SCISSOR);
-
-			if ( !pipeline->configureDynamicStates(dynamicStates) || !pipeline->configureViewportState(variant.width, variant.height) )
-			{
-				return nullptr;
-			}
-
-			VkPipelineRasterizationStateCreateInfo rasterization{};
-			rasterization.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-			rasterization.rasterizerDiscardEnable = VK_FALSE;
-			rasterization.polygonMode = VK_POLYGON_MODE_FILL;
-			rasterization.cullMode = VK_CULL_MODE_NONE;
-			rasterization.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-			rasterization.depthBiasEnable = VK_FALSE;
-			rasterization.lineWidth = 1.0F;
-
-			if ( !pipeline->configureRasterizationState(rasterization) || !pipeline->configureMultisampleState(1) )
-			{
-				return nullptr;
-			}
-
-			VkPipelineDepthStencilStateCreateInfo depthStencil{};
-			depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-			depthStencil.depthTestEnable = VK_FALSE;
-			depthStencil.depthWriteEnable = VK_FALSE;
-			depthStencil.stencilTestEnable = VK_FALSE;
-
-			if ( !pipeline->configureDepthStencilState(depthStencil) )
-			{
-				return nullptr;
-			}
-
-			StaticVector< VkPipelineColorBlendAttachmentState, 8 > attachments;
-
-			for ( size_t index = 0; index < contributions.size(); ++index )
-			{
-				attachments.emplace_back(VkPipelineColorBlendAttachmentState{
-					.blendEnable = VK_FALSE,
-					.srcColorBlendFactor = VK_BLEND_FACTOR_ONE,
-					.dstColorBlendFactor = VK_BLEND_FACTOR_ZERO,
-					.colorBlendOp = VK_BLEND_OP_ADD,
-					.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE,
-					.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO,
-					.alphaBlendOp = VK_BLEND_OP_ADD,
-					.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT
-				});
-			}
-
-			VkPipelineColorBlendStateCreateInfo colorBlend{};
-			colorBlend.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-			colorBlend.logicOpEnable = VK_FALSE;
-
-			if ( !pipeline->configureColorBlendState(attachments, colorBlend) )
-			{
-				return nullptr;
-			}
-
-			if ( !pipeline->finalize(variant.renderPass, variant.pipelineLayout, false, false) )
-			{
-				return nullptr;
-			}
-
-			variant.pipeline = std::move(pipeline);
+			return nullptr;
 		}
 
 		/* Per-frame descriptor sets (H and V read different sources) + dynamics UBOs. */
@@ -423,6 +370,8 @@ namespace EmEn::Graphics
 				return nullptr;
 			}
 		}
+
+		variant.pipeline = std::move(pipeline);
 
 		return &variant;
 	}
@@ -505,7 +454,7 @@ namespace EmEn::Graphics
 			}
 		}
 
-		auto * variant = this->getOrCreateVariant(computeSignature(contributions), contributions);
+		auto * variant = this->getOrCreateVariant(this->buildLookupKey(contributions), contributions);
 
 		if ( variant == nullptr || !this->updateFramebuffers(*variant, contributions) )
 		{

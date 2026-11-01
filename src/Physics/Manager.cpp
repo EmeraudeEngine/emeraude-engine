@@ -27,13 +27,19 @@
 #include "Manager.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
 #include <ranges>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "BlobTrait.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/Device.hpp"
@@ -135,9 +141,6 @@ namespace EmEn::Physics
 	Manager::onTerminate () noexcept
 	{
 		size_t error = 0;
-
-		m_computePipelines.clear();
-		m_pipelineLayouts.clear();
 
 		m_descriptorPool = nullptr;
 

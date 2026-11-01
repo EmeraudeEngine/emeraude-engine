@@ -32,16 +32,38 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "IndirectPostProcessEffect.hpp"
 
-namespace EmEn::Vulkan
+/* Local inclusions for usages. */
+#include "ExactKey.hpp"
+#include "Graphics/EffectSlot.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn
 {
-	class Framebuffer;
-	class RenderPass;
+	namespace Graphics
+	{
+		class Renderer;
+	}
+
+	namespace Vulkan
+	{
+		class CommandBuffer;
+		class GraphicsPipeline;
+		class PipelineLayout;
+		class RenderPass;
+	}
 }
 
 namespace EmEn::Graphics
@@ -55,8 +77,10 @@ namespace EmEn::Graphics
 	 * horizontal, one vertical — instead of two passes per effect. Each effect keeps its
 	 * EXACT kernel through the GLSL snippet of its DenoiseContribution; the H/V targets
 	 * stay effect-owned (mixed formats allowed, same extent required across the group).
-	 * The generated shader and its pipeline are cached per group SIGNATURE; the
-	 * framebuffers are rebuilt when the attachment set changes (effect resize).
+	 * The generated shader and its pipeline are cached per group under the EXACT key of every
+	 * input (Base::ExactKey: the ordered prefixes, target formats, context needs, GLSL snippets
+	 * and the group's extent); the framebuffers are rebuilt when the attachment set changes
+	 * (effect resize).
 	 * @extends EmEn::Graphics::IndirectPostProcessEffect Reuses the shared fullscreen
 	 * pass infrastructure — it is never inserted into a stack itself.
 	 */
@@ -122,7 +146,7 @@ namespace EmEn::Graphics
 			bool
 			create (uint32_t /*width*/, uint32_t /*height*/) noexcept override
 			{
-				/* The pass owns no target: everything is per-signature, created lazily. */
+				/* The pass owns no target: everything is per group key, created lazily. */
 				return true;
 			}
 
@@ -145,7 +169,7 @@ namespace EmEn::Graphics
 
 		private:
 
-			/** @brief GPU objects for one group signature. */
+			/** @brief GPU objects for one group key. */
 			struct Variant
 			{
 				std::shared_ptr< Vulkan::RenderPass > renderPass;
@@ -173,8 +197,25 @@ namespace EmEn::Graphics
 				float padding1;
 			};
 
+			/**
+			 * @brief Returns (creating on first use) the pipeline variant for a group key.
+			 * @note A variant is served only once complete (its pipeline is set last): a creation that failed stays in the
+			 * map without a pipeline and returns nullptr from then on, never a half-built variant.
+			 * @param key The exact key of the group (buildLookupKey()).
+			 * @param contributions The ordered contributions (source of the generated GLSL).
+			 * @return Variant * nullptr on creation failure.
+			 */
 			[[nodiscard]]
-			Variant * getOrCreateVariant (size_t signature, const std::vector< GroupEntry > & contributions) noexcept;
+			Variant * getOrCreateVariant (const Base::ExactKey & key, const std::vector< GroupEntry > & contributions) noexcept;
+
+			/**
+			 * @brief Creates the render pass of a group: one colour attachment per contribution (its H target's format),
+			 * DONT_CARE load, STORE, ending SHADER_READ_ONLY, with FULL external dependencies.
+			 * @param contributions The ordered contributions.
+			 * @return std::shared_ptr< Vulkan::RenderPass > nullptr on failure (traced).
+			 */
+			[[nodiscard]]
+			std::shared_ptr< Vulkan::RenderPass > createRenderPass (const std::vector< GroupEntry > & contributions) const noexcept;
 
 			[[nodiscard]]
 			bool updateFramebuffers (Variant & variant, const std::vector< GroupEntry > & contributions) noexcept;
@@ -182,9 +223,22 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			static std::string buildFragmentShaderSource (const std::vector< GroupEntry > & contributions) noexcept;
 
+			/**
+			 * @brief Rebuilds m_lookupKey for a group: every input of the generated shader and of its render pass — the
+			 * ordered prefixes, each H target's format, the context needs, the GLSL snippets — and the group's extent,
+			 * which the variant's framebuffers take. The textures and the dynamics are bound per frame and take no part.
+			 * @note Once a frame per group: the member key keeps its storage (Base::ExactKey::reset()), so it allocates
+			 * only while it grows.
+			 * @pre The group passed record()'s check: non-empty, non-null prefixes and targets, one extent.
+			 * @param contributions The ordered contributions.
+			 * @return const Base::ExactKey &
+			 */
 			[[nodiscard]]
-			static size_t computeSignature (const std::vector< GroupEntry > & contributions) noexcept;
+			const Base::ExactKey & buildLookupKey (const std::vector< GroupEntry > & contributions) noexcept;
 
-			std::unordered_map< size_t, Variant > m_variants;
+			/* ⚠️ Keyed EXACTLY: a bare size_t hash of the prefixes, formats and needs until 2026-11-01 served one
+			 * group's shader for another's on a collision, and never saw the snippet nor the extent. */
+			std::unordered_map< Base::ExactKey, Variant > m_variants;
+			Base::ExactKey m_lookupKey;
 	};
 }
