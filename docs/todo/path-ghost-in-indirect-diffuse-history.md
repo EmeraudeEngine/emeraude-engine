@@ -50,8 +50,9 @@ Measured:
 - `temporalCapture` blocks the main thread: send `setPoints` first, then start the capture. Pin the exposure.
 - Not this item: the NEW line's rim converges over ~30 frames under TAA alone (macOS: 1590 → 582 px at threshold 16,
   1 px at 32) — the TAA accumulating the anti-aliasing of a shape that just appeared, on both sides of it.
-- Related, distinct: `gi-history-keeps-a-switched-off-emitter-lit` (a radiance DROP on unchanged geometry, same
-  history) — a fix of one may cover the other; decide them together.
+- Related, distinct: the former item `gi-history-keeps-a-switched-off-emitter-lit` (a radiance DROP on unchanged
+  geometry, same history), closed 2026-11-01 by the pooled anti-lag (graphics doc 13-12 § 16, stage 5): check whether
+  it changed this ghost.
 
 ## References
 

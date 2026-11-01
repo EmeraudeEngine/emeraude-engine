@@ -656,8 +656,8 @@ void main()
 	float temporalSigma = sqrt(varianceSum / pooled);
 
 	/* One frame's noise per pixel: the larger of the spatial deviation and antiLagParams.z of the fast window's temporal
-	 * one (the spatial one alone reads 0 in a sparse estimator's empty windows, item
-	 * gi-history-keeps-a-switched-off-emitter-lit). The pooled fast mean averages `pooled` pixels over
+	 * one (the spatial one alone reads 0 in a sparse estimator's empty windows: graphics doc 13-12 #16, the history of
+	 * the lag). The pooled fast mean averages `pooled` pixels over
 	 * min(age + 1, fastFrames) frames. A small relative floor keeps a noiseless (flat) region from tripping on
 	 * rounding. */
 	float noiseSigma = max(spatialSigma, antiLagParams.z * temporalSigma);

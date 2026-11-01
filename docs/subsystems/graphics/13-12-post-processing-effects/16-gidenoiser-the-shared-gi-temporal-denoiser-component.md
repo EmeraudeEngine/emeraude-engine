@@ -175,8 +175,8 @@ the first detector's speed WAS that permanently short history. A `labyrinth` lam
 
 A per-pixel 3σ test on a 6-frame mean cannot separate SSGI's per-frame noise (of the order of the mean) from a full
 drop. Owner decision 2026-10-25: the safe detector now, a neighbourhood-pooled test next (ReBLUR / RELAX); A-SVGF's
-temporal gradients (Schied et al., HPG 2018) are the reference beyond. All the detectors measured are in item
-`gi-history-keeps-a-switched-off-emitter-lit`. Cost: 0.037 ms (`GIDenoiser/antiLag`, RTX 3070 Ti, GI resolution).
+temporal gradients (Schied et al., HPG 2018) are the reference beyond. All the detectors measured are in § The
+history of the lag, below. Cost: 0.037 ms (`GIDenoiser/antiLag`, RTX 3070 Ti, GI resolution).
 0 VUID, 0 SYNC-HAZARD (sky-lab both lanes, `reflexion-debug`).
 
 **The POOLED detector (2026-11-01, owner decision — the neighbourhood-pooled test the safe detector announced).** The safe
@@ -207,4 +207,56 @@ The level is kept (no false trigger: the age view and the converged levels are t
 anti-lag off), and a change converges in about the fast window's length instead of the 64-frame history. 0 VUID,
 0 `[Error]`. ⚠️ The former protocol's right wall (x 1350–1900, y 200–800) reads 3.1 at `labyrinth`'s own exposure
 (f/2.8 1/30 ISO 400) on both detectors: the measurement above uses the whole image at ISO 6400.
+
+**The pooled detector on the three OS and AMD** (engine e2a7320e, 2026-11-01; no energy loss anywhere, 0 VUID, 0 "Unable
+to compile" — RADV and MoltenVK included):
+- Windows-PA, RTX 3500 Ada (~106 FPS, layer on): the `city` sunset settles by +2 s (AntiLag off: +8-9 s). Intel iGPU
+  (SSGI, 24 FPS): the `reflexion-debug` picture-sky switch reaches its floor (0.0121 → 0.0034) by +6 s (October, before
+  any anti-lag: 0.96 at +10 s); `labyrinth` 63.35 vs AntiLag off 62.78 (whole image, ISO 6400).
+- macOS-PA, M6 (SSGI, 2560×1440, 25 FPS): `labyrinth` 55.84 = AntiLag off 55.84; age view 213.3; the `city` sunset
+  187 / 88 / 37.8 / 21.6 at +1 / 2 / 3 / 4 s (AntiLag off: 222 / 198 / 174 / 150, still 24.5 at 12 s); `sky-lab`
+  0.76 → 0.80 floor 39.7 / 31 / 18 / 7 at +0.1 / 0.25 / 0.5 / 1 s (off: 41.2 / 39.4 / 34.4 / 25).
+- LinuxB-PA, AMD RADV Renoir (SSGI, 17-22 FPS): the `city` sunset 208 / 135 / 73 / 40 / 25 at +1 … 5 s, 14.3 at 12 s
+  (off: 225 / 202 / 181 / 162 / 143, still 43.8 at 12 s); `labyrinth` within the launch-to-launch noise of off.
+- ⚠️ **On a slow GPU the convergence still takes seconds**, for two reasons. Everything here is counted in FRAMES: the
+  history, the fast window, TAA. And on the M6 the INPUT itself is slow: with `IndirectDiffuse` disabled the `city`
+  land still reads 95 / 26.7 / 16.4 at +1 / 2 / 3 s at 25 FPS (Linux at ~42 FPS: final from +1 s), so the anti-lag
+  sees no sharp change and its cap never engages (the age view slides 206 → 142 over 2.4 s; on Linux it drops to ~80
+  within 0.1 s and holds). Open item `lighting-change-converges-over-frames`.
+
+### The history of the lag (the former item `gi-history-keeps-a-switched-off-emitter-lit`, 2026-10-06 → 2026-11-01)
+
+- **Found** by macOS-PA (Apple M2, SSGI, ~6.7 FPS, `labyrinth` test pose, 2026-10-06): the 55 flickering lamps switched
+  off, their panels' emission at 0 at once, the panel interior read 230 / 167 / 80 / 27 / 10 / 4.7 / 1.4 at +5 / 10 /
+  15 / 20 / 25 / 30 / 40 s; `IndirectDiffuse` off: 0.0 at +2 s. The history fed the panel's old glow back onto its
+  own pixels and decayed PER FRAME. Switching on was instant.
+- **The same under the sky's IBL** (owner: a defect, 2026-10-25): macOS M6 SSGI ~76 FPS, `sky-lab` 0.76 → 0.80 an
+  e-fold of ~1.3 s (~100 frames), TAA on or off alike; brightening lagged too (~3 s); `IndirectDiffuse` off: final by
+  +0.5 s. Windows' Intel iGPU (~47 FPS then) kept a picture sky's light on the floor 10-30 s after `setBackground()`.
+- **The cause**: the 1/N accumulation's floor, 1/64, with no history rectification — Linux ~390 FPS `sky-lab`
+  RT 39 / 21 / 8 / 2 at +0.1 / 0.25 / 0.5 / 1 s, `MaxAccumulation` 8 instead: 26 / 4 / 1 / 0.
+- **The detectors measured** (Linux; `labyrinth` right wall; `sky-lab` floor R after 0.76 → 0.80 at +0.1 / 0.25 / 0.5 /
+  1 s; the `labyrinth` lamp panel at +1 / 2 / 3 s):
+
+  | Noise term | labyrinth | sky-lab SSGI | sky-lab RT | lamps |
+  |---|---|---|---|---|
+  | anti-lag OFF | 88.5 | 32 / 19 / 8 / 2 | 39 / 21 / 8 / 2 | 50 / 17 / 5.3 |
+  | spatial σ (the first detector) | 39.8 | 21 / 5 / 1 / 0 | 19 / 4 / 1 / 0 | 3.5 / 2.4 / 2.4 |
+  | temporal σ (slow moments) | 88.6 | 32 / 19 / 8 / 2 | 28 / 10 / 5 / 1 | — |
+  | spatial + 0.5 temporal (RELAX form) | 86.4 | 31 / 16 / 7 / 2 | 27 / 10 / 4 / 1 | — |
+  | max(spatial, 0.5 temporal) (the safe one) | 86.4 | 28 / 15 / 7 / 2 | 24 / 10 / 4 / 1 | 53 / 20 / 6.1 |
+  | max(spatial, 0.25 temporal) | 64.1 | 24 / 10 / 4 / 1 | 24 / 10 / 4 / 1 | — |
+  | tracked RMS of (fast − slow) | 117.7 (+33 %) | 28 / 13 / 6 / 1.8 | 26 / 9 / 4 / 1 | — |
+
+  The safe detector on the three OS (49b6f570, 2026-10-25): macOS `labyrinth` 82.3 vs off 84.3, age view 214.71 vs
+  214.92; Windows Intel 85.7 vs off 87.6 (`AntiLagTemporalSigma` 0: 42.5).
+- **The pooled detector** (above) closed it on 2026-11-01: a sunset in `city` now converges in ~1 s on an RTX at
+  40-100 FPS, with no level change.
+- **Not done, recorded for later** (each a design decision): A-SVGF's temporal gradients (re-shade last frame's samples
+  with this frame's light; the producers must re-evaluate their own samples); a history luminance clamp (A. Lauritzen /
+  B. Karis, "High-Quality Temporal Supersampling", SIGGRAPH 2014; ReBLUR's history reset on a lighting change).
+- Protocol notes: the `labyrinth` test pose is `Act.setPosition(-6, 0, 67.3)` + `Act.lookAt(-6, 3.9, 66)`; its lamp
+  switch-off turns off `LabyrinthLamp<N-1>` for each `LabyrinthFlickeringPanel<N>` (55), panel region x 860-1060 /
+  y 420-620 at 1080p; the age view is `Denoiser/DebugView` 2 read at f/4 1/8 s ISO 100; a lamp's panel follows it
+  (`docs/subsystems/animations/02-animations-specific-rules.md`).
 
