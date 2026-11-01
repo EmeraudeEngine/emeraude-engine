@@ -104,7 +104,7 @@ layout(set = 0, binding = 9, std140) uniform FrameData
 	vec4 bounceParams;	/* x = multiBounceStrength, y = pre-exposure, z = variance-clip gamma, w = accumulation cap N. */
 	vec4 skyParams;		/* The producers' (unused here). */
 	vec4 skyStarMask;	/* The producers' (unused here). */
-	vec4 antiLagParams;	/* x = the fast history's length in frames, y = the tolerance in standard deviations, z = the weight of the temporal deviation in one frame's noise. */
+	vec4 antiLagParams;	/* x = the fast history's length in frames, y = the tolerance in standard deviations, z = the weight of the temporal deviation in one frame's noise, w = the reset ratio. */
 };
 
 const uint FlagVarianceClip = 1u;
@@ -661,6 +661,22 @@ void main()
 	 * min(age + 1, fastFrames) frames. A small relative floor keeps a noiseless (flat) region from tripping on
 	 * rounding. */
 	float noiseSigma = max(spatialSigma, antiLagParams.z * temporalSigma);
+
+	/* A VERY LARGE step (owner decision 2026-11-02): this frame's pooled raw estimate and the slow history differ by at
+	 * least antiLagParams.w (either way) and by more than antiLagParams.y of ONE pixel's noise (not the pooled mean's:
+	 * a sparse estimator's empty windows must not reset). The slow history is DISCARDED (cap 0: the resolve's weight is
+	 * 1, then 1/2, 1/3…, the spatial filter covering the young pixels as after a disocclusion) and the fast window
+	 * restarts from this frame. Shortened to the fast length instead, a day → night step (~×1000) took ~7 e-folds of it:
+	 * ~45 frames, 1.8 s at 25 FPS (2026-11-02). */
+	float low = min(rawPooled, slowPooled);
+	float high = max(rawPooled, slowPooled);
+
+	if (high > antiLagParams.w * max(low, 1e-6) && high - low > antiLagParams.y * noiseSigma + 0.02 * high)
+	{
+		outAntiLag = vec4(luma, 0.0, luma, 0.0);
+		return;
+	}
+
 	float fastSigma = noiseSigma / sqrt(pooled * min(age + 1.0, fastFrames));
 	float tolerance = antiLagParams.y * fastSigma + 0.02 * max(slowPooled, fastPooled) + 1e-6;
 	float excess = abs(fastPooled - slowPooled) / tolerance;
@@ -1323,7 +1339,7 @@ namespace EmEn::Graphics
 			 * (0 = no sky term for the screen-space producers). */
 			.skyParams = {inputs.skyLuminance, inputs.skyDistance, inputs.occlusionMaxDistance, static_cast< float >(inputs.lightCount)},
 			.skyStarMask = inputs.skyStarMask,
-			.antiLagParams = {static_cast< float >(m_parameters.antiLagFastFrames), m_parameters.antiLagSigmaScale, m_parameters.antiLagTemporalSigmaScale, 0.0F}
+			.antiLagParams = {static_cast< float >(m_parameters.antiLagFastFrames), m_parameters.antiLagSigmaScale, m_parameters.antiLagTemporalSigmaScale, m_parameters.antiLagResetRatio}
 		};
 
 		const auto success = IndirectPostProcessEffect::updateUniformBufferData(*m_frameUBOs[frameIndex], &ubo, sizeof(FrameUBOData));

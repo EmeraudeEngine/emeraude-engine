@@ -1016,6 +1016,14 @@ namespace EmEn
 			constexpr auto DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagTemporalSigma{0.5F};
 			constexpr auto MinGraphicsPPIndirectDiffuseDenoiserAntiLagTemporalSigma{0.0F}; /* Inclusive: outside the range the default applies, with a warning. */
 			constexpr auto MaxGraphicsPPIndirectDiffuseDenoiserAntiLagTemporalSigma{4.0F};
+			/* ANTI-LAG RESET (owner decision 2026-11-02): where this frame's pooled 5x5 raw estimate and the slow history
+			 * differ by at least this ratio (either way) and by more than one pixel's noise, the slow history is
+			 * DISCARDED (age 0) instead of shortened to the fast length. A day → night step (~×1000) took ~7 e-folds of
+			 * the 6-frame cap (~45 frames: 1.8 s at 25 FPS). A very large ratio (the maximum) switches it off. */
+			constexpr auto GraphicsPPIndirectDiffuseDenoiserAntiLagResetRatioKey{"Core/Graphics/PostProcessing/IndirectDiffuse/Denoiser/AntiLagResetRatio"};
+			constexpr auto DefaultGraphicsPPIndirectDiffuseDenoiserAntiLagResetRatio{4.0F};
+			constexpr auto MinGraphicsPPIndirectDiffuseDenoiserAntiLagResetRatio{1.5F}; /* Inclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPIndirectDiffuseDenoiserAntiLagResetRatio{1.0e6F};
 			/* Debug view of the denoiser internals, drawn by the combine pass INSTEAD of the
 			 * GI contribution: 0 = off, 1 = temporal variance (binary-amplified x1e6 — a linear
 			 * scale is unreadable under the photometric exposure), 2 = accumulation age

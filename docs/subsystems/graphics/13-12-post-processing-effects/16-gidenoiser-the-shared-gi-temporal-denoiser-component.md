@@ -218,11 +218,37 @@ to compile" — RADV and MoltenVK included):
   0.76 → 0.80 floor 39.7 / 31 / 18 / 7 at +0.1 / 0.25 / 0.5 / 1 s (off: 41.2 / 39.4 / 34.4 / 25).
 - LinuxB-PA, AMD RADV Renoir (SSGI, 17-22 FPS): the `city` sunset 208 / 135 / 73 / 40 / 25 at +1 … 5 s, 14.3 at 12 s
   (off: 225 / 202 / 181 / 162 / 143, still 43.8 at 12 s); `labyrinth` within the launch-to-launch noise of off.
-- ⚠️ **On a slow GPU the convergence still takes seconds**, for two reasons. Everything here is counted in FRAMES: the
-  history, the fast window, TAA. And on the M6 the INPUT itself is slow: with `IndirectDiffuse` disabled the `city`
-  land still reads 95 / 26.7 / 16.4 at +1 / 2 / 3 s at 25 FPS (Linux at ~42 FPS: final from +1 s), so the anti-lag
-  sees no sharp change and its cap never engages (the age view slides 206 → 142 over 2.4 s; on Linux it drops to ~80
-  within 0.1 s and holds). Open item `lighting-change-converges-over-frames`.
+- ⚠️ **On a slow GPU the convergence still took seconds.** Everything here is counted in FRAMES: the history, the fast
+  window, TAA. The M6's "slow input" read here at first (the land 95 / 26.7 / 16.4 at +1 / 2 / 3 s with
+  `IndirectDiffuse` off) was TAA's own lag, fixed by its large-change test (graphics doc 13-12 § The TAA resolve,
+  2026-11-01). Its age view had passed through TAA too. With TAA off the cap DOES engage on a slow GPU. The remaining
+  seconds were the cap's length: the reset below.
+
+**The RESET on a very large step (owner decision 2026-11-02).** The cap shortens the slow history to the fast window
+(6 frames), and a day → night step divides the light by ~1000. At ~1/7 a frame, that takes ~7 e-folds: ~45 frames,
+0.75 s at 60 FPS and 1.8 s at 25 FPS. Expressing the windows in seconds would have made it ~0.75 s everywhere, no
+shorter. So a very large step now DISCARDS the slow history. Where this frame's pooled 5×5 RAW estimate and the pooled
+slow mean differ by at least `Denoiser/AntiLagResetRatio` (default **4**, range [1.5, 10⁶], the maximum ≈ off) either
+way, AND by more than `AntiLagSigma` × ONE pixel's noise + 2 % (not the pooled mean's noise: a sparse estimator's empty
+windows must not reset), the anti-lag writes a cap of 0. The colour resolve's weight is then 1, then 1/2, 1/3… (the
+spatial filter covers the young pixels as after a disocclusion), the moments restart, and the fast window restarts
+from this frame. The anti-lag pair's B and R take this frame's luminance.
+
+| Measured (Linux, RTX 3070 Ti, 1920×1080, layer on, 0 VUID; TAA OFF to isolate the GI) | reset off (10⁶) | reset 4 |
+|---|---|---|
+| `city` sunset 0.55 → 0.95 at 25 FPS, the land (exposure pinned f/8 · 1/125 · ISO 25600) at +0.1 / 1 / 2 s, RTGI | 224 / 104 / 33 | **16.3 / 15.6 / 15.3** |
+| same, SSGI | 207 / 75 / 26 | **16.7 / 13.9 / 13.8** |
+| parked, young pixels (age < 4, `DebugView` 2) per frame: `labyrinth` RT / SS | 0 % / 0 % | 0 % / 0 % |
+| same, `sponza` RT / SS (a fixed zone) | 0.99 % / 1.00 % | 0.99 % / 1.00 % |
+| parked level / 16-frame per-pixel shimmer mean (whole image, two runs each where given): `labyrinth` RT | 19.35 & 19.01 / 2.34 & 2.37 | 19.06 & 19.12 / 1.80 & 1.59 |
+| same, `labyrinth` SS | 28.64 & 28.30 / 3.65 & 3.89 | 28.32 & 28.31 / 3.83 & 4.07 |
+| same, `sponza` RT / SS | 113.14 / 1.41 — 114.14 / 0.27 | 113.14 / 1.43 — 114.51 / 0.27 |
+| same, `city` day RT / SS | 111.45 / 9.85 — 114.04 / 11.01 | 112.06 / 9.74 — 114.18 / 10.95 |
+
+The level, the noise and the age are those of the reset off, and a very large step converges in 2-3 frames at any
+frame rate. A first `labyrinth` RT run with the reset (level 14.95, shimmer 7.2) did not reproduce in two alternated
+repeats: launch-to-launch variance, the labyrinth's auto exposure unpinned. A moderate change still converges over the
+6-frame window, in frames.
 
 ### The history of the lag (the former item `gi-history-keeps-a-switched-off-emitter-lit`, 2026-10-06 → 2026-11-01)
 

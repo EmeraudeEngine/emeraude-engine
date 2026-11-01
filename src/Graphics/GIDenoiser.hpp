@@ -169,6 +169,10 @@ namespace EmEn::Graphics
 				/* ANTI-LAG: the weight of the pixel's temporal deviation in one frame's noise (max with the 3x3 spatial
 				 * one): the spatial one alone reads 0 in a sparse estimator's empty windows. */
 				float antiLagTemporalSigmaScale{0.5F};
+				/* ANTI-LAG RESET (owner decision 2026-11-02): the ratio between this frame's pooled raw estimate and the
+				 * slow history (either way, beyond one pixel's noise) that DISCARDS the slow history instead of
+				 * shortening it: a very large step converges in a few frames, not in e-folds of the fast length. */
+				float antiLagResetRatio{4.0F};
 				/* REFLECTION mode (RTR, 2026-09-13): the input is a 4-channel premultiplied colour +
 				 * confidence accumulated as a whole; the history is reprojected through the VIRTUAL
 				 * position of the reflected point (P + V·hitT, hitT from the hit-data texture handed to

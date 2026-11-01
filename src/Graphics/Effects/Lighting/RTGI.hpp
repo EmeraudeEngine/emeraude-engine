@@ -116,6 +116,7 @@ namespace EmEn::Graphics::Effects::Lighting
 				uint32_t denoiserAntiLagFastFrames{6};
 				float denoiserAntiLagSigma{3.0F};
 				float denoiserAntiLagTemporalSigma{0.5F};
+				float denoiserAntiLagResetRatio{4.0F};
 				float temporalAlpha{0.1F};
 				float temporalDepthTolerance{0.05F};
 				float temporalNormalThreshold{0.8F};

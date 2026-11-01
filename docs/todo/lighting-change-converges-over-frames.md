@@ -1,7 +1,7 @@
 ---
 id: lighting-change-converges-over-frames
 title: A global lighting change converges over a FRAME count — seconds on a slow GPU
-status: open
+status: in-progress
 priority: unranked
 scope: Graphics/PostProcessing (GI denoiser history and anti-lag window, TAA, SSGI feedback), the sky's IBL
 opened: 2026-11-01
@@ -53,9 +53,26 @@ Two causes, measured:
   `TemporalAA/LargeChangeThreshold` 0.25), not an alpha in seconds. With GI off the sunset is final from +0.2-0.5 s
   on every machine, the M6 and the AMD laptop included. Graphics doc 13-12 § "The TAA resolve" § The LARGE-CHANGE test
   holds the measurements and the peers' verdicts.
-- **The GI windows** (owner decision still open: frame counts or seconds). With RTGI on and the TAA test on, Linux at
-  40 FPS reads 230 / 66 / 22 / 17 at +0.2 / 1 / 2 / 3 s (final ~15): that tail is the GI denoiser's history. Re-read
-  the anti-lag's cap on a slow GPU with `TemporalAA` off (round 2's age view was smeared by TAA), then decide.
+- **The GI windows: fixed in the working tree (2026-11-02), awaiting the commit and the peers.** The owner chose a RESET
+  on a very large step (`Denoiser/AntiLagResetRatio` 4), not windows in seconds: graphics doc 13-12 § 16 § The RESET
+  holds the mechanism and the measurements (25 FPS: final within 2-3 frames; no false reset, level and noise unchanged
+  on `labyrinth`, `sponza`, `city`). Then the item closes, its knowledge already in the graphics docs. Attributed on 2026-11-02 (Linux, RTX 3070 Ti, `city` quay, TAA OFF,
+  exposure pinned f/8 · 1/125 · ISO 25600, the land's 8-bit mean after 0.55 → 0.95, layer on, 0 VUID):
+
+  | Run | RTGI +1 / 2 / 3 s | SSGI +1 / 2 / 3 s |
+  |---|---|---|
+  | 25 FPS, defaults | 104 / 33 / 18 | 75 / 26 / 17 |
+  | 60 FPS, defaults | 22 / 15.3 / 15.1 | 20 / 14.3 / 13.9 |
+  | 25 FPS, `IrradianceProbes/Enabled` false | 104 / 33 / 18 (the land is outside the 24 m box) | 75 / 26 / 17 |
+  | 25 FPS, `MaxAccumulation` 16 | 102 / 29 / 18 | 71 / 22 / 16 |
+  | 25 FPS, `AntiLagSigma` 1.0 | 73 / 21 / 16 | 55 / 19 / 15 |
+  | 25 FPS, `AntiLagFastFrames` 1 | **15.6** / 15.3 (final from +0.5 s) | **13.9** / 13.8 |
+
+  The age view (`Denoiser/DebugView` 2, TAA off, 25 FPS) drops to the capped level within 100 ms and holds it during the
+  whole change: the anti-lag's cap DOES engage on a slow GPU. What remains is the cap's own length. A day → night step
+  divides the land's light by ~1000; at a 6-frame cap the history blends ~1/7 a frame, and 1000× takes ~7 e-folds:
+  ~45 frames, 0.75 s at 60 FPS and 1.8 s at 25 FPS. Expressing the windows in seconds would make that the same wall
+  time on every GPU (~0.75 s), not shorter. A large step needs the history discarded, not shortened.
 - The near-black frames right after a jump were a separate cause, fixed on 2026-11-01. The IBL cycle now runs in
   one frame on a jump, and `city` checks its lamps every logic cycle (graphics doc 42 § "The environment", item 7).
 - The Intel iGPU of Windows-PA ran `reflexion-debug` and `labyrinth` at 22-24 FPS on 2026-11-01, against ~47 FPS
