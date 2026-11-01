@@ -29,9 +29,51 @@ filtered) decides whether the history is still valid.
   8-phase jitter's first harmonic through, 0.05 half of it.
 - ⚠️ **What the depth cannot see**: a SHADING change on unchanged geometry — a moving shadow, a
   light switched on, an animated texture, a reflection, a translucent surface absent from the depth
-  buffer. Those now FADE over the accumulation (~1/alpha frames) instead of snapping. If one becomes
-  visible, add a colour test reserved to LARGE changes; never bring back a colour clip on still,
+  buffer. Those FADE over the accumulation (~1/alpha frames) instead of snapping. A LARGE one is now
+  caught by the large-change test below (2026-11-01); never bring back a per-pixel colour clip on still,
   unchanged geometry.
+- **The LARGE-CHANGE test (owner decision 2026-11-01)** — the colour test that bullet foresaw, made
+  visible by the macOS peer: after a time-of-day jump on `city` (0.55 → 0.95), the M6 took ~3 s to settle,
+  and switching `TemporalAA` off alone made it final from +0.5 s (macOS-PA round 3, engine item
+  `lighting-change-converges-over-frames`). The stationary alpha 0.05 is ~20 frames per e-fold: 0.2 s at
+  100 FPS, ~3 s to settle at 35-45 FPS.
+  - **The test**: the mean EXPOSED luminance (× the residual exposure, the history × `historyRescale`) of
+    this frame's 5×5 neighbourhood against the history's, reprojected with the pixel's own motion. Above
+    `TemporalAA/LargeChangeThreshold` (default **0.25**, range (0, 1]) of the larger mean, plus a 1e-3
+    exposed floor for the near-black, the history is clipped like a disocclusion (the same variance box),
+    ramped to full at twice the threshold so the noise cannot toggle it. The relative gap never reaches 1:
+    1 switches the test off. Over 25 pixels a sub-pixel detail's jitter phase weighs 1/25 — the per-pixel
+    gap that made the former colour clip shimmer. The neighbourhood statistics are NVIDIA's RELAX / ReBLUR
+    (D. Zhdan, Ray Tracing Gems II, 2021), as the GI denoiser's anti-lag (§ 16).
+  - **Cost**: the 5×5 box mean comes from 3×3 BILINEAR taps at −1.5, 0, +1.5 texels weighted 2, 1, 2 (a tap
+    1.5 texels off the centre averages texels 1 and 2 equally): 9 fetches per image instead of 25, the exact
+    mean on the frame's texel-centred taps. ⚠️ Exact only under LINEAR filtering: the history is an
+    `IntermediateRenderTarget` (always linear); with `Core/Graphics/Texture/MagFilter = "nearest"` on a scene
+    target the taps pick one texel of each pair, still a 9-texel neighbourhood mean. GPU time of
+    `TAAEffect`, Linux RTX 3070 Ti, 1920×1080, city quay, day, no layer, profiler on, 2 alternated pairs ×
+    3 windows of 6 s: test off 0.20-0.21 ms, 25 + 25 point taps 0.47-0.52 ms (rejected), **bilinear 0.30 ms**
+    (+0.09 ms).
+  - **Measured** (Linux, RTX 3070 Ti, `FrameRateLimit` 40 to stand in for the M6, TAA on, exposure pinned
+    f/8 · 1/125 · ISO 25600, the land region's 8-bit mean after the jump):
+
+    | Run | +0.2 s | +1 s | +2 s | +3 s |
+    |---|---|---|---|---|
+    | GI off, test off | 240 | 127 | 38 | 20 |
+    | GI off, test on | 16 | 15.2 | 14.9 | 14.9 (final) |
+    | Default (RTGI), test off | 247 | 170 | 57 | 23 |
+    | Default (RTGI), test on | 230 | 66 | 22 | 17 |
+
+    With RTGI on, what remains is the GI denoiser's own history (engine item
+    `lighting-change-converges-over-frames`).
+  - **Parked shimmer** (16 consecutive frames, per-pixel 8-bit peak-to-peak, y < 1400): `relief` mean 0.61 /
+    0.01 % > 8 / max 38 (off) against 0.61 / 0.009 % / max 27 (on) — unchanged. `city` at the quay (day):
+    façade 0.19 / 0.18, sky 0.04 / 0.04, trees 1.26 / 1.35 (> 8: 1.40 / 1.82 %, the wind); the SEA 22 → 34. The
+    sea is translucent, absent from the depth buffer: TAA used to average its sun glints over ~20 frames,
+    the test lets them live. **Owner verdict 2026-11-01, eye A/B at the quay: "sur B les reflets sont plus
+    nets" — B validated, the test on by default.**
+  - ⚠️ **It unmasks what TAA used to average away**: three near-black frames (~75 ms) right after a
+    time-of-day jump, with `IndirectDiffuse` off, one jump out of two on Linux (macOS-PA saw one with TAA off).
+    They are upstream of TAA: engine item `time-jump-renders-black-frames`.
 - **Cross-OS (2026-09-23)**: macOS (M2, TAA forced on) whole frame > 8 = 0.01 %, max 11 — the Linux
   figure; Windows (RTX 3060, 720p, RayTracing lane) 0.30 % against 1.21 % with its TAA OFF; Linux in
   the RayTracing lane 0.27 %. The ScreenSpace/RayTracing gap is the lane, not the machine. ⚠️ OPEN: in

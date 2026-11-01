@@ -51,7 +51,7 @@
 
 The quality keys an effect reads with `getOrSetDefault()` are BOUNDED (triad 7f, owner ruling 2026-10-01): outside
 its range a value warns and takes the default (`Settings::getOrSetDefaultInRange()`, the ranges beside the
-defaults in `SettingKeys.hpp`): `TemporalAA/Alpha` (0, 1], `TemporalAA/VarianceGamma` (0, 10],
+defaults in `SettingKeys.hpp`): `TemporalAA/Alpha` (0, 1], `TemporalAA/VarianceGamma` (0, 10], `TemporalAA/LargeChangeThreshold` (0, 1] (1 = off),
 `MotionBlur/SampleCount` [1, 128], `MotionBlur/SoftDepthExtent` (0, 10], `Clouds/StepCount` [1, 512],
 `Clouds/LightStepCount` [1, 64], `DepthOfField/SampleCount` [1, 256], `DepthOfField/MaxRadius` [1, 128] px,
 `DepthOfField/AutoFocusSpeed` (0, 100]. Triad 7g bounded the lighting effects' counts and sizes the same way (the list:

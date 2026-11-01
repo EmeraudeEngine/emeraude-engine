@@ -1118,10 +1118,19 @@ namespace EmEn
 			constexpr auto DefaultGraphicsPPTemporalAAVarianceGamma{1.0F};
 			constexpr auto MinGraphicsPPTemporalAAVarianceGamma{0.0F}; /* Exclusive: outside the range the default applies, with a warning. */
 			constexpr auto MaxGraphicsPPTemporalAAVarianceGamma{10.0F};
+			/* LARGE-CHANGE test (owner decision 2026-11-01): the history is clipped like a disocclusion where the mean EXPOSED
+			 * luminance of its 5x5 neighbourhood and that of this frame part by more than this fraction of the larger one,
+			 * ramped to full at twice it. The depth rule alone lets a lighting change on unchanged geometry fade over
+			 * ~1/alpha frames (about 3 s at 35-45 FPS). The relative gap never reaches 1: 1 switches the test off. */
+			constexpr auto GraphicsPPTemporalAALargeChangeThresholdKey{"Core/Graphics/PostProcessing/TemporalAA/LargeChangeThreshold"};
+			constexpr auto DefaultGraphicsPPTemporalAALargeChangeThreshold{0.25F};
+			constexpr auto MinGraphicsPPTemporalAALargeChangeThreshold{0.0F}; /* Exclusive: outside the range the default applies, with a warning. */
+			constexpr auto MaxGraphicsPPTemporalAALargeChangeThreshold{1.0F};
 			/* Karis inverse-luminance blend weighting (HDR anti-firefly / anti-flicker). */
 			constexpr auto GraphicsPPTemporalAALumaWeightingKey{"Core/Graphics/PostProcessing/TemporalAA/LumaWeighting"};
 			constexpr auto DefaultGraphicsPPTemporalAALumaWeighting{true};
-			/* DEBUG VIEW of the resolve's decision, read at creation (0 = off): 1 = rejected (red) / velocity dilated
+			/* DEBUG VIEW of the resolve's decision, read at creation (0 = off): 1 = rejected (red: by the depth, the motion
+			 * marker or a large change, its ramp in shades) / velocity dilated
 			 * from a neighbour (green) / reprojection length (blue); 2 = history depth nearer (red) or farther (blue)
 			 * than the 3x3 range; 3 = exposed luminance gap between the kept history and the current frame (red).
 			 * A second pass into its own target: the history keeps accumulating for real. */

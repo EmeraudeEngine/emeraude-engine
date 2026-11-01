@@ -91,9 +91,11 @@ namespace
 		/* r = this frame's pre-exposure / the one the history was written at (scene-colour pre-exposure D5), 1
 		 * without a usable history. */
 		float historyRescale;
+		/* The large-change test's relative threshold (TemporalAA/LargeChangeThreshold), 1 = off. */
+		float largeChangeThreshold;
 	};
 
-	static_assert(sizeof(TAAPushConstants) == 48, "TAAPushConstants must be 48 bytes.");
+	static_assert(sizeof(TAAPushConstants) == 52, "TAAPushConstants must be 52 bytes.");
 
 	/** @brief The view reconstruction's binding (after the five samplers: getInputLayout(5, 1)). The history carries
 	 * the LINEAR depth of its surface in alpha, read through it. */
@@ -121,6 +123,10 @@ namespace
 	 *   history accumulated is no longer in the 3x3 depth range. Karis 2014 names the defect a colour clip causes on
 	 *   still content ("camera is static but some pixels flicker… history gets clamped"), the TAA survey (Yang, Liu,
 	 *   Salvi, CGF 2020, § 6.3) its cause; depth-based disocclusion tests are the survey's § 4.2 geometric rejection.
+	 * - LARGE-CHANGE test (2026-11-01, owner decision): what the depth cannot see, a shading change on unchanged geometry,
+	 *   is caught on the 5x5 MEAN exposed luminance of the history against this frame (the neighbourhood statistics of
+	 *   NVIDIA's RELAX / ReBLUR, D. Zhdan, Ray Tracing Gems II, 2021, as the GI denoiser's anti-lag). A mean over 25
+	 *   pixels averages the sub-pixel detail that made the per-pixel colour clip shimmer.
 	 * - History deringing: the bicubic result is clamped to its 2x2 bilinear footprint (AMD FidelityFX FSR2,
 	 *   `ffx_fsr2_sample.h`, MIT), so its negative lobes cannot build dark/bright seams frame after frame.
 	 * - Karis weights on the EXPOSED luminance (UE4 `HdrWeight4(C, Exposure)`, FSR2 `PrepareRgb`, HDRP pre-exposure):
@@ -156,7 +162,16 @@ layout(push_constant) uniform PushConstants
 	float debugView;
 	float reactiveEnabled;
 	float historyRescale;
+	float largeChangeThreshold;
 };
+
+/* The large-change test's 5x5 box mean from 3x3 BILINEAR taps: a tap 1.5 texels off the centre averages texels 1 and 2
+ * equally, so the taps at -1.5, 0, +1.5 weighted 2, 1, 2 sum the five texels of a row exactly (2 x 2 + 1 x 2 + 1 = 25 in
+ * 2D). 9 fetches per image instead of 25 — the same mean on this frame's texel-centred taps, under LINEAR filtering (the
+ * history is an IntermediateRenderTarget, always linear; a scene target follows Core/Graphics/Texture/MagFilter, and
+ * "nearest" picks one texel of each pair: still a 9-texel neighbourhood mean). */
+const float LargeChangeOffsets[3] = float[3](-1.5, 0.0, 1.5);
+const float LargeChangeWeights[3] = float[3](2.0, 1.0, 2.0);
 
 /* The distance along the view axis, through the frame's inverse projection (ViewReconstructionGLSL). It does not depend
  * on the screen position (perspective and orthographic alike, the jitter only shifts X and Y), so a neighbour's depth is
@@ -491,10 +506,48 @@ void main()
 	bool rejected = !sameSurface || objectLeft || historyReactive;
 	bool markOut = foreignMotion || (historyMarked && edge);
 
-	if (rejected)
+	/* LARGE CHANGE (owner decision 2026-11-01): what the depth cannot see — a SHADING change on unchanged geometry (a
+	 * time-of-day jump, a light switched on). The mean EXPOSED luminance of this frame's 5x5 neighbourhood against the
+	 * history's, reprojected with this pixel's motion. Over 25 pixels a sub-pixel detail's jitter phase weighs 1/25: that
+	 * per-pixel difference is what made the former colour clip shimmer on a parked camera (2026-09-23). Above
+	 * largeChangeThreshold of the larger mean the history is clipped like a disocclusion, ramped to full at twice it so
+	 * the noise cannot toggle it. Without it, the city's sunset jump faded at the stationary alpha: ~3 s at 35-45 FPS on
+	 * the M6 (macOS-PA, 2026-11-01). The relative gap never reaches 1: a threshold of 1 switches the test off. */
+	float largeChange = 0.0;
+
+	if (largeChangeThreshold < 1.0)
+	{
+		float currentSum = 0.0;
+		float historySum = 0.0;
+
+		for (int y = 0; y < 3; y++)
+		{
+			for (int x = 0; x < 3; x++)
+			{
+				vec2 offset = vec2(LargeChangeOffsets[x], LargeChangeOffsets[y]) * texel;
+				float weight = LargeChangeWeights[x] * LargeChangeWeights[y];
+				currentSum += weight * luminanceOf(texture(sceneTex, vUV + offset).rgb);
+				historySum += weight * luminanceOf(texture(historyTex, prevUV + offset).rgb);
+			}
+		}
+
+		float exposure = displayExposure > 0.0 ? displayExposure : 1.0;
+		float currentMean = currentSum / 25.0 * exposure;
+		float historyMean = historySum / 25.0 * historyRescale * exposure;
+		/* A small absolute floor (exposed units) keeps the near-black from tripping on rounding. */
+		float tolerance = largeChangeThreshold * max(currentMean, historyMean) + 1e-3;
+		float excess = abs(historyMean - currentMean) / tolerance;
+
+		/* A non-finite neighbour adds nothing here: the centre's own guard above already handles a poisoned history. */
+		largeChange = (isnan(excess) || isinf(excess)) ? 0.0 : clamp(excess - 1.0, 0.0, 1.0);
+	}
+
+	float rejection = rejected ? 1.0 : largeChange;
+
+	if (rejection > 0.0)
 	{
 		vec3 clippedYCoCg = clipToAABB(mu - varianceGamma * sigma, mu + varianceGamma * sigma, RGBToYCoCg(history));
-		history = max(YCoCgToRGB(clippedYCoCg), vec3(0.0));
+		history = mix(history, max(YCoCgToRGB(clippedYCoCg), vec3(0.0)), rejection);
 	}
 
 	/* A stationary pixel averages over more frames: at alpha 0.1 the EMA still lets 13.6 % of the first jitter
@@ -532,13 +585,14 @@ void main()
 
 		if (debugView < 1.5)
 		{
-			/* 1 — THE DECISION: red = history rejected (clipped, by the depth or by the motion marker), green = what
+			/* 1 — THE DECISION: red = history rejected (clipped, by the depth, by the motion marker or by a large change, its
+			 * ramp in shades), green = what
 			 * the dilation changed (the velocity taken from the nearest 3x3 neighbour against the pixel's own, 1 px =
 			 * full — on a grazing ground the nearest neighbour is always another pixel, so "a neighbour was taken"
 			 * alone lights everything; above half a pixel it marks the history), blue = reprojection length (8 px =
 			 * full). */
 			colour = vec3(
-				rejected ? 1.0 : 0.0,
+				rejection,
 				clamp(dilationPixels, 0.0, 1.0),
 				clamp(motionPixels / 8.0, 0.0, 1.0)
 			);
@@ -590,6 +644,7 @@ namespace EmEn::Graphics::Effects::Resolve
 		auto & settings = renderer.primaryServices().settings();
 		m_parameters.alpha = settings.getOrSetDefaultInRange< float >(GraphicsPPTemporalAAAlphaKey, DefaultGraphicsPPTemporalAAAlpha, MinGraphicsPPTemporalAAAlpha, MaxGraphicsPPTemporalAAAlpha, true);
 		m_parameters.varianceGamma = settings.getOrSetDefaultInRange< float >(GraphicsPPTemporalAAVarianceGammaKey, DefaultGraphicsPPTemporalAAVarianceGamma, MinGraphicsPPTemporalAAVarianceGamma, MaxGraphicsPPTemporalAAVarianceGamma, true);
+		m_parameters.largeChangeThreshold = settings.getOrSetDefaultInRange< float >(GraphicsPPTemporalAALargeChangeThresholdKey, DefaultGraphicsPPTemporalAALargeChangeThreshold, MinGraphicsPPTemporalAALargeChangeThreshold, MaxGraphicsPPTemporalAALargeChangeThreshold, true);
 		m_parameters.lumaWeighting = settings.getOrSetDefault< bool >(GraphicsPPTemporalAALumaWeightingKey, DefaultGraphicsPPTemporalAALumaWeighting);
 		m_parameters.debugNonFinite = settings.getOrSetDefault< bool >(GraphicsPPDebugNonFiniteKey, DefaultGraphicsPPDebugNonFinite);
 		m_parameters.debugView = std::min(settings.getOrSetDefault< uint32_t >(GraphicsPPTemporalAADebugViewKey, DefaultGraphicsPPTemporalAADebugView), 3U);
@@ -763,7 +818,8 @@ namespace EmEn::Graphics::Effects::Resolve
 			.displayExposure = context.residualExposure,
 			.debugView = 0.0F,
 			.reactiveEnabled = context.reactive != nullptr ? 1.0F : 0.0F,
-			.historyRescale = historyRescale
+			.historyRescale = historyRescale,
+			.largeChangeThreshold = m_parameters.largeChangeThreshold
 		};
 
 		IndirectPostProcessEffect::recordFullscreenPass(

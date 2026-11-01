@@ -18,24 +18,45 @@ seconds, with no energy loss (verified on the three OS and AMD, 2026-11-01):
 - macOS M6 (SSGI, 2560×1440, 25 FPS): the land 187 / 88 / 37.8 / 21.6 at +1 / 2 / 3 / 4 s;
 - AMD RADV Renoir (SSGI, 17-22 FPS): 208 / 135 / 73 / 40 / 25 at +1 … 5 s, about 110 frames to fall under 25.
 
-Two causes, measured, not yet attributed in detail:
+Two causes, measured:
 
 1. **The temporal filters count in frames**: the GI history (`Denoiser/MaxAccumulation` 64), the anti-lag's fast window
    (`Denoiser/AntiLagFastFrames` 6), and TAA. Graphics doc 42 notes that TAA smears a sudden global change over ~1 s
    at 60 FPS, which is ~2.4 s at 25 FPS. A frame count is a different wall time on every GPU.
-2. **On the M6 the INPUT of the GI is itself slow**: with `IndirectDiffuse` disabled, the land still reads
-   95 / 26.7 / 16.4 at +1 / 2 / 3 s at 25 FPS (macOS-PA; the validation layer does not change it). On Linux at ~42 FPS
-   it is final from +1 s. A slowly changing input never trips the anti-lag: its cap does not engage there (the age
-   view slides 206 → 142 over 2.4 s, where Linux drops to ~80 within 0.1 s and holds).
+2. **On the M6, the slow part is the TAA resolve, not the GI** (macOS-PA round 3, 2026-11-01, engine dd77f62b, M6
+   2560×1440, one launch, default settings, layer on, 0 VUID; exposure pinned f/8 · 1/125 · ISO 25600; the land region's
+   mean in the 8-bit capture after a 0.55 → 0.95 jump). The variants switch one more thing off each time:
+
+   | Variant | FPS | +0.5 s | +1 s | +2 s | +3 s | +6 s |
+   |---|---|---|---|---|---|---|
+   | V0: `IndirectDiffuse` off | 35 | 179.9 | 84.6 | 25.4 | 16.0 | 13.6 |
+   | V1: + `TemporalAA` off | 37 | 13.5 | 13.5 | 13.5 | 13.5 | 13.5 |
+   | V2: + `setLightingMode(None)` | 45 | 0.04 (one black frame, below) | 13.5 | 13.5 | 13.5 | 13.5 |
+   | V3: + `bypassSceneEffects(1)` | 46 | 13.6 | 13.6 | 13.6 | 13.6 | 13.6 |
+   | V4: bypass off, TAA alone back on (lighting family off) | 43 | 154.8 | 54.7 | 18.6 | 14.5 | 13.7 |
+
+   Without TAA the input lands within two frames, ~85 ms after the command (V3 `temporalCapture(72)`: 236 for frames 0-4,
+   50.8 at frame 5, 13.5 from frame 6). That is one step: there is no IBL cycle and no blend upstream of the
+   post-process. The mechanism is the one graphics doc 13-12 § "The TAA resolve" foresaw: the history is clipped only
+   where the DEPTH changed, so a shading change on unchanged geometry fades at the stationary alpha
+   (`TemporalAA/Alpha` 0.1 × 0.5 = 0.05, ~20 frames per e-fold). The Karis weights only speed up the bright → dark
+   direction. On the RTX at 100+ FPS that is ~0.2 s; on the M6 at 35-45 FPS it is about 3 s to settle.
+   Round 2 had read the M6's age view (GI `DebugView` 2) sliding 206 → 142 over 2.4 s, where Linux drops to ~80 within
+   0.1 s and holds. It was taken with TAA ON, and the lighting family runs before TAA in the chain (graphics doc 13-12
+   § 33), so that view was smeared too. Whether the anti-lag's cap engages on a slow GPU must be re-read with
+   `TemporalAA` off.
 
 ## What remains
 
-- Attribute the M6's slow input (macOS-PA): TAA off; the lighting family off (`setLightingMode(None)`); the IBL alone.
-  Which frame-counted filter carries the 3 s?
-- Owner decision, once attributed: keep frame counts, or express the windows in SECONDS. A per-frame blend weight
-  alpha = 1 − exp(−dt / τ) makes a slow GPU converge in the same wall time; it costs the noise reduction a slow GPU
-  gets from its longer history. This applies to the GI history, the anti-lag window, and maybe TAA's feedback, each
-  measured on its own.
+- **TAA: done in the working tree (2026-11-01), awaiting the commit and the peers.** The owner chose the graphics
+  doc's own note: a colour test reserved to LARGE changes (5×5 pooled exposed luminance, variance clip ramped,
+  `TemporalAA/LargeChangeThreshold` 0.25), not an alpha in seconds. Graphics doc 13-12 § "The TAA resolve" § The
+  LARGE-CHANGE test holds the measurements. On Linux at 40 FPS with GI off, the sunset is final from +0.2 s instead of
+  ~4 s. The peers must re-run round 3's V0 (GI off, TAA on) on the M6 and the AMD laptop.
+- **The GI windows** (owner decision still open: frame counts or seconds). With RTGI on and the TAA test on, Linux at
+  40 FPS reads 230 / 66 / 22 / 17 at +0.2 / 1 / 2 / 3 s (final ~15): that tail is the GI denoiser's history. Re-read
+  the anti-lag's cap on a slow GPU with `TemporalAA` off (round 2's age view was smeared by TAA), then decide.
+- The near-black frames right after a jump are their own item: `time-jump-renders-black-frames`.
 - The Intel iGPU of Windows-PA ran `reflexion-debug` and `labyrinth` at 22-24 FPS on 2026-11-01, against ~47 FPS
   logged in October (not investigated). If a frame-rate regression is confirmed, it is its own item.
 

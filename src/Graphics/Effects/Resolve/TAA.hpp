@@ -39,7 +39,21 @@
 #include "Graphics/IndirectPostProcessEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Vulkan
+{
+	class GraphicsPipeline;
+	class PipelineLayout;
+}
 
 namespace EmEn::Graphics::Effects::Resolve
 {
@@ -86,6 +100,7 @@ namespace EmEn::Graphics::Effects::Resolve
 			{
 				float alpha{0.1F}; /**< Blend weight of the current frame (0.1 = 90% history). */
 				float varianceGamma{1.0F}; /**< Variance clipping AABB half-size, in standard deviations. */
+				float largeChangeThreshold{0.25F}; /**< Relative gap of the 5x5 mean exposed luminances (history against this frame) above which the history is clipped; 1 = off (Core/Graphics/PostProcessing/TemporalAA/LargeChangeThreshold). */
 				uint32_t debugView{0}; /**< 0 = off; 1 decision, 2 history depth vs the 3x3 range, 3 kept-history gap (Core/Graphics/PostProcessing/TemporalAA/DebugView). */
 				bool lumaWeighting{true}; /**< Karis inverse-luminance HDR blend weighting, on the EXPOSED luminance. */
 				bool debugNonFinite{false}; /**< Paint the pixels whose reconstruction holds a NaN/Inf (Core/Graphics/PostProcessing/DebugNonFinite). */
