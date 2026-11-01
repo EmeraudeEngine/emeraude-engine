@@ -97,9 +97,9 @@ earliest hit with the static world's ties broken as in step 4b.
   front's is low for one step (the ABS lets 0.1-0.6 g through for 0.1 s).
 - `WheelState::tractionFactor` / `brakeFactor`: the share of the requested torque the wheel got (1: untouched).
 - Measured on projet-alpha's CarConcept (1888 kg, 1250 N·m, all-wheel drive, μ 1.4, `city` straight, Linux, 0 VUID):
-  0-100 km/h 3.03 s (wheelspin under 0.3 of slip; without the aids the wheels spun at a slip of 3-30 to the limiter),
-  braking from 100 km/h at 1.03-1.18 g over 42.2 m with no wheel held (without: the front wheels held from 0.1 s,
-  0.73-0.8 g); shares at 0.7: 3.29 s and 44.7 m.
+  0-100 km/h 2.88-2.90 s (wheelspin under 0.3 of slip; without the aids the wheels spun at a slip of 3-30 to the
+  limiter), braking from 28 m/s over 40.6 m (~1.1 g) with no wheel held (without: the front wheels held from 0.1 s,
+  0.73-0.8 g); shares at 0.7: 3.29 s and 44.7 m (0.25 s sampling).
 
 ### Console / MCP
 - `getNodePhysics(name)` gains a `vehicle` object: `engineRPM`, `gear`, `clutch` and per wheel `contact`,
@@ -141,6 +141,15 @@ cross-OS bit identity was never a requirement, only run to run. The brake fix (e
 was accepted on macOS and Windows the same day (the 3 cars changed only; citadel driving works). Their citadel car
 parked at different heights because citadel's seeded TERRAIN differed per OS (std's random facilities), fixed by base
 `PortableRandom` (base `docs/subsystems/source-tree/23-portable-random.md`).
+
+The wheel model fix, the explicit centre of mass and the aids (engine `c7aaa843`, alpha `e0a7c3d8`, 2026-11-01) were
+accepted on the three OS: 0 warning (Windows Release and Debug /W4 /WX, macOS `-Wdocumentation -Werror` on 178 TUs);
+bench 2 runs × 49 stations at 0 differing samples on each OS. The cars: `BenchCarStraight` 17.55 / 17.60 / 17.54 m/s at
+cycle 300, stopped at cycle 430 on all three over 18.46 / 18.57 / 18.45 m (Linux / macOS / Windows), then a pitch
+rebound of ~0.13 m/s around cycle 438 settling 3-3.5 cm back before it sleeps (the same rebound existed before the fix,
+6.5 cm forward); `BenchCarTurn` 9.47 m/s and −0.832 rad/s on all three; `BenchCarIdle` at rest y 0.8208, asleep. The
+CarConcept in `city`: 0-100 km/h 2.86-2.93 s, braking from 28 m/s over 40.3-40.6 m with no wheel held, parked and
+asleep (projet-alpha `docs/subsystems/actor/07-7-driving.md`). 0 `VUID-`.
 
 The slope limit (`maxSlopeAngle`, engine `dccc0329`, alpha `dd61f85a`, 2026-10-03) was accepted on the three OS:
 bench 49 stations, the 48 older identical in full state run against run (Windows NVIDIA = AMD on all 49);
