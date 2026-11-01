@@ -76,7 +76,10 @@ namespace EmEn::Graphics
 	 *   cycle; a cycle starts when the star moved more than TriggerAngle, its illuminance or the grading changed, or
 	 *   nothing was baked yet;
 	 * - a RING of MaxFramesInFlight + 1 sets, allocated once: a cycle writes the set published RingSize − 1 cycles ago,
-	 *   which no frame in flight can still read.
+	 *   which no frame in flight can still read;
+	 * - a LARGE change (owner decision 2026-11-01: the star moved more than ImmediateAngle, or its illuminance changed by
+	 *   ImmediateRatio, since the running or last cycle) records the WHOLE cycle in one frame, a running cycle dropped:
+	 *   a time-of-day jump changes the ambient with the sky instead of 8 frames later.
 	 * @note RENDER THREAD: recordStage() and onSubmitted() (the sky's command buffer, Renderer::renderSkyAtmosphere()).
 	 * Any thread: takePublication(), under a mutex — the scene takes it on the logic thread (Scene::updateEnvironmentIBL()).
 	 * @note References: Unity's time-sliced reflection probes (one face or one mip per frame); Unreal's sky light "Real
@@ -97,6 +100,13 @@ namespace EmEn::Graphics
 
 			/** @brief The relative change of the star's illuminance (or of the grading) that starts a new cycle. */
 			static constexpr float TriggerRatio{0.01F};
+
+			/** @brief The star's motion, in degrees, that records a whole cycle in one frame (owner decision 2026-11-01:
+			 * a jump; a running clock, even at ×600, moves ~0.04° a frame). */
+			static constexpr float ImmediateAngle{5.0F};
+
+			/** @brief The factor of the star's illuminance change that records a whole cycle in one frame. */
+			static constexpr float ImmediateRatio{2.0F};
 
 			/**
 			 * @brief The sky's artistic grading, applied to the capture as to the drawn sky.
@@ -225,6 +235,23 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			bool cycleNeeded (const Inputs & inputs) const noexcept;
+
+			/**
+			 * @brief Returns whether the star changed so much since the running or last cycle that a whole cycle must be
+			 * recorded in this frame: a motion beyond ImmediateAngle, or an illuminance changed by ImmediateRatio. Never
+			 * before the first bake (it stays amortised).
+			 * @param inputs The frame's star (its direction normalized).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool largeChange (const Inputs & inputs) const noexcept;
+
+			/**
+			 * @brief Records the stage m_stage names into the command buffer and advances it.
+			 * @param renderer A reference to the renderer.
+			 * @param commandBuffer A reference to the recording command buffer.
+			 */
+			void recordNextStage (Renderer & renderer, const Vulkan::CommandBuffer & commandBuffer) noexcept;
 
 			/**
 			 * @brief Records the capture of the sky into a set's cubemap and the blit cascade of its mips.

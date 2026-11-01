@@ -56,7 +56,8 @@ Two causes, measured:
 - **The GI windows** (owner decision still open: frame counts or seconds). With RTGI on and the TAA test on, Linux at
   40 FPS reads 230 / 66 / 22 / 17 at +0.2 / 1 / 2 / 3 s (final ~15): that tail is the GI denoiser's history. Re-read
   the anti-lag's cap on a slow GPU with `TemporalAA` off (round 2's age view was smeared by TAA), then decide.
-- The near-black frames right after a jump are their own item: `time-jump-renders-black-frames`.
+- The near-black frames right after a jump were a separate cause, fixed on 2026-11-01. The IBL cycle now runs in
+  one frame on a jump, and `city` checks its lamps every logic cycle (graphics doc 42 § "The environment", item 7).
 - The Intel iGPU of Windows-PA ran `reflexion-debug` and `labyrinth` at 22-24 FPS on 2026-11-01, against ~47 FPS
   logged in October (not investigated). If a frame-rate regression is confirmed, it is its own item.
 

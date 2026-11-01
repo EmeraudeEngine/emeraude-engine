@@ -88,8 +88,9 @@ filtered) decides whether the history is still valid.
     follows ~90-180 ms later, then a few near-black frames, then the emissive windows. Without the test, TAA averaged
     the order away. In A, the sky decays smoothly from white (254.9 → 221.7 over 15 frames) while the input is
     already black. macOS-PA first read B's black sky in those frames as a defect of the test (it is not), and on the
-    RTX the black frames leave an undershoot that climbs back at the stationary alpha. The cause is upstream of
-    TAA: engine item `time-jump-renders-black-frames`.
+    RTX the black frames leave an undershoot that climbs back at the stationary alpha. The cause was upstream of
+    TAA, fixed the same day: graphics doc 42 § "The environment", item 7 (the IBL cycle in one frame on a jump) and
+    `city`'s lamps checked every logic cycle.
 - **Cross-OS (2026-09-23)**: macOS (M2, TAA forced on) whole frame > 8 = 0.01 %, max 11 — the Linux
   figure; Windows (RTX 3060, 720p, RayTracing lane) 0.30 % against 1.21 % with its TAA OFF; Linux in
   the RayTracing lane 0.27 %. The ScreenSpace/RayTracing gap is the lane, not the machine. ⚠️ OPEN: in

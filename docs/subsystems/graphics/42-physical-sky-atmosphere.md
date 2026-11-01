@@ -219,6 +219,27 @@ Owner decisions (2026-10-25):
    (`Scene::ProbeResignalAngle`).
 6. **The environment slot (0) gets the capture too**: refraction, the RTGI misses and the irradiance probe volume see
    the sky.
+7. **A LARGE change records the whole cycle in one frame** (owner decision 2026-11-01): when the star moved more than
+   **5°** (`SkyEnvironment::ImmediateAngle`) or its illuminance changed by a factor **2** (`ImmediateRatio`) since the
+   running or last cycle, every stage is recorded in this frame's command buffer, and a running cycle is dropped (it
+   restarts from the capture in the same set: nothing of it was published). Each stage's closing barrier makes its
+   target readable by the next, as in the blocking `IBLBaker::bakeEnvironment()`. A running clock, even at ×600, moves
+   ~0.04° a frame and stays amortised; the first bake stays amortised too.
+   - **Why: a time-of-day jump was not applied in one frame.** The sky reads the clock's published state on the next
+     frame. The ambient (the IBL) followed one amortised cycle later (8 frames + one logic tick: ~200 ms at 40 FPS), so
+     the land kept the DAY ambient while the sky was night. `city` then showed near-black frames: the night ambient had
+     arrived, but its lamps and night windows, switched by a once-a-second action, were not lit yet (1 to 23 frames
+     over six jumps, Linux 40 FPS; none when the lamps happened to switch first). TAA averaged that order away until its
+     large-change test (graphics doc 13-12 § The TAA resolve) showed the input as it is.
+   - **Measured** (Linux, RTX 3070 Ti, `FrameRateLimit` 40, `city` at the quay, GI off, TAA on, exposure pinned
+     f/8 · 1/125 · ISO 25600, `temporalCapture` right after `setTimeOfDay(0.95)`, six jumps): before, the land stayed at
+     240 for 7-8 frames, then 0-23 near-black frames (0.0-0.1); after, with `city`'s lamps checked every logic cycle
+     (projet-alpha, `Act::addLogicAction()`), the land is at night (15.8-16.1) within 0-2 frames of the capture's
+     start, **0 near-black frame** in 6 jumps. The ambient still lands one logic tick after the sky (the scene takes the
+     set on the logic thread, `Scene::updateDynamicSkyIBL()`). `sky-lab` under synchronization validation
+     (`VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`, proven armed by the layer's "Current Validation Enabled:
+     Synchronization"), six jumps 0.55 ↔ 0.95: 0 VUID, 0 `SYNC-HAZARD`, 0 `UNASSIGNED-`. ⚠️ `city` itself is too heavy
+     under synchronization validation: its console stopped answering.
 
 A scene takes its ambient from the sky with `applyBackgroundLighting({.applyAmbient = true, .applyStars = false})`
 (sky-lab does; the clock lights the sun). The CPU photometry of a picture sky (`hemisphereIlluminanceFactor()`,
@@ -227,7 +248,7 @@ A scene takes its ambient from the sky with `applyBackgroundLighting({.applyAmbi
 | Measured (sky-lab, Linux, RTX 3070 Ti) | Value |
 |---|---|
 | `SkyAtmosphere/Environment` (GPU profiler, the clock at ×600: cycles back to back) | avg 0.003–0.015 ms, **max 0.10 ms** per frame; Apple M6 (MoltenVK): avg 0.031–0.034, max 0.14–0.42; RTX 3500 Ada: avg 0.008, max 0.08; ⚠️ Intel Raptor Lake iGPU: avg 0.19, **max 2.1 ms** (its heaviest stage in one frame — a split of the prefilter's mip 0 / the irradiance over two frames is the lever if it matters) |
-| Lag behind the sky | one cycle: 8 frames + one logic tick (~0.15 s at 60 FPS), every 0.25° of sun (≈ 1 min in real time). ⚠️ What follows the IBL can be slower: with SSGI owning the indirect diffuse (the ScreenSpace lane), the floor converges with an e-fold of ~1.3 s (macOS-PA, M6; IBL-only: < 0.5 s), and TAA alone smeared a sudden global change over ~1 s at 60 FPS, ~3 s at 35-45 FPS, until its large-change test (graphics doc 13-12 § "The TAA resolve", 2026-11-01) |
+| Lag behind the sky | one cycle: 8 frames + one logic tick (~0.15 s at 60 FPS), every 0.25° of sun (≈ 1 min in real time); a jump beyond 5° (item 7): one logic tick. ⚠️ What follows the IBL can be slower: with SSGI owning the indirect diffuse (the ScreenSpace lane), the floor converges with an e-fold of ~1.3 s (macOS-PA, M6; IBL-only: < 0.5 s), and TAA alone smeared a sudden global change over ~1 s at 60 FPS, ~3 s at 35-45 FPS, until its large-change test (graphics doc 13-12 § "The TAA resolve", 2026-11-01) |
 | The floor (albedo 0.5) under the sky alone, by time of day | noon neutral-warm, sunset orange, after sunset the twilight's purple, night dark (the exposure floor) — Mars: butterscotch at sunset |
 | Validation (Earth, Mars, four picture skies swapped in a row on `reflexion-debug`) | 0 VUID, 0 SYNC-HAZARD (synchronization validation requested with `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`) |
 

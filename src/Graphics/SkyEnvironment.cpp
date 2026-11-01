@@ -309,6 +309,28 @@ namespace EmEn::Graphics
 		return changed(inputs.grading.intensity, m_cycle.grading.intensity) || changed(inputs.grading.saturation, m_cycle.grading.saturation);
 	}
 
+	bool
+	SkyEnvironment::largeChange (const Inputs & inputs) const noexcept
+	{
+		if ( !m_baked )
+		{
+			return false;
+		}
+
+		const auto cosMotion = Vector< 3, float >::dotProduct(inputs.sunDirection, m_cycle.sunDirection);
+
+		if ( cosMotion < std::cos(ImmediateAngle * (std::numbers::pi_v< float > / 180.0F)) )
+		{
+			return true;
+		}
+
+		/* The illuminance as the sum of its channels (a colour × lux, every channel ≥ 0), floored so zero divides nothing. */
+		const auto now = inputs.sunIlluminance[0] + inputs.sunIlluminance[1] + inputs.sunIlluminance[2];
+		const auto before = m_cycle.sunIlluminance[0] + m_cycle.sunIlluminance[1] + m_cycle.sunIlluminance[2];
+
+		return std::max(now, before) > ImmediateRatio * std::max(std::min(now, before), 1.0e-3F);
+	}
+
 	void
 	SkyEnvironment::recordCapture (const CommandBuffer & commandBuffer, const RingSet & set, const Grading & grading) const noexcept
 	{
@@ -377,28 +399,51 @@ namespace EmEn::Graphics
 			m_created = true;
 		}
 
+		/* The frame's star, usable when its direction is (a running cycle goes on without it). */
+		std::optional< Inputs > normalized;
+
+		if ( const auto lengthSquared = inputs.sunDirection.lengthSquared(); std::isfinite(lengthSquared) && lengthSquared > 0.0F )
+		{
+			normalized = inputs;
+			normalized->sunDirection = inputs.sunDirection.normalized();
+		}
+
+		bool immediate = false;
+
 		if ( m_stage == Stage::Idle )
 		{
-			const auto lengthSquared = inputs.sunDirection.lengthSquared();
-
-			if ( !std::isfinite(lengthSquared) || lengthSquared <= 0.0F )
+			if ( !normalized.has_value() || !this->cycleNeeded(*normalized) )
 			{
 				return;
 			}
 
-			Inputs normalized = inputs;
-			normalized.sunDirection = inputs.sunDirection.normalized();
-
-			if ( !this->cycleNeeded(normalized) )
-			{
-				return;
-			}
-
-			m_cycle = normalized;
+			immediate = this->largeChange(*normalized);
+			m_cycle = *normalized;
 			m_restart = false;
 			m_stage = Stage::Capture;
 		}
+		else if ( normalized.has_value() && this->largeChange(*normalized) )
+		{
+			/* A LARGE change during a cycle: it starts over from the capture, in the same set (nothing of it was
+			 * published, and every stage discards its target first), and runs whole now. */
+			immediate = true;
+			m_cycle = *normalized;
+			m_stage = Stage::Capture;
+		}
 
+		/* One stage, or (a large change) every stage of the cycle in this command buffer: each one's closing barrier makes
+		 * its target readable by the next, as in IBLBaker::bakeEnvironment(). At most 2 + the prefilter's mip count. */
+		this->recordNextStage(renderer, commandBuffer);
+
+		while ( immediate && m_stage != Stage::Idle )
+		{
+			this->recordNextStage(renderer, commandBuffer);
+		}
+	}
+
+	void
+	SkyEnvironment::recordNextStage (Renderer & renderer, const CommandBuffer & commandBuffer) noexcept
+	{
 		/* m_ringIndex < RingSize: it only advances modulo RingSize. */
 		const auto & set = *std::next(m_ring.begin(), static_cast< std::ptrdiff_t >(m_ringIndex));
 		const auto & baker = renderer.IBLBaker();
