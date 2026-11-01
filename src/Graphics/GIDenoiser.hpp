@@ -456,9 +456,9 @@ namespace EmEn::Graphics
 			/* À-trous working pair (ping-pong across iterations, RGBA16F): RGB = filtered
 			 * irradiance, A = filtered variance (w² propagation rule). */
 			std::array< IntermediateRenderTarget, 2 > m_atrousTargets;
-			/* Anti-lag (ping-pong, RG16F, only with Parameters::antiLag in diffuse mode): R = the FAST mean of the raw
+			/* Anti-lag (ping-pong, RGBA16F, only with Parameters::antiLag in diffuse mode): R = the FAST mean of the raw
 			 * luminance (next frame's history), G = this frame's cap on the slow history's age (maxAccumulation where
-			 * the histories agree). */
+			 * the histories agree), B = the root of the fast second moment (the pooled test's temporal noise). */
 			std::array< IntermediateRenderTarget, 2 > m_antiLagTargets;
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_temporalPipeline;

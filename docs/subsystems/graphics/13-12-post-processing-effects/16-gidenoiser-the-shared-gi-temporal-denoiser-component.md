@@ -179,3 +179,32 @@ temporal gradients (Schied et al., HPG 2018) are the reference beyond. All the d
 `gi-history-keeps-a-switched-off-emitter-lit`. Cost: 0.037 ms (`GIDenoiser/antiLag`, RTX 3070 Ti, GI resolution).
 0 VUID, 0 SYNC-HAZARD (sky-lab both lanes, `reflexion-debug`).
 
+**The POOLED detector (2026-11-01, owner decision — the neighbourhood-pooled test the safe detector announced).** The safe
+detector never fired on a large global change: its temporal noise came from the SLOW moments (64 frames), whose variance
+during a lighting change measures the old/new mixture itself, so its threshold grew with the change it had to detect
+(`city`, a sunset jump 0.55 → 0.95: the age view dipped 221 → 193 for 0.5 s and was back at 216 by 1 s, while the scene
+stayed lit by the gone daylight for 8 s). Now:
+- the test is POOLED over a 5×5 neighbourhood: the previous slow and fast means are averaged over the reprojected
+  neighbourhood, the fast one advanced by this frame's pooled raw luminance, and compared against the noise of a mean of
+  that many pixels over min(age + 1, fastFrames) frames (NRD RELAX / ReBLUR compare neighbourhood statistics the same
+  way);
+- the temporal noise is the FAST window's own deviation (its second moment, kept beside its mean: the anti-lag pair is
+  RGBA16F since: R the fast mean, G the cap, B the root of the fast second moment), averaged over the neighbourhood: it
+  forgets the old light within `AntiLagFastFrames`. One frame's noise stays the larger of the 5×5 spatial deviation and
+  `AntiLagTemporalSigma` (0.5) × that temporal one.
+
+| Measured (Linux, RTX 3070 Ti, 1920×1080, validation layer, exposure pinned) | safe detector | pooled |
+|---|---|---|
+| `city` sunset 0.55 → 0.95, land region at +0 / 1 / 2 / 3 / 12 s, RT lane (~42 FPS) | 231 / 187 / 139 / 88 / 15.2 | 236 / **28.7 / 15.4** / 15.1 / 15.0 |
+| same, SSGI lane | 221 / 170 / 125 / 79 / 14.2 | 220 / **24.1 / 14.4** / 13.9 / 13.8 |
+| `sky-lab` 0.76 → 0.80, floor R at +0.1 / 0.25 / 0.5 / 1 s, RT lane (~60 FPS, `temporalCapture`) | 39.5 / 27 / 19.5 / 13.2 | 40.4 / **17 / 6 / 2** |
+| same, SSGI lane | 37.6 / 29 / 21.2 / 15 | 34.6 / **15 / 6 / 2** |
+| `labyrinth` converged level (whole image, f/2.8 1/30 ISO 6400, test pose, 40 s), SSGI / RT (anti-lag OFF: 61.1 / 68.6) | 60.2 / 69.7 | 61.1 / 70.1 |
+| `labyrinth` age view mean (`DebugView` 2, f/4 1/8 ISO 100), SSGI / RT | 213.8 / 211.2 | 213.5 / 211.2 |
+| `GIDenoiser/antiLag` (GPU profiler, no layer, `city` day), RT / SSGI | 0.082 / 0.080 ms | 0.142 / 0.134 ms |
+
+The level is kept (no false trigger: the age view and the converged levels are those of the safe detector and of the
+anti-lag off), and a change converges in about the fast window's length instead of the 64-frame history. 0 VUID,
+0 `[Error]`. ⚠️ The former protocol's right wall (x 1350–1900, y 200–800) reads 3.1 at `labyrinth`'s own exposure
+(f/2.8 1/30 ISO 400) on both detectors: the measurement above uses the whole image at ISO 6400.
+

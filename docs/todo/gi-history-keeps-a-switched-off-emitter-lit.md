@@ -88,12 +88,29 @@ anti-lag OFF:
 - 0 VUID and 0 SYNC-HAZARD with the new default on all three. Windows' A/B runs caught the single-queue upload hazard
   again (item `single-queue-upload-not-ordered-before-draw`).
 
+**A full sunset jump in `city`: the safe anti-lag does not fire at all** (Linux, RTX 3070 Ti, 2026-11-01, validation
+layer on, ~40-45 FPS, quay pose `(150, 12, 245) → (−150, 0, 300)`, exposure PINNED f/8 1/125 ISO 25600, time of day
+0.55 → 0.95, the land region x 1300-1800 / y 700-1000 at 1920×1080, one capture a second): RT lane 231 / 187 / 139 / 88 /
+52 / 33 / 23 / 19 / 17 / 16 → 15.2 at +0 … 12 s; SSGI lane the same shape (221 / 170 / 125 / 79 / 47 / 31 …); RT lane
+without the irradiance probes the same (236 / 200 / 162 / 109 / 65 …); `IndirectDiffuse` off on either lane, or the
+lighting family off: 13.4-14.6 from +1 s. The excess halves about every second — an e-fold of ~1.4 s, i.e. the 64-frame
+floor at that frame rate: the detector never caps the history, even for a ~95 % drop of the whole frame (the safe
+`max(spatial, 0.5 × temporal)` deviation is probably inflated by the slow moments' own drift — to verify). The scene
+then reads lit by a daylight that is gone (the grass green, the facades lit) for 5-8 s after the sun set; the sky
+itself is black from +1 s. Windows-PA reported it as "the sky taking several seconds" (signal pose, layer on). The
+auto-exposure is NOT involved: it reaches its ISO ceiling within 1 s and the pinned run is identical.
+
 ## What remains
 
 - Measure the decay in frames on Linux in BOTH lanes (SSGI and RTGI) at a pinned frame rate — the labyrinth's lamps and
   sky-lab's time-of-day jump (`setDate`, both directions). The SSGI temporal alpha is 0.1
   (`IndirectDiffuse/TemporalAlpha`): ~9.5 frames for an e-fold by itself — the measured ~100 says more than the alpha
   (the variance-guided à-trous' moments, the normal history) holds the past.
+- **Done 2026-11-01: the POOLED detector** (owner decision: 5×5 pooled means, the temporal noise from the fast window's
+  own second moment). graphics doc 13-12 § 16, stage 5 § The POOLED detector: the `city` sunset converges in ~1 s
+  instead of 8-10 s on both lanes, `sky-lab`'s small jump reaches its floor in 1 s (2 vs 13-15), the `labyrinth` level
+  and age view unchanged, +0.06 ms. Left: the peers (macOS M6 SSGI, Windows RTX + the Intel iGPU's picture-sky switch,
+  AMD) on the same three scenes, the `labyrinth` lamp switch-off; then close this item.
 - **Owner decision 2026-10-25: the safe detector now, a pooled test next.** The safe `max(spatial, 0.5 temporal)`
   (`Denoiser/AntiLagTemporalSigma` 0.5) is in the engine: no level change, no false trigger, little SSGI acceleration.
   NEXT, its own lot: a neighbourhood-POOLED test (ReBLUR / RELAX compare neighbourhood statistics: NRD

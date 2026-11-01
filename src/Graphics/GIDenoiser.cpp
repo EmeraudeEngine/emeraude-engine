@@ -80,8 +80,9 @@ namespace
 	 *    same hit last frame).
 	 * Descriptor bindings shared by both passes: 1 depth, 2 normals (view space, alpha = packed
 	 * roughness/metalness), 4 world-normal history, 5 velocity, 7 hit data (RG16F: cone width,
-	 * hitT — the reflection mode's source; the diffuse producers bind a placeholder), 8 the anti-lag (RG16F: the fast
- * luminance, this frame's age cap — the anti-lag pass's output; a placeholder when it does not run), 9 frame UBO. */
+	 * hitT — the reflection mode's source; the diffuse producers bind a placeholder), 8 the anti-lag (RGBA16F: the fast
+ * luminance, this frame's age cap, the root of the fast second moment — the anti-lag pass's output; a placeholder when it
+ * does not run), 9 frame UBO. */
 #define GIDENOISER_REPROJECTION_GLSL R"GLSL(
 layout(set = 0, binding = 1) uniform sampler2D depthTex;
 layout(set = 0, binding = 2) uniform sampler2D normalTex;
@@ -512,18 +513,20 @@ void main()
 	 * "ReBLUR: A Hierarchical Recurrent Denoiser", Ray Tracing Gems II, 2021). Recorded FIRST, before the colour
 	 * resolve and the moments. It keeps a FAST mean of the raw luminance (antiLagParams.x frames) with the SAME
 	 * reprojection and validation as the moments, and compares it with the SLOW mean (the moments' m1, 1/N up to
-	 * maxAccumulation). The fast mean's expected noise is one frame's deviation over the root of the frames it
-	 * averages, one frame's deviation being the larger of the raw estimate's 3x3 SPATIAL deviation and antiLagParams.z
-	 * of the pixel's TEMPORAL one (the slow moments); where the two means part by more than antiLagParams.y of it, the light changed and the slow
-	 * history's age is capped to the fast length (a smooth ramp over one more tolerance, so the noise cannot toggle it).
+	 * maxAccumulation). Since 2026-11-01 the test is POOLED over a 5x5 neighbourhood (owner decision): the fast and slow
+	 * means of the neighbourhood are compared against the noise of a mean of that many pixels over the frames it
+	 * averages, one frame's deviation being the larger of the raw estimate's 5x5 SPATIAL deviation and antiLagParams.z
+	 * of the FAST window's own TEMPORAL deviation (its second moment, kept beside its mean); where the two means part by
+	 * more than antiLagParams.y of it, the light changed and the slow history's age is capped to the fast length (a
+	 * smooth ramp over one more tolerance, so the noise cannot toggle it).
 	 * The colour resolve and the moments apply the cap: both restart together and converge in a few frames, then grow
 	 * back to maxAccumulation.
 	 * Output: R = the fast mean (next frame's history, pre-exposed like the moments), G = the age cap (maxAccumulation
-	 * where the histories agree or no history exists).
+	 * where the histories agree or no history exists), B = the root of the fast second moment (pre-exposed).
 	 *
 	 * Descriptor set 0 (pass-specific bindings; the shared ones are in the prelude):
 	 *   binding 0: raw estimate (the owner's trace output)
-	 *   binding 3: anti-lag history (previous frame: its fast mean)
+	 *   binding 3: anti-lag history (previous frame: its fast mean and the root of its fast second moment)
 	 *   binding 6: moments history (previous frame: the slow mean, the age, the validation distance)
 	 *   binding 8: unused here (a placeholder: it is this pass's own output for the other two)
 	 */
@@ -538,6 +541,10 @@ layout(set = 0, binding = 3) uniform sampler2D antiLagHistoryTex;
 layout(set = 0, binding = 6) uniform sampler2D momentsHistoryTex;
 )GLSL" GIDENOISER_REPROJECTION_GLSL R"GLSL(
 
+/* The pooled test's neighbourhood: 5x5. */
+const int AntiLagPoolRadius = 2;
+const float AntiLagPoolCount = 25.0;
+
 void main()
 {
 	float depth = texture(depthTex, vUV).r;
@@ -550,14 +557,16 @@ void main()
 		return;
 	}
 
-	/* The raw estimate's luminance and its 3x3 spatial deviation (the noise of ONE frame). */
+	/* The raw estimate over a 5x5 neighbourhood: this pixel's luminance, the pooled mean and the window's spatial
+	 * deviation (the noise of ONE frame; conservative across an edge, where the window also holds the edge's step). */
 	vec2 texel = 1.0 / vec2(textureSize(rawTex, 0));
+	float luma = dot(texture(rawTex, vUV).rgb, LumaWeights);
 	float s1 = 0.0;
 	float s2 = 0.0;
 
-	for (int y = -1; y <= 1; y++)
+	for (int y = -AntiLagPoolRadius; y <= AntiLagPoolRadius; y++)
 	{
-		for (int x = -1; x <= 1; x++)
+		for (int x = -AntiLagPoolRadius; x <= AntiLagPoolRadius; x++)
 		{
 			float l = dot(texture(rawTex, vUV + vec2(x, y) * texel).rgb, LumaWeights);
 			s1 += l;
@@ -565,9 +574,8 @@ void main()
 		}
 	}
 
-	float luma = dot(texture(rawTex, vUV).rgb, LumaWeights);
-	float spatialMean = s1 / 9.0;
-	float spatialSigma = sqrt(max(s2 / 9.0 - spatialMean * spatialMean, 0.0));
+	float rawPooled = s1 / AntiLagPoolCount;
+	float spatialSigma = sqrt(max(s2 / AntiLagPoolCount - rawPooled * rawPooled, 0.0));
 
 	/* Reconstruct the world position from NDC + depth (camera-relative, see the colour resolve). */
 	vec2 ndc = vUV * 2.0 - 1.0;
@@ -588,50 +596,79 @@ void main()
 	vec4 fastS = texture(antiLagHistoryTex, rp.surfaceUV);
 	bool valid = temporalParams.x < 1.0 && historySampleFinite(momS) && historySampleFinite(fastS) && historyValid(rp.surfaceUV, momS.a, rp.expectedSurfaceDistance, worldNormal);
 
-	/* No history: the fast mean starts from this frame, nothing to cap (the age restarts anyway). */
+	/* No history: the fast window starts from this frame, nothing to cap (the age restarts anyway). */
 	if (!valid)
 	{
-		outAntiLag = vec4(luma, maxN, 0.0, 0.0);
+		outAntiLag = vec4(luma, maxN, luma, 0.0);
 		return;
 	}
 
-	/* PRE-EXPOSURE (D5), as the moments: both means were written at the history's pre-exposure (the second moment
-	 * is stored as its root: squared back, it scales by r²). */
-	float slowMean = momS.r * prevCamPos.w;
-	float slowSecond = (momS.g * momS.g) * (prevCamPos.w * prevCamPos.w);
-	float previousFast = fastS.r * prevCamPos.w;
+	/* PRE-EXPOSURE (D5), as the moments: the means were written at the history's pre-exposure, the second moments as
+	 * their roots (squared back, they scale by r squared). */
+	float r = prevCamPos.w;
 	float age = momS.b;
-
 	float fastFrames = max(antiLagParams.x, 1.0);
 	float fastAlpha = max(1.0 / (age + 1.0), 1.0 / fastFrames);
-	float fastMean = mix(previousFast, luma, fastAlpha);
 
-	/* One frame's noise: the larger of the 3x3 spatial deviation and antiLagParams.z (0.5) of the pixel's TEMPORAL
-	 * deviation. The spatial one protects a hit's arrival (its own window holds it), the temporal one a run without
-	 * hits.
-	 * ⚠️ The spatial deviation ALONE (the first detector, 711c70a7) is blind to a SPARSE estimator: where most rays
-	 * miss (the screen-space lane in a dim corridor), most 3x3 windows hold no hit and read 0, leaving only the 2 %
-	 * floor. The fast mean, dipping between two hits, crossed it nearly every frame, the slow history was held at the
-	 * fast length, and the SSGI's screen-space feedback amplified that small per-frame bias into an energy loss
-	 * (labyrinth, 2026-10-25: the converged right wall 40 instead of 88, the age view at 60 % of its steady value;
-	 * found by macOS-PA). ANY trigger correlated with the noise biases the level, by firing between hits (a loss) or
-	 * on a hit's arrival (a gain), and the SSGI feedback amplifies either. Measured (item
-	 * gi-history-keeps-a-switched-off-emitter-lit): a weight of 0.25 still loses 28 %; 0.5 keeps the level and, on the
-	 * screen-space lane, gives up most of the acceleration, which a per-pixel test on a 6-frame mean of SSGI's noise
-	 * cannot deliver honestly (owner decision 2026-10-25: this safe detector now, a neighbourhood-pooled test next). */
-	float temporalSigma = sqrt(max(slowSecond - (slowMean * slowMean), 0.0));
+	/* This pixel's FAST window (fastFrames): its mean and its second moment, the next frame's history. */
+	float fastMean = mix(fastS.r * r, luma, fastAlpha);
+	float fastSecond = mix((fastS.b * fastS.b) * (r * r), luma * luma, fastAlpha);
+
+	/* The POOLED test (owner decision 2026-11-01; the neighbourhood statistics of NVIDIA's RELAX / ReBLUR, D. Zhdan,
+	 * Ray Tracing Gems II, 2021): the previous slow and fast means over the reprojected 5x5 neighbourhood, the fast one
+	 * advanced by this frame's pooled raw luminance, against the noise of a mean of that many pixels. The temporal
+	 * noise is the FAST window's own deviation, averaged over the neighbourhood: it forgets the old light within
+	 * fastFrames. The former detector took it from the SLOW moments (maxAccumulation frames), whose variance during a
+	 * lighting change measures the old/new mixture itself: its threshold grew with the change it had to detect (city,
+	 * a sunset jump: the age dipped for 0.5 s while the light took 8 s, 2026-11-01). */
+	vec2 historyTexel = 1.0 / vec2(textureSize(momentsHistoryTex, 0));
+	float slowSum = 0.0;
+	float fastSum = 0.0;
+	float varianceSum = 0.0;
+	float pooled = 0.0;
+
+	for (int y = -AntiLagPoolRadius; y <= AntiLagPoolRadius; y++)
+	{
+		for (int x = -AntiLagPoolRadius; x <= AntiLagPoolRadius; x++)
+		{
+			vec2 uv = rp.surfaceUV + vec2(x, y) * historyTexel;
+			vec4 m = texture(momentsHistoryTex, uv);
+			vec4 f = texture(antiLagHistoryTex, uv);
+
+			if (!historySampleFinite(m) || !historySampleFinite(f))
+			{
+				continue;
+			}
+
+			float neighbourFast = f.r * r;
+			float neighbourSecond = (f.b * f.b) * (r * r);
+
+			slowSum += m.r * r;
+			fastSum += neighbourFast;
+			varianceSum += max(neighbourSecond - neighbourFast * neighbourFast, 0.0);
+			pooled += 1.0;
+		}
+	}
+
+	/* The centre passed historySampleFinite(): pooled >= 1. */
+	float slowPooled = slowSum / pooled;
+	float fastPooled = mix(fastSum / pooled, rawPooled, fastAlpha);
+	float temporalSigma = sqrt(varianceSum / pooled);
+
+	/* One frame's noise per pixel: the larger of the spatial deviation and antiLagParams.z of the fast window's temporal
+	 * one (the spatial one alone reads 0 in a sparse estimator's empty windows, item
+	 * gi-history-keeps-a-switched-off-emitter-lit). The pooled fast mean averages `pooled` pixels over
+	 * min(age + 1, fastFrames) frames. A small relative floor keeps a noiseless (flat) region from tripping on
+	 * rounding. */
 	float noiseSigma = max(spatialSigma, antiLagParams.z * temporalSigma);
-
-	/* The fast mean's expected noise: one frame's deviation over the root of the frames it averages. A small
-	 * relative floor keeps a noiseless (flat) region from tripping on rounding. */
-	float fastSigma = noiseSigma / sqrt(min(age + 1.0, fastFrames));
-	float tolerance = antiLagParams.y * fastSigma + 0.02 * max(slowMean, fastMean) + 1e-6;
-	float excess = abs(fastMean - slowMean) / tolerance;
+	float fastSigma = noiseSigma / sqrt(pooled * min(age + 1.0, fastFrames));
+	float tolerance = antiLagParams.y * fastSigma + 0.02 * max(slowPooled, fastPooled) + 1e-6;
+	float excess = abs(fastPooled - slowPooled) / tolerance;
 
 	/* Beyond the tolerance, ramp the cap from maxAccumulation down to the fast length over one more tolerance. */
 	float cap = mix(maxN, fastFrames, clamp(excess - 1.0, 0.0, 1.0));
 
-	outAntiLag = vec4(fastMean, cap, 0.0, 0.0);
+	outAntiLag = vec4(fastMean, cap, sqrt(max(fastSecond, 0.0)), 0.0);
 }
 )GLSL";
 
@@ -937,7 +974,8 @@ namespace EmEn::Graphics
 			}
 		}
 
-		/* Anti-lag pair (RG16F) — only for a diffuse producer with the anti-lag on. */
+		/* Anti-lag pair (RGBA16F: the fast mean, the age cap, the root of the fast second moment) — only for a diffuse
+		 * producer with the anti-lag on. */
 		if ( m_parameters.antiLag && !m_parameters.reflectionMode )
 		{
 			for ( size_t index = 0; auto & target : m_antiLagTargets )
@@ -946,7 +984,7 @@ namespace EmEn::Graphics
 				name += "_GIAntiLag";
 				name += std::to_string(index++);
 
-				if ( !target.create(renderer, width, height, VK_FORMAT_R16G16_SFLOAT, name) )
+				if ( !target.create(renderer, width, height, VK_FORMAT_R16G16B16A16_SFLOAT, name) )
 				{
 					TraceError{ClassId} << "Failed to create the GI anti-lag target '" << name << "' !";
 
