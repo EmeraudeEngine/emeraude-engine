@@ -648,8 +648,10 @@ namespace EmEn::Resources
 			 * container task (synchronous, manual on the caller's thread) has none: its completion gets a token that never
 			 * stops.
 			 * @note Not copyable, not movable: one scope, one load, on the load's own thread.
+			 * @note EMEN_LEAN_API on the NESTED class itself: MSVC does not export a nested class with its enclosing one,
+			 * and the Container template constructs it in the consumer (docs/windows-export-api.md § 3).
 			 */
-			class LoadStopScope final
+			class EMEN_LEAN_API LoadStopScope final
 			{
 				public:
 

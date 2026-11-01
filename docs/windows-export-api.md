@@ -135,6 +135,10 @@ lean set costs a few ordinals, an under-inclusive one costs a broken consumer li
   class EMEN_API Bar { … };           // public, but not referenced by our applications
   EMEN_API bool freeFunction (int);   // out-of-line free function
   ```
+- **A NESTED class is NOT exported with its enclosing class** on MSVC: a nested class with out-of-line members
+  needs its own macro. `ResourceTrait::LoadStopScope` (2026-11-01) had none; GCC and clang linked (default
+  visibility), MSVC failed the consumer's link (LNK2001 × 114 from `Container.hpp`, a template instantiated in
+  `projet-alpha`) — `class EMEN_LEAN_API LoadStopScope final`, LEAN because the consumer reaches it through a template.
 - **Do NOT annotate**: header-only / fully-inline classes, function/class **templates** (instantiated
   in the consumer — `Math/*`, most of `Base::PixelFactory`), `constexpr`/`inline` helpers, and
   anything purely internal to the engine. Annotating them is harmless but noise.
