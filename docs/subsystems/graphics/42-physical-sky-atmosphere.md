@@ -240,6 +240,18 @@ Owner decisions (2026-10-25):
      (`VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`, proven armed by the layer's "Current Validation Enabled:
      Synchronization"), six jumps 0.55 ↔ 0.95: 0 VUID, 0 `SYNC-HAZARD`, 0 `UNASSIGNED-`. ⚠️ `city` itself is too heavy
      under synchronization validation: its console stopped answering.
+   - **Peers (engine 2cdc4112, projet-alpha 9552130e, 2026-11-01)**, the same protocol, four jumps each, 0 VUID everywhere:
+     - macOS-PA (M6, ~47 FPS): 0 near-black frame (round 4: 5 / 14 / 6 / 0), the land at night from frame #0. Apple
+       clang compiles the 53 includers of the trimmed `Act.hpp`.
+     - LinuxB-PA (AMD RADV Renoir, ~25 FPS): 0 near-black frame, night at frame #0 with the lamps, signals and windows
+       already lit.
+     - Windows-PA (RTX 3500 Ada, ~80 FPS): 0 near-black frame; MSVC Release and Debug clean. The one capture that
+       caught the step shows a single part-dark frame between day and night (42 % of the pixels non-zero). That is
+       the documented residue: the ambient lands one logic tick after the sky.
+     - Everywhere a slow settle follows (5-7 % over ~0.4-0.85 s): TAA converging at its stationary alpha below its
+       large-change threshold (graphics doc 13-12 § The TAA resolve).
+     - ⚠️ `temporalCapture` records the frames presented after the command arrives (4-40 ms after the jump): a frame
+       in between is not in the record.
 
 A scene takes its ambient from the sky with `applyBackgroundLighting({.applyAmbient = true, .applyStars = false})`
 (sky-lab does; the clock lights the sun). The CPU photometry of a picture sky (`hemisphereIlluminanceFactor()`,
