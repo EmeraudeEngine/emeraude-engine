@@ -28,17 +28,30 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cstddef>
+#include <cstdint>
 #include <iomanip>
+#include <memory>
 #include <optional>
+#include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
+#include <vector>
 
 /* Local inclusions. */
+#include "Console/CommandResult.hpp"
+#include "Console/Output.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
+#include "CoreTypes.hpp"
+#include "Graphics/EffectSlot.hpp"
+#include "Graphics/FrameDiagnostics.hpp"
 #include "IndirectPostProcessEffect.hpp"
+#include "Logging/Severity.hpp"
 #include "SettingKeys.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {
@@ -495,6 +508,10 @@ namespace EmEn::Graphics
 					( diagnostics.metering.preExposureOverridden ? "FORCED, Core.RendererService.setPreExposureOverride(0) gives it back." : "automatic." )
 				);
 				appendOverflowCensus(diagnostics, outputs);
+				outputs.emplace_back(Severity::Info, diagnostics.viewProjectionSparse ?
+					"View reconstruction: Sparse — the projection has the sparse layout, the marching effects record their FAST variants (graphics doc 13-12 § 41)." :
+					"View reconstruction: Matrix — the projection is not sparse, the marching effects record their matrix variants."
+				);
 			}
 
 			return Console::CommandResult::fromOutputs(std::move(outputs), true);

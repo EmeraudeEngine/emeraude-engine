@@ -177,5 +177,8 @@ namespace EmEn::Graphics
 		MeteringReport metering{};
 		/** @brief The rendered-frame serial of the publication (Renderer::renderedFrameSerial()). */
 		uint64_t renderedFrame{0};
+		/** @brief Whether the chain's projection had the sparse layout: the marching effects recorded their FAST
+		 * (ProjectionForm::Sparse) variants (graphics doc 13-12 § 41). */
+		bool viewProjectionSparse{false};
 	};
 }

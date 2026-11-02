@@ -160,6 +160,14 @@ off, 3 launches each (the October engine through a bisect, graphics item `intel-
   mean |difference| 0.025 (the animated dragon excluded).
 - **Measured on the Intel** (same protocol): matrix 15.17 ms → **Sparse variant 14.55 ms** (−0.62 ms, Frame 46.69 →
   46.09, 20.21 → 20.47 FPS); the RTX unchanged (2.61 ms). MSVC Release and Debug clean.
+- **The other GPUs** (engine 416f5722, `reflexion-debug`, 3 launches before / after, layer off): Apple M6 (MoltenVK,
+  2560×1440) `SSGIEffect/internal` 16.69 → 16.88 ms; AMD RADV Renoir (1280×720) 14.06 → 14.10 ms — both inside their
+  run-to-run spread (0.5 / 0.25 ms): neither gains, neither regresses. Their march is bound by its fetches, not by the
+  reconstruction's arithmetic: the gain is the Intel's. Layer-on smokes on both: 0 VUID, 0 "Unable to compile" (the new
+  `_Sparse` / `_Matrix` translations included).
+- **Which variant a frame recorded**: `Core.SceneManagerService.PostProcess.getStatus` ends with "View reconstruction:
+  Sparse …" or "… Matrix …" (`FrameDiagnostics::viewProjectionSparse`, computed by `Renderer::publishFrameDiagnostics()`
+  from the same read-state projection the chain's view block is built from). `reflexion-debug` on Linux: Sparse.
 - ⚠️ **A runtime uniform branch is NOT free there**: the first version chose between the two forms inside each helper
   (`if (emView.cameraPosition.w < 0.5) return <matrix>`), and the Intel paid +0.85 ms instead of saving: its compiler
   kept both paths live inside the march loop. Without the branch (B′, the same coefficients): 14.57 ms.

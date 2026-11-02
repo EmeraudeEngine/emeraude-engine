@@ -60,6 +60,7 @@
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/CubemapResource.hpp"
 #include "Graphics/DeferredLightResolve.hpp"
+#include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/ExternalInput.hpp"
 #include "Graphics/FrameCapture.hpp"
 #include "Graphics/FrameDiagnostics.hpp"
@@ -3810,6 +3811,18 @@ namespace EmEn::Graphics
 	{
 		FrameDiagnostics diagnostics{};
 		diagnostics.renderedFrame = m_renderedFrameSerial;
+
+		/* The layout the chain's view block was built from (PostProcessor: the main target's READ-state projection):
+		 * the marching effects recorded their FAST variants when it is sparse (graphics doc 13-12 § 41). */
+		if ( const auto mainTarget = this->mainRenderTarget(); mainTarget != nullptr )
+		{
+			std::array< float, 16 > projection{};
+			const auto & matrix = mainTarget->viewMatrices().projectionMatrix(m_currentReadStateIndex);
+
+			std::copy_n(matrix.data(), projection.size(), projection.begin());
+
+			diagnostics.viewProjectionSparse = ViewReconstructionGLSL::isSparseProjection(projection);
+		}
 
 		if ( const auto * census = m_postProcessor.overflowCensus(); census != nullptr )
 		{
