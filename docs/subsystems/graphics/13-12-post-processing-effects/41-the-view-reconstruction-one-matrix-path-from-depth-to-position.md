@@ -171,5 +171,8 @@ off, 3 launches each (the October engine through a bisect, graphics item `intel-
 - ⚠️ **A runtime uniform branch is NOT free there**: the first version chose between the two forms inside each helper
   (`if (emView.cameraPosition.w < 0.5) return <matrix>`), and the Intel paid +0.85 ms instead of saving: its compiler
   kept both paths live inside the march loop. Without the branch (B′, the same coefficients): 14.57 ms.
-- SSR, SSAO and the contact shadows march too: the same variants, each kept only on an Intel A/B showing a gain (owner
-  decision, effect by effect).
+- **SSR and SSAO, measured and NOT adopted** (Ave Performus: ≥ 5 % and outside the noise; Windows-PA, the Intel, same
+  protocol, 2026-11-02): SSR's trace (a screen-space Hi-Z march: only its linear depth, twice a step, goes through the
+  reconstruction) 8.20 → 8.06 ms, −1.7 %; SSAO's AO pass (two matrix products a sample) 1.126 → 1.072 ms, −4.8 %, Frame
+  flat — both outside the noise, both under the bar. Owner decision: neither kept; they stay on the matrix helpers. The
+  contact shadows project with their own pushed matrix, not the view block: outside this mechanism.

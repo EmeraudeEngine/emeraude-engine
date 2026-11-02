@@ -38,7 +38,6 @@ The bisect of the +4 ms (Intel, 1280×720, layer off, 3 launches per point, medi
   initializer patch) in Windows-PA's `.claude-build-oct`, then bisect the engine half if it shows there.
 - Bisect the ScenePass +0.9 ms between f85402e1 and 95fe78cd.
 - Owner decisions on whatever they find; the anti-lag and TAA costs are known features (record, or optimise).
-- The FAST forms for SSR, SSAO and the contact shadows, each kept on an Intel A/B (owner decision, effect by effect).
 
 ## ⚠️ Traps
 
