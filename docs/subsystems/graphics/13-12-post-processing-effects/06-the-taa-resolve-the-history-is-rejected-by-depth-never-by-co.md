@@ -34,8 +34,8 @@ filtered) decides whether the history is still valid.
   unchanged geometry.
 - **The LARGE-CHANGE test (owner decision 2026-11-01)** — the colour test that bullet foresaw, made
   visible by the macOS peer: after a time-of-day jump on `city` (0.55 → 0.95), the M6 took ~3 s to settle,
-  and switching `TemporalAA` off alone made it final from +0.5 s (macOS-PA round 3, engine item
-  `lighting-change-converges-over-frames`). The stationary alpha 0.05 is ~20 frames per e-fold: 0.2 s at
+  and switching `TemporalAA` off alone made it final from +0.5 s (macOS-PA round 3; the former engine item
+  `lighting-change-converges-over-frames`, closed 2026-11-02). The stationary alpha 0.05 is ~20 frames per e-fold: 0.2 s at
   100 FPS, ~3 s to settle at 35-45 FPS.
   - **The test**: the mean EXPOSED luminance (× the residual exposure, the history × `historyRescale`) of
     this frame's 5×5 neighbourhood against the history's, reprojected with the pixel's own motion. Above
@@ -63,8 +63,8 @@ filtered) decides whether the history is still valid.
     | Default (RTGI), test off | 247 | 170 | 57 | 23 |
     | Default (RTGI), test on | 230 | 66 | 22 | 17 |
 
-    With RTGI on, what remains is the GI denoiser's own history (engine item
-    `lighting-change-converges-over-frames`).
+    With RTGI on, what remained was the GI denoiser's own history, fixed by its anti-lag reset (graphics
+    doc 13-12 § 16, The RESET, 2026-11-02).
   - **Parked shimmer** (16 consecutive frames, per-pixel 8-bit peak-to-peak, y < 1400): `relief` mean 0.61 /
     0.01 % > 8 / max 38 (off) against 0.61 / 0.009 % / max 27 (on) — unchanged. `city` at the quay (day):
     façade 0.19 / 0.18, sky 0.04 / 0.04, trees 1.26 / 1.35 (> 8: 1.40 / 1.82 %, the wind); the SEA 22 → 34. The

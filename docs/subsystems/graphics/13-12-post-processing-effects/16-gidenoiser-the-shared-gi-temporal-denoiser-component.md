@@ -250,6 +250,17 @@ frame rate. A first `labyrinth` RT run with the reset (level 14.95, shimmer 7.2)
 repeats: launch-to-launch variance, the labyrinth's auto exposure unpinned. A moderate change still converges over the
 6-frame window, in frames.
 
+**The reset on the three OS and AMD** (engine cf4c4432, 2026-11-02; TAA off, `city` sunset at the peers' own frame rates,
+reset off (10⁶) → on (4); 0 VUID, 0 "Unable to compile" everywhere, MSVC Release and Debug and RADV clean):
+- macOS-PA, M6 (SSGI, ~26 FPS): the land at frame #0 / +0.1 / +0.5 / +1 s 104 / 90 / 46 / 22 → **17.5 / 15.2 / 14.1 /
+  13.9** (night 13.8); `labyrinth` 55.00 → 55.03.
+- LinuxB-PA, AMD RADV Renoir (SSGI, ~27 FPS): 129 / 120 / 69 / 35 → **25 / 21 / 15.4 / 14.3**; `labyrinth` 61.85 → 62.06
+  (+0.3 %).
+- Windows-PA, Intel iGPU (SSGI, 12-21 FPS): +0.1 / 1 / 2 s 121 / 49 / 22 → **22.4 / 14.4 / 14.0**; RTX 3500 Ada (RTGI,
+  77-175 FPS): the screenshot right after the command 231 → **16.3**.
+- What remains is a short tail (B: ~17-25 → 14 over ~1 s at 25 FPS): the moderate change after the reset, settling
+  over the 6-frame window.
+
 ### The history of the lag (the former item `gi-history-keeps-a-switched-off-emitter-lit`, 2026-10-06 → 2026-11-01)
 
 - **Found** by macOS-PA (Apple M2, SSGI, ~6.7 FPS, `labyrinth` test pose, 2026-10-06): the 55 flickering lamps switched
