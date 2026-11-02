@@ -20,7 +20,13 @@ ambient at 5000 lx delivered 120 lx.
   intensity and red chromaticity on it: VolumetricLight read them as is, so every sky pixel radiated that red all
   night and the auto exposure turned it into a saturated veil (WaterWorld's physical sky, the sun 20° down: 255 /
   248 / 214 with the shafts, 0.1 / 0 / 0 without; after the fix both 0.1 / 0 / 0, the day unchanged, 0 VUID).
-  AtmosphericFog does not check yet (`docs/todo/atmospheric-fog-lit-by-a-disabled-sun.md`).
+  AtmosphericFog checks too since 2026-11-02 (the fog's luminance is zero; the extinction still applies, so a
+  sunless fog only attenuates). `light-and-shadow-debug` with `select(Fog, AtmosphericFogEffect)`, its `Sun0` switched
+  off through `DirectionalLight.setEnabled`: the whole image 66.0 before the fix (a white-grey fog band lit at the
+  horizon) → 41.6 after (RGB 54.8 / 21.4 / 48.6, the VolumetricScattering occupant's own 54.5 / 21.2 / 48.2); sun on
+  91.04 both; 0 VUID. Owner verdict on the night look, same day: validated.
+  ⚠️ `LightSet::mainDirectionalLight()` stays the FIRST directional light added (a clock's sun), disabled or not: a
+  moon never lights these effects.
 - ⚠️ **A channel may exceed 1** (pure blue 13.85, a 2000 K sun 1.65 in red): carry it as floats, never through a
   clamping `Color< float >` (the probe-volume ambient did, capping every ambient above 1 lx at 1 — fixed, with its
   missing 1/π). The lens flare caps its sun luminance on the BRIGHTEST CHANNEL, not the scalar (half-float range).

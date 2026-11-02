@@ -324,8 +324,11 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		 * Default derivation: L = E · ρ / π, the Lambertian relation used everywhere else in the
 		 * engine, with E the illuminance in lux and ρ carried by the chromaticity itself. */
 		/* PRE-EXPOSURE (step 6, D8): the composited buffer holds nits × E_pre, so the fog's own radiance is
-		 * written at that scale too. */
-		const auto fogLuminance = medium->resolveLuminance(mainLight->illuminance()) * context.preExposure;
+		 * written at that scale too.
+		 * ⚠️ A DISABLED main light lights nothing (graphics doc 13-12 § 03): a celestial clock switches its sun off
+		 * at sunset and leaves its last illuminance and colour on it, and read as is the fog kept that inscatter all
+		 * night. Its luminance is zero then; the extinction still applies (a sunless fog only attenuates). */
+		const auto fogLuminance = mainLight->isEnabled() ? medium->resolveLuminance(mainLight->illuminance()) * context.preExposure : 0.0F;
 
 		/* Update per-frame descriptor with scene color, depth, and material properties. */
 		static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));
