@@ -492,6 +492,10 @@ namespace EmEn::Graphics
 				 * 0 without a camera. */
 				float shutterSpeed{0.0F};
 				PostProcessor::PushConstants constants{};
+				/* Whether the frame's projection has the sparse layout (ViewReconstructionGLSL::isSparseProjection()): a
+				 * marching effect then records the pipeline built with ProjectionForm::Sparse, else its Matrix variant
+				 * (owner decision 2026-11-02: two pipeline variants, never a runtime branch in the shader). */
+				bool viewProjectionSparse{false};
 			};
 
 			/**

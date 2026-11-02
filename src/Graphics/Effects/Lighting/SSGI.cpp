@@ -27,6 +27,9 @@
 #include "SSGI.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
+#include <initializer_list>
+#include <iterator>
 #include <string>
 
 /* Third-party inclusions. */
@@ -130,10 +133,11 @@ const float PI_HALF = 1.57079633;
 /* Reconstruct the RECONSTRUCTION-space position from UV and depth: view space with Z negated (the distance along the
  * view axis is positive, view-space Z is negative in front of the camera), which is the space the whole screen-space
  * family works in — through the frame's inverse projection (ViewReconstructionGLSL), never a scalar linearisation: the
- * chain's clip planes were frozen at 0.1 / 1000, up to 2.1x off with a wide lens (2026-10-25). */
+ * chain's clip planes were frozen at 0.1 / 1000, up to 2.1x off with a wide lens (2026-10-25). The FAST helper: called in
+ * the horizon march, the full matrix product is what a marching loop must not pay (graphics doc 13-12 § 41). */
 vec3 reconstructPosition (vec2 uv, float depth)
 {
-	vec3 viewPosition = emViewPosition(uv, depth);
+	vec3 viewPosition = emViewPositionFast(uv, depth);
 
 	return vec3(viewPosition.xy, -viewPosition.z);
 }
@@ -407,13 +411,14 @@ layout(push_constant) uniform PushConstants
  * Z alone (perspective, jittered or not, and orthographic), so X = Y = 0 stand in. */
 float linearizeDepth (float depth)
 {
-	return emViewDepth(vec2(0.5), depth);
+	return emViewDepthFast(depth);
 }
 
-/* Reconstruct the position from UV and depth. */
+/* Reconstruct the position from UV and depth. The FAST helpers: called at every march step and refinement step, the
+ * full matrix product cost +0.73 ms on an Intel iGPU (graphics doc 13-12 § 41). */
 vec3 reconstructPosition (vec2 uv, float depth)
 {
-	vec3 viewPosition = emViewPosition(uv, depth);
+	vec3 viewPosition = emViewPositionFast(uv, depth);
 
 	return vec3(viewPosition.xy, -viewPosition.z);
 }
@@ -421,7 +426,7 @@ vec3 reconstructPosition (vec2 uv, float depth)
 /* Project a position back to screen UV. */
 vec2 projectToUV (vec3 viewPos)
 {
-	return emUVFromView(vec3(viewPos.xy, -viewPos.z));
+	return emUVFromViewFast(vec3(viewPos.xy, -viewPos.z));
 }
 
 /* PCG integer hash → decorrelated white noise from integer pixel coordinates (same
@@ -852,45 +857,61 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		const auto vertexModule = this->getFullscreenVertexShader();
 
-		/* ⚠️ The variant is decided HERE, once: the sky block declares a sampler the no-sky pipeline
-		 * layout does not carry, and a `#extension` cannot live inside an `#ifdef` block. */
-		const std::string traceSource = m_skyVisibilityActive
-			? std::string{"#version 450\n#define EMEN_SSGI_SKY_VISIBILITY 1\n#extension GL_EXT_nonuniform_qualifier : require\n"} + SSGITraceFragmentShaderBody + ViewReconstructionGLSL::sourceGLSL(0, TraceSkyViewBinding) + SSGITraceFragmentShaderMain
-			: std::string{"#version 450\n"} + SSGITraceFragmentShaderBody + ViewReconstructionGLSL::sourceGLSL(0, TraceViewBinding) + SSGITraceFragmentShaderMain;
-
-		const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, m_skyVisibilityActive ? "SSGI_TraceSky_FS" : "SSGI_Trace_FS", ShaderType::FragmentShader, traceSource);
-
-		if ( vertexModule == nullptr || traceFragment == nullptr )
+		if ( vertexModule == nullptr )
 		{
-			TraceError{ClassId} << "Failed to compile SSGI shaders !";
+			TraceError{ClassId} << "Failed to compile the SSGI vertex shader !";
 
 			return false;
 		}
 
-		/* ---- Create pipelines ---- */
-		m_tracePipeline = this->createFullscreenPipeline(ClassId, "SSGI_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
-
-		if ( m_tracePipeline == nullptr )
+		/* ---- Create pipelines: both ProjectionForm variants of each pass (index 0 Matrix, 1 Sparse) ---- */
+		for ( const auto form : {ViewReconstructionGLSL::ProjectionForm::Matrix, ViewReconstructionGLSL::ProjectionForm::Sparse} )
 		{
-			return false;
-		}
+			const bool sparse = form == ViewReconstructionGLSL::ProjectionForm::Sparse;
+			const std::string suffix{sparse ? "_Sparse" : "_Matrix"};
+			const auto index = static_cast< size_t >(sparse ? 1 : 0);
 
-		if ( m_skyVisibilityActive )
-		{
-			const auto horizonFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSGI_SkyVisibility_FS", ShaderType::FragmentShader, std::string{SSGIHorizonFragmentShader} + ViewReconstructionGLSL::sourceGLSL(0, HorizonViewBinding) + SSGIHorizonFragmentBody);
+			/* ⚠️ The variant is decided HERE, once: the sky block declares a sampler the no-sky pipeline
+			 * layout does not carry, and a `#extension` cannot live inside an `#ifdef` block. */
+			const std::string traceSource = m_skyVisibilityActive
+				? std::string{"#version 450\n#define EMEN_SSGI_SKY_VISIBILITY 1\n#extension GL_EXT_nonuniform_qualifier : require\n"} + SSGITraceFragmentShaderBody + ViewReconstructionGLSL::sourceGLSL(0, TraceSkyViewBinding, form) + SSGITraceFragmentShaderMain
+				: std::string{"#version 450\n"} + SSGITraceFragmentShaderBody + ViewReconstructionGLSL::sourceGLSL(0, TraceViewBinding, form) + SSGITraceFragmentShaderMain;
 
-			if ( horizonFragment == nullptr )
+			const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, (m_skyVisibilityActive ? "SSGI_TraceSky_FS" : "SSGI_Trace_FS") + suffix, ShaderType::FragmentShader, traceSource);
+
+			if ( traceFragment == nullptr )
 			{
-				TraceError{ClassId} << "Failed to compile the SSGI sky-visibility shader !";
+				TraceError{ClassId} << "Failed to compile the SSGI trace shader (" << suffix << ") !";
 
 				return false;
 			}
 
-			m_horizonPipeline = this->createFullscreenPipeline(ClassId, "SSGI_SkyVisibility", vertexModule, horizonFragment, m_horizonLayout, m_horizonTarget);
+			auto & tracePipeline = *std::next(m_tracePipelines.begin(), static_cast< std::ptrdiff_t >(index));
+			tracePipeline = this->createFullscreenPipeline(ClassId, "SSGI_Trace" + suffix, vertexModule, traceFragment, m_traceLayout, m_traceTarget);
 
-			if ( m_horizonPipeline == nullptr )
+			if ( tracePipeline == nullptr )
 			{
 				return false;
+			}
+
+			if ( m_skyVisibilityActive )
+			{
+				const auto horizonFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSGI_SkyVisibility_FS" + suffix, ShaderType::FragmentShader, std::string{SSGIHorizonFragmentShader} + ViewReconstructionGLSL::sourceGLSL(0, HorizonViewBinding, form) + SSGIHorizonFragmentBody);
+
+				if ( horizonFragment == nullptr )
+				{
+					TraceError{ClassId} << "Failed to compile the SSGI sky-visibility shader (" << suffix << ") !";
+
+					return false;
+				}
+
+				auto & horizonPipeline = *std::next(m_horizonPipelines.begin(), static_cast< std::ptrdiff_t >(index));
+				horizonPipeline = this->createFullscreenPipeline(ClassId, "SSGI_SkyVisibility" + suffix, vertexModule, horizonFragment, m_horizonLayout, m_horizonTarget);
+
+				if ( horizonPipeline == nullptr )
+				{
+					return false;
+				}
 			}
 		}
 
@@ -924,9 +945,18 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_horizonPerFrame.clear();
 		m_tracePerFrame.clear();
 
-		m_horizonPipeline.reset();
+		for ( auto & pipeline : m_horizonPipelines )
+		{
+			pipeline.reset();
+		}
+
 		m_horizonLayout.reset();
-		m_tracePipeline.reset();
+
+		for ( auto & pipeline : m_tracePipelines )
+		{
+			pipeline.reset();
+		}
+
 		m_traceLayout.reset();
 
 		m_denoiser.destroy();
@@ -948,6 +978,8 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
+		/* The pipeline variant of this frame's projection (index 0 Matrix, 1 Sparse). */
+		const auto formIndex = static_cast< std::ptrdiff_t >(context.viewProjectionSparse ? 1 : 0);
 
 		/* Update depth + normals + scene color descriptors for this frame's trace pass. */
 		if ( inputDepth != nullptr )
@@ -1014,7 +1046,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			IndirectPostProcessEffect::recordFullscreenPass(
 				commandBuffer,
 				m_horizonTarget,
-				*m_horizonPipeline,
+				**std::next(m_horizonPipelines.cbegin(), formIndex),
 				*m_horizonLayout,
 				*m_horizonPerFrame[frameIndex],
 				&pc,
@@ -1039,7 +1071,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			IndirectPostProcessEffect::recordFullscreenPass(
 				commandBuffer,
 				m_traceTarget,
-				*m_tracePipeline,
+				**std::next(m_tracePipelines.cbegin(), formIndex),
 				*m_traceLayout,
 				*m_tracePerFrame[frameIndex],
 				&pc,

@@ -333,9 +333,10 @@ namespace EmEn::Graphics::Effects::Lighting
 			/* IRT: sky visibility (half-res, RGBA16F) — xyz = WORLD-space bent normal, w = the
 			 * cosine-weighted visibility of the hemisphere. Written before the trace, read by it. */
 			IntermediateRenderTarget m_horizonTarget;
-			/* Pipelines. */
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_horizonPipeline;
+			/* Pipelines, one per ViewReconstructionGLSL::ProjectionForm (index 0 Matrix, 1 Sparse): the frame records the one
+			 * FrameContext::viewProjectionSparse names (owner decision 2026-11-02, never a runtime branch in the march). */
+			std::array< std::shared_ptr< Vulkan::GraphicsPipeline >, 2 > m_tracePipelines;
+			std::array< std::shared_ptr< Vulkan::GraphicsPipeline >, 2 > m_horizonPipelines;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_horizonLayout;

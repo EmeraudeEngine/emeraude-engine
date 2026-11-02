@@ -27,6 +27,8 @@ The engine provides rich types in `Base/` that should be used for all user-facin
 8. **Depth → position: only through the view reconstruction** (`Effects/Shared/ViewReconstructionGLSL.hpp`,
    `FrameContext::view`) — never a scalar linearisation, never clip planes or a FOV copied into push constants. The
    chain's copy was frozen at 0.1 / 1000 for months, unnoticed: [`41-the-view-reconstruction`](41-the-view-reconstruction-one-matrix-path-from-depth-to-position.md).
+   In a MARCHING loop, use the FAST helpers and build both `ProjectionForm` pipeline variants, never a runtime branch
+   between the forms (§ 41, The FAST forms: the branch cost an Intel iGPU +0.85 ms).
 
 **Example (AtmosphericFog):**
 ```cpp

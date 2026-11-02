@@ -1452,6 +1452,7 @@ namespace EmEn::Graphics
 		 * rendered the depth buffer, in this frame's buffer. The two halves of a cut frame write the same values; the
 		 * frame's fence was waited before its slot is reused. */
 		const Vulkan::UniformBufferObject * viewData = nullptr;
+		bool viewProjectionSparse = false;
 
 		if ( const auto frameIndex = m_renderer.currentFrameIndex(); frameIndex < m_viewUBOs.size() )
 		{
@@ -1467,6 +1468,15 @@ namespace EmEn::Graphics
 			std::copy_n(projection.data(), data.projection.size(), data.projection.begin());
 			std::copy_n(inverseProjection.data(), data.inverseProjection.size(), data.inverseProjection.begin());
 			std::copy_n(inverseRelativeViewProjection.data(), data.inverseRelativeViewProjection.size(), data.inverseRelativeViewProjection.begin());
+			/* The FAST coefficients (ViewReconstructionGLSL, owner decision 2026-11-02): a marching effect records its
+			 * Sparse variant when the projection has that layout, its Matrix variant otherwise. */
+			viewProjectionSparse = ViewReconstructionGLSL::isSparseProjection(data.projection);
+
+			if ( viewProjectionSparse )
+			{
+				ViewReconstructionGLSL::fillFastCoefficients(data);
+			}
+
 			data.cameraPosition = {position[Base::Math::X], position[Base::Math::Y], position[Base::Math::Z], 0.0F};
 
 			if ( m_viewUBOs[frameIndex]->writeData(Vulkan::MemoryRegion{&data, sizeof(data)}) )
@@ -1541,7 +1551,8 @@ namespace EmEn::Graphics
 				.frameHeight = static_cast< float >(extent.height),
 				.time = elapsedTime,
 				.deltaTime = deltaTime
-			}
+			},
+			.viewProjectionSparse = viewProjectionSparse
 		};
 
 		/* Combine grouping (phase A of the pass-merging plan): contiguous OVERLAY effects

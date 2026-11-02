@@ -27,8 +27,8 @@ planes, and the scalar COPY is what went out of sync.
 #### The contract
 
 - `PostProcessor` writes, once per frame and per frame-in-flight slot, a `ViewReconstructionGLSL::Data` block
-  (std140, 208 bytes): the projection, its inverse, the inverse of projection × view ROTATION (camera-relative) and
-  the camera position — all of the READ state, the matrices that rendered the depth buffer. It reaches the effects as
+  (std140, 256 bytes since 2026-11-02, 208 before): the projection, its inverse, the inverse of projection × view
+  ROTATION (camera-relative), the camera position and the FAST coefficients (below) — all of the READ state, the matrices that rendered the depth buffer. It reaches the effects as
   `FrameContext::view` (null only if the buffer could not be created or written; `Buffer::writeData()` logs that).
 - `Effects/Shared/ViewReconstructionGLSL.hpp` holds the GLSL block and the helpers, spliced into an effect's source
   with `sourceGLSL(set, binding)` between its sampler declarations and its body:
@@ -134,3 +134,34 @@ the same day ([`42-emission-in-the-indirect-diffuse`](42-emission-in-the-indirec
 `IndirectDiffuse/ScreenSpace/SkyVisibilityRadius` 16, `MotionBlur/SoftDepthExtent` 0.05, and SSR's
 `Parameters::maxDistance` 50 / `thickness` 0.2, not settings) was chosen as a physical quantity, not fitted to a look,
 and is now honoured. A scene's medium density is the scene's.
+
+#### The FAST forms for a marching loop (owner decision 2026-11-02)
+
+The matrix reconstruction made SSGI's march pay a full matrix product at every step and every refinement step (the
+former scalar path: a division). Measured by Windows-PA, Intel Raptor Lake iGPU, `reflexion-debug` at 1280×720, layer
+off, 3 launches each (the October engine through a bisect, graphics item `intel-igpu-frame-rate-halved`):
+`SSGIEffect/internal` 13.35 ms (engine 21aa2bdf) → **14.08 ms** (e64e67da, this section's port); +0.02 ms on an RTX
+3070 Ti, inside its noise. A pure-arithmetic cost a modest GPU feels and a large one does not.
+
+- `ViewReconstructionGLSL::isSparseProjection(projection)`: no x↔y shear, no x or y term in the depth and w rows, a
+  finite non-zero scale on both axes — every perspective and orthographic projection the engine builds
+  (`Matrix::perspectiveProjection()`, `orthographicProjection()`), centred or not (the jitter is applied per draw in
+  `gl_Position`, never in these matrices). `PostProcessor` checks it once per frame, fills `depthCoefficients`
+  (P22, P32, P23, P33), `perspectiveScale` (P00, P11 and their reciprocals) and `perspectiveOffset` (P20, P21, P30,
+  P31) with `fillFastCoefficients()`, and sets `FrameContext::viewProjectionSparse`.
+- The FAST helpers — `emViewDepthFast(depth)`, `emViewPositionFast(uv, depth)`, `emUVFromViewFast(viewPosition)` — are
+  a COMPILE-TIME form: `sourceGLSL(set, binding, ProjectionForm::Sparse)` splices the coefficient form,
+  `ProjectionForm::Matrix` (and the two-argument `sourceGLSL()`) the matrix helpers under the same names. A marching
+  effect builds BOTH pipelines and records the one `FrameContext::viewProjectionSparse` names (owner decision: two
+  variants, never a runtime branch). SSGI does (its horizon and trace passes, `SSGI_*_FS_Sparse` / `_Matrix`).
+- The formulas, checked against numpy's exact inverse on perspective and orthographic matrices, centred and
+  off-centre: 5·10⁻¹⁴ worst relative error in double. Frozen-noise parity on Linux (`AnimatedNoise` off, TAA off):
+  the static region of `reflexion-debug` 131.26 / 131.30, mean |difference| 0.22; on the Intel 129.435 / 129.436,
+  mean |difference| 0.025 (the animated dragon excluded).
+- **Measured on the Intel** (same protocol): matrix 15.17 ms → **Sparse variant 14.55 ms** (−0.62 ms, Frame 46.69 →
+  46.09, 20.21 → 20.47 FPS); the RTX unchanged (2.61 ms). MSVC Release and Debug clean.
+- ⚠️ **A runtime uniform branch is NOT free there**: the first version chose between the two forms inside each helper
+  (`if (emView.cameraPosition.w < 0.5) return <matrix>`), and the Intel paid +0.85 ms instead of saving: its compiler
+  kept both paths live inside the march loop. Without the branch (B′, the same coefficients): 14.57 ms.
+- SSR, SSAO and the contact shadows march too: the same variants, each kept only on an Intel A/B showing a gain (owner
+  decision, effect by effect).
