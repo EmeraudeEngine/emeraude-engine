@@ -354,14 +354,13 @@ namespace EmEn::Overlay
 			return image.writeData(renderer.transferManager(), MemoryRegion{pixmap.data().data(), pixmap.bytes()});
 		};
 
-		/* NOTE: Every condition below is a reason the partial path cannot be PROVEN safe, so the
+		/* NOTE: Every condition below is a reason the region path cannot be PROVEN safe, so the
 		 * full upload stays the default. In particular the layout check is what guarantees the image
 		 * already holds a complete frame - a fresh or recreated image is UNDEFINED and gets a full
-		 * upload, which is also what re-arms the partial path for the frames after it. */
+		 * upload, which is also what re-arms the region path for the frames after it. */
 		const auto & createInfo = image.createInfo();
 
 		if (
-			!touchedRegion.isValid() ||
 			image.currentImageLayout() != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ||
 			createInfo.arrayLayers != 1 ||
 			createInfo.mipLevels != 1 ||
@@ -373,17 +372,20 @@ namespace EmEn::Overlay
 			return fullUpload();
 		}
 
+		/* NOTE: A resident image is refreshed through the region path ONLY, even for every row. The full upload
+		 * runs on the transfer queue, the region one on the graphics queue, and nothing orders the two: a full
+		 * upload overtaken by an older region upload left that band stale on screen until its rows were touched
+		 * again (docs/todo/overlay-surface-reupload-races-on-two-queues.md). */
+		uint32_t bandTop = 0;
+		uint32_t bandHeight = pixmap.height();
+
 		/* NOTE: Full-width row band. The staging buffer layout is the linear image, so a band of
 		 * rows is contiguous in both - which is the whole reason this shape was chosen over a tight
 		 * 2D sub-rectangle: no row-by-row copy, no stride arithmetic. */
-		const auto bandTop = std::min(touchedRegion.top(), pixmap.height() - 1);
-		const auto bandHeight = std::min(touchedRegion.height(), pixmap.height() - bandTop);
-
-		if ( bandHeight == 0 || bandHeight >= pixmap.height() )
+		if ( touchedRegion.isValid() )
 		{
-			/* NOTE: A band covering every row IS the full image - going through the partial path
-			 * would only add two barriers for nothing. */
-			return fullUpload();
+			bandTop = std::min(touchedRegion.top(), pixmap.height() - 1);
+			bandHeight = std::min(touchedRegion.height(), pixmap.height() - bandTop);
 		}
 
 		const auto bytesPerPixel = pixmapBytes / (static_cast< uint64_t >(pixmap.width()) * pixmap.height());
