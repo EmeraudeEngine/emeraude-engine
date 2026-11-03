@@ -183,10 +183,16 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
   `.mac.cpp` against the trimmed headers, AppleClang `-Wdocumentation` over 417 TUs 0; Windows-PA MSVC 14.44 `/W4 /WX`
   Release and Debug 0 warning, the 17 `.windows.cpp` TUs; both: `reflexion-debug` (both lanes on the RTX),
   `forest`, `water-world`, `sky-lab` looked at, `city`'s in-capture jumps clean (day up to the first night frame,
-  marked, at the night level), 0 VUID, 0 "Unable to compile"; the Intel UHD loads `reflexion-debug` clean.
+  marked, at the night level), 0 VUID, 0 "Unable to compile"; the Intel UHD loads `reflexion-debug` clean. **The
+  per-frame IBL groups cost nothing measurable** (Windows-PA, Intel UHD, `reflexion-debug`, layer off, idle, A =
+  ef0bb2bc / B = eed27ab5 interleaved A B A B A B): TAA 4.51 → 4.51 ms, `SSGIEffect/internal` 13.91 → 13.88, the
+  anti-lag 0.45 → 0.45, à-trous 3.93 → 3.90, SSR trace 8.39 → 8.32, the frame 44.80 → 44.79; ScenePass 9.35 → 9.44
+  (B above A in the three pairs, ~1 %, under the 5 % bar). The same code measured 13.68 / 0.39 / 44.29 one day
+  earlier: compare across days only interleaved.
   ⚠️ Open observation (Windows RTX, RT lane, TAA OFF): after the jump the sea box keeps a slow tail, 2.6-3.0 at the
   first night frame down to ~0.1 over ~1.4 s, a diagonal line of specks on the water — likely the ray-traced
-  reflections' own history (RTR's denoiser) converging; Linux's RT lane reads 0.0 there. Not measured further.
+  reflections' own history (RTR's denoiser) converging; Linux's RT lane reads 0.0 there. Item
+  `rt-reflections-trail-after-a-lighting-jump` (owner, 2026-11-04: medium).
 
 > [!NOTE]
 > **One unexplained freeze, never reproduced** (Linux, 2026-11-03, during the contract's validation): in a `labyrinth`

@@ -2,7 +2,7 @@
 id: effects-read-the-live-main-light
 title: Five post-process effects read the main directional light live, not from the frame's render state
 status: open
-priority: high
+priority: medium
 scope: Graphics/Effects (Atmosphere, Camera), Scenes/LightSet
 opened: 2026-11-03
 tags: [render-state, threading, lighting]
