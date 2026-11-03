@@ -236,19 +236,33 @@ namespace EmEn
 				/* Core-application cyclic update on the active scene only.
 				 * NOTE: It will ask for a shared-access to the active scene
 				 * preventing locking the "rendering thread" for updating the scene logic. */
+				std::weak_ptr< Scenes::Scene > processedScene;
+
 				m_sceneManager.withSharedActiveScene([&] (const auto & activeScene ) {
 					/* This should run "freely" on one thread. */
 					activeScene->processLogics(m_cycle, m_physicalSimulationEnabled);
 
-					/* Tells the system one snapshot of the logic is ready to be synced. */
-					activeScene->publishStateForRendering();
+					processedScene = activeScene;
+				}, true);
+
+				/* User-application cyclic update, BEFORE the publication: what it changes this cycle (a game rule that
+				 * lights a city's lamps when the sun sets) is rendered from the same render state slot as the scene's own
+				 * logic. After it, its changes reached the next slot, one cycle late (a frame of a sunless city with its
+				 * lamps still off after a time-of-day jump, graphics doc 13-12 § 43). Outside the scene's lock, as before. */
+				this->onCoreProcessLogics(m_cycle);
+
+				m_sceneManager.withSharedActiveScene([&] (const auto & activeScene ) {
+					/* The scene this cycle processed only (a weak pointer's control block, never the address): a scene
+					 * activated meanwhile publishes after its own first cycle. */
+					if ( !processedScene.expired() && !processedScene.owner_before(activeScene) && !activeScene.owner_before(processedScene) )
+					{
+						/* Tells the system one snapshot of the logic is ready to be synced. */
+						activeScene->publishStateForRendering();
+					}
 				}, true);
 
 				/* Editor logic update (gizmo scale, hover). */
 				m_sceneManager.editorManager().processLogics();
-
-				/* User-application cyclic update. */
-				this->onCoreProcessLogics(m_cycle);
 
 				/* The release pass of the uploaded resources' CPU copies (about once a second, when enabled). */
 				m_resourceManager.releaseIdleLocalData();

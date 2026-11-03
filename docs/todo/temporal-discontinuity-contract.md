@@ -42,8 +42,11 @@ clean on the touched TUs.
   it happens; it showed an UNMARKED frame of day sky over a sunless land (the sun's enabled flag read live by the
   frame's light lists). Owner decision 2026-11-03: the enabled state is published per slot (done, scenes doc 16;
   Linux: that frame stays day, the night and its mark arrive together).
-- **AMD round 6 on it** (LinuxB-PA): R2 again — the sea at frame #0 must stay 0.00 in every jump; then close the item
-  (the knowledge is in § 43 already).
+- AMD round 6 (§ 43): the slow jumps gone; the 0.20 level remains — frames in flight reading the reserved IBL
+  slots rewritten in place (item `bindless-ibl-slots-rewritten-while-in-flight`, the ring slots); the dark first
+  night frame (the lamps one slot late) fixed by the logic cycle's order.
+- AMD round 7 once the ring slots land: the sea at frame #0 must stay 0.00 in every jump; then close the item (the
+  knowledge is in § 43 already).
 
 ## ⚠️ Traps
 

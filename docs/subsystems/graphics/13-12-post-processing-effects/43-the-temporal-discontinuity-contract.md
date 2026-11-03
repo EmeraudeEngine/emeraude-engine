@@ -124,7 +124,22 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
   light lists read the live flag, while the sky, its IBL and the epoch follow with the next slot. TAA blended that frame
   at its stationary rate. **Fixed** (owner decision 2026-11-03): the enabled state is published per slot
   (`AbstractLightEmitter::publishedEnabled()`, scenes doc 16): frame #5 stays day (251.1), the night and its mark
-  arrive together, TAA off and on, 0 VUID. AMD to verify.
+  arrive together, TAA off and on, 0 VUID.
+- **AMD round 6** (LinuxB-PA, engine 0389c34e, 25 night-frame jumps + 8 in-capture jumps at 40 FPS and 4 at 8 FPS, 0
+  VUID): the 6.x level and the slow jumps are GONE (0 of 25); the 0.20 level remains (9 of 25). Two causes found:
+  - **Frames in flight read the new IBL.** In-capture (TAA off), frames #3-#4 — SUBMITTED before the command ran —
+    show the day sun and sky over a night ambient, IBL and reflections (land 224 against 251), unmarked, in 8 of 8;
+    at 8 FPS (nothing pending on the GPU) they vanish. The engine has ONE bindless descriptor set (UPDATE_AFTER_BIND);
+    `BindlessTextureManager::syncTextureSet()` rewrites the three reserved IBL slots in place while submitted frames
+    still read them. The IBL ring protects the images, not the descriptors. Open: item
+    `bindless-ibl-slots-rewritten-while-in-flight` (owner decision 2026-11-03: the IBL sets get ring slots).
+  - **The lamps one slot late.** In 6 of 25 the first night frame, marked, is dark (land 7.8 against 13.4, TAA off
+    too): `Core::logicsTask()` ran the application's logic (`onCoreProcessLogics()`, where `city`'s lamp rule runs)
+    AFTER the scene's publication, so the lamps lit by it reached the next slot, while the sun the console switched
+    off between two cycles was in this one. **Fixed** (owner decision 2026-11-03): the hook runs between the scene's
+    logic and its publication (source-tree doc 02). Linux, 10 in-capture jumps, TAA off: the first night frame
+    marked and at the night level (15.44) in 10 of 10, no dark frame (1 in 4 before); `labyrinth`, `sponza` load
+    clean, 0 VUID.
   A second raise 0.1-1.3 s after a jump, clock stopped, in 6 of the 26 (the street lamps' switch, checked every
   logic cycle, is the likely source; not proven).
 - The readout (Linux, RTX 3070 Ti, layer on, `city` TAA alone at 40 FPS): a parked capture 60 frames unmarked;

@@ -1871,7 +1871,9 @@ namespace EmEn
 
 			/**
 			 * @brief Called every logic frame for game logic processing.
-			 * @details Runs on the logic thread, separate from rendering.
+			 * @details Runs on the logic thread, separate from rendering, after the active scene's own logic and BEFORE its
+			 * publication for rendering (since 2026-11-03): what it changes is rendered from the same render state slot
+			 * as the scene's logic of this cycle. It runs outside the scene's lock.
 			 * Update game state, AI, and non-physics logic here.
 			 * @warning Thread safety: Do not access rendering resources directly.
 			 * @param engineCycle The current frame number since engine start.
