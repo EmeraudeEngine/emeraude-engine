@@ -851,7 +851,7 @@ namespace EmEn::Scenes
 				/* Directional lights (type = 0). */
 				for ( const auto & light : m_directionalLights )
 				{
-					if ( lightIndex >= MaxRTLights || !light->isEnabled() )
+					if ( lightIndex >= MaxRTLights || !light->publishedEnabled(readStateIndex) )
 					{
 						continue;
 					}
@@ -906,7 +906,7 @@ namespace EmEn::Scenes
 				/* Point lights (type = 1). */
 				for ( const auto & light : m_pointLights )
 				{
-					if ( !light->isEnabled() )
+					if ( !light->publishedEnabled(readStateIndex) )
 					{
 						continue;
 					}
@@ -943,7 +943,7 @@ namespace EmEn::Scenes
 				/* Spotlights (type = 2). */
 				for ( const auto & light : m_spotLights )
 				{
-					if ( !light->isEnabled() )
+					if ( !light->publishedEnabled(readStateIndex) )
 					{
 						continue;
 					}
@@ -983,7 +983,7 @@ namespace EmEn::Scenes
 				 * luminance (nits). No shadow flag: a line light casts no shadow yet. */
 				for ( const auto & light : m_lineLights )
 				{
-					if ( !light->isEnabled() )
+					if ( !light->publishedEnabled(readStateIndex) )
 					{
 						continue;
 					}

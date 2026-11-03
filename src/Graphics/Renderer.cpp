@@ -3960,7 +3960,7 @@ namespace EmEn::Graphics
 	}
 
 	FrameCapture::Result
-	Renderer::captureFrames (uint32_t frameCount, bool temporal, std::chrono::milliseconds timeout) noexcept
+	Renderer::captureFrames (uint32_t frameCount, bool temporal, std::chrono::milliseconds timeout, uint32_t triggerFrame, const std::function< void () > & trigger) noexcept
 	{
 		if ( m_swapChain == nullptr )
 		{
@@ -3982,7 +3982,7 @@ namespace EmEn::Graphics
 			return {.files = {}, .error = std::move(error), .success = false};
 		}
 
-		return m_frameCapture.waitForCompletion(timeout);
+		return m_frameCapture.waitForCompletion(timeout, triggerFrame, trigger);
 	}
 
 	void

@@ -28,10 +28,14 @@
 
 /* STL inclusions. */
 #include <ranges>
+#include <sstream>
 
 /* Local inclusions. */
-#include "Controller.hpp"
 #include "BlobTrait.hpp"
+#include "Command.hpp"
+#include "Controller.hpp"
+#include "CoreTypes.hpp"
+#include "Logging/Severity.hpp"
 #include "String.hpp"
 #include "Tracer.hpp"
 
@@ -40,6 +44,20 @@ namespace EmEn::Console
 	using namespace Base;
 
 	constexpr auto TracerTag{"ControllableTrait"};
+
+	Controller *
+	ControllableTrait::rootConsole () const noexcept
+	{
+		const auto * object = this;
+
+		/* The tree is finite and acyclic (registerToObject() links a child under one parent). */
+		while ( object->m_parentObject != nullptr )
+		{
+			object = object->m_parentObject;
+		}
+
+		return object->m_console;
+	}
 
 	ControllableTrait::~ControllableTrait ()
 	{

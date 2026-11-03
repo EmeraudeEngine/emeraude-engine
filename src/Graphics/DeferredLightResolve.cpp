@@ -978,7 +978,7 @@ void main()
 			const auto skipWhenDistant = [&] (const Scenes::Component::AbstractLightEmitter & light, const Vector< 3, float > & position) {
 				const auto & drawDistance = light.publishedDrawDistance(readStateIndex);
 
-				if ( drawDistance.distance > 0.0F && light.isEnabled() && (position - viewPosition).length() >= drawDistance.distance )
+				if ( drawDistance.distance > 0.0F && light.publishedEnabled(readStateIndex) && (position - viewPosition).length() >= drawDistance.distance )
 				{
 					m_invisibleLights.emplace_back(&light);
 
@@ -994,7 +994,7 @@ void main()
 				const auto & block = light->publishedBlock(readStateIndex);
 				const Vector< 3, float > position{block[PointLight::PositionOffset + 0], block[PointLight::PositionOffset + 1], block[PointLight::PositionOffset + 2]};
 
-				if ( Scenes::LightSet::isDeferredPunctualLight(*light, shadowMapsEnabled) )
+				if ( Scenes::LightSet::isDeferredPunctualLight(*light, readStateIndex, shadowMapsEnabled) )
 				{
 					classify(*light, position, block[PointLight::RadiusOffset], false);
 				}
@@ -1009,7 +1009,7 @@ void main()
 				const auto & block = light->publishedBlock(readStateIndex);
 				const Vector< 3, float > position{block[SpotLight::PositionOffset + 0], block[SpotLight::PositionOffset + 1], block[SpotLight::PositionOffset + 2]};
 
-				if ( Scenes::LightSet::isDeferredPunctualLight(*light, shadowMapsEnabled) )
+				if ( Scenes::LightSet::isDeferredPunctualLight(*light, readStateIndex, shadowMapsEnabled) )
 				{
 					classify(*light, position, block[SpotLight::RadiusOffset], true);
 				}

@@ -48,6 +48,22 @@ render thread the moment a barrel exploded):
   `AbstractLightEmitter::touch(sphere, readStateIndex)`: the render-thread culling reads position
   AND radius from the **published block** of the latched slot (`publishedBlock()`), never from the
   parent entity. **No render-thread code may reach a light's parent entity.**
+- **A light's ENABLED state is published too** (`AbstractLightEmitter::publishedEnabled(readStateIndex)`, filled with
+  the block; 2026-11-03, owner decision). Every render-side selection reads it, never the live `isEnabled()`: the
+  frame's light lists (`Scene::renderLightedSelection()`), `LightSet::isDeferredPunctualLight()` and
+  `DeferredLightResolve::prepare()`, the RT light SSBO's walk (`LightSet::updateVideoMemory()`), `LightGlints`.
+  `enable()` / `toggle()` bump the logic generation BOTH ways (switching off republishes). The linked emissive
+  material (`linkEmissiveMaterial()`) follows at the publication (`publishStateForRendering()`), not at `enable()` /
+  `setIntensity()`: the bulb steps with its light (a material has no slot: its flush may still land one frame early,
+  while the slot is being filled). **Why:** `setTimeOfDay` → `CelestialClock::apply()` → `enable(false)` on the main
+  thread switched the sun off on the very next frame, while the sky, its IBL and the temporal-discontinuity epoch
+  followed with the next slot — one UNMARKED frame of a day sky over a sunless land (Linux `city`: land 238 against
+  251), which TAA blended at its stationary rate (graphics doc 13-12 § 43). Still live on the render thread, known: the
+  shadow map's suspension (`syncShadowMapRendering()`: at worst one frame shows its last content), and the main
+  directional light's state as read by VolumetricClouds, VolumetricLight, VolumetricScattering, AtmosphericFog and
+  LensFlare (`mainDirectionalLight()` — enabled, direction and illuminance live; engine item
+  `effects-read-the-live-main-light`), and the RT light SSBO's coordinates and colour (item
+  `rt-light-ssbo-rewritten-while-in-flight`).
 - **`LightSet::remove()` RETIRES, it does not destroy.** The light is erased from the sets and
   pushed to `m_retiredLights` stamped with the render frame counter; `destroyRetiredLights()`, called
   from `Scene::beginRenderFrame()` **behind the in-flight fence**, destroys the hardware of lights

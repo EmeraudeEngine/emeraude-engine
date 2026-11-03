@@ -22,6 +22,9 @@ Found by the G-buffer audit of the deferred resolve (2026-10-04). The resolve do
 buffer per frame in flight filled from the published blocks (`Graphics::DeferredLightResolve::prepare()`), which is
 the pattern to follow here.
 
+Since 2026-11-03 its walk skips the lights by their PUBLISHED enabled state (`publishedEnabled(readStateIndex)`,
+scenes doc 16); the coordinates and the colour are still live.
+
 ## What remains
 
 - One buffer (or one region) per frame in flight, written for the frame being recorded.

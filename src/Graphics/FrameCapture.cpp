@@ -208,11 +208,33 @@ namespace EmEn::Graphics
 	}
 
 	FrameCapture::Result
-	FrameCapture::waitForCompletion (std::chrono::milliseconds timeout) noexcept
+	FrameCapture::waitForCompletion (std::chrono::milliseconds timeout, uint32_t triggerFrame, const std::function< void () > & trigger) noexcept
 	{
+		const auto deadline = std::chrono::steady_clock::now() + timeout;
+
+		/* The trigger first: once triggerFrame frames are submitted (confirmSubmit() notifies each one), run it without
+		 * the lock — it may be any console command, the render thread keeps submitting meanwhile. */
+		if ( trigger )
+		{
+			bool reached = false;
+
+			{
+				Base::MutexLock lock{m_access};
+
+				reached = m_completion.waitUntil(lock, deadline, [this, triggerFrame] () EMEN_REQUIRES(m_access) {
+					return m_resultReady || m_state != State::Armed || m_nextFrame >= triggerFrame;
+				}) && !m_resultReady && m_state == State::Armed;
+			}
+
+			if ( reached )
+			{
+				trigger();
+			}
+		}
+
 		Base::MutexLock lock{m_access};
 
-		if ( !m_completion.waitFor(lock, timeout, [this] () EMEN_REQUIRES(m_access) {
+		if ( !m_completion.waitUntil(lock, deadline, [this] () EMEN_REQUIRES(m_access) {
 			return m_resultReady;
 		}) )
 		{
@@ -374,6 +396,9 @@ namespace EmEn::Graphics
 		}
 
 		m_nextFrame++;
+
+		/* A waiter with a trigger counts the submitted frames (waitForCompletion()). */
+		m_completion.notifyAll();
 
 		if ( m_nextFrame == m_frames.size() || !m_result.error.empty() )
 		{

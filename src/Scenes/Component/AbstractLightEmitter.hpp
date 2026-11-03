@@ -743,6 +743,23 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Returns whether the light was enabled in a render state slot (enable(), toggle()).
+			 * @note Render-thread read, the slot latched by the frame: published with publishedBlock(). Every render-side
+			 * selection reads THIS, never isEnabled(): the live flag changes on the logic or main thread (a time-of-day
+			 * jump, CelestialClock::apply()) a frame before the sky and the rest of the frame's state follow, and that
+			 * frame carries no temporal-discontinuity mark (graphics doc 13-12 § 43).
+			 * @pre readStateIndex < RenderStateSlotCount.
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			publishedEnabled (uint32_t readStateIndex) const noexcept
+			{
+				return *std::next(m_publishedEnabled.begin(), readStateIndex);
+			}
+
+			/**
 			 * @brief Returns whether this light type uses a cubemap for color projection.
 			 * @note Override in PointLight to return true.
 			 * @return bool
@@ -996,6 +1013,8 @@ namespace EmEn::Scenes::Component
 			float m_linkedIntensity{0.0F};
 			uint32_t m_colorProjectionBindlessIndex{NoColorProjectionTexture};
 			float m_colorProjectionBoost{0.0F};
+			/** @brief Published copies of the enabled flag, one per render state slot (filled with the blocks). */
+			std::array< bool, RenderStateSlotCount > m_publishedEnabled{};
 			/** @brief Whether takeEmissionStep() ran once (m_checkedEmission holds an emission). Logic thread. */
 			bool m_emissionChecked{false};
 	};

@@ -1632,10 +1632,12 @@ namespace EmEn::Graphics
 			 * @param frameCount The number of consecutive frames, 1 for a screenshot.
 			 * @param temporal True for a temporal capture (numbered files and a JSON), false for a screenshot.
 			 * @param timeout The longest wait for the files.
+			 * @param triggerFrame With a trigger: the number of frames submitted before it runs (FrameCapture::waitForCompletion()).
+			 * @param trigger Optional: run once on the calling thread after triggerFrame frames of the capture.
 			 * @return FrameCapture::Result
 			 */
 			[[nodiscard]]
-			FrameCapture::Result captureFrames (uint32_t frameCount, bool temporal, std::chrono::milliseconds timeout) noexcept;
+			FrameCapture::Result captureFrames (uint32_t frameCount, bool temporal, std::chrono::milliseconds timeout, uint32_t triggerFrame = 0, const std::function< void () > & trigger = {}) noexcept;
 
 			/**
 			 * @brief Returns a copy of the diagnostics the render thread published for the last rendered frame.

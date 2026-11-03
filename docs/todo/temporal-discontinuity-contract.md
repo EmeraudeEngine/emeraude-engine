@@ -36,9 +36,14 @@ clean on the touched TUs.
   (§ 43): the slow jumps are MARKED; the cause is one or two frames rendered with the night sky and the DAY IBL — the
   sky records its immediate cycle in frame N on the render thread, the scene adopts the set at its next logic tick
   (`Scene::updateDynamicSkyIBL()`). Owner decision 2026-11-03: the renderer adopts an immediate set itself, in frame N
-  (done, graphics doc 42 § The environment point 7; Linux 0 such frame in 20 jumps). Left: AMD's R2 again on it (the
-  sea at frame #0 must stay 0.00 in every jump), then close the item.
-- Then close the item (the knowledge is in § 43 already).
+  (done, graphics doc 42 § The environment point 7; Linux 0 such frame in 20 jumps). AMD round 4 on it: UNCHANGED (the
+  same three levels at the same rates) — the IBL lag was not AMD's cause. Round 5 (TAA off): the residue lives in
+  TAA's history. Owner decision 2026-11-03: `temporalCapture(N, triggerFrame, command)` records the jump from before
+  it happens; it showed an UNMARKED frame of day sky over a sunless land (the sun's enabled flag read live by the
+  frame's light lists). Owner decision 2026-11-03: the enabled state is published per slot (done, scenes doc 16;
+  Linux: that frame stays day, the night and its mark arrive together).
+- **AMD round 6 on it** (LinuxB-PA): R2 again — the sea at frame #0 must stay 0.00 in every jump; then close the item
+  (the knowledge is in § 43 already).
 
 ## ⚠️ Traps
 

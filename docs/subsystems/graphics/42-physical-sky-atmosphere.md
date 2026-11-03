@@ -260,9 +260,10 @@ Owner decisions (2026-10-25):
      `syncTextureSet()` then binds it, and the bake's closing barriers (`ALL_COMMANDS`) order it before the frame's
      submission on the same queue. The scene still takes the same set on its logic cycle (then a no-op).
      - **Why:** the one-tick residue above lit 1-2 frames with the DAY IBL under the night sky and sun (Linux captured
-       one: land 240, sea 21). TAA rejected the step into that frame, but not its dark residue out of it (6/255 on the
-       sea), which then faded at TAA's stationary rate for ~1 s: AMD, 2 jumps of 26, 3 discrete levels by frame
-       alignment.
+       them: land 240, sea 21 or 254).
+     - ⚠️ **It is NOT the cause of AMD's slow jumps** (graphics doc 13-12 § 43): that residue was the suspect (a dark
+       remnant TAA does not reject), but LinuxB-PA's round 4 on this fix found the same three levels at the same
+       rates. Still open.
      - **Measured** (Linux, RTX 3070 Ti, `city` at the quay, TAA alone at 40 FPS, exposure pinned, the same build
        with and without the adoption, `temporalCapture(60)` right after `setTimeOfDay(0.95)`): without, frame #0 still
        showed the day IBL on the sea and the land (sea 254.5 / land 241, or sea 21 / land 240 — the sky boxes are out of

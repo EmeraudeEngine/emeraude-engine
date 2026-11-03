@@ -330,6 +330,12 @@ python3 tools/temporal-analysis.py <stem>          # or the .json path it printe
   jitter, camera, exposure, and `temporalDiscontinuity` — whether the lighting-step mark was on, graphics doc
   13-12 § 43 — per frame). Budget 1 GiB of staging (57 frames at 2880×1620).
 - ⚠️ Capture **8** frames or more for a TAA question: the jitter cycle is 8 frames.
+- **An event recorded from before it happens** (2026-11-03): `temporalCapture(N, triggerFrame, "command")` runs that
+  console command (quoted, any command) once `triggerFrame` frames are captured, on the console's thread, while the
+  capture goes on — the console is blocked during a capture, so a command sent beside it lands only after the last
+  frame. The answer says after which frame it ran (or that the capture ended first) and repeats the command's output.
+  Example: `temporalCapture(60, 5, "Core.SceneManagerService.CelestialClock.setTimeOfDay(CitySun0, CitySunClock,
+  0.95)")` — frames #0-#4 are the day, the jump lands from #5 on, with each frame's `temporalDiscontinuity` mark.
 - Park the camera, PIN the exposure (`Camera.setExposure`) for an A/B, and let the scene converge: the
   analysis prints the flatness line first and warns when the camera moved or the exposure is auto.
 - The analysis gives the per-pixel temporal peak-to-peak (mean, p99, p99.9, shares > 1/2/4/8/16),

@@ -112,8 +112,19 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
   blend), while the lamp-lit walls start DARKER and rise; the sea at frame #0 takes three discrete values over the 26
   jumps (0.00 ×19, 0.20 ×5, 6.1 ×2). Reading: one or two frames after the jump render the night sky and sun with the
   day IBL (Linux captured one: land 240, sea 21); TAA rejects day → that frame, but not its dark residue → night.
-  **Fixed 2026-11-03** (owner decision): the renderer adopts an immediate IBL set in the frame that recorded it
-  (graphics doc 42 § The environment, point 7) — Linux 0 such frame in 20 jumps (4 in 6 before).
+  The renderer now adopts an immediate IBL set in the frame that recorded it (owner decision 2026-11-03, graphics doc
+  42 § The environment, point 7): Linux 0 such frame in 20 jumps (4 in 6 before). **But AMD's round 4 on it (engine
+  7e8742ba, 25 jumps) is unchanged**: sea 6.15 once (slow, +9.5 %), 0.20 in 7, 0.00 in 16 — that reading was wrong
+  for AMD. Round 5 (TAA off, 26 jumps): the sea 0.00 at every frame, the land flat — the residue lives in TAA's
+  history, fed by a frame BEFORE the capture.
+- **The unmarked frame, found** (Linux, RTX 3070 Ti, 2026-11-03, `temporalCapture(60, 5, "…setTimeOfDay(…, 0.95)")`,
+  the jump inside the capture — ai-runtime-control § Temporal capture): with TAA off, 2 jumps of 3 show frame #5
+  UNMARKED with the day sky (255) over a land already dimmer (238 against 251), then the night, marked, from #6. The
+  sun's DirectionalLight was switched off LIVE (`CelestialClock::apply()` → `enable(false)`, main thread) and the frame's
+  light lists read the live flag, while the sky, its IBL and the epoch follow with the next slot. TAA blended that frame
+  at its stationary rate. **Fixed** (owner decision 2026-11-03): the enabled state is published per slot
+  (`AbstractLightEmitter::publishedEnabled()`, scenes doc 16): frame #5 stays day (251.1), the night and its mark
+  arrive together, TAA off and on, 0 VUID. AMD to verify.
   A second raise 0.1-1.3 s after a jump, clock stopped, in 6 of the 26 (the street lamps' switch, checked every
   logic cycle, is the likely source; not proven).
 - The readout (Linux, RTX 3070 Ti, layer on, `city` TAA alone at 40 FPS): a parked capture 60 frames unmarked;

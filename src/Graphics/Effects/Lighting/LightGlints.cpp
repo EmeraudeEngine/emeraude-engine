@@ -522,7 +522,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 			for ( const auto & light : lightSet.pointLights() )
 			{
-				if ( const auto area = light->publishedVisibleSourceArea(readStateIndex); area > 0.0F && light->isEnabled() )
+				if ( const auto area = light->publishedVisibleSourceArea(readStateIndex); area > 0.0F && light->publishedEnabled(readStateIndex) )
 				{
 					append(makeGlint< PointLight::PositionOffset, PointLight::ColorOffset, PointLight::IntensityOffset >(light->publishedBlock(readStateIndex), area, {0.0F, 0.0F, 0.0F, 0.0F}, cameraPosition));
 				}
@@ -530,7 +530,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 			for ( const auto & light : lightSet.spotLights() )
 			{
-				if ( const auto area = light->publishedVisibleSourceArea(readStateIndex); area > 0.0F && light->isEnabled() )
+				if ( const auto area = light->publishedVisibleSourceArea(readStateIndex); area > 0.0F && light->publishedEnabled(readStateIndex) )
 				{
 					const auto & block = light->publishedBlock(readStateIndex);
 					Math::Vector< 3, float > direction{std::get< SpotLight::DirectionOffset + 0 >(block), std::get< SpotLight::DirectionOffset + 1 >(block), std::get< SpotLight::DirectionOffset + 2 >(block)};

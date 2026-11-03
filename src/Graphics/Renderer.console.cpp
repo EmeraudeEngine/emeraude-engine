@@ -59,7 +59,9 @@
 
 /* Local inclusions. */
 #include "Console/CommandResult.hpp"
+#include "Console/Controller.hpp"
 #include "Console/JSONNumber.hpp"
+#include "Console/Output.hpp"
 #include "Console/Parameter.hpp"
 #include "Console/Types.hpp"
 #include "FastJSON.hpp"
@@ -597,11 +599,13 @@ namespace EmEn::Graphics
 			return Console::CommandResult::image(result.files.front(), "image/png", message.str());
 		});
 
-		this->bindCommand("temporalCapture", "DEV: captures N consecutive presented frames as <unix seconds>-<n>.png, plus <unix seconds>.json with the per-frame metadata (jitter, camera, exposure, timing).",
+		this->bindCommand("temporalCapture", "DEV: captures N consecutive presented frames as <unix seconds>-<n>.png, plus <unix seconds>.json with the per-frame metadata (jitter, camera, exposure, timing, temporal-discontinuity mark). With triggerFrame and command: runs that console command once triggerFrame frames are captured (an event recorded from before it happens).",
 			{
-				{"frameCount", "Number of consecutive frames to capture (at least 1).", static_cast< int32_t >(FrameCapture::DefaultTemporalFrameCount)}
+				{"frameCount", "Number of consecutive frames to capture (at least 1).", static_cast< int32_t >(FrameCapture::DefaultTemporalFrameCount)},
+				{"triggerFrame", "Optional, with command: the number of frames captured before the command runs (1 to frameCount - 1)."},
+				{"command", "Optional, with triggerFrame: a full console command, quoted (e.g. \"Core.SceneManagerService.CelestialClock.setTimeOfDay(CitySun0, CitySunClock, 0.95)\")."}
 			},
-			[this] (int32_t requestedFrameCount) {
+			[this] (int32_t requestedFrameCount, std::optional< int32_t > triggerFrame, const std::optional< std::string > & command) {
 				/* DEV tool (owner, 2026-09-23): N CONSECUTIVE presented frames, to see shimmer and temporal artefacts on a
 				 * still camera. The frames pay one GPU copy each and nothing on the CPU until the last one is done. */
 				if ( requestedFrameCount < 1 )
@@ -611,9 +615,41 @@ namespace EmEn::Graphics
 
 				const auto frameCount = static_cast< uint32_t >(requestedFrameCount);
 
+				/* The trigger (owner decision 2026-11-03): the console is blocked while a capture waits, so an event can
+				 * only be recorded from before it happens if the capture itself runs it. */
+				if ( triggerFrame.has_value() != command.has_value() )
+				{
+					return Console::CommandResult::error("temporalCapture(): triggerFrame and command go together.");
+				}
+
+				if ( triggerFrame.has_value() && ( *triggerFrame < 1 || std::cmp_greater_equal(*triggerFrame, frameCount) ) )
+				{
+					return Console::CommandResult::error("temporalCapture(): triggerFrame must lie between 1 and frameCount - 1.");
+				}
+
+				auto * console = this->rootConsole();
+
+				if ( command.has_value() && ( command->empty() || console == nullptr ) )
+				{
+					return Console::CommandResult::error(command->empty() ? "temporalCapture(): the command is empty." : "temporalCapture(): no console to run the command.");
+				}
+
+				Console::Outputs triggerOutputs;
+				bool triggered = false;
+				std::function< void () > trigger;
+
+				if ( command.has_value() )
+				{
+					trigger = [console, &command, &triggerOutputs, &triggered] () {
+						triggered = true;
+
+						static_cast< void >(console->executeCommand(*command, triggerOutputs));
+					};
+				}
+
 				/* The frames themselves, then one PNG per frame on the thread pool: generous, a slow machine runs at 20 fps. */
 				const auto timeout = std::chrono::seconds{10} + std::chrono::milliseconds{500} * frameCount;
-				const auto result = this->captureFrames(frameCount, true, std::chrono::duration_cast< std::chrono::milliseconds >(timeout));
+				const auto result = this->captureFrames(frameCount, true, std::chrono::duration_cast< std::chrono::milliseconds >(timeout), triggerFrame.has_value() ? static_cast< uint32_t >(*triggerFrame) : 0U, trigger);
 
 				if ( !result.success )
 				{
@@ -622,6 +658,16 @@ namespace EmEn::Graphics
 
 				std::stringstream message;
 				message << "Temporal capture of " << frameCount << " consecutive frames saved:";
+
+				if ( command.has_value() )
+				{
+					message << "\n  " << (triggered ? "Ran after frame #" + std::to_string(*triggerFrame - 1) + ": " : "NOT run (the capture ended first): ") << *command;
+
+					for ( const auto & output : triggerOutputs )
+					{
+						message << "\n    " << output.message();
+					}
+				}
 
 				for ( const auto & file : result.files )
 				{

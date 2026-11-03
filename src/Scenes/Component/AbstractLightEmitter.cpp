@@ -134,7 +134,13 @@ namespace EmEn::Scenes::Component
 
 		*std::next(m_publishedDrawDistances.begin(), writeStateIndex) = m_drawDistance;
 		*std::next(m_publishedVisibleSourceAreas.begin(), writeStateIndex) = m_visibleSourceArea;
+		*std::next(m_publishedEnabled.begin(), writeStateIndex) = this->isEnabled();
 		m_publishedGeneration[writeStateIndex] = m_logicGeneration;
+
+		/* The linked material's emission changes when the light's state is published, not when it is set: the bulb and
+		 * its light step together (a material has no render state slot; the flush may still land one frame early, while
+		 * the slot is being filled). */
+		this->syncLinkedEmissiveMaterial();
 	}
 
 	bool
@@ -309,13 +315,10 @@ namespace EmEn::Scenes::Component
 	{
 		this->setFlag(Enabled, state);
 
-		if ( state )
-		{
-			++m_logicGeneration;
-		}
+		/* Both ways: the render reads the PUBLISHED flag (publishedEnabled()), so switching off republishes too. */
+		++m_logicGeneration;
 
 		this->syncShadowMapRendering();
-		this->syncLinkedEmissiveMaterial();
 	}
 
 	bool
@@ -325,8 +328,10 @@ namespace EmEn::Scenes::Component
 		{
 			this->disableFlag(Enabled);
 
+			/* The render reads the PUBLISHED flag (publishedEnabled()): switching off republishes too. */
+			++m_logicGeneration;
+
 			this->syncShadowMapRendering();
-			this->syncLinkedEmissiveMaterial();
 
 			return false;
 		}
@@ -336,7 +341,6 @@ namespace EmEn::Scenes::Component
 		++m_logicGeneration;
 
 		this->syncShadowMapRendering();
-		this->syncLinkedEmissiveMaterial();
 
 		return true;
 	}
@@ -416,9 +420,8 @@ namespace EmEn::Scenes::Component
 
 		this->onIntensityChange(m_intensity);
 
+		/* The linked material follows at the publication (publishStateForRendering()). */
 		this->requestVideoMemoryUpdate();
-
-		this->syncLinkedEmissiveMaterial();
 	}
 
 	bool

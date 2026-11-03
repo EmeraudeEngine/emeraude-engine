@@ -2492,12 +2492,13 @@ namespace EmEn::Scenes
 		/* Only the ENABLED lights are copied: a switched-off light draws nothing, and the batches below no longer walk
 		 * it (owner, 2026-10-28: 5800 street lamps, out by day, were walked by every batch — 14 million tests a frame,
 		 * the render thread at 100 %). */
-		const auto copyEnabled = [] (const auto & source, auto & destination) {
+		const auto copyEnabled = [readStateIndex] (const auto & source, auto & destination) {
 			destination.reserve(source.size());
 
 			for ( const auto & light : source )
 			{
-				if ( light->isEnabled() )
+				/* The frame's state, not the live flag (AbstractLightEmitter::publishedEnabled()). */
+				if ( light->publishedEnabled(readStateIndex) )
 				{
 					destination.emplace_back(light);
 				}

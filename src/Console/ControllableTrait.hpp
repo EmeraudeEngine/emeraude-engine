@@ -34,11 +34,15 @@
 #include <map>
 #include <string>
 #include <utility>
+#include <vector>
 
 /* Local inclusions for usages. */
 #include "Command.hpp"
-#include "CommandResult.hpp"
-#include "Expression.hpp"
+#include "Console/CommandResult.hpp" // IWYU pragma: export (every bindCommand() callable returns it: the trait's contract to its users)
+#include "Console/CommandSignature.hpp"
+#include "Console/Expression.hpp" // IWYU pragma: export (execute() takes it: the console builds one to dispatch every command)
+#include "Console/Output.hpp"
+#include "Console/Types.hpp"
 #include "Parameter.hpp"
 #include "TypedBinding.hpp"
 
@@ -267,6 +271,15 @@ namespace EmEn::Console
 			 * @return bool
 			 */
 			bool registerToConsole (Controller & console) noexcept;
+
+			/**
+			 * @brief Returns the console this object's tree is registered at (its root's), or nullptr when it is not.
+			 * @note MAIN THREAD (the console's): a command handler may run another command through it
+			 * (Controller::executeCommand()), which takes no lock.
+			 * @return Controller *
+			 */
+			[[nodiscard]]
+			Controller * rootConsole () const noexcept;
 
 		private:
 

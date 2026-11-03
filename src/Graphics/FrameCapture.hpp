@@ -32,6 +32,7 @@
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -166,11 +167,15 @@ namespace EmEn::Graphics
 			 * on the GPU drain through their fences, and it goes back to idle without writing anything. It used to stay
 			 * armed: the next request was refused ("A capture is already in progress") and its late result was
 			 * published to nobody (Windows, a screenshot right after a scene switch).
-			 * @param timeout The longest wait.
+			 * @param timeout The longest wait (the trigger's wait included).
+			 * @param triggerFrame With a trigger: the number of frames submitted before it runs (1 to the frame count − 1).
+			 * @param trigger Optional: run ONCE on the waiting thread, without the capture's lock, as soon as triggerFrame
+			 * frames are submitted (a temporal capture that starts before the event it records). Not run when the
+			 * capture ends, fails or times out first.
 			 * @return Result
 			 */
 			[[nodiscard]]
-			Result waitForCompletion (std::chrono::milliseconds timeout) noexcept;
+			Result waitForCompletion (std::chrono::milliseconds timeout, uint32_t triggerFrame = 0, const std::function< void () > & trigger = {}) noexcept;
 
 			/**
 			 * @brief RENDER THREAD. Returns whether a capture wants the frame being recorded: one atomic load, no lock.
