@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <cstdint>
 #include <iosfwd>
 #include <iterator> // IWYU pragma: keep (std::pair: IWYU adds then removes it across the TUs, libstdc++ mapping)
@@ -306,9 +307,12 @@ namespace EmEn::Scenes
 			void
 			setAmbientLightColor (const Base::PixelFactory::Color< float > & color) noexcept
 			{
+				const auto before = this->ambientEmission();
+
 				m_ambientLightColor = color;
 				m_ambientEmissionChromaticity = color.unitLuminanceChromaticity();
 
+				this->noteAmbientStep(before);
 				this->notify(AmbientLightChanged);
 			}
 
@@ -324,10 +328,35 @@ namespace EmEn::Scenes
 			void
 			setAmbientLightIntensity (float intensity) noexcept
 			{
+				const auto before = this->ambientEmission();
+
 				m_ambientLightIntensity = intensity;
 
+				this->noteAmbientStep(before);
 				this->notify(AmbientLightChanged);
 			}
+
+			/**
+			 * @brief Returns the count of the light set's temporal discontinuities so far: a light added or removed, the
+			 * ambient stepped (AbstractLightEmitter::emissionStepped()), and the lights' emission steps collected by
+			 * takeEmissionSteps(). Monotonic: the scene publishes it with each render state slot (item
+			 * temporal-discontinuity-contract).
+			 * @note Any thread.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			temporalDiscontinuityEvents () const noexcept
+			{
+				return m_temporalDiscontinuityEvents.load(std::memory_order_relaxed);
+			}
+
+			/**
+			 * @brief Asks every light whether its emission stepped since the previous call
+			 * (AbstractLightEmitter::takeEmissionStep()), and counts one temporal discontinuity if any did.
+			 * @note LOGIC THREAD, once per publication (Scene::publishStateForRendering()).
+			 */
+			void takeEmissionSteps () noexcept;
 
 			/**
 			 * @brief Returns the ambient colour as it was authored (setAmbientLightColor()).
@@ -680,6 +709,31 @@ namespace EmEn::Scenes
 
 		private:
 
+			/**
+			 * @brief Returns the ambient's emission: its chromaticity × its illuminance, per channel.
+			 * @return Base::Math::Vector< 3, float >
+			 */
+			[[nodiscard]]
+			Base::Math::Vector< 3, float >
+			ambientEmission () const noexcept
+			{
+				return m_ambientEmissionChromaticity * m_ambientLightIntensity;
+			}
+
+			/**
+			 * @brief Counts a temporal discontinuity when the ambient's emission stepped from before
+			 * (AbstractLightEmitter::emissionStepped()).
+			 * @param before The ambient's emission before the change.
+			 */
+			void noteAmbientStep (const Base::Math::Vector< 3, float > & before) noexcept;
+
+			/** @brief Counts one temporal discontinuity (a light added or removed, the ambient stepped). Any thread. */
+			void
+			raiseTemporalDiscontinuity () noexcept
+			{
+				m_temporalDiscontinuityEvents.fetch_add(1, std::memory_order_relaxed);
+			}
+
 			/** @brief A punctual or line-segment entry competing for the RT SSBO. */
 			struct RTLightCandidate
 			{
@@ -771,6 +825,8 @@ namespace EmEn::Scenes
 			Base::Math::Vector< 3, float > m_ambientEmissionChromaticity{0.0F, 0.0F, 0.0F};
 			float m_ambientLightIntensity{DefaultAmbientLightIntensity};
 			float m_lightPercentToAmbient{DefaultLightPercentToAmbient};
+			/** @brief temporalDiscontinuityEvents(): bumped from any thread (additions, removals, the ambient). */
+			std::atomic_uint64_t m_temporalDiscontinuityEvents{0};
 			bool m_initialized{false};
 			bool m_enabled{false};
 			bool m_createAmbientFromLights{false};

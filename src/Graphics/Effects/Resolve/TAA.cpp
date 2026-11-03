@@ -135,8 +135,6 @@ namespace
 	/* ⚠️ Split into adjacent raw literals (byte-identical once concatenated): MSVC caps ONE literal at 16380 bytes
 	 * (C2026, docs/caution-points.md). Keep every piece well under it when the shader grows. */
 	constexpr auto TAAResolveHeader = R"GLSL(
-#version 450
-
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outResolved;
 
@@ -515,6 +513,10 @@ void main()
 	 * the M6 (macOS-PA, 2026-11-01). The relative gap never reaches 1: a threshold of 1 switches the test off. */
 	float largeChange = 0.0;
 
+	/* Compiled into the variant of the frames FrameContext::temporalDiscontinuity marks only (owner decision 2026-11-03,
+	 * item temporal-discontinuity-contract): switched off by the uniform branch below, the block still cost the Intel
+	 * iGPU ~0.32 ms. */
+#ifdef EMEN_TAA_LARGE_CHANGE
 	if (largeChangeThreshold < 1.0)
 	{
 		float currentSum = 0.0;
@@ -541,6 +543,7 @@ void main()
 		/* A non-finite neighbour adds nothing here: the centre's own guard above already handles a poisoned history. */
 		largeChange = (isnan(excess) || isinf(excess)) ? 0.0 : clamp(excess - 1.0, 0.0, 1.0);
 	}
+#endif
 
 	float rejection = rejected ? 1.0 : largeChange;
 
@@ -677,9 +680,13 @@ namespace EmEn::Graphics::Effects::Resolve
 		/* Compile shaders. */
 		const auto vertexModule = this->getFullscreenVertexShader();
 
-		const auto fragmentModule = renderer.shaderManager().getShaderModuleFromSourceCode(renderer.device(), "TAAResolveFS", Saphir::ShaderType::FragmentShader, std::string{TAAResolveHeader} + ViewReconstructionGLSL::sourceGLSL(0, ViewBinding) + TAAResolveFragmentShader);
+		/* Two variants (owner decision 2026-11-03, item temporal-discontinuity-contract): [0] without the large-change test,
+		 * [1] with it, recorded on the frames FrameContext::temporalDiscontinuity marks. */
+		const std::string resolveBody = std::string{TAAResolveHeader} + ViewReconstructionGLSL::sourceGLSL(0, ViewBinding) + TAAResolveFragmentShader;
+		const auto steadyModule = renderer.shaderManager().getShaderModuleFromSourceCode(renderer.device(), "TAAResolveFS", Saphir::ShaderType::FragmentShader, "#version 450\n" + resolveBody);
+		const auto largeChangeModule = renderer.shaderManager().getShaderModuleFromSourceCode(renderer.device(), "TAAResolveLargeChangeFS", Saphir::ShaderType::FragmentShader, "#version 450\n#define EMEN_TAA_LARGE_CHANGE 1\n" + resolveBody);
 
-		if ( vertexModule == nullptr || fragmentModule == nullptr )
+		if ( vertexModule == nullptr || steadyModule == nullptr || largeChangeModule == nullptr )
 		{
 			TraceError{TracerTag} << "Failed to compile TAA shaders !";
 
@@ -720,9 +727,10 @@ namespace EmEn::Graphics::Effects::Resolve
 		/* Graphics pipeline. NOTE: Created against [0], recorded into either ping-pong
 		 * target — Vulkan render pass compatibility (identical format/ops), same trick
 		 * as the RTGI temporal pass. */
-		m_pipeline = this->createFullscreenPipeline(ClassId, "TAAResolve", vertexModule, fragmentModule, m_pipelineLayout, m_historyTargets[0]);
+		m_pipelines[0] = this->createFullscreenPipeline(ClassId, "TAAResolve", vertexModule, steadyModule, m_pipelineLayout, m_historyTargets[0]);
+		m_pipelines[1] = this->createFullscreenPipeline(ClassId, "TAAResolveLargeChange", vertexModule, largeChangeModule, m_pipelineLayout, m_historyTargets[0]);
 
-		if ( m_pipeline == nullptr )
+		if ( m_pipelines[0] == nullptr || m_pipelines[1] == nullptr )
 		{
 			TraceError{TracerTag} << "Failed to create TAA pipeline !";
 
@@ -746,7 +754,12 @@ namespace EmEn::Graphics::Effects::Resolve
 	TAA::destroy () noexcept
 	{
 		m_descriptorSets.clear();
-		m_pipeline.reset();
+
+		for ( auto & pipeline : m_pipelines )
+		{
+			pipeline.reset();
+		}
+
 		m_pipelineLayout.reset();
 
 		for ( auto & target : m_historyTargets )
@@ -805,6 +818,9 @@ namespace EmEn::Graphics::Effects::Resolve
 		const auto preExposure = std::isfinite(context.preExposure) && context.preExposure > 0.0F ? context.preExposure : 1.0F;
 		const auto historyRescale = historyUsable && m_historyPreExposure > 0.0F ? preExposure / m_historyPreExposure : 1.0F;
 
+		/* The large-change variant on the frames a discontinuity marks (and only where the test is on: 1 = off). */
+		const auto & pipeline = context.temporalDiscontinuity && m_parameters.largeChangeThreshold < 1.0F ? *m_pipelines[1] : *m_pipelines[0];
+
 		const TAAPushConstants pc{
 			.texelSizeX = 1.0F / static_cast< float >(m_historyTargets[writeIdx].width()),
 			.texelSizeY = 1.0F / static_cast< float >(m_historyTargets[writeIdx].height()),
@@ -825,7 +841,7 @@ namespace EmEn::Graphics::Effects::Resolve
 		IndirectPostProcessEffect::recordFullscreenPass(
 			commandBuffer,
 			m_historyTargets[writeIdx],
-			*m_pipeline,
+			pipeline,
 			*m_pipelineLayout,
 			*m_descriptorSets[frameIndex],
 			&pc,
@@ -849,7 +865,7 @@ namespace EmEn::Graphics::Effects::Resolve
 			IndirectPostProcessEffect::recordFullscreenPass(
 				commandBuffer,
 				m_debugTarget,
-				*m_pipeline,
+				pipeline,
 				*m_pipelineLayout,
 				*m_descriptorSets[frameIndex],
 				&debugPushConstants,

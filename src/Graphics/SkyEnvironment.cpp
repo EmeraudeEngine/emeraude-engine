@@ -379,6 +379,9 @@ namespace EmEn::Graphics
 	void
 	SkyEnvironment::recordStage (Renderer & renderer, const CommandBuffer & commandBuffer, const SkyAtmosphere & atmosphere, const Inputs & inputs) noexcept
 	{
+		/* This frame's answer to recordedImmediateCycle(), false on every early exit. */
+		m_recordedImmediateCycle = false;
+
 		if ( m_failed )
 		{
 			return;
@@ -418,6 +421,7 @@ namespace EmEn::Graphics
 			}
 
 			immediate = this->largeChange(*normalized);
+			m_immediateCycle = immediate;
 			m_cycle = *normalized;
 			m_restart = false;
 			m_stage = Stage::Capture;
@@ -427,9 +431,12 @@ namespace EmEn::Graphics
 			/* A LARGE change during a cycle: it starts over from the capture, in the same set (nothing of it was
 			 * published, and every stage discards its target first), and runs whole now. */
 			immediate = true;
+			m_immediateCycle = true;
 			m_cycle = *normalized;
 			m_stage = Stage::Capture;
 		}
+
+		m_recordedImmediateCycle = immediate;
 
 		/* One stage, or (a large change) every stage of the cycle in this command buffer: each one's closing barrier makes
 		 * its target readable by the next, as in IBLBaker::bakeEnvironment(). At most 2 + the prefilter's mip count. */
@@ -481,7 +488,8 @@ namespace EmEn::Graphics
 						.environment = set.capture,
 						.irradiance = set.irradiance,
 						.prefiltered = set.prefiltered,
-						.sunDirection = m_cycle.sunDirection
+						.sunDirection = m_cycle.sunDirection,
+						.immediate = m_immediateCycle
 					};
 
 					if ( !m_baked )

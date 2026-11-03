@@ -147,6 +147,9 @@ namespace EmEn::Graphics
 				std::shared_ptr< IBLTexture > prefiltered;
 				/** @brief The unit vector toward the star when the set was captured (world, Y up). */
 				Base::Math::Vector< 3, float > sunDirection{0.0F, 1.0F, 0.0F};
+				/** @brief Whether an IMMEDIATE cycle (a large change) completed the set: taking it is a temporal
+				 * discontinuity of the scene's ambient (item temporal-discontinuity-contract). */
+				bool immediate{false};
 			};
 
 			/**
@@ -189,6 +192,20 @@ namespace EmEn::Graphics
 			 * @param submitted Whether the command buffer was submitted.
 			 */
 			void onSubmitted (bool submitted) noexcept;
+
+			/**
+			 * @brief Returns whether the last recordStage() recorded an IMMEDIATE cycle (a large change: the star moved
+			 * more than ImmediateAngle or its illuminance changed by ImmediateRatio): the frame is a temporal
+			 * discontinuity (Renderer, FrameContext::temporalDiscontinuity).
+			 * @note RENDER THREAD, after recordStage() of the frame.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			recordedImmediateCycle () const noexcept
+			{
+				return m_recordedImmediateCycle;
+			}
 
 			/**
 			 * @brief Takes the last completed set, if a new one is available.
@@ -281,5 +298,9 @@ namespace EmEn::Graphics
 			bool m_failed{false};
 			bool m_baked{false};
 			bool m_restart{false};
+			/** @brief Render thread: the running cycle records whole in one frame (its publication says so). */
+			bool m_immediateCycle{false};
+			/** @brief Render thread: the last recordStage() recorded an immediate cycle (recordedImmediateCycle()). */
+			bool m_recordedImmediateCycle{false};
 	};
 }

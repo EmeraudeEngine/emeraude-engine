@@ -2194,6 +2194,9 @@ namespace EmEn::Graphics
 		 * scene target), and nothing of this frame has written a radiance yet. */
 		this->latchPreExposure(scene.get());
 
+		/* After the sky's environment stage (renderSkyAtmosphere()), before the chain records. */
+		this->latchTemporalDiscontinuity(scene);
+
 		/* Dispatch to the appropriate rendering strategy.
 		 * NOTE: The post-processing path is only taken when there IS an active scene. The
 		 * PostProcessor is a renderer-global service that executes the ACTIVE scene's post-process
@@ -2803,6 +2806,7 @@ namespace EmEn::Graphics
 
 		atmosphereInFlight = nullptr;
 		starFieldInFlight = {};
+		m_frameSkyImmediateCycle = false;
 
 		const auto background = scene.background();
 
@@ -2981,6 +2985,10 @@ namespace EmEn::Graphics
 		}
 
 		atmosphere->environment().onSubmitted(true);
+
+		/* A large change of the sky (a time-of-day jump) recorded its whole IBL cycle in this frame: a temporal
+		 * discontinuity, the frame its direct light jumps (latchTemporalDiscontinuity()). */
+		m_frameSkyImmediateCycle = atmosphere->environment().recordedImmediateCycle();
 
 		atmosphereInFlight = atmosphere;
 		starFieldInFlight = std::move(starField);
@@ -3730,6 +3738,51 @@ namespace EmEn::Graphics
 		metadata.preExposure = m_preExposure;
 
 		return m_frameCapture.recordCopy(commandBuffer, *image, m_swapChain->finalColorLayout(), m_currentFrameIndex, metadata);
+	}
+
+	void
+	Renderer::latchTemporalDiscontinuity (const std::shared_ptr< Scenes::Scene > & scene) noexcept
+	{
+		/* The sky's answer is this frame's only: consumed here. */
+		bool raised = std::exchange(m_frameSkyImmediateCycle, false);
+
+		if ( scene == nullptr )
+		{
+			m_temporalDiscontinuityScene.reset();
+			m_temporalDiscontinuityFramesLeft = 0;
+			m_postProcessor.setFrameTemporalDiscontinuity(false);
+
+			return;
+		}
+
+		const auto readStateIndex = scene->frameReadStateIndex();
+		const auto epoch = readStateIndex < RenderStateSlotCount ? scene->temporalDiscontinuityEpoch(readStateIndex) : m_temporalDiscontinuityEpoch;
+
+		/* The same scene as the previous frame: the same control block (a weak pointer keeps it, so a new scene at a
+		 * reused address never compares equal). */
+		const bool sameScene = !m_temporalDiscontinuityScene.expired() && !m_temporalDiscontinuityScene.owner_before(scene) && !scene.owner_before(m_temporalDiscontinuityScene);
+
+		if ( !sameScene || epoch != m_temporalDiscontinuityEpoch )
+		{
+			raised = true;
+		}
+
+		m_temporalDiscontinuityScene = scene;
+		m_temporalDiscontinuityEpoch = epoch;
+
+		if ( raised )
+		{
+			m_temporalDiscontinuityFramesLeft = TemporalDiscontinuityFrames;
+		}
+
+		const bool marked = m_temporalDiscontinuityFramesLeft > 0;
+
+		if ( marked )
+		{
+			--m_temporalDiscontinuityFramesLeft;
+		}
+
+		m_postProcessor.setFrameTemporalDiscontinuity(marked);
 	}
 
 	void

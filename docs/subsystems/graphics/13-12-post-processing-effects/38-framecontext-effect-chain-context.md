@@ -11,3 +11,8 @@ per-frame data belongs in FrameContext, NOT in a new parameter.
 `FrameContext::view` (Oct 2026) is the frame's view reconstruction block — the ONLY way an effect turns a depth into a
 position or a distance; the scalar `constants.nearPlane / farPlane / tanHalfFovY` are gone (they were frozen at
 0.1 / 1000): [`41-the-view-reconstruction`](41-the-view-reconstruction-one-matrix-path-from-depth-to-position.md).
+
+`FrameContext::temporalDiscontinuity` (Nov 2026) says that the lighting stepped within the last 25 frames (a light, the
+ambient, the background, the sky): a temporal integrator then records the pipeline variant carrying its own
+large-change test (TAA, the GI anti-lag) —
+[`43-the-temporal-discontinuity-contract`](43-the-temporal-discontinuity-contract.md).

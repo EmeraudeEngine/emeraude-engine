@@ -227,21 +227,25 @@ namespace EmEn::Scenes
 		/* NOTE: The refused lights' removal is notified AFTER the lock, like remove() does. */
 		for ( const auto & light : refused.directional )
 		{
+			this->raiseTemporalDiscontinuity();
 			this->notify(DirectionalLightRemoved, light);
 		}
 
 		for ( const auto & light : refused.point )
 		{
+			this->raiseTemporalDiscontinuity();
 			this->notify(PointLightRemoved, light);
 		}
 
 		for ( const auto & light : refused.spot )
 		{
+			this->raiseTemporalDiscontinuity();
 			this->notify(SpotLightRemoved, light);
 		}
 
 		for ( const auto & light : refused.line )
 		{
+			this->raiseTemporalDiscontinuity();
 			this->notify(LineLightRemoved, light);
 		}
 
@@ -497,6 +501,7 @@ namespace EmEn::Scenes
 			}
 		}
 
+		this->raiseTemporalDiscontinuity();
 		this->notify(DirectionalLightAdded, light);
 	}
 
@@ -519,6 +524,7 @@ namespace EmEn::Scenes
 			m_pointLights.emplace(light);
 		}
 
+		this->raiseTemporalDiscontinuity();
 		this->notify(PointLightAdded, light);
 	}
 
@@ -541,6 +547,7 @@ namespace EmEn::Scenes
 			m_spotLights.emplace(light);
 		}
 
+		this->raiseTemporalDiscontinuity();
 		this->notify(SpotLightAdded, light);
 	}
 
@@ -559,6 +566,7 @@ namespace EmEn::Scenes
 			m_directionalLights.erase(light);
 		}
 
+		this->raiseTemporalDiscontinuity();
 		this->notify(DirectionalLightRemoved, light);
 
 		this->retireLight(light);
@@ -575,6 +583,7 @@ namespace EmEn::Scenes
 			m_pointLights.erase(light);
 		}
 
+		this->raiseTemporalDiscontinuity();
 		this->notify(PointLightRemoved, light);
 
 		this->retireLight(light);
@@ -591,6 +600,7 @@ namespace EmEn::Scenes
 			m_spotLights.erase(light);
 		}
 
+		this->raiseTemporalDiscontinuity();
 		this->notify(SpotLightRemoved, light);
 
 		this->retireLight(light);
@@ -615,6 +625,7 @@ namespace EmEn::Scenes
 			m_lineLights.emplace(light);
 		}
 
+		this->raiseTemporalDiscontinuity();
 		this->notify(LineLightAdded, light);
 	}
 
@@ -629,6 +640,7 @@ namespace EmEn::Scenes
 			m_lineLights.erase(light);
 		}
 
+		this->raiseTemporalDiscontinuity();
 		this->notify(LineLightRemoved, light);
 
 		this->retireLight(light);
@@ -675,8 +687,40 @@ namespace EmEn::Scenes
 	}
 
 	void
+	LightSet::noteAmbientStep (const Vector< 3, float > & before) noexcept
+	{
+		if ( Component::AbstractLightEmitter::emissionStepped(before, this->ambientEmission()) )
+		{
+			this->raiseTemporalDiscontinuity();
+		}
+	}
+
+	void
+	LightSet::takeEmissionSteps () noexcept
+	{
+		bool stepped = false;
+
+		{
+			const Base::MutexLock lock{m_lightsAccess};
+
+			/* Every light is asked (no short-circuit): each one remembers its emission for the next publication. */
+			for ( const auto & light : m_lights )
+			{
+				stepped = light->takeEmissionStep() || stepped;
+			}
+		}
+
+		if ( stepped )
+		{
+			this->raiseTemporalDiscontinuity();
+		}
+	}
+
+	void
 	LightSet::removeAllLights () noexcept
 	{
+		this->raiseTemporalDiscontinuity();
+
 		const Base::MutexLock lock{m_lightsAccess};
 
 		m_lights.clear();

@@ -32,6 +32,9 @@
 /* Project configuration. */
 #include "emeraude_config.hpp"
 
+/* STL inclusions. */
+#include <cstddef>
+
 /* Local inclusions. */
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
@@ -132,6 +135,54 @@ namespace EmEn::Scenes::Component
 		*std::next(m_publishedDrawDistances.begin(), writeStateIndex) = m_drawDistance;
 		*std::next(m_publishedVisibleSourceAreas.begin(), writeStateIndex) = m_visibleSourceArea;
 		m_publishedGeneration[writeStateIndex] = m_logicGeneration;
+	}
+
+	bool
+	AbstractLightEmitter::emissionStepped (const Vector< 3, float > & before, const Vector< 3, float > & now) noexcept
+	{
+		float peak = 0.0F;
+
+		for ( size_t channel = 0; channel < 3; ++channel )
+		{
+			if ( !std::isfinite(before[channel]) || !std::isfinite(now[channel]) )
+			{
+				return false;
+			}
+
+			peak = std::max({peak, std::abs(before[channel]), std::abs(now[channel])});
+		}
+
+		/* Dark before and after: nothing to see. */
+		if ( peak <= 0.0F )
+		{
+			return false;
+		}
+
+		for ( size_t channel = 0; channel < 3; ++channel )
+		{
+			const auto low = std::min(std::abs(before[channel]), std::abs(now[channel]));
+			const auto high = std::max(std::abs(before[channel]), std::abs(now[channel]));
+
+			if ( high > (TemporalDiscontinuityRatio * low) + (TemporalDiscontinuityFloor * peak) )
+			{
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool
+	AbstractLightEmitter::takeEmissionStep () noexcept
+	{
+		const auto emission = this->isEnabled() ? m_emissionChromaticity * std::max(0.0F, m_intensity) : Vector< 3, float >{0.0F, 0.0F, 0.0F};
+
+		const bool stepped = m_emissionChecked && emissionStepped(m_checkedEmission, emission);
+
+		m_checkedEmission = emission;
+		m_emissionChecked = true;
+
+		return stepped;
 	}
 
 	void

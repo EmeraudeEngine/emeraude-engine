@@ -1,9 +1,9 @@
 ---
 id: temporal-discontinuity-contract
 title: One temporal-discontinuity contract instead of three per-pixel large-change detectors
-status: open
+status: in-progress
 priority: unranked
-scope: Graphics (TAA, GIDenoiser, SkyEnvironment, Renderer, LightSet)
+scope: Graphics (TAA, GIDenoiser, SkyEnvironment, Renderer, LightSet, Scene)
 opened: 2026-11-02
 tags: [performance, architecture, temporal, intel]
 ---
@@ -12,78 +12,44 @@ tags: [performance, architecture, temporal, intel]
 
 ## Why
 
-The item `lighting-change-converges-over-frames` (closed 2026-11-02) was solved by three mechanisms, each one GUESSING,
-every frame and for every pixel, an event the engine already KNOWS:
+TAA's large-change test (3c25c355) and the GI anti-lag's pooled test and reset (e2a7320e, cf4c4432) guessed, every
+frame and for every pixel, a lighting step the engine already knows: Intel iGPU +0.92 ms and +0.83 ms a frame (item
+`intel-igpu-frame-rate-halved`). Owner decision 2026-11-02: one signal raised by the code that knows, each consumer's
+validated test run only on the frames it marks.
 
-| Mechanism | Commit | What it detects | Cost every frame |
-|---|---|---|---|
-| TAA's large-change test | 3c25c355 | 5×5 mean exposed luminance, this frame against the history (9 + 9 bilinear taps) | Intel +0.92 ms, RTX +0.10 |
-| GI anti-lag, pooled 5×5 + reset ratio | e2a7320e, cf4c4432 | pooled raw / slow / fast GI means, `AntiLagResetRatio` 4 | Intel +0.83 ms, RTX +0.06 |
-| SkyEnvironment's whole IBL cycle in one frame | 2cdc4112 | the star moved > 5° or its illuminance changed ×2 (CPU, exact) | none (CPU) |
+## Done (Linux, 2026-11-03, working tree)
 
-Their causes were all discrete: a time-of-day jump (city's sunset, sky-lab), a lamp switched on. The owner (2026-11-02):
-"take a step back": one contract, raised by the code that knows, honoured by every temporal integrator; the selective
-per-pixel tests run only on the frames it marks. Measured costs of the per-frame form: item `intel-igpu-frame-rate-halved`.
-
-## Proposed design (nothing written yet)
-
-Owner decisions (2026-11-02): **unify the WHEN, keep each effect's HOW** ("sometimes divide to rule, sometimes unite
-to be stronger: a middle ground") — one signal, each consumer keeps its own response and validated thresholds in its
-own class, no shared rejection mechanism. **Producers: all three below.** **The GI denoiser off-event keeps the
-per-pixel detector** of before e2a7320e (the 6-frame cap for moderate continuous changes); the pooled 5×5 and its reset
-run on marked frames only. **Selection: measure first** (below), then a push constant or pipeline variants.
-
-- **The signal** (owner decisions 2026-11-03): `bool temporalDiscontinuity` in `IndirectPostProcessEffect::FrameContext`
-  (it names what the consumers do, not the cause: VolumetricLight, RTR and clouds can join), chosen by the `Renderer`
-  when it records the frame, TRUE for **8 frames** after the last raise (the IBL published a logic tick later, the
-  frames in flight, the GI lane reading the previous frame).
-- **The transport: a monotonic epoch** (owner decision 2026-11-03). The scene keeps a counter, published with the
-  render state slot; the logic side increments it when a light is added, removed, enabled, disabled or its luminance
-  steps by ≥ ×2 between two publications, on `AmbientLightChanged`, on a background swap, and when
-  `Scene::updateEnvironmentIBL()` takes a set completed by an immediate cycle. The renderer compares the epoch of the
-  slot it reads with the one of its previous frame (robust to skipped slots); the sky's immediate cycle is a flag of
-  the renderer itself (`renderSkyAtmosphere()` records before the post-process of the same frame). No per-light table
-  on the render thread. Rejected: a per-light comparison of the published blocks in the renderer (a new virtual
-  accessor, the intensity offset differs per light type, a cost per light per frame).
-- **Producers** (CPU, exact, no per-pixel work):
-  - the sky: `SkyEnvironment::largeChange()` (already 5° / ×2), the frame it records an immediate cycle;
-  - the light set: a light added, removed, enabled, disabled, or its published luminance stepped by ≥ a ratio between two
-    frames (a per-light comparison in the renderer, so game code raises nothing by hand: the city's lamps are covered);
-  - the ambient light (`LightSet::AmbientLightChanged`) and a background swap.
-- **Consumers**: TAA (its large-change test runs only on marked frames), the GI denoiser (the pooled test and its
-  reset only on marked frames), later VolumetricLight, RTR accumulation, clouds.
-- **Selection**: a pipeline variant per consumer (the FAST-forms precedent, graphics doc 13-12 § 41) — measured
-  2026-11-03 (What remains): the push-constant uniform branch switched off still costs TAA ~0.32 ms on the Intel (a
-  per-call uniform branch in a march loop had cost +0.85 ms there).
-- **Validated look kept**: on marked frames the tests are the ones the owner validated (5×5), unchanged.
+The contract as designed and decided: graphics doc 13-12 § 43 (the signal `FrameContext::temporalDiscontinuity`, 25
+frames; the monotonic epoch; the producers; the per-channel ×2 step rule; TAA's and the anti-lag's two pipeline
+variants), with the owner's decisions (2026-11-02/03: producers, transport, name, window 8 → 25 on measurement,
+per-channel steps, a flickering light marks, the unsignalled-change trade-off, TAA kept in the contract after the eye
+A/B at the quay) and the Linux validation (RTX 3070 Ti: `city` jumps on both lanes, GI on and off, 25 and 40 FPS;
+parked `relief` / `city` / `sponza` / `labyrinth`; `sky-lab`; 0 VUID). Gate `commit` all OK, clang `-Wdocumentation`
+clean on the touched TUs.
 
 ## What remains
 
-- The signal's name, window and transport, and the unsignalled-change trade-off: decided 2026-11-03 (above, ⚠️ Traps).
-- The selection. Intel, Windows-PA 2026-11-02, `reflexion-debug`, layer off, alternated: the existing uniform branch
-  switched off (`TemporalAA/LargeChangeThreshold` = 1) TAA 4.77 ms against 5.44 at 0.25 (−0.67; 4 and 6 clean values;
-  a second half of the series discarded, the machine loaded by another application). ~0.2 ms short of the 4.57 measured
-  before 3c25c355 (another session). **Settled, Windows-PA 2026-11-03** (round 7, idle machine: a 5 s load sample
-  before every launch, 0.09-0.89 CPU-s; same scene and driver; alternated T25 → T100 → N → T100 → N, 3 launches each;
-  N = the GLSL block REMOVED at compile time, a throwaway patch): TAA medians T25 5.48, T100 4.82 / 4.82, N 4.49 /
-  4.50 ms — N below the switched-off branch by 0.33 and 0.32 ms in both pairs (threshold set at 0.15), Frame −0.30 ms;
-  ScenePass flat (9.23-9.29) as the control; 0 VUID, 0 `[Error]` in the 20 runs (layer off). **A uniform branch
-  switched off still costs ~0.32 ms on this iGPU: the consumers take pipeline variants** (the FAST-forms precedent),
-  not a push-constant branch. Total recoverable on TAA: −0.99 ms on unmarked frames.
-- Implementation, then the validation of 3c25c355 / e2a7320e / cf4c4432 again: city jumps (both lanes, GI on and off,
-  25 and 40 FPS), sky-lab, parked labyrinth / sponza / relief / city (no false trigger, shimmer unchanged), Intel timings,
-  0 VUID, three OS.
+- **The implementation's Intel timing** (Windows-PA): TAA and `GIDenoiser/antiLag` on `reflexion-debug`, unmarked
+  frames, against the per-frame tests (expected from the throwaway patches: TAA 5.48 → ~4.5 ms, the anti-lag
+  1.21 → ~0.38 ms).
+- **The peers**: macOS-PA (M6, MoltenVK, SSGI only), Windows-PA (MSVC Release + Debug, RTX and Intel), LinuxB-PA (RADV):
+  the build, the `city` sunset at their frame rates (TAA on / GI off, GI on / TAA off), parked `relief` and `city`,
+  `sky-lab`, 0 VUID, 0 "Unable to compile".
+- Then close the item (the knowledge is in § 43 already).
 
 ## ⚠️ Traps
 
-- A change nobody signals (an emissive material switched, an explosion's flash) converges at the pre-2026-11-01 rate
-  (TAA ~20 frames per e-fold, the GI's 6-frame cap): **accepted by the owner (2026-11-03)** — the validated behaviour of
-  before 2026-11-01; an explosion's flash is a light, so the epoch covers it. A public `Scene` call raising the epoch
-  for game code comes only with a real case.
-- The anti-lag's fast moments are STATE: they must still be updated on unmarked frames; only the pooled test is skipped.
-- Frames in flight: the signal is a per-frame value chosen at record time, never a shared mutable flag read by the GPU.
+- **One unexplained freeze, not reproduced** (Linux, 2026-11-03): during a `labyrinth` GI-noise run (layer on, TAA
+  off), right after `PostProcess.setLightingMode(ScreenSpace)`, the log stopped for good (the logic thread's per-tick
+  probe lines too); the instance had to be killed. Its logs were overwritten by the next runs. Not reproduced in 24
+  lane switches (layer on and off) and 12 full GI-noise runs under a stall watchdog that would have dumped every
+  thread with gdb. The probe of that build traced while holding `LightSet::m_lightsAccess` (removed since); the
+  Tracer forwards nothing to the console, so no deadlock through it is proven. If it comes back: `gdb -p <pid> -batch
+  -ex "thread apply all bt 30"` before killing, and keep the log.
+- `labyrinth`'s GI-noise runs vary from launch to launch (the dying lamp in the 16-frame window): compare medians
+  (§ 43).
 
 ## References
 
-- Item `intel-igpu-frame-rate-halved` (the per-frame costs), graphics doc 13-12 § 16 (the anti-lag), § The TAA resolve,
-  graphics doc 42 § The environment, item 7 (the immediate IBL cycle).
+- Graphics doc 13-12 § 43 (the contract), § 06 (the TAA resolve), § 16 (the anti-lag), § 41 (the FAST forms);
+  graphics doc 42 § The environment; item `intel-igpu-frame-rate-halved`.

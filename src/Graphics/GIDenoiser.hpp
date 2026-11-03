@@ -327,7 +327,7 @@ namespace EmEn::Graphics
 			bool
 			antiLagActive () const noexcept
 			{
-				return this->temporalActive() && m_parameters.antiLag && !m_parameters.reflectionMode && m_antiLagPipeline != nullptr;
+				return this->temporalActive() && m_parameters.antiLag && !m_parameters.reflectionMode && m_antiLagPipelines[0] != nullptr && m_antiLagPipelines[1] != nullptr;
 			}
 
 			/**
@@ -469,7 +469,9 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_momentsPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_normalCopyPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_atrousPipeline;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_antiLagPipeline;
+			/* The anti-lag's two variants (item temporal-discontinuity-contract): [0] the per-pixel test of the unmarked
+			 * frames, [1] the pooled 5x5 test and its reset (FrameContext::temporalDiscontinuity). */
+			std::array< std::shared_ptr< Vulkan::GraphicsPipeline >, 2 > m_antiLagPipelines;
 			/* Pipeline layouts. */
 			std::shared_ptr< Vulkan::PipelineLayout > m_temporalLayout;
 			std::shared_ptr< Vulkan::PipelineLayout > m_momentsLayout;

@@ -378,6 +378,17 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief RENDER THREAD. Sets whether a temporal discontinuity marks the frame (Renderer, item
+			 * temporal-discontinuity-contract), handed to every effect through FrameContext::temporalDiscontinuity.
+			 * @param marked Whether the lighting stepped within the renderer's window.
+			 */
+			void
+			setFrameTemporalDiscontinuity (bool marked) noexcept
+			{
+				m_frameTemporalDiscontinuity = marked;
+			}
+
+			/**
 			 * @brief Executes multi-pass scene effects outside any active render pass.
 			 * @note Must be called after recordBlit() and before the RP2 restart.
 			 * Each effect in the chain receives the output of the previous one.
@@ -515,5 +526,7 @@ namespace EmEn::Graphics
 			bool m_cachedRequiresVelocity{false};
 			/* The census creation failed once: it is never retried (the failure is traced where it happens). */
 			bool m_overflowCensusCreationFailed{false};
+			/** @brief Whether a temporal discontinuity marks the frame (setFrameTemporalDiscontinuity()). */
+			bool m_frameTemporalDiscontinuity{false};
 	};
 }

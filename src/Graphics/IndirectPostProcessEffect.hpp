@@ -496,6 +496,13 @@ namespace EmEn::Graphics
 				 * marching effect then records the pipeline built with ProjectionForm::Sparse, else its Matrix variant
 				 * (owner decision 2026-11-02: two pipeline variants, never a runtime branch in the shader). */
 				bool viewProjectionSparse{false};
+				/* A TEMPORAL DISCONTINUITY marks this frame (owner decision 2026-11-03, item temporal-discontinuity-contract):
+				 * the lighting stepped (a light added, removed, switched or stepped by x2, the ambient, the background,
+				 * the sky's immediate IBL cycle) within the last Renderer::TemporalDiscontinuityFrames frames. Chosen by
+				 * the renderer when it records the frame, never read back from the GPU. A temporal integrator then
+				 * records the pipeline variant carrying its own large-change test (TAA, the GI denoiser's anti-lag);
+				 * the other frames skip that test's cost. */
+				bool temporalDiscontinuity{false};
 			};
 
 			/**

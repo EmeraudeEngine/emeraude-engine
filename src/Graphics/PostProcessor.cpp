@@ -1552,7 +1552,8 @@ namespace EmEn::Graphics
 				.time = elapsedTime,
 				.deltaTime = deltaTime
 			},
-			.viewProjectionSparse = viewProjectionSparse
+			.viewProjectionSparse = viewProjectionSparse,
+			.temporalDiscontinuity = m_frameTemporalDiscontinuity
 		};
 
 		/* Combine grouping (phase A of the pass-merging plan): contiguous OVERLAY effects

@@ -35,9 +35,11 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <initializer_list>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
@@ -1366,6 +1368,13 @@ namespace EmEn::Scenes
 				highlights.push_back({entity, entity->getWorldRenderBoundingBox()});
 			}
 		}
+
+		/* The temporal discontinuities so far (item temporal-discontinuity-contract): the lights' emission steps are
+		 * collected here, on this thread, once per publication; the scene's own and the light set's counters are
+		 * monotonic, so is their sum, and the renderer compares the slot's value with its previous frame's. */
+		m_lightSet.takeEmissionSteps();
+
+		*std::next(m_publishedTemporalDiscontinuityEpochs.begin(), static_cast< std::ptrdiff_t >(nextTarget)) = m_temporalDiscontinuityEpoch.load(std::memory_order_relaxed) + m_lightSet.temporalDiscontinuityEvents();
 
 		/* NOTE: Publish the written slot as the middle one and take back the previous middle to write the next tick.
 		 * The release half orders every write above before the render thread's acquiring exchange. */

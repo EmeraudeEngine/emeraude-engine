@@ -2125,6 +2125,24 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns the temporal-discontinuity epoch published with a render state slot: a monotonic count of the
+			 * scene's lighting steps (a light added, removed, switched or stepped by
+			 * AbstractLightEmitter::TemporalDiscontinuityRatio, the ambient stepped, a background swapped, a new IBL
+			 * replacing the previous one at once). The renderer compares it with its previous frame's: a different value
+			 * marks the frame (FrameContext::temporalDiscontinuity; item temporal-discontinuity-contract).
+			 * @note Render thread, the slot latched by the frame.
+			 * @pre readStateIndex < RenderStateSlotCount.
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			temporalDiscontinuityEpoch (uint32_t readStateIndex) const noexcept
+			{
+				return *std::next(m_publishedTemporalDiscontinuityEpochs.begin(), static_cast< std::ptrdiff_t >(readStateIndex));
+			}
+
+			/**
 			 * @brief Prepares render lists for a frame without issuing draw calls.
 			 *
 			 * Populates render lists via frustum culling and Z-sorting, and caches
@@ -2615,6 +2633,18 @@ namespace EmEn::Scenes
 			Graphics::Compute::IBLBaker::StarMask environmentStarMask () const noexcept;
 
 		private:
+
+			/**
+			 * @brief Counts one temporal discontinuity of the scene (a background swap, an IBL replaced at once), published
+			 * with the next render state slot (temporalDiscontinuityEpoch()).
+			 * @note Any thread. Private on purpose (owner decision 2026-11-03): game code gets a public call only with a
+			 * real case.
+			 */
+			void
+			raiseTemporalDiscontinuity () noexcept
+			{
+				m_temporalDiscontinuityEpoch.fetch_add(1, std::memory_order_relaxed);
+			}
 
 			/* ============================================================
 			 * [PRIVATE: OBSERVER]
@@ -3482,6 +3512,11 @@ namespace EmEn::Scenes
 
 			/** @brief Written by publishStateForRendering() into the logic slot, read by highlightedWorldBoundingBoxes(). */
 			std::array< std::vector< PublishedHighlight >, RenderStateSlotCount > m_publishedHighlights{};
+			/** @brief The scene's own temporal discontinuities (a background swap, an IBL replaced at once). Any thread. */
+			std::atomic_uint64_t m_temporalDiscontinuityEpoch{0};
+			/** @brief Per render state slot: the scene's and the light set's discontinuities at the publication
+			 * (temporalDiscontinuityEpoch()). Written by publishStateForRendering(), read by the render thread. */
+			std::array< uint64_t, RenderStateSlotCount > m_publishedTemporalDiscontinuityEpochs{};
 			/** @brief Raised from any thread (setBackground), consumed by processLogics()
 			 * (logic thread) to push the background photometry to the view UBOs. */
 			std::atomic_bool m_backgroundPhotometryDirty{false};

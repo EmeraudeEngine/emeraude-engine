@@ -188,7 +188,8 @@ namespace EmEn::Graphics::Effects::Resolve
 			std::array< IntermediateRenderTarget, 2 > m_historyTargets;
 			/** @brief The debug view's output (created only when Parameters::debugView != 0): never part of the history. */
 			IntermediateRenderTarget m_debugTarget;
-			std::shared_ptr< Vulkan::GraphicsPipeline > m_pipeline;
+			/** @brief [0] the resolve without the large-change test, [1] with it (the frames FrameContext::temporalDiscontinuity marks). */
+			std::array< std::shared_ptr< Vulkan::GraphicsPipeline >, 2 > m_pipelines;
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			uint32_t m_historyWriteIndex{0};

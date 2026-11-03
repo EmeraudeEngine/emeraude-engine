@@ -71,6 +71,13 @@ filtered) decides whether the history is still valid.
     sea is translucent, absent from the depth buffer: TAA used to average its sun glints over ~20 frames,
     the test lets them live. **Owner verdict 2026-11-01, eye A/B at the quay: "sur B les reflets sont plus
     nets" — B validated, the test on by default.**
+  - **Since 2026-11-03 it runs only on the frames a temporal discontinuity marks** (owner decision; § 43, The
+    temporal-discontinuity contract): `TAA` builds two pipelines, the resolve without the test and the one with it
+    (`EMEN_TAA_LARGE_CHANGE`), and records the second while `FrameContext::temporalDiscontinuity` holds (25 frames
+    after a light, ambient, background or sky step). Intel iGPU, the block removed by a throwaway patch: TAA 5.48 →
+    4.49 ms (the implementation's own timing: § 43). The
+    sea's glints at the quay are averaged again on those frames (`city` day shimmer 7.94 → 5.31, the level of the
+    test off): **owner verdict 2026-11-03, eye A/B at the quay: "no difference".**
   - **Peers (engine 3c25c355, 2026-11-01)**, the city sunset with GI off, threshold 1 against 0.25, the land's mean:
     - macOS-PA (M6, MoltenVK, 2560×1440, 34-35 FPS): 180.8 / 85.0 / 26.0 / 16.0 at +0.5 / 1 / 2 / 3 s against
       13.1 / 13.5 / 13.6 / 13.6. With SSGI: about 1 s ahead (172 / 83 / 27 at +0.5 / 1 / 2 s against

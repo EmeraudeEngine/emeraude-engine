@@ -250,6 +250,14 @@ frame rate. A first `labyrinth` RT run with the reset (level 14.95, shimmer 7.2)
 repeats: launch-to-launch variance, the labyrinth's auto exposure unpinned. A moderate change still converges over the
 6-frame window, in frames.
 
+**Two variants since 2026-11-03 (owner decision; § 43, The temporal-discontinuity contract).** The pooled 5×5 test and
+its reset run only on the frames `FrameContext::temporalDiscontinuity` marks (the pipeline built with
+`EMEN_GI_ANTILAG_POOLED`); every other frame runs the PER-PIXEL safe detector of before 2026-11-01 (3×3 spatial
+deviation, the SLOW moments' temporal one, the 6-frame cap for the moderate changes nobody signals), which still advances
+the fast window's mean and second moment — the state the pooled variant reads on its next marked frame. The mark holds
+25 frames: with 8, the RTGI's tail after a `city` sunset was slower (17.1 against 15.6 at +1 s, 25 FPS). Parked noise,
+level and age view unchanged on `sponza`, `city` and `labyrinth` (§ 43, Validated).
+
 **The anti-lag's cost, and a cheaper sampling refused (2026-11-02).** The pooled detector reads ~77 texels a pixel (25 raw,
 25 slow, 25 fast + the centre): `GIDenoiser/antiLag` 0.08 → 0.14 ms on an RTX 3070 Ti, **0.38 → 1.21 ms on an Intel
 iGPU** at 1280×720 (Windows-PA, `reflexion-debug`; it is a child of `SSGIEffect/internal`). Tried: the 5×5 MEANS through

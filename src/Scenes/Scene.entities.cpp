@@ -26,18 +26,71 @@
 
 #include "Scene.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <cstdint>
+#include <functional>
+#include <iterator>
+#include <map>
+#include <memory>
 #include <ranges>
+#include <sstream>
+#include <string>
+#include <thread>
+#include <type_traits>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
 /* Local inclusions. */
-#include "NodeCrawler.hpp"
 #include "AnyValue.hpp"
-#include "Scenes/Component/Camera.hpp"
+#include "Audio/Ambience.hpp"
+#include "BlobTrait.hpp"
+#include "Graphics/Renderable/AbstractBackground.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Vector.hpp"
+#include "Mutex.hpp"
+#include "NodeCrawler.hpp"
+#include "Physics/CollisionModelInterface.hpp"
+#include "Scenes/AbstractEntity.hpp"
+#include "Scenes/AVConsole/Manager.hpp"
+#include "Scenes/BindlessTextureSet.hpp"
+#include "Scenes/CloudSet.hpp"
+#include "Scenes/Component/Abstract.hpp"
+#include "Scenes/Component/Camera.hpp" // IWYU pragma: keep (shared_ptr< Component::Camera > converts to its AVConsole base: the complete type)
 #include "Scenes/Component/CelestialClock.hpp"
-#include "Scenes/Component/CloudVolume.hpp"
-#include "Scenes/Component/DirectionalLight.hpp"
-#include "Scenes/Component/Microphone.hpp"
-#include "Scenes/Component/ParticlesEmitter.hpp"
+#include "Scenes/Component/CloudVolume.hpp" // IWYU pragma: keep (shared_ptr< Component::CloudVolume > converts to its base: the complete type)
+#include "Scenes/Component/DirectionalLight.hpp" // IWYU pragma: keep (shared_ptr< Component::DirectionalLight > converts to its base: the complete type)
+#include "Scenes/Component/Microphone.hpp" // IWYU pragma: keep (shared_ptr< Component::Microphone > converts to its AVConsole base: the complete type)
+#include "Scenes/Component/ParticlesEmitter.hpp" // IWYU pragma: keep (shared_ptr< Component::ParticlesEmitter > converts to its base: the complete type)
+#include "Scenes/LightSet.hpp"
+#include "Scenes/Node.hpp"
+#include "Scenes/NodeController.hpp"
+#include "Scenes/OctreeSector.hpp"
+#include "Scenes/SkyState.hpp"
+#include "Scenes/StaticEntity.hpp"
+#include "Tracer.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Base
+{
+	class Any;
+}
+
+namespace EmEn::Scenes::Component
+{
+	class AbstractModifier;
+	class LineLight;
+	class PointLight;
+	class SpotLight;
+}
 
 namespace EmEn::Scenes
 {
@@ -267,6 +320,9 @@ namespace EmEn::Scenes
 	Scene::setBackground (const std::shared_ptr< Graphics::Renderable::AbstractBackground > & background) noexcept
 	{
 		m_backgroundResource = background;
+
+		/* Another sky, another light: a temporal discontinuity (item temporal-discontinuity-contract). */
+		this->raiseTemporalDiscontinuity();
 
 		/* The sky IS scene content for a probe: on-demand render targets are re-baked. */
 		this->signalOnDemandRenderTargets();

@@ -519,6 +519,11 @@ void main()
 	 * of the FAST window's own TEMPORAL deviation (its second moment, kept beside its mean); where the two means part by
 	 * more than antiLagParams.y of it, the light changed and the slow history's age is capped to the fast length (a
 	 * smooth ramp over one more tolerance, so the noise cannot toggle it).
+	 * TWO VARIANTS (owner decision 2026-11-03, item temporal-discontinuity-contract): the pooled 5x5 test and its reset
+	 * run only on the frames FrameContext::temporalDiscontinuity marks (EMEN_GI_ANTILAG_POOLED); every other frame runs
+	 * the PER-PIXEL test of before 2026-11-01 (3x3 spatial deviation, the slow moments' temporal one; the 6-frame cap for
+	 * the moderate continuous changes nobody signals), and still advances the fast window's mean and second moment, the
+	 * state the pooled variant reads.
 	 * The colour resolve and the moments apply the cap: both restart together and converge in a few frames, then grow
 	 * back to maxAccumulation.
 	 * Output: R = the fast mean (next frame's history, pre-exposed like the moments), G = the age cap (maxAccumulation
@@ -531,8 +536,6 @@ void main()
 	 *   binding 8: unused here (a placeholder: it is this pass's own output for the other two)
 	 */
 	constexpr auto GIDenoiserAntiLagFragmentShader = R"GLSL(
-#version 450
-
 layout(location = 0) in vec2 vUV;
 layout(location = 0) out vec4 outAntiLag;
 
@@ -541,9 +544,15 @@ layout(set = 0, binding = 3) uniform sampler2D antiLagHistoryTex;
 layout(set = 0, binding = 6) uniform sampler2D momentsHistoryTex;
 )GLSL" GIDENOISER_REPROJECTION_GLSL R"GLSL(
 
-/* The pooled test's neighbourhood: 5x5. */
+#ifdef EMEN_GI_ANTILAG_POOLED
+/* The pooled test's neighbourhood: 5x5 (the marked frames). */
 const int AntiLagPoolRadius = 2;
 const float AntiLagPoolCount = 25.0;
+#else
+/* The per-pixel test's spatial window: 3x3 (the other frames). */
+const int AntiLagPoolRadius = 1;
+const float AntiLagPoolCount = 9.0;
+#endif
 
 void main()
 {
@@ -557,7 +566,7 @@ void main()
 		return;
 	}
 
-	/* The raw estimate over a 5x5 neighbourhood: this pixel's luminance, the pooled mean and the window's spatial
+	/* The raw estimate over the variant's window (5x5 marked, 3x3 otherwise): this pixel's luminance, the pooled mean and its spatial
 	 * deviation (the noise of ONE frame; conservative across an edge, where the window also holds the edge's step). */
 	vec2 texel = 1.0 / vec2(textureSize(rawTex, 0));
 	float luma = dot(texture(rawTex, vUV).rgb, LumaWeights);
@@ -613,6 +622,21 @@ void main()
 	/* This pixel's FAST window (fastFrames): its mean and its second moment, the next frame's history. */
 	float fastMean = mix(fastS.r * r, luma, fastAlpha);
 	float fastSecond = mix((fastS.b * fastS.b) * (r * r), luma * luma, fastAlpha);
+
+#ifndef EMEN_GI_ANTILAG_POOLED
+	/* The PER-PIXEL test (the unmarked frames; the detector of before 2026-11-01, graphics doc 13-12 #16): this pixel's
+	 * fast and slow means against the fast mean's expected noise, one frame's deviation being the larger of the 3x3
+	 * spatial one and antiLagParams.z of the pixel's SLOW temporal one (the moments). Its threshold grows with a large
+	 * change, which only the marked frames' pooled test must catch: here it holds the moderate continuous changes to the
+	 * 6-frame cap without a false trigger in a sparse estimator's empty windows. */
+	float slowMean = momS.r * r;
+	float slowSecond = (momS.g * momS.g) * (r * r);
+	float temporalSigma = sqrt(max(slowSecond - slowMean * slowMean, 0.0));
+	float noiseSigma = max(spatialSigma, antiLagParams.z * temporalSigma);
+	float fastSigma = noiseSigma / sqrt(min(age + 1.0, fastFrames));
+	float tolerance = antiLagParams.y * fastSigma + 0.02 * max(slowMean, fastMean) + 1e-6;
+	float excess = abs(fastMean - slowMean) / tolerance;
+#else
 
 	/* The POOLED test (owner decision 2026-11-01; the neighbourhood statistics of NVIDIA's RELAX / ReBLUR, D. Zhdan,
 	 * Ray Tracing Gems II, 2021): the previous slow and fast means over the reprojected 5x5 neighbourhood, the fast one
@@ -680,6 +704,7 @@ void main()
 	float fastSigma = noiseSigma / sqrt(pooled * min(age + 1.0, fastFrames));
 	float tolerance = antiLagParams.y * fastSigma + 0.02 * max(slowPooled, fastPooled) + 1e-6;
 	float excess = abs(fastPooled - slowPooled) / tolerance;
+#endif
 
 	/* Beyond the tolerance, ramp the cap from maxAccumulation down to the fast length over one more tolerance. */
 	float cap = mix(maxN, fastFrames, clamp(excess - 1.0, 0.0, 1.0));
@@ -1076,9 +1101,13 @@ namespace EmEn::Graphics
 		const auto normalCopyFragment = shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_NormalCopy_FS", ShaderType::FragmentShader, GIDenoiserNormalCopyFragmentShader);
 		const auto atrousFragment = m_parameters.atrousIterations > 0 ? shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_Atrous_FS", ShaderType::FragmentShader, GIDenoiserAtrousFragmentShader) : nullptr;
 		const bool antiLag = m_parameters.antiLag && !m_parameters.reflectionMode;
-		const auto antiLagFragment = antiLag ? shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_AntiLag_FS", ShaderType::FragmentShader, GIDenoiserAntiLagFragmentShader) : nullptr;
+		/* The anti-lag's two variants, decided per frame by FrameContext::temporalDiscontinuity: the unmarked frames' per-pixel
+		 * test, the marked frames' pooled one (a uniform branch switched off still cost the Intel iGPU ~0.32 ms on TAA's
+		 * equivalent block, item temporal-discontinuity-contract). */
+		const auto antiLagSteadyFragment = antiLag ? shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_AntiLag_FS", ShaderType::FragmentShader, std::string{"#version 450\n"} + GIDenoiserAntiLagFragmentShader) : nullptr;
+		const auto antiLagPooledFragment = antiLag ? shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_AntiLagPooled_FS", ShaderType::FragmentShader, std::string{"#version 450\n#define EMEN_GI_ANTILAG_POOLED 1\n"} + GIDenoiserAntiLagFragmentShader) : nullptr;
 
-		if ( vertexModule == nullptr || temporalFragment == nullptr || momentsFragment == nullptr || normalCopyFragment == nullptr || (m_parameters.atrousIterations > 0 && atrousFragment == nullptr) || (antiLag && antiLagFragment == nullptr) )
+		if ( vertexModule == nullptr || temporalFragment == nullptr || momentsFragment == nullptr || normalCopyFragment == nullptr || (m_parameters.atrousIterations > 0 && atrousFragment == nullptr) || (antiLag && (antiLagSteadyFragment == nullptr || antiLagPooledFragment == nullptr)) )
 		{
 			TraceError{ClassId} << "Failed to compile the GI denoiser shaders !";
 
@@ -1099,9 +1128,10 @@ namespace EmEn::Graphics
 
 		if ( antiLag )
 		{
-			m_antiLagPipeline = this->createFullscreenPipeline(ClassId, baseName + "_GIAntiLag", vertexModule, antiLagFragment, m_antiLagLayout, m_antiLagTargets[0]);
+			m_antiLagPipelines[0] = this->createFullscreenPipeline(ClassId, baseName + "_GIAntiLag", vertexModule, antiLagSteadyFragment, m_antiLagLayout, m_antiLagTargets[0]);
+			m_antiLagPipelines[1] = this->createFullscreenPipeline(ClassId, baseName + "_GIAntiLagPooled", vertexModule, antiLagPooledFragment, m_antiLagLayout, m_antiLagTargets[0]);
 
-			if ( m_antiLagPipeline == nullptr )
+			if ( m_antiLagPipelines[0] == nullptr || m_antiLagPipelines[1] == nullptr )
 			{
 				return false;
 			}
@@ -1208,7 +1238,10 @@ namespace EmEn::Graphics
 
 		m_frameUBOs.clear();
 
-		m_antiLagPipeline.reset();
+		for ( auto & pipeline : m_antiLagPipelines )
+		{
+			pipeline.reset();
+		}
 		m_atrousPipeline.reset();
 		m_normalCopyPipeline.reset();
 		m_momentsPipeline.reset();
@@ -1496,7 +1529,8 @@ namespace EmEn::Graphics
 			IndirectPostProcessEffect::recordFullscreenPass(
 				commandBuffer,
 				antiLagWrite,
-				*m_antiLagPipeline,
+				/* The pooled test and its reset on the frames a discontinuity marks, the per-pixel test otherwise. */
+				context.temporalDiscontinuity ? *m_antiLagPipelines[1] : *m_antiLagPipelines[0],
 				*m_antiLagLayout,
 				*m_antiLagPerFrame[frameIndex],
 				nullptr,

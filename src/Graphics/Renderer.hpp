@@ -270,6 +270,11 @@ namespace EmEn::Graphics
 			static constexpr uint32_t MaxSwapChainRecreationFailures{30};
 			/** @brief The minimum interval between two attempts after a failed swap-chain recreation. */
 			static constexpr std::chrono::milliseconds SwapChainRecreationRetryInterval{100};
+			/** @brief The frames a temporal discontinuity marks, the raising frame included (owner decision 2026-11-03,
+			 * item temporal-discontinuity-contract). The GI histories converge per FRAME: with 8, the RTGI's tail after a
+			 * city sunset jump was slower than the per-frame tests' (17.1 against 15.6 at 1 s, 25 FPS); with 25 it is the
+			 * same (16.0 / 15.6 / 15.5 at 100 / 500 / 1000 ms, against 16.3 / 15.8 / 15.6). */
+			static constexpr uint32_t TemporalDiscontinuityFrames{25};
 
 			/** @brief Observable notification codes. */
 			enum NotificationCode : std::uint8_t
@@ -2113,6 +2118,13 @@ namespace EmEn::Graphics
 			 * it was written at, which it stores itself (TAA, GIDenoiser). */
 			float m_preExposure{1.0F};
 			float m_quantisedPreExposure{0.0F};
+			/* The temporal discontinuity (latchTemporalDiscontinuity()), render thread only: the scene and the epoch of the
+			 * previous frame, the frames the mark still holds, and the sky's immediate cycle of this frame
+			 * (renderSkyAtmosphere()). */
+			std::weak_ptr< Scenes::Scene > m_temporalDiscontinuityScene;
+			uint64_t m_temporalDiscontinuityEpoch{0};
+			uint32_t m_temporalDiscontinuityFramesLeft{0};
+			bool m_frameSkyImmediateCycle{false};
 			/* The swap-chain recreation retries (retryDegradedSwapChain()): render thread only, except the given-up flag
 			 * read by the main loop. */
 			std::chrono::steady_clock::time_point m_lastSwapChainRecreationFailure;
@@ -2163,6 +2175,16 @@ namespace EmEn::Graphics
 			 * @param scene The scene of the frame, or null.
 			 */
 			void latchPreExposure (const Scenes::Scene * scene) noexcept;
+
+			/**
+			 * @brief RENDER THREAD. Decides whether a temporal discontinuity marks the frame (owner decision 2026-11-03,
+			 * item temporal-discontinuity-contract) and hands it to the post-processor (FrameContext::temporalDiscontinuity):
+			 * the scene's epoch of the latched slot differs from the previous frame's (Scenes::Scene::temporalDiscontinuityEpoch()),
+			 * the scene changed, or the sky recorded an immediate cycle this frame (renderSkyAtmosphere()). The mark holds
+			 * TemporalDiscontinuityFrames frames from the last raise. After renderSkyAtmosphere(), before the chain.
+			 * @param scene The scene of the frame, or null (nothing marked).
+			 */
+			void latchTemporalDiscontinuity (const std::shared_ptr< Scenes::Scene > & scene) noexcept;
 
 			Base::Mutex m_materialUpdatesAccess; ///< Guards m_pendingMaterialUpdates (logic/loading threads register, the render thread flushes).
 			std::vector< std::weak_ptr< Material::Interface > > m_pendingMaterialUpdates EMEN_GUARDED_BY(m_materialUpdatesAccess); ///< Materials that changed a dynamic property since the last flush.

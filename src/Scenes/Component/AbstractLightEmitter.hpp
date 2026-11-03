@@ -314,6 +314,35 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::publishStateForRendering(uint32_t) */
 			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
 
+			/** @brief The factor of an emission step that is a temporal discontinuity (owner decision 2026-11-02). */
+			static constexpr float TemporalDiscontinuityRatio{2.0F};
+
+			/** @brief The share of the brighter emission below which a channel's step does not count (its noise). */
+			static constexpr float TemporalDiscontinuityFloor{0.01F};
+
+			/**
+			 * @brief Returns whether two RGB emissions (lux or candela per channel) differ by a temporal discontinuity:
+			 * a channel above TemporalDiscontinuityFloor of the brighter of both steps by at least
+			 * TemporalDiscontinuityRatio, either way. Per channel, so a colour switched at the same luminance (a traffic
+			 * signal) counts; switching on or off counts; a non-finite value never does.
+			 * @param before The emission at the previous check.
+			 * @param now The emission now.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool emissionStepped (const Base::Math::Vector< 3, float > & before, const Base::Math::Vector< 3, float > & now) noexcept;
+
+			/**
+			 * @brief Returns whether the light's emission (its chromaticity × intensity, 0 while disabled) stepped since the
+			 * previous call (emissionStepped()), and remembers the emission for the next one. The first call only
+			 * remembers it (the light's addition is the scene's discontinuity already).
+			 * @note LOGIC THREAD, once per publication: LightSet::takeTemporalDiscontinuity() (item
+			 * temporal-discontinuity-contract).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool takeEmissionStep () noexcept;
+
 			/**
 			 * @brief Fills EVERY render state slot and uploads one, at creation time.
 			 * @note ⚠️ Creation happens outside the publish/render cadence, so without this the
@@ -931,6 +960,8 @@ namespace EmEn::Scenes::Component
 			DrawDistance m_drawDistance{};
 			/** @brief The visible source's area, square metres, 0 for none (setVisibleSourceArea()). Logic thread. */
 			float m_visibleSourceArea{0.0F};
+			/** @brief The emission at the last takeEmissionStep() (logic thread); m_emissionChecked false before the first. */
+			Base::Math::Vector< 3, float > m_checkedEmission{0.0F, 0.0F, 0.0F};
 			/** @brief Logic generation each published slot was filled from. */
 			std::array< uint32_t, RenderStateSlotCount > m_publishedGeneration{};
 			/**
@@ -965,5 +996,7 @@ namespace EmEn::Scenes::Component
 			float m_linkedIntensity{0.0F};
 			uint32_t m_colorProjectionBindlessIndex{NoColorProjectionTexture};
 			float m_colorProjectionBoost{0.0F};
+			/** @brief Whether takeEmissionStep() ran once (m_checkedEmission holds an emission). Logic thread. */
+			bool m_emissionChecked{false};
 	};
 }

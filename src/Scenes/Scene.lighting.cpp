@@ -368,6 +368,13 @@ namespace EmEn::Scenes
 		m_bindlessTextureSet.setPrefilteredCubemap(publication->prefiltered);
 		m_IBLBakedIrradiance = publication->irradiance;
 
+		/* A set an IMMEDIATE cycle completed (a time-of-day jump) steps the ambient and the reflections now: a temporal
+		 * discontinuity, published with the next slot (item temporal-discontinuity-contract). */
+		if ( publication->immediate )
+		{
+			this->raiseTemporalDiscontinuity();
+		}
+
 		/* A picture sky adopted later is baked afresh, even the one baked before this sky. */
 		m_IBLBakedSource = nullptr;
 
@@ -437,6 +444,9 @@ namespace EmEn::Scenes
 					m_bindlessTextureSet.setPrefilteredCubemap(prefiltered);
 					m_IBLBakedIrradiance = irradiance;
 					m_IBLWriteIndex = (m_IBLWriteIndex + 1) % IBLRingSize;
+
+					/* A new picture sky's IBL replaces the previous one at once: a temporal discontinuity. */
+					this->raiseTemporalDiscontinuity();
 
 					/* The environment IBL is scene LIGHT for every material (ambient-pass
 					 * irradiance, prefiltered reflections): a once-probe baked before this
