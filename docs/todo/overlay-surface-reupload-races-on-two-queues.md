@@ -52,18 +52,25 @@ What the message says:
   (submit l.360). Both record `Image::recordPendingSubmission()`, but the pending submissions are consumed only at
   destruction (`Image::destroyAfterPendingSubmissions()`, `src/Vulkan/Image.cpp:543`), never before a re-upload.
 
+## State (2026-11-03): a real race, measured on screen
+
+- The race was seen without any validation layer, on a downstream application (Windows): a row band covering every
+  row went through the FULL upload (transfer queue) right after a region upload (graphics queue) of the previous
+  frame; the full one landed first, the older region overwrote it, and its rows stayed stale on screen until the next
+  paint touched them (a translucent band of a faded-out modal backdrop, cut at the bottom of the next small repaint).
+  One trace per paint and per upload gave the sequence `partial 101-1009` (old) → `full 0-1009` (new) →
+  `partial 32-166` (new).
+- Fix: `Overlay::Surface::uploadActiveBuffer()` pins every upload of a resident image (`SHADER_READ_ONLY_OPTIMAL`)
+  to the region path, whole image included. `Image::writeData()` now only uploads a fresh image, which has no earlier
+  upload to race. `docs/caution-points.md` § Vulkan Validation.
+
 ## What remains
 
-- Decide first whether this is a **real race or a tracking gap of the layer**. 0 VUID in the same run means
-  the command buffer was not pending when re-recorded, so the host knew the previous operation had finished
-  through some wait. Find which one (`TransferManager` / `Overlay::Surface::uploadActiveBuffer()` →
-  `Image::writeData()`), and whether it covers the step-1 submission on the other queue, or only step 2's
-  fence on the graphics queue.
-- If real: order each upload of an image after the previous one (wait the operation's own fence before
-  reuse, or pin one image's uploads to one queue), in line with the rule of the round-robin caution:
-  "never assume a `waitIdle()` on a round-robined queue covers a previously submitted operation".
 - Re-run the same launch with synchronization validation: no `SYNC-HAZARD` from `ImageTransferOperation`,
-  and the notifier still draws.
+  and the notifier still draws. The notifier's startup hazard above was two uploads of the same image on two
+  queues; the second one now goes through the region path, so the hazard should be gone — to be measured.
+- The general case (any `Image` re-uploaded through `writeData()` twice, outside the overlay) is untouched:
+  `recordPendingSubmission()` still only defers destruction.
 
 ## ⚠️ Traps
 

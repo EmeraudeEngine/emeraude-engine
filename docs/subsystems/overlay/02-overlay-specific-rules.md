@@ -474,9 +474,21 @@ screen->useBGRAFormat(true);          // CEF provides BGRA pixels
 
 `processUpdates()` uploads **only the rows the provider actually changed**, read from
 `Pixmap::updatedRegion()` and sent through `Image::writeDataRegion()`. Everything outside that band
-is preserved on the GPU. It falls back to a full-image upload whenever a partial one is not provably
-safe: no valid touched region, an image that never received a complete upload, a size mismatch, more
-than one array layer or mip level, a band covering every row, or a failed partial transfer.
+is preserved on the GPU. It falls back to a full-image upload whenever the region path is not provably
+safe: an image that never received a complete upload, a size mismatch, more than one array layer or
+mip level, or a failed region transfer. A touched region that is invalid or covers every row is sent
+as a band of every row, **still through the region path**.
+
+> [!CAUTION]
+> ⚠️⚠️ **A resident image is never refreshed by `Image::writeData()` again (2026-11-03).** The full upload
+> runs on the transfer queue (`transferToGPU()`), the region upload on the graphics queue
+> (`transferRegion()`), and nothing orders one after the other. The row band used to switch back to the
+> full upload when it covered every row, "two barriers for nothing" — and that full upload, submitted
+> right after a region one, could land on the GPU **first**: the older band then overwrote the fresh
+> frame, and its rows stayed stale on screen until the next paint touched them. Measured downstream as
+> a translucent band of a faded-out modal backdrop with a razor-straight edge at the bottom of the
+> next small repaint. The only full upload of an image is now its first one (`UNDEFINED` layout), and
+> a fresh image has no earlier upload to race. `docs/todo/overlay-surface-reupload-races-on-two-queues.md`.
 
 > [!CAUTION]
 > ⚠️⚠️ **The upload used to be full-frame, and this section used to claim otherwise.** It read *"both
@@ -509,7 +521,7 @@ initialization).
 
 | Counter | Meaning |
 |---|---|
-| `uploadCount` / `partialCount` | uploads performed, and how many took the row-band path |
+| `uploadCount` / `partialCount` | uploads performed, and how many took the row-band path (every upload of a resident image, a band of every row included — `saturatedCount` separates those) |
 | `uploadedBytes` | what was **actually** moved |
 | `fullBytes` | what a full-image upload would have moved — the baseline the realised gain is computed against |
 | `regionBytes` | what a tight bounding-box upload would move — the ceiling above the row band |
