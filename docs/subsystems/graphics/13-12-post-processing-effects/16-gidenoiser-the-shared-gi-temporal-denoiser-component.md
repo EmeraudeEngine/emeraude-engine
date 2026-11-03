@@ -250,6 +250,15 @@ frame rate. A first `labyrinth` RT run with the reset (level 14.95, shimmer 7.2)
 repeats: launch-to-launch variance, the labyrinth's auto exposure unpinned. A moderate change still converges over the
 6-frame window, in frames.
 
+**The anti-lag's cost, and a cheaper sampling refused (2026-11-02).** The pooled detector reads ~77 texels a pixel (25 raw,
+25 slow, 25 fast + the centre): `GIDenoiser/antiLag` 0.08 → 0.14 ms on an RTX 3070 Ti, **0.38 → 1.21 ms on an Intel
+iGPU** at 1280×720 (Windows-PA, `reflexion-debug`; it is a child of `SSGIEffect/internal`). Tried: the 5×5 MEANS through
+3×3 bilinear taps (exact) and the NOISE on the exact 3×3 (~47 texels). The convergence was unchanged (`city` at 25 FPS,
+RTGI 16.7 / 15.6 at +0.1 / 1 s), `labyrinth` too, but on `sponza` (RTGI) the parked shimmer doubled — pixels above 8:
+1.66 % → 3.0 %, max 62 → 175, two runs — and the age view fell 214 → 207: a noise estimated over 9 pixels is noisier,
+sometimes lower, and the test fires more. Owner decision: not adopted; the detector keeps its 5×5 noise. A noise window
+cannot shrink without a new tolerance calibration.
+
 **The reset on the three OS and AMD** (engine cf4c4432, 2026-11-02; TAA off, `city` sunset at the peers' own frame rates,
 reset off (10⁶) → on (4); 0 VUID, 0 "Unable to compile" everywhere, MSVC Release and Debug and RADV clean):
 - macOS-PA, M6 (SSGI, ~26 FPS): the land at frame #0 / +0.1 / +0.5 / +1 s 104 / 90 / 46 / 22 → **17.5 / 15.2 / 14.1 /

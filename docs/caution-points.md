@@ -72,6 +72,16 @@ waves instead of sparse dots; 0 `VUID-` with the validation layer loaded. Owner:
 and no burst in motion any more. **Three OS** (engine `33df4a4a`, 2026-10-27): macOS M6 and Windows (RTX 3500 Ada RT lane,
 Intel iGPU screen-space lane) green — builds 0 warning, 0 `VUID-`, every light-pass pipeline compiled, the glitter a sun
 path (isolated one-pixel glints 3-7 % of the glint pixels on the M6), `relief` with 0 black / non-finite pixel.
+**Its cost on the Intel iGPU (2026-11-02, Windows-PA, Raptor Lake UHD, driver 32.0.101.7088, `reflexion-debug`
+1280×720): ScenePass +0.8 ms (8.45 → 9.22, 1.7 % of a 46 ms frame); nothing measurable on the RTX.** Split by
+throwaway patches, 3 launches per point: the whole cost is the explicit `dFdx`/`dFdy` of a COMPUTED value — the
+filter's arithmetic alone is free, and every derivative form costs the same (fine or coarse, of the normal map or of
+the interpolated TBN axis, before or after the reach discards). The compiler's statistics
+(`VK_KHR_pipeline_executable_properties`) show no cause on the directional pass (same SIMD widths, no spill, ±3
+instructions); on the point and spot passes the block does cost codegen (SIMD32 lost, SIMD16 spills of 448-1216
+bytes), not timed. **Owner decision: the cost is accepted** — the alternatives were the G-buffer's filtered roughness
+read back in the light pass (a same-render-pass read) and a texture-space prefilter (Toksvig / LEAN). Details: item
+`intel-igpu-frame-rate-halved`.
 **Completed the same day — every specular consumer of the roughness, except the sheen** (closes the item
 `specular-antialiasing-at-the-source`, opened 2026-09-23):
 - the AMBIENT pass filters ONE roughness (`LightGenerator::AmbientFilteredRoughness`) read by the split-sum lookup AND the
