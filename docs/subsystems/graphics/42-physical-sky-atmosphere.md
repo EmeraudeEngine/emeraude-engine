@@ -215,7 +215,7 @@ Owner decisions (2026-10-25):
 5. **Publication**: the completed set is released after the sky's command buffer is SUBMITTED
    (`SkyEnvironment::onSubmitted()`; a failed submission drops the cycle and starts it over); the scene takes it on the
    logic thread (`Scene::updateDynamicSkyIBL()`) and publishes the three slots, the irradiance under the applyAmbient
-   contract. The once-probes are re-signalled when the sun moved more than **2°** since they last were
+   contract. An IMMEDIATE set is adopted by the renderer in the frame that recorded it (point 7). The once-probes are re-signalled when the sun moved more than **2°** since they last were
    (`Scene::ProbeResignalAngle`).
 6. **The environment slot (0) gets the capture too**: refraction, the RTGI misses and the irradiance probe volume see
    the sky.
@@ -252,6 +252,24 @@ Owner decisions (2026-10-25):
        large-change threshold (graphics doc 13-12 § The TAA resolve).
      - ⚠️ `temporalCapture` records the frames presented after the command arrives (4-40 ms after the jump): a frame
        in between is not in the record.
+   - **Since 2026-11-03 the renderer adopts an immediate set in the frame that recorded it** (owner decision; graphics
+     doc 13-12 § 43). `Renderer::renderSkyAtmosphere()` hands `SkyEnvironment::releasedImmediateSet()` to
+     `BindlessTextureSet::adoptSkyEnvironment()` right after the sky's submission. The adoption happens under the set's lock,
+     and only if the environment is still the one read before the background (a `setBackground()` in between wins). The
+     irradiance is replaced only while one is published (the applyAmbient contract stays the scene's). The frame's
+     `syncTextureSet()` then binds it, and the bake's closing barriers (`ALL_COMMANDS`) order it before the frame's
+     submission on the same queue. The scene still takes the same set on its logic cycle (then a no-op).
+     - **Why:** the one-tick residue above lit 1-2 frames with the DAY IBL under the night sky and sun (Linux captured
+       one: land 240, sea 21). TAA rejected the step into that frame, but not its dark residue out of it (6/255 on the
+       sea), which then faded at TAA's stationary rate for ~1 s: AMD, 2 jumps of 26, 3 discrete levels by frame
+       alignment.
+     - **Measured** (Linux, RTX 3070 Ti, `city` at the quay, TAA alone at 40 FPS, exposure pinned, the same build
+       with and without the adoption, `temporalCapture(60)` right after `setTimeOfDay(0.95)`): without, frame #0 still
+       showed the day IBL on the sea and the land (sea 254.5 / land 241, or sea 21 / land 240 — the sky boxes are out of
+       these crops) in 4 jumps of 6, for 1-2 frames; with it, **0 of 20**: the land at night (15.97-16.18) and the sea
+       at 0.0 from frame #0. Synchronization validation armed ("Current Validation Enabled: … Synchronization"): 0 VUID,
+       0 `SYNC-`, 0 `UNASSIGNED-` over the 20 jumps; `sky-lab` (`applyAmbient`: the irradiance replaced too) unchanged
+       (the floor 0.1 → 0.0), 0 VUID.
 
 A scene takes its ambient from the sky with `applyBackgroundLighting({.applyAmbient = true, .applyStars = false})`
 (sky-lab does; the clock lights the sun). The CPU photometry of a picture sky (`hemisphereIlluminanceFactor()`,

@@ -1815,12 +1815,14 @@ namespace EmEn::Graphics
 			 * @brief Refreshes the sky-view table of the scene's physical sky (Renderable::DynamicSkyResource) for this
 			 * frame's star and camera, in a submission of its own, AHEAD of every pass that draws the sky.
 			 * @note No semaphore: every pass that reads the table is submitted later on the same queue, and the
-			 * atmosphere's barriers order them (SkyAtmosphere::recordFrame()).
+			 * atmosphere's barriers order them (SkyAtmosphere::recordFrame()). An IMMEDIATE IBL cycle recorded here is
+			 * adopted into the scene's bindless set at once (BindlessTextureSet::adoptSkyEnvironment()): the frame whose sky
+			 * jumped is lit by the matching IBL.
 			 * @param currentFrameScope A writable reference to the current frame scope, the one being rendered.
-			 * @param scene A reference to the scene.
+			 * @param scene A writable reference to the scene (its bindless set).
 			 * @param queue A pointer to the graphics queue to use for submissions.
 			 */
-			void renderSkyAtmosphere (RendererFrameScope & currentFrameScope, const Scenes::Scene & scene, const Vulkan::Queue * queue) noexcept;
+			void renderSkyAtmosphere (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Vulkan::Queue * queue) noexcept;
 
 			/**
 			 * @brief Updates every shadow map from the scene.

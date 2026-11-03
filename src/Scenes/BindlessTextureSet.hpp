@@ -199,6 +199,22 @@ namespace EmEn::Scenes
 			void setPrefilteredCubemap (const std::shared_ptr< Vulkan::TextureInterface > & cubemap) noexcept;
 
 			/**
+			 * @brief Adopts a sky-baked IBL set at once — the environment and the prefiltered cubemaps, and the irradiance
+			 * while one is published — unless the environment changed since the caller read it.
+			 * @note Any thread, under the set's lock: it never interleaves with the scene's own writes (setBackground(),
+			 * the logic thread's IBL adoption). Whether the ambient reads the sky's irradiance stays the scene's decision
+			 * (the applyAmbient contract): an unpublished irradiance stays unpublished.
+			 * @param expectedEnvironment The environment cubemap the caller read before choosing the set.
+			 * @param environment The set's captured sky.
+			 * @param irradiance The set's irradiance.
+			 * @param prefiltered The set's prefiltered chain.
+			 * @return bool False when another environment came in between (the scene then adopts the set on its next
+			 * logic cycle, as for every other set).
+			 */
+			[[nodiscard]]
+			bool adoptSkyEnvironment (const std::shared_ptr< Vulkan::TextureInterface > & expectedEnvironment, const std::shared_ptr< Vulkan::TextureInterface > & environment, const std::shared_ptr< Vulkan::TextureInterface > & irradiance, const std::shared_ptr< Vulkan::TextureInterface > & prefiltered) noexcept;
+
+			/**
 			 * @brief Produces a thread-safe copy of the set for descriptor upload.
 			 * @return Snapshot
 			 */

@@ -32,8 +32,12 @@ clean on the touched TUs.
 - The peers' round 1 (engine ef0bb2bc) is done on the three OS and the Intel gain measured (§ 43).
 - **One slow TAA run out of 4 on AMD** (§ 43): unmarked-rate convergence after a jump that landed inside the capture.
   No readout said whether a frame was marked, so a missed mark could not be told from a GI switch still pending.
-  Owner decision 2026-11-03: each frame's mark goes into `temporalCapture`'s JSON (`FrameCapture::FrameMetadata`);
-  then LinuxB-PA repeats R2 until a jump lands inside a capture again, and reads the marks of those frames.
+  Owner decision 2026-11-03: each frame's mark goes into `temporalCapture`'s JSON (engine fd84b011). Rounds 2-3
+  (§ 43): the slow jumps are MARKED; the cause is one or two frames rendered with the night sky and the DAY IBL — the
+  sky records its immediate cycle in frame N on the render thread, the scene adopts the set at its next logic tick
+  (`Scene::updateDynamicSkyIBL()`). Owner decision 2026-11-03: the renderer adopts an immediate set itself, in frame N
+  (done, graphics doc 42 § The environment point 7; Linux 0 such frame in 20 jumps). Left: AMD's R2 again on it (the
+  sea at frame #0 must stay 0.00 in every jump), then close the item.
 - Then close the item (the knowledge is in § 43 already).
 
 ## ⚠️ Traps

@@ -208,6 +208,20 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the set an IMMEDIATE cycle completed in the command buffer the last onSubmitted() released, so
+			 * that the frame which recorded it is lit by it (Renderer::renderSkyAtmosphere(): its sky and its sun already
+			 * jumped). The scene still takes the same set with takePublication().
+			 * @note RENDER THREAD, right after onSubmitted() of the frame; empty after any other submission.
+			 * @return const std::optional< Publication > &
+			 */
+			[[nodiscard]]
+			const std::optional< Publication > &
+			releasedImmediateSet () const noexcept
+			{
+				return m_releasedImmediate;
+			}
+
+			/**
 			 * @brief Takes the last completed set, if a new one is available.
 			 * @note Any thread (the scene: the logic thread).
 			 * @return std::optional< Publication >
@@ -288,6 +302,8 @@ namespace EmEn::Graphics
 			std::optional< Publication > m_completed;
 			/** @brief The set released after its submission, until the scene takes it (m_publicationAccess). */
 			std::optional< Publication > m_publication;
+			/** @brief Render thread only: the set an immediate cycle completed, released by the last onSubmitted(). */
+			std::optional< Publication > m_releasedImmediate;
 			/** @brief The inputs the running (or last) cycle was captured from. */
 			Inputs m_cycle{};
 			size_t m_ringIndex{0};

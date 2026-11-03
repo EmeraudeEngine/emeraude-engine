@@ -105,6 +105,17 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
   the capture (frame #0 still day) and whose `getStatus` 10 ms after `disable(IndirectDiffuse)` still showed the
   pending switch; Linux's jump inside a capture was fast (240.2 day → 15.6 at +0.1 s). Not explained; `sky-lab`,
   `relief` clean; 0 VUID, 0 `UNASSIGNED-`, 0 "Unable to compile" in the 8 runs.
+- **AMD, round 2** (LinuxB-PA, engine fd84b011, the readout; 26 jumps in 2 launches, GI proven off before the
+  first): 24 fast (+0.9-2.1 % at 1 s), 2 SLOW (+7.4 %) — and the slow ones are MARKED from frame #0 (26 and 51
+  frames): no raise was missed. Round 3 (the same captures): exposure constant, the sky unchanged; the excess sits on
+  the ambient-only surfaces (the sea 6.1 against 0.0, the quay, a tree) and decays at 0.97 a frame (TAA's normal
+  blend), while the lamp-lit walls start DARKER and rise; the sea at frame #0 takes three discrete values over the 26
+  jumps (0.00 ×19, 0.20 ×5, 6.1 ×2). Reading: one or two frames after the jump render the night sky and sun with the
+  day IBL (Linux captured one: land 240, sea 21); TAA rejects day → that frame, but not its dark residue → night.
+  **Fixed 2026-11-03** (owner decision): the renderer adopts an immediate IBL set in the frame that recorded it
+  (graphics doc 42 § The environment, point 7) — Linux 0 such frame in 20 jumps (4 in 6 before).
+  A second raise 0.1-1.3 s after a jump, clock stopped, in 6 of the 26 (the street lamps' switch, checked every
+  logic cycle, is the likely source; not proven).
 - The readout (Linux, RTX 3070 Ti, layer on, `city` TAA alone at 40 FPS): a parked capture 60 frames unmarked;
   three sunset jumps, each 26 frames marked then unmarked (the sky's raise, then the lamps' and the sun's one tick
   later), the land box 16.1 → 15.6 over the first 8 frames; the third jump landed inside its capture (frame #0 at

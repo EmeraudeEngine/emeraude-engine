@@ -103,6 +103,7 @@
 #include "Resources/Manager.hpp"
 #include "Saphir/Program.hpp"
 #include "SceneRenderTarget.hpp"
+#include "Scenes/BindlessTextureSet.hpp"
 #include "Scenes/CloudSet.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Editor/Manager.hpp"
@@ -141,6 +142,17 @@
 #include "Vulkan/Sync/Semaphore.hpp"
 #include "Vulkan/Types.hpp"
 #include "Window.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Scenes::Component
+{
+	class AbstractLightEmitter;
+}
+
+namespace EmEn::Vulkan
+{
+	class TextureInterface;
+}
 
 namespace
 {
@@ -230,6 +242,33 @@ namespace
 	}
 
 	/**
+	 * @brief Adopts into the scene's bindless set the IBL set an IMMEDIATE sky cycle completed in the command buffer
+	 * just submitted, so that it lights THIS frame — the one whose sky and sun jumped. Left to the scene's next logic
+	 * cycle, one or two frames rendered the night sky over the day IBL (graphics doc 42 § The environment, point 7).
+	 * @note RENDER THREAD, right after SkyEnvironment::onSubmitted(true). The bake precedes the frame's submission on the
+	 * same queue and its closing barriers make it readable by every later command.
+	 * @param scene A writable reference to the scene (its bindless set).
+	 * @param environment A reference to the sky's environment.
+	 * @param environmentBefore The scene's environment cubemap read before its background (see
+	 * BindlessTextureSet::adoptSkyEnvironment()).
+	 */
+	void
+	adoptImmediateSkyEnvironment (EmEn::Scenes::Scene & scene, const EmEn::Graphics::SkyEnvironment & environment, const std::shared_ptr< EmEn::Vulkan::TextureInterface > & environmentBefore) noexcept
+	{
+		const auto & immediate = environment.releasedImmediateSet();
+
+		if ( !immediate.has_value() )
+		{
+			return;
+		}
+
+		if ( !scene.bindlessTextureSet().adoptSkyEnvironment(environmentBefore, immediate->environment, immediate->irradiance, immediate->prefiltered) )
+		{
+			EmEn::TraceDebug{EmEn::Graphics::Renderer::ClassId} << "The sky's immediate IBL set was not adopted by the renderer: the environment changed during the frame (the scene adopts it on its next logic cycle).";
+		}
+	}
+
+	/**
 	 * @brief Composes the effect list of the FINAL fullscreen pass: the scene stack's
 	 * display effects (AA, sharpening) followed by the camera's lens effects.
 	 * @note Returns the camera list unchanged (no allocation) when the stack declares no
@@ -267,12 +306,6 @@ namespace
 
 		return combined;
 	}
-}
-
-/* Forward declarations. */
-namespace EmEn::Scenes::Component
-{
-	class AbstractLightEmitter;
 }
 
 namespace EmEn::Graphics
@@ -2789,7 +2822,7 @@ namespace EmEn::Graphics
 	}
 
 	void
-	Renderer::renderSkyAtmosphere (RendererFrameScope & currentFrameScope, const Scenes::Scene & scene, const Queue * queue) noexcept
+	Renderer::renderSkyAtmosphere (RendererFrameScope & currentFrameScope, Scenes::Scene & scene, const Queue * queue) noexcept
 	{
 		const auto frameIndex = currentFrameScope.frameIndex();
 
@@ -2807,6 +2840,9 @@ namespace EmEn::Graphics
 		atmosphereInFlight = nullptr;
 		starFieldInFlight = {};
 		m_frameSkyImmediateCycle = false;
+
+		/* Read BEFORE the background: an immediate set is adopted below only if no other environment came in between. */
+		const auto environmentBefore = scene.bindlessTextureSet().environmentCubemap();
 
 		const auto background = scene.background();
 
@@ -2989,6 +3025,8 @@ namespace EmEn::Graphics
 		/* A large change of the sky (a time-of-day jump) recorded its whole IBL cycle in this frame: a temporal
 		 * discontinuity, the frame its direct light jumps (latchTemporalDiscontinuity()). */
 		m_frameSkyImmediateCycle = atmosphere->environment().recordedImmediateCycle();
+
+		adoptImmediateSkyEnvironment(scene, atmosphere->environment(), environmentBefore);
 
 		atmosphereInFlight = atmosphere;
 		starFieldInFlight = std::move(starField);

@@ -26,8 +26,8 @@
 
 #include "BindlessTextureSet.hpp"
 
-/* Local inclusions. */
-#include "Vulkan/TextureInterface.hpp"
+/* STL inclusions. */
+#include <utility>
 
 namespace EmEn::Scenes
 {
@@ -210,6 +210,28 @@ namespace EmEn::Scenes
 		const Base::MutexLock lock{m_access};
 
 		m_prefilteredCubemap = cubemap;
+	}
+
+	bool
+	BindlessTextureSet::adoptSkyEnvironment (const std::shared_ptr< Vulkan::TextureInterface > & expectedEnvironment, const std::shared_ptr< Vulkan::TextureInterface > & environment, const std::shared_ptr< Vulkan::TextureInterface > & irradiance, const std::shared_ptr< Vulkan::TextureInterface > & prefiltered) noexcept
+	{
+		const Base::MutexLock lock{m_access};
+
+		/* Already adopted (the scene took the set first) is fine; another environment is not ours to replace. */
+		if ( m_environmentCubemap != expectedEnvironment && m_environmentCubemap != environment )
+		{
+			return false;
+		}
+
+		m_environmentCubemap = environment;
+		m_prefilteredCubemap = prefiltered;
+
+		if ( m_irradianceCubemap != nullptr )
+		{
+			m_irradianceCubemap = irradiance;
+		}
+
+		return true;
 	}
 
 	BindlessTextureSet::Snapshot

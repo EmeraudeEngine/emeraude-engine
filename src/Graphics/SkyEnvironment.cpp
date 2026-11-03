@@ -511,6 +511,9 @@ namespace EmEn::Graphics
 	void
 	SkyEnvironment::onSubmitted (bool submitted) noexcept
 	{
+		/* This submission's answer to releasedImmediateSet(): never a previous frame's set. */
+		m_releasedImmediate.reset();
+
 		if ( !submitted )
 		{
 			/* The stages of this cycle recorded in the lost command buffer never ran: start the cycle over (every stage
@@ -528,6 +531,11 @@ namespace EmEn::Graphics
 		if ( !m_completed.has_value() )
 		{
 			return;
+		}
+
+		if ( m_completed->immediate )
+		{
+			m_releasedImmediate = m_completed;
 		}
 
 		const MutexLock lock{m_publicationAccess};
