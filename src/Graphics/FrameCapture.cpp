@@ -585,6 +585,7 @@ namespace EmEn::Graphics
 					json << "\t\t\t\"rendererFrame\": " << meta.rendererFrame << ",\n";
 					json << "\t\t\t\"recordTimeMS\": " << timeMS << ",\n";
 					json << "\t\t\t\"deltaMS\": " << deltaMS << ",\n";
+					json << "\t\t\t\"temporalDiscontinuity\": " << (meta.temporalDiscontinuity ? "true" : "false") << ",\n";
 					json << "\t\t\t\"jitterNDC\": ";
 					writeArray(json, meta.jitterNDC);
 					json << ",\n";

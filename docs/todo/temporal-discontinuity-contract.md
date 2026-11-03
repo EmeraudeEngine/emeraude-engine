@@ -29,12 +29,11 @@ clean on the touched TUs.
 
 ## What remains
 
-- **The implementation's Intel timing** (Windows-PA): TAA and `GIDenoiser/antiLag` on `reflexion-debug`, unmarked
-  frames, against the per-frame tests (expected from the throwaway patches: TAA 5.48 → ~4.5 ms, the anti-lag
-  1.21 → ~0.38 ms).
-- **The peers**: macOS-PA (M6, MoltenVK, SSGI only), Windows-PA (MSVC Release + Debug, RTX and Intel), LinuxB-PA (RADV):
-  the build, the `city` sunset at their frame rates (TAA on / GI off, GI on / TAA off), parked `relief` and `city`,
-  `sky-lab`, 0 VUID, 0 "Unable to compile".
+- The peers' round 1 (engine ef0bb2bc) is done on the three OS and the Intel gain measured (§ 43).
+- **One slow TAA run out of 4 on AMD** (§ 43): unmarked-rate convergence after a jump that landed inside the capture.
+  No readout said whether a frame was marked, so a missed mark could not be told from a GI switch still pending.
+  Owner decision 2026-11-03: each frame's mark goes into `temporalCapture`'s JSON (`FrameCapture::FrameMetadata`);
+  then LinuxB-PA repeats R2 until a jump lands inside a capture again, and reads the marks of those frames.
 - Then close the item (the knowledge is in § 43 already).
 
 ## ⚠️ Traps

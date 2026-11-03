@@ -3736,6 +3736,8 @@ namespace EmEn::Graphics
 		}
 
 		metadata.preExposure = m_preExposure;
+		/* Latched earlier in this frame (latchTemporalDiscontinuity()). */
+		metadata.temporalDiscontinuity = m_postProcessor.frameTemporalDiscontinuity();
 
 		return m_frameCapture.recordCopy(commandBuffer, *image, m_swapChain->finalColorLayout(), m_currentFrameIndex, metadata);
 	}

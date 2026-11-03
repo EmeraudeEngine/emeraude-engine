@@ -43,13 +43,14 @@
 #include "ConditionVariable.hpp"
 #include "Mutex.hpp"
 #include "ThreadPool.hpp"
+#include "ThreadSafety.hpp"
+#include "Vulkan/Buffer.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
 	namespace Vulkan
 	{
-		class Buffer;
 		class CommandBuffer;
 		class Device;
 		class Image;
@@ -109,6 +110,9 @@ namespace EmEn::Graphics
 				uint64_t rendererFrame{0};
 				bool autoExposure{false};
 				bool hasCamera{false};
+				/* Whether a temporal discontinuity marked the frame (the large-change variants of TAA and the GI anti-lag
+				 * ran): graphics doc 13-12 § 43. */
+				bool temporalDiscontinuity{false};
 			};
 
 			/**
@@ -123,8 +127,9 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Constructs the frame capture service.
-			 * @note Out of line with the destructor: the members hold a unique_ptr to the forward-declared Buffer, and
-			 * an inline constructor makes MSVC instantiate its deleter (C2027).
+			 * @note Out of line with the destructor: written when Buffer was only forward-declared here (an inline
+			 * constructor made MSVC instantiate the unique_ptr's deleter, C2027); Buffer.hpp is included since 2026-11-03
+			 * (include-what-you-use).
 			 */
 			FrameCapture () noexcept;
 

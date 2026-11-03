@@ -327,7 +327,8 @@ python3 tools/temporal-analysis.py <stem>          # or the .json path it printe
   window rendering?", because the waiting main thread was the only source of redraws. See
   `docs/subsystems/source-tree/02-main-components.md` § Core - On-Demand Rendering. A temporal capture writes
   `<unix seconds>-<n>.png` for n = 0..N-1 and `<unix seconds>.json` (frame serial, timing, TAA
-  jitter, camera, exposure per frame). Budget 1 GiB of staging (57 frames at 2880×1620).
+  jitter, camera, exposure, and `temporalDiscontinuity` — whether the lighting-step mark was on, graphics doc
+  13-12 § 43 — per frame). Budget 1 GiB of staging (57 frames at 2880×1620).
 - ⚠️ Capture **8** frames or more for a TAA question: the jitter cycle is 8 frames.
 - Park the camera, PIN the exposure (`Camera.setExposure`) for an A/B, and let the scene converge: the
   analysis prints the flatness line first and warns when the camera moved or the exposure is auto.

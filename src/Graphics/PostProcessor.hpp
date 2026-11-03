@@ -389,6 +389,18 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief RENDER THREAD. Returns whether a temporal discontinuity marks the frame being recorded (the value
+			 * setFrameTemporalDiscontinuity() set; the frame capture's metadata reads it).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			frameTemporalDiscontinuity () const noexcept
+			{
+				return m_frameTemporalDiscontinuity;
+			}
+
+			/**
 			 * @brief Executes multi-pass scene effects outside any active render pass.
 			 * @note Must be called after recordBlit() and before the RP2 restart.
 			 * Each effect in the chain receives the output of the previous one.

@@ -14,7 +14,8 @@ only on the frames the signal marks.
 **The signal.** `IndirectPostProcessEffect::FrameContext::temporalDiscontinuity` (a `bool`), chosen by
 `Renderer::latchTemporalDiscontinuity()` when the frame is recorded (after `renderSkyAtmosphere()`, before the chain),
 handed through `PostProcessor::setFrameTemporalDiscontinuity()`. Never a flag the GPU reads back: frames in flight
-each carry their own value. It stays TRUE for `Renderer::TemporalDiscontinuityFrames` = **25 frames** from the last
+each carry their own value; `Renderer.temporalCapture` writes each frame's value (`"temporalDiscontinuity"` in its
+JSON, `FrameCapture::FrameMetadata`, owner decision 2026-11-03) — the only readout. It stays TRUE for `Renderer::TemporalDiscontinuityFrames` = **25 frames** from the last
 raise, the raising frame included.
 
 **The producers** (CPU, exact, no per-pixel work):
@@ -84,6 +85,30 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
 - `sky-lab` 0.76 → 0.80 (the sky's immediate cycle as the producer), both lanes, f/8 · 1/125 · ISO 800: the floor
   (R) 0.1 → 0.0 from the first captured frame — converged before the capture starts (its own console command after the
   jump; the reset converges in 2-3 frames), so this protocol no longer resolves the lag; 0 VUID, 0 `[Error]`.
+- **The Intel gain, measured on the implementation** (Windows-PA 2026-11-03, Intel UHD Raptor Lake-S, driver
+  32.0.101.7088, `reflexion-debug`, 1280×720, SSGI, layer off, idle machine, A = engine 95160d41 / B = ef0bb2bc
+  alternated A B A B A B, 8 s windows after a 15 s settle): TAA **5.48 → 4.52 ms**, `GIDenoiser/antiLag` **1.21 →
+  0.39 ms** (`SSGIEffect/internal` 14.48 → 13.68), ScenePass 9.26 → 9.28 (the control), the frame 45.99 → 44.29 ms
+  (20.5 → 21.2 FPS); spread within an arm ~0.04 ms, the arms do not overlap — the frames after the load are unmarked.
+  MSVC 14.44 Release and Debug 0 warning at `/W4 /WX`; on the RTX 3500 Ada (layer on) `city` RTGI 15.93 / 15.52 at
+  +0.08 / 1 s against 15.01 at +8 s, SSGI 15.22 / 13.84 against 13.78, TAA alone 15.96 / 15.18 against 14.99;
+  `sky-lab`, `relief` clean; 0 VUID, 0 `UNASSIGNED-`, 0 "Unable to compile" in every run.
+- **macOS** (macOS-PA 2026-11-03, Apple M6, MoltenVK, AGXG18G 362.5.1, engine ef0bb2bc, 2560×1440, layer on): Release
+  0 warning, AppleClang `-Wdocumentation -Werror` clean over the 264 TUs including a touched file; `city` sunset, SSGI
+  (22 FPS, under the 25 cap) — the land box 14.95 / 14.07 / 13.87 / 13.83 at +0.1 / 0.5 / 1 / 2 s against 13.82 at
+  +8 s (+0.4 % at 1 s); TAA alone at 34 FPS 14.35 / 13.84 at +0.1 / 1 s against 13.60 (+1.8 % at 1 s); `sky-lab`,
+  `relief` clean; 0 VUID, 0 `UNASSIGNED-`, 0 "Unable to compile", 0 `[Error]` in the four runs.
+- **AMD** (LinuxB-PA 2026-11-03, RADV RENOIR iGPU, Mesa 26.0.8, engine ef0bb2bc, 1280×720, layer on, ScreenSpace
+  only): Release 0 warning; `city` sunset, SSGI, the land box 20.5 / 15.4 / 14.4 / 14.1 at +0.1 / 0.5 / 1 / 2 s against
+  13.8 at +8 s; TAA alone, 4 runs: three fast (14.4 at +0.1 s, +0.7-2.2 % at 1 s), **one slow** (17.3 / 16.1 / 15.1 at
+  +0.1 / 0.5 / 1 s, +9.4 % at 1 s: about 27 frames per e-fold, the UNMARKED rate) — the run whose jump landed inside
+  the capture (frame #0 still day) and whose `getStatus` 10 ms after `disable(IndirectDiffuse)` still showed the
+  pending switch; Linux's jump inside a capture was fast (240.2 day → 15.6 at +0.1 s). Not explained; `sky-lab`,
+  `relief` clean; 0 VUID, 0 `UNASSIGNED-`, 0 "Unable to compile" in the 8 runs.
+- The readout (Linux, RTX 3070 Ti, layer on, `city` TAA alone at 40 FPS): a parked capture 60 frames unmarked;
+  three sunset jumps, each 26 frames marked then unmarked (the sky's raise, then the lamps' and the sun's one tick
+  later), the land box 16.1 → 15.6 over the first 8 frames; the third jump landed inside its capture (frame #0 at
+  144.6, already marked) and converged as fast; 0 VUID.
 - Raises observed: `city` — the load, each signal change (every 6-8 s), each time-of-day jump (the sky's immediate
   cycle, then the lamps and the sun stepping one tick later); `labyrinth` — the dying lamp (`Animations::LampFlicker`,
   71 ↔ ~1200 cd) about 8 times a second.
