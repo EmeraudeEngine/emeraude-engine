@@ -336,8 +336,8 @@ namespace EmEn::Scenes::Component
 			 * @brief Returns whether the light's emission (its chromaticity × intensity, 0 while disabled) stepped since the
 			 * previous call (emissionStepped()), and remembers the emission for the next one. The first call only
 			 * remembers it (the light's addition is the scene's discontinuity already).
-			 * @note LOGIC THREAD, once per publication: LightSet::takeTemporalDiscontinuity() (item
-			 * temporal-discontinuity-contract).
+			 * @note LOGIC THREAD, once per publication: LightSet::takeEmissionSteps() (graphics doc
+			 * 13-12 § 43).
 			 * @return bool
 			 */
 			[[nodiscard]]

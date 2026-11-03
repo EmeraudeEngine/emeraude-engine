@@ -520,7 +520,7 @@ void main()
 	 * of the FAST window's own TEMPORAL deviation (its second moment, kept beside its mean); where the two means part by
 	 * more than antiLagParams.y of it, the light changed and the slow history's age is capped to the fast length (a
 	 * smooth ramp over one more tolerance, so the noise cannot toggle it).
-	 * TWO VARIANTS (owner decision 2026-11-03, item temporal-discontinuity-contract): the pooled 5x5 test and its reset
+	 * TWO VARIANTS (owner decision 2026-11-03, graphics doc 13-12 § 43): the pooled 5x5 test and its reset
 	 * run only on the frames FrameContext::temporalDiscontinuity marks (EMEN_GI_ANTILAG_POOLED); every other frame runs
 	 * the PER-PIXEL test of before 2026-11-01 (3x3 spatial deviation, the slow moments' temporal one; the 6-frame cap for
 	 * the moderate continuous changes nobody signals), and still advances the fast window's mean and second moment, the
@@ -1104,7 +1104,7 @@ namespace EmEn::Graphics
 		const bool antiLag = m_parameters.antiLag && !m_parameters.reflectionMode;
 		/* The anti-lag's two variants, decided per frame by FrameContext::temporalDiscontinuity: the unmarked frames' per-pixel
 		 * test, the marked frames' pooled one (a uniform branch switched off still cost the Intel iGPU ~0.32 ms on TAA's
-		 * equivalent block, item temporal-discontinuity-contract). */
+		 * equivalent block, graphics doc 13-12 § 43). */
 		const auto antiLagSteadyFragment = antiLag ? shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_AntiLag_FS", ShaderType::FragmentShader, std::string{"#version 450\n"} + GIDenoiserAntiLagFragmentShader) : nullptr;
 		const auto antiLagPooledFragment = antiLag ? shaderManager.getShaderModuleFromSourceCode(device, "GIDenoiser_AntiLagPooled_FS", ShaderType::FragmentShader, std::string{"#version 450\n#define EMEN_GI_ANTILAG_POOLED 1\n"} + GIDenoiserAntiLagFragmentShader) : nullptr;
 

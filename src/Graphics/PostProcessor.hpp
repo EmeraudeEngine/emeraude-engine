@@ -378,8 +378,8 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief RENDER THREAD. Sets whether a temporal discontinuity marks the frame (Renderer, item
-			 * temporal-discontinuity-contract), handed to every effect through FrameContext::temporalDiscontinuity.
+			 * @brief RENDER THREAD. Sets whether a temporal discontinuity marks the frame (Renderer, graphics
+			 * doc 13-12 § 43), handed to every effect through FrameContext::temporalDiscontinuity.
 			 * @param marked Whether the lighting stepped within the renderer's window.
 			 */
 			void

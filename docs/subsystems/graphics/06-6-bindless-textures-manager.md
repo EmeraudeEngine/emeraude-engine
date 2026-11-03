@@ -94,7 +94,7 @@ The `BindlessTexturesManager` provides a global descriptor set with arrays of te
 > `IrradianceProbeVolume` `iblParams`, `VolumetricClouds` `ambient.w` as uint bits). A new reader that indexes a bare
 > slot reads another frame's IBL. The minimal profile keeps the groups in the cube array only (23 entries), the 2D and
 > cube-array arrays keep their 6-slot reserved region. ⚠️ Still rewritten in place while frames are in flight: the
-> animated textures' 2D views, `clearTextureSet()`, the grab pass (item `bindless-ibl-slots-rewritten-while-in-flight`).
+> animated textures' 2D views, `clearTextureSet()`, the grab pass (item `gpu-data-rewritten-under-frames-in-flight`).
 
 | Slot | Array | Constant | Purpose | Written by |
 |------|-------|----------|---------|------------|

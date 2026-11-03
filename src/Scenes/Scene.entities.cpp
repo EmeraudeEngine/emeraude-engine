@@ -321,7 +321,7 @@ namespace EmEn::Scenes
 	{
 		m_backgroundResource = background;
 
-		/* Another sky, another light: a temporal discontinuity (item temporal-discontinuity-contract). */
+		/* Another sky, another light: a temporal discontinuity (graphics doc 13-12 § 43). */
 		this->raiseTemporalDiscontinuity();
 
 		/* The sky IS scene content for a probe: on-demand render targets are re-baked. */

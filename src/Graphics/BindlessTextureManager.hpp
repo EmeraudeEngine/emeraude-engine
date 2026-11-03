@@ -352,7 +352,7 @@ namespace EmEn::Graphics
 			 * cubemap. Hitch-free: NO device waitIdle here (the leaving scene's textures stay alive
 			 * while dormant). ⚠️ A frame still pending on the GPU reads the rewritten slots
 			 * (UPDATE_AFTER_BIND does not freeze a submitted frame's descriptors): item
-			 * bindless-ibl-slots-rewritten-while-in-flight § Traps. The drain that protects destruction is in
+			 * gpu-data-rewritten-under-frames-in-flight. The drain that protects destruction is in
 			 * Scenes::Manager::deleteScene, before the scene is erased.
 			 * @param set A reference to the leaving scene's bindless texture set.
 			 */

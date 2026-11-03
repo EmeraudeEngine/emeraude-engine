@@ -339,8 +339,8 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Returns the count of the light set's temporal discontinuities so far: a light added or removed, the
 			 * ambient stepped (AbstractLightEmitter::emissionStepped()), and the lights' emission steps collected by
-			 * takeEmissionSteps(). Monotonic: the scene publishes it with each render state slot (item
-			 * temporal-discontinuity-contract).
+			 * takeEmissionSteps(). Monotonic: the scene publishes it with each render state slot (graphics
+			 * doc 13-12 § 43).
 			 * @note Any thread.
 			 * @return uint64_t
 			 */

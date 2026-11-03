@@ -148,7 +148,7 @@ namespace EmEn::Graphics
 				/** @brief The unit vector toward the star when the set was captured (world, Y up). */
 				Base::Math::Vector< 3, float > sunDirection{0.0F, 1.0F, 0.0F};
 				/** @brief Whether an IMMEDIATE cycle (a large change) completed the set: taking it is a temporal
-				 * discontinuity of the scene's ambient (item temporal-discontinuity-contract). */
+				 * discontinuity of the scene's ambient (graphics doc 13-12 § 43). */
 				bool immediate{false};
 			};
 

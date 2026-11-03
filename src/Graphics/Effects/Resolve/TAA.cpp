@@ -514,7 +514,7 @@ void main()
 	float largeChange = 0.0;
 
 	/* Compiled into the variant of the frames FrameContext::temporalDiscontinuity marks only (owner decision 2026-11-03,
-	 * item temporal-discontinuity-contract): switched off by the uniform branch below, the block still cost the Intel
+	 * graphics doc 13-12 § 43): switched off by the uniform branch below, the block still cost the Intel
 	 * iGPU ~0.32 ms. */
 #ifdef EMEN_TAA_LARGE_CHANGE
 	if (largeChangeThreshold < 1.0)
@@ -680,7 +680,7 @@ namespace EmEn::Graphics::Effects::Resolve
 		/* Compile shaders. */
 		const auto vertexModule = this->getFullscreenVertexShader();
 
-		/* Two variants (owner decision 2026-11-03, item temporal-discontinuity-contract): [0] without the large-change test,
+		/* Two variants (owner decision 2026-11-03, graphics doc 13-12 § 43): [0] without the large-change test,
 		 * [1] with it, recorded on the frames FrameContext::temporalDiscontinuity marks. */
 		const std::string resolveBody = std::string{TAAResolveHeader} + ViewReconstructionGLSL::sourceGLSL(0, ViewBinding) + TAAResolveFragmentShader;
 		const auto steadyModule = renderer.shaderManager().getShaderModuleFromSourceCode(renderer.device(), "TAAResolveFS", Saphir::ShaderType::FragmentShader, "#version 450\n" + resolveBody);

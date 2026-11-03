@@ -152,14 +152,15 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
     `withExclusiveActiveScene()` takes it BEFORE its announcement (the cycle's shared accesses wait for announced
     writers: announced while queuing, the writer would wait for a cycle waiting for it); an exclusive access asked
     inside the cycle on its thread is a contract fault (traced, aborted). Linux: 15 jump commands, 0 hang, 0 dark
-    frame, 0 VUID.
+    frame, 0 VUID. AMD round 8 (eed27ab5, 26 jumps): no dark or rising first-night frame, the sea 0.00 in 25 of 25,
+    the console's latency unchanged (setTimeOfDay median 8-9 ms, max ~20 ms, as before).
   - **The glossy lift before the night** (AMD round 7, TAA off, in-capture): day frames just before the night read
     251.3 against 251.0 on 1.9 % of the pixels — windows, a mirror-like object, the lower facade, warm-tinted. At
     40 FPS it is on frames #3-#4, recorded BEFORE the jump ran (frames in flight); at 8 FPS only on the frame just
     before the night, in 4 of 8. Likely the lamps' bulbs (their linked emissive material, synced at the publication,
     scenes doc 16) seen in reflections: a material has no render state slot (its flush may land one frame early), and
     the 40 FPS case suggests its uniform data is also rewritten under frames in flight — the class of item
-    `bindless-ibl-slots-rewritten-while-in-flight` § Traps. Not proven, not pursued.
+    `gpu-data-rewritten-under-frames-in-flight`. Not proven, not pursued.
   A second raise 0.1-1.3 s after a jump, clock stopped, in 6 of the 26 (the street lamps' switch, checked every
   logic cycle, is the likely source; not proven).
 - The readout (Linux, RTX 3070 Ti, layer on, `city` TAA alone at 40 FPS): a parked capture 60 frames unmarked;
@@ -177,10 +178,28 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
 > camera cut) converges at the pre-2026-11-01 rate — TAA ~20 frames per e-fold, the GI's 6-frame cap: the accepted
 > trade-off (owner decision 2026-11-03); a public `Scene` call raising the epoch comes only with a real case.
 
+- **The peers on engine eed27ab5** (2026-11-04; the four commits 0389c34e, 3e484a60, 4a29d706, eed27ab5):
+  macOS-PA (M6, the REDUCED bindless profile — 1212 descriptors, Cube[128]) Release 0 warning, every `.mm` /
+  `.mac.cpp` against the trimmed headers, AppleClang `-Wdocumentation` over 417 TUs 0; Windows-PA MSVC 14.44 `/W4 /WX`
+  Release and Debug 0 warning, the 17 `.windows.cpp` TUs; both: `reflexion-debug` (both lanes on the RTX),
+  `forest`, `water-world`, `sky-lab` looked at, `city`'s in-capture jumps clean (day up to the first night frame,
+  marked, at the night level), 0 VUID, 0 "Unable to compile"; the Intel UHD loads `reflexion-debug` clean.
+  ⚠️ Open observation (Windows RTX, RT lane, TAA OFF): after the jump the sea box keeps a slow tail, 2.6-3.0 at the
+  first night frame down to ~0.1 over ~1.4 s, a diagonal line of specks on the water — likely the ray-traced
+  reflections' own history (RTR's denoiser) converging; Linux's RT lane reads 0.0 there. Not measured further.
+
+> [!NOTE]
+> **One unexplained freeze, never reproduced** (Linux, 2026-11-03, during the contract's validation): in a `labyrinth`
+> GI-noise run (layer on, TAA off), right after `PostProcess.setLightingMode(ScreenSpace)`, the log stopped for good —
+> the logic thread's per-tick probe lines too — and the instance had to be killed; its logs were overwritten. Not
+> reproduced in 24 lane switches (layer on and off) and 12 full GI-noise runs under a stall watchdog. The probe of that
+> build traced while holding `LightSet::m_lightsAccess` (removed since). If it comes back: `gdb -p <pid> -batch -ex
+> "thread apply all bt 30"` before killing, and keep the log.
+
 > [!WARNING]
 > `labyrinth`'s GI noise runs vary from launch to launch (the dying lamp's flicker inside the 16-frame window: max
 > ~189, the level dips — RTGI 14.8-18.0 in 3 runs of 14, SSGI 19.3 / 21.5 in 2 of 13). Compare its median over several
 > runs, never one run.
 
-References: item `temporal-discontinuity-contract` (while open), § 06 (the TAA resolve), § 16 (the anti-lag), § 41
+References: § 06 (the TAA resolve), § 16 (the anti-lag), § 41
 (the FAST forms), graphics doc 42 § The environment.

@@ -60,7 +60,7 @@ The bisect of the +4 ms (Intel, 1280×720, layer off, 3 launches per point, medi
   spilling executables with the block, 6 without). Not timed: `reflexion-debug` draws no point or spot light
   (every light-pass variant is built per renderable, `Scene::prepareRenderPassTypes()`); a lamp scene (city) would.
 - TAA's large-change test (+0.92 on the Intel, +0.10 on the RTX; already 9 + 9 bilinear taps: only a reduced-resolution pre-pass would cut it).
-  The owner chose to run it only on the frames a discontinuity marks: item `temporal-discontinuity-contract` (the
+  The owner chose to run it only on the frames a discontinuity marks: graphics doc 13-12 § 43, the temporal-discontinuity contract (the
   block compiled out measured −0.99 ms against today's default on the Intel, 2026-11-03; the GI anti-lag's +0.83 goes
   the same way).
 

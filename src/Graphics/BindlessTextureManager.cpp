@@ -668,7 +668,7 @@ namespace EmEn::Graphics
 		/* NOTE: No device waitIdle here — this runs on every scene disable/switch and must stay
 		 * hitch-free; the leaving scene's textures stay alive (the scene goes dormant). ⚠️ A frame
 		 * still pending on the GPU reads the slots rewritten here (item
-		 * bindless-ibl-slots-rewritten-while-in-flight § Traps). The drain that protects actual destruction lives at the
+		 * gpu-data-rewritten-under-frames-in-flight). The drain that protects actual destruction lives at the
 		 * destruction site — Scenes::Manager::deleteScene waits idle before erasing the scene. */
 		const Base::MutexLock lock{m_indexMutex};
 

@@ -472,7 +472,7 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_momentsPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_normalCopyPipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_atrousPipeline;
-			/* The anti-lag's two variants (item temporal-discontinuity-contract): [0] the per-pixel test of the unmarked
+			/* The anti-lag's two variants (graphics doc 13-12 § 43): [0] the per-pixel test of the unmarked
 			 * frames, [1] the pooled 5x5 test and its reset (FrameContext::temporalDiscontinuity). */
 			std::array< std::shared_ptr< Vulkan::GraphicsPipeline >, 2 > m_antiLagPipelines;
 			/* Pipeline layouts. */

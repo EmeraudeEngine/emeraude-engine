@@ -369,7 +369,7 @@ namespace EmEn::Scenes
 		m_IBLBakedIrradiance = publication->irradiance;
 
 		/* A set an IMMEDIATE cycle completed (a time-of-day jump) steps the ambient and the reflections now: a temporal
-		 * discontinuity, published with the next slot (item temporal-discontinuity-contract). */
+		 * discontinuity, published with the next slot (graphics doc 13-12 § 43). */
 		if ( publication->immediate )
 		{
 			this->raiseTemporalDiscontinuity();

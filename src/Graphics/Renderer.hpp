@@ -271,7 +271,7 @@ namespace EmEn::Graphics
 			/** @brief The minimum interval between two attempts after a failed swap-chain recreation. */
 			static constexpr std::chrono::milliseconds SwapChainRecreationRetryInterval{100};
 			/** @brief The frames a temporal discontinuity marks, the raising frame included (owner decision 2026-11-03,
-			 * item temporal-discontinuity-contract). The GI histories converge per FRAME: with 8, the RTGI's tail after a
+			 * graphics doc 13-12 § 43). The GI histories converge per FRAME: with 8, the RTGI's tail after a
 			 * city sunset jump was slower than the per-frame tests' (17.1 against 15.6 at 1 s, 25 FPS); with 25 it is the
 			 * same (16.0 / 15.6 / 15.5 at 100 / 500 / 1000 ms, against 16.3 / 15.8 / 15.6). */
 			static constexpr uint32_t TemporalDiscontinuityFrames{25};
@@ -2182,7 +2182,7 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief RENDER THREAD. Decides whether a temporal discontinuity marks the frame (owner decision 2026-11-03,
-			 * item temporal-discontinuity-contract) and hands it to the post-processor (FrameContext::temporalDiscontinuity):
+			 * graphics doc 13-12 § 43) and hands it to the post-processor (FrameContext::temporalDiscontinuity):
 			 * the scene's epoch of the latched slot differs from the previous frame's (Scenes::Scene::temporalDiscontinuityEpoch()),
 			 * the scene changed, or the sky recorded an immediate cycle this frame (renderSkyAtmosphere()). The mark holds
 			 * TemporalDiscontinuityFrames frames from the last raise. After renderSkyAtmosphere(), before the chain.

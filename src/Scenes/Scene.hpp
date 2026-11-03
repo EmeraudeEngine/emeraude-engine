@@ -2129,7 +2129,7 @@ namespace EmEn::Scenes
 			 * scene's lighting steps (a light added, removed, switched or stepped by
 			 * AbstractLightEmitter::TemporalDiscontinuityRatio, the ambient stepped, a background swapped, a new IBL
 			 * replacing the previous one at once). The renderer compares it with its previous frame's: a different value
-			 * marks the frame (FrameContext::temporalDiscontinuity; item temporal-discontinuity-contract).
+			 * marks the frame (FrameContext::temporalDiscontinuity; graphics doc 13-12 § 43).
 			 * @note Render thread, the slot latched by the frame.
 			 * @pre readStateIndex < RenderStateSlotCount.
 			 * @param readStateIndex The render state slot latched by the frame.

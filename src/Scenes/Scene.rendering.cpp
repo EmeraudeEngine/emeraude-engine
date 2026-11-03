@@ -1369,7 +1369,7 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* The temporal discontinuities so far (item temporal-discontinuity-contract): the lights' emission steps are
+		/* The temporal discontinuities so far (graphics doc 13-12 § 43): the lights' emission steps are
 		 * collected here, on this thread, once per publication; the scene's own and the light set's counters are
 		 * monotonic, so is their sum, and the renderer compares the slot's value with its previous frame's. */
 		m_lightSet.takeEmissionSteps();
