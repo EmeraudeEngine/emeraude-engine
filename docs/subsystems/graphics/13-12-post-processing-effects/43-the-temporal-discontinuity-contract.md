@@ -131,8 +131,11 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
     show the day sun and sky over a night ambient, IBL and reflections (land 224 against 251), unmarked, in 8 of 8;
     at 8 FPS (nothing pending on the GPU) they vanish. The engine has ONE bindless descriptor set (UPDATE_AFTER_BIND);
     `BindlessTextureManager::syncTextureSet()` rewrites the three reserved IBL slots in place while submitted frames
-    still read them. The IBL ring protects the images, not the descriptors. Open: item
-    `bindless-ibl-slots-rewritten-while-in-flight` (owner decision 2026-11-03: the IBL sets get ring slots).
+    still read them. The IBL ring protects the images, not the descriptors. **Fixed** (owner decision 2026-11-03,
+    the variant chosen over ring slots per IBL set): one IBL group PER FRAME IN FLIGHT, written by that frame only,
+    its base carried by the view block and each effect's per-frame block (graphics doc 06-6 § Reserved Slots). Linux:
+    every reader exercised (`reflexion-debug` on both lanes, `forest`, `water-world`, `sky-lab`, `city`), 0 VUID,
+    0 "Unable to compile"; the in-capture jumps clean (Linux has no pending frame to show the defect). AMD to verify.
   - **The lamps one slot late.** In 6 of 25 the first night frame, marked, is dark (land 7.8 against 13.4, TAA off
     too): `Core::logicsTask()` ran the application's logic (`onCoreProcessLogics()`, where `city`'s lamp rule runs)
     AFTER the scene's publication, so the lamps lit by it reached the next slot, while the sun the console switched

@@ -31,17 +31,35 @@
 #include <mutex>
 
 /* Local inclusions. */
-#include "Graphics/RenderableInstance/Abstract.hpp"
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Types.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "HeightfieldSurfaceHelper.hpp"
 #include "OceanSurfaceHelper.hpp"
+#include "Saphir/AbstractShader.hpp"
 #include "Saphir/Code.hpp"
+#include "Saphir/Declaration/InputAttribute.hpp"
+#include "Saphir/Declaration/ShaderStorageBlock.hpp"
+#include "Saphir/Declaration/Structure.hpp"
+#include "Saphir/Declaration/Types.hpp"
+#include "Saphir/Declaration/UniformBlock.hpp"
+#include "Saphir/FragmentShader.hpp"
+#include "Saphir/Keys.hpp"
+#include "Saphir/Program.hpp"
+#include "Saphir/SetIndexes.hpp"
+#include "Saphir/ShaderManager.hpp"
+#include "Saphir/VertexShader.hpp"
 #include "SkinningLayoutHelper.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/GraphicsPipeline.hpp"
+#include "Vulkan/LayoutManager.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
+#include "Vulkan/PipelineLayout.hpp"
+#include "Vulkan/RenderPass.hpp"
 
 namespace EmEn::Saphir::Generator
 {
@@ -765,6 +783,7 @@ namespace EmEn::Saphir::Generator
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::EnvironmentLuminance);
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::IBLDiffuseWeight);
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::PreExposure);
+			uniformBlock.addMember(Declaration::VariableType::UnsignedInteger, UniformBlock::Component::IBLSlotBase);
 
 			return shader.declare(uniformBlock);
 		}
@@ -782,7 +801,8 @@ namespace EmEn::Saphir::Generator
 			 * float ambientLightIntensity - offset 352
 			 * float environmentLuminance - offset 356
 			 * float iblDiffuseWeight - offset 360
-			 * float preExposure - offset 364 */
+			 * float preExposure - offset 364
+			 * uint iblSlotBase - offset 368 */
 			Declaration::UniformBlock uniformBlock{setIndex, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::CSMView, UniformBlock::View};
 			uniformBlock.addArrayMember(Declaration::VariableType::Matrix4, UniformBlock::Component::CascadeViewProjectionMatrices, 4);
 			uniformBlock.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::CascadeSplitDistances);
@@ -795,6 +815,7 @@ namespace EmEn::Saphir::Generator
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::EnvironmentLuminance);
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::IBLDiffuseWeight);
 			uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::PreExposure);
+			uniformBlock.addMember(Declaration::VariableType::UnsignedInteger, UniformBlock::Component::IBLSlotBase);
 
 			return shader.declare(uniformBlock);
 		}
@@ -809,6 +830,7 @@ namespace EmEn::Saphir::Generator
 		uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::EnvironmentLuminance);
 		uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::IBLDiffuseWeight);
 		uniformBlock.addMember(Declaration::VariableType::Float, UniformBlock::Component::PreExposure);
+		uniformBlock.addMember(Declaration::VariableType::UnsignedInteger, UniformBlock::Component::IBLSlotBase);
 
 		return shader.declare(uniformBlock);
 	}

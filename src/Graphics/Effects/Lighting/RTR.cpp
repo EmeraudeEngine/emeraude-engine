@@ -178,6 +178,7 @@ layout(set = 1, binding = 5, std140) uniform TraceParams
 	vec4 ambientLight;
 	float coneScale;
 	float preExposure;
+	uint iblSlotBase;	/* The frame's IBL group in the bindless table (BindlessTextureManager::iblSlotBase()). */
 };
 
 /* Material flag bits (must match GPURTMaterialData). */
@@ -897,7 +898,7 @@ void main()
 		 * volume is disabled the IBL leg is back, exactly as before. */
 		{
 			vec3 hitR = reflect(reflDir, hitNormal);
-			vec3 prefiltered = textureLod(texturesCube[nonuniformEXT(2)], hitR, clamp(hitRoughness, 0.0, 1.0) * PrefilteredMaxLod).rgb;
+			vec3 prefiltered = textureLod(texturesCube[nonuniformEXT(iblSlotBase + 2u)], hitR, clamp(hitRoughness, 0.0, 1.0) * PrefilteredMaxLod).rgb;
 			vec3 iblSpecular = prefiltered * fresnelSchlick(hitNdotV, hitF0);
 
 			/* Coverage: 1 inside the volume, fading to 0 over its last cell, 0 when disabled. Where the
@@ -907,7 +908,7 @@ void main()
 			vec3 diffuseAlbedo = albedo * (1.0 - hitMetalness);
 			/* The query returns energy; the IndirectDiffuse intensity the primary surfaces get is applied here. */
 			vec3 probeDiffuse = diffuseAlbedo * probeIrradiance(hitPos, hitNormal, hitV) * probeVolume.ambientColor.w;
-			vec3 iblDiffuse = diffuseAlbedo * texture(texturesCube[nonuniformEXT(1)], hitNormal).rgb * ambientLight.w * (1.0 - probeCoverage);
+			vec3 iblDiffuse = diffuseAlbedo * texture(texturesCube[nonuniformEXT(iblSlotBase + 1u)], hitNormal).rgb * ambientLight.w * (1.0 - probeCoverage);
 
 			/* The scene ambient is an ILLUMINANCE in lux, so a Lambertian surface sends back
 			 * `albedo * E / PI` — the same 1/PI the raster applies (`iblBaseColor * 0.3183098862`,
@@ -973,7 +974,7 @@ void main()
 		 * `reflexion-debug --demo-options 0,5,0` with a clear-horizon sky, the mirror sphere's TOP
 		 * — where rays leave toward the sky — reflected the dark GROUND instead (luminance 85
 		 * against 174 for the real sky, blue-minus-green -2.8 against +9.6). */
-		vec3 envColor = textureLod(texturesCube[nonuniformEXT(2)], reflDir, clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb * ambientLight.w;
+		vec3 envColor = textureLod(texturesCube[nonuniformEXT(iblSlotBase + 2u)], reflDir, clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb * ambientLight.w;
 
 		/* The mirror ray escaped — but did the LOBE? See specularLobeVisibility() above: one escaping
 		 * sample is not evidence that a surface buried in geometry sees the sky. */
@@ -1791,7 +1792,8 @@ namespace EmEn::Graphics::Effects::Lighting
 				.skyLuminance = context.skyLuminance,
 				/* |P[1][1]| = 1 / tan(vFOV / 2) (column-major, element 5): focal length in trace texels. */
 				.coneScale = std::abs(projMat[5]) * 0.5F * static_cast< float >(m_traceTarget.height()),
-				.preExposure = context.preExposure
+				.preExposure = context.preExposure,
+				.iblSlotBase = BindlessTextureManager::iblSlotBase(frameIndex)
 			};
 
 			if ( !updateUniformBufferData(*m_traceFrameUBOs[frameIndex], &traceData, sizeof(traceData)) )

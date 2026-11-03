@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cstdint>
 #include <memory>
 
@@ -37,10 +38,12 @@
 #include "volk.h"
 
 /* Local inclusions for inheritances. */
+#include "Constants.hpp"
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
 #include "Mutex.hpp"
+#include "ThreadSafety.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -78,10 +81,19 @@ namespace EmEn::Graphics
 			 * texturesCube[] (TextureCubeBinding), 2D slots index textures2D[]
 			 * (Texture2DBinding). The numbering restarts per array. */
 
-			/* Cube array (texturesCube[]) reserved slots. */
+			/* Cube array (texturesCube[]) reserved slots: the scene's IBL, ONE GROUP PER FRAME IN FLIGHT (2026-11-03,
+			 * owner decision). Frame f reads slots iblSlotBase(f) + the offsets below, and only frame f's
+			 * syncTextureSet() writes them: the frame that last read them has completed (its fence was waited), so a
+			 * submitted frame never sees a later frame's IBL — one rewritten group used to be read by frames still
+			 * pending on the GPU (graphics doc 13-12 § 43, AMD round 6). Every reader adds the frame's base, carried by
+			 * the view block (iblSlotBase) or by the effect's own per-frame block. */
 			static constexpr uint32_t EnvironmentCubemapSlot = 0;
 			static constexpr uint32_t IrradianceCubemapSlot = 1;
 			static constexpr uint32_t PrefilteredCubemapSlot = 2;
+			/** @brief The cube slots of one frame's IBL group (the three offsets above). */
+			static constexpr uint32_t IBLSlotsPerFrame = 3;
+			/** @brief The cube slots the IBL groups span: one group per frame in flight. */
+			static constexpr uint32_t IBLReservedCubeSlots = IBLSlotsPerFrame * static_cast< uint32_t >(MaxFramesInFlight);
 
 			/* 2D array (textures2D[]) reserved slots. */
 			static constexpr uint32_t BRDFLutSlot = 3;
@@ -93,6 +105,8 @@ namespace EmEn::Graphics
 			 * host it falls back to MinimalFirstDynamicSlot. Never use it to seed a slot cursor —
 			 * use firstDynamicSlot(), which is what Scenes::BindlessTextureSet is handed. */
 			static constexpr uint32_t FirstDynamicSlot = 16;
+
+			static_assert(FirstDynamicSlot >= IBLReservedCubeSlots, "The default reserved region hosts every frame's IBL group.");
 
 			/** @brief Number of slots the named reserved slots above actually span.
 			 * @note The numbering is shared across arrays — cube uses 0-2, 2D uses 3-5 — so an array
@@ -143,6 +157,9 @@ namespace EmEn::Graphics
 			static constexpr uint32_t MinimalMaxTextures1D = 4;
 			static constexpr uint32_t MinimalMaxTextures3D = 4;
 			static constexpr uint32_t MinimalTexturesPerDynamicArray = MinimalFirstDynamicSlot + MinDynamicSlotsPerArray;
+			/** @brief The cube array of the minimal profile: every frame's IBL group, then the dynamic floor (its first
+			 * dynamic slot stays past the groups, firstDynamicCubeSlot()). */
+			static constexpr uint32_t MinimalMaxTexturesCube = IBLReservedCubeSlots + MinDynamicSlotsPerArray;
 
 			/** @brief Sampler budget left to the OTHER descriptor sets of a pipeline layout.
 			 * @note The update-after-bind pipeline-layout VUIDs (03022, 03036) sum the sampler
@@ -222,6 +239,34 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the first slot available for scene-dynamic CUBE textures: past every frame's IBL group, even
+			 * when the minimal profile lowered firstDynamicSlot().
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			firstDynamicCubeSlot () const noexcept
+			{
+				return m_firstDynamicSlot > IBLReservedCubeSlots ? m_firstDynamicSlot : IBLReservedCubeSlots;
+			}
+
+			/**
+			 * @brief Returns the first cube slot of a frame's IBL group (EnvironmentCubemapSlot and the others are offsets
+			 * from it).
+			 * @pre frameIndex < MaxFramesInFlight.
+			 * @param frameIndex The frame in flight (Renderer::currentFrameIndex()).
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			static
+			constexpr
+			uint32_t
+			iblSlotBase (uint32_t frameIndex) noexcept
+			{
+				return IBLSlotsPerFrame * frameIndex;
+			}
+
+			/**
 			 * @brief Returns the effective capacity of the 1D texture array.
 			 * @note Valid after service initialization; before that, the desired capacity.
 			 * @return uint32_t
@@ -289,10 +334,13 @@ namespace EmEn::Graphics
 			 * (handles newly added textures and per-frame animated-texture frame swaps) and on
 			 * scene activation. Dynamic slots not present in the set are simply left untouched;
 			 * they are never sampled because materials/lights only reference occupied slots.
+			 * The scene's IBL goes to the group of the frame being recorded only (iblSlotBase()).
+			 * @pre frameIndex < MaxFramesInFlight.
+			 * @param frameIndex The frame in flight being recorded (Renderer::currentFrameIndex()).
 			 * @param set A reference to the active scene's bindless texture set.
 			 * @param sceneTimeMS The active scene lifetime in milliseconds (for animated textures).
 			 */
-			void syncTextureSet (const Scenes::BindlessTextureSet & set, uint32_t sceneTimeMS) const noexcept;
+			void syncTextureSet (uint32_t frameIndex, const Scenes::BindlessTextureSet & set, uint32_t sceneTimeMS) const noexcept;
 
 			/**
 			 * @brief Clears, in the GPU descriptor table, the slots occupied by a scene's set.
@@ -300,10 +348,11 @@ namespace EmEn::Graphics
 			 * so the global descriptor set no longer references that scene's textures/samplers
 			 * before they may be destroyed (otherwise vkDestroySampler/Image fire
 			 * "currently in use by VkDescriptorSet"). Each freed dynamic slot is overwritten with
-			 * an engine-owned dummy texture; the environment reserved slot is reset to the default
-			 * cubemap. Hitch-free: NO device waitIdle here (overwriting bound descriptors while
-			 * frames are in flight is safe via UPDATE_AFTER_BIND, and the leaving scene's textures
-			 * stay alive while dormant). The drain that protects destruction is in
+			 * an engine-owned dummy texture; every frame's IBL group is reset to the default
+			 * cubemap. Hitch-free: NO device waitIdle here (the leaving scene's textures stay alive
+			 * while dormant). ⚠️ A frame still pending on the GPU reads the rewritten slots
+			 * (UPDATE_AFTER_BIND does not freeze a submitted frame's descriptors): item
+			 * bindless-ibl-slots-rewritten-while-in-flight § Traps. The drain that protects destruction is in
 			 * Scenes::Manager::deleteScene, before the scene is erased.
 			 * @param set A reference to the leaving scene's bindless texture set.
 			 */
@@ -474,6 +523,28 @@ namespace EmEn::Graphics
 			 */
 			[[nodiscard]]
 			bool writeRawToDescriptorSet (uint32_t binding, uint32_t arrayIndex, const VkDescriptorImageInfo & descriptorInfo) const noexcept EMEN_REQUIRES(m_indexMutex);
+
+			/**
+			 * @brief Writes a frame's IBL group (syncTextureSet()): environment, irradiance and prefiltered, each parked on
+			 * the default cubemap when absent or not created.
+			 * @pre frameIndex < MaxFramesInFlight.
+			 * @param frameIndex The frame in flight being recorded.
+			 * @param group The three cubemaps, in the order of the slot offsets (EnvironmentCubemapSlot first).
+			 */
+			void writeIBLGroup (uint32_t frameIndex, const std::array< std::shared_ptr< Vulkan::TextureInterface >, IBLSlotsPerFrame > & group) const noexcept EMEN_REQUIRES(m_indexMutex);
+
+			/**
+			 * @brief Writes the current frame's 2D view of an ANIMATED texture (its main view is a 2D array, invalid for
+			 * sampler2D[]).
+			 * @param arrayIndex The texture's slot in the 2D array.
+			 * @param texture A reference to the texture (any 2D texture: only an AnimatedTexture2D of several frames is
+			 * written here).
+			 * @param sceneTimeMS The active scene lifetime in milliseconds.
+			 * @return bool True when the texture was animated and handled here (written or skipped), false when the
+			 * caller writes it as a plain texture.
+			 */
+			[[nodiscard]]
+			bool writeAnimatedTexture2D (uint32_t arrayIndex, const Vulkan::TextureInterface & texture, uint32_t sceneTimeMS) const noexcept EMEN_REQUIRES(m_indexMutex);
 
 			Renderer & m_renderer;
 			/* Effective capacities, resolved at initialization from the device budget. They default

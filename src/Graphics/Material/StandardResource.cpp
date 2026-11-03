@@ -4344,6 +4344,12 @@ namespace EmEn::Graphics::Material
 		/* Enable the nonuniform qualifier extension. */
 		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
 
+		/* The frame's IBL group comes from the view block (ViewIBLCubeIndex()): idempotent. */
+		if ( !generator.declareViewUniformBlock(fragmentShader) )
+		{
+			return false;
+		}
+
 		/* Declare the global bindless cubemap array (unbounded). Several features and
 		 * subsystems (materials, LightGenerator) declare it on use; a re-declaration is a
 		 * silent no-op (see the Saphir declare de-duplication contract). */
@@ -4396,7 +4402,7 @@ namespace EmEn::Graphics::Material
 				LightGenerator::specularAntialiasedRoughness({.outputVariable = SurfaceReflectionRoughness, .normalExpression = "reflectionNormalRaw", .roughnessExpression = roughnessExpression}) << Line::End <<
 				"const vec3 reflectDir = reflect(reflectionI, reflectionNormal);" << Line::End <<
 				"const vec3 " << ShaderVariable::ReflectionTextureCoordinates << " = reflectDir;" << Line::End <<
-				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
+				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << ViewIBLCubeIndex(BindlessTextureManager::PrefilteredCubemapSlot) << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
 		}
 		else
 		{
@@ -4406,7 +4412,7 @@ namespace EmEn::Graphics::Material
 			const auto reflectionLOD = prefilteredLOD(roughnessExpression);
 
 			Code(fragmentShader, Location::Top) <<
-				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
+				"const vec4 " << SurfaceReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << ViewIBLCubeIndex(BindlessTextureManager::PrefilteredCubemapSlot) << ")]" << ", " << ShaderVariable::ReflectionTextureCoordinates << ", " << reflectionLOD << ");";
 		}
 
 		return true;
@@ -4423,6 +4429,12 @@ namespace EmEn::Graphics::Material
 
 		/* Enable the nonuniform qualifier extension. */
 		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+		/* The frame's IBL group comes from the view block (ViewIBLCubeIndex()): idempotent. */
+		if ( !generator.declareViewUniformBlock(fragmentShader) )
+		{
+			return false;
+		}
 
 		/* Declare the global bindless cubemap array (unbounded). Several features and
 		 * subsystems (materials, LightGenerator) declare it on use; a re-declaration is a
@@ -4469,9 +4481,9 @@ namespace EmEn::Graphics::Material
 					"const vec3 refractDirR = refract(reflectionI, reflectionNormal, etaR);" << Line::End <<
 					"const vec3 refractDirG = refract(reflectionI, reflectionNormal, etaG);" << Line::End <<
 					"const vec3 refractDirB = refract(reflectionI, reflectionNormal, etaB);" << Line::End <<
-					"float convergR = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", refractDirR).r;" << Line::End <<
-					"float convergG = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", refractDirG).g;" << Line::End <<
-					"float convergB = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", refractDirB).b;" << Line::End <<
+					"float convergR = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << ViewIBLCubeIndex(BindlessTextureManager::EnvironmentCubemapSlot) << ")]" << ", refractDirR).r;" << Line::End <<
+					"float convergG = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << ViewIBLCubeIndex(BindlessTextureManager::EnvironmentCubemapSlot) << ")]" << ", refractDirG).g;" << Line::End <<
+					"float convergB = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << ViewIBLCubeIndex(BindlessTextureManager::EnvironmentCubemapSlot) << ")]" << ", refractDirB).b;" << Line::End <<
 					"const vec4 " << SurfaceRefractionColor << " = vec4(convergR, convergG, convergB, 1.0);";
 			}
 			else
@@ -4480,7 +4492,7 @@ namespace EmEn::Graphics::Material
 					"const float refractionEta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
 					"const vec3 refractDir = refract(reflectionI, reflectionNormal, refractionEta);" << Line::End <<
 					"const vec3 " << ShaderVariable::RefractionTextureCoordinates << " = refractDir;" << Line::End <<
-					"const vec4 " << SurfaceRefractionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
+					"const vec4 " << SurfaceRefractionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << ViewIBLCubeIndex(BindlessTextureManager::EnvironmentCubemapSlot) << ")]" << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
 			}
 		}
 		else
@@ -4488,7 +4500,7 @@ namespace EmEn::Graphics::Material
 			/* Low quality: use pre-computed refraction coordinates from vertex shader.
 			 * NOTE: Refraction direction was already computed in vertex shader and passed via RefractionTextureCoordinates. */
 			Code(fragmentShader, Location::Top) <<
-				"const vec4 " << SurfaceRefractionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::EnvironmentCubemapSlot << ")]" << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
+				"const vec4 " << SurfaceRefractionColor << " = texture(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << ViewIBLCubeIndex(BindlessTextureManager::EnvironmentCubemapSlot) << ")]" << ", " << ShaderVariable::RefractionTextureCoordinates << ");";
 		}
 
 		return true;
@@ -4505,6 +4517,12 @@ namespace EmEn::Graphics::Material
 
 		/* Enable the nonuniform qualifier extension. */
 		fragmentShader.setExtensionBehavior(GLSL::Extension::NonUniformQualifier, GLSL::Extension::Require);
+
+		/* The frame's IBL group comes from the view block (ViewIBLCubeIndex()): idempotent. */
+		if ( !generator.declareViewUniformBlock(fragmentShader) )
+		{
+			return false;
+		}
 
 		/* Declare the global bindless cubemap array (unbounded). Several features and
 		 * subsystems (materials, LightGenerator) declare it on use; a re-declaration is a
@@ -4549,14 +4567,14 @@ namespace EmEn::Graphics::Material
 			Code(fragmentShader, Location::Top) <<
 				"const vec3 transmissionDir = reflectionI;" << Line::End <<
 				"const float transmissionLod = clamp(" << transmissionRoughness << ", 0.0, 1.0) * " << (IBLTexture::PrefilteredMipLevels - 1) << ".0;" << Line::End <<
-				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", transmissionDir, transmissionLod).rgb;";
+				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << ViewIBLCubeIndex(BindlessTextureManager::PrefilteredCubemapSlot) << ")]" << ", transmissionDir, transmissionLod).rgb;";
 		}
 		else
 		{
 			/* Low quality: sample at a fixed LOD using the reflection coordinates (view direction approximation). */
 			Code(fragmentShader, Location::Top) <<
 				"const vec3 transmissionDir = " << ShaderVariable::ReflectionTextureCoordinates << ";" << Line::End <<
-				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", transmissionDir, 3.0).rgb;";
+				"const vec3 " << SurfaceTransmissionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << ViewIBLCubeIndex(BindlessTextureManager::PrefilteredCubemapSlot) << ")]" << ", transmissionDir, 3.0).rgb;";
 		}
 
 		return true;
@@ -5317,6 +5335,12 @@ namespace EmEn::Graphics::Material
 		if ( m_isUsingEnvironmentCubemap && generator.bindlessTexturesEnabled() && generator.highQualityEnabled()
 			&& this->isComponentPresent(ComponentType::ClearCoatNormal) && m_materialProperties[ClearCoatFactorOffset] > 0.0F )
 		{
+			/* The frame's IBL group comes from the view block (ViewIBLCubeIndex()): idempotent. */
+			if ( !generator.declareViewUniformBlock(fragmentShader) )
+			{
+				return false;
+			}
+
 			const auto ccRoughnessIt = m_components.find(ComponentType::ClearCoatRoughness);
 			const auto ccRoughnessExpression = ccRoughnessIt != m_components.cend()
 				? ccRoughnessIt->second->variableName()
@@ -5331,7 +5355,7 @@ namespace EmEn::Graphics::Material
 				"const vec3 clearCoatNormalRaw = normalize(" << ShaderVariable::WorldTBNMatrix << " * " << SurfaceClearCoatNormal << ");" << Line::End <<
 				LightGenerator::specularAntialiasedRoughness({.outputVariable = SurfaceClearCoatReflectionRoughness, .normalExpression = "clearCoatNormalRaw", .roughnessExpression = ccRoughnessExpression}) << Line::End <<
 				"const vec3 " << SurfaceClearCoatReflectionNormal << " = dot(clearCoatNormalRaw, reflectionI) > 0.0 ? -clearCoatNormalRaw : clearCoatNormalRaw;" << Line::End <<
-				"const vec4 " << SurfaceClearCoatReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << BindlessTextureManager::PrefilteredCubemapSlot << ")]" << ", reflect(reflectionI, " << SurfaceClearCoatReflectionNormal << "), " << ccLOD << ");";
+				"const vec4 " << SurfaceClearCoatReflectionColor << " = textureLod(" << Bindless::TexturesCube << "[" << GLSL::Functions::NonUniformEXT << "(" << ViewIBLCubeIndex(BindlessTextureManager::PrefilteredCubemapSlot) << ")]" << ", reflect(reflectionI, " << SurfaceClearCoatReflectionNormal << "), " << ccLOD << ");";
 
 			/* Declared HERE and not in setupLightGenerator(): the two variables exist only under
 			 * the conditions just tested, and the light generator's fragment code is emitted after

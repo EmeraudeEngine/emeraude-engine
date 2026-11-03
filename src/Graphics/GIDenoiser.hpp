@@ -130,6 +130,9 @@ namespace EmEn::Graphics
 				/* The anti-lag (Parameters::antiLag): x = the fast history's length in frames, y = the tolerance in
 				 * standard deviations of the fast mean, z / w unused. */
 				std::array< float, 4 > antiLagParams;
+				/* x = the frame's IBL group in the bindless table (BindlessTextureManager::iblSlotBase()): RTGI's sky reads
+				 * texturesCube[x + EnvironmentCubemapSlot]; y / z / w unused. */
+				std::array< uint32_t, 4 > iblParams;
 			};
 
 			/**

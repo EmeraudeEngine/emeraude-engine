@@ -526,12 +526,20 @@ namespace EmEn::Graphics
 				return texture.load(blackCubemap);
 			});
 
-		/* Initialize the bindless environment cubemap slot with the default cubemap. */
+		/* Initialize every frame's IBL group (environment, irradiance, prefiltered) with the default cubemap: no slot is
+		 * ever sampled undefined, even before the first scene's sync. */
 		if ( m_bindlessTextureManager.usable() && m_defaultTextureCubemap != nullptr )
 		{
-			if ( m_bindlessTextureManager.updateTextureCube(BindlessTextureManager::EnvironmentCubemapSlot, *m_defaultTextureCubemap) )
+			bool initialized = true;
+
+			for ( uint32_t slot = 0; slot < BindlessTextureManager::IBLReservedCubeSlots; ++slot )
 			{
-				TraceSuccess{ClassId} << "Bindless environment cubemap slot initialized with default cubemap.";
+				initialized = m_bindlessTextureManager.updateTextureCube(slot, *m_defaultTextureCubemap) && initialized;
+			}
+
+			if ( initialized )
+			{
+				TraceSuccess{ClassId} << "Bindless IBL slots (" << BindlessTextureManager::IBLReservedCubeSlots << ") initialized with the default cubemap.";
 			}
 		}
 
@@ -2378,7 +2386,7 @@ namespace EmEn::Graphics
 		 * any pass samples it (RT effects), then record the deferred TLAS build (no CPU stall). */
 		if ( scenePtr != nullptr )
 		{
-			m_bindlessTextureManager.syncTextureSet(scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
+			m_bindlessTextureManager.syncTextureSet(m_currentFrameIndex, scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
 
 			scenePtr->recordTLASBuild(commandBuffer->handle(), m_skinnedGeometryProcessor.get());
 
@@ -2543,7 +2551,7 @@ namespace EmEn::Graphics
 		 * any pass samples it (RT effects), then record the deferred TLAS build (no CPU stall). */
 		if ( scenePtr != nullptr )
 		{
-			m_bindlessTextureManager.syncTextureSet(scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
+			m_bindlessTextureManager.syncTextureSet(m_currentFrameIndex, scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
 
 			{
 				const GPUProfiler::ScopedZone profilingZone{m_GPUProfiler.get(), *commandBuffer, "TLASBuild"};
@@ -3240,7 +3248,7 @@ namespace EmEn::Graphics
 
 				if ( hasContent )
 				{
-					m_bindlessTextureManager.syncTextureSet(scene.bindlessTextureSet(), scene.lifetimeMS());
+					m_bindlessTextureManager.syncTextureSet(m_currentFrameIndex, scene.bindlessTextureSet(), scene.lifetimeMS());
 
 					scene.renderOpaque(renderToTexture, *commandBuffer);
 					scene.renderTranslucent(renderToTexture, *commandBuffer);

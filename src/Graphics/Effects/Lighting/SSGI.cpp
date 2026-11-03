@@ -403,6 +403,7 @@ layout(push_constant) uniform PushConstants
 	uint stepCount;
 	float noiseFrameIndex;	/* R2 sequence index; < 0 = frozen pattern. */
 	float skyLuminance;		/* Scale of the irradiance cubemap, in nits (0 = no sky). */
+	uint iblSlotBase;		/* The frame's IBL group in the bindless table (BindlessTextureManager::iblSlotBase()). */
 };
 
 /* The trace's "reconstruction space": view-space X and Y, and the distance along the view axis as a POSITIVE Z — through
@@ -659,7 +660,7 @@ void main()
 	 * no negation anywhere — same contract as the skybox and the material reflections). */
 	vec4 skyVisibility = texture(horizonTex, vUV);
 
-	indirectLight += texture(texturesCube[nonuniformEXT(IrradianceCubemapSlot)], skyVisibility.xyz).rgb * skyLuminance * skyVisibility.w;
+	indirectLight += texture(texturesCube[nonuniformEXT(iblSlotBase + IrradianceCubemapSlot)], skyVisibility.xyz).rgb * skyLuminance * skyVisibility.w;
 #endif
 
 	/* Safety net: never let a NaN/Inf or negative value reach the apply pass (color += gi would
@@ -1065,7 +1066,8 @@ namespace EmEn::Graphics::Effects::Lighting
 				.stepCount = m_parameters.stepCount,
 				.noiseFrameIndex = animated ? noiseFrameIndex : -1.0F,
 				/* PRE-EXPOSURE (step 6, D8): the sky term × E_pre, like the scene-colour samples it is summed with. */
-				.skyLuminance = m_skyVisibilityActive ? context.skyLuminance * context.preExposure : 0.0F
+				.skyLuminance = m_skyVisibilityActive ? context.skyLuminance * context.preExposure : 0.0F,
+				.iblSlotBase = BindlessTextureManager::iblSlotBase(frameIndex)
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(

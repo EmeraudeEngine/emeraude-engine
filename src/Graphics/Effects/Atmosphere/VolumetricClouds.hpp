@@ -40,15 +40,27 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/Effects/Shared/CloudVolumeGLSL.hpp"
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
+	namespace Graphics
+	{
+		class Renderer;
+	}
+
 	namespace Vulkan
 	{
+		class Framebuffer;
+		class GraphicsPipeline;
 		class Image;
 		class ImageView;
+		class PipelineLayout;
+		class RenderPass;
 		class Sampler;
 	}
 
@@ -154,7 +166,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				std::array< float, 4 > sunDirection{};
 				/** @brief rgb = sun colour × illuminance in lux (0 = no sun), w = shadow bias. */
 				std::array< float, 4 > sunIlluminance{};
-				/** @brief x = sky luminance (nits, scale of the irradiance cubemap), y = ground albedo, z = cascade count, w = unused. */
+				/** @brief x = sky luminance (nits, scale of the irradiance cubemap), y = ground albedo, z = cascade count, w = the
+				 * frame's IBL group in the bindless table as the bits of a uint (BindlessTextureManager::iblSlotBase()). */
 				std::array< float, 4 > ambient{};
 				/** @brief The clouds. */
 				std::array< CloudBlock, MaxClouds > clouds{};

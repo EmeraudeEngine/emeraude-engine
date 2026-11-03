@@ -37,12 +37,8 @@
 #include <random>
 #include <vector>
 
-/* Third-party inclusions. */
-#include "volk.h"
-
 /* Local inclusions for usages. */
 #include "Math/Vector.hpp"
-#include "PixelFactory/Color.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Graphics
@@ -326,9 +322,11 @@ namespace EmEn::Graphics
 				std::array< float, 4 > rotation1;
 				std::array< float, 4 > rotation2;
 				std::array< float, 4 > skyStarMask;
+				/* x: the frame's IBL group in the bindless table (BindlessTextureManager::iblSlotBase()). */
+				std::array< uint32_t, 4 > iblParams;
 			};
 
-			static_assert(sizeof(ParametersUBO) == 176, "The parameters block must stay 11 vec4 wide (std140 mirror).");
+			static_assert(sizeof(ParametersUBO) == 192, "The parameters block must stay 12 vec4 wide (std140 mirror).");
 
 			/** @brief Reads the settings into m_parameters, sanitizing what the shaders assume. */
 			void readSettings (Renderer & renderer) noexcept;

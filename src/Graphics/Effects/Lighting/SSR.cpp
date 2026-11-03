@@ -556,6 +556,8 @@ layout(push_constant) uniform PushConstants
 	float pyramidMaxLod;
 	float skyLuminance;
 	float debugNonFinite;
+	/* The frame's IBL group in the bindless table (BindlessTextureManager::iblSlotBase()). */
+	uint iblSlotBase;
 };
 
 /* ENVIRONMENT BRDF — the SECOND half of the split-sum approximation (Karis, "Real Shading in
@@ -760,7 +762,7 @@ void main()
 		/* A normalized source becomes nits through the sky luminance — the RTR miss path does the
 		 * same with its `ambientLight.w`. Without it the fallback injected a [0,1] value into a
 		 * chain that lives in nits: invisible under a 17 000 lx sky, a plain constant elsewhere. */
-		vec3 envColor = textureLod(texturesCube[nonuniformEXT(PrefilteredCubemapSlot)], worldReflDir, clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb * skyLuminance;
+		vec3 envColor = textureLod(texturesCube[nonuniformEXT(iblSlotBase + PrefilteredCubemapSlot)], worldReflDir, clamp(roughness, 0.0, 1.0) * PrefilteredMaxLod).rgb * skyLuminance;
 
 		/* The trust in a screen-space miss (envFallbackIntensity: a miss means "no information",
 		 * not "sky") times the same lobe weight and roughness fade a hit would carry. */
@@ -1709,7 +1711,8 @@ namespace EmEn::Graphics::Effects::Lighting
 				/* PRE-EXPOSURE (step 6, D8): the sky miss is synthesised in nits, the scene colour it stands
 				 * in for holds nits × E_pre. The scene-colour samples are already at that scale. */
 				.skyLuminance = context.skyLuminance * context.preExposure,
-				.debugNonFinite = m_debugNonFinite ? 1.0F : 0.0F
+				.debugNonFinite = m_debugNonFinite ? 1.0F : 0.0F,
+				.iblSlotBase = BindlessTextureManager::iblSlotBase(frameIndex)
 			};
 
 			IndirectPostProcessEffect::recordFullscreenPass(

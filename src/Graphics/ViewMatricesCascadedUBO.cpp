@@ -29,17 +29,33 @@
 #include <string>
 
 #include <algorithm>
+#include <bit>
+
+/* Project configuration. */
+#include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <cmath>
 #include <cstring>
-#include <limits>
+#include <numbers>
 #include <span>
+#include <sstream>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Base.hpp"
+#include "Math/CartesianFrame.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
 
 namespace EmEn::Graphics
 {
@@ -660,6 +676,8 @@ namespace EmEn::Graphics
 
 		/* The pre-exposure is render-thread state, not logic state: it overrides the slot the copy above carried. */
 		std::span{pointer, ViewUBOElementCount}[PreExposureOffset] = m_preExposure;
+		/* The frame's IBL group in the bindless table (render-thread state too: the region IS the frame in flight). */
+		std::span{pointer, ViewUBOElementCount}[IBLSlotBaseOffset] = std::bit_cast< float >(BindlessTextureManager::iblSlotBase(frameIndex));
 
 		uniformBufferObject->unmapMemory(0, VK_WHOLE_SIZE);
 

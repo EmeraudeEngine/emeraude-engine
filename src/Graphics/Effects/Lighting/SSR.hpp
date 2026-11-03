@@ -136,7 +136,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 			/**
 			 * @brief Push constants for the resolve pass (cone lookup + cubemap fallback).
-			 * @note 80 bytes, under the 128-byte Vulkan minimum guarantee. Member order is the
+			 * @note 84 bytes, under the 128-byte Vulkan minimum guarantee. Member order is the
 			 * GLSL block order.
 			 */
 			struct EMEN_API ResolvePushConstants
@@ -160,6 +160,9 @@ namespace EmEn::Graphics::Effects::Lighting
 				 * (Core/Graphics/PostProcessing/DebugNonFinite): red = grabbed colour, blue = pyramid,
 				 * green = trace data, magenta = the mix only. */
 				float debugNonFinite;
+				/** @brief The frame's IBL group in the bindless table (BindlessTextureManager::iblSlotBase()): the miss path
+				 * reads texturesCube[iblSlotBase + PrefilteredCubemapSlot]. */
+				uint32_t iblSlotBase;
 			};
 
 			/**

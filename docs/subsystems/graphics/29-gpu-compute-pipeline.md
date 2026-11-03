@@ -90,11 +90,12 @@ their full mip chain, and why 64-512 samples/texel suffice. Details:
 **Trigger & publication (Scenes side):** `Scene::updateEnvironmentIBL()` polls in
 `processLogics` (same pattern as the background photometry poll): when the mutex-protected
 `BindlessTextureSet::environmentCubemap()` identity changes (and is not the engine default),
-it bakes into a **ping-pong pair** of scene-owned `IBLTexture` (frames in flight keep
-sampling the published pair untouched), then publishes via
-`BindlessTextureSet::setIrradianceCubemap()/setPrefilteredCubemap()` — mirrored to the
-reserved slots by `syncTextureSet()` (UPDATE_AFTER_BIND hot-swap), parked on the default
-cubemap by `clearTextureSet()` on scene switch.
+it bakes into a ring of `Scene::IBLRingSize` (6) scene-owned `IBLTexture` sets (a frame in flight never reads the
+set being written; graphics doc 42 § The environment, point 4 — it was a ping-pong pair until 2026-10-25), then
+publishes via
+`BindlessTextureSet::setIrradianceCubemap()/setPrefilteredCubemap()` — mirrored by `syncTextureSet()` into the
+IBL group of the frame being recorded (one group per frame in flight since 2026-11-03, graphics doc 06-6 § Reserved
+Slots), parked on the default cubemap by `clearTextureSet()` on scene switch.
 
 **Baking runs on the GRAPHICS queue** (one-shot, `waitIdle` at boot): the images are later
 sampled by fragment shaders on that same queue — using the compute queue would demand a

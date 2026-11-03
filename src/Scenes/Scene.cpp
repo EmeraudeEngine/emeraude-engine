@@ -38,6 +38,8 @@
 #include "Audio/Ambience.hpp"
 #include "Audio/HardwareOutput.hpp"
 #include "Audio/Manager.hpp"
+#include "Audio/SoundResource.hpp"
+#include "Audio/Types.hpp"
 #include "BlobTrait.hpp"
 #include "Component/CharacterController.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
@@ -108,13 +110,14 @@ namespace EmEn::Scenes
 		{
 			const auto & bindlessTextureManager = graphicsRenderer.bindlessTextureManager();
 
-			m_bindlessTextureSet.setCapacities(
-				bindlessTextureManager.maxTextures2D(),
-				bindlessTextureManager.maxTexturesCube(),
-				bindlessTextureManager.maxTexturesCubeArray(),
-				bindlessTextureManager.maxTextures3D(),
-				bindlessTextureManager.firstDynamicSlot()
-			);
+			m_bindlessTextureSet.setCapacities({
+				.maxTextures2D = bindlessTextureManager.maxTextures2D(),
+				.maxTexturesCube = bindlessTextureManager.maxTexturesCube(),
+				.maxTexturesCubeArray = bindlessTextureManager.maxTexturesCubeArray(),
+				.maxTextures3D = bindlessTextureManager.maxTextures3D(),
+				.firstDynamicSlot = bindlessTextureManager.firstDynamicSlot(),
+				.firstDynamicCubeSlot = bindlessTextureManager.firstDynamicCubeSlot()
+			});
 		}
 
 		/* An asynchronously loading background pushes its photometry (luminance) once

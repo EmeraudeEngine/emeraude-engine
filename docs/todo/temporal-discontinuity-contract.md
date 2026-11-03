@@ -45,8 +45,8 @@ clean on the touched TUs.
 - AMD round 6 (§ 43): the slow jumps gone; the 0.20 level remains — frames in flight reading the reserved IBL
   slots rewritten in place (item `bindless-ibl-slots-rewritten-while-in-flight`, the ring slots); the dark first
   night frame (the lamps one slot late) fixed by the logic cycle's order.
-- AMD round 7 once the ring slots land: the sea at frame #0 must stay 0.00 in every jump; then close the item (the
-  knowledge is in § 43 already).
+- AMD round 7 on the per-frame IBL groups (item `bindless-ibl-slots-rewritten-while-in-flight`, done on Linux): the
+  sea at frame #0 must stay 0.00 in every jump; then close the item (the knowledge is in § 43 already).
 
 ## ⚠️ Traps
 

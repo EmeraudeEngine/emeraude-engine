@@ -29,36 +29,63 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cmath>
 #include <cstring>
+#include <functional>
+#include <initializer_list>
+#include <span>
 #include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
 #include "Algorithms/WorleyNoise.hpp"
+#include "BlobTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/CloudShapeResource.hpp"
-#include "Graphics/Effects/Shared/CSMSamplingGLSL.hpp"
 #include "Graphics/Effects/Shared/CloudVolumeGLSL.hpp"
+#include "Graphics/Effects/Shared/CSMSamplingGLSL.hpp"
 #include "Graphics/Effects/Shared/MarchDitherGLSL.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesCascadedUBO.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
+#include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "Scenes/CloudSet.hpp"
 #include "Scenes/Component/CloudVolume.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/LightSet.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/MemoryRegion.hpp"
-#include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/RenderPass.hpp"
+#include "Vulkan/RenderSubPass.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Settings;
+
+	namespace Vulkan
+	{
+		class DescriptorSetLayout;
+	}
+}
 
 static constexpr auto TracerTag{"VolumetricCloudsEffect"};
 
@@ -120,7 +147,7 @@ layout(set = 0, binding = EMEN_CLOUDS_FRAME_BINDING, std140) uniform EmCloudFram
 	vec4 cameraForward;		/* w = step count. */
 	vec4 sunDirection;		/* xyz = direction of PROPAGATION, w = light step count. */
 	vec4 sunIlluminance;	/* rgb = colour x lux, 0 = no sun; w = shadow bias. */
-	vec4 ambient;			/* x = sky luminance (nits), y = ground albedo, z = cascade count. */
+	vec4 ambient;			/* x = sky luminance (nits), y = ground albedo, z = cascade count, w = the frame's IBL group (uint bits, BindlessTextureManager::iblSlotBase()). */
 	EmCloud clouds[MaxClouds];
 } emFrame;
 
@@ -339,7 +366,7 @@ void main()
 
 	/* The ambient: the sky over the cloud, the ground bounce under it (L = albedo . E / pi). */
 	float skyLuminance = emFrame.ambient.x;
-	vec3 skyRadiance = skyLuminance > 0.0 ? textureLod(texturesCube[IrradianceCubemapSlot], vec3(0.0, 1.0, 0.0), 0.0).rgb * skyLuminance : vec3(0.0);
+	vec3 skyRadiance = skyLuminance > 0.0 ? textureLod(texturesCube[floatBitsToUint(emFrame.ambient.w) + IrradianceCubemapSlot], vec3(0.0, 1.0, 0.0), 0.0).rgb * skyLuminance : vec3(0.0);
 	vec3 groundIrradiance = sunIlluminance * max(-sunDirection.y, 0.0) + skyRadiance * EmPi;
 
 	/* The sky's HUE, normalised by its brightest channel so a tint never boosts one (Look::skyTint). */
@@ -1023,6 +1050,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 		block.ambient[0] = context.skyLuminance * context.preExposure;
 		block.ambient[1] = std::clamp(m_parameters.groundAlbedo, 0.0F, 1.0F);
+		/* The frame's IBL group, as the bits of a uint (the shader reads floatBitsToUint()). */
+		block.ambient[3] = std::bit_cast< float >(BindlessTextureManager::iblSlotBase(frameIndex));
 
 		if ( !updateUniformBufferData(*m_frameUBOs[frameIndex], &block, sizeof(block)) )
 		{

@@ -261,10 +261,10 @@ vec3 skyRadiance (vec3 direction)
 	/* The celestial body declared IN the texture is masked like the IBL bake masks it (its light is the analytic
 	 * directional light's, with shadows): a probe ray landing on Sponza's HDR sun disc used to flash the whole volume
 	 * (2026-10-05, StarMaskGLSL.hpp). The rim is widened by one top-level texel. */
-	const float rimWidening = 1.5707963 / float(textureSize(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], 0).x);
+	const float rimWidening = 1.5707963 / float(textureSize(texturesCube[nonuniformEXT(probeVolume.iblParams.x + EnvironmentCubemapSlot)], 0).x);
 
 	/* Explicit LOD: a compute shader has no derivatives to pick one. */
-	return textureLod(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], emMaskStar(direction, probeVolume.skyStarMask, rimWidening), 0.0).rgb * probeVolume.skyAmbient.x;
+	return textureLod(texturesCube[nonuniformEXT(probeVolume.iblParams.x + EnvironmentCubemapSlot)], emMaskStar(direction, probeVolume.skyStarMask, rimWidening), 0.0).rgb * probeVolume.skyAmbient.x;
 }
 
 void main ()
@@ -1129,6 +1129,7 @@ namespace EmEn::Graphics
 		block.rotation1 = {2.0F * (qx * qy - qz * qw), 1.0F - (2.0F * (qx * qx + qz * qz)), 2.0F * (qy * qz + qx * qw), 0.0F};
 		block.rotation2 = {2.0F * (qx * qz + qy * qw), 2.0F * (qy * qz - qx * qw), 1.0F - (2.0F * (qx * qx + qy * qy)), 0.0F};
 		block.skyStarMask = inputs.skyStarMask;
+		block.iblParams = {BindlessTextureManager::iblSlotBase(frameIndex), 0U, 0U, 0U};
 
 		if ( frameIndex < m_parameterBuffers.size() )
 		{

@@ -971,7 +971,7 @@ namespace EmEn::Saphir
 				/* TWO-SIDED: a back face reads the irradiance on ITS side, not behind it. The facing is decided
 				 * in view space (NormalViewSpace against -PositionViewSpace) and applied to the world normal. */
 				"const vec3 iblAmbientNormal = dot(normalize(" << ShaderVariable::NormalViewSpace << "), " << ShaderVariable::PositionViewSpace << ".xyz) > 0.0 ? -normalize(" << ShaderVariable::NormalWorldSpace << ") : normalize(" << ShaderVariable::NormalWorldSpace << ");" << Line::End <<
-				"const vec3 iblIrradiance = texture(" << Bindless::TexturesCube << "[" << BindlessTextureManager::IrradianceCubemapSlot << "], iblAmbientNormal).rgb;" << Line::End <<
+				"const vec3 iblIrradiance = texture(" << Bindless::TexturesCube << "[" << ViewIBLCubeIndex(BindlessTextureManager::IrradianceCubemapSlot) << "], iblAmbientNormal).rgb;" << Line::End <<
 				"/* INDIRECT-DIFFUSE OWNERSHIP: an enabled provider (RTGI) gathers this very irradiance"
 				" with visibility, so the scene drops the weight to 0 and the raster stops adding its"
 				" own - the sky must not be counted twice. The DIFFUSE legs read this one; the specular"

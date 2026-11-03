@@ -1058,8 +1058,9 @@ sat on one).
 > view). `SceneMetaData::rebuild` walks `m_textureRegistrationCache` each
 > frame, detects textures with `frameCount() > 1` via `dynamic_cast` to
 > `AnimatedTexture2D`, computes the current frame from `Scene::lifetimeMS()`,
-> and refreshes the bindless slot via `updateTexture2DFromDescriptorInfo` —
-> UPDATE_AFTER_BIND makes this safe while the GPU is reading. Animation in
+> and refreshes the bindless slot via `updateTexture2DFromDescriptorInfo`. ⚠️ UPDATE_AFTER_BIND does NOT
+> make this invisible to frames already submitted: a frame pending on the GPU reads the newer view (measured for the
+> IBL slots, 2026-11-03: graphics doc 06-6 § Reserved Slots; the IBL now has one group per frame). Animation in
 > reflections stays in sync with the rasterizer's animation state.
 >
 > **Billboard path:** for `Renderable::isSprite()` instances,
@@ -3769,8 +3770,8 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 > which overwrites each of that scene's freed dynamic slots with an engine-owned dummy (2D → dummy
 > color-projection 2D, cube + reserved env slot → default cubemap). After that the leaving scene
 > has zero descriptor references. **`clearTextureSet` does NOT waitIdle** — disable/switch stays
-> hitch-free (overwriting bound descriptors mid-flight is safe via UPDATE_AFTER_BIND, and the
-> dormant scene's textures stay alive). The drain that protects destruction lives in
+> hitch-free (the dormant scene's textures stay alive). ⚠️ The overwrite is NOT invisible to frames already
+> submitted: UPDATE_AFTER_BIND lets a pending frame read the new descriptor (graphics doc 06-6 § Reserved Slots). The drain that protects destruction lives in
 > `Scenes::Manager::deleteScene`: `device->waitIdle()` before `m_scenes.erase`, so a delete (active
 > or inactive) is safe. **Known gap:** cube-array slots (animated cubemap gobos) have no
 > engine dummy and are left untouched — rare, add a dummy cube-array if a scene uses them.

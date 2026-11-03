@@ -787,6 +787,9 @@ namespace EmEn::Saphir
 				constexpr auto IBLDiffuseWeight{"iblDiffuseWeight"};
 				/* The pre-exposure of the view (scene colour = nits × preExposure), ViewMatricesInterface::setPreExposure(). */
 				constexpr auto PreExposure{"preExposure"};
+				/* The frame's first bindless IBL slot (BindlessTextureManager::iblSlotBase()): every reader of the environment,
+				 * irradiance and prefiltered cubemaps indexes texturesCube[iblSlotBase + <slot>]. */
+				constexpr auto IBLSlotBase{"iblSlotBase"};
 				/* Material specific (Phong) */
 				constexpr auto AmbientColor{"ambientColor"};
 				constexpr auto DiffuseColor{"diffuseColor"};
@@ -1115,6 +1118,26 @@ namespace EmEn::Saphir
 		std::stringstream output;
 
 		output << Keys::PushConstant::PostProcessing << '.' << componentName;
+
+		return output.str();
+	}
+
+	/**
+	 * @brief Returns the bindless index of one of the frame's IBL cubemaps for a raster shader: the frame's group, read
+	 * from the view block (iblSlotBase), plus the slot. Every raster reader of the environment, irradiance or prefiltered
+	 * cubemap indexes texturesCube[] with it, never with the bare slot (graphics doc 13-12 § 43: one group per frame in
+	 * flight). The shader must declare the view block (Generator::Abstract::declareViewUniformBlock()).
+	 * @param slot Graphics::BindlessTextureManager::EnvironmentCubemapSlot, IrradianceCubemapSlot or PrefilteredCubemapSlot.
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	inline
+	std::string
+	ViewIBLCubeIndex (uint32_t slot) noexcept
+	{
+		std::stringstream output;
+
+		output << '(' << Keys::UniformBlock::View << '.' << Keys::UniformBlock::Component::IBLSlotBase << " + " << slot << "u)";
 
 		return output.str();
 	}

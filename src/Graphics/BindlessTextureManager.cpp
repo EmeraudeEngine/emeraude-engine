@@ -29,25 +29,30 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <cstddef>
+#include <iterator>
+#include <string>
 #include <utility>
 #include <vector>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/DummyColorProjectionTexture.hpp"
 #include "Graphics/TextureResource/AnimatedTexture2D.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Renderer.hpp"
+#include "Scenes/BindlessTextureSet.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/Sampler.hpp"
 #include "Vulkan/TextureInterface.hpp"
-#include "Scenes/BindlessTextureSet.hpp"
-#include "Renderer.hpp"
-#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {
@@ -216,7 +221,7 @@ namespace EmEn::Graphics
 	{
 		/* The table can never claim the whole device budget — see OtherSetsSamplerHeadroom. */
 		constexpr uint32_t minimalTotal =
-			MinimalMaxTextures1D + MinimalMaxTextures3D + (3 * MinimalTexturesPerDynamicArray);
+			MinimalMaxTextures1D + MinimalMaxTextures3D + (2 * MinimalTexturesPerDynamicArray) + MinimalMaxTexturesCube;
 
 		if ( deviceBudget < OtherSetsSamplerHeadroom + minimalTotal )
 		{
@@ -286,7 +291,8 @@ namespace EmEn::Graphics
 		m_firstDynamicSlot = MinimalFirstDynamicSlot;
 		m_maxTextures1D = MinimalMaxTextures1D;
 		m_maxTextures3D = MinimalMaxTextures3D;
-		m_maxTexturesCube = MinimalTexturesPerDynamicArray;
+		/* The cube array keeps every frame's IBL group below its dynamic slots (firstDynamicCubeSlot()). */
+		m_maxTexturesCube = MinimalMaxTexturesCube;
 		m_maxTexturesCubeArray = MinimalTexturesPerDynamicArray;
 		m_maxTextures2D = std::min(budget - (minimalTotal - MinimalTexturesPerDynamicArray), DesiredMaxTextures2D);
 
@@ -520,8 +526,15 @@ namespace EmEn::Graphics
 	}
 
 	void
-	BindlessTextureManager::syncTextureSet (const Scenes::BindlessTextureSet & set, uint32_t sceneTimeMS) const noexcept
+	BindlessTextureManager::syncTextureSet (uint32_t frameIndex, const Scenes::BindlessTextureSet & set, uint32_t sceneTimeMS) const noexcept
 	{
+		if ( frameIndex >= MaxFramesInFlight )
+		{
+			TraceError{ClassId} << "syncTextureSet(): the frame index " << frameIndex << " has no IBL group (" << MaxFramesInFlight << " frames at most) !";
+
+			return;
+		}
+
 		if ( m_descriptorSet == nullptr || !m_descriptorSet->isCreated() )
 		{
 			return;
@@ -531,60 +544,18 @@ namespace EmEn::Graphics
 
 		const Base::MutexLock lock{m_indexMutex};
 
-		/* Environment cubemap and its baked IBL derivatives occupy their reserved slots. Fall
-		 * back to the engine default when the active scene has none, so a scene switch never
-		 * leaves the previous scene's cubemaps bound. */
-		{
-			const auto & defaultCubemap = m_renderer.getDefaultTextureCubemap();
-			const bool defaultUsable = defaultCubemap != nullptr && defaultCubemap->isCreated();
+		/* Environment cubemap and its baked IBL derivatives occupy THIS frame's IBL group; the engine default stands in
+		 * when the active scene has none, so a scene switch never leaves the previous scene's cubemaps bound. */
+		this->writeIBLGroup(frameIndex, {snapshot.environmentCubemap, snapshot.irradianceCubemap, snapshot.prefilteredCubemap});
 
-			const auto writeReservedCube = [&] (uint32_t slot, const std::shared_ptr< Vulkan::TextureInterface > & texture) EMEN_REQUIRES(m_indexMutex) {
-				if ( texture != nullptr && texture->isCreated() )
-				{
-					static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, slot, *texture));
-				}
-				else if ( defaultUsable )
-				{
-					static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, slot, *defaultCubemap));
-				}
-			};
-
-			writeReservedCube(EnvironmentCubemapSlot, snapshot.environmentCubemap);
-			writeReservedCube(IrradianceCubemapSlot, snapshot.irradianceCubemap);
-			writeReservedCube(PrefilteredCubemapSlot, snapshot.prefilteredCubemap);
-		}
-
-		/* 2D textures. Animated textures expose their current-frame 2D view (the main view is a
-		 * 2D_ARRAY, invalid for sampler2D[]); that view is swapped in every frame. */
+		/* 2D textures. Animated textures expose their current-frame 2D view, swapped in every frame. */
 		for ( const auto & entry : snapshot.textures2D )
 		{
 			const auto * texture = entry.texture.get();
 
-			if ( texture == nullptr || !texture->isCreated() )
+			if ( texture == nullptr || !texture->isCreated() || this->writeAnimatedTexture2D(entry.globalIndex, *texture, sceneTimeMS) )
 			{
 				continue;
-			}
-
-			if ( texture->frameCount() > 1 )
-			{
-				if ( const auto * animated = dynamic_cast< const TextureResource::AnimatedTexture2D * >(texture); animated != nullptr )
-				{
-					const auto frameView = animated->imageViewForFrame(animated->frameIndexAt(sceneTimeMS));
-
-					if ( frameView == nullptr || animated->sampler() == nullptr )
-					{
-						continue;
-					}
-
-					VkDescriptorImageInfo descriptorInfo{};
-					descriptorInfo.sampler = animated->sampler()->handle();
-					descriptorInfo.imageView = frameView->handle();
-					descriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-					static_cast< void >(this->writeRawToDescriptorSet(Texture2DBinding, entry.globalIndex, descriptorInfo));
-
-					continue;
-				}
 			}
 
 			static_cast< void >(this->writeTextureToDescriptorSet(Texture2DBinding, entry.globalIndex, *texture));
@@ -619,6 +590,66 @@ namespace EmEn::Graphics
 	}
 
 	void
+	BindlessTextureManager::writeIBLGroup (uint32_t frameIndex, const std::array< std::shared_ptr< Vulkan::TextureInterface >, IBLSlotsPerFrame > & group) const noexcept
+	{
+		const auto & defaultCubemap = m_renderer.getDefaultTextureCubemap();
+		const bool defaultUsable = defaultCubemap != nullptr && defaultCubemap->isCreated();
+
+		/* THIS frame's group only: the frame that read it last has completed (its fence was waited), while the other
+		 * groups may still be read by frames pending on the GPU. */
+		const auto base = iblSlotBase(frameIndex);
+
+		for ( uint32_t offset = 0; offset < IBLSlotsPerFrame; ++offset )
+		{
+			/* offset < IBLSlotsPerFrame == group.size(). */
+			const auto & texture = *std::next(group.cbegin(), static_cast< std::ptrdiff_t >(offset));
+
+			if ( texture != nullptr && texture->isCreated() )
+			{
+				static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, base + offset, *texture));
+			}
+			else if ( defaultUsable )
+			{
+				static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, base + offset, *defaultCubemap));
+			}
+		}
+	}
+
+	bool
+	BindlessTextureManager::writeAnimatedTexture2D (uint32_t arrayIndex, const Vulkan::TextureInterface & texture, uint32_t sceneTimeMS) const noexcept
+	{
+		if ( texture.frameCount() <= 1 )
+		{
+			return false;
+		}
+
+		const auto * animated = dynamic_cast< const TextureResource::AnimatedTexture2D * >(&texture);
+
+		if ( animated == nullptr )
+		{
+			return false;
+		}
+
+		const auto frameView = animated->imageViewForFrame(animated->frameIndexAt(sceneTimeMS));
+
+		/* Animated but not ready this frame: handled (nothing written), never as a plain texture (its main view is a 2D
+		 * array, invalid for sampler2D[]). */
+		if ( frameView == nullptr || animated->sampler() == nullptr )
+		{
+			return true;
+		}
+
+		VkDescriptorImageInfo descriptorInfo{};
+		descriptorInfo.sampler = animated->sampler()->handle();
+		descriptorInfo.imageView = frameView->handle();
+		descriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+		static_cast< void >(this->writeRawToDescriptorSet(Texture2DBinding, arrayIndex, descriptorInfo));
+
+		return true;
+	}
+
+	void
 	BindlessTextureManager::clearTextureSet (const Scenes::BindlessTextureSet & set) const noexcept
 	{
 		if ( m_descriptorSet == nullptr || !m_descriptorSet->isCreated() )
@@ -635,9 +666,9 @@ namespace EmEn::Graphics
 		}
 
 		/* NOTE: No device waitIdle here — this runs on every scene disable/switch and must stay
-		 * hitch-free. Overwriting bound descriptors while frames are in flight is safe (same as the
-		 * per-frame syncTextureSet, via UPDATE_AFTER_BIND); the leaving scene's textures stay alive
-		 * (the scene goes dormant). The drain that protects actual destruction lives at the
+		 * hitch-free; the leaving scene's textures stay alive (the scene goes dormant). ⚠️ A frame
+		 * still pending on the GPU reads the slots rewritten here (item
+		 * bindless-ibl-slots-rewritten-while-in-flight § Traps). The drain that protects actual destruction lives at the
 		 * destruction site — Scenes::Manager::deleteScene waits idle before erasing the scene. */
 		const Base::MutexLock lock{m_indexMutex};
 
@@ -658,9 +689,11 @@ namespace EmEn::Graphics
 				static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, entry.globalIndex, *defaultCubemap));
 			}
 
-			static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, EnvironmentCubemapSlot, *defaultCubemap));
-			static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, IrradianceCubemapSlot, *defaultCubemap));
-			static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, PrefilteredCubemapSlot, *defaultCubemap));
+			/* Every frame's IBL group. */
+			for ( uint32_t slot = 0; slot < IBLReservedCubeSlots; ++slot )
+			{
+				static_cast< void >(this->writeTextureToDescriptorSet(TextureCubeBinding, slot, *defaultCubemap));
+			}
 		}
 
 		/* NOTE: cube-array slots (animated cubemap gobos) have no engine dummy; they are rare and

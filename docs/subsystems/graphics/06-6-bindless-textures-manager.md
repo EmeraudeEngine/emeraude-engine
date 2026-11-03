@@ -81,15 +81,30 @@ The `BindlessTexturesManager` provides a global descriptor set with arrays of te
 > Each slot is an index into **ONE typed array** — cube slots index `texturesCube[]`
 > (binding 3), 2D slots index `textures2D[]` (binding 1). The numbering restarts per array.
 
+> [!IMPORTANT]
+> **The IBL cubes are one GROUP PER FRAME IN FLIGHT** (2026-11-03, owner decision): frame f reads slots
+> `iblSlotBase(f) + Environment/Irradiance/PrefilteredCubemapSlot` (`iblSlotBase(f) = 3f`, `IBLReservedCubeSlots` =
+> 3 × `MaxFramesInFlight` = 15), and only frame f's `syncTextureSet(f, …)` writes them — the frame that read them last
+> has completed (its fence was waited). One shared group, rewritten in place, was read by frames still PENDING on the
+> GPU: `UPDATE_AFTER_BIND` does not freeze a submitted frame's descriptors (AMD RADV, 4 frames in flight: two frames of
+> the day sun over the night IBL after a time-of-day jump; graphics doc 13-12 § 43). Every reader adds the frame's base:
+> the raster through the view block's `iblSlotBase` (`Saphir::Keys::ViewIBLCubeIndex()`, written render-side for the
+> frame's region by `ViewMatrices*UBO::updateVideoMemory()`), the effects through their own per-frame block (SSR /
+> SSGI push constants, `GIDenoiser::FrameUBOData::iblParams` for RTGI, `RTR::TraceFrameUBOData::iblSlotBase`,
+> `IrradianceProbeVolume` `iblParams`, `VolumetricClouds` `ambient.w` as uint bits). A new reader that indexes a bare
+> slot reads another frame's IBL. The minimal profile keeps the groups in the cube array only (23 entries), the 2D and
+> cube-array arrays keep their 6-slot reserved region. ⚠️ Still rewritten in place while frames are in flight: the
+> animated textures' 2D views, `clearTextureSet()`, the grab pass (item `bindless-ibl-slots-rewritten-while-in-flight`).
+
 | Slot | Array | Constant | Purpose | Written by |
 |------|-------|----------|---------|------------|
-| 0 | cube | `EnvironmentCubemapSlot` | Scene environment cubemap | `syncTextureSet()` per frame (default cubemap fallback) |
-| 1 | cube | `IrradianceCubemapSlot` | IBL diffuse irradiance (32² RGBA16F, stores E/π) | `Scene::updateEnvironmentIBL()` → `BindlessTextureSet` → `syncTextureSet()` (default fallback) |
-| 2 | cube | `PrefilteredCubemapSlot` | IBL GGX-prefiltered environment (128² RGBA16F, 6 mips) | same path as slot 1 |
+| 3f + 0 | cube | `EnvironmentCubemapSlot` (an offset) | Scene environment cubemap, frame f's copy | `syncTextureSet(f, …)` per frame (default cubemap fallback) |
+| 3f + 1 | cube | `IrradianceCubemapSlot` (an offset) | IBL diffuse irradiance (32² RGBA16F, stores E/π), frame f's copy | `Scene::updateEnvironmentIBL()` → `BindlessTextureSet` → `syncTextureSet(f, …)` (default fallback) |
+| 3f + 2 | cube | `PrefilteredCubemapSlot` (an offset) | IBL GGX-prefiltered environment (128² RGBA16F, 6 mips), frame f's copy | same path as 3f + 1 |
 | 3 | 2D | `BRDFLutSlot` | Split-sum BRDF LUT (128² RGBA16F, scale/bias on F0 in RG) | `Renderer::createDefaultResources()` at boot, baked by `Compute::IBLBaker` |
 | 4 | 2D | `GrabPassSlot` | Scene color grab pass | Renderer per frame |
 | 5 | 2D | `GrabPassDepthSlot` | Scene depth grab pass | Renderer per frame |
-| 16+ | all | `FirstDynamicSlot` | Dynamic texture allocation | per-scene `BindlessTextureSet` |
+| 16+ | all | `FirstDynamicSlot` | Dynamic texture allocation (the cube array from `firstDynamicCubeSlot()`, past the IBL groups even in the minimal profile) | per-scene `BindlessTextureSet` |
 | 0+ | 3D | — | Volumetric cloud SHAPES (`Graphics::CloudShapeResource`), Sep 2026 — the 3D array has NO reserved region, its cursor starts at 0 | `Scenes::Component::CloudVolume` → `BindlessTextureSet::registerTexture3D()` → `syncTextureSet()` |
 
 > ⚠️ The 3D array had no allocator until the clouds (Sep 2026): `updateTexture3D()` existed and

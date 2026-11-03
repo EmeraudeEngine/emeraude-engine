@@ -30,9 +30,11 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
 #include <array>
+#include <cstdint>
+#include <iosfwd>
 #include <memory>
+#include <string>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -40,9 +42,17 @@
 #include "Constants.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/Frustum.hpp"
 #include "Graphics/Types.hpp"
-#include "Tracer.hpp"
-#include "Vulkan/UniformBufferObject.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSet;
+	class UniformBufferObject;
+}
 
 namespace EmEn::Graphics
 {
@@ -275,7 +285,7 @@ namespace EmEn::Graphics
 			friend EMEN_API std::ostream & operator<< (std::ostream & out, const ViewMatrices2DUBO & obj);
 
 			/** @brief Total number of elements in the UBO buffer. */
-			static constexpr auto ViewUBOElementCount = Matrix4Alignment + (5 * VectorAlignment);
+			static constexpr auto ViewUBOElementCount = Matrix4Alignment + (6 * VectorAlignment);
 			/** @brief Total size in bytes of the UBO buffer. */
 			static constexpr auto ViewUBOSize = ViewUBOElementCount * sizeof(float);
 
@@ -305,6 +315,9 @@ namespace EmEn::Graphics
 			static constexpr auto IBLDiffuseWeightOffset{34UL};
 			/** @brief Offset of the pre-exposure in the buffer (setPreExposure()): the last float of the vec4. */
 			static constexpr auto PreExposureOffset{IBLDiffuseWeightOffset + 1UL};
+			/** @brief Offset of the frame's first bindless IBL slot (a uint, BindlessTextureManager::iblSlotBase()), the first
+			 * lane of its own vec4: render-thread state, written for the frame region at each upload. */
+			static constexpr auto IBLSlotBaseOffset{PreExposureOffset + 1UL};
 
 			/**
 			 * @brief Internal state structure holding view matrices and related data.

@@ -148,6 +148,8 @@ layout(set = 1, binding = 3, std140) uniform FrameData
 	vec4 bounceParams;	/* x = multiBounceStrength, y = the frame's pre-exposure (the slot of the clamp that died with the screen-history feedback), z = variance-clip gamma, w = accumulation cap. */
 	vec4 skyParams;		/* x = sky luminance in nits (0 = no sky), y = sky ray distance, z = ambient-occlusion lane range (0 = lane disarmed), w = RT light count. */
 	vec4 skyStarMask;	/* xyz = direction toward the in-texture celestial body, w = cone half-angle in radians (0 = none). */
+	vec4 antiLagParams;	/* The denoiser's (unused here). */
+	uvec4 iblParams;	/* x = the frame's IBL group in the bindless table (BindlessTextureManager::iblSlotBase()). */
 };
 
 /* Bindless textures (set 2). Binding 1 = 2D texture array, binding 3 = cubemap array whose
@@ -188,10 +190,10 @@ vec3 skyRadiance (vec3 direction)
 	 * was no longer there. Same contract as the skybox (Material/Helpers.cpp) and the material
 	 * reflections: no negation anywhere. */
 	/* The mask's rim is widened by one texel of the cubemap's top level. */
-	const float rimWidening = 1.5707963 / float(textureSize(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], 0).x);
+	const float rimWidening = 1.5707963 / float(textureSize(texturesCube[nonuniformEXT(iblParams.x + EnvironmentCubemapSlot)], 0).x);
 	const vec3 skyDirection = emMaskStar(direction, skyStarMask, rimWidening);
 
-	return texture(texturesCube[nonuniformEXT(EnvironmentCubemapSlot)], skyDirection).rgb * skyParams.x;
+	return texture(texturesCube[nonuniformEXT(iblParams.x + EnvironmentCubemapSlot)], skyDirection).rgb * skyParams.x;
 }
 
 /* NOTE: GLSL has no built-in PI constant. */

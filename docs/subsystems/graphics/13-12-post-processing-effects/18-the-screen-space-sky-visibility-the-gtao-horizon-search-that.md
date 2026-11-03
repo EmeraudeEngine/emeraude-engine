@@ -23,7 +23,7 @@ sample raises that side's horizon; the cosine-weighted arc between the two horiz
 visibility **V**, and the mean direction of that arc is the **bent normal**. The trace pass then adds
 
 ```glsl
-indirectLight += texture(texturesCube[IrradianceCubemapSlot], bentNormalWorld).rgb * skyLuminance * V;
+indirectLight += texture(texturesCube[iblSlotBase + IrradianceCubemapSlot], bentNormalWorld).rgb * skyLuminance * V;
 ```
 
 right where it normalises its bounce estimator — so the sky rides the SAME demodulated convention

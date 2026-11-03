@@ -35,6 +35,7 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/IndirectPostProcessEffect.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Graphics/Renderer.hpp"
@@ -1372,7 +1373,8 @@ namespace EmEn::Graphics
 			 * (0 = no sky term for the screen-space producers). */
 			.skyParams = {inputs.skyLuminance, inputs.skyDistance, inputs.occlusionMaxDistance, static_cast< float >(inputs.lightCount)},
 			.skyStarMask = inputs.skyStarMask,
-			.antiLagParams = {static_cast< float >(m_parameters.antiLagFastFrames), m_parameters.antiLagSigmaScale, m_parameters.antiLagTemporalSigmaScale, m_parameters.antiLagResetRatio}
+			.antiLagParams = {static_cast< float >(m_parameters.antiLagFastFrames), m_parameters.antiLagSigmaScale, m_parameters.antiLagTemporalSigmaScale, m_parameters.antiLagResetRatio},
+			.iblParams = {BindlessTextureManager::iblSlotBase(frameIndex), 0U, 0U, 0U}
 		};
 
 		const auto success = IndirectPostProcessEffect::updateUniformBufferData(*m_frameUBOs[frameIndex], &ubo, sizeof(FrameUBOData));

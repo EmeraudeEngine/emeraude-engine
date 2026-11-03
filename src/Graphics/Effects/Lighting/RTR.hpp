@@ -36,22 +36,46 @@
 #include <memory>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "Graphics/IndirectPostProcessEffect.hpp"
-#include "Graphics/TextureResource/TextureCubemap.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/GIDenoiser.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "StaticVector.hpp"
 #include "Vulkan/ComputePipeline.hpp"
-#include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Image.hpp"
-#include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
 #include "Vulkan/TextureInterface.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Graphics
+	{
+		class Renderer;
+
+		namespace TextureResource
+		{
+			class TextureCubemap;
+		}
+	}
+
+	namespace Vulkan
+	{
+		class DescriptorPool;
+		class DescriptorSetLayout;
+		class GraphicsPipeline;
+		class ImageView;
+		class PipelineLayout;
+		class Sampler;
+	}
+}
 
 namespace EmEn::Graphics::Effects::Lighting
 {
@@ -143,6 +167,9 @@ namespace EmEn::Graphics::Effects::Lighting
 				/** @brief The frame's pre-exposure (FrameContext::preExposure): the trace synthesises its radiance in nits
 				 * and is combined into the scene colour, which holds nits × E_pre. */
 				float preExposure;
+				/** @brief The frame's IBL group in the bindless table (BindlessTextureManager::iblSlotBase()): the hit and
+				 * miss paths read texturesCube[iblSlotBase + IrradianceCubemapSlot / PrefilteredCubemapSlot]. */
+				uint32_t iblSlotBase;
 			};
 
 			/* ⚠️ The GLSL block is std140 and keeps THESE members in THIS order, so every offset
@@ -151,7 +178,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * exactly like the C++ `float[3] + float`, and `vec4 ambientLight` lands on 128 on
 			 * its own. Change a member and the shader reads garbage with NO compile error --
 			 * these assertions are the only guard. */
-			static_assert(sizeof(TraceFrameUBOData) == 152, "The RTR trace UBO must stay 152 bytes.");
+			static_assert(sizeof(TraceFrameUBOData) == 156, "The RTR trace UBO must stay 156 bytes.");
 			static_assert(offsetof(TraceFrameUBOData, invRelativeViewProj) == 0, "std140: mat4 at 0.");
 			static_assert(offsetof(TraceFrameUBOData, invViewCol0) == 64, "std140: vec3 aligned on 16.");
 			static_assert(offsetof(TraceFrameUBOData, viewPosX) == 76, "std140: float in the vec3 tail.");
@@ -166,6 +193,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			static_assert(offsetof(TraceFrameUBOData, ambientR) == 128, "std140: vec4 ambientLight aligned on 16.");
 			static_assert(offsetof(TraceFrameUBOData, coneScale) == 144, "std140: trailing scalar.");
 			static_assert(offsetof(TraceFrameUBOData, preExposure) == 148, "std140: trailing scalar.");
+			static_assert(offsetof(TraceFrameUBOData, iblSlotBase) == 152, "std140: trailing scalar.");
 
 			/**
 			 * @brief Constructs a ray-tracing reflexion effect.

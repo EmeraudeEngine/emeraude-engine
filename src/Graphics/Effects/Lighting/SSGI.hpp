@@ -162,6 +162,9 @@ namespace EmEn::Graphics::Effects::Lighting
 				 * the SAME value the raster leg this effect takes over applied
 				 * (ViewUB EnvironmentLuminance). Read by the sky-visibility variant only. */
 				float skyLuminance;
+				/* The frame's IBL group in the bindless table (BindlessTextureManager::iblSlotBase()): the sky-visibility
+				 * variant reads texturesCube[iblSlotBase + IrradianceCubemapSlot]. */
+				uint32_t iblSlotBase;
 			};
 
 			/**

@@ -1,7 +1,7 @@
 ---
 id: bindless-ibl-slots-rewritten-while-in-flight
 title: The reserved IBL slots of the one bindless descriptor set are rewritten while submitted frames read them
-status: open
+status: in-progress
 priority: high
 scope: Graphics (BindlessTextureManager, the IBL readers), Scenes (BindlessTextureSet, the IBL rings)
 opened: 2026-11-03
@@ -22,10 +22,20 @@ night ambient, IBL and reflections (land 224 against 251), unmarked, in 8 of 8; 
 TAA keeps them (the 0.20 residue, graphics doc 13-12 § 43). No VUID fires. The comment of `clearTextureSet()` calls
 the in-flight rewrite safe.
 
-Owner decision 2026-11-03: **each IBL set gets its own permanent slots (a ring)**, written once; the frame carries
-the index of the set it reads.
+Owner decision 2026-11-03: **one IBL group PER FRAME IN FLIGHT** (the variant chosen over permanent slots per IBL
+set: no link with the IBL rings, the picture sky's environment slot covered, 3 × `MaxFramesInFlight` = 15 slots). Done
+(graphics doc 06-6 § Reserved Slots): `BindlessTextureManager::iblSlotBase()`, `syncTextureSet(frameIndex, …)` writes
+the frame's group only, every reader adds the base (the view block's `iblSlotBase`, each effect's per-frame block), the
+cube array's dynamic slots start past the groups (`firstDynamicCubeSlot()`, `BindlessTextureSet::Capacities`).
 
-## What remains — the inventory (2026-11-03, before any code)
+## What remains
+
+- **AMD round 7** (LinuxB-PA): the in-capture jump with TAA off — no frame mixing the day sun with the night IBL —
+  and R2 at 40 FPS — the sea at 0.00 at frame #0 in every jump. Then close this item and `temporal-discontinuity-contract`.
+- The traps below (other slots rewritten in flight) move to `docs/caution-points.md` or their own item when this one
+  closes — owner's call.
+
+## The inventory (2026-11-03, before the code; kept for the review)
 
 - **Readers bake the slot into their GLSL text as a constant.** None takes it from a push constant or a UBO field.
   - Raster: `Saphir/LightGenerator.cpp:974` (the ambient's IBL diffuse, slot 1);
