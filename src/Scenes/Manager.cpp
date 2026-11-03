@@ -29,7 +29,9 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <filesystem>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
@@ -360,6 +362,14 @@ namespace EmEn::Scenes
 		}
 
 		return nullptr;
+	}
+
+	void
+	Manager::refuseExclusiveAccessInsideLogicCycle () noexcept
+	{
+		Tracer::fatal(ClassId, "withExclusiveActiveScene(), contract violation: an exclusive access from inside the logic cycle on its own thread (Core::onCoreProcessLogics() must use shared accesses only) would wait for itself ! Aborting.");
+
+		std::abort();
 	}
 
 	void

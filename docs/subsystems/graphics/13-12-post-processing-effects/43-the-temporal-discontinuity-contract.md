@@ -135,14 +135,31 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
     the variant chosen over ring slots per IBL set): one IBL group PER FRAME IN FLIGHT, written by that frame only,
     its base carried by the view block and each effect's per-frame block (graphics doc 06-6 § Reserved Slots). Linux:
     every reader exercised (`reflexion-debug` on both lanes, `forest`, `water-world`, `sky-lab`, `city`), 0 VUID,
-    0 "Unable to compile"; the in-capture jumps clean (Linux has no pending frame to show the defect). AMD to verify.
+    0 "Unable to compile"; the in-capture jumps clean (Linux has no pending frame to show the defect). **AMD round 7
+    (engine 4a29d706): verified** — the in-capture jump (TAA off) clean in 8 of 8 (land 251 up to the first night
+    frame, marked, at 13.4), the sea 0.00 at frame #0 in 26 of 26 TAA jumps (0.20 in 9 of 25 before), no slow jump;
+    `sky-lab`, `forest`, `reflexion-debug` looked at; 0 VUID, 0 `SYNC-`.
   - **The lamps one slot late.** In 6 of 25 the first night frame, marked, is dark (land 7.8 against 13.4, TAA off
     too): `Core::logicsTask()` ran the application's logic (`onCoreProcessLogics()`, where `city`'s lamp rule runs)
     AFTER the scene's publication, so the lamps lit by it reached the next slot, while the sun the console switched
     off between two cycles was in this one. **Fixed** (owner decision 2026-11-03): the hook runs between the scene's
     logic and its publication (source-tree doc 02). Linux, 10 in-capture jumps, TAA off: the first night frame
     marked and at the night level (15.44) in 10 of 10, no dark frame (1 in 4 before); `labyrinth`, `sponza` load
-    clean, 0 VUID.
+    clean, 0 VUID. AMD round 7: 1 dark first-night frame in 26 TAA jumps (6 in 25 before), none in 16 in-capture
+    ones — the console's exclusive access could still land BETWEEN the hook (the lamps checked against a sun still
+    up) and the publication, the cycle taking the scene's shared lock twice. **Fixed** (owner decision 2026-11-03):
+    `Scenes::Manager::withLogicCycle()` holds a cycle lock over the scene's logic, the hook and the publication, and
+    `withExclusiveActiveScene()` takes it BEFORE its announcement (the cycle's shared accesses wait for announced
+    writers: announced while queuing, the writer would wait for a cycle waiting for it); an exclusive access asked
+    inside the cycle on its thread is a contract fault (traced, aborted). Linux: 15 jump commands, 0 hang, 0 dark
+    frame, 0 VUID.
+  - **The glossy lift before the night** (AMD round 7, TAA off, in-capture): day frames just before the night read
+    251.3 against 251.0 on 1.9 % of the pixels — windows, a mirror-like object, the lower facade, warm-tinted. At
+    40 FPS it is on frames #3-#4, recorded BEFORE the jump ran (frames in flight); at 8 FPS only on the frame just
+    before the night, in 4 of 8. Likely the lamps' bulbs (their linked emissive material, synced at the publication,
+    scenes doc 16) seen in reflections: a material has no render state slot (its flush may land one frame early), and
+    the 40 FPS case suggests its uniform data is also rewritten under frames in flight — the class of item
+    `bindless-ibl-slots-rewritten-while-in-flight` § Traps. Not proven, not pursued.
   A second raise 0.1-1.3 s after a jump, clock stopped, in 6 of the 26 (the street lamps' switch, checked every
   logic cycle, is the likely source; not proven).
 - The readout (Linux, RTX 3070 Ti, layer on, `city` TAA alone at 40 FPS): a parked capture 60 frames unmarked;

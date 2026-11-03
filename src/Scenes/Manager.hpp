@@ -31,15 +31,13 @@
 
 /* STL inclusions. */
 #include <atomic>
-#include <condition_variable>
 #include <cstdint>
-#include <cstddef>
 #include <filesystem>
 #include <map>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 #include <string>
+#include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -49,12 +47,17 @@
 
 /* Local inclusions for usages. */
 #include "ConditionVariable.hpp"
-#include "Mutex.hpp"
-#include "SharedMutex.hpp"
+#include "Console/Output.hpp"
 #include "DefinitionResource.hpp"
 #include "Editor/Manager.hpp"
-#include "Graphics/Renderable/AbstractBackground.hpp"
+#include "Hash/FNV1a.hpp"
+#include "Mutex.hpp"
+#include "ObservableTrait.hpp"
 #include "Scene.hpp"
+#include "Scenes/Node.hpp"
+#include "Scenes/StaticEntity.hpp"
+#include "SharedMutex.hpp"
+#include "ThreadSafety.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -64,13 +67,24 @@ namespace EmEn
 		class Manager;
 	}
 
-	namespace Graphics
+	namespace Graphics::Renderable
 	{
-		class Renderer;
+		class AbstractBackground;
+	}
+
+	namespace Input
+	{
+		class Manager;
 	}
 
 	class PrimaryServices;
 	class Notifier;
+}
+
+namespace EmEn::Scenes
+{
+	class GroundLevelInterface;
+	class SeaLevelInterface;
 }
 
 namespace EmEn::Scenes::Loaders
@@ -396,6 +410,19 @@ namespace EmEn::Scenes
 			void
 			withExclusiveActiveScene (function_t && processActiveScene, bool abortOnNullScene) const noexcept requires (std::is_invocable_v< function_t, const std::shared_ptr< Scene > & >)
 			{
+				/* Inside the logic cycle on its own thread, the cycle lock below would never come: a contract fault. */
+				if ( m_logicCycleOwner.load(std::memory_order_acquire) == std::this_thread::get_id() )
+				{
+					refuseExclusiveAccessInsideLogicCycle();
+				}
+
+				/* Between two logic cycles, never inside one (withLogicCycle()): an exclusive change (a console command) can
+				 * no longer land between the application's logic and the publication, where it reached the slot with only
+				 * half of its consequences (graphics doc 13-12 § 43). ⚠️ Taken BEFORE the announcement: the logic thread's
+				 * shared accesses inside its cycle wait for announced writers (writer preference) — announced while queuing
+				 * on this lock, the writer would wait for a cycle that waits for it. */
+				const Base::MutexLock cycleLock{m_logicCycleAccess};
+
 				/* Announced BEFORE queuing on the lock, withdrawn AFTER releasing it (reverse destruction order). */
 				const ExclusiveAccessAnnouncement announcement{*this};
 				const Base::SharedMutexWriteLock lock{m_activeSceneSharedAccess};
@@ -406,6 +433,29 @@ namespace EmEn::Scenes
 				}
 
 				std::forward< function_t >(processActiveScene)(m_activeScene);
+			}
+
+			/**
+			 * @brief Runs one logic cycle — the active scene's logic, the application's (Core::onCoreProcessLogics()) and the
+			 * publication for rendering — as ONE unit against the exclusive accesses: withExclusiveActiveScene() lands
+			 * between two cycles, never inside one.
+			 * @note LOGIC THREAD (Core::logicsTask()). The cycle takes its own shared accesses inside.
+			 * @warning The cycle must never take an exclusive access (withExclusiveActiveScene()) on its thread: it would
+			 * wait for itself — a contract fault, traced and aborted.
+			 * @tparam function_t The type of function. Signature: void ()
+			 * @param cycle The cycle.
+			 */
+			template< typename function_t >
+			void
+			withLogicCycle (function_t && cycle) const noexcept requires (std::is_invocable_v< function_t >)
+			{
+				const Base::MutexLock lock{m_logicCycleAccess};
+
+				m_logicCycleOwner.store(std::this_thread::get_id(), std::memory_order_release);
+
+				std::forward< function_t >(cycle)();
+
+				m_logicCycleOwner.store(std::thread::id{}, std::memory_order_release);
 			}
 
 			/**
@@ -489,6 +539,13 @@ namespace EmEn::Scenes
 			void withdrawExclusiveAccess () const noexcept;
 
 			/**
+			 * @brief Traces and aborts: an exclusive access asked from inside the logic cycle, on its own thread
+			 * (withLogicCycle()).
+			 */
+			[[noreturn]]
+			static void refuseExclusiveAccessInsideLogicCycle () noexcept;
+
+			/**
 			 * @brief Blocks a READER while an exclusive access is announced. Lock-free when none is.
 			 */
 			void waitForAnnouncedExclusiveAccesses () const noexcept;
@@ -532,6 +589,12 @@ namespace EmEn::Scenes
 			mutable Base::Mutex m_sceneListAccess;
 			/** @brief Handle a shared thread-safe access to the member 'm_activeScene', when manipulating the content of a scene. 'Readers' can share the access, while 'Writers' can have an exclusive lock.  */
 			mutable Base::SharedMutex m_activeSceneSharedAccess;
+			/** @brief Held by the logic thread for one whole cycle (withLogicCycle()), by an exclusive access before its
+			 * announcement and its write lock (withExclusiveActiveScene()). Lock order: this, then m_activeSceneSharedAccess. */
+			mutable Base::Mutex m_logicCycleAccess;
+			/** @brief The thread inside withLogicCycle(), none outside (C++20 value-initialises it to std::thread::id{}): the
+			 * self-deadlock check. */
+			mutable std::atomic< std::thread::id > m_logicCycleOwner;
 			/** @brief The writer-preference gate of 'm_activeSceneSharedAccess': the exclusive accesses announced and not
 			 * finished, and what the readers wait on (see withSharedActiveScene()). */
 			mutable std::atomic< uint32_t > m_announcedExclusiveAccesses{0};

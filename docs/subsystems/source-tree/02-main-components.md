@@ -39,7 +39,7 @@ private:
 
 **Mandatory callbacks** (pure virtual):
 - `onCoreStarted(const EmEn::Arguments & arguments, EmEn::Settings & settings)` - Scene initialization, return true to continue
-- `onCoreProcessLogics(size_t)` - Game logic (separate thread). Each logic cycle runs the active scene's logic, THEN this hook, THEN the scene's publication for rendering (since 2026-11-03): what the application changes in a cycle is rendered from that cycle's render state slot. It used to run after the publication, so its changes reached the next slot, one cycle late (graphics doc 13-12 § 43). It runs outside the scene's lock; a scene activated during it publishes after its own first cycle.
+- `onCoreProcessLogics(size_t)` - Game logic (separate thread). Each logic cycle runs the active scene's logic, THEN this hook, THEN the scene's publication for rendering (since 2026-11-03): what the application changes in a cycle is rendered from that cycle's render state slot. It used to run after the publication, so its changes reached the next slot, one cycle late (graphics doc 13-12 § 43). It runs outside the scene's lock; a scene activated during it publishes after its own first cycle. The whole cycle is ONE unit against the exclusive accesses (`Scenes::Manager::withLogicCycle()`: `withExclusiveActiveScene()` lands between two cycles, never inside one) — so the hook must use shared accesses only: an exclusive access from it is a contract fault (traced, aborted).
 
 **Optional callbacks** (default implementation):
 - `onBeforeCoreSecondaryServicesInitialization()` - Pre-init (e.g., --help)
