@@ -543,7 +543,7 @@ namespace EmEn
 			if ( errorCode )
 			{
 				std::stringstream message;
-				message << "Unable to keep the previous log file as '" << IO::toU8String(previousFilepath) << "' (" << errorCode.message() << "), it will be overwritten.";
+				message << "Unable to keep the previous log file as '" << IO::toU8String(previousFilepath) << "' (" << Base::IO::systemErrorText(errorCode) << "), it will be overwritten.";
 
 				this->trace(Severity::Warning, ClassId, message.str());
 			}

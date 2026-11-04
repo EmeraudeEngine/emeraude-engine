@@ -515,6 +515,9 @@ others; a path built from a narrow string decodes that string as ANSI. So:
 - **To a Windows or CEF API**: the native / wide string (`p.native()`, `p.c_str()`), never a narrow conversion. A C
   library that documents UTF-8 file names (ufbx, tinyusdz, RenderDoc) gets `toU8String()`; one that opens a narrow name
   with `fopen()` gets the CONTENT instead (`IO::fileGetContents()`, then a memory API).
+- **An error's text**: `Base::IO::systemErrorText(errorCode)` — never `errorCode.message()`. MSVC's `message()` of the
+  system category is `FormatMessageA`, the ANSI code page (CP-1252 accents become U+FFFD in a UTF-8 reader); the base
+  reads it through `FormatMessageW` (emeraude-base `docs/caution-points.md`). asio's error code is a `std::error_code`.
 - **Untrusted text bound for a third-party path API** is checked with `Base::String::isValidUTF8()` first: MSVC's
   `char8_t` path conversion throws on invalid UTF-8 (the glTF uri pre-check, `GLTFLoader::load()`).
 - The application declares `<activeCodePage>UTF-8</activeCodePage>` as a second line of defence only: a DLL cannot impose

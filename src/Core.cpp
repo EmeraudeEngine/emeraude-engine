@@ -2956,7 +2956,7 @@ namespace EmEn
 
 				if ( permissionError )
 				{
-					TraceWarning{ClassId} << "Unable to make " << scriptPath << " executable (" << permissionError.message() << "): run it with 'sh'.";
+					TraceWarning{ClassId} << "Unable to make " << scriptPath << " executable (" << Base::IO::systemErrorText(permissionError) << "): run it with 'sh'.";
 				}
 
 				TraceSuccess{ClassId} << "RushMaker assemble script written to " << scriptPath;
@@ -3538,7 +3538,7 @@ namespace EmEn
 
 		if ( errorCode )
 		{
-			TraceError{ClassId} << "Failed to backup settings file: " << errorCode.message();
+			TraceError{ClassId} << "Failed to backup settings file: " << Base::IO::systemErrorText(errorCode);
 
 			return;
 		}
@@ -3692,7 +3692,7 @@ namespace EmEn
 		{
 			/* Backup failed: leave the settings untouched — better an outdated file than clearing the
 			 * store and overwriting the user's settings with empties at save-at-exit (data loss). */
-			TraceError{ClassId} << "Settings version guard: failed to back up '" << Base::IO::toU8String(settingsPath) << "': " << errorCode.message() << " - keeping the current settings.";
+			TraceError{ClassId} << "Settings version guard: failed to back up '" << Base::IO::toU8String(settingsPath) << "': " << Base::IO::systemErrorText(errorCode) << " - keeping the current settings.";
 
 			return;
 		}

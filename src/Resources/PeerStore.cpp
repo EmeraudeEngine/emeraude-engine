@@ -402,7 +402,7 @@ namespace EmEn::Resources
 
 		if ( errorCode )
 		{
-			this->reportError("Unable to create the directory of '" + file.path + "': " + errorCode.message());
+			this->reportError("Unable to create the directory of '" + file.path + "': " + Base::IO::systemErrorText(errorCode));
 			countFailure();
 
 			return;
@@ -495,7 +495,7 @@ namespace EmEn::Resources
 
 		if ( errorCode )
 		{
-			this->reportError("Unable to put '" + file.path + "' in place: " + errorCode.message());
+			this->reportError("Unable to put '" + file.path + "' in place: " + Base::IO::systemErrorText(errorCode));
 			std::filesystem::remove(partial, errorCode);
 			countFailure();
 

@@ -514,7 +514,7 @@ namespace EmEn::Net
 
 			if ( error )
 			{
-				TraceError{ClassId} << "Unable to remove the cached file '" << IO::toU8String(entry.path()) << "': " << error.message();
+				TraceError{ClassId} << "Unable to remove the cached file '" << IO::toU8String(entry.path()) << "': " << Base::IO::systemErrorText(error);
 
 				success = false;
 			}
@@ -820,7 +820,7 @@ namespace EmEn::Net
 
 			if ( error )
 			{
-				TraceError{ClassId} << "Unable to install '" << IO::toU8String(partialFilepath) << "' as '" << IO::toU8String(filepath) << "': " << error.message();
+				TraceError{ClassId} << "Unable to install '" << IO::toU8String(partialFilepath) << "' as '" << IO::toU8String(filepath) << "': " << Base::IO::systemErrorText(error);
 
 				std::filesystem::remove(partialFilepath, error);
 

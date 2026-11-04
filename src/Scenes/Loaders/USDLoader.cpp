@@ -767,7 +767,7 @@ namespace EmEn::Scenes::Loaders
 
 		if ( pathError )
 		{
-			TraceError{ClassId} << "Unable to resolve an absolute path for '" << Base::IO::toU8String(filepath) << "' : " << pathError.message();
+			TraceError{ClassId} << "Unable to resolve an absolute path for '" << Base::IO::toU8String(filepath) << "' : " << Base::IO::systemErrorText(pathError);
 
 			return false;
 		}
@@ -872,7 +872,7 @@ namespace EmEn::Scenes::Loaders
 
 			if ( walkError )
 			{
-				TraceWarning{ClassId} << "Partial stage directory scan for '" << Base::IO::toU8String(filepath.filename()) << "' : " << walkError.message();
+				TraceWarning{ClassId} << "Partial stage directory scan for '" << Base::IO::toU8String(filepath.filename()) << "' : " << Base::IO::systemErrorText(walkError);
 			}
 
 			resolver.set_search_paths(searchPaths);

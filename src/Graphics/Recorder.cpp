@@ -130,7 +130,7 @@ namespace EmEn::Graphics
 
 		const std::error_code error{errno, std::generic_category()};
 
-		TraceError{Recorder::ClassId} << "Unable to write to " << IO::toU8String(path) << " (" << error.message() << ") ! The recording stops, the video is truncated.";
+		TraceError{Recorder::ClassId} << "Unable to write to " << IO::toU8String(path) << " (" << Base::IO::systemErrorText(error) << ") ! The recording stops, the video is truncated.";
 
 		failed.store(true, std::memory_order_release);
 
@@ -155,7 +155,7 @@ namespace EmEn::Graphics
 		{
 			const std::error_code error{errno, std::generic_category()};
 
-			TraceError{Recorder::ClassId} << "Unable to close " << IO::toU8String(path) << " (" << error.message() << ") ! The video is truncated.";
+			TraceError{Recorder::ClassId} << "Unable to close " << IO::toU8String(path) << " (" << Base::IO::systemErrorText(error) << ") ! The video is truncated.";
 
 			failed.store(true, std::memory_order_release);
 		}

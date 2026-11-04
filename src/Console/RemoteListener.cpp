@@ -38,6 +38,7 @@
 #endif
 
 /* Local inclusions. */
+#include "IO/IO.hpp"
 #include "RemoteProtocol.hpp"
 #include "Tracer.hpp"
 
@@ -161,7 +162,7 @@ namespace EmEn::Console
 
 		if ( ec )
 		{
-			TraceWarning{ClassId} << "Invalid remote console bind address '" << m_address << "' (" << ec.message() << "), falling back to loopback.";
+			TraceWarning{ClassId} << "Invalid remote console bind address '" << m_address << "' (" << Base::IO::systemErrorText(ec) << "), falling back to loopback.";
 
 			bindAddress = asio::ip::address_v4::loopback();
 			m_address = bindAddress.to_string();
@@ -174,7 +175,7 @@ namespace EmEn::Console
 
 		if ( ec )
 		{
-			TraceError{ClassId} << "Failed to open acceptor: " << ec.message();
+			TraceError{ClassId} << "Failed to open acceptor: " << Base::IO::systemErrorText(ec);
 
 			return;
 		}
@@ -183,7 +184,7 @@ namespace EmEn::Console
 
 		if ( ec )
 		{
-			TraceWarning{ClassId} << "Failed to set reuse_address: " << ec.message();
+			TraceWarning{ClassId} << "Failed to set reuse_address: " << Base::IO::systemErrorText(ec);
 			ec.clear();
 		}
 
@@ -196,7 +197,7 @@ namespace EmEn::Console
 				" — the port is most likely taken by another process (Windows reports that as access denied); choose another one in Core/Console/RemoteListenerPort" :
 				"";
 
-			TraceError{ClassId} << "Failed to bind to " << m_address << ':' << m_port << ": " << ec.message() << hint;
+			TraceError{ClassId} << "Failed to bind to " << m_address << ':' << m_port << ": " << Base::IO::systemErrorText(ec) << hint;
 
 			return;
 		}
@@ -205,7 +206,7 @@ namespace EmEn::Console
 
 		if ( ec )
 		{
-			TraceError{ClassId} << "Failed to listen on " << m_address << ':' << m_port << ": " << ec.message();
+			TraceError{ClassId} << "Failed to listen on " << m_address << ':' << m_port << ": " << Base::IO::systemErrorText(ec);
 
 			return;
 		}
@@ -391,7 +392,7 @@ namespace EmEn::Console
 
 					if ( optionError )
 					{
-						TraceWarning{ClassId} << "Unable to disable Nagle's algorithm for a client: " << optionError.message();
+						TraceWarning{ClassId} << "Unable to disable Nagle's algorithm for a client: " << Base::IO::systemErrorText(optionError);
 					}
 
 					TraceInfo{ClassId} << "New AI client connected to Remote Console.";
@@ -409,7 +410,7 @@ namespace EmEn::Console
 			{
 				/* Never re-arm blindly: a permanent failure (EMFILE) would spin this thread at
 				 * 100 % with no trace of why. */
-				TraceError{ClassId} << "Remote console accept failed: " << error.message() << ".";
+				TraceError{ClassId} << "Remote console accept failed: " << Base::IO::systemErrorText(error) << ".";
 
 				if ( error == asio::error::no_descriptors || error == asio::error::no_memory )
 				{

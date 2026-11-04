@@ -44,6 +44,7 @@
 #endif
 
 /* Local inclusions. */
+#include "IO/IO.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific
@@ -97,7 +98,7 @@ namespace EmEn::PlatformSpecific
 
 		if ( const auto result = posix_spawnp(&child, argv.front(), nullptr, nullptr, argv.data(), processEnvironment()); result != 0 )
 		{
-			TraceError{ClassId} << "Unable to start '" << arguments.front() << "' : " << std::error_code{result, std::generic_category()}.message() << " !";
+			TraceError{ClassId} << "Unable to start '" << arguments.front() << "' : " << Base::IO::systemErrorText(std::error_code{result, std::generic_category()}) << " !";
 
 			return std::nullopt;
 		}
@@ -122,7 +123,7 @@ namespace EmEn::PlatformSpecific
 
 			if ( errno != EINTR )
 			{
-				TraceError{ClassId} << "Unable to wait for '" << arguments.front() << "' : " << std::error_code{errno, std::generic_category()}.message() << " !";
+				TraceError{ClassId} << "Unable to wait for '" << arguments.front() << "' : " << Base::IO::systemErrorText(std::error_code{errno, std::generic_category()}) << " !";
 
 				return std::nullopt;
 			}
