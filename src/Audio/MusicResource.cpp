@@ -173,7 +173,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		const auto sampleRate = static_cast< size_t >(m_frequency);
+		const auto sampleRate = static_cast< size_t >(m_frequency.hz());
 
 		/* Music box arrangement of "Crocodile Tears", composed by Frank Klepacki
 		 * for the video game "The Legend of Kyrandia: Hand of Fate" (1993).
@@ -433,7 +433,7 @@ namespace EmEn::Audio
 		{
 			TraceWarning{ClassId} <<
 				"Music '" << this->name() << "' frequency mismatch the system ! "
-				"Resampling the wave from " << static_cast< int >(m_localData.frequency()) << "Hz to " << static_cast< int >(m_frequency) << "Hz ...";
+				"Resampling the wave from " << m_localData.frequency().hz() << "Hz to " << m_frequency.hz() << "Hz ...";
 
 			/* Copy the buffer in float (single precision) format. */
 			WaveFactory::Processor processor{m_localData};
@@ -441,7 +441,7 @@ namespace EmEn::Audio
 			/* Launch a resampling process ... */
 			if ( !processor.resample(m_frequency) )
 			{
-				TraceError{ClassId} << "Unable to resample the wave to " << static_cast< int >(m_frequency) << "Hz !";
+				TraceError{ClassId} << "Unable to resample the wave to " << m_frequency.hz() << "Hz !";
 
 				return this->setLoadSuccess(false);
 			}

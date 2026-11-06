@@ -55,7 +55,7 @@ namespace EmEn::Audio
 		}
 
 		const auto frequencyPlayback = this->serviceProvider().audioManager().frequencyPlayback();
-		const auto sampleRate = static_cast< size_t >(frequencyPlayback);
+		const auto sampleRate = static_cast< size_t >(frequencyPlayback.hz());
 
 		/* Default/fallback sound: A retro "alert" double-beep.
 		 * Two short beeps with a pitch sweep, easily recognizable as a placeholder. */
@@ -166,12 +166,12 @@ namespace EmEn::Audio
 				{
 					TraceWarning{ClassId} <<
 					   "Sound '" << this->name() << "' frequency mismatch the system ! "
-					   "Resampling the wave from " << static_cast< int >(m_localData.frequency()) << "Hz to " << static_cast< int >(frequencyPlayback) << "Hz ...";
+					   "Resampling the wave from " << m_localData.frequency().hz() << "Hz to " << frequencyPlayback.hz() << "Hz ...";
 				}
 
 				if ( !processor.resample(frequencyPlayback) )
 				{
-					TraceError{ClassId} << "Unable to resample the wave to " << static_cast< int >(frequencyPlayback) << "Hz !";
+					TraceError{ClassId} << "Unable to resample the wave to " << frequencyPlayback.hz() << "Hz !";
 
 					return this->setLoadSuccess(false);
 				}

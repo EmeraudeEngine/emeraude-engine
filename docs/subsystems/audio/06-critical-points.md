@@ -23,6 +23,12 @@
   - `Buffer` and `Source` own their OpenAL name: neither copyable nor movable (a copy deleted the name twice).
   - So do `Effects::Abstract`, `Filters::Abstract` and `EffectSlot` (and every effect / filter): neither copyable nor
     movable since Ave Robustus II P5 (2026-10-16) — the defaulted move did not clear the name either.
+- **Sample rates (2026-11-06, base `WaveFactory::Frequency` became a strong type)**: a sound or music file at any rate in
+  [1 kHz, 384 kHz] loads (22 255 Hz, a classic Mac rate, was refused before) and is resampled ONCE to the playback rate
+  by `SoundResource` / `MusicResource`. The settings `Core/Audio/PlaybackFrequency` and the capture frequency go through
+  the same `Frequency::fromHz()`: any rate in that range is now accepted (only the ten standard rates were before),
+  outside it the 48 kHz default is used with a warning. `Manager` keeps the rate the OpenAL context actually reports
+  (`ALC_FREQUENCY`); a reported rate outside the range is ignored with a warning (it used to become Invalid silently).
 - **Microphone privacy**: `Core/Audio/Capture/Enable` must be explicitly `true` before any microphone access. Default is `false`. Voice-over (`Core/RushMaker/EnableVoiceOver`) depends on this gate.
 - **Available devices in settings**: Both playback (`Core/Audio/AvailableDevices`) and capture (`Core/Audio/Capture/AvailableDevices`) device lists are written to settings on each startup for easy device switching via settings file editing
 

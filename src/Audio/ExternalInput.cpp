@@ -28,16 +28,24 @@
 
 /* STL inclusions. */
 #include <chrono>
+#include <cstddef>
+#include <iostream>
+#include <memory>
 #include <ranges>
 #include <thread>
 
+/* Third-party inclusions. */
+#include "AL/alc.h"
+
 /* Local inclusions. */
+#include "Arguments.hpp"
+#include "BlobTrait.hpp"
+#include "PrimaryServices.hpp"
+#include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Tracer.hpp"
 #include "WaveFactory/FileIO.hpp"
 #include "WaveFactory/Wave.hpp"
-#include "Manager.hpp"
-#include "Arguments.hpp"
-#include "PrimaryServices.hpp"
-#include "Settings.hpp"
 
 namespace EmEn::Audio
 {
@@ -158,9 +166,9 @@ namespace EmEn::Audio
 
 		/* Checks configuration file */
 		const auto bufferSize = settings.getOrSetDefaultInRange< int32_t >(AudioCaptureBufferSizeKey, DefaultAudioCaptureBufferSize, MinAudioCaptureBufferSize, MaxAudioCaptureBufferSize);
-		m_frequency = WaveFactory::toFrequency(settings.getOrSetDefault< int32_t >(AudioCaptureFrequencyKey, DefaultAudioCaptureFrequency));
+		m_frequency = WaveFactory::Frequency::fromHz(settings.getOrSetDefault< int32_t >(AudioCaptureFrequencyKey, DefaultAudioCaptureFrequency));
 
-		if ( m_frequency == WaveFactory::Frequency::Invalid )
+		if ( !m_frequency.isValid() )
 		{
 			TraceWarning{ClassId} <<
 				"Invalid recorder frequency in settings file! "
@@ -172,7 +180,7 @@ namespace EmEn::Audio
 		/* NOTE: Opening the output input device. */
 		m_device.reset(alcCaptureOpenDevice(
 			m_selectedDeviceName.c_str(),
-			static_cast< ALuint >(m_frequency),
+			static_cast< ALuint >(m_frequency.hz()),
 			AL_FORMAT_MONO16,
 			bufferSize * 1024
 		));
@@ -429,7 +437,7 @@ namespace EmEn::Audio
 		const uint32_t riffSize = dataSize + 36;
 		const uint16_t audioFormat = 1; /* PCM */
 		const uint16_t numChannels = 1; /* Mono */
-		const auto sampleRate = static_cast< uint32_t >(m_frequency);
+		const auto sampleRate = m_frequency.hz();
 		const uint32_t byteRate = sampleRate * numChannels * static_cast< uint32_t >(sizeof(int16_t)); /* The WAV header field is 32-bit. */
 		const uint16_t blockAlign = numChannels * sizeof(int16_t);
 		const uint16_t bitsPerSample = 16;

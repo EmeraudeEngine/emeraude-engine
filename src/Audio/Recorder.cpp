@@ -27,18 +27,27 @@
 #include "Recorder.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <chrono>
+#include <cstddef>
+#include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "AL/al.h"
+#include "AL/alext.h"
+
 /* Local inclusions. */
-#include "WaveFactory/FileIO.hpp"
-#include "WaveFactory/Wave.hpp"
+#include "Audio/OpenALExtensions.hpp"
+#include "Audio/OpenALHandles.hpp"
+#include "BlobTrait.hpp"
 #include "Manager.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
-#include "Utility.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio
 {
@@ -90,7 +99,7 @@ namespace EmEn::Audio
 
 		if ( outputMode == "Surround51" )
 		{
-			if ( OpenAL::alcIsRenderFormatSupportedSOFT(m_loopbackDevice.get(), static_cast< ALCsizei >(m_playbackFrequency), ALC_5POINT1_SOFT, ALC_SHORT_SOFT) != ALC_FALSE )
+			if ( OpenAL::alcIsRenderFormatSupportedSOFT(m_loopbackDevice.get(), static_cast< ALCsizei >(m_playbackFrequency.hz()), ALC_5POINT1_SOFT, ALC_SHORT_SOFT) != ALC_FALSE )
 			{
 				channelFormat = ALC_5POINT1_SOFT;
 				m_channelCount = 6;
@@ -104,9 +113,9 @@ namespace EmEn::Audio
 		}
 
 		/* Check if the chosen render format is supported. */
-		if ( OpenAL::alcIsRenderFormatSupportedSOFT(m_loopbackDevice.get(), static_cast< ALCsizei >(m_playbackFrequency), channelFormat, ALC_SHORT_SOFT) == ALC_FALSE )
+		if ( OpenAL::alcIsRenderFormatSupportedSOFT(m_loopbackDevice.get(), static_cast< ALCsizei >(m_playbackFrequency.hz()), channelFormat, ALC_SHORT_SOFT) == ALC_FALSE )
 		{
-			TraceError{ClassId} << "Loopback render format (" << m_channelCount << "ch, int16, " << static_cast< int >(m_playbackFrequency) << "Hz) not supported !";
+			TraceError{ClassId} << "Loopback render format (" << m_channelCount << "ch, int16, " << m_playbackFrequency.hz() << "Hz) not supported !";
 
 			this->releaseContexts();
 
@@ -119,7 +128,7 @@ namespace EmEn::Audio
 		const std::array loopbackAttrs{
 			ALC_FORMAT_CHANNELS_SOFT, static_cast< int >(channelFormat),
 			ALC_FORMAT_TYPE_SOFT, ALC_SHORT_SOFT,
-			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency),
+			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency.hz()),
 			ALC_MONO_SOURCES, monoSources,
 			ALC_STEREO_SOURCES, stereoSources,
 			0
@@ -170,7 +179,7 @@ namespace EmEn::Audio
 		}
 
 		const std::array playbackAttrs{
-			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency),
+			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency.hz()),
 			ALC_MONO_SOURCES, 1,
 			ALC_STEREO_SOURCES, 1,
 			ALC_OUTPUT_MODE_SOFT, static_cast< int >(playbackOutputMode),
@@ -266,7 +275,7 @@ namespace EmEn::Audio
 		constexpr ALsizei ChunkSamples = 1024;
 		constexpr size_t NumBuffers = 4;
 
-		const auto frequency = static_cast< ALsizei >(m_playbackFrequency);
+		const auto frequency = static_cast< ALsizei >(m_playbackFrequency.hz());
 		const ALenum alFormat = (m_channelCount == 6) ? alGetEnumValue("AL_FORMAT_51CHN16") : AL_FORMAT_STEREO16;
 
 		/* Create a streaming source and buffers on the playback context. */
@@ -446,7 +455,7 @@ namespace EmEn::Audio
 		const uint32_t riffSize = dataSize + 36;
 		const uint16_t audioFormat = 1; /* PCM */
 		const uint16_t numChannels = m_channelCount;
-		const auto sampleRate = static_cast< uint32_t >(m_playbackFrequency);
+		const auto sampleRate = m_playbackFrequency.hz();
 		const uint32_t byteRate = sampleRate * numChannels * static_cast< uint32_t >(sizeof(int16_t)); /* The WAV header field is 32-bit. */
 		const uint16_t blockAlign = numChannels * sizeof(int16_t);
 		const uint16_t bitsPerSample = 16;

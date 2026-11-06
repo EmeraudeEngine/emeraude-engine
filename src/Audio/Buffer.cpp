@@ -26,10 +26,14 @@
 
 #include "Buffer.hpp"
 
+/* STL inclusions. */
+#include <string>
+
 /* Local inclusions. */
 #include "Manager.hpp"
 #include "Tracer.hpp"
 #include "Utility.hpp"
+#include "WaveFactory/Types.hpp"
 
 namespace EmEn::Audio
 {
@@ -123,11 +127,11 @@ namespace EmEn::Audio
 		{
 			const auto chunk = wave.chunk(chunkIndex, length);
 
-			alBufferData(this->identifier(), format, wave.samplePointer(chunk.offset), static_cast< ALsizei >(chunk.bytes), static_cast< ALsizei >(wave.frequency()));
+			alBufferData(this->identifier(), format, wave.samplePointer(chunk.offset), static_cast< ALsizei >(chunk.bytes), static_cast< ALsizei >(wave.frequency().hz()));
 		}
 		else
 		{
-			alBufferData(this->identifier(), format, wave.samplePointer(0), wave.bytes< ALsizei >(), static_cast< ALsizei >(wave.frequency()));
+			alBufferData(this->identifier(), format, wave.samplePointer(0), wave.bytes< ALsizei >(), static_cast< ALsizei >(wave.frequency().hz()));
 		}
 
 		if ( alGetErrors("alBufferData()", __FILE__, __LINE__) )

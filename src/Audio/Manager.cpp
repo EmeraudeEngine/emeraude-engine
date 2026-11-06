@@ -26,24 +26,48 @@
 
 #include "Manager.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <cstdlib>
-#include <cstring>
+#include <functional>
 #include <iostream>
 #include <ranges>
+#include <sstream>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "AL/alext.h"
+#include "AL/efx.h"
 
 /* Local inclusions. */
-#include "Math/Base.hpp"
-#include "WaveFactory/Synthesizer.hpp"
 #include "Arguments.hpp"
-#include "PrimaryServices.hpp"
-#include "Resources/Manager.hpp"
+#include "Audio/OpenALExtensions.hpp"
+#include "Audio/Types.hpp"
+#include "BlobTrait.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Base.hpp"
 #include "MusicResource.hpp"
+#include "Physics/EnvironmentPhysicalProperties.hpp"
+#include "PrimaryServices.hpp"
+#include "Resources/Container.hpp"
+#include "Resources/Manager.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
 #include "SoundResource.hpp"
 #include "Source.hpp"
+#include "String.hpp"
+#include "Tracer.hpp"
 #include "Utility.hpp"
+#include "WaveFactory/Synthesizer.hpp"
+#include "WaveFactory/Wave.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Audio
+{
+	class PlayableInterface;
+}
 
 namespace EmEn::Audio
 {
@@ -148,9 +172,9 @@ namespace EmEn::Audio
 		}
 
 		/* Checks configuration file */
-		m_playbackFrequency = WaveFactory::toFrequency(settings.getOrSetDefault< int32_t >(AudioPlaybackFrequencyKey, DefaultAudioPlaybackFrequency));
+		m_playbackFrequency = WaveFactory::Frequency::fromHz(settings.getOrSetDefault< int32_t >(AudioPlaybackFrequencyKey, DefaultAudioPlaybackFrequency));
 
-		if ( m_playbackFrequency == WaveFactory::Frequency::Invalid )
+		if ( !m_playbackFrequency.isValid() )
 		{
 			TraceWarning{ClassId} <<
 				"Invalid frequency in settings file! "
@@ -195,7 +219,7 @@ namespace EmEn::Audio
 		TraceInfo{ClassId} << "Audio output mode: " << outputMode << " (0x" << std::hex << outputModeValue << std::dec << ")";
 
 		const std::array attributeList{
-			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency),
+			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency.hz()),
 			ALC_REFRESH, settings.getOrSetDefaultInRange< int32_t >(OpenALRefreshRateKey, DefaultOpenALRefreshRate, MinOpenALRefreshRate, MaxOpenALRefreshRate),
 			ALC_SYNC, settings.getOrSetDefaultInRange< int32_t >(OpenALSyncStateKey, DefaultOpenALSyncState, MinOpenALSyncState, MaxOpenALSyncState),
 			ALC_MONO_SOURCES, settings.getOrSetDefaultInRange< int32_t >(OpenALMaxMonoSourceCountKey, DefaultOpenALMaxMonoSourceCount, MinOpenALMaxMonoSourceCount, MaxOpenALMaxMonoSourceCount),
@@ -264,7 +288,14 @@ namespace EmEn::Audio
 		}
 
 		/* NOTE: Be sure of the playback frequency allowed by this OpenAL context. */
-		m_playbackFrequency = WaveFactory::toFrequency(m_contextAttributes[ALC_FREQUENCY]);
+		if ( const auto contextFrequency = WaveFactory::Frequency::fromHz(m_contextAttributes[ALC_FREQUENCY]); contextFrequency.isValid() )
+		{
+			m_playbackFrequency = contextFrequency;
+		}
+		else
+		{
+			TraceWarning{ClassId} << "The OpenAL context reports " << m_contextAttributes[ALC_FREQUENCY] << " Hz, outside [" << WaveFactory::Frequency::MinimumHz << ", " << WaveFactory::Frequency::MaximumHz << "] Hz: keeping " << m_playbackFrequency.hz() << " Hz.";
+		}
 		m_musicChunkSize = settings.getOrSetDefaultInRange< uint32_t >(AudioMusicChunkSizeKey, DefaultAudioMusicChunkSize, MinAudioMusicChunkSize, MaxAudioMusicChunkSize);
 
 		/* NOTE: The recorder uses a loopback device with a thread-local context.
@@ -526,7 +557,7 @@ namespace EmEn::Audio
 		auto * soundResources = m_resourceManager.container< SoundResource >();
 
 		const auto frequencyPlayback = Manager::frequencyPlayback();
-		const auto sampleRate = static_cast< size_t >(frequencyPlayback);
+		const auto sampleRate = static_cast< size_t >(frequencyPlayback.hz());
 
 		/* INFO sound: A gentle, pleasant two-tone chime (ascending).
 		 * Musical interval: Perfect fifth (C5 -> G5). */
