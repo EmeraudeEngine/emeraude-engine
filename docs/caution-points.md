@@ -6633,6 +6633,19 @@ reproduced in projet-alpha on Linux (RTX 3070 Ti, `App/CEF/TextureUploadStrategy
 copy, barrier, fence — 0 VUID on the same scenario. A transfer that touches an image the frames sample must stay on
 the family that samples it; only a fresh image (no reader yet) may be uploaded on the transfer family.
 
+### A full upload on the transfer queue overtook an older region upload on the graphics queue: a stale band (fixed 2026-11-03)
+
+`Surface::uploadActiveBuffer()` sent a row band covering every row through the FULL upload (`Image::writeData()`,
+transfer queue + graphics finalize) instead of the region one (`Image::writeDataRegion()`, graphics queue), "two
+barriers for nothing". Nothing orders the two queues (`Image::recordPendingSubmission()` only defers destruction), so
+a full upload submitted right after a region one could execute first: the older region then overwrote the fresh rows,
+and they stayed stale until the next paint touched them. Seen on a downstream application as a translucent band of a
+modal backdrop that had finished fading out, cut by a straight edge at the bottom of the next small repaint; traced
+with one line per paint and per upload: `partial 101-1009` (old frame) → `full 0-1009` (new frame) → `partial 32-166`
+(new) left rows 166+ old. A resident image (`SHADER_READ_ONLY_OPTIMAL`) now always takes the region path, whole image
+included; `writeData()` only uploads a fresh image, which has nothing earlier to race.
+`docs/todo/overlay-surface-reupload-races-on-two-queues.md` keeps the synchronization-validation re-run.
+
 ### ⚠️⚠️ A DEVICE_LOST with 0 VUID and `READ_INVALID addr=0x0` = a shader read through a NULL buffer address (2026-10-07, FIXED)
 
 > [!CAUTION]
