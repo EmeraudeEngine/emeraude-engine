@@ -141,5 +141,8 @@ cannot give on demand; 0 `VUID-`):
   fix: `"status":"Error","reason":"Success"`);
 - console conformance 5247/5247, MCP conformance 2019/2019.
 
-`APIClient` is pure C++: macOS and Windows build the change; the run itself was not replayed there (owner,
-2026-11-08).
+`APIClient` is pure C++: the full run was not replayed on macOS and Windows (owner, 2026-11-08). The peers built
+`cb642962` (0 warning, MSVC Release + Debug, AppleClang) and ran a test instance (0 `VUID-`): `status(9999)` →
+`Unknown` with its note, and `events()` after a GitHub GET → `RequestStarted`, `ResponseReceived`, `RequestsFinished`,
+all `onOwnerThread: true`. MCP conformance 2019/0 on both; console conformance 5247/0 on Windows, 5235/0 on macOS
+(the 12-check gap is older than this lot — 4870 vs 4882 in the Ave Robustus II record — and not yet explained).
