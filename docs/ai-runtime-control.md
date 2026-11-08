@@ -107,8 +107,15 @@ Windows). Use the Python client for anything else.
 **The conformance bench — `tools/console-conformance.py`**: run it against a live instance after any
 change to `src/Console/` or to a command. It checks the wire format (banner, one ordered line per
 request, transport limits) and the typed contract of EVERY command (declared, arguments validated
-before running) without executing anything but read-only, argument-less commands. 2090 checks pass
-on Linux (2026-09-27); it has been shown to fail against a server that breaks the contract.
+before running) without executing anything but read-only, argument-less commands. It has been shown
+to fail against a server that breaks the contract.
+
+> ⚠️ **The expected total depends on the GPU, not only on the commands** (2026-11-08): each output of an
+> executed command costs 3 checks, and `PostProcess.listEffects()` prints one line per chain occupant. A
+> machine with an acceleration-structure builder registers RTGI, RTR, RTAO and RTContactShadows
+> (`PostProcessStack.cpp`), one without it does not: Linux (RTX 3070 Ti) and Windows (RTX 3500 Ada) pass
+> 5247 checks, macOS (M6, MoltenVK) 5235 — the same 920 commands and 360 executed, `listEffects()` 19
+> outputs against 15. Compare two machines with `--verbose` (per-command output counts), never the total alone.
 
 ### Argument syntax and validation
 

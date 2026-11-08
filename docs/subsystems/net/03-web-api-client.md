@@ -145,4 +145,6 @@ cannot give on demand; 0 `VUID-`):
 `cb642962` (0 warning, MSVC Release + Debug, AppleClang) and ran a test instance (0 `VUID-`): `status(9999)` →
 `Unknown` with its note, and `events()` after a GitHub GET → `RequestStarted`, `ResponseReceived`, `RequestsFinished`,
 all `onOwnerThread: true`. MCP conformance 2019/0 on both; console conformance 5247/0 on Windows, 5235/0 on macOS
-(the 12-check gap is older than this lot — 4870 vs 4882 in the Ave Robustus II record — and not yet explained).
+(the 12-check gap is by design, not a defect: without an acceleration-structure builder the M6 never registers
+the four ray-traced occupants, so `PostProcess.listEffects()` prints 15 outputs instead of 19, 3 checks each — see
+[`ai-runtime-control.md`](../../ai-runtime-control.md) § The conformance bench).
