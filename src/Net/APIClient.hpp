@@ -24,20 +24,24 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-
 #pragma once
 
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -47,15 +51,29 @@
 
 /* Local inclusions for usages. */
 #include "APIRequestItem.hpp"
+#include "Hash/FNV1a.hpp"
 #include "Mutex.hpp"
+#include "Net/Types.hpp"
 #include "Network/HTTPRequest.hpp"
-#include "Network/URI.hpp"
+#include "Network/HTTPSClient.hpp"
+#include "ObserverTrait.hpp"
 #include "ThreadPool.hpp"
+#include "ThreadSafety.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
 	class Settings;
+}
+
+namespace EmEn::Base::Network
+{
+	class URI;
+}
+
+namespace Json
+{
+	class Value;
 }
 
 namespace EmEn::Net
@@ -89,7 +107,7 @@ namespace EmEn::Net
 	 * @note [OBS][STATIC-OBSERVABLE]
 	 * @extends EmEn::ServiceInterface This is a service.
 	 * @extends EmEn::Base::ObservableTrait Emits the request lifecycle notifications.
-	 * @extends EmEn::Console::ControllableTrait Drivable from the console (request, get, post, status, list, cancel, release).
+	 * @extends EmEn::Console::ControllableTrait Drivable from the console (request, get, post, status, list, cancel, release, watchEvents, events…).
 	 */
 	class EMEN_LEAN_API APIClient final : public ServiceInterface, public Base::ObservableTrait, public Console::ControllableTrait
 	{
@@ -196,7 +214,8 @@ namespace EmEn::Net
 			/**
 			 * @brief Returns the status of a ticket [Thread-safe].
 			 * @param ticket A ticket from request().
-			 * @return APIRequestStatus Error for an unknown or already released ticket.
+			 * @return APIRequestStatus Unknown for a ticket not held: never issued, released, or dropped by the retention
+			 * ceiling. ⚠️ It was Error until 2026-11-08, which made an evicted response look like a failed call.
 			 */
 			[[nodiscard]]
 			APIRequestStatus requestStatus (int ticket) const noexcept;
@@ -243,6 +262,8 @@ namespace EmEn::Net
 
 			/**
 			 * @brief Returns why a ticket failed, and the HTTP status when the exchange completed.
+			 * @note Meaningful only for a ticket whose requestStatus() is Error: a ticket that is not held answers
+			 * (Success, 0) — read requestStatus() first.
 			 * @param ticket A ticket from request().
 			 * @return std::pair< Base::Network::DownloadOutcome, uint16_t >
 			 */
@@ -379,6 +400,79 @@ namespace EmEn::Net
 				NotificationCode code{Unknown};
 			};
 
+			/**
+			 * @brief The console's notification recorder (watchEvents() / events()): a REAL observer of this service,
+			 * so the lifecycle notifications are verified the way a consumer receives them.
+			 * @details Opt-in (owner, 2026-11-08): it observes the service only between watchEvents(true) and
+			 * watchEvents(false) — Core deliberately observes nothing here, an API response wakes no one unless asked.
+			 * A ring of Capacity entries: the oldest is overwritten, dropped() counts them.
+			 * @note Main thread only, no lock: notify() runs from dispatchCompleted() (Core's main loop) and the
+			 * console commands from Console::Controller::poll() (same thread). Whether each notification really ran
+			 * on the thread that constructed the service (the main thread, through Core's PrimaryServices) is what
+			 * Entry::onOwnerThread records.
+			 */
+			class NotificationLog final : public Base::ObserverTrait
+			{
+				public:
+
+					/** @brief How many notifications are kept. */
+					static constexpr size_t Capacity{64};
+
+					/** @brief One received notification. */
+					struct Entry
+					{
+						uint64_t sequence{0};		/* 1 for the first notification since clear(). */
+						uint64_t elapsedMS{0};		/* Since clear(). */
+						int ticket{InvalidTicket};	/* InvalidTicket for RequestsFinished (no payload). */
+						NotificationCode code{Unknown};
+						bool onOwnerThread{false};	/* Received on the thread that constructed the service. */
+					};
+
+					/** @brief Constructs an empty log; the constructing thread is the owner thread. */
+					NotificationLog () noexcept = default;
+
+					/** @brief Forgets every entry and restarts the clock and the sequence. */
+					void clear () noexcept;
+
+					/**
+					 * @brief Returns how many notifications were received since clear().
+					 * @return uint64_t
+					 */
+					[[nodiscard]]
+					uint64_t
+					received () const noexcept
+					{
+						return m_received;
+					}
+
+					/**
+					 * @brief Returns how many entries are kept (at most Capacity).
+					 * @return size_t
+					 */
+					[[nodiscard]]
+					size_t keptCount () const noexcept;
+
+					/**
+					 * @brief Returns a kept entry, the oldest first.
+					 * @pre index < keptCount().
+					 * @param index The index, 0 being the oldest kept entry.
+					 * @return const Entry &
+					 */
+					[[nodiscard]]
+					const Entry & kept (size_t index) const noexcept;
+
+				private:
+
+					/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
+					[[nodiscard]]
+					bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;
+
+					std::array< Entry, Capacity > m_entries{};
+					std::chrono::steady_clock::time_point m_start{std::chrono::steady_clock::now()};
+					uint64_t m_received{0};
+					std::thread::id m_ownerThread{std::this_thread::get_id()};
+			};
+
 			/** @brief TLS context + HTTPS client, confined to the TU. */
 			struct Impl;
 
@@ -427,6 +521,8 @@ namespace EmEn::Net
 			bool m_enabled{false};
 			bool m_shuttingDown{false};
 			bool m_retentionWarned{false};
+			/* NOTE: Destroyed before the ObservableTrait base: its ObserverTrait destructor detaches it from this service. */
+			NotificationLog m_notificationLog;
 			/* NOTE: LAST (Ave Robustus II): the requests read the members above through `this`; onTerminate() stops and
 			 * waits for them, and the group's destruction again for any other path. */
 			Base::TaskGroup m_requests;

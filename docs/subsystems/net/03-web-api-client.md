@@ -38,6 +38,11 @@ if ( apiClient.requestStatus(ticket) == APIRequestStatus::Done )
   (`Core/Net/API/MaxRetainedTickets`, default 64) drops the **oldest terminal** tickets when the
   caller forgets, and logs **once** that it had to. ⚠️ That is a safety net, not a policy: the
   ticket it drops may be one nobody read yet. A ticket still in flight is **never** dropped.
+- **A ticket that is not held is `APIRequestStatus::Unknown`** (2026-11-08): never issued, released, or dropped by
+  the ceiling. It was `Error` before, and `requestFailure()` then answered `Success`: an evicted response read as a
+  failed call whose reason was "Success" (found by the runtime run below). `requestFailure()` is meaningful only
+  for an `Error` ticket. A consumer's `switch` over `APIRequestStatus` must handle `Unknown` (a `default:` already
+  does: a downstream application that polls the status treats it as before).
 - **`cancel(ticket)` frees the caller, not the socket.** `HTTPSClient` is synchronous and has no
   cancellation point: a call already on the wire runs to completion on its worker and its response
   is thrown away on arrival. A cancelled ticket emits **no** notification.
@@ -68,9 +73,16 @@ forever after a batch that ended on a cancellation.
 ⚠️ `Core` registers the service to the console but does **not** observe it: unlike a download, an
 API response is the business of whoever asked for it. Consumers observe `Net::APIClient` directly.
 
+**The console's recorder** (owner, 2026-11-08): `watchEvents(1)` attaches a private observer
+(`APIClient::NotificationLog`, a `Base::ObserverTrait`) and clears its log; `events()` returns what it received —
+`sequence`, `elapsedMS`, `code`, `ticket` (none for `RequestsFinished`), and `onOwnerThread` (received on the thread
+that constructed the service, the main thread); `watchEvents(0)` detaches it. Opt-in, so Core's "nobody wakes on
+a response unless asked" holds. A ring of 64 entries without allocation (`dropped` counts the overwritten ones);
+main thread only, no lock: `dispatchCompleted()` and the console's `poll()` both run there.
+
 ### Console
 
-`Core.NetAPIClientService.{request,get,post,status,header,list,release,cancel,setHeader,removeHeader,headers,isEnabled}`.
+`Core.NetAPIClientService.{request,get,post,status,header,list,release,cancel,setHeader,removeHeader,headers,watchEvents,events,isEnabled}`.
 
 > [!CAUTION]
 > **Owner decision, 2026-08-28: this console surface is FULLY EXPOSED.** `request()` accepts an
@@ -106,6 +118,28 @@ paragraph said "only ever run on Linux", the board item said "never executed"; b
 - the console on Linux (2026-10-07, [`07-critical-points.md`](07-critical-points.md) § the redacted URL): `get()`
   answered `HTTP 503` and `list()` showed the ticket.
 
-Still never run anywhere: the observer notifications on the main thread, the retention ceiling, `cancel()` on a call
-in flight, a body that declares JSON and is not, and most of the console surface — engine item
-`apiclient-runtime-verification`.
+**The whole service ran on Linux on 2026-11-08** (test instance, ports 7780 / 17779, a settings copy with
+`MaxRetainedTickets = 8` and `CABundleFile` = a scratch test CA; a local Python HTTPS server for what a public server
+cannot give on demand; 0 `VUID-`):
+- **notifications**, through `watchEvents()` / `events()`: one call → `RequestStarted`, `ResponseReceived`,
+  `RequestsFinished`; a batch of two → ONE `RequestStarted`, two `ResponseReceived` in completion order, ONE
+  `RequestsFinished`; every one `onOwnerThread: true`; a 70-call burst wrapped the 64-entry ring exactly (210
+  received, 146 dropped, sequences 147-210 kept);
+- **`cancel()`** of the only call in flight (a 3 s reply): `Cancelled`, NO `ResponseReceived`, `RequestsFinished`
+  still emitted when the exchange ended (3.0 s); a second `cancel()` refused; `release()` refused while in flight;
+  cancelling one of two: the other `ResponseReceived`, ONE `RequestsFinished` after both;
+- **JSON**: a JSON body → `jsonParsed: true`; a body declaring `application/json` that is not → `Done` 200,
+  `jsonParsed: false`;
+- **strict reception** (base, 2026-11-07): a non-token header name, a control character in a header value or in the
+  reason phrase → `Error`, reason `Protocol`, the base refusal in the log;
+- `404` → `Done` 404; `post()` and `request(PUT, …)` → 201 with the default `Authorization` sent, `removeHeader()`
+  stopped it; `header(ticket, ETag)`; `list()`; `release()` (a second one refused);
+- **public servers**: GitHub raw → 200 (`text/plain`); `expired.badssl.com` → `Error` `TLSFailure`; the GitHub API
+  → 200, `jsonParsed: true`, `ETag` read; a missing GitHub endpoint → `Done` 404;
+- **retention**: two bursts of 12 at a ceiling of 8 → 8 held, the oldest dropped, the warning logged ONCE;
+- **`Unknown`**: a never-issued, a released and an evicted ticket → `"status":"Unknown"` with a note (before the
+  fix: `"status":"Error","reason":"Success"`);
+- console conformance 5247/5247, MCP conformance 2019/2019.
+
+`APIClient` is pure C++: macOS and Windows build the change; the run itself was not replayed there (owner,
+2026-11-08).

@@ -24,29 +24,36 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-
 #include "APIClient.hpp"
+
+/* Project configuration. */
+#include "emeraude_config.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
 #include <cctype>
 #include <chrono>
 #include <optional>
-#include <ranges>
+#include <stop_token>
 #include <string_view>
 
 /* Third-party inclusions. */
-#include "Network/asio_throw_exception.hpp"
 #include "asio/ssl.hpp"
+#include "json/json.h"
+#include "Network/asio_throw_exception.hpp"
 
 /* Local inclusions. */
-#include "emeraude_base_config.hpp"
+#include "Any.hpp"
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
 #include "IO/IO.hpp"
+#include "Net/APIRequestItem.hpp"
+#include "Network/HTTPResponse.hpp"
 #include "Network/HTTPSClient.hpp"
 #include "Network/TrustStore.hpp"
-#include "Settings.hpp"
+#include "Network/URI.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
 #include "String.hpp"
 #include "Tracer.hpp"
 
@@ -687,7 +694,7 @@ namespace EmEn::Net
 
 		const auto itemIt = m_items.find(ticket);
 
-		return itemIt == m_items.end() ? APIRequestStatus::Error : itemIt->second.status();
+		return itemIt == m_items.end() ? APIRequestStatus::Unknown : itemIt->second.status();
 	}
 
 	uint16_t

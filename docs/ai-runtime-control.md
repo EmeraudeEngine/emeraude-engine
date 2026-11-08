@@ -610,10 +610,13 @@ python3 tools/remote-console.py 'Core.NetAPIClientService.release(1)'     # ⚠�
 | `release(ticket)` | **Drops the response.** Do it once read |
 | `cancel(ticket)` | Abandons a ticket — see the warning below |
 | `setHeader(Name, value)` / `removeHeader(Name)` / `headers()` | The default headers sent with every call (where an `Authorization` belongs) |
+| `watchEvents(1\|0)` / `events()` | Records the service's notifications (`RequestStarted`, `ResponseReceived`, `RequestsFinished`) and lists them with their ticket and whether they ran on the main thread; off by default, `watchEvents(1)` clears the log |
 
 ⚠️ **A ticket status of `Done` does NOT mean the API accepted the call.** `Done` means a response
 arrived; a 404 or a 422 is `Done`. Read `httpStatus`. Only a call that never completed is `Error`,
 and then `reason` names the cause (`TLSFailure`, `Unreachable`, `Timeout`, `BadRequest`, …).
+A ticket that is not held — never issued, released, or dropped by the retention ceiling — is `Unknown`, with a
+`note` saying so (it read `Error` / `Success` before 2026-11-08).
 
 ⚠️ **`cancel()` does not interrupt anything on the wire.** The HTTPS client is synchronous and has
 no cancellation point: a call already in flight runs to completion on its worker and its response

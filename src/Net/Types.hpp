@@ -76,7 +76,9 @@ namespace EmEn::Net
 		InFlight,	/* A worker is performing the exchange. */
 		Error,		/* Terminal: refused, or the exchange never completed — there is no response. */
 		Done,		/* Terminal: a response arrived. ⚠️ Says NOTHING about the HTTP status: a 404 is Done. */
-		Cancelled	/* Terminal: the caller stopped caring; the response, if any, was dropped. */
+		Cancelled,	/* Terminal: the caller stopped caring; the response, if any, was dropped. */
+		Unknown		/* Not held: never issued, released, or dropped by the retention ceiling (Core/Net/API/MaxRetainedTickets).
+					 * Not an Error: nothing failed, there is simply no ticket to read (2026-11-08). */
 	};
 
 	/**
@@ -105,6 +107,9 @@ namespace EmEn::Net
 
 			case APIRequestStatus::Cancelled :
 				return "Cancelled";
+
+			case APIRequestStatus::Unknown :
+				break;
 		}
 
 		return "Unknown";

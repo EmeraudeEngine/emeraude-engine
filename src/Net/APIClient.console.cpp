@@ -24,14 +24,34 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-
 #include "APIClient.hpp"
 
 /* STL inclusions. */
+#include <array>
+#include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <iterator>
+#include <optional>
 #include <sstream>
+#include <string>
+#include <thread>
+#include <utility>
+#include <vector>
+
+/* Third-party inclusions. */
+#include "json/json.h"
 
 /* Local inclusions. */
+#include "AnyValue.hpp"
+#include "Console/CommandResult.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
+#include "Net/Types.hpp"
+#include "Network/HTTPRequest.hpp"
 #include "Network/HTTPSClient.hpp"
+#include "Network/URI.hpp"
+#include "SettingKeys.hpp"
 
 namespace EmEn::Net
 {
@@ -94,6 +114,89 @@ namespace EmEn::Net
 
 			return escaped;
 		}
+
+		/**
+		 * @brief Returns the name of a notification code, as the console prints it.
+		 * @param code The code.
+		 * @return const char *
+		 */
+		[[nodiscard]]
+		const char *
+		notificationName (APIClient::NotificationCode code) noexcept
+		{
+			switch ( code )
+			{
+				case APIClient::RequestStarted :
+					return "RequestStarted";
+
+				case APIClient::ResponseReceived :
+					return "ResponseReceived";
+
+				case APIClient::RequestsFinished :
+					return "RequestsFinished";
+
+				case APIClient::Unknown :
+				case APIClient::MaxEnum :
+					break;
+			}
+
+			return "Unknown";
+		}
+	}
+
+	void
+	APIClient::NotificationLog::clear () noexcept
+	{
+		m_entries.fill(Entry{});
+		m_start = std::chrono::steady_clock::now();
+		m_received = 0;
+	}
+
+	size_t
+	APIClient::NotificationLog::keptCount () const noexcept
+	{
+		return m_received < Capacity ? static_cast< size_t >(m_received) : Capacity;
+	}
+
+	const APIClient::NotificationLog::Entry &
+	APIClient::NotificationLog::kept (size_t index) const noexcept
+	{
+		/* The oldest kept entry sits right after the newest once the ring has wrapped. */
+		const auto oldest = m_received < Capacity ? uint64_t{0} : m_received % Capacity;
+
+		/* The slot is < Capacity by the modulo. */
+		return *std::next(m_entries.cbegin(), static_cast< std::ptrdiff_t >((oldest + index) % Capacity));
+	}
+
+	bool
+	APIClient::NotificationLog::onNotification (const Base::ObservableTrait * /*observable*/, int notificationCode, const Base::Any & data) noexcept
+	{
+		Entry entry{};
+		entry.sequence = m_received + 1;
+		entry.elapsedMS = static_cast< uint64_t >(std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - m_start).count());
+		entry.onOwnerThread = std::this_thread::get_id() == m_ownerThread;
+
+		/* An out-of-range code is recorded as Unknown, never cast blindly. */
+		if ( notificationCode > Unknown && notificationCode < MaxEnum )
+		{
+			entry.code = static_cast< NotificationCode >(notificationCode);
+		}
+
+		/* RequestsFinished carries no payload: reading one would log a mismatch. */
+		if ( entry.code == RequestStarted || entry.code == ResponseReceived )
+		{
+			if ( const auto * ticket = Base::anyValue< int >(data, "Net::APIClient::NotificationLog") )
+			{
+				entry.ticket = *ticket;
+			}
+		}
+
+		/* The slot is < Capacity by the modulo. */
+		*std::next(m_entries.begin(), static_cast< std::ptrdiff_t >(m_received % Capacity)) = entry;
+		m_received++;
+
+		/* Keep observing: watchEvents(false) is what detaches it. */
+		return true;
 	}
 
 	void
@@ -173,7 +276,7 @@ namespace EmEn::Net
 				return Console::CommandResult::success("Ticket #" + std::to_string(ticket) + ". Poll with status(" + std::to_string(ticket) + ").");
 			});
 
-		this->bindCommand("status", "Returns a ticket as JSON (status, httpStatus, contentType, body when Done, reason when Error). A ticket is Done even on a 404: read httpStatus.",
+		this->bindCommand("status", "Returns a ticket as JSON (status, httpStatus, contentType, body when Done, reason when Error). A ticket is Done even on a 404: read httpStatus. Unknown = not held (never issued, released, or dropped by the retention ceiling).",
 			{
 				{"ticket", "The ticket number returned by request(), get() or post()."}
 			},
@@ -192,6 +295,11 @@ namespace EmEn::Net
 						<< R"(,"bodyBytes":)" << body.size()
 						<< R"(,"jsonParsed":)" << [this, ticket] { Json::Value value; return this->responseJSON(ticket, value) ? "true" : "false"; }()
 						<< R"(,"body":")" << escapeJSON(body) << '"';
+				}
+
+				if ( status == APIRequestStatus::Unknown )
+				{
+					json << R"(,"note":"not held: never issued, released, or dropped by the retention ceiling ()" << NetAPIMaxRetainedTicketsKey << ")\"";
 				}
 
 				if ( status == APIRequestStatus::Error )
@@ -323,6 +431,59 @@ namespace EmEn::Net
 			}
 
 			json << ']';
+
+			return Console::CommandResult::json(json.str());
+		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("watchEvents", "Starts (1) or stops (0) recording the service's notifications (RequestStarted, ResponseReceived, RequestsFinished) for events(). Starting clears the log. Off by default: nothing observes API responses unless asked.",
+			{
+				{"enabled", "1 (true) attaches the recorder and clears its log, 0 (false) detaches it (the log is kept for events())."}
+			},
+			[this] (bool enabled) {
+				if ( !enabled )
+				{
+					m_notificationLog.forget(this);
+
+					return Console::CommandResult::success("Notification recording stopped; events() still shows the log.");
+				}
+
+				m_notificationLog.clear();
+
+				if ( !m_notificationLog.isObserving(this) )
+				{
+					m_notificationLog.observe(this);
+				}
+
+				return Console::CommandResult::success("Notification recording started, log cleared: read it with events().");
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("events", "Returns the notifications recorded since watchEvents(1), oldest first, as JSON: sequence, elapsedMS, code, ticket (none for RequestsFinished), and whether it ran on the thread that built the service (the main thread).", [this] () {
+			std::stringstream json;
+			const auto keptCount = m_notificationLog.keptCount();
+
+			json << R"({"watching":)" << ( m_notificationLog.isObserving(this) ? "true" : "false" )
+				<< R"(,"received":)" << m_notificationLog.received()
+				<< R"(,"dropped":)" << ( m_notificationLog.received() - keptCount )
+				<< R"(,"events":[)";
+
+			for ( size_t index = 0; index < keptCount; ++index )
+			{
+				const auto & entry = m_notificationLog.kept(index);
+
+				json << ( index == 0 ? "" : "," )
+					<< R"({"sequence":)" << entry.sequence
+					<< R"(,"elapsedMS":)" << entry.elapsedMS
+					<< R"(,"code":")" << notificationName(entry.code) << '"';
+
+				if ( entry.ticket != InvalidTicket )
+				{
+					json << R"(,"ticket":)" << entry.ticket;
+				}
+
+				json << R"(,"onOwnerThread":)" << ( entry.onOwnerThread ? "true" : "false" ) << '}';
+			}
+
+			json << "]}";
 
 			return Console::CommandResult::json(json.str());
 		}, Console::CommandHint::ReadOnly);
