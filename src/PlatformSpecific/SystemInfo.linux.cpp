@@ -47,6 +47,7 @@
 /* Local inclusions. */
 #include "IO/IO.hpp"
 #include "String.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific
 {
@@ -265,7 +266,7 @@ namespace EmEn::PlatformSpecific
 				}
 				else
 				{
-					std::cerr << "Failed to get machine UUID !" "\n";
+					TraceError{SystemInfo::ClassId} << "Failed to get machine UUID !";
 				}
 			}
 		}

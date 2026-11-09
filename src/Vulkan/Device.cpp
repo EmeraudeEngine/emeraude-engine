@@ -36,12 +36,11 @@
  * causing VMA to detect non-empty memory blocks during vmaDestroyAllocator().
  * The default assert() calls abort(), which truncates RenderDoc captures
  * and prevents proper engine shutdown. This override logs the error instead. */
-#include <cstdio>
 #define VMA_ASSERT(expr) \
 	do { \
 		if ( !(expr) ) \
 		{ \
-			fprintf(stderr, "[VMA] Assertion failed: %s (%s:%d)\n", #expr, __FILE__, __LINE__); \
+			EmEn::TraceError{"VMA"} << "Assertion failed: " << #expr << " (" << __FILE__ << ':' << __LINE__ << ')'; \
 		} \
 	} while (false)
 
@@ -51,6 +50,10 @@
 #define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
 #define VMA_IMPLEMENTATION
 
+/* NOTE: VMA_ASSERT reports through the Tracer (owner, 2026-11-09: no direct stream access): its declaration must
+ * precede the VMA implementation that expands the macro. */
+#include "Tracer.hpp"
+
 /* NOTE: The defines above (VMA_ASSERT override, VMA_IMPLEMENTATION) must precede
  * this include — the VMA implementation is compiled in this TU only. */
 #include "vk_mem_alloc.h"
@@ -58,25 +61,30 @@
 #include "Device.hpp"
 
 /* STL inclusions. */
-#include <array>
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
-#include <ranges>
 #include <span>
 #include <sstream>
+#include <string_view>
 #include <vector>
 
 /* Third-party inclusions. */
 #include "magic_enum/magic_enum.hpp"
 
 /* Local inclusions. */
-#include "Utility.hpp"
-#include "Instance.hpp"
-#include "DeviceRequirements.hpp"
+#include "BlobTrait.hpp"
+#include "CoreTypes.hpp"
 #include "DeferredDestructor.hpp"
-#include "Tracer.hpp"
+#include "DeviceRequirements.hpp"
+#include "Instance.hpp"
+#include "Utility.hpp"
+#include "Vulkan/DeviceQueueConfiguration.hpp"
+#include "Vulkan/PendingSubmissions.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
+#include "Vulkan/Types.hpp"
 
 namespace EmEn::Vulkan
 {

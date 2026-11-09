@@ -26,8 +26,9 @@
 
 #include "Types.hpp"
 
-/* STL inclusions. */
-#include <iostream>
+/* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {
@@ -217,7 +218,7 @@ namespace EmEn::Graphics
 			return RenderPassType::None;
 		}
 
-		std::cerr << "to_RenderPassType() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
+		TraceError{"Graphics::Types"} << "to_RenderPassType() : Unknown '" << value << "' type ! Returning 'None' by default.";
 
 		return RenderPassType::None;
 	}
@@ -258,7 +259,7 @@ namespace EmEn::Graphics
 			return ModelMatrixType::Invalid;
 		}
 
-		std::cerr << "to_ModelMatrixType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.\n";
+		TraceError{"Graphics::Types"} << "to_ModelMatrixType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.";
 
 		return ModelMatrixType::Invalid;
 	}
@@ -355,7 +356,7 @@ namespace EmEn::Graphics
 			return FillingType::None;
 		}
 
-		std::cerr << "to_FillingType() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
+		TraceError{"Graphics::Types"} << "to_FillingType() : Unknown '" << value << "' type ! Returning 'None' by default.";
 
 		return FillingType::None;
 	}
@@ -405,7 +406,7 @@ namespace EmEn::Graphics
 		 * subtracts the background instead of screening it. Emissive surfaces add. */
 		if ( value == ScreenBlendingString )
 		{
-			std::cerr << "to_BlendingMode() : '" << value << "' blending is undefined in an HDR (nits) target ! Returning 'Add'.\n";
+			TraceError{"Graphics::Types"} << "to_BlendingMode() : '" << value << "' blending is undefined in an HDR (nits) target ! Returning 'Add'.";
 
 			return BlendingMode::Add;
 		}
@@ -415,7 +416,7 @@ namespace EmEn::Graphics
 			return BlendingMode::None;
 		}
 
-		std::cerr << "to_BlendingMode() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
+		TraceError{"Graphics::Types"} << "to_BlendingMode() : Unknown '" << value << "' type ! Returning 'None' by default.";
 
 		return BlendingMode::None;
 	}
@@ -656,7 +657,7 @@ namespace EmEn::Graphics
 			return ComponentType::Invalid;
 		}
 
-		std::cerr << "to_ComponentType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.\n";
+		TraceError{"Graphics::Types"} << "to_ComponentType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.";
 
 		return ComponentType::Invalid;
 	}
@@ -777,7 +778,7 @@ namespace EmEn::Graphics
 			return Topology::Invalid;
 		}
 
-		std::cerr << "to_TopologyType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.\n";
+		TraceError{"Graphics::Types"} << "to_TopologyType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.";
 
 		return Topology::Invalid;
 	}
@@ -834,7 +835,7 @@ namespace EmEn::Graphics
 			return PolygonMode::Invalid;
 		}
 
-		std::cerr << "to_PolygonMode() : Unknown '" << value << "' type ! Returning 'Invalid' by default.\n";
+		TraceError{"Graphics::Types"} << "to_PolygonMode() : Unknown '" << value << "' type ! Returning 'Invalid' by default.";
 
 		return PolygonMode::Invalid;
 	}
@@ -886,7 +887,7 @@ namespace EmEn::Graphics
 			return CullingMode::None;
 		}
 
-		std::cerr << "to_CullingMode() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
+		TraceError{"Graphics::Types"} << "to_CullingMode() : Unknown '" << value << "' type ! Returning 'None' by default.";
 
 		return CullingMode::None;
 	}
@@ -935,7 +936,7 @@ namespace EmEn::Graphics
 			return BufferType::Invalid;
 		}
 
-		std::cerr << "to_BufferType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.\n";
+		TraceError{"Graphics::Types"} << "to_BufferType() : Unknown '" << value << "' type ! Returning 'Invalid' by default.";
 
 		return BufferType::Invalid;
 	}
@@ -1078,7 +1079,7 @@ namespace EmEn::Graphics
 			return VertexAttributeType::BoneWeight;
 		}
 
-		std::cerr << "to_VertexAttributeType() : Unknown '" << value << "' type ! Returning 'Position' by default.\n";
+		TraceError{"Graphics::Types"} << "to_VertexAttributeType() : Unknown '" << value << "' type ! Returning 'Position' by default.";
 
 		return VertexAttributeType::Position;
 	}
@@ -1143,7 +1144,7 @@ namespace EmEn::Graphics
 			return CubemapFace::NegativeZ;
 		}
 
-		std::cerr << "to_CubemapFace() : Unknown '" << value << "' type ! Returning 'PositiveX' by default.\n";
+		TraceError{"Graphics::Types"} << "to_CubemapFace() : Unknown '" << value << "' type ! Returning 'PositiveX' by default.";
 
 		return CubemapFace::PositiveX;
 	}
@@ -1200,7 +1201,7 @@ namespace EmEn::Graphics
 			return FilterQuality::Trilinear;
 		}
 
-		std::cerr << "to_FilterQuality() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
+		TraceError{"Graphics::Types"} << "to_FilterQuality() : Unknown '" << value << "' type ! Returning 'None' by default.";
 
 		return FilterQuality::None;
 	}
@@ -1353,7 +1354,7 @@ namespace EmEn::Graphics
 			return ShapeType::Axis;
 		}
 
-		std::cerr << "to_ShapeType() : Unknown '" << value << "' type ! Returning 'Cube' by default.\n";
+		TraceError{"Graphics::Types"} << "to_ShapeType() : Unknown '" << value << "' type ! Returning 'Cube' by default.";
 
 		return ShapeType::Cube;
 	}

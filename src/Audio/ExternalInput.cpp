@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <chrono>
 #include <cstddef>
-#include <iostream>
 #include <memory>
 #include <ranges>
 #include <thread>
@@ -146,14 +145,16 @@ namespace EmEn::Audio
 
 		if ( m_showInformation )
 		{
-			std::cout << "[OpenAL] Capture audio devices:" "\n";
+			TraceInfo trace{ClassId};
+
+			trace << "OpenAL Capture audio devices :";
 
 			for ( const auto & deviceName : m_availableDevices )
 			{
-				std::cout << " - " << deviceName << '\n';
+				trace << "\n - " << deviceName;
 			}
 
-			std::cout << "Default: " << m_selectedDeviceName << '\n';
+			trace << "\nDefault: " << m_selectedDeviceName;
 		}
 
 		/* Save available capture devices to settings for easy editing. */

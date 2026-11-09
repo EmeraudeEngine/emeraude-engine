@@ -27,18 +27,21 @@
 #include "GeometryDataPrinter.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
 #include <fstream>
-#include <iostream>
+#include <optional>
 #include <sstream>
 #include <vector>
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "BlobTrait.hpp"
 #include "Constants.hpp"
 #include "Graphics/Types.hpp"
-#include "BlobTrait.hpp"
-#include "VertexFactory/ShapeGenerator.hpp"
+#include "String.hpp"
 #include "Tracer.hpp"
+#include "VertexFactory/ShapeGenerator.hpp"
+#include "VertexFactory/Types.hpp"
 
 namespace EmEn::Tool
 {
@@ -158,7 +161,7 @@ namespace EmEn::Tool
 
 		if ( m_outputFile.empty() )
 		{
-			std::cout << "\n\n" << this->printData() << "\n\n";
+			TraceInfo{ClassId} << "\n\n" << this->printData() << "\n";
 		}
 		else
 		{

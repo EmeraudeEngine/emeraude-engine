@@ -27,11 +27,13 @@
 #include "DebugMessenger.hpp"
 
 /* STL inclusions. */
-#include <iostream>
+#include <memory>
 #include <sstream>
 
 /* Local inclusions. */
+#include "CoreTypes.hpp"
 #include "Instance.hpp"
+#include "Logging/Severity.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Vulkan
@@ -130,7 +132,8 @@ namespace EmEn::Vulkan
 				break;
 		}
 
-		auto isError = false;
+		/* NOTE: The Tracer's severity follows the message's (2026-11-09: a loader WARNING was traced as an error). */
+		auto severity = Severity::Info;
 
 		switch ( messageSeverity )
 		{
@@ -143,20 +146,20 @@ namespace EmEn::Vulkan
 				break;
 
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT :
-				isError = true;
+				severity = Severity::Warning;
 
 				output << "[WARNING]";
 				break;
 
 			case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT :
-				isError = true;
+				severity = Severity::Error;
 
 				output << "[ERROR]";
 				break;
 
 			/* NOTE: A Vulkan enumeration: the driver may send a value this header does not know (MAX_ENUM included). */
 			default:
-				isError = true;
+				severity = Severity::Error;
 
 				output << "[UNKNOWN]";
 				break;
@@ -166,14 +169,7 @@ namespace EmEn::Vulkan
 			"[ID:" << pCallbackData->pMessageIdName << " #" << pCallbackData->messageIdNumber << "]" "\n"
 			"[MESSAGE:" << pCallbackData->pMessage << "]";
 
-		if ( isError )
-		{
-			std::cerr << output.str() << "\n";
-		}
-		else
-		{
-			std::cout << output.str() << "\n";
-		}
+		Tracer::getInstance().trace(severity, ClassId, output.str());
 
 		return 1;
 	}

@@ -255,8 +255,8 @@ emeraude-base: `-fno-exceptions` on GCC/Clang, `/EHs- /EHc-` on MSVC). A `throw`
 of our frames does not unwind, it terminates the process. Therefore:
 
 - **No `try`, `catch` or `throw` in engine code**, not even in a platform-specific file. A failure is
-  a value: `bool`, or `std::optional< T >`, with the reason on the diagnostics channel (Tracer, or
-  `std::cerr` for bootstrap services). The full contract is emeraude-base's
+  a value: `bool`, or `std::optional< T >`, with the reason on the diagnostics channel (the Tracer — see
+  § Diagnostics go through the Tracer). The full contract is emeraude-base's
   [`docs/error-handling.md`](../dependencies/emeraude-base/docs/error-handling.md).
 - ⚠️ **Standard-library calls that report failure by throwing are forbidden too**, and Windows is the
   usual trap: `std::thread`'s constructor throws `std::system_error` from inside the CRT when the OS
@@ -299,6 +299,22 @@ void processDevice(const std::shared_ptr<PhysicalDevice>& device);
 ---
 
 ## Error Handling
+
+### Diagnostics go through the Tracer — no direct `std::cout` / `std::cerr` (owner, 2026-11-09)
+
+Every message of the engine goes through the Tracer (`TraceError{ClassId} << ...`, `Tracer::warning(tag, text)`);
+emeraude-base's go through its `Logging` sink, which the Tracer installs. No `std::cout`, `std::cerr`, `std::clog`,
+`printf` / `puts` / `perror`, `stdout` / `stderr` and no C++23 `std::print` anywhere else, platform files included.
+The Tracer is reachable at any time (`Tracer::getInstance()`), before `earlySetup()` too. A third-party library that
+prints by itself gets its message callback routed (VMA's `VMA_ASSERT` reports through the Tracer, `Vulkan/Device.cpp`).
+
+- The only exceptions: `src/Tracer.cpp` (the terminal itself and its self-diagnostics) and the Windows console
+  attachment of `PlatformSpecific/Helpers.windows.cpp` (it reopens the streams, and its "Press any key" prompt).
+- Enforced by the cascade gate (projet-alpha `tools/gate/gate.py direct-io`): code only, comments and string literals
+  ignored; an allowed file declares its exact count in `tools/gate/direct-io-allowlist.txt`, so a new access fails.
+- A composed message: the `TraceX` helpers forward every `operator<<` (manipulators included: `std::hex`, `std::setw`)
+  to a `std::stringstream`; a multi-part message is one named helper (`TraceInfo trace{ClassId}; trace << ...;`),
+  emitted when it goes out of scope.
 
 ### Use `value_or()` with `std::optional`
 

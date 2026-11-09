@@ -43,8 +43,6 @@
 #include <fstream>
 #include <functional>
 #include <iomanip>
-#include <iostream>
-#include <iterator>
 #include <map>
 #include <ranges>
 #include <ratio>
@@ -796,10 +794,9 @@ namespace EmEn
 				{
 					const auto & stats = m_graphicsRenderer.statistics();
 
-					std::cout <<
-						"[TIME:" << std::setw(5) << std::setfill(' ') << std::right << Time::elapsedSeconds() << " s]"
+					TraceInfo{ClassId} << "[TIME:" << std::setw(5) << std::setfill(' ') << std::right << Time::elapsedSeconds() << " s]"
 						"[FPS:" << std::setw(4) << std::setfill(' ') << std::right << stats.executionsPerSecond() << ", " << std::setw(3) << std::setfill(' ') << std::right << stats.duration() << " ms]"
-						"[FPS-AVG: " << std::setw(10) << std::setfill(' ') << std::right << stats.averageExecutionsPerSecond() << ", " << std::setw(10) << std::setfill(' ') << std::right << stats.averageDuration() << " ms]" << '\n';
+						"[FPS-AVG: " << std::setw(10) << std::setfill(' ') << std::right << stats.averageExecutionsPerSecond() << ", " << std::setw(10) << std::setfill(' ') << std::right << stats.averageDuration() << " ms]";
 
 					lastTop = currentTime;
 				}
@@ -986,10 +983,10 @@ namespace EmEn
 			TraceWarning{ClassId} << "The C numeric locale was not 'C' when the engine started: something already called setlocale() in this process. Restored, but any float parsed or written before this point may have used a comma as decimal separator.";
 		}
 
-		std::cout << "\n"
+		TraceInfo{ClassId} << "\n"
 			"Engine	  : " << m_identification.engineId() << "\n"
 			"Application : " << m_identification.applicationId() << "\n"
-			"Reverse ID  : " << m_identification.applicationReverseId() << "\n\n";
+			"Reverse ID  : " << m_identification.applicationReverseId() << "\n";
 
 		/* Registering core help. */
 		{
@@ -1878,10 +1875,9 @@ namespace EmEn
 	void
 	Core::proceedStop () noexcept
 	{
-		std::cout << "\n"
+		TraceInfo{ClassId} << "\n"
 			"**************************************************************" "\n"
-			"   Engine is about to stop (User exit code: " << m_userExitCode << ") !   " "\n"
-			"**************************************************************" "\n\n";
+			"   Engine is about to stop (User exit code: " << m_userExitCode << ") !   " "\n" "**************************************************************" "\n";
 
 		/* Dispatch the stop event,
 		 * first by sending the event,
@@ -2058,18 +2054,18 @@ namespace EmEn
 		{
 			if ( const auto aliveObjects = AbstractObject::trackedObjects(); !aliveObjects.empty() )
 			{
-				std::cerr << "[DEBUG:VK_TRACKING] There is " << aliveObjects.size() << " Vulkan objects not properly destructed !" "\n";
+				TraceError{ClassId} << "There is " << aliveObjects.size() << " Vulkan objects not properly destructed !";
 
 				for ( const auto & [address, identifier] : aliveObjects )
 				{
-					std::cerr << "[DEBUG:VK_TRACKING] The Vulkan object @" << address << " '" << identifier << "' still alive !" << "\n";
+					TraceError{ClassId} << "The Vulkan object @" << address << " '" << identifier << "' still alive !";
 
 					errors++;
 				}
 			}
 			else
 			{
-				std::cout << "[DEBUG:VK_TRACKING] All Vulkan objects has been released !" << "\n";
+				TraceInfo{ClassId} << "All Vulkan objects has been released !";
 			}
 		}
 
@@ -2497,11 +2493,7 @@ namespace EmEn
 	void
 	Core::hangExecution (const std::string & command) noexcept
 	{
-		std::cout << "\n\n\n"
-			"******************************************************************\n"
-			"	 Execution has been hung ! Press SPACE-BAR to continue ...	\n"
-			"******************************************************************\n"
-			"\n\n\n";
+		TraceWarning{ClassId} << "\n\n\n" "******************************************************************\n" "	 Execution has been hung ! Press SPACE-BAR to continue ...	\n" "******************************************************************\n" "\n\n";
 
 		/* Execute a command (Only in debug) */
 		if constexpr ( IsDebug )

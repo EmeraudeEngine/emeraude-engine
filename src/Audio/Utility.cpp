@@ -27,7 +27,6 @@
 #include "Utility.hpp"
 
 /* STL inclusions. */
-#include <iostream>
 #include <sstream>
 #include <string>
 
@@ -35,9 +34,20 @@
 #include "AL/al.h"
 #include "AL/alc.h"
 #include "AL/alext.h"
+#include "AL/efx.h"
+
+/* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Audio
 {
+	namespace
+	{
+		constexpr auto TracerTag{"OpenAL-AC-API"};
+		constexpr auto TracerALCTag{"OpenAL-ALC-API"};
+	}
+
 	bool
 	alGetErrors (const std::string & lastFunctionCalled, const std::string & filename, int line) noexcept
 	{
@@ -48,36 +58,38 @@ namespace EmEn::Audio
 
 		while ( (error = alGetError()) != AL_NO_ERROR )
 		{
-			std::cerr << "[OpenAL-AC-API][" << lastFunctionCalled << ":" << filename << '@' << line << "] ";
+			TraceError trace{TracerTag};
+
+			trace << "[" << lastFunctionCalled << ":" << filename << '@' << line << "] ";
 
 			switch ( error )
 			{
 				case AL_INVALID_NAME :
-					std::cerr << "AL_INVALID_NAME : ";
+					trace << "AL_INVALID_NAME : ";
 					break;
 
 				case AL_INVALID_ENUM :
-					std::cerr << "AL_INVALID_ENUM : ";
+					trace << "AL_INVALID_ENUM : ";
 					break;
 
 				case AL_INVALID_VALUE :
-					std::cerr << "AL_INVALID_VALUE : ";
+					trace << "AL_INVALID_VALUE : ";
 					break;
 
 				case AL_INVALID_OPERATION :
-					std::cerr << "AL_INVALID_OPERATION : ";
+					trace << "AL_INVALID_OPERATION : ";
 					break;
 
 				case AL_OUT_OF_MEMORY :
-					std::cerr << "AL_OUT_OF_MEMORY : ";
+					trace << "AL_OUT_OF_MEMORY : ";
 					break;
 
 				default :
-					std::cerr << error << " : ";
+					trace << error << " : ";
 					break;
 			}
 
-			std::cerr << alGetString(error) << '\n';
+			trace << alGetString(error);
 
 			hasError = true;
 		}
@@ -104,7 +116,7 @@ namespace EmEn::Audio
 		{
 			hasError = true;
 
-			std::cerr << "[OpenAL-ALC-API][" << lastFunctionCalled << ":" << filename << ':' << line << "] : " << alcGetString(device, error) << '\n';
+			TraceError{TracerALCTag} << "[" << lastFunctionCalled << ":" << filename << ':' << line << "] : " << alcGetString(device, error);
 		}
 
 		return hasError;

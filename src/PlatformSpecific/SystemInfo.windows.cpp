@@ -53,6 +53,7 @@
 /* Local inclusions. */
 #include "COM.windows.hpp"
 #include "Helpers.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/Types.hpp"
 
 namespace
@@ -124,7 +125,7 @@ namespace EmEn::PlatformSpecific
 
 			if ( !systemName.has_value() || !systemVersion.has_value() )
 			{
-				std::cerr << "Unable to read the OS product name/build number from the registry !" << std::endl;
+				TraceError{SystemInfo::ClassId} << "Unable to read the OS product name/build number from the registry !";
 
 				return false;
 			}
@@ -158,7 +159,7 @@ namespace EmEn::PlatformSpecific
 
 			if ( size == 0 )
 			{
-				std::cerr << "GetComputerNameExW() size probe failed : 0x" << std::hex << GetLastError() << std::endl;
+				TraceError{SystemInfo::ClassId} << "GetComputerNameExW() size probe failed : 0x" << std::hex << GetLastError();
 
 				m_OSInformation.computerName = "UnknownComputer";
 			}
@@ -174,7 +175,7 @@ namespace EmEn::PlatformSpecific
 				}
 				else
 				{
-					std::cerr << "GetComputerNameExW() failed : 0x" << std::hex << GetLastError() << std::endl;
+					TraceError{SystemInfo::ClassId} << "GetComputerNameExW() failed : 0x" << std::hex << GetLastError();
 
 					m_OSInformation.computerName = "UnknownComputer";
 				}
@@ -194,7 +195,7 @@ namespace EmEn::PlatformSpecific
 
 			if ( FAILED(hr) )
 			{
-				std::cerr << "CoInitializeEx() : 0x" << std::hex << hr << std::endl;
+				TraceError{SystemInfo::ClassId} << "CoInitializeEx() : 0x" << std::hex << hr;
 
 				return false;
 			}
@@ -204,7 +205,7 @@ namespace EmEn::PlatformSpecific
 
 			if ( FAILED(hr) && hr != RPC_E_TOO_LATE )
 			{
-				std::cerr << "CoInitializeSecurity() : 0x" << std::hex << hr << std::endl;
+				TraceError{SystemInfo::ClassId} << "CoInitializeSecurity() : 0x" << std::hex << hr;
 
 				return false;
 			}
@@ -216,7 +217,7 @@ namespace EmEn::PlatformSpecific
 
 			if ( FAILED(hr) )
 			{
-				std::cerr << "CoCreateInstance() : 0x" << std::hex << hr << std::endl;
+				TraceError{SystemInfo::ClassId} << "CoCreateInstance() : 0x" << std::hex << hr;
 
 				return false;
 			}
@@ -230,7 +231,7 @@ namespace EmEn::PlatformSpecific
 
 			if ( FAILED(hr) )
 			{
-				std::cerr << "Unable to connect to WMI (ROOT\\CIMV2) : 0x" << std::hex << hr << std::endl;
+				TraceError{SystemInfo::ClassId} << "Unable to connect to WMI (ROOT\\CIMV2) : 0x" << std::hex << hr;
 
 				return false;
 			}
@@ -240,7 +241,7 @@ namespace EmEn::PlatformSpecific
 
 			if ( FAILED(hr) )
 			{
-				std::cerr << "CoSetProxyBlanket() : 0x" << std::hex << hr << std::endl;
+				TraceError{SystemInfo::ClassId} << "CoSetProxyBlanket() : 0x" << std::hex << hr;
 
 				return false;
 			}
@@ -262,7 +263,7 @@ namespace EmEn::PlatformSpecific
 
 			if ( FAILED(hr) )
 			{
-				std::cerr << "Unable to execute the query : 0x" << std::hex << hr << std::endl;
+				TraceError{SystemInfo::ClassId} << "Unable to execute the query : 0x" << std::hex << hr;
 
 				return false;
 			}
@@ -287,18 +288,18 @@ namespace EmEn::PlatformSpecific
 					}
 					else
 					{
-						std::cerr << "Unable to get machine UUID !" << std::endl;
+						TraceError{SystemInfo::ClassId} << "Unable to get machine UUID !";
 					}
 
 					VariantClear(&vtProp);
 				}
 				else if ( FAILED(hr) )
 				{
-					std::cerr << "Error : 0x" << std::hex << hr << std::endl;
+					TraceError{SystemInfo::ClassId} << "Error : 0x" << std::hex << hr;
 				}
 				else
 				{
-					std::cerr << "No Win32_ComputerSystemProduct object found !" << std::endl;
+					TraceError{SystemInfo::ClassId} << "No Win32_ComputerSystemProduct object found !";
 				}
 			}
 		}
@@ -315,7 +316,7 @@ namespace EmEn::PlatformSpecific
 
 		if ( const auto result = CreateDXGIFactory1(IID_PPV_ARGS(factory.GetAddressOf())); FAILED(result) )
 		{
-			std::cerr << "CreateDXGIFactory1() failed : 0x" << std::hex << static_cast< unsigned long >(result) << std::dec << std::endl;
+			TraceError{SystemInfo::ClassId} << "CreateDXGIFactory1() failed : 0x" << std::hex << static_cast< unsigned long >(result) << std::dec;
 
 			return false;
 		}
@@ -336,7 +337,7 @@ namespace EmEn::PlatformSpecific
 
 			if ( FAILED(enumeration) )
 			{
-				std::cerr << "IDXGIFactory1::EnumAdapters1(" << index << ") failed : 0x" << std::hex << static_cast< unsigned long >(enumeration) << std::dec << std::endl;
+				TraceError{SystemInfo::ClassId} << "IDXGIFactory1::EnumAdapters1(" << index << ") failed : 0x" << std::hex << static_cast< unsigned long >(enumeration) << std::dec;
 
 				return false;
 			}
@@ -345,14 +346,14 @@ namespace EmEn::PlatformSpecific
 
 			if ( const auto result = adapter->GetDesc1(&description); FAILED(result) )
 			{
-				std::cerr << "IDXGIAdapter1::GetDesc1() failed for adapter #" << index << " : 0x" << std::hex << static_cast< unsigned long >(result) << std::dec << std::endl;
+				TraceError{SystemInfo::ClassId} << "IDXGIAdapter1::GetDesc1() failed for adapter #" << index << " : 0x" << std::hex << static_cast< unsigned long >(result) << std::dec;
 
 				continue;
 			}
 
 			if ( m_GPUDevices.full() )
 			{
-				std::cerr << "More than " << m_GPUDevices.capacity() << " graphics adapters: adapter #" << index << " and the next ones are not listed." << std::endl;
+				TraceError{SystemInfo::ClassId} << "More than " << m_GPUDevices.capacity() << " graphics adapters: adapter #" << index << " and the next ones are not listed.";
 
 				return true;
 			}
@@ -399,7 +400,7 @@ namespace EmEn::PlatformSpecific
 			m_GPUDevices.emplace_back(std::move(device));
 		}
 
-		std::cerr << "More than " << MaxAdapters << " graphics adapters enumerated: the walk stopped." << std::endl;
+		TraceError{SystemInfo::ClassId} << "More than " << MaxAdapters << " graphics adapters enumerated: the walk stopped.";
 
 		return true;
 	}

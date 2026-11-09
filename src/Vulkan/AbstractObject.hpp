@@ -164,7 +164,7 @@ namespace EmEn::Vulkan
 						TraceError{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") is not correctly destroyed !";
 					}
 
-					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << identifier << "' @" << this << ") destructed !" "\n";
+					TraceInfo{"VulkanObject"} << "A Vulkan object ('" << identifier << "' " << this << ") destructed !";
 
 					AbstractObject::untrack(this);
 				}
@@ -192,7 +192,7 @@ namespace EmEn::Vulkan
 				{
 					AbstractObject::track(this, this->identifier());
 
-					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object ('" << this->identifier() << "', @" << this << ") is marked !" "\n";
+					TraceInfo{"VulkanObject"} << "A Vulkan object ('" << this->identifier() << "', " << this << ") is marked !";
 				}
 			}
 
@@ -287,7 +287,7 @@ namespace EmEn::Vulkan
 				{
 					AbstractObject::track(this, {});
 
-					std::cout << "[DEBUG:VK_TRACKING] A Vulkan object (@" << this << ") constructed !" "\n";
+					TraceInfo{"VulkanObject"} << "A Vulkan object (" << this << ") constructed !";
 				}
 			}
 

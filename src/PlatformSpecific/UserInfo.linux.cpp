@@ -36,6 +36,9 @@
 #include <pwd.h>
 #include <unistd.h>
 
+/* Local inclusions. */
+#include "Tracer.hpp"
+
 namespace EmEn::PlatformSpecific
 {
 	namespace
@@ -121,19 +124,19 @@ namespace EmEn::PlatformSpecific
 
 		if ( m_username.empty() )
 		{
-			std::cerr << "Warning: Unable to get the username !" "\n";
+			TraceWarning{UserInfo::ClassId} << "Unable to get the username !";
 		}
 
 		if ( m_accountName.empty() )
 		{
-			std::cerr << "Error: Unable to get the account name !" "\n";
+			TraceError{UserInfo::ClassId} << "Unable to get the account name !";
 
 			return false;
 		}
 
 		if ( m_homePath.empty() )
 		{
-			std::cerr << "Warning: Unable to get the home directory !" "\n";
+			TraceWarning{UserInfo::ClassId} << "Unable to get the home directory !";
 
 			return false;
 		}

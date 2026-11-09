@@ -480,12 +480,12 @@ namespace EmEn::PlatformSpecific
 				}
 				else
 				{
-					std::cerr << "Unable to get the machine UUID !" "\n";
+					TraceError{SystemInfo::ClassId} << "Unable to get the machine UUID !";
 				}
 			}
 			else
 			{
-				std::cerr << "Unable to get the machine UUID !" "\n";
+				TraceError{SystemInfo::ClassId} << "Unable to get the machine UUID !";
 			}
 
 			if ( UUIDProperty != nullptr )

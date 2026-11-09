@@ -27,8 +27,11 @@
 #include "Types.hpp"
 
 /* STL inclusions. */
-#include <iostream>
 #include <string>
+
+/* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::PlatformSpecific::Desktop::Dialog
 {
@@ -84,7 +87,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			return ButtonLayout::Quit;
 		}
 
-		std::cerr << "to_ButtonLayout() : Unknown '" << value << "' type ! Returning 'OK' by default.\n";
+		TraceError{"Dialog::Types"} << "to_ButtonLayout() : Unknown '" << value << "' type ! Returning 'OK' by default.";
 
 		return ButtonLayout::OK;
 	}
@@ -133,7 +136,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			return MessageType::Question;
 		}
 
-		std::cerr << "to_MessageType() : Unknown '" << value << "' type ! Returning 'Info' by default.\n";
+		TraceError{"Dialog::Types"} << "to_MessageType() : Unknown '" << value << "' type ! Returning 'Info' by default.";
 
 		return MessageType::Info;
 	}
@@ -198,7 +201,7 @@ namespace EmEn::PlatformSpecific::Desktop::Dialog
 			return Answer::DialogFailure;
 		}
 
-		std::cerr << "to_Answer() : Unknown '" << value << "' type ! Returning 'None' by default.\n";
+		TraceError{"Dialog::Types"} << "to_Answer() : Unknown '" << value << "' type ! Returning 'None' by default.";
 
 		return Answer::None;
 	}

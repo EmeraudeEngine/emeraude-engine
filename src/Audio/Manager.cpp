@@ -32,7 +32,6 @@
 /* STL inclusions. */
 #include <cstdlib>
 #include <functional>
-#include <iostream>
 #include <ranges>
 #include <sstream>
 #include <utility>
@@ -153,14 +152,16 @@ namespace EmEn::Audio
 
 		if ( m_showInformation )
 		{
-			std::cout << "[OpenAL] Audio devices:" "\n";
+			TraceInfo trace{ClassId};
+
+			trace << "OpenAL Audio devices :";
 
 			for ( const auto & deviceName : m_availableDevices )
 			{
-				std::cout << " - " << deviceName << '\n';
+				trace << "\n - " << deviceName;
 			}
 
-			std::cout << "Default: " << m_selectedDeviceName << '\n';
+			trace << "\nDefault: " << m_selectedDeviceName;
 		}
 
 		/* Save available output devices to settings for easy editing. */

@@ -27,29 +27,31 @@
 #include "PrimaryServices.hpp"
 
 /* Project configuration. */
+#include "emeraude_config.hpp"
 #include "emeraude_platform.hpp"
 
 /* STL inclusions. */
-#include <iostream>
 #include <ranges>
 #include <sstream>
 #include <thread>
 #include <utility>
 
 /* Local inclusions. */
-#include "IO/IO.hpp"
-#include "ThreadPool.hpp"
 #include "Arguments.hpp"
+#include "BlobTrait.hpp"
 #include "FaultInjection.hpp"
 #include "FileSystem.hpp"
 #include "Identification.hpp"
+#include "IO/IO.hpp"
 #include "Net/APIClient.hpp"
 #include "Net/Manager.hpp"
 #include "PlatformSpecific/SystemInfo.hpp"
 #include "PlatformSpecific/UserInfo.hpp"
 #include "ServiceInterface.hpp"
 #include "Settings.hpp"
+#include "ThreadPool.hpp"
 #include "Tracer.hpp"
+#include "Version.hpp"
 
 namespace EmEn
 {
@@ -105,7 +107,7 @@ namespace EmEn
 		/* NOTE: This must be done immediately! */
 		if ( !m_arguments.initialize(m_servicesEnabled) )
 		{
-			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute!";
+			TraceError{ClassId} << m_arguments.name() << " service failed to execute!";
 		}
 
 		Tracer::getInstance().earlySetup(m_arguments, m_processName, false);
@@ -149,7 +151,7 @@ namespace EmEn
 		}
 		else
 		{
-			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute!";
+			TraceError{ClassId} << m_arguments.name() << " service failed to execute!";
 		}
 	}
 
@@ -163,7 +165,7 @@ namespace EmEn
 		/* NOTE: This must be done immediately! */
 		if ( !m_arguments.initialize(m_servicesEnabled) )
 		{
-			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute!";
+			TraceError{ClassId} << m_arguments.name() << " service failed to execute!";
 		}
 
 		Tracer::getInstance().earlySetup(m_arguments, m_processName, false);
@@ -207,7 +209,7 @@ namespace EmEn
 		}
 		else
 		{
-			std::cerr << ClassId << ", " << m_arguments.name() << " service failed to execute!";
+			TraceError{ClassId} << m_arguments.name() << " service failed to execute!";
 		}
 	}
 #endif

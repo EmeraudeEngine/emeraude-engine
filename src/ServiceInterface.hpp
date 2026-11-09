@@ -41,6 +41,7 @@
 
 /* Local inclusions for usages. */
 #include "FaultInjection.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn
 {
@@ -102,9 +103,7 @@ namespace EmEn
 				if ( this->usable() )
 				{
 					/* NOTE: This should never happen! */
-					std::cerr <<
-						"The service '" << this->name() << "' looks like already initialized !" "\n"
-						"The method ServiceInterface::usable() must dynamically report if the service has been initialized and usable !" "\n";
+					TraceError{"ServiceInterface"} << "The service '" << this->name() << "' looks like already initialized !" "\n" "The method ServiceInterface::usable() must dynamically report if the service has been initialized and usable !";
 
 					return false;
 				}

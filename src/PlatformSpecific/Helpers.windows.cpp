@@ -108,7 +108,7 @@ namespace EmEn::PlatformSpecific
 		{
 			/* NOTE: std::cerr on purpose — this helper serves SystemInfo, whose diagnostics all go to the
 			 * error stream (bootstrap service). */
-			std::cerr << "RegGetValueW(HKLM\\" << convertWideToUTF8(regSubKey) << ", " << convertWideToUTF8(regValue) << ") failed : Windows system error code " << rc << std::endl;
+			TraceError{TracerTag} << "RegGetValueW(HKLM\\" << convertWideToUTF8(regSubKey) << ", " << convertWideToUTF8(regValue) << ") failed : Windows system error code " << rc;
 
 			return std::nullopt;
 		}
