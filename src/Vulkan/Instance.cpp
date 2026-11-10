@@ -339,6 +339,8 @@ namespace EmEn::Vulkan
 			 * open (measured on the three OSes, 2026-11-10: zero physical device, a crash at exit after the refusal). */
 			static_cast< void >(this->onTerminate());
 
+			TraceInfo{ClassId} << "The Vulkan instance was released by the failed service itself (the loader is still open).";
+
 			return false;
 		}
 

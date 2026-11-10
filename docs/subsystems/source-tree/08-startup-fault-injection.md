@@ -199,6 +199,15 @@ then `preparePhysicalDevices()` finds no device (a driver that loads but sees no
 - Verified (Linux, ASan): the zero-device run exits 97 with no sanitizer line (the layers unload right after the
   Fatal); the reference and the missing-manifest runs unchanged; the sweep 33 services, 20 / 13, validation 0,
   ASan 0, LSan 0.
+- Verified on engine `20ef05e6` (base `cb88e0b8`), same reproductions as above:
+  - Windows (Windows-PA, MSVC Debug): exit 97 instead of 0xC0000005, 0 access violation even first-chance under a
+    from-start debugger, 0 VUID; the reference run unchanged (exit 0);
+  - macOS (macOS-PA, AppleClang Release, Apple M6): exit 97 instead of SIGSEGV, no new `.ips`; the reference run
+    unchanged (exit 0).
+  - On both, the journal now ends with "Log file closed properly" (before the fix it stopped at "Core level
+    terminated"). The self-termination wrote no trace on that path (the core logs only the services it terminates),
+    so the failure path now writes an Info line after the release: "The Vulkan instance was released by the failed
+    service itself (the loader is still open)."
 - ⚠️ Rule for every service: a failure path of `onInitialize()` releases what that call created before it returns
   false. Neither the core (it skips a failed service) nor a member's destructor (it runs after the loader / GLFW are
   gone) can do it later.
