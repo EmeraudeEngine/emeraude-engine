@@ -166,7 +166,39 @@ members.
 - `PlatformManager::GLFWLibrary`: owns `glfwInit()`, `glfwTerminate()` at its end, declared after the Vulkan loader
   (GLFW terminated before the loader closes). Fixed through it: a missing Vulkan support after `glfwInit()` left GLFW
   initialized.
-- `Vulkan::Instance` already released in its destructor (P0, H3): unchanged.
+- `Vulkan::Instance` already released in its destructor (P0, H3): unchanged. ⚠️ Corrected 2026-11-10 (below): that
+  destructor runs AFTER the platform manager closed the Vulkan loader, so it cannot be the release of a failed
+  `onInitialize()`.
 - Verified after the change: the sweep again (33 runs, 0 issue); a projet-alpha rush with the voice-over (the output,
   loopback and capture devices closed with their logs; 181 pictures, the WAVs valid; 0 VUID).
 
+
+### Found in production, 2026-11-10: zero physical device, a crash at exit after the refusal
+
+The sweep injects BEFORE `onInitialize()`, so the Vulkan instance is never created there; the missing-manifest proof
+fails INSIDE `vkCreateInstance()` (the handle stays null). The path in between was not covered: the instance created,
+then `preparePhysicalDevices()` finds no device (a driver that loads but sees no GPU of its vendor).
+- Seen in a downstream application's crash reports (Windows minidumps, one macOS machine): after the "Graphics driver
+  required" refusal, an access violation executing address 0x0 in `~Core()` → `Instance::~Instance()` →
+  `onTerminate()` → `vkDestroyInstance`.
+- Mechanism: a failed service is never terminated; `PlatformManager::onTerminate()` then closes the loader
+  (`Loader::close()` → `volkFinalize()`, every volk pointer reset, the library unloaded); `~Core()` destroys
+  `m_vulkanInstance` (declared after `m_platformManager`, so destroyed first) with `m_instance` still set; the
+  destructor's safety call jumps to the null `vkDestroyInstance`.
+- Reproduced with `EmeraudeStartupFaultInjection`, no injection, engine `edf344b5`:
+  - Linux (Linux-PA, clang ASan): `VK_DRIVER_FILES=/usr/share/vulkan/icd.d/radeon_icd.json` on a machine without an
+    AMD GPU (RADV loads, finds nothing) → ASan SEGV at pc 0x0, `Instance.cpp:345` (the destructor's call);
+  - Windows (Windows-PA, MSVC Debug): `VK_LOADER_VENDOR_ID_FILTER=0x1002` (an absent vendor; the shipped loader
+    1.4.363 honours it silently: "0 physical device(s) found.") → exit 0xC0000005, the debugger shows the null call
+    from `onTerminate()` line 383;
+  - macOS (macOS-PA, AppleClang, the tool in a scratch `.app` layout — outside a bundle it finds no loader):
+    `VK_LOADER_VENDOR_ID_FILTER=0x10DE` → SIGSEGV at 0x0, `blr` to the null `_vkDestroyInstance` volk global.
+- Fix: `Instance::onInitialize()` calls `onTerminate()` itself when `preparePhysicalDevices()` fails (the only failure
+  after the creation), while the loader is open; a failed `vkCreateInstance()` resets `m_instance` (undefined after a
+  failure). The destructor carries the warning: never rely on it after the platform manager terminated.
+- Verified (Linux, ASan): the zero-device run exits 97 with no sanitizer line (the layers unload right after the
+  Fatal); the reference and the missing-manifest runs unchanged; the sweep 33 services, 20 / 13, validation 0,
+  ASan 0, LSan 0.
+- ⚠️ Rule for every service: a failure path of `onInitialize()` releases what that call created before it returns
+  false. Neither the core (it skips a failed service) nor a member's destructor (it runs after the loader / GLFW are
+  gone) can do it later.

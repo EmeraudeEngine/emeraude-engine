@@ -258,6 +258,9 @@ namespace EmEn::Vulkan
 
 			if ( result != VK_SUCCESS )
 			{
+				/* NOTE: The handle is undefined after a failed creation: never let the destructor release it. */
+				m_instance = VK_NULL_HANDLE;
+
 				switch ( result )
 				{
 					case VK_ERROR_OUT_OF_HOST_MEMORY :
@@ -330,6 +333,12 @@ namespace EmEn::Vulkan
 		{
 			TraceFatal{ClassId} << "No physical device available !";
 
+			/* NOTE: A failed service is never terminated by the core, and the platform manager closes the loader
+			 * (volkFinalize(), every volk pointer reset) before ~Core() destroys this instance: the destructor's
+			 * safety call then jumped to a null vkDestroyInstance. Release everything NOW, while the loader is
+			 * open (measured on the three OSes, 2026-11-10: zero physical device, a crash at exit after the refusal). */
+			static_cast< void >(this->onTerminate());
+
 			return false;
 		}
 
@@ -339,7 +348,10 @@ namespace EmEn::Vulkan
 	Instance::~Instance ()
 	{
 		/* NOTE: onTerminate() is idempotent (every handle is reset after its release); it is only needed when it did
-		 * not run. */
+		 * not run.
+		 * ⚠️ This safety call is only safe while the Vulkan loader is open: ~Core() destroys this member AFTER the
+		 * platform manager closed the loader (volkFinalize()). A failure path of onInitialize() must release what it
+		 * created itself, never leave it to this destructor (a jump to a null vkDestroyInstance, 2026-11-10). */
 		if ( m_instance != VK_NULL_HANDLE || m_graphicsDevice != nullptr || m_computeDevice != nullptr )
 		{
 			static_cast< void >(this->onTerminate());
