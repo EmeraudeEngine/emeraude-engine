@@ -37,10 +37,10 @@ there too, more quietly.
 
 ## ⚠️ Traps
 
-- The downstream crash reporter collects the journals by name (app_system `docs/crash-report.md` § Traps): a new
+- The downstream crash reporter collects the journals by name (its own documentation): a new
   naming must be agreed with it in the same delivery.
 
 ## References
 
-- app_system `docs/todo/crash-exit-code-1-after-cefinitializationfailed-0b1244.md` (the measurement, the reports).
-- app_system `docs/plans/crashreport-solucius.md` (wave W0: the instrument).
+- A downstream application item (the measurement, the reports).
+- A plan of the downstream application (wave W0: the instrument).

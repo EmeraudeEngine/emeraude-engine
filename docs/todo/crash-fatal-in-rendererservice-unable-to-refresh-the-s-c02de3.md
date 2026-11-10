@@ -10,7 +10,7 @@ tags: [crash, crash-report-auto]
 
 # Crash reports: Fatal in RendererService — Unable to refresh the swap-chain!
 
-> Dropped by app_system's `tools/crash-reports/crash_reports.py`: a cause never seen before in the production crash reports.
+> Dropped by the downstream application's crash-report tool: a cause never seen before in the production crash reports.
 > **Triage**: confirm it is a defect, give the file a better name, move it to the repository that owns the defect
 > (an engine defect goes to `vendors/emeraude-engine/docs/todo/`, …) and rank it. The block between the
 > `crash-reports` markers is rewritten at every run, wherever the item went (it is found by its signature line);
@@ -52,11 +52,9 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 [RendererService][Fatal] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::renderFrame`) Unable to refresh the swap-chain!
 ```
 
-Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
+Archives:
 
-- `reports/8.0.2/d24ec66a3458545d7f13686139ef8408-17ef72ed-46da-4255-9dab-d9a9fdc182fa.zip` → `archives/8.0.2/d24ec66a3458545d7f13686139ef8408-17ef72ed-46da-4255-9dab-d9a9fdc182fa.zip`
-- `reports/8.0.2/385b83920ce1b488bff71c380a9d637f-c55ea309-f825-47f0-8f11-5dfb991e6eea.zip` → `archives/8.0.2/385b83920ce1b488bff71c380a9d637f-c55ea309-f825-47f0-8f11-5dfb991e6eea.zip`
-- `reports/8.0.2/ec13a09beaf8739d3ced0493fb60965f-e600ffdc-28c1-40ad-b8a1-dbf00f039d33.zip` → `archives/8.0.2/ec13a09beaf8739d3ced0493fb60965f-e600ffdc-28c1-40ad-b8a1-dbf00f039d33.zip`
+- 3 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)
@@ -66,20 +64,20 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
   when every launch fails).
 - **Reading**: Linux, Intel iGPU (Mesa 25/26): the swap-chain cannot be refreshed (resize / out-of-date).
 - **Next step**: Read the journals for the `vkCreateSwapchainKHR` / acquire result; Wayland or X11?
-- **Plan**: `CrashReport Solucius`, wave W5 — app_system's `docs/plans/crashreport-solucius.md`.
+- **Plan**: `CrashReport Solucius`, wave W5 — a plan of the downstream application.
 
 ## 8.0.3 status (checked 2026-10-21)
 
 **Changed.** Engine `8a5bfd58` (1.0.1): retried up to 30 times (~3 s), then a clean stop with exit 98 instead of this Fatal; `6ae7e404` fixes a resize lost during a recreation on Wayland.
 
-Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (the application 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, its kernel 1.3.1 → 1.3.2, its frontend `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
 ## What remains
 
-- Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).
+- Read the journals of the archives counted above (in the downstream application's crash-report mirror).
 - Find the defect, reproduce it, fix it where it lives.
 
 ## References
 
-- app_system's `docs/crash-report.md` — what an archive holds, the flight recorder milestones.
-- app_system's `tools/crash-reports/README.md` — how this item was produced, how the cause is chosen.
+- The downstream application's crash-report documentation — what an archive holds, the flight recorder milestones.
+- The downstream application's crash-report tool documentation — how this item was produced, how the cause is chosen.

@@ -10,7 +10,7 @@ tags: [crash, crash-report-auto]
 
 # Crash reports: Fatal in VulkanSwapChain — Unable to create the swap-chain : VK_ERROR_INITIALIZATION_FAILED !
 
-> Dropped by app_system's `tools/crash-reports/crash_reports.py`: a cause never seen before in the production crash reports.
+> Dropped by the downstream application's crash-report tool: a cause never seen before in the production crash reports.
 > **Triage**: confirm it is a defect, give the file a better name, move it to the repository that owns the defect
 > (an engine defect goes to `vendors/emeraude-engine/docs/todo/`, …) and rank it. The block between the
 > `crash-reports` markers is rewritten at every run, wherever the item went (it is found by its signature line);
@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 1 — per version: 8.0.2 ×1 |
-| Reports | 1 (first 2026-10-21, last 2026-10-21) |
-| Versions | 8.0.2 ×1 |
-| Platforms | windows ×1 |
-| OS | Windows 11 Home ×1 |
-| GPU (selected) | NVIDIA GeForce RTX 3070 Laptop GPU (driver 572.16) ×1 |
-| ANGLE backend | d3d11 ×1 |
-| Died at milestone | ApplicationStarted ×1 |
-| Single-instance lock | not recorded ×1 |
+| Machines | 12 — per version: 8.0.2 ×7, 8.0.3 ×6 |
+| Reports | 16 (first 2026-10-21, last 2026-11-08) |
+| Versions | 8.0.2 ×9, 8.0.3 ×7 |
+| Platforms | windows ×10, linux ×6 |
+| OS | Ubuntu 24.04.5 LTS ×6, Windows 10 Pro ×3, Windows 11 Home ×3, Windows 11 Pro ×2, Windows 10 Home ×1, Windows 10 Home Single Language ×1 |
+| GPU (selected) | unknown ×6, Microsoft Direct3D12 (NVIDIA GeForce RTX 3070 Ti Laptop GPU) (driver 26.0.129.35) ×1, NVIDIA GeForce GTX 1050 Ti (driver 581.80) ×1, NVIDIA GeForce RTX 2070 (driver 617.42) ×1, NVIDIA GeForce RTX 3050 (driver 617.14) ×1, NVIDIA GeForce RTX 3070 Laptop GPU (driver 572.16) ×1, … (5 more) |
+| ANGLE backend | d3d11 ×10, vulkan ×6 |
+| Died at milestone | Stopping ×9, SessionOpened ×6, ApplicationStarted ×1 |
+| Single-instance lock | not recorded ×16 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the swap-chain : VK_ERROR_INITIALIZATION_FAILED !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createBaseSwapChain`
@@ -37,24 +37,22 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
+- ×9 `died at Stopping`
+- ×6 `died at SessionOpened`
 - ×1 `died at ApplicationStarted`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[VulkanDeviceMemory][Error] (vendors/emeraude-engine/src/Vulkan/DeviceMemory.cpp `EmEn::Vulkan::DeviceMemory::createOnHardware`) Unable to allocate <n> bytes (alignment:<n> bytes) in the device memory <n> : VK_ERROR_OUT_OF_DEVICE_MEMORY !
-[VulkanImage][Error] (vendors/emeraude-engine/src/Vulkan/Image.cpp `EmEn::Vulkan::Image::importFromWin32Handle`) Unable to import the external D3D11 texture memory (handle @@0000000000002A78) !
-[WebView][Error] (src/UI/WebView.CefRenderHandler.cpp `Mango3D::System::UI::WebView::OnAcceleratedPaint`) [CEF-ACCEL] Unable to import the accelerated frame for 'View3D' (<n><hex>px) !
-[VulkanDeviceMemory][Error] (vendors/emeraude-engine/src/Vulkan/DeviceMemory.cpp `EmEn::Vulkan::DeviceMemory::createOnHardware`) Unable to allocate <n> bytes (alignment:<n> bytes) in the device memory <n> : VK_ERROR_OUT_OF_DEVICE_MEMORY !
-[VulkanImage][Error] (vendors/emeraude-engine/src/Vulkan/Image.cpp `EmEn::Vulkan::Image::importFromWin32Handle`) Unable to import the external D3D11 texture memory (handle @@00000000000026B8) !
-[WebView][Error] (src/UI/WebView.CefRenderHandler.cpp `Mango3D::System::UI::WebView::OnAcceleratedPaint`) [CEF-ACCEL] Unable to import the accelerated frame for 'View3D' (<n><hex>px) !
+[a line of the downstream application, redacted] (×5)
+[VulkanDevice][Error] (vendors/emeraude-engine/src/Vulkan/Device.cpp `EmEn::Vulkan::Device::waitIdle`) Unable to wait the device 00000235DAF132E0 : VK_ERROR_OUT_OF_DEVICE_MEMORY ! Call location: Renderer::recreateSystem()
 [VulkanSwapChain][Fatal] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createBaseSwapChain`) Unable to create the swap-chain : VK_ERROR_INITIALIZATION_FAILED !
 [VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::recreate`) Unable to recreate the base of the swap-chain !
 ```
 
-Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
+Archives:
 
-- `reports/8.0.2/1298ad41311466a315cbac54b9cc7e07-7b11e234-24ae-4634-ad95-b005a74c956b.zip` → `archives/8.0.2/1298ad41311466a315cbac54b9cc7e07-7b11e234-24ae-4634-ad95-b005a74c956b.zip`
+- 16 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-22)
@@ -64,20 +62,20 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
   launch fails).
 - **Reading**: Windows, a hybrid laptop (RTX 3070 Laptop GPU, driver 572.16): the swap-chain cannot be created during use (`VK_ERROR_INITIALIZATION_FAILED`). Same family as the other swap-chain failures of hybrid laptops (`crash-fatal-in-vulkanswapchain-unable-to-create-the-sw-9703d3`).
 - **Next step**: Read the journal: which device presents (the iGPU drives the screen on a hybrid laptop), what triggered the recreation (resize, monitor change, power state).
-- **Plan**: `CrashReport Solucius`, wave W5 — app_system's `docs/plans/crashreport-solucius.md`.
+- **Plan**: `CrashReport Solucius`, wave W5 — a plan of the downstream application.
 
 ## 8.0.3 status (checked 2026-10-22)
 
 **Possibly affected.** Engine `8a5bfd58` (1.0.1): a failed recreation is retried (at most 30 times, ~3 s), then the engine stops as on a lost device (exit 98) — a Fatal no longer; the cross-GPU presentation is not addressed.
 
-Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (the application 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, its kernel 1.3.1 → 1.3.2, its frontend `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
 ## What remains
 
-- Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).
+- Read the journals of the archives counted above (in the downstream application's crash-report mirror).
 - Find the defect, reproduce it, fix it where it lives.
 
 ## References
 
-- app_system's `docs/crash-report.md` — what an archive holds, the flight recorder milestones.
-- app_system's `tools/crash-reports/README.md` — how this item was produced, how the cause is chosen.
+- The downstream application's crash-report documentation — what an archive holds, the flight recorder milestones.
+- The downstream application's crash-report tool documentation — how this item was produced, how the cause is chosen.

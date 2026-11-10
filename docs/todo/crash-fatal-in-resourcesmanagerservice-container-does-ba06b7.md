@@ -10,7 +10,7 @@ tags: [crash, crash-report-auto]
 
 # Crash reports: Fatal in ResourcesManagerService — Container does not exist !
 
-> Dropped by app_system's `tools/crash-reports/crash_reports.py`: a cause never seen before in the production crash reports.
+> Dropped by the downstream application's crash-report tool: a cause never seen before in the production crash reports.
 > **Triage**: confirm it is a defect, give the file a better name, move it to the repository that owns the defect
 > (an engine defect goes to `vendors/emeraude-engine/docs/todo/`, …) and rank it. The block between the
 > `crash-reports` markers is rewritten at every run, wherever the item went (it is found by its signature line);
@@ -51,9 +51,9 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 [ResourcesManagerService][Fatal] (vendors/emeraude-engine/src/Resources/Manager.cpp `*EmEn::Resources::Manager::getContainerInternal`) Container does not exist !
 ```
 
-Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
+Archives:
 
-- `reports/8.0.2/59ac994dc45f2b48098d441d6250259d-cf5b7c69-d1ef-4b53-9512-2c8853fc955c.zip` → `archives/8.0.2/59ac994dc45f2b48098d441d6250259d-cf5b7c69-d1ef-4b53-9512-2c8853fc955c.zip`
+- 1 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)
@@ -62,21 +62,21 @@ Archives (local mirror under `tools/crash-reports/data/`, extracted next to them
 - **Machines**: ≈1 (reports grouped by CPU + RAM + OS fingerprint on 2026-10-21; several reports per machine
   when every launch fails).
 - **Reading**: macOS, at startup: a resource container does not exist — a missing data file in the bundle?
-- **Next step**: Read the journal for the container name; if it is a packaging omission the fix is app_system's (`cmake/ConfigureDynamicResources.cmake`).
-- **Plan**: `CrashReport Solucius`, wave W6 — app_system's `docs/plans/crashreport-solucius.md`.
+- **Next step**: Read the journal for the container name; if it is a packaging omission the fix belongs to the downstream application (its resource packaging).
+- **Plan**: `CrashReport Solucius`, wave W6 — a plan of the downstream application.
 
 ## 8.0.3 status (checked 2026-10-21)
 
 **Possibly affected.** Engine `78ce1936` (1.0.1) registers a container that was missing (volumetric images for `Texture3D`); not verified to be this one.
 
-Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (the application 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, its kernel 1.3.1 → 1.3.2, its frontend `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
 ## What remains
 
-- Read the journals of the archives above (extracted under `tools/crash-reports/data/extracted/`).
+- Read the journals of the archives counted above (in the downstream application's crash-report mirror).
 - Find the defect, reproduce it, fix it where it lives.
 
 ## References
 
-- app_system's `docs/crash-report.md` — what an archive holds, the flight recorder milestones.
-- app_system's `tools/crash-reports/README.md` — how this item was produced, how the cause is chosen.
+- The downstream application's crash-report documentation — what an archive holds, the flight recorder milestones.
+- The downstream application's crash-report tool documentation — how this item was produced, how the cause is chosen.

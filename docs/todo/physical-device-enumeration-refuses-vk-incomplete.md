@@ -42,20 +42,20 @@ These machines very likely have a perfectly capable GPU: the engine refuses them
 
 56 reports (≈17 machines, Windows, 8.0.2 / engine 1.0.0) end on `No physical device available !`; 34 of them carry `VK_INCOMPLETE` — this item's defect, at scale (the others: a real absence of device, to read). Engine 1.0.1 (shipped with 8.0.3) holds the fix; **the 8.0.3 production reports are the Windows run of "What remains"**.
 
-Plan: `CrashReport Solucius` (app_system `docs/plans/crashreport-solucius.md`).
+Plan: `CrashReport Solucius` (a plan of the downstream application).
 
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 20 — per version: 8.0.2 ×20 |
-| Reports | 60 (first 2026-10-15, last 2026-10-22) |
-| Versions | 8.0.2 ×60 |
-| Platforms | windows ×60 |
-| OS | Windows 10 Pro ×25, Windows 11 Home ×17, Windows 10 Home ×16, Windows 11 Pro ×2 |
-| GPU (selected) | unknown ×60 |
-| ANGLE backend | d3d11 ×60 |
-| Died at milestone | SessionOpened ×60 |
-| Single-instance lock | not recorded ×60 |
+| Machines | 24 — per version: 8.0.2 ×23, 8.0.3 ×1 |
+| Reports | 67 (first 2026-10-15, last 2026-11-09) |
+| Versions | 8.0.2 ×66, 8.0.3 ×1 |
+| Platforms | windows ×67 |
+| OS | Windows 10 Pro ×25, Windows 11 Home ×21, Windows 10 Home ×17, Windows 11 Pro ×3, Windows 10 Education ×1 |
+| GPU (selected) | unknown ×67 |
+| ANGLE backend | d3d11 ×67 |
+| Died at milestone | SessionOpened ×66, CEFInitializationFailed ×1 |
+| Single-instance lock | not recorded ×67 |
 
 - **Cause (normalized):** `VulkanInstanceService: No physical device available !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/Instance.cpp` — `EmEn::Vulkan::Instance::onInitialize`
@@ -63,51 +63,29 @@ Plan: `CrashReport Solucius` (app_system `docs/plans/crashreport-solucius.md`).
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×60 `died at SessionOpened`
+- ×66 `died at SessionOpened`
+- ×1 `died at CEFInitializationFailed`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[Application][Info] (src/Application.CefBrowserProcessHandler.cpp `Mango3D::System::Application::OnRegisterCustomPreferences`) A request context preference has been changed !
-[Application][Success] (src/Application.CefBrowserProcessHandler.cpp `Mango3D::System::Application::OnContextInitialized`) Chromium context initialized !
-[PlatformManagerService][Info] (vendors/emeraude-engine/src/PlatformManager.cpp `EmEn::PlatformManager::onInitialize`) Vulkan layer search path : '<path> Files\Lychee\vulkan\explicit_layer.d'.
-[VulkanLoader][Info] (vendors/emeraude-engine/src/Vulkan/Loader.cpp `EmEn::Vulkan::Loader::open`) Vulkan loader '<path> Files\Lychee\vulkan\vulkan-<n>.dll' opened (instance version <n>).
+[a line of the downstream application, redacted] (×4)
 [Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) PlatformManagerService service up!
 [VulkanInstanceService][Error] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::preparePhysicalDevices`) Unable to get physical device count : VK_INCOMPLETE !
 [VulkanInstanceService][Fatal] (vendors/emeraude-engine/src/Vulkan/Instance.cpp `EmEn::Vulkan::Instance::onInitialize`) No physical device available !
 [Core][Fatal] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) VulkanInstanceService service failed to execute!
 ```
 
-Archives (local mirror under `tools/crash-reports/data/`, extracted next to them in `extracted/`):
+Archives:
 
-- … 40 older archive(s), see `crash_reports.py list`
-- `reports/8.0.2/a0f06246859f348e122eacf6a246408c-bc1d9b67-bb3c-4d28-9d8c-78cd1bd6e88b.zip` → `archives/8.0.2/a0f06246859f348e122eacf6a246408c-bc1d9b67-bb3c-4d28-9d8c-78cd1bd6e88b.zip`
-- `reports/8.0.2/ed454557d83296853e3b3eb64732021f-daf89069-62a2-4865-8c58-428f7cb40945.zip` → `archives/8.0.2/ed454557d83296853e3b3eb64732021f-daf89069-62a2-4865-8c58-428f7cb40945.zip`
-- `reports/8.0.2/049b1ff7505518c1ff408d9f01bea7e3-ffdd960a-e40c-4104-bd14-682cbb4f4a15.zip` → `archives/8.0.2/049b1ff7505518c1ff408d9f01bea7e3-ffdd960a-e40c-4104-bd14-682cbb4f4a15.zip`
-- `reports/8.0.2/ded252c5d9402ff82dcb8ce09873b317-02634dfb-5c01-4625-999b-83f37fd7c4af.zip` → `archives/8.0.2/ded252c5d9402ff82dcb8ce09873b317-02634dfb-5c01-4625-999b-83f37fd7c4af.zip`
-- `reports/8.0.2/08cc3dde3bd8c04319945aeb2d913a17-dd834ab4-9682-4e6b-8ea8-a2153bf6e9d4.zip` → `archives/8.0.2/08cc3dde3bd8c04319945aeb2d913a17-dd834ab4-9682-4e6b-8ea8-a2153bf6e9d4.zip`
-- `reports/8.0.2/361fe9b24d6ecee834f438679023f662-cc2affec-828d-4987-8909-9adb76ac95eb.zip` → `archives/8.0.2/361fe9b24d6ecee834f438679023f662-cc2affec-828d-4987-8909-9adb76ac95eb.zip`
-- `reports/8.0.2/d332179a4f4f03b28e04f5b731797543-03856748-4219-47ba-b490-3e0073ec795b.zip` → `archives/8.0.2/d332179a4f4f03b28e04f5b731797543-03856748-4219-47ba-b490-3e0073ec795b.zip`
-- `reports/8.0.2/47b44234bc94661f63e0c4f608b91f26-aa3124d5-4f8b-4b96-b43e-6cfa7e714b90.zip` → `archives/8.0.2/47b44234bc94661f63e0c4f608b91f26-aa3124d5-4f8b-4b96-b43e-6cfa7e714b90.zip`
-- `reports/8.0.2/e16a01270a66fc7d02a266ed385d7dc7-c955cdc1-56dc-4124-a8af-98f0aff61810.zip` → `archives/8.0.2/e16a01270a66fc7d02a266ed385d7dc7-c955cdc1-56dc-4124-a8af-98f0aff61810.zip`
-- `reports/8.0.2/ca7da69e897d50a62f3fb0bc6f3b011c-4a410dee-f3f6-456a-a5d5-e0cb19b4c511.zip` → `archives/8.0.2/ca7da69e897d50a62f3fb0bc6f3b011c-4a410dee-f3f6-456a-a5d5-e0cb19b4c511.zip`
-- `reports/8.0.2/1c00afcb628c6d57a90110dce97f1700-1723556e-eef5-458b-83e5-8f5bada69e7b.zip` → `archives/8.0.2/1c00afcb628c6d57a90110dce97f1700-1723556e-eef5-458b-83e5-8f5bada69e7b.zip`
-- `reports/8.0.2/12385dc4bdb07d680ccf6eb94a6f24d3-5e293d41-ae30-4f09-8368-358e39827dc9.zip` → `archives/8.0.2/12385dc4bdb07d680ccf6eb94a6f24d3-5e293d41-ae30-4f09-8368-358e39827dc9.zip`
-- `reports/8.0.2/2da2d9ccbe3b8043ee38549a10b3e494-9a8a3092-dce7-40d8-bee0-437bece277a5.zip` → `archives/8.0.2/2da2d9ccbe3b8043ee38549a10b3e494-9a8a3092-dce7-40d8-bee0-437bece277a5.zip`
-- `reports/8.0.2/eabb9355ccf3da277ca54e5f423cb3f0-debe9672-7277-498a-b8b5-c96b1dd5f969.zip` → `archives/8.0.2/eabb9355ccf3da277ca54e5f423cb3f0-debe9672-7277-498a-b8b5-c96b1dd5f969.zip`
-- `reports/8.0.2/7b3cded70076145c2371bf3263edcead-471e207b-504d-45ae-bb00-23dfe293f207.zip` → `archives/8.0.2/7b3cded70076145c2371bf3263edcead-471e207b-504d-45ae-bb00-23dfe293f207.zip`
-- `reports/8.0.2/d58ebc717921f627434c40fa9e93d9c3-c9872d3f-8cee-4079-9c08-5bc369971118.zip` → `archives/8.0.2/d58ebc717921f627434c40fa9e93d9c3-c9872d3f-8cee-4079-9c08-5bc369971118.zip`
-- `reports/8.0.2/6676ca9a13bec9b2a5a39c447cafa5f6-1367fc7e-cea5-46f6-a133-0235353261b6.zip` → `archives/8.0.2/6676ca9a13bec9b2a5a39c447cafa5f6-1367fc7e-cea5-46f6-a133-0235353261b6.zip`
-- `reports/8.0.2/dddcc2b7eb2138db8f2acf664cf5fb61-6744b492-6976-4c42-94ac-ef0f8a097944.zip` → `archives/8.0.2/dddcc2b7eb2138db8f2acf664cf5fb61-6744b492-6976-4c42-94ac-ef0f8a097944.zip`
-- `reports/8.0.2/aec19e95152239be1f9e3e0b328aa2df-041c9f4f-e02e-4eb7-a56a-749006c7264f.zip` → `archives/8.0.2/aec19e95152239be1f9e3e0b328aa2df-041c9f4f-e02e-4eb7-a56a-749006c7264f.zip`
-- `reports/8.0.2/6e8fee61128ffdea47a67e411221a49b-7832a4bc-ef83-4838-931d-ab0dece75c69.zip` → `archives/8.0.2/6e8fee61128ffdea47a67e411221a49b-7832a4bc-ef83-4838-931d-ab0dece75c69.zip`
+- 67 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## 8.0.3 status (checked 2026-10-21)
 
 **Fixed.** 34 of the 56 reports carry `VK_INCOMPLETE`, accepted as a success since `7dfbe4c0` (engine 1.0.1): those machines should start. The 22 others had no device at all: 8.0.3 tells them (`NoVulkanDriver`, exit 97) — Changed, not fixed.
 
-Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (app_system 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, app_kernel 1.3.1 → 1.3.2, core `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
+Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (the application 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, its kernel 1.3.1 → 1.3.2, its frontend `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
 ## Why it stays open (2026-10-22)
 
@@ -116,7 +94,7 @@ The four sibling causes fixed by 1.0.1 were closed on 2026-10-22 on the owner's 
 its signature is the Fatal "No physical device available !" (`src/Vulkan/Instance.cpp:320`), which 1.0.1 still traces
 for a machine with no device at all before the `NoVulkanDriver` dialog and exit 97 — and the downstream tool classifies
 by the first Fatal, before the exit code. Closed now, the 22 no-device reports would come back on 8.0.3 as false
-regressions. It closes once the tool tells exit 97 apart (app_system `crash-report-incompatible-system-is-not-a-crash`)
+regressions. It closes once the tool tells exit 97 apart (a downstream application item)
 and the 8.0.3 reports show no `VK_INCOMPLETE`.
 
 ## What remains
