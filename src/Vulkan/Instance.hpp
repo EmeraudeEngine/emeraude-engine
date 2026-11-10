@@ -34,17 +34,19 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "DebugMessenger.hpp"
+#include "DebugMessenger.hpp" // IWYU pragma: keep (complete type: the inline constructor instantiates ~unique_ptr< DebugMessenger >)
 #include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/RenderDocCapture.hpp"
 #include "Types.hpp"
@@ -54,8 +56,9 @@ namespace EmEn
 {
 	namespace Vulkan
 	{
-		class PhysicalDevice;
 		class Device;
+		class DeviceRequirements;
+		class PhysicalDevice;
 	}
 
 	class Identification;
@@ -700,9 +703,13 @@ namespace EmEn::Vulkan
 			bool checkDeviceCompatibility (const std::shared_ptr< PhysicalDevice > & physicalDevice, const Window * window, size_t & score) const noexcept;
 
 			/**
-			 * @brief Checks the device features presence for a specialized device selector.
+			 * @brief Checks the device features a graphics device needs, for the device selector.
+			 * @note The Vulkan 1.0 core features are only a census: the absent ones are listed in ONE Info line and
+			 * refuse nothing (the features actually requested are checked by createGraphicsDevice()). A device is
+			 * refused for multisampling enabled in the settings without 'sampleRateShading', or, when the scene is
+			 * rendered, for a missing Vulkan 1.2 descriptor-indexing feature (bindless textures), each with an Error.
 			 * @param physicalDevice A reference to the physical device smart pointer.
-			 * @param score A reference to a score to sort the preferred device.
+			 * @param score A reference to a score to sort the preferred device (unused by this check).
 			 * @return bool
 			 */
 			[[nodiscard]]

@@ -6616,6 +6616,15 @@ and MoltenVK's ICD does not implement it. Nothing read the result (engine, proje
 the query, `PhysicalDevice::getPresentRectangles()` and `Surface::presentRectangles()` were removed (owner,
 2026-11-10). Device groups would bring it back BEHIND a capability check (API >= 1.1, the entry point resolved,
 not a portability-subset ICD). A macOS test instance is the only proof: Linux and Windows never showed the message.
+Proved by macOS-PA on engine `5b54312b` (default demo, layer loaded, a real window resize recreating the swapchain):
+0 `VUID-`, 0 `[Error]`, three runs.
+
+The 19 `[Warning]` left in that macOS journal were NOT MoltenVK's: 18 came from `checkDevicesFeaturesForGraphics()`, one
+Warning per Vulkan 1.0 core feature the device lacks (sparse residency, `shaderFloat64`, `wideLines`…), on every
+candidate device, refusing none (its `return false` were commented out). The scan is now a census: ONE Info line per
+device, "does not advertise N of the 55 Vulkan 1.0 core features: …" (owner, 2026-11-10). A Warning about a device
+feature now means a feature the engine REQUESTED and lost (`requestOptionalVK10/11/12` in `createGraphicsDevice()`,
+naming the capability, e.g. "geometryShader … TBN space display unavailable"); a refusal is an Error.
 
 ### A drawn instance's or geometry's buffer destroyed in place (fixed 2026-10-24)
 

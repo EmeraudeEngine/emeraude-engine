@@ -27,13 +27,16 @@
 #include "Instance.hpp"
 
 /* Project configuration. */
+#include "emeraude_config.hpp"
 #include "emeraude_platform.hpp"
 
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <compare>
 #include <cstring>
+#include <iterator>
 #include <limits>
 #include <optional>
 #include <ranges>
@@ -51,6 +54,7 @@
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "BlobTrait.hpp"
 #include "Device.hpp"
 #include "DeviceRequirements.hpp"
 #include "Identification.hpp"
@@ -58,8 +62,15 @@
 #include "PortabilitySubset.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "StaticVector.hpp"
 #include "String.hpp"
+#include "Tracer.hpp"
 #include "Utility.hpp"
+#include "Version.hpp"
+#include "Vulkan/DebugMessenger.hpp"
+#include "Vulkan/Surface.hpp"
+#include "Vulkan/Types.hpp"
 #include "Window.hpp"
 
 namespace EmEn::Vulkan
@@ -1117,9 +1128,10 @@ namespace EmEn::Vulkan
 		/* ⚠️ A feature requested here that the device does not advertise makes vkCreateDevice fail
 		 * with VK_ERROR_FEATURE_NOT_PRESENT for the WHOLE set, naming none of them — so one absent
 		 * feature costs the renderer, and the log says only that a device could not be created.
-		 * `checkDevicesFeaturesForGraphics()` above warns per feature and lets the device through
-		 * (its `return false` are deliberately commented out), so the warnings and the request were
-		 * not connected to each other: the engine observed availability and then asked anyway.
+		 * `checkDevicesFeaturesForGraphics()` used to warn per feature and let the device through
+		 * (its `return false` were commented out), so the warnings and the request were not
+		 * connected to each other: the engine observed availability and then asked anyway. It now
+		 * lists the absent core features in one Info line; the lambdas below are the only verdict.
 		 *
 		 * Measured 2026-09-17 on a GitHub Windows runner against CEF's SwiftShader (software
 		 * device): 26 features absent, three of them requested below — `geometryShader`,
@@ -2003,49 +2015,94 @@ namespace EmEn::Vulkan
 		const auto & properties = physicalDevice->propertiesVK10();
 		const auto & features = physicalDevice->featuresVK10();
 
-		if ( features.robustBufferAccess == 0 )
+		/* NOTE: The Vulkan 1.0 core features are a CENSUS here, not a requirement: no device is refused for lacking one.
+		 * What the engine needs is checked where it is requested (createGraphicsDevice(): requireVK10 refuses the device,
+		 * requestOptionalVK10 warns with the capability lost). The census only tells the reader of the log what the device
+		 * does not advertise — one Info line, not one Warning per feature (2026-11-10: 18 Warnings on every macOS startup). */
+		struct CoreFeature
 		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'robustBufferAccess' feature !";
+			VkBool32 VkPhysicalDeviceFeatures::* member;
+			std::string_view name;
+		};
 
-			//return false;
+		static constexpr auto CoreFeatures = std::to_array< CoreFeature >({
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::robustBufferAccess, .name = "robustBufferAccess"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::fullDrawIndexUint32, .name = "fullDrawIndexUint32"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::imageCubeArray, .name = "imageCubeArray"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::independentBlend, .name = "independentBlend"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::geometryShader, .name = "geometryShader"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::tessellationShader, .name = "tessellationShader"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::sampleRateShading, .name = "sampleRateShading"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::dualSrcBlend, .name = "dualSrcBlend"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::logicOp, .name = "logicOp"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::multiDrawIndirect, .name = "multiDrawIndirect"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::drawIndirectFirstInstance, .name = "drawIndirectFirstInstance"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::depthClamp, .name = "depthClamp"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::depthBiasClamp, .name = "depthBiasClamp"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::fillModeNonSolid, .name = "fillModeNonSolid"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::depthBounds, .name = "depthBounds"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::wideLines, .name = "wideLines"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::largePoints, .name = "largePoints"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::alphaToOne, .name = "alphaToOne"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::multiViewport, .name = "multiViewport"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::samplerAnisotropy, .name = "samplerAnisotropy"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderImageGatherExtended, .name = "shaderImageGatherExtended"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::textureCompressionETC2, .name = "textureCompressionETC2"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::textureCompressionASTC_LDR, .name = "textureCompressionASTC_LDR"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::textureCompressionBC, .name = "textureCompressionBC"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::occlusionQueryPrecise, .name = "occlusionQueryPrecise"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::pipelineStatisticsQuery, .name = "pipelineStatisticsQuery"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::vertexPipelineStoresAndAtomics, .name = "vertexPipelineStoresAndAtomics"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::fragmentStoresAndAtomics, .name = "fragmentStoresAndAtomics"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderTessellationAndGeometryPointSize, .name = "shaderTessellationAndGeometryPointSize"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderStorageImageExtendedFormats, .name = "shaderStorageImageExtendedFormats"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderStorageImageMultisample, .name = "shaderStorageImageMultisample"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderStorageImageReadWithoutFormat, .name = "shaderStorageImageReadWithoutFormat"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderStorageImageWriteWithoutFormat, .name = "shaderStorageImageWriteWithoutFormat"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderUniformBufferArrayDynamicIndexing, .name = "shaderUniformBufferArrayDynamicIndexing"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderSampledImageArrayDynamicIndexing, .name = "shaderSampledImageArrayDynamicIndexing"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderStorageBufferArrayDynamicIndexing, .name = "shaderStorageBufferArrayDynamicIndexing"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderStorageImageArrayDynamicIndexing, .name = "shaderStorageImageArrayDynamicIndexing"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderClipDistance, .name = "shaderClipDistance"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderCullDistance, .name = "shaderCullDistance"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderFloat64, .name = "shaderFloat64"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderInt64, .name = "shaderInt64"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderInt16, .name = "shaderInt16"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderResourceResidency, .name = "shaderResourceResidency"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::shaderResourceMinLod, .name = "shaderResourceMinLod"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::sparseBinding, .name = "sparseBinding"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::sparseResidencyBuffer, .name = "sparseResidencyBuffer"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::sparseResidencyImage2D, .name = "sparseResidencyImage2D"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::sparseResidencyImage3D, .name = "sparseResidencyImage3D"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::sparseResidency2Samples, .name = "sparseResidency2Samples"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::sparseResidency4Samples, .name = "sparseResidency4Samples"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::sparseResidency8Samples, .name = "sparseResidency8Samples"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::sparseResidency16Samples, .name = "sparseResidency16Samples"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::sparseResidencyAliased, .name = "sparseResidencyAliased"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::variableMultisampleRate, .name = "variableMultisampleRate"},
+			CoreFeature{.member = &VkPhysicalDeviceFeatures::inheritedQueries, .name = "inheritedQueries"}
+		});
+
+		const auto missingCount = std::ranges::count_if(CoreFeatures, [&features] (const CoreFeature & coreFeature) {
+			return features.*(coreFeature.member) == VK_FALSE;
+		});
+
+		if ( missingCount > 0 )
+		{
+			TraceInfo trace{ClassId};
+
+			trace << "The physical device '" << properties.deviceName << "' does not advertise " << missingCount << " of the " << CoreFeatures.size() << " Vulkan 1.0 core features:";
+
+			for ( const auto & coreFeature : CoreFeatures )
+			{
+				if ( features.*(coreFeature.member) == VK_FALSE )
+				{
+					trace << ' ' << coreFeature.name;
+				}
+			}
 		}
 
-		if ( features.fullDrawIndexUint32 == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'fullDrawIndexUint32' feature !";
-
-			//return false;
-		}
-
-		if ( features.imageCubeArray == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'imageCubeArray' feature !";
-
-			//return false;
-		}
-
-		if ( features.independentBlend == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'independentBlend' feature !";
-
-			//return false;
-		}
-
-		if ( features.geometryShader == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'geometryShader' feature !";
-
-			//return false;
-		}
-
-		if ( features.tessellationShader == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'tessellationShader' feature !";
-
-			//return false;
-		}
-
-		if ( features.sampleRateShading == 0 )
+		if ( features.sampleRateShading == VK_FALSE )
 		{
 			// TODO: Maybe incorrect assertion !
 			if ( m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples) > 1 )
@@ -2056,351 +2113,6 @@ namespace EmEn::Vulkan
 
 				return false;
 			}
-
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'sampleRateShading' feature !";
-		}
-
-		if ( features.dualSrcBlend == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'dualSrcBlend' feature !";
-
-			//return false;
-		}
-
-		if ( features.logicOp == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'logicOp' feature !";
-
-			//return false;
-		}
-
-		if ( features.multiDrawIndirect == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'multiDrawIndirect' feature !";
-
-			//return false;
-		}
-
-		if ( features.drawIndirectFirstInstance == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'drawIndirectFirstInstance' feature !";
-
-			//return false;
-		}
-
-		if ( features.depthClamp == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'depthClamp' feature !";
-
-			//return false;
-		}
-
-		if ( features.depthBiasClamp == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'depthBiasClamp' feature !";
-
-			//return false;
-		}
-
-		if ( features.fillModeNonSolid == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'fillModeNonSolid' feature !";
-
-			//return false;
-		}
-
-		if ( features.depthBounds == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'depthBounds' feature !";
-
-			//return false;
-		}
-
-		if ( features.wideLines == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'wideLines' feature !";
-
-			//return false;
-		}
-
-		if ( features.largePoints == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'largePoints' feature !";
-
-			//return false;
-		}
-
-		if ( features.alphaToOne == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'alphaToOne' feature !";
-
-			//return false;
-		}
-
-		if ( features.multiViewport == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'multiViewport' feature !";
-
-			//return false;
-		}
-
-		if ( features.samplerAnisotropy == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'samplerAnisotropy' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderImageGatherExtended == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderImageGatherExtended' feature !";
-
-			//return false;
-		}
-
-		if ( features.textureCompressionETC2 == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'textureCompressionETC2' feature !";
-
-			//return false;
-		}
-
-		if ( features.textureCompressionASTC_LDR == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'textureCompressionASTC_LDR' feature !";
-
-			//return false;
-		}
-
-		if ( features.textureCompressionBC == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'textureCompressionBC' feature !";
-
-			//return false;
-		}
-
-		if ( features.occlusionQueryPrecise == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'occlusionQueryPrecise' feature !";
-
-			//return false;
-		}
-
-		if ( features.pipelineStatisticsQuery == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'pipelineStatisticsQuery' feature !";
-
-			//return false;
-		}
-
-		if ( features.vertexPipelineStoresAndAtomics == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'vertexPipelineStoresAndAtomics' feature !";
-
-			//return false;
-		}
-
-		if ( features.fragmentStoresAndAtomics == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'fragmentStoresAndAtomics' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderTessellationAndGeometryPointSize == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderTessellationAndGeometryPointSize' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderImageGatherExtended == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderImageGatherExtended' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderStorageImageExtendedFormats == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderStorageImageExtendedFormats' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderStorageImageMultisample == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderStorageImageMultisample' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderStorageImageReadWithoutFormat == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderStorageImageReadWithoutFormat' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderStorageImageWriteWithoutFormat == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderStorageImageWriteWithoutFormat' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderUniformBufferArrayDynamicIndexing == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderUniformBufferArrayDynamicIndexing' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderSampledImageArrayDynamicIndexing == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderSampledImageArrayDynamicIndexing' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderStorageBufferArrayDynamicIndexing == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderStorageBufferArrayDynamicIndexing' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderStorageImageArrayDynamicIndexing == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderStorageImageArrayDynamicIndexing' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderClipDistance == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderClipDistance' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderCullDistance == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderCullDistance' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderFloat64 == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderFloat64' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderInt64 == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderInt64' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderInt16 == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderInt16' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderResourceResidency == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderResourceResidency' feature !";
-
-			//return false;
-		}
-
-		if ( features.shaderResourceMinLod == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'shaderResourceMinLod' feature !";
-
-			//return false;
-		}
-
-		if ( features.sparseBinding == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'sparseBinding' feature !";
-
-			//return false;
-		}
-
-		if ( features.sparseResidencyBuffer == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'sparseResidencyBuffer' feature !";
-
-			//return false;
-		}
-
-		if ( features.sparseResidencyImage2D == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'sparseResidencyImage2D' feature !";
-
-			//return false;
-		}
-
-		if ( features.sparseResidencyImage3D == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'sparseResidencyImage3D' feature !";
-
-			//return false;
-		}
-
-		if ( features.sparseResidency2Samples == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'sparseResidency2Samples' feature !";
-
-			//return false;
-		}
-
-		if ( features.sparseResidency4Samples == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'sparseResidency4Samples' feature !";
-
-			//return false;
-		}
-
-		if ( features.sparseResidency8Samples == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'sparseResidency8Samples' feature !";
-
-			//return false;
-		}
-
-		if ( features.sparseResidency16Samples == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'sparseResidency16Samples' feature !";
-
-			//return false;
-		}
-
-		if ( features.sparseResidencyAliased == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'sparseResidencyAliased' feature !";
-
-			//return false;
-		}
-
-		if ( features.variableMultisampleRate == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'variableMultisampleRate' feature !";
-
-			//return false;
-		}
-
-		if ( features.inheritedQueries == 0 )
-		{
-			TraceWarning{ClassId} << "The physical device '" << properties.deviceName << "' is missing 'inheritedQueries' feature !";
-
-			//return false;
 		}
 
 		/* NOTE: Below the scene-rendering target the engine draws the overlay only: no bindless, nothing more to check. */
