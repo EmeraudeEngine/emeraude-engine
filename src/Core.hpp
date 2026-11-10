@@ -343,6 +343,9 @@ namespace EmEn
 				uint64_t budgetBytes{0};
 				/** @} */
 				Cause cause{Cause::OutOfVideoMemory};
+				/** @brief An integrated GPU (Apple silicon, Intel UHD…): its "video memory" is the system memory, shared
+				 * (the message says so instead of naming a graphics card's own memory, macOS-PA 2026-11-10). */
+				bool sharedMemory{false};
 			};
 
 			/** @brief How long the application may take to acknowledge a stop requested by the system (end of the user

@@ -2036,7 +2036,10 @@ namespace EmEn
 
 		if ( const auto & device = m_graphicsRenderer.device(); device != nullptr )
 		{
-			failure.deviceName = device->physicalDevice()->propertiesVK10().deviceName;
+			const auto & properties = device->physicalDevice()->propertiesVK10();
+
+			failure.deviceName = properties.deviceName;
+			failure.sharedMemory = properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
 
 			for ( const auto & heap : device->memoryBudgets() )
 			{
@@ -2063,8 +2066,10 @@ namespace EmEn
 			named += ")";
 		}
 
+		/* NOTE: An integrated GPU has no memory of its own: its largest device-local heap is the system memory. */
 		failure.message =
-			"The video memory of the graphics card is full" + named + ": the window can no longer be drawn and the application closes. "
+			std::string{failure.sharedMemory ? "The graphics memory, shared with the system, is full" : "The video memory of the graphics card is full"} + named +
+			": the window can no longer be drawn and the application closes. "
 			"Other programs using the graphics card may hold this memory: closing them before restarting may help.";
 
 		return failure;

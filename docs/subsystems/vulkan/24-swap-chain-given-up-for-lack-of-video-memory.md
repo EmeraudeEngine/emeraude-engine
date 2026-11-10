@@ -76,8 +76,10 @@ native dialog can show: anything the engine draws (an overlay, a web view) needs
   in one session (system memory exhausted as well). The stop told to the user covers those cases; the injection is
   what proves it on the three OSes (Linux, Windows, macOS: exit 95, 0 VUID).
 - macOS (macOS-PA, Apple M6, engine d4bf3bab): the injection exits **95**, the reference 0, validation layer loaded,
-  0 VUID, no crash report. ⚠️ Unified memory: the message names 16384 MiB, the whole system memory. The real test is
-  not run on a Mac (it would fill the system memory).
+  0 VUID, no crash report. Unified memory: the message named 16384 MiB of "video memory", the whole system memory;
+  since then an integrated GPU (`VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU`) sets `GraphicsFailure::sharedMemory` and the
+  message says "The graphics memory, shared with the system, is full". The real test is not run on a Mac (it would
+  fill the system memory).
 - ⚠️ The runner crashed Steam (another Chromium-based process on the same GPU) while the memory was full: whoever
   allocates at the wrong moment falls. Close the GPU applications of the machine before the real test.
 - ⚠️ Side finding: at 11441x6416 the process died inside the libdecor GTK decoration plugin ("creating a buffer file
