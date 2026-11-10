@@ -26,21 +26,36 @@
 
 #include "Surface.hpp"
 
+/* Project configuration. */
+#include "emeraude_platform.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <chrono>
 #include <cstring>
+#include <mutex>
+#include <sstream>
+#include <vector>
+
+/* Third-party inclusions. */
+#include "magic_enum/magic_enum.hpp"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
-#include "PixelFactory/Processor.hpp"
 #include "Manager.hpp"
+#include "Overlay/Framebuffer.hpp"
+#include "Overlay/FramebufferProperties.hpp"
+#include "PixelFactory/Color.hpp"
+#include "PixelFactory/Processor.hpp"
+#include "PixelFactory/Types.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/Device.hpp"
-#include "Vulkan/ExternalImageDescriptor.hpp"
+#include "Vulkan/ExternalImageDescriptor.hpp" // IWYU pragma: keep (complete type: the IS_WINDOWS || IS_MACOS import paths read its members)
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/MemoryRegion.hpp"
@@ -49,7 +64,13 @@
 #include "Vulkan/Sampler.hpp"
 #include "Vulkan/Sync/Fence.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
-#include "magic_enum/magic_enum.hpp"
+#include "Vulkan/TransferManager.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Settings;
+}
 
 namespace EmEn::Overlay
 {
