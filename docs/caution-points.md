@@ -6603,6 +6603,20 @@ an identical one still gives zero). Runtime check (Linux, RTX 3070 Ti, window-le
 
 ## Vulkan Validation
 
+### A loader message is traced at its own severity — and MoltenVK lacks the present rectangles (2026-11-10)
+
+Since the "no direct stream access" lot (engine `b3fe29ff`) the debug messenger traces every message through the
+Tracer, at the Vulkan message's own severity (WARNING → `[Warning]`, ERROR → `[Error]`): loader GENERAL messages that
+were raw stderr text now count in a test instance's `[Error]` bar.
+
+The first one it surfaced: on macOS (M6, MoltenVK) every run showed three loader ERRORs, "ICD associated with
+VkPhysicalDevice does not support GetPhysicalDevicePresentRectanglesKHX" — `Surface::create()` and `update()` queried
+`vkGetPhysicalDevicePresentRectanglesKHR` (device groups: several GPUs presenting one image) with no capability check,
+and MoltenVK's ICD does not implement it. Nothing read the result (engine, projet-alpha, downstream consumers):
+the query, `PhysicalDevice::getPresentRectangles()` and `Surface::presentRectangles()` were removed (owner,
+2026-11-10). Device groups would bring it back BEHIND a capability check (API >= 1.1, the entry point resolved,
+not a portability-subset ICD). A macOS test instance is the only proof: Linux and Windows never showed the message.
+
 ### A drawn instance's or geometry's buffer destroyed in place (fixed 2026-10-24)
 
 `VUID-vkDestroyBuffer-buffer-00922` ("currently in use by VkCommandBuffer") then the same `VkBuffer` in

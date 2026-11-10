@@ -27,9 +27,11 @@
 #include "Surface.hpp"
 
 /* STL inclusions. */
+#include <optional>
 #include <sstream>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Device.hpp"
 #include "Instance.hpp"
 #include "PhysicalDevice.hpp"
@@ -94,7 +96,9 @@ namespace EmEn::Vulkan
 		m_capabilities = physicalDevice->getSurfaceCapabilities(m_handle);
 		m_formats = physicalDevice->getSurfaceFormats(m_handle);
 		m_presentModes = physicalDevice->getSurfacePresentModes(m_handle);
-		m_presentRectangles = physicalDevice->getPresentRectangles(m_handle);
+
+		/* NOTE: No present rectangles (vkGetPhysicalDevicePresentRectanglesKHR, device groups): nothing read them, and
+		 * MoltenVK's ICD lacks the entry point, the loader reported an ERROR on every macOS run (removed 2026-11-10). */
 
 		return true;
 	}
@@ -114,7 +118,6 @@ namespace EmEn::Vulkan
 		m_capabilities = physicalDevice->getSurfaceCapabilities(m_handle);
 		m_formats = physicalDevice->getSurfaceFormats(m_handle);
 		m_presentModes = physicalDevice->getSurfacePresentModes(m_handle);
-		m_presentRectangles = physicalDevice->getPresentRectangles(m_handle);
 
 		return true;
 	}

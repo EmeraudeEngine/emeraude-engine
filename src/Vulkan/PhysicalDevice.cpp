@@ -26,6 +26,9 @@
 
 #include "PhysicalDevice.hpp"
 
+/* Project configuration. */
+#include "emeraude_platform.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <cstring>
@@ -34,9 +37,12 @@
 #include <sstream>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "String.hpp"
 #include "Tracer.hpp"
 #include "Utility.hpp"
+#include "Vulkan/PortabilitySubset.hpp"
+#include "Vulkan/Types.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -680,20 +686,6 @@ namespace EmEn::Vulkan
 		}
 
 		return presentModes;
-	}
-
-	std::vector< VkRect2D >
-	PhysicalDevice::getPresentRectangles (VkSurfaceKHR surface) const noexcept
-	{
-		std::vector< VkRect2D > presentRectangles{};
-
-		/* NOTE: VK_INCOMPLETE is a success code (the list changed between the two calls): enumerate() handles it. */
-		if ( const auto outcome = enumerate(presentRectangles, [&] (uint32_t * count, auto * data) { return vkGetPhysicalDevicePresentRectanglesKHR(m_physicalDevice, surface, count, data); }); !outcome.succeeded() )
-		{
-			TraceError{ClassId} << "Unable to get present rectangles : " << vkResultToCString(outcome.result) << " !";
-		}
-
-		return presentRectangles;
 	}
 
 	uint32_t

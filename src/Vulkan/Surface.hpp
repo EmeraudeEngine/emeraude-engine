@@ -34,6 +34,9 @@
 #include <string>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
@@ -159,17 +162,6 @@ namespace EmEn::Vulkan
 			}
 
 			/**
-			 * @brief Returns the surface present rectangles.
-			 * @return const std::vector< VkRect2D > &
-			 */
-			[[nodiscard]]
-			const std::vector< VkRect2D > &
-			presentRectangles () const noexcept
-			{
-				return m_presentRectangles;
-			}
-
-			/**
 			 * @brief Returns whether this surface supports the presentation.
 			 * @return bool
 			 */
@@ -195,7 +187,6 @@ namespace EmEn::Vulkan
 			VkSurfaceCapabilitiesKHR m_capabilities{};
 			std::vector< VkSurfaceFormatKHR > m_formats;
 			std::vector< VkPresentModeKHR > m_presentModes;
-			std::vector< VkRect2D > m_presentRectangles;
 			bool m_supported{false};
 	};
 }

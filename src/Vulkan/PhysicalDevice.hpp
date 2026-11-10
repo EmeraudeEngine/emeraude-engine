@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -746,14 +747,6 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			std::vector< VkPresentModeKHR > getSurfacePresentModes (VkSurfaceKHR surface) const noexcept;
-
-			/**
-			 * @brief Returns the physical device presents rectangles.
-			 * @param surface The surface handle.
-			 * @return std::vector< VkRect2D >
-			 */
-			[[nodiscard]]
-			std::vector< VkRect2D > getPresentRectangles (VkSurfaceKHR surface) const noexcept;
 
 			/**
 			 * @brief Returns the physical device queue family performance query passes.
