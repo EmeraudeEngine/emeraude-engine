@@ -1444,4 +1444,45 @@ namespace EmEn::Vulkan
 
 		destruction();
 	}
+
+	void
+	Device::publishUploadPoint (const Queue & queue, uint64_t value) noexcept
+	{
+		if ( value == 0 )
+		{
+			return;
+		}
+
+		const Base::MutexLock lock{m_uploadFrontierAccess};
+
+		/* NOTE: A queue completes in submission order: its latest value covers the earlier ones. */
+		for ( auto & point : m_uploadFrontier )
+		{
+			if ( point.queue == &queue )
+			{
+				point.value = std::max(point.value, value);
+
+				return;
+			}
+		}
+
+		/* NOTE: One point per queue and at most MaxQueues queues (m_queues): the frontier cannot fill up. A full one
+		 * would be a contract fault, never a dropped point. */
+		if ( m_uploadFrontier.full() )
+		{
+			TraceFatal{ClassId} << "The upload frontier holds more queues than the device owns !";
+
+			std::abort();
+		}
+
+		m_uploadFrontier.push_back(SubmissionPoint{.queue = &queue, .value = value});
+	}
+
+	Device::UploadFrontier
+	Device::uploadFrontier () const noexcept
+	{
+		const Base::MutexLock lock{m_uploadFrontierAccess};
+
+		return m_uploadFrontier;
+	}
 }

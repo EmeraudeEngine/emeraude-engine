@@ -1,7 +1,7 @@
 ---
 id: single-queue-upload-not-ordered-before-draw
 title: On a device with one queue, a buffer upload is not ordered before the draw that reads it (SYNC-HAZARD, Intel iGPU)
-status: open
+status: in-progress
 priority: high
 scope: Vulkan/TransferManager, the geometry upload path, Graphics/Renderer (queue submission)
 opened: 2026-10-25
@@ -34,12 +34,20 @@ Seen again (Windows-PA, the same iGPU, 2026-10-25, the GI anti-lag A/B runs): 3 
 `vkCmdCopyBuffer` on the same queue: two in `reflexion-debug`, one in `labyrinth`. A model's buffer, not only the
 144-byte cube: any upload can race its first draw.
 
+## State (2026-11-11): fixed on Linux, awaiting macOS and Windows
+
+Fixed by the upload ordering lot (engine `docs/subsystems/vulkan/25-uploads-ordered-before-their-readers.md`): every
+upload publishes its completion point (`Device::publishUploadPoint()`) and every reader batch of the renderer and the
+AS builds waits for `Device::uploadFrontier()` on the GPU. Measured on Linux, Intel RPL-S (one queue),
+`sponza --demo-options 1`, window-less, Synchronization Validation on: before, 3/3 runs `SYNC-HAZARD-READ-AFTER-WRITE`
+(a 10 016 880-byte index buffer); after, 4/4 runs 0 hazard, 0 VUID, 0 `[Error]`.
+
 ## What remains
 
-- [ ] Reproduce on Linux by forcing the single-queue path (a device-queue configuration with the transfer queue off),
-      under synchronization validation.
-- [ ] Record the buffer barrier (or the semaphore) on the single-queue path; prove 0 SYNC-HAZARD on the iGPU (several
-      runs: it is intermittent).
+- macOS-PA (one MoltenVK queue, where it was first seen): `animation-debug` and `sponza --demo-options 1` with
+  Synchronization Validation, several runs: 0 `SYNC-HAZARD`.
+- Windows-PA, Intel iGPU (`ForceGPU`), `sky-lab`, `reflexion-debug`, `labyrinth`: 11 runs, 0 `SYNC-HAZARD` (it was 3 in 11).
+- Then delete this item (its knowledge is in vulkan doc 25 and `docs/caution-points.md`).
 
 ## References
 

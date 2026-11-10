@@ -196,6 +196,18 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns the completion points of the submissions still writing this image, for a new write to wait
+			 * for them (SynchInfo::waitsFor()).
+			 * @return PendingSubmissions::Points
+			 */
+			[[nodiscard]]
+			PendingSubmissions::Points
+			pendingWrites () const noexcept
+			{
+				return m_pendingSubmissions.points();
+			}
+
+			/**
 			 * @brief Returns the image vulkan handle.
 			 * @return VkImage
 			 */

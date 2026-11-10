@@ -6667,7 +6667,21 @@ modal backdrop that had finished fading out, cut by a straight edge at the botto
 with one line per paint and per upload: `partial 101-1009` (old frame) → `full 0-1009` (new frame) → `partial 32-166`
 (new) left rows 166+ old. A resident image (`SHADER_READ_ONLY_OPTIMAL`) now always takes the region path, whole image
 included; `writeData()` only uploads a fresh image, which has nothing earlier to race.
-`docs/todo/overlay-surface-reupload-races-on-two-queues.md` keeps the synchronization-validation re-run.
+The region path itself still rotated over the graphics queues: two region uploads stayed unordered until 2026-11-11
+(the entry below).
+
+### ⚠️⚠️ An upload was ordered before NOTHING: not its first draw, not the next write of the same object (fixed 2026-11-11)
+
+An upload returns once SUBMITTED, on a queue picked round-robin, while the renderer draws on its own fixed queue; a host
+fence wait orders the host only. On the Intel iGPU (one queue), `sponza --demo-options 1` under Synchronization
+Validation: 3/3 runs `SYNC-HAZARD-READ-AFTER-WRITE` (a 10 MB index buffer drawn after its `vkCmdCopyBuffer` on the same
+queue with no barrier), the submit rejected, then a SIGSEGV; on a downstream application's web views (RTX 3070 Ti),
+10 `SYNC-HAZARD-WRITE-RACING-WRITE` between two region uploads on two graphics queues. Now: every write of a buffer or
+an image waits on the GPU for the previous writes of that object (`pendingWrites()` + `SynchInfo::waitsFor()`) and
+publishes its point (`Device::publishUploadPoint()`); every reader batch (the renderer's four submissions, the AS
+builds) waits for `Device::uploadFrontier()`, taken after recording. After: 0 hazard in every run. **A new GPU writer
+publishes its point; a new reader batch waits for the frontier** — no message warns you otherwise, Synchronization
+Validation aside. Engine `docs/subsystems/vulkan/25-uploads-ordered-before-their-readers.md`.
 
 ### ⚠️⚠️ A DEVICE_LOST with 0 VUID and `READ_INVALID addr=0x0` = a shader read through a NULL buffer address (2026-10-07, FIXED)
 

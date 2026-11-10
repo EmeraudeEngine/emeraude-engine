@@ -26,11 +26,27 @@
 
 #include "ImageTransferOperation.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
+#include <cstdint>
+#include <span>
+#include <string>
 
 /* Local inclusions. */
 #include "Sync/ImageMemoryBarrier.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/Buffer.hpp"
+#include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/CommandPool.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/Image.hpp"
+#include "Vulkan/Queue.hpp"
+#include "Vulkan/Sync/Fence.hpp"
+#include "Vulkan/Sync/Semaphore.hpp"
+#include "Vulkan/Types.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -204,9 +220,13 @@ namespace EmEn::Vulkan
 
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 
+			/* NOTE: A new write of the image waits, on the GPU, for its previous writes: two uploads of one image on two
+			 * queues are otherwise unordered, and the older one could land last (a stale band of an overlay surface). */
+			const auto previousWrites = dstImage.pendingWrites();
+
 			uint64_t transferValue = 0;
 
-			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1}).tracksCompletion(transferValue)) )
+			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1}).waitsFor({previousWrites.data(), previousWrites.size()}).tracksCompletion(transferValue)) )
 			{
 				Tracer::error(ClassId, "Unable to transfer an image (1/2) !");
 
@@ -365,6 +385,7 @@ namespace EmEn::Vulkan
 			}
 
 			dstImage.recordPendingSubmission(*queue, graphicsValue);
+			device->publishUploadPoint(*queue, graphicsValue);
 
 			dstImage.setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
@@ -423,9 +444,13 @@ namespace EmEn::Vulkan
 
 			VkSemaphore semaphoreHandle = m_semaphore->handle();
 
+			/* NOTE: A new write of the image waits, on the GPU, for its previous writes: two uploads of one image on two
+			 * queues are otherwise unordered, and the older one could land last (a stale band of an overlay surface). */
+			const auto previousWrites = dstImage.pendingWrites();
+
 			uint64_t transferValue = 0;
 
-			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1}).tracksCompletion(transferValue)) )
+			if ( !queue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1}).waitsFor({previousWrites.data(), previousWrites.size()}).tracksCompletion(transferValue)) )
 			{
 				Tracer::error(ClassId, "Unable to transfer compressed image (1/2) !");
 
@@ -476,6 +501,7 @@ namespace EmEn::Vulkan
 			}
 
 			dstImage.recordPendingSubmission(*queue, graphicsValue);
+			device->publishUploadPoint(*queue, graphicsValue);
 
 			dstImage.setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}
@@ -557,9 +583,14 @@ namespace EmEn::Vulkan
 		{
 			auto * queue = device->getPrimaryQueue(QueuePriority::High);
 
+			/* NOTE: A region write waits, on the GPU, for the previous writes of the image: two region uploads on two
+			 * queues of the family (getPrimaryQueue() rotates) were unordered, and the older band could land last —
+			 * 10 SYNC-HAZARD-WRITE-RACING-WRITE on a web-view surface, NVIDIA, 2026-11-10. */
+			const auto previousWrites = dstImage.pendingWrites();
+
 			uint64_t graphicsValue = 0;
 
-			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.withFence(m_operationFence->handle()).tracksCompletion(graphicsValue)) )
+			if ( !queue->submit(*m_graphicsCommandBuffer, SynchInfo{}.waitsFor({previousWrites.data(), previousWrites.size()}).withFence(m_operationFence->handle()).tracksCompletion(graphicsValue)) )
 			{
 				Tracer::error(ClassId, "Unable to transfer an image region !");
 
@@ -567,6 +598,7 @@ namespace EmEn::Vulkan
 			}
 
 			dstImage.recordPendingSubmission(*queue, graphicsValue);
+			device->publishUploadPoint(*queue, graphicsValue);
 
 			dstImage.setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		}

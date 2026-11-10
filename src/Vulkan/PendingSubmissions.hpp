@@ -139,6 +139,21 @@ namespace EmEn::Vulkan
 			void record (const Queue & queue, uint64_t value) noexcept;
 
 			/**
+			 * @brief Returns a copy of the points, keeping them.
+			 * @note For a new write of the object to wait for the previous ones on the GPU (SynchInfo::waitsFor()): two
+			 * uploads of one object on two queues are otherwise unordered, and the older one can land last.
+			 * @return Points
+			 */
+			[[nodiscard]]
+			Points
+			points () const noexcept
+			{
+				const Base::MutexLock lock{m_mutex};
+
+				return m_points;
+			}
+
+			/**
 			 * @brief Returns the points not reached yet and forgets every point.
 			 * @note Called once by the object's destruction.
 			 * @return Points

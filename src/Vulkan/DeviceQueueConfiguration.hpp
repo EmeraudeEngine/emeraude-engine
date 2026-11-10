@@ -36,6 +36,7 @@
 /* Local inclusions for usages. */
 #include "StaticVector.hpp"
 #include "Queue.hpp"
+#include "Types.hpp"
 
 namespace EmEn::Vulkan
 {

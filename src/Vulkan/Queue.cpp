@@ -26,12 +26,20 @@
 
 #include "Queue.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <iterator>
+#include <ranges>
+
 /* Local inclusions. */
-#include "StaticVector.hpp"
+#include "BlobTrait.hpp"
 #include "CommandBuffer.hpp"
 #include "Device.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Utility.hpp"
+#include "Vulkan/PendingSubmissions.hpp"
+#include "Vulkan/Types.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -124,6 +132,61 @@ namespace EmEn::Vulkan
 			}
 		}
 
+		/* NOTE: Completion points join the binary waits in ONE array: once a wait is a timeline, Vulkan wants a value for
+		 * every wait (ignored for a binary one, VUID-VkSubmitInfo-pNext-03240). Two points on one queue keep the
+		 * highest value (a queue completes in order). */
+		const auto waitsPoints = !synchInfo.waitPoints.empty();
+
+		Base::StaticVector< VkSemaphore, MaxWaitSemaphores > waitSemaphores;
+		Base::StaticVector< uint64_t, MaxWaitSemaphores > waitValues;
+		Base::StaticVector< VkPipelineStageFlags, MaxWaitSemaphores > waitStages;
+
+		if ( waitsPoints )
+		{
+			if ( synchInfo.waitSemaphores.size() + synchInfo.waitPoints.size() > MaxWaitSemaphores )
+			{
+				TraceError{ClassId} << "A submission waits at most " << MaxWaitSemaphores << " semaphores, completion points included !";
+
+				return false;
+			}
+
+			for ( size_t index = 0; index < synchInfo.waitSemaphores.size(); ++index )
+			{
+				waitSemaphores.push_back(synchInfo.waitSemaphores[index]);
+				waitValues.push_back(0);
+				waitStages.push_back(synchInfo.waitStages[index]);
+			}
+
+			for ( const auto & point : synchInfo.waitPoints )
+			{
+				/* NOTE: A value of 0 tracks nothing: there is nothing to wait for. */
+				if ( point.value == 0 )
+				{
+					continue;
+				}
+
+				if ( point.queue == nullptr || point.queue->timelineHandle() == VK_NULL_HANDLE )
+				{
+					TraceError{ClassId} << "A completion point names no queue timeline: the submission is refused !";
+
+					return false;
+				}
+
+				if ( auto * const known = std::ranges::find(waitSemaphores, point.queue->timelineHandle()); known != waitSemaphores.end() )
+				{
+					auto & knownValue = waitValues[static_cast< size_t >(std::distance(waitSemaphores.begin(), known))];
+
+					knownValue = std::max(knownValue, point.value);
+
+					continue;
+				}
+
+				waitSemaphores.push_back(point.queue->timelineHandle());
+				waitValues.push_back(point.value);
+				waitStages.push_back(VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+			}
+		}
+
 		VkCommandBuffer commandBufferHandle = commandBuffer.handle();
 
 		VkTimelineSemaphoreSubmitInfo timelineInfo{};
@@ -141,6 +204,17 @@ namespace EmEn::Vulkan
 			.signalSemaphoreCount = static_cast< uint32_t >(synchInfo.signalSemaphores.size()),
 			.pSignalSemaphores = synchInfo.signalSemaphores.data(),
 		};
+
+		if ( waitsPoints )
+		{
+			timelineInfo.waitSemaphoreValueCount = static_cast< uint32_t >(waitValues.size());
+			timelineInfo.pWaitSemaphoreValues = waitValues.data();
+
+			submitInfo.pNext = &timelineInfo;
+			submitInfo.waitSemaphoreCount = static_cast< uint32_t >(waitSemaphores.size());
+			submitInfo.pWaitSemaphores = waitSemaphores.data();
+			submitInfo.pWaitDstStageMask = waitStages.data();
+		}
 
 		/* [VULKAN-CPU-SYNC] vkQueueSubmit() */
 		const auto deviceLock = m_device.lockAccess();
@@ -195,6 +269,14 @@ namespace EmEn::Vulkan
 		if ( synchInfo.waitSemaphores.size() != synchInfo.waitStages.size() )
 		{
 			Tracer::error(ClassId, "Wait semaphore count must equal wait stage count!");
+
+			return false;
+		}
+
+		/* NOTE: A synchronization-only batch drains binary semaphores; it reads nothing an upload wrote. */
+		if ( !synchInfo.waitPoints.empty() || synchInfo.timelineValue != nullptr )
+		{
+			Tracer::error(ClassId, "A synchronization-only submission takes no completion point and tracks nothing !");
 
 			return false;
 		}

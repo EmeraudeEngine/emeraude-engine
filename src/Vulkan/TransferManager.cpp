@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <chrono>
+#include <compare>
 #include <cstddef>
 #include <mutex>
 #include <span>
@@ -39,8 +40,14 @@
 #include "CommandBuffer.hpp"
 #include "Device.hpp"
 #include "Image.hpp"
+#include "PixelFactory/Types.hpp"
 #include "Sync/Fence.hpp"
 #include "Sync/ImageMemoryBarrier.hpp"
+#include "Vulkan/BufferTransferOperation.hpp"
+#include "Vulkan/CommandPool.hpp"
+#include "Vulkan/ImageTransferOperation.hpp"
+#include "Vulkan/Queue.hpp"
+#include "Vulkan/Types.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -230,12 +237,21 @@ namespace EmEn::Vulkan
 
 		const auto * queue = m_device->getPrimaryQueue(QueuePriority::High);
 
-		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.withFence(m_imageLayoutTransitionFence->handle())) )
+		/* NOTE: This write of the image waits for its previous writes, and its readers wait for it on the GPU
+		 * (Device::uploadFrontier()): the fence wait below orders the HOST only, never another queue's reads. */
+		const auto previousWrites = image.pendingWrites();
+
+		uint64_t writeValue = 0;
+
+		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.waitsFor({previousWrites.data(), previousWrites.size()}).withFence(m_imageLayoutTransitionFence->handle()).tracksCompletion(writeValue)) )
 		{
 			TraceError{ClassId} << "Unable to submit the image layout transition command buffer for the image '" << image.identifier() << "' !";
 
 			return false;
 		}
+
+		image.recordPendingSubmission(*queue, writeValue);
+		m_device->publishUploadPoint(*queue, writeValue);
 
 		if ( !m_imageLayoutTransitionFence->wait() )
 		{
@@ -863,12 +879,21 @@ namespace EmEn::Vulkan
 
 		const auto * queue = m_device->getPrimaryQueue(QueuePriority::High);
 
-		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.withFence(m_imageLayoutTransitionFence->handle())) )
+		/* NOTE: This write of the image waits for its previous writes, and its readers wait for it on the GPU
+		 * (Device::uploadFrontier()): the fence wait below orders the HOST only, never another queue's reads. */
+		const auto previousWrites = image.pendingWrites();
+
+		uint64_t writeValue = 0;
+
+		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.waitsFor({previousWrites.data(), previousWrites.size()}).withFence(m_imageLayoutTransitionFence->handle()).tracksCompletion(writeValue)) )
 		{
 			TraceError{ClassId} << "Unable to submit the command buffer for clearing the depth image '" << image.identifier() << "' !";
 
 			return false;
 		}
+
+		image.recordPendingSubmission(*queue, writeValue);
+		m_device->publishUploadPoint(*queue, writeValue);
 
 		if ( !m_imageLayoutTransitionFence->wait() )
 		{
@@ -926,12 +951,21 @@ namespace EmEn::Vulkan
 
 		const auto * queue = m_device->getPrimaryQueue(QueuePriority::High);
 
-		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.withFence(m_imageLayoutTransitionFence->handle())) )
+		/* NOTE: This write of the image waits for its previous writes, and its readers wait for it on the GPU
+		 * (Device::uploadFrontier()): the fence wait below orders the HOST only, never another queue's reads. */
+		const auto previousWrites = image.pendingWrites();
+
+		uint64_t writeValue = 0;
+
+		if ( !queue->submit(*m_imageLayoutTransitionCommandBuffer, SynchInfo{}.waitsFor({previousWrites.data(), previousWrites.size()}).withFence(m_imageLayoutTransitionFence->handle()).tracksCompletion(writeValue)) )
 		{
 			TraceError{ClassId} << "Unable to submit the command buffer for clearing the color image '" << image.identifier() << "' !";
 
 			return false;
 		}
+
+		image.recordPendingSubmission(*queue, writeValue);
+		m_device->publishUploadPoint(*queue, writeValue);
 
 		if ( !m_imageLayoutTransitionFence->wait() )
 		{

@@ -30,6 +30,12 @@ the former item `bindless-ibl-slots-rewritten-while-in-flight`). The same class 
   reflections (251.3 against 251.0 on 1.9 % of the pixels); not at 8 FPS. Not proven: read how the material uniform
   data is buffered (one region, or one per frame in flight) first.
 
+- **Overlay surface images** (2026-11-11): a region re-upload (`ImageTransferOperation::transferRegion()`) rewrites the
+  ACTIVE image in place, on a rotated graphics queue, while frames in flight on the renderer's queue may still sample
+  it; it waits for the previous WRITES of the image (vulkan doc 25), not for those reads. Synchronization Validation
+  reported nothing on Linux (a downstream application's web views, `light-and-shadow-debug`): read why first (the
+  frame fence of the slot? the layer's tracking?) before calling it a defect.
+
 ## What remains
 
 - For each case, read how it is buffered and say which frames can read it. Measure the visible ones with

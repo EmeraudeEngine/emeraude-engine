@@ -1,7 +1,7 @@
 ---
 id: overlay-surface-reupload-races-on-two-queues
 title: A re-upload of an overlay surface races the previous upload under synchronization validation
-status: open
+status: in-progress
 priority: high
 scope: Vulkan/ImageTransferOperation, Vulkan/TransferManager, Overlay/Surface
 opened: 2026-09-26
@@ -64,13 +64,21 @@ What the message says:
   to the region path, whole image included. `Image::writeData()` now only uploads a fresh image, which has no earlier
   upload to race. `docs/caution-points.md` § Vulkan Validation.
 
+## State (2026-11-11): region versus region fixed on Linux
+
+`b3745cc1` left the region path on `getPrimaryQueue()`, which rotates over the graphics queues: on a downstream
+application's web views (Linux, RTX 3070 Ti, 2026-11-10), 10 `SYNC-HAZARD-WRITE-RACING-WRITE` between two region uploads
+of one surface, 4 of them falling back to the full upload under the layer. Every write of an image now waits on the GPU
+for the previous writes of that image (`Image::pendingWrites()` + `SynchInfo::waitsFor()`, vulkan doc 25): the same
+scenario gives 0 hazard, 0 fallback, no stale band; `light-and-shadow-debug --demo-options 0,1` (the notifier) gives
+0 hazard. The general case (any image re-uploaded twice) is covered by the same rule.
+
 ## What remains
 
-- Re-run the same launch with synchronization validation: no `SYNC-HAZARD` from `ImageTransferOperation`,
-  and the notifier still draws. The notifier's startup hazard above was two uploads of the same image on two
-  queues; the second one now goes through the region path, so the hazard should be gone — to be measured.
-- The general case (any `Image` re-uploaded through `writeData()` twice, outside the overlay) is untouched:
-  `recordPendingSubmission()` still only defers destruction.
+- Windows-PA and macOS-PA: a web-view or notifier scenario with Synchronization Validation, 0 `SYNC-HAZARD` from
+  `ImageTransferOperation`, the notifier drawn. Then delete this item.
+- A re-upload still does not wait for the FRAMES IN FLIGHT that sample the old content (write after read): item
+  `gpu-data-rewritten-under-frames-in-flight`.
 
 ## ⚠️ Traps
 

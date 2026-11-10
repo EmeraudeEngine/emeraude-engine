@@ -1,7 +1,7 @@
 ---
 id: index-upload-read-after-write-hazard
 title: Index buffers are drawn after their upload copy without a transfer → index-input dependency (SYNC-HAZARD-READ-AFTER-WRITE)
-status: open
+status: in-progress
 priority: high
 scope: Vulkan/BufferTransferOperation, Vulkan/TransferManager, geometry upload, shadow maps
 opened: 2026-09-03
@@ -32,15 +32,20 @@ write available to the index fetch.
 with a fence only, and records no TRANSFER_WRITE → INDEX_READ barrier. Only the two-family path has an acquire barrier
 (~196-212).
 
+## State (2026-11-11): fixed on Linux, awaiting macOS and Windows
+
+Fixed by the upload ordering lot (engine `docs/subsystems/vulkan/25-uploads-ordered-before-their-readers.md`): every
+upload publishes its completion point (`Device::publishUploadPoint()`) and every reader batch of the renderer and the
+AS builds waits for `Device::uploadFrontier()` on the GPU. Measured on Linux, Intel RPL-S (one queue),
+`sponza --demo-options 1`, window-less, Synchronization Validation on: before, 3/3 runs `SYNC-HAZARD-READ-AFTER-WRITE`
+(a 10 016 880-byte index buffer); after, 4/4 runs 0 hazard, 0 VUID, 0 `[Error]`.
+
 ## What remains
 
-- Reproduce on Linux with Synchronization Validation on: sponza with `--demo-options 1,…` (the animated sun's shadow
-  map), and `animation-debug`.
-- Give the single-family upload path its dependency:
-  - a buffer memory barrier TRANSFER_WRITE → INDEX_READ (and VERTEX_ATTRIBUTE_READ for the vertices) at the release;
-  - or a semaphore when the copy is on another queue.
-- Check the vertex buffers and the shadow-pass path the same way.
-- Re-run under Synchronization Validation: zero `SYNC-HAZARD` on both demos.
+- macOS-PA (one MoltenVK queue, where it was first seen): `animation-debug` and `sponza --demo-options 1` with
+  Synchronization Validation, several runs: 0 `SYNC-HAZARD`.
+- Windows-PA, Intel iGPU (`ForceGPU`), `sky-lab`, `reflexion-debug`, `labyrinth`: 11 runs, 0 `SYNC-HAZARD` (it was 3 in 11).
+- Then delete this item (its knowledge is in vulkan doc 25 and `docs/caution-points.md`).
 
 ## References
 

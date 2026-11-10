@@ -151,6 +151,18 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns the completion points of the submissions still writing this buffer, for a new write to wait
+			 * for them (SynchInfo::waitsFor()).
+			 * @return PendingSubmissions::Points
+			 */
+			[[nodiscard]]
+			PendingSubmissions::Points
+			pendingWrites () const noexcept
+			{
+				return m_pendingSubmissions.points();
+			}
+
+			/**
 			 * @brief Recreates a new buffer on the device.
 			 * @param size The new size of the buffer in bytes.
 			 * @return bool

@@ -30,20 +30,27 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <atomic>
+#include <cstddef>
+#include <cstdint>
+#include <memory>
 #include <span>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
 /* Local inclusions for usages. */
-#include "Types.hpp"
+#include "PendingSubmissions.hpp" // IWYU pragma: keep (complete type: std::span< const SubmissionPoint > requires its element type complete, [span.overview])
+#include "Tracer.hpp"
 
 namespace EmEn::Vulkan
 {
 	class Device;
 	class CommandBuffer;
+	enum class SwapChainStatus : uint8_t;
 }
 
 namespace EmEn::Vulkan
@@ -95,6 +102,24 @@ namespace EmEn::Vulkan
 		}
 
 		/**
+		 * @brief Makes the submission wait, on the GPU, for completion points of queue timelines.
+		 * @note The whole batch waits (VK_PIPELINE_STAGE_ALL_COMMANDS_BIT): a point is a write the batch may read or
+		 * overwrite (an upload, Device::uploadFrontier(); an earlier write of the same object). The wait is also a
+		 * memory dependency, so the writes are VISIBLE to the batch, whatever queue made them — a point on the
+		 * submitting queue itself included (an earlier submission). No CPU wait: the GPU resolves an already reached
+		 * value at once. Every point must come from SynchInfo::tracksCompletion() (a queue with a timeline).
+		 * @param points A list of completion points.
+		 * @return SynchInfo &
+		 */
+		SynchInfo &
+		waitsFor (std::span< const SubmissionPoint > points)
+		{
+			waitPoints = points;
+
+			return *this;
+		}
+
+		/**
 		 * @brief Asks the submission to also signal the queue's timeline semaphore, and to report the value.
 		 * @note The value is the submission's completion point on this queue: Queue::isReached(value) turns
 		 * true once every command submitted up to it has completed. A resource written by the submission
@@ -113,6 +138,7 @@ namespace EmEn::Vulkan
 		std::span< const VkSemaphore > waitSemaphores;
 		std::span< const VkPipelineStageFlags > waitStages;
 		std::span< const VkSemaphore > signalSemaphores;
+		std::span< const SubmissionPoint > waitPoints;
 		VkFence fence{VK_NULL_HANDLE};
 		uint64_t * timelineValue{nullptr};
 	};
@@ -130,6 +156,10 @@ namespace EmEn::Vulkan
 
 			/** @brief The signal-semaphore capacity of a tracked submission, the queue timeline included. */
 			static constexpr size_t MaxTrackedSignalSemaphores{8};
+
+			/** @brief The wait capacity of a submission with completion points: binary semaphores plus one timeline per
+			 * queue of the device (Device holds at most 32 queues). */
+			static constexpr size_t MaxWaitSemaphores{48};
 
 			static inline std::atomic_int s_queueInstanceCounter{0};
 
@@ -217,6 +247,17 @@ namespace EmEn::Vulkan
 			 */
 			[[nodiscard]]
 			bool isReached (uint64_t value) const noexcept;
+
+			/**
+			 * @brief Returns the queue's timeline semaphore, the one SynchInfo::waitsFor() waits on.
+			 * @return VkSemaphore VK_NULL_HANDLE when the queue has none.
+			 */
+			[[nodiscard]]
+			VkSemaphore
+			timelineHandle () const noexcept
+			{
+				return m_timeline;
+			}
 
 			/**
 			 * @brief Blocks until every submission tracked up to a timeline value has completed.

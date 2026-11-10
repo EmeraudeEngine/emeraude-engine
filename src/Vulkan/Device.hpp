@@ -32,14 +32,17 @@
 /* STL inclusions. */
 #include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 /* Third-party forward declarations (the VMA implementation header is only
@@ -47,16 +50,24 @@
  * an opaque handle, identical to VMA's own VK_DEFINE_HANDLE definition). */
 using VmaAllocator = struct VmaAllocator_T *;
 
+/* Third-party inclusions. */
+#include "volk.h"
+/* NOTE: The forward typedef above stands for VMA's header (an opaque handle). */
+// IWYU pragma: no_include <vk_mem_alloc.h>
+
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 #include "NameableTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Mutex.hpp"
-#include "PhysicalDevice.hpp"
 #include "DeviceQueueConfiguration.hpp"
+#include "Mutex.hpp"
 #include "PendingSubmissions.hpp"
+#include "PhysicalDevice.hpp"
+#include "StaticVector.hpp"
+#include "ThreadSafety.hpp"
 #include "Types.hpp"
+#include "Vulkan/Queue.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
@@ -950,6 +961,36 @@ namespace EmEn::Vulkan
 				return std::chrono::steady_clock::now().time_since_epoch().count() - last <= delay.count();
 			}
 
+			/** @brief The capacity of the upload frontier: one point per queue of the device. */
+			static constexpr size_t MaxQueues{32};
+
+			/** @brief The latest upload point of every queue that received one. */
+			using UploadFrontier = Base::StaticVector< SubmissionPoint, MaxQueues >;
+
+			/**
+			 * @brief Publishes the completion point of a submission that WRITES a buffer or an image (an upload, a layout
+			 * transition), so that every later reader waits for it (uploadFrontier()).
+			 * @details An upload returns as soon as it is SUBMITTED, on a queue picked round-robin, while the renderer
+			 * reads on its own fixed queue: nothing else orders the write before the first read (a SYNC-HAZARD on a
+			 * single-queue device, no execution order at all across queues). One point per queue: a queue completes in
+			 * order, so its latest value covers the earlier ones. Thread-safe (any loading thread).
+			 * @param queue A reference to the queue the submission went to.
+			 * @param value The timeline value received from SynchInfo::tracksCompletion(). 0 is ignored.
+			 */
+			void publishUploadPoint (const Queue & queue, uint64_t value) noexcept;
+
+			/**
+			 * @brief Returns the latest upload point of every queue, for a submission that may read uploaded data to wait
+			 * for them on the GPU (SynchInfo::waitsFor()).
+			 * @note Take it AFTER recording the batch, right before submitting it: a resource found ready while recording
+			 * published its point before it became ready, so the batch waits for it. A point is never dropped once
+			 * reached: waiting a reached value costs the GPU nothing, and only a GPU wait makes the write VISIBLE to
+			 * another queue. Thread-safe.
+			 * @return UploadFrontier
+			 */
+			[[nodiscard]]
+			UploadFrontier uploadFrontier () const noexcept;
+
 		private:
 
 			/**
@@ -1072,6 +1113,8 @@ namespace EmEn::Vulkan
 			mutable std::mutex m_logicalDeviceAccess;
 			DeferredDestructor * m_deferredDestructor EMEN_GUARDED_BY(m_deferredDestructorAccess){nullptr};
 			Base::Mutex m_deferredDestructorAccess;
+			UploadFrontier m_uploadFrontier EMEN_GUARDED_BY(m_uploadFrontierAccess);
+			mutable Base::Mutex m_uploadFrontierAccess;
 			/** @brief The steady-clock tick of the last allocation refused for lack of video memory (0: never). */
 			mutable std::atomic< std::chrono::steady_clock::rep > m_lastOutOfDeviceMemory{0};
 			mutable std::atomic_bool m_deviceLostReported{false};

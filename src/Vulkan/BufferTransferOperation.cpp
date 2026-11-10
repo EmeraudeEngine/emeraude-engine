@@ -26,6 +26,26 @@
 
 #include "BufferTransferOperation.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
+/* STL inclusions. */
+#include <cstdint>
+#include <span>
+#include <string>
+
+/* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/Buffer.hpp"
+#include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/CommandPool.hpp"
+#include "Vulkan/Device.hpp"
+#include "Vulkan/Queue.hpp"
+#include "Vulkan/Sync/Fence.hpp"
+#include "Vulkan/Sync/Semaphore.hpp"
+#include "Vulkan/Types.hpp"
+
 namespace EmEn::Vulkan
 {
 	bool
@@ -140,14 +160,20 @@ namespace EmEn::Vulkan
 			/* NOTE: Get a pure transfer queue or the transfer queue for graphics. */
 			const auto * transferQueue = device->getPrimaryTransferQueue(QueuePriority::High);
 
+			/* NOTE: A new write of the buffer waits, on the GPU, for its previous writes (two uploads on two queues are
+			 * otherwise unordered). Its readers wait for it through Device::uploadFrontier(): nothing else orders this
+			 * copy before the first draw (SYNC-HAZARD-READ-AFTER-WRITE, index buffers, Apple M2 and Intel iGPU). */
+			const auto previousWrites = dstBuffer.pendingWrites();
+
 			uint64_t transferValue = 0;
 
-			if ( !transferQueue->submit(*m_transferCommandBuffer, SynchInfo{}.withFence(m_operationFence->handle()).tracksCompletion(transferValue)) )
+			if ( !transferQueue->submit(*m_transferCommandBuffer, SynchInfo{}.waitsFor({previousWrites.data(), previousWrites.size()}).withFence(m_operationFence->handle()).tracksCompletion(transferValue)) )
 			{
 				return false;
 			}
 
 			dstBuffer.recordPendingSubmission(*transferQueue, transferValue);
+			device->publishUploadPoint(*transferQueue, transferValue);
 
 			return true;
 		}
@@ -226,9 +252,12 @@ namespace EmEn::Vulkan
 			/* NOTE: Get a pure transfer queue or the transfer queue for graphics. */
 			const auto * transferQueue = device->getPrimaryTransferQueue(QueuePriority::High);
 
+			/* NOTE: A new write of the buffer waits, on the GPU, for its previous writes. */
+			const auto previousWrites = dstBuffer.pendingWrites();
+
 			uint64_t transferValue = 0;
 
-			if ( !transferQueue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1}).tracksCompletion(transferValue)) )
+			if ( !transferQueue->submit(*m_transferCommandBuffer, SynchInfo{}.signals({&semaphoreHandle, 1}).waitsFor({previousWrites.data(), previousWrites.size()}).tracksCompletion(transferValue)) )
 			{
 				Tracer::error(ClassId, "Unable to transfer a buffer (1/2) !");
 
@@ -252,6 +281,8 @@ namespace EmEn::Vulkan
 		}
 
 		dstBuffer.recordPendingSubmission(*graphicsQueue, graphicsValue);
+		/* NOTE: The acquire is the upload's last step: its readers wait for it (Device::uploadFrontier()). */
+		device->publishUploadPoint(*graphicsQueue, graphicsValue);
 
 		return true;
 	}

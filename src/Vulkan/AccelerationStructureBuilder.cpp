@@ -26,7 +26,13 @@
 
 #include "AccelerationStructureBuilder.hpp"
 
+/* STL inclusions. */
+#include <ios>
+#include <span>
+#include <utility>
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Buffer.hpp"
 #include "CommandBuffer.hpp"
 #include "CommandPool.hpp"
@@ -34,6 +40,9 @@
 #include "Queue.hpp"
 #include "Sync/Fence.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/AccelerationStructure.hpp"
+#include "Vulkan/MemoryRegion.hpp"
+#include "Vulkan/Types.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -694,8 +703,13 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* NOTE: The build reads uploaded vertex / index buffers: it waits for the uploads on the GPU
+		 * (Device::uploadFrontier()). The host wait on the transfer queues above does not cover an ownership acquire
+		 * submitted on another queue of the graphics family, nor makes the copies visible to this queue. */
+		const auto uploads = m_device->uploadFrontier();
+
 		SynchInfo synchInfo;
-		synchInfo.withFence(m_fence->handle());
+		synchInfo.withFence(m_fence->handle()).waitsFor({uploads.data(), uploads.size()});
 
 		if ( !queue->submit(*m_commandBuffer, synchInfo) )
 		{

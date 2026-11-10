@@ -2335,8 +2335,14 @@ namespace EmEn::Graphics
 			 * re-acquisition of that image proves the previous present released it. */
 			VkSemaphore presentSemaphoreHandle = m_presentSemaphores[imageIndex]->handle();
 
+			/* NOTE: Every batch that may read uploaded data waits for the uploads on the GPU (Vulkan::Device::uploadFrontier()):
+			 * they run on other queues, or before this batch on this one, and nothing else orders them before this read. Taken
+			 * after recording, so a resource found ready while recording is covered. */
+			const auto uploads = m_device->uploadFrontier();
+
 			if ( !m_graphicsQueue->submit(*commandBuffer, SynchInfo{}
 					.waits(currentFrameScope.secondarySemaphores(), waitStages)
+					.waitsFor({uploads.data(), uploads.size()})
 					.signals({&presentSemaphoreHandle, 1})
 					.withFence(currentFrameScope.inFlightFence()->handle())
 				) )
@@ -3020,7 +3026,12 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		if ( !queue->submit(*commandBuffer) )
+		/* NOTE: Every batch that may read uploaded data waits for the uploads on the GPU (Vulkan::Device::uploadFrontier()):
+		 * they run on other queues, or before this batch on this one, and nothing else orders them before this read. Taken
+		 * after recording, so a resource found ready while recording is covered. */
+		const auto uploads = m_device->uploadFrontier();
+
+		if ( !queue->submit(*commandBuffer, SynchInfo{}.waitsFor({uploads.data(), uploads.size()})) )
 		{
 			TraceError{ClassId} << "Unable to submit the sky atmosphere command buffer !";
 
@@ -3141,9 +3152,13 @@ namespace EmEn::Graphics
 
 			VkSemaphore semaphoreHandle = shadowMap->semaphore()->handle();
 
+			/* NOTE: The shadow pass draws uploaded geometry: it waits for the uploads (Vulkan::Device::uploadFrontier()). */
+			const auto uploads = m_device->uploadFrontier();
+
 			const auto submitted = queue->submit(
 				*commandBuffer,
 				SynchInfo{}
+					.waitsFor({uploads.data(), uploads.size()})
 					.signals({&semaphoreHandle, 1})
 			);
 
@@ -3274,6 +3289,9 @@ namespace EmEn::Graphics
 
 			bool submitted = false;
 
+			/* NOTE: A render-to-texture draws uploaded data: it waits for the uploads (Vulkan::Device::uploadFrontier()). */
+			const auto uploads = m_device->uploadFrontier();
+
 			/* Only the first render-to-texture waits on primary (shadow map) semaphores.
 			 * Binary semaphores can only be waited on once per signal. */
 			if ( !primaryConsumed && !currentFrameScope.primarySemaphores().empty() )
@@ -3285,6 +3303,7 @@ namespace EmEn::Graphics
 					*commandBuffer,
 					SynchInfo{}
 						.waits(waitSemaphores, waitStages)
+						.waitsFor({uploads.data(), uploads.size()})
 						.signals({&signalSemaphoreHandle, 1})
 				);
 
@@ -3295,6 +3314,7 @@ namespace EmEn::Graphics
 				submitted = queue->submit(
 					*commandBuffer,
 					SynchInfo{}
+						.waitsFor({uploads.data(), uploads.size()})
 						.signals({&signalSemaphoreHandle, 1})
 				);
 			}
