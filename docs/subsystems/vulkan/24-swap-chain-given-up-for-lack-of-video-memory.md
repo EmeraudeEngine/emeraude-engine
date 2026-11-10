@@ -63,6 +63,21 @@ native dialog can show: anything the engine draws (an overlay, a web view) needs
   AT ITS BUDGET", 5776 MiB used for 5854). On this driver VMA spills to system memory instead of failing: nothing
   fails, frames read the attachments over PCIe. The real test cannot end on 95 here; the production failures were on
   Windows (WDDM): to be measured there.
+- Windows (Windows-PA, RTX 3500 Ada Laptop 12 GB, driver 32.0.15.9658, one 1920x1080 screen at 125 %, engine
+  d4bf3bab): the injection exits **95** and the reference 0, validation layer loaded, 0 VUID. The real test: 11680 MiB
+  eaten until the driver refused 16 MiB (WDDM does refuse a raw device-local allocation once the heap is full), then
+  119 recreations in 60 s, all successful, no give-up: the engine's VMA allocations spilled to the system heap (its
+  depth/stencil images there), and the driver recreated the presentable images while the process used about
+  12070 MiB of a 11247 MiB budget (WDDM overcommits them). ⚠️ Windows clamps the window to the desktop: it stayed at
+  1924x1055, the swap-chain never grew.
+- **Conclusion (2026-11-10):** a full video memory alone does not make the swap-chain fail on these two drivers — the
+  engine spills, the driver overcommits. The production failures needed more: the CEF imports, which cannot spill (a
+  dedicated import of an external texture), the depth buffer refused by VMA on BOTH heaps, `VK_ERROR_OUT_OF_HOST_MEMORY`
+  in one session (system memory exhausted as well). The stop told to the user covers those cases; the injection is
+  what proves it on the three OSes (Linux, Windows, macOS: exit 95, 0 VUID).
+- macOS (macOS-PA, Apple M6, engine d4bf3bab): the injection exits **95**, the reference 0, validation layer loaded,
+  0 VUID, no crash report. ⚠️ Unified memory: the message names 16384 MiB, the whole system memory. The real test is
+  not run on a Mac (it would fill the system memory).
 - ⚠️ The runner crashed Steam (another Chromium-based process on the same GPU) while the memory was full: whoever
   allocates at the wrong moment falls. Close the GPU applications of the machine before the real test.
 - ⚠️ Side finding: at 11441x6416 the process died inside the libdecor GTK decoration plugin ("creating a buffer file
