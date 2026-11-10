@@ -253,6 +253,13 @@ namespace EmEn
 			 */
 			static constexpr int DisplayLostExitCode{96};
 
+			/** @brief Exit code of a run stopped because the swap-chain could not be recreated for lack of video memory
+			 * (stopOnVideoMemoryExhaustion()).
+			 * @details Distinct from DeviceLostExitCode: a downstream crash reporter tells a full video memory (often filled
+			 * by another process on the same GPU) from a graphics device that stopped answering (owner decision 2026-11-10).
+			 */
+			static constexpr int OutOfVideoMemoryExitCode{95};
+
 			/** @brief The force-quit dialog of stop() opens at MaxStopVetoCount vetoes AND this long after the first one.
 			 * @details Owner decision 2026-10-22: three clicks on the close button within a few seconds, while the
 			 * application is saving or its interface is frozen, opened the dialog at once (≈ 35 force-quits of the
@@ -303,6 +310,39 @@ namespace EmEn
 				std::optional< size_t > namedDevice;
 				/** @} */
 				Cause cause{Cause::Other};
+			};
+
+			/**
+			 * @brief Why a running engine stops because the graphics can no longer be drawn, in terms a user can act on
+			 * (owner decision 2026-11-10: only the swap-chain given up for lack of video memory; a failed load never
+			 * stops the engine).
+			 */
+			struct GraphicsFailure final
+			{
+				/** @brief The cause. */
+				enum class Cause : uint8_t
+				{
+					/** @brief The swap-chain could not be recreated for lack of video memory
+					 * (Graphics::Renderer::isSwapChainGivenUpForVideoMemory()). */
+					OutOfVideoMemory
+				};
+
+				/** @brief The dialog title (English). */
+				std::string title;
+				/** @brief The message (English), naming the GPU and its video memory when known. */
+				std::string message;
+				/** @name The parts of the message, for an application that writes its own (its translations).
+				 * @{ */
+				/** @brief The graphics device's name; empty when unknown. */
+				std::string deviceName;
+				/** @brief The size of its largest device-local memory heap, in bytes; 0 when unknown. */
+				uint64_t videoMemoryBytes{0};
+				/** @brief What this process used on that heap when it stopped (VK_EXT_memory_budget), in bytes. */
+				uint64_t usageBytes{0};
+				/** @brief The budget the driver gave this process on that heap when it stopped, in bytes. */
+				uint64_t budgetBytes{0};
+				/** @} */
+				Cause cause{Cause::OutOfVideoMemory};
 			};
 
 			/** @brief How long the application may take to acknowledge a stop requested by the system (end of the user
@@ -1596,6 +1636,30 @@ namespace EmEn
 			void stopOnDisplayLoss () noexcept;
 
 			/**
+			 * @brief Stops the engine once, at once, after the renderer gave up its swap-chain for lack of video memory
+			 * (Graphics::Renderer::isSwapChainGivenUpForVideoMemory()).
+			 * @details The user is told first (tellGraphicsFailure(), owner decision 2026-11-10: while the window is still
+			 * there), then the application (onBeforeCoreStop(): it may save its data) cannot refuse. Exit code
+			 * OutOfVideoMemoryExitCode. No force-quit dialog. One-shot (shared with stopOnDeviceLoss()).
+			 * @note Main thread.
+			 */
+			void stopOnVideoMemoryExhaustion () noexcept;
+
+			/**
+			 * @brief Describes the video memory exhaustion that stops the engine: the GPU, its largest device-local heap,
+			 * this process's usage and budget on it.
+			 * @return GraphicsFailure
+			 */
+			[[nodiscard]]
+			GraphicsFailure diagnoseVideoMemoryExhaustion () const noexcept;
+
+			/**
+			 * @brief Tells the user why the engine stops: the application's hook first, else a native dialog.
+			 * @param failure The classified failure.
+			 */
+			void tellGraphicsFailure (const GraphicsFailure & failure) noexcept;
+
+			/**
 			 * @brief Main-loop check of a system stop: past its deadline, the stop proceeds whatever the application said.
 			 * @note Main thread.
 			 */
@@ -1843,6 +1907,23 @@ namespace EmEn
 			virtual
 			bool
 			onStartupRefused ([[maybe_unused]] const StartupRefusal & refusal) noexcept
+			{
+				return false;
+			}
+
+			/**
+			 * @brief Called when the running engine stops because the graphics can no longer be drawn (GraphicsFailure),
+			 * before the engine shows its own native dialog and before onBeforeCoreStop().
+			 * @details The application may show its own message (its wording, its translations) and record the failure in
+			 * its reports; returning true replaces the engine's dialog. Nothing can be drawn any more: a message drawn by
+			 * the engine (a web view, an overlay) cannot show, only a native dialog can. Main thread.
+			 * @param failure The classified failure.
+			 * @return bool True when the application told the user itself (the engine shows nothing).
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			onGraphicsFailure ([[maybe_unused]] const GraphicsFailure & failure) noexcept
 			{
 				return false;
 			}

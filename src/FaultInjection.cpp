@@ -56,6 +56,20 @@ namespace EmEn::FaultInjection
 
 			return name;
 		}
+
+		/**
+		 * @brief Whether the swap-chain recreations fail for lack of video memory.
+		 * @note Same discipline as injectedService(): written once by configure(), read-only afterwards.
+		 * @return bool &
+		 */
+		[[nodiscard]]
+		bool &
+		swapChainOutOfVideoMemory () noexcept
+		{
+			static bool injected{false};
+
+			return injected;
+		}
 	}
 
 	void
@@ -66,6 +80,13 @@ namespace EmEn::FaultInjection
 			injectedService() = value.value();
 
 			TraceWarning{"FaultInjection"} << "FAULT INJECTION: the startup of the service '" << injectedService() << "' will fail on purpose (" << StartupFailureArgument << ").";
+		}
+
+		if ( arguments.isSwitchPresent(SwapChainOutOfVideoMemoryArgument) )
+		{
+			swapChainOutOfVideoMemory() = true;
+
+			TraceWarning{"FaultInjection"} << "FAULT INJECTION: every swap-chain recreation will fail for lack of video memory (" << SwapChainOutOfVideoMemoryArgument << ").";
 		}
 	}
 
@@ -81,6 +102,12 @@ namespace EmEn::FaultInjection
 
 		return true;
 	}
+
+	bool
+	swapChainOutOfVideoMemoryInjected () noexcept
+	{
+		return swapChainOutOfVideoMemory();
+	}
 #else
 	/* NOTE: A normal build: no injection, nothing stored (the configuration selects the code, emeraude_config.hpp). */
 	void
@@ -90,6 +117,12 @@ namespace EmEn::FaultInjection
 
 	bool
 	startupFailureInjected (std::string_view /*serviceName*/) noexcept
+	{
+		return false;
+	}
+
+	bool
+	swapChainOutOfVideoMemoryInjected () noexcept
 	{
 		return false;
 	}

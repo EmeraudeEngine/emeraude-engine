@@ -58,6 +58,8 @@ namespace EmEn::Vulkan
 				"Unable to allocate " << m_requirement.memoryRequirements.size << " bytes (alignment:" << m_requirement.memoryRequirements.alignment << " bytes) "
 				"in the device memory " << m_handle << " : " << vkResultToCString(result) << " !";
 
+			this->device()->noteAllocationResult(result);
+
 			return false;
 		}
 

@@ -50,6 +50,10 @@ namespace EmEn::FaultInjection
 	/** @brief The command-line argument naming the service whose startup fails: `--inject-startup-failure=NAME`. */
 	constexpr auto StartupFailureArgument{"--inject-startup-failure"};
 
+	/** @brief The command-line switch making every swap-chain recreation fail for lack of video memory:
+	 * `--inject-swap-chain-out-of-video-memory` (Graphics::Renderer::retryDegradedSwapChain()). */
+	constexpr auto SwapChainOutOfVideoMemoryArgument{"--inject-swap-chain-out-of-video-memory"};
+
 	/**
 	 * @brief Reads the argument once. Does nothing in a build without EMERAUDE_FAULT_INJECTION.
 	 * @pre Main process, main thread, right after the arguments service and before any other service starts.
@@ -66,4 +70,14 @@ namespace EmEn::FaultInjection
 	 */
 	[[nodiscard]]
 	EMEN_API bool startupFailureInjected (std::string_view serviceName) noexcept;
+
+	/**
+	 * @brief Returns whether every swap-chain recreation is made to fail as if the video memory were exhausted (the
+	 * renderer then gives up and Core stops with OutOfVideoMemoryExitCode). Always false in a build without
+	 * EMERAUDE_FAULT_INJECTION.
+	 * @note Read-only after configure(): any thread.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	EMEN_API bool swapChainOutOfVideoMemoryInjected () noexcept;
 }

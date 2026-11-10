@@ -540,6 +540,8 @@ namespace EmEn::Vulkan
 		{
 			TraceError{ClassId} << "Unable to create an image with VMA : " << vkResultToCString(result) << " !";
 
+			this->device()->noteAllocationResult(result);
+
 			return false;
 		}
 

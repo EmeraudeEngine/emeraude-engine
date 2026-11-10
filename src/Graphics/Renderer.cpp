@@ -55,6 +55,7 @@
 #include "DummyShadowTexture.hpp"
 #include "Effects/Camera/ToneMapping.hpp"
 #include "FastJSON.hpp"
+#include "FaultInjection.hpp"
 #include "FileSystem.hpp"
 #include "GrabPass.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
@@ -3598,7 +3599,19 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		if ( this->recreateRenderingSubSystem(false) )
+		bool recreated = false;
+
+		if ( FaultInjection::swapChainOutOfVideoMemoryInjected() )
+		{
+			/* NOTE: Test builds only (EMERAUDE_FAULT_INJECTION): the recreation fails as a full video memory makes it fail. */
+			m_device->noteAllocationResult(VK_ERROR_OUT_OF_DEVICE_MEMORY);
+		}
+		else
+		{
+			recreated = this->recreateRenderingSubSystem(false);
+		}
+
+		if ( recreated )
 		{
 			/* NOTE: A recreation skipped for a 0-px window keeps the swap-chain degraded: neither a failure nor a success. */
 			if ( m_swapChain->status() == SwapChainStatus::Ready )
@@ -3609,6 +3622,7 @@ namespace EmEn::Graphics
 				}
 
 				m_swapChainRecreationFailures = 0;
+				m_swapChainFailingForVideoMemory = false;
 			}
 
 			return;
@@ -3617,9 +3631,26 @@ namespace EmEn::Graphics
 		++m_swapChainRecreationFailures;
 		m_lastSwapChainRecreationFailure = now;
 
+		/* NOTE: The recreation fails on the engine's own attachments (VK_ERROR_OUT_OF_DEVICE_MEMORY), or inside
+		 * vkCreateSwapchainKHR (VK_ERROR_INITIALIZATION_FAILED) once another process filled the GPU: the refused
+		 * allocations that came just before name the cause. Kept for the whole episode (production, 2026-11-10). */
+		if ( m_device->outOfDeviceMemoryWithin(SwapChainVideoMemoryDelay) )
+		{
+			m_swapChainFailingForVideoMemory = true;
+		}
+
 		if ( m_swapChainRecreationFailures >= MaxSwapChainRecreationFailures )
 		{
-			TraceFatal{ClassId} << "Unable to refresh the swap-chain after " << m_swapChainRecreationFailures << " consecutive attempts: the renderer gives up, the engine stops.";
+			if ( m_swapChainFailingForVideoMemory )
+			{
+				TraceFatal{ClassId} << "Unable to refresh the swap-chain after " << m_swapChainRecreationFailures << " consecutive attempts: the video memory is exhausted, the renderer gives up, the engine stops.";
+
+				m_swapChainGivenUpForVideoMemory = true;
+			}
+			else
+			{
+				TraceFatal{ClassId} << "Unable to refresh the swap-chain after " << m_swapChainRecreationFailures << " consecutive attempts: the renderer gives up, the engine stops.";
+			}
 
 			m_swapChainGivenUp = true;
 

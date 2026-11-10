@@ -270,6 +270,9 @@ namespace EmEn::Graphics
 			static constexpr uint32_t MaxSwapChainRecreationFailures{30};
 			/** @brief The minimum interval between two attempts after a failed swap-chain recreation. */
 			static constexpr std::chrono::milliseconds SwapChainRecreationRetryInterval{100};
+			/** @brief How far back an allocation refused for lack of video memory names the cause of a failed swap-chain
+			 * recreation (production, 2026-11-10: 0 to 6 s between the last refused allocation and the first failure). */
+			static constexpr std::chrono::seconds SwapChainVideoMemoryDelay{30};
 			/** @brief The frames a temporal discontinuity marks, the raising frame included (owner decision 2026-11-03,
 			 * graphics doc 13-12 § 43). The GI histories converge per FRAME: with 8, the RTGI's tail after a
 			 * city sunset jump was slower than the per-frame tests' (17.1 against 15.6 at 1 s, 25 FPS); with 25 it is the
@@ -1688,6 +1691,20 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether the renderer gave up its swap-chain for lack of video memory: an allocation was refused
+			 * for it (Vulkan::Device::outOfDeviceMemoryWithin()) within SwapChainVideoMemoryDelay of a failed recreation of
+			 * that episode. Core then stops with OutOfVideoMemoryExitCode and tells the user (Core::stopOnVideoMemoryExhaustion()).
+			 * @note Thread-safe. Implies isSwapChainGivenUp().
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isSwapChainGivenUpForVideoMemory () const noexcept
+			{
+				return m_swapChainGivenUpForVideoMemory.load();
+			}
+
+			/**
 			 * @brief Returns whether the graphics device was lost (Vulkan::Device::isLost()): no frame is rendered any more,
 			 * and Core stops the engine (Core::stopOnDeviceLoss()).
 			 * @note Thread-safe.
@@ -2133,7 +2150,10 @@ namespace EmEn::Graphics
 			 * read by the main loop. */
 			std::chrono::steady_clock::time_point m_lastSwapChainRecreationFailure;
 			uint32_t m_swapChainRecreationFailures{0};
+			std::atomic_bool m_swapChainGivenUpForVideoMemory{false};
 			std::atomic_bool m_swapChainGivenUp{false};
+			/* A failed recreation of the current episode followed an allocation refused for lack of video memory. */
+			bool m_swapChainFailingForVideoMemory{false};
 			/** @brief Settings: may the ACTIVE CAMERA materialize its depth of field / motion blur?
 			 * @note A user-level refusal of two expensive, intrusive photographic effects. It
 			 * OVERRIDES the camera, which only ever requests them. */

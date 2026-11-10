@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -913,6 +914,42 @@ namespace EmEn::Vulkan
 				return m_deviceLostReported.load(std::memory_order_acquire);
 			}
 
+			/**
+			 * @brief Records an allocation refused for lack of video memory.
+			 * @details It stops nothing by itself: a load whose allocation fails stays a failed load (owner decision
+			 * 2026-11-10). It only names the cause when the renderer gives up its swap-chain
+			 * (Graphics::Renderer::isSwapChainGivenUpForVideoMemory()). Thread-safe, no lock.
+			 * @param result The result of the refused allocation: anything but VK_ERROR_OUT_OF_DEVICE_MEMORY is ignored.
+			 */
+			void
+			noteAllocationResult (VkResult result) const noexcept
+			{
+				if ( result == VK_ERROR_OUT_OF_DEVICE_MEMORY )
+				{
+					m_lastOutOfDeviceMemory.store(std::chrono::steady_clock::now().time_since_epoch().count(), std::memory_order_relaxed);
+				}
+			}
+
+			/**
+			 * @brief Returns whether an allocation was refused for lack of video memory within this delay.
+			 * @note Thread-safe, no lock.
+			 * @param delay The delay to look back.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			outOfDeviceMemoryWithin (std::chrono::steady_clock::duration delay) const noexcept
+			{
+				const auto last = m_lastOutOfDeviceMemory.load(std::memory_order_relaxed);
+
+				if ( last == 0 )
+				{
+					return false;
+				}
+
+				return std::chrono::steady_clock::now().time_since_epoch().count() - last <= delay.count();
+			}
+
 		private:
 
 			/**
@@ -1035,6 +1072,8 @@ namespace EmEn::Vulkan
 			mutable std::mutex m_logicalDeviceAccess;
 			DeferredDestructor * m_deferredDestructor EMEN_GUARDED_BY(m_deferredDestructorAccess){nullptr};
 			Base::Mutex m_deferredDestructorAccess;
+			/** @brief The steady-clock tick of the last allocation refused for lack of video memory (0: never). */
+			mutable std::atomic< std::chrono::steady_clock::rep > m_lastOutOfDeviceMemory{0};
 			mutable std::atomic_bool m_deviceLostReported{false};
 			/** @brief Set for the duration of restorePipelineCache(): destroy() during it is a contract fault. */
 			std::atomic_bool m_pipelineCacheRestoreInFlight{false};

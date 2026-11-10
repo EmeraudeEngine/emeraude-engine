@@ -742,6 +742,11 @@ namespace EmEn
 					this->onWindowChanged();
 				}
 			}
+			else if ( m_graphicsRenderer.isSwapChainGivenUpForVideoMemory() && !m_graphicsRenderer.isDeviceLost() )
+			{
+				/* ... If the video memory is exhausted, the user is told, then we stop at once (one-shot). */
+				this->stopOnVideoMemoryExhaustion();
+			}
 			else
 			{
 				/* ... If so, we stop at once (one-shot), letting the user application save its data. */
@@ -1995,6 +2000,92 @@ namespace EmEn
 		static_cast< void >(this->onBeforeCoreStop());
 
 		this->proceedStop();
+	}
+
+	void
+	Core::stopOnVideoMemoryExhaustion () noexcept
+	{
+		if ( m_deviceLossStopIssued )
+		{
+			return;
+		}
+
+		m_deviceLossStopIssued = true;
+
+		TraceError{ClassId} << "The video memory is exhausted and the swap-chain cannot be recreated : the engine stops now (exit code " << OutOfVideoMemoryExitCode << ").";
+
+		this->setAppReadyToQuit(OutOfVideoMemoryExitCode);
+
+		/* NOTE: Told before the application saves, while the window is still there (owner decision 2026-11-10). */
+		this->tellGraphicsFailure(this->diagnoseVideoMemoryExhaustion());
+
+		/* NOTE: The application may save its data, but cannot refuse: nothing can be drawn anymore. */
+		static_cast< void >(this->onBeforeCoreStop());
+
+		this->proceedStop();
+	}
+
+	Core::GraphicsFailure
+	Core::diagnoseVideoMemoryExhaustion () const noexcept
+	{
+		constexpr uint64_t MiB{1024ULL * 1024ULL};
+
+		GraphicsFailure failure;
+		failure.cause = GraphicsFailure::Cause::OutOfVideoMemory;
+		failure.title = "Not enough video memory";
+
+		if ( const auto & device = m_graphicsRenderer.device(); device != nullptr )
+		{
+			failure.deviceName = device->physicalDevice()->propertiesVK10().deviceName;
+
+			for ( const auto & heap : device->memoryBudgets() )
+			{
+				if ( heap.deviceLocal && heap.size > failure.videoMemoryBytes )
+				{
+					failure.videoMemoryBytes = heap.size;
+					failure.usageBytes = heap.usage;
+					failure.budgetBytes = heap.budget;
+				}
+			}
+		}
+
+		std::string named;
+
+		if ( !failure.deviceName.empty() )
+		{
+			named = " (" + failure.deviceName;
+
+			if ( failure.videoMemoryBytes > 0 )
+			{
+				named += ", " + std::to_string(failure.videoMemoryBytes / MiB) + " MiB";
+			}
+
+			named += ")";
+		}
+
+		failure.message =
+			"The video memory of the graphics card is full" + named + ": the window can no longer be drawn and the application closes. "
+			"Other programs using the graphics card may hold this memory: closing them before restarting may help.";
+
+		return failure;
+	}
+
+	void
+	Core::tellGraphicsFailure (const GraphicsFailure & failure) noexcept
+	{
+		TraceError{ClassId} << failure.title << ": " << failure.message;
+
+		if ( this->onGraphicsFailure(failure) )
+		{
+			Tracer::info(ClassId, "The application told the user about the graphics failure itself.");
+
+			return;
+		}
+
+		/* NOTE: Unparented, like the startup refusal: the window cannot be drawn any more. */
+		PlatformSpecific::Desktop::Dialog::Message dialog{failure.title, failure.message, PlatformSpecific::Desktop::Dialog::ButtonLayout::OK, PlatformSpecific::Desktop::Dialog::MessageType::Error};
+
+		static_cast< void >(dialog.execute(m_window, false));
 	}
 
 	int

@@ -275,6 +275,8 @@ namespace EmEn::Vulkan
 		{
 			TraceError{ClassId} << "Unable to create a buffer with VMA : " << vkResultToCString(result) << " !";
 
+			this->device()->noteAllocationResult(result);
+
 			return false;
 		}
 

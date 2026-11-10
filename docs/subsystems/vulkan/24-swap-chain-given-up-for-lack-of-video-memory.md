@@ -1,0 +1,75 @@
+## A swap-chain given up for lack of video memory: told to the user, exit code 95 (Nov 2026)
+
+Found in the crash reports of a downstream application (2026-11-10, 4 sessions, 3 Windows NVIDIA machines): after
+hours of use, another process on the same GPU filled the video memory. The renderer could no longer recreate its
+swap-chain, gave up after `MaxSwapChainRecreationFailures` attempts (`Renderer::retryDegradedSwapChain()`), and Core
+stopped cleanly with `DeviceLostExitCode` (98) — without a word to the user, and with the exit code of a device that
+stopped answering. Owner decisions 2026-11-10:
+
+- **Only the swap-chain stops the engine.** Without it nothing can be shown and nothing works; a load (a model, a
+  scene) whose allocation is refused stays a failed load and never stops the engine.
+- The user is told, by the same contract as a startup refusal (`22-startup-refusals-told-to-the-user.md`): the
+  application's hook first, else the engine's native dialog in English.
+- A dedicated exit code, `Core::OutOfVideoMemoryExitCode` (95), so a crash reporter tells a full video memory from a
+  device loss (98) without reading the journal.
+- The dialog shows at the stop, BEFORE the application saves (`onBeforeCoreStop()`), while the window is still there.
+- A device loss (98) and a lost display connection (96) are unchanged: a clean stop, no message.
+
+### Naming the cause
+
+- `Vulkan::Device::noteAllocationResult(VkResult)` records the time of every allocation refused with
+  `VK_ERROR_OUT_OF_DEVICE_MEMORY`: `DeviceMemory::createOnHardware()` (manual path, external-memory imports included),
+  `Buffer` and `Image` creation through VMA. It stops nothing; `Device::outOfDeviceMemoryWithin(delay)` reads it.
+- `Renderer::retryDegradedSwapChain()`: a failed recreation within `SwapChainVideoMemoryDelay` (30 s) of a refused
+  allocation marks the EPISODE as a video-memory one, until a recreation succeeds. A time window, not "since the last
+  presented frame": in production the recreation also fails inside `vkCreateSwapchainKHR` with
+  `VK_ERROR_INITIALIZATION_FAILED` (no allocation of the engine's refused), right after refused imports — and a frame
+  could be presented between them (measured: 0 to 6 s between the last refused allocation and the first failure, on
+  the 4 sessions; the give-up itself came up to 160 s later).
+- At the give-up the Fatal says "the video memory is exhausted" and `Renderer::isSwapChainGivenUpForVideoMemory()` is
+  raised; the main loop calls `Core::stopOnVideoMemoryExhaustion()` instead of `stopOnDeviceLoss()` (unless the device
+  is also lost). One-shot, shared with the two other runtime stops.
+
+### What the user and the application get (`Core::GraphicsFailure`)
+
+`Core::diagnoseVideoMemoryExhaustion()` fills `title` ("Not enough video memory"), `message` (the GPU and the size of
+its largest device-local heap, "the window can no longer be drawn and the application closes", other programs may hold
+that memory) and the parts for a translated message: `deviceName`, `videoMemoryBytes`, and this process's `usageBytes`
+and `budgetBytes` on that heap (VK_EXT_memory_budget through VMA). `Core::tellGraphicsFailure()` traces it, calls
+`onGraphicsFailure()` (true = the application told the user itself), else shows an unparented native dialog. ⚠️ Only a
+native dialog can show: anything the engine draws (an overlay, a web view) needs the swap-chain that just failed.
+
+### Proof (`EmeraudeStartupFaultInjection`, a build with `EMERAUDE_FAULT_INJECTION`)
+
+- `--inject-swap-chain-out-of-video-memory` (`FaultInjection::swapChainOutOfVideoMemoryInjected()`): the runner
+  degrades the swap-chain once, every recreation then fails as a full video memory makes it fail; expected: the
+  "video memory is exhausted" Fatal after 30 attempts (≈ 3 s), the message printed by the runner's hook, exit code 95.
+- `--eat-video-memory`: the real test. The runner fills the video memory with device-local allocations through
+  `Vulkan::DeviceMemory` (256 MiB, then four times smaller after each refusal, down to 16 MiB; their refusal is
+  recorded like a refused import), then grows the window by a quarter every 500 ms (at most 8192 px a side) until a
+  recreation fails; the engine's native dialog shows, the eaten memory is given back first. ⚠️ It fills the GPU of the
+  machine it runs on (the desktop may stutter until the stop); the runner stops by itself after 60 s.
+
+**Measured** (2026-11-10, Linux main, RTX 3070 Ti 8 GB, NVIDIA 620.70, KDE Wayland):
+
+- `--inject-swap-chain-out-of-video-memory`: 30 attempts, the video-memory Fatal, the message, exit code **95**, 0 VUID;
+  the reference run unchanged (exit 0).
+- `--eat-video-memory` at a CONSTANT window size: 3232 MiB eaten until the driver refused 16 MiB, then 119
+  recreations in 60 s, all successful. `recreate()` frees the attachments first and takes the same room back: the
+  engine's own memory cannot make a same-size recreation fail. In production another process takes the freed room.
+- `--eat-video-memory` with the window growing (the GPU applications closed, 5600 MiB eaten): every recreation
+  succeeded up to 8192x8192. The heaps show where the attachments went: VMA's allocations on the device-local heap
+  stayed at 60-110 MiB while those on the SYSTEM heap grew from 0 to 3072 MiB; the budget warning fired ("GPU memory
+  AT ITS BUDGET", 5776 MiB used for 5854). On this driver VMA spills to system memory instead of failing: nothing
+  fails, frames read the attachments over PCIe. The real test cannot end on 95 here; the production failures were on
+  Windows (WDDM): to be measured there.
+- ⚠️ The runner crashed Steam (another Chromium-based process on the same GPU) while the memory was full: whoever
+  allocates at the wrong moment falls. Close the GPU applications of the machine before the real test.
+- ⚠️ Side finding: at 11441x6416 the process died inside the libdecor GTK decoration plugin ("creating a buffer file
+  for -1527818496 B failed", then SIGSEGV): `Window::resize()` accepts any size. The runner caps its growth at 8192.
+
+### Related
+
+- `docs/subsystems/graphics/37-gpu-memory-budget-and-report.md` — the budget warning (an allocation refused while the
+  engine is under it means another process holds the memory), and why the swap-chain attachments are not reserved.
+- `docs/subsystems/source-tree/08-startup-fault-injection.md` — the fault-injection build and runner.
