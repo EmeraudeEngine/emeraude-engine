@@ -193,8 +193,8 @@ namespace EmEn
 	Core::logicsTask (const std::stop_token & stopToken) noexcept
 	{
 		constexpr std::chrono::duration< uint64_t, std::micro > logicsUpdateFrequency{WorldPhysicsUpdateCycleDurationUS< uint64_t >};
-		/* NOTE: The logic may fall behind (a long cycle, a stalled system) and then runs its missed cycles back to back to
-		 * stay on the wall clock; past this debt it gives the missed time up instead of a long burst. */
+		/* NOTE: The logic may fall behind (a long cycle, a stalled system) and then runs its missed cycles back to stay on the wall clock;
+		 * past this debt it gives the missed time up instead of a long burst. */
 		constexpr auto maximumCatchUp = logicsUpdateFrequency * 4;
 
 #if IS_MACOS
@@ -304,15 +304,15 @@ namespace EmEn
 			return;
 		}
 
-		/* NOTE: Budget enough frames to refresh every swap-chain image, otherwise a
-		 * multi-buffered swap-chain would keep re-displaying a stale buffer for the images
-		 * we did not redraw. framesInFlight() is sized from the swap-chain image count. */
-		const auto budget = std::max< uint32_t >(1, m_graphicsRenderer.framesInFlight());
-
 		{
 			/* NOTE: Mutate the shared budget under the same mutex the rendering thread waits on,
 			 * to close the lost-wakeup window between the predicate test and the wait. */
-			const Base::MutexLock lock{m_redrawMutex};
+			const MutexLock lock{m_redrawMutex};
+
+			/* NOTE: Budget enough frames to refresh every swap-chain image, otherwise a
+			 * multi-buffered swap-chain would keep re-displaying a stale buffer for the images
+			 * we did not redraw. framesInFlight() is sized from the swap-chain image count. */
+			const auto budget = std::max< uint32_t >(1, m_graphicsRenderer.framesInFlight());
 
 			m_pendingFrames.store(budget, std::memory_order_relaxed);
 		}
@@ -349,7 +349,7 @@ namespace EmEn
 				continue;
 			}
 
-			/* NOTE: A lost device draws and uploads nothing any more (the overlay uploads included): the main loop stops
+			/* NOTE: A lost device draws and uploads nothing anymore (the overlay uploads included): the main loop stops
 			 * the engine (stopOnDeviceLoss()), this thread idles until then. */
 			if ( m_graphicsRenderer.isDeviceLost() )
 			{
@@ -390,7 +390,7 @@ namespace EmEn
 				}
 			}
 
-			/* ⚠️⚠️ The frame slot and the swap-chain image are acquired BEFORE the scene lock: the acquisition waits
+			/* ⚠️ The frame slot and the swap-chain image are acquired BEFORE the scene lock: the acquisition waits
 			 * on the presentation engine without bound (60 s timeout), and a writer waiting for that lock on the main
 			 * thread — the thread pumping the window's events — deadlocked `terrain` for 60 s at every start
 			 * (2026-09-25, Renderer::beginFrame()). */
@@ -414,7 +414,7 @@ namespace EmEn
 				 * (recursive shared_mutex = UB, deadlocks on Windows once a writer queues). */
 				m_frameScene = activeScene.get();
 
-				/* ⚠️⚠️ The scene's jitter and UBO upload used to happen HERE, before renderFrame() —
+				/* ⚠️ The scene's jitter and UBO upload used to happen HERE, before renderFrame() —
 				 * i.e. before the frame's in-flight fence had been waited on. Every buffer they
 				 * write is single-instance, so the host was overwriting memory that up to
 				 * framesInFlight() - 1 still-executing frames were reading. They now live inside
@@ -438,13 +438,13 @@ namespace EmEn
 #endif
 
 				/* NOTE: The same frame with or without a window: a window-less run renders into a HEADLESS
-				 * swap-chain (Vulkan::SwapChain::isHeadless()). */
-				/* NOTE: The RushMaker's copy is recorded inside the frame (Recorder::recordFrameCopy()), never after
-				 * the present. */
-				/* ⚠️⚠️ A scene the logic thread has not published yet is NOT drawn: its render state is the default
+				 * swap-chain (Vulkan::SwapChain::isHeadless()).
+				 * NOTE: The RushMaker's copy is recorded inside the frame (Recorder::recordFrameCopy()), never after
+				 * the present.
+				 * ⚠️ A scene the logic thread has not published yet is NOT drawn: its render state is the default
 				 * one, every entity at the origin (Scene::hasPublishedStateForRendering()). The frame keeps the
 				 * overlay; the scene appears one logic tick later. */
-				static const std::shared_ptr< Scenes::Scene > NoScene{};
+				static const std::shared_ptr< Scene > NoScene{};
 
 				const auto & frameScene = ( activeScene != nullptr && !activeScene->hasPublishedStateForRendering() ) ? NoScene : activeScene;
 
@@ -527,7 +527,7 @@ namespace EmEn
 
 		if ( !m_window.isWindowLessMode() )
 		{
-			/* NOTE: The monitor holding the window's centre, the primary one otherwise. */
+			/* NOTE: The monitor holding the window's center, the primary one otherwise. */
 			const auto & state = m_window.state();
 			const auto centerX = static_cast< int64_t >(state.windowXPosition) + (state.windowWidth / 2);
 			const auto centerY = static_cast< int64_t >(state.windowYPosition) + (state.windowHeight / 2);
@@ -834,7 +834,7 @@ namespace EmEn
 		}
 
 		/* NOTE: Every thread-pool job that touches an object is OWNED by it (Ave Robustus II, 2026-10-15): its owner stops
-		 * and waits for it when it goes. Core neither cancels nor drains the pool for them any more (the global cancel
+		 * and waits for it when it goes. Core neither cancels nor drains the pool for them anymore (the global cancel
 		 * flag and the two drains are gone); terminate() stops the resource manager's jobs first. */
 		return this->terminate();
 	}
@@ -970,12 +970,12 @@ namespace EmEn
 	bool
 	Core::initializeBaseLevel () noexcept
 	{
-		/* The engine serialises floats through the C numeric family (settings, scene files, cache
+		/* The engine serializes floats through the C numeric family (settings, scene files, cache
 		 * keys, generated shader code), so it states the numeric locale it needs instead of hoping
 		 * nobody changed it: in a comma-decimal locale (fr_BE, fr_FR, de_DE …) every written float
 		 * changes format and strtod() stops parsing at the dot. See Base::Locale::enforceNumericC().
-		 * ⚠️ This call covers the engine's own bring-up ONLY. A library initialised later can still
-		 * change it — CEF is initialised AFTER the engine and Chromium does call
+		 * ⚠️ This call covers the engine's own bring-up ONLY. A library initialized later can still
+		 * change it — CEF is initialized AFTER the engine and Chromium does call
 		 * setlocale(LC_ALL, ""), so an application embedding such a library must re-assert it at
 		 * that point. */
 		if ( Locale::enforceNumericC() )
@@ -1205,7 +1205,7 @@ namespace EmEn
 			return false;
 		}
 
-		/* Initialize the vulkan API, at the version the application targets. */
+		/* Initialize the Vulkan API, at the version the application targets. */
 		m_vulkanInstance.setTargetAPIVersion(this->targetVulkanAPIVersion());
 
 		if ( m_vulkanInstance.initialize(m_secondaryServicesEnabled) )
@@ -1418,7 +1418,7 @@ namespace EmEn
 		screen->setVisibility(false);
 
 		/* PHYSICAL CAMERA panel, toggled with Shift+F2. The camera is the single source of truth
-		 * for the photographic behaviour of the image — optics, exposure triad, and the effects it
+		 * for the photographic behavior of the image — optics, exposure triad, and the effects it
 		 * materializes — so a panel bound to it replaces a rebuild for every tweak. The EV100
 		 * readout at the bottom is the point: it makes the physics legible while you drag. */
 		m_cameraScreen = m_overlayManager.createImGUIScreen("PhysicalCameraScreen", [this] {
@@ -1435,7 +1435,7 @@ namespace EmEn
 			 * shared_mutex this thread already share-owns — UB, and a real deadlock on Windows
 			 * SRWLOCK once a writer queues. The frame's scene is read from m_frameScene, the
 			 * pointer Core publishes for exactly this scope. */
-			[] (Scenes::Scene * const activeScene) {
+			[] (Scene * const activeScene) {
 				if ( activeScene == nullptr )
 				{
 					ImGui::TextUnformatted("No active scene.");
@@ -1969,7 +1969,7 @@ namespace EmEn
 
 		TraceError{ClassId} << "The graphics device is lost or the renderer is no longer usable : the engine stops now (exit code " << DeviceLostExitCode << ").";
 
-		/* NOTE: The application may save its data, but cannot refuse: nothing can be drawn any more. */
+		/* NOTE: The application may save its data, but cannot refuse: nothing can be drawn anymore. */
 		this->setAppReadyToQuit(DeviceLostExitCode);
 
 		static_cast< void >(this->onBeforeCoreStop());
@@ -1989,7 +1989,7 @@ namespace EmEn
 
 		TraceError{ClassId} << "The connection to the display server is lost (on Wayland a compositor protocol error, printed on stderr by libwayland) : the engine stops now (exit code " << DisplayLostExitCode << ").";
 
-		/* NOTE: The application may save its data, but cannot refuse: nothing can be shown any more. */
+		/* NOTE: The application may save its data, but cannot refuse: nothing can be shown anymore. */
 		this->setAppReadyToQuit(DisplayLostExitCode);
 
 		static_cast< void >(this->onBeforeCoreStop());
@@ -2394,7 +2394,7 @@ namespace EmEn
 			return true;
 		}
 
-		/* NOTE: The asset was imported at rest (ModelViewer disables the auto-play), so the cycle
+		/* NOTE: The asset was imported at rest (ModelViewer disables the autoplay), so the cycle
 		 * starts on its OFF position and the space bar walks from there. */
 		m_viewerClipNames = viewer.clipNames();
 		m_viewerAnimationIndex = 0;
@@ -2440,7 +2440,7 @@ namespace EmEn
 			return false;
 		}
 
-		/* NOTE: 0 is the rest pose, so the cycle walks 0..N and wraps back to 0. */
+		/* NOTE: 0 is the rest pose, so the cycle walks 0...N and wraps back to 0. */
 		m_viewerAnimationIndex = (m_viewerAnimationIndex + 1) % (m_viewerClipNames.size() + 1);
 
 		Viewers::ModelViewer::applyAnimation(*viewerScene, m_viewerClipNames, m_viewerAnimationIndex);
@@ -2502,7 +2502,7 @@ namespace EmEn
 
 			if ( subCode > 0 )
 			{
-				TraceWarning{ClassId} << "Command " << command << " exitd with code: " << subCode;
+				TraceWarning{ClassId} << "Command " << command << " exited with code: " << subCode;
 			}
 		}
 
@@ -2914,7 +2914,7 @@ namespace EmEn
 					script << " -c:v copy";
 				}
 
-				/* Container-level colour tags (the VP9 bitstream itself already carries BT.709). */
+				/* Container-level color tags (the VP9 bitstream itself already carries BT.709). */
 			script << " -colorspace bt709 -color_primaries bt709 -color_trc bt709";
 
 			script << " \"" << filename << containerExtension << "\"\n";
@@ -2952,7 +2952,7 @@ namespace EmEn
 					script << " -c:v copy";
 				}
 
-				/* Container-level colour tags (the VP9 bitstream itself already carries BT.709). */
+				/* Container-level color tags (the VP9 bitstream itself already carries BT.709). */
 			script << " -colorspace bt709 -color_primaries bt709 -color_trc bt709";
 
 			script << " \"" << filename << containerExtension << "\"\n";
@@ -3304,7 +3304,7 @@ namespace EmEn
 			switch ( notificationCode )
 			{
 				case Overlay::Manager::RedrawRequested :
-					/* NOTE: The overlay signalled a visual change (surface content/geometry/visibility/order,
+					/* NOTE: The overlay signaled a visual change (surface content/geometry/visibility/order,
 					 * or a screen lifecycle/visibility change). Wake the on-demand rendering thread. No-op in
 					 * continuous rendering. */
 					this->requestRedraw();
@@ -3713,7 +3713,7 @@ namespace EmEn
 		settings.clear();
 
 		/* Read the declared entries back from the backup into the fresh store. A backup that cannot be
-		 * re-parsed is reported and the reset stands: it was parsed a moment ago, and the entries are a
+		 * reparsed is reported and the reset stands: it was parsed a moment ago, and the entries are a
 		 * convenience on top of a reset that has already happened on disk. */
 		SettingsKeyRestoration::Report report;
 
