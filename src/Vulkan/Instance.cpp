@@ -803,6 +803,7 @@ namespace EmEn::Vulkan
 		scored.device = device;
 		scored.score = score;
 		scored.enumerationIndex = enumerationIndex;
+		scored.translationLayer = device->isTranslationLayer();
 
 		switch ( device->propertiesVK10().deviceType )
 		{
@@ -844,15 +845,18 @@ namespace EmEn::Vulkan
 	Instance::rankDevices (std::vector< ScoredPhysicalDevice > & devices) const noexcept
 	{
 		/* NOTE: The enumeration index is inverted so that, at equal keys, the device Vulkan listed FIRST ranks higher. */
+		/* NOTE: The first key puts a translation layer below every native device, whatever its score (production,
+		 * 2026-11-10: Microsoft's Vulkan-on-Direct3D 12 layer was picked over the native driver of the same GPU). */
 		const auto keys = [this] (const ScoredPhysicalDevice & scored) {
 			const auto order = std::numeric_limits< size_t >::max() - scored.enumerationIndex;
+			const uint64_t native = scored.translationLayer ? 0 : 1;
 
 			if ( m_autoSelectMode == DeviceAutoSelectMode::RawPerformance )
 			{
-				return std::tuple< uint64_t, uint64_t, uint64_t, uint64_t >{scored.typeRank, scored.deviceLocalMemory, scored.score, order};
+				return std::tuple< uint64_t, uint64_t, uint64_t, uint64_t, uint64_t >{native, scored.typeRank, scored.deviceLocalMemory, scored.score, order};
 			}
 
-			return std::tuple< uint64_t, uint64_t, uint64_t, uint64_t >{scored.score, scored.typeRank, scored.deviceLocalMemory, order};
+			return std::tuple< uint64_t, uint64_t, uint64_t, uint64_t, uint64_t >{native, scored.score, scored.typeRank, scored.deviceLocalMemory, order};
 		};
 
 		std::ranges::sort(devices, [&keys] (const ScoredPhysicalDevice & left, const ScoredPhysicalDevice & right) {
@@ -935,6 +939,11 @@ namespace EmEn::Vulkan
 			this->modulateDeviceScoring(physicalDevice->propertiesVK10(), score);
 
 			auto scored = Instance::makeScoredDevice(physicalDevice, score, enumerationIndex);
+
+			if ( scored.translationLayer )
+			{
+				TraceInfo{ClassId} << "Physical device '" << physicalDevice->propertiesVK10().deviceName << "' is a translation layer over another graphics API: it ranks below every native device.";
+			}
 
 			if ( m_showInformation )
 			{
@@ -1027,7 +1036,10 @@ namespace EmEn::Vulkan
 
 		if ( selectedPhysicalDevice == nullptr && m_preferredGraphicsDevice.has_value() )
 		{
-			for ( const auto & scored : scoredDevices )
+			/* NOTE: From the BEST: a translation layer shares the native driver's LUID and ranks below it, so the native
+			 * one wins; the layer is taken only when it is the sole match. The former loop went from the worst and took
+			 * Microsoft's Direct3D 12 layer on the Windows machines that have it (production, 8.0.2 to 8.0.4). */
+			for ( const auto & scored : std::ranges::reverse_view(scoredDevices) )
 			{
 				const auto & physicalDevice = scored.device;
 

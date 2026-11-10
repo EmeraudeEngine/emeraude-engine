@@ -57,10 +57,16 @@ Archives:
 ## Triage (2026-11-10)
 
 - **Owner**: the engine. 1 Windows machine, 5 reports in 8.0.4, at `SessionOpened`, GPU not recorded.
+- **Cause (2026-11-10)**: its journal shows the Microsoft Direct3D12 translation layer selected "(PREFERRED by the
+  application)": the preferred-device loop took the layer, which shares the native driver's LUID.
+- **Fixed (engine, 2026-11-10)**: translation layers rank below every native device and the preferred-device match goes
+  from the best (`docs/subsystems/vulkan/21-gpu-selection-modes-and-preferred-device.md` § Translation layers rank
+  last).
 
 ## What remains
 
-- See the triage above; the journals stay in the downstream application's crash-report mirror.
+- Confirm on the reports of the first release that ships the fix: this signature should disappear; then delete the
+  item (the knowledge is in the GPU selection doc).
 
 ## References
 

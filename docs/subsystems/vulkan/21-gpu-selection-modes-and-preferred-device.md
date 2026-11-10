@@ -32,6 +32,23 @@ The preferred device is selected only among the compatible ones ("… (PREFERRED
 compatible → "The physical device preferred by the application is absent or not compatible : the score decides."
 Without a call, nothing changes.
 
+### Translation layers rank last (2026-11-10)
+
+Microsoft's Vulkan-on-Direct3D 12 layer (Mesa "Dozen", `VK_DRIVER_ID_MESA_DOZEN`, installed by the Windows "OpenCL,
+OpenGL & Vulkan Compatibility Pack") lists one device per GPU, named "Microsoft Direct3D12 (<the GPU>)", with the SAME
+LUID as that GPU's native driver. Production (a downstream application's crash reports): 17 machines in 8.0.2, 11 in
+8.0.3, 6 in 8.0.4 got the layer, every time "(PREFERRED by the application)": the preferred-device loop went from the
+WORST ranked device and stopped at the first LUID match. On the layer, the application's shared textures failed to
+import (`VK_ERROR_OUT_OF_HOST_MEMORY`), the composited view stayed empty, some swap-chains could not be created.
+
+- `PhysicalDevice::isTranslationLayer()`: the driver id, else the name prefix.
+- `rankDevices()`: its FIRST key puts a translation layer below every native device, in every mode (graphics and
+  compute); one Info line names each layer found.
+- The preferred-device loop goes from the BEST: the native device of the preferred LUID wins; the layer is taken only
+  when it is the sole match. Never refused: some machines (Windows on ARM) may have no other Vulkan driver.
+- ⚠️ Not reproducible on a machine without the Compatibility Pack (Linux, most Windows workstations): verified by the
+  build only; the proof is a Windows machine with the pack, or the downstream application's next crash reports.
+
 ⚠️ An integrated GPU reports SYSTEM memory as its `DEVICE_LOCAL` heap (measured: Intel RPL-S 64 GiB, llvmpipe 128 GiB,
 RTX 3070 Ti 8 GiB): VRAM only compares devices of the same type, which is why `RawPerformance` ranks the type first.
 

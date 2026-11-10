@@ -574,6 +574,7 @@ namespace EmEn::Vulkan
 				uint64_t deviceLocalMemory{0}; /**< The largest DEVICE_LOCAL heap, in bytes (VRAM). */
 				size_t enumerationIndex{0};  /**< The order Vulkan listed it (the last tie-break: lower first). */
 				uint32_t typeRank{0};        /**< Discrete 4, integrated 3, virtual 2, CPU 1, other 0. */
+				bool translationLayer{false}; /**< PhysicalDevice::isTranslationLayer(): ranked below every native device. */
 			};
 
 			/**
@@ -632,7 +633,8 @@ namespace EmEn::Vulkan
 			static ScoredPhysicalDevice makeScoredDevice (const std::shared_ptr< PhysicalDevice > & device, size_t score, size_t enumerationIndex) noexcept;
 
 			/**
-			 * @brief Sorts the devices from the worst to the BEST (the last). RawPerformance: type rank, then VRAM, then
+			 * @brief Sorts the devices from the worst to the BEST (the last). A translation layer always ranks below every
+			 * native device (PhysicalDevice::isTranslationLayer()). Then RawPerformance: type rank, then VRAM, then
 			 * score; the other modes: score, then type rank, then VRAM. The enumeration order breaks the last tie, so no
 			 * two devices ever compare equal (the former std::map keyed by score silently dropped a device with the same
 			 * score as another).

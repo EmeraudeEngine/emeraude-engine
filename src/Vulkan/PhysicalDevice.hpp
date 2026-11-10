@@ -37,6 +37,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -411,6 +412,22 @@ namespace EmEn::Vulkan
 			deviceName () const noexcept
 			{
 				return m_properties.properties.deviceName;
+			}
+
+			/**
+			 * @brief Returns whether this device is a translation layer over another graphics API rather than a native
+			 * driver: Microsoft's Vulkan-on-Direct3D 12 layer (Mesa "Dozen", shipped by the Windows "OpenCL, OpenGL & Vulkan
+			 * Compatibility Pack"), listed as "Microsoft Direct3D12 (<the GPU>)" with the SAME LUID as the native driver.
+			 * @note Production, 2026-11-10: picked as the application's preferred device on Windows machines since 8.0.2;
+			 * the shared textures of the web views could not be imported on it. Ranked below every native device
+			 * (Instance::rankDevices()), never refused: some machines have no other Vulkan driver.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isTranslationLayer () const noexcept
+			{
+				return m_propertiesVK12.driverID == VK_DRIVER_ID_MESA_DOZEN || std::string_view{m_properties.properties.deviceName}.starts_with("Microsoft Direct3D12 (");
 			}
 
 			/**
