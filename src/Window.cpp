@@ -150,8 +150,23 @@ namespace EmEn
 		}
 		else
 		{
-			const auto windowWidth = settings.getOrSetDefault< int32_t >(WindowWidthKey, DefaultWindowWidth);
-			const auto windowHeight = settings.getOrSetDefault< int32_t >(WindowHeightKey, DefaultWindowHeight);
+			auto windowWidth = settings.getOrSetDefault< int32_t >(WindowWidthKey, DefaultWindowWidth);
+			auto windowHeight = settings.getOrSetDefault< int32_t >(WindowHeightKey, DefaultWindowHeight);
+
+			/* NOTE: A stored size the window cannot have (0x0, 144x0: production, 8.0.2 to 8.0.4, 12 reports on 10
+			 * machines, its writer unknown) used to fail the startup with a Fatal, the defaults restored for the next
+			 * launch only. It is replaced now, and this launch goes on. */
+			if ( windowWidth <= 0 || windowHeight <= 0 )
+			{
+				TraceWarning{ClassId} << "The stored window size " << windowWidth << "x" << windowHeight << " is invalid : the default size " << DefaultWindowWidth << "x" << DefaultWindowHeight << " is used.";
+
+				windowWidth = static_cast< int32_t >(DefaultWindowWidth);
+				windowHeight = static_cast< int32_t >(DefaultWindowHeight);
+
+				settings.set< int32_t >(WindowWidthKey, windowWidth);
+				settings.set< int32_t >(WindowHeightKey, windowHeight);
+			}
+
 			const auto frameless = settings.getOrSetDefault< bool >(WindowFramelessKey, DefaultWindowFrameless);
 
 			/* GLFW_RESIZABLE specifies whether the windowed mode window

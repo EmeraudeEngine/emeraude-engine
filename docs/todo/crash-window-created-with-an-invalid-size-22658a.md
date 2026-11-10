@@ -67,12 +67,18 @@ Archives:
   from a monitor that reports nothing usable (an unplugged or virtual monitor, a minimized window saved as is?) —
   not confirmed.
 
+- **2026-11-10, read side fixed**: the size comes from the stored `Core/Video/Window/Width|Height`; the save side
+  already refused a minimised or empty window (since 2026-10-01, shipped in 8.0.4), yet 3 machines started 8.0.4 with
+  0x0 — the writer was not found (neither the downstream application nor its frontend writes these keys). The window
+  service now replaces a stored size with a side <= 0 by the default one, with a warning ("The stored window size 0x0
+  is invalid : the default size 1280x720 is used."), and the launch goes on. Verified (Linux, the fault-injection
+  runner with a settings file holding 0x0): the warning, exit 0, the settings repaired.
+
 ## What remains
 
-- Read the journals of the archives counted above (in the downstream application's crash-report mirror): where the
-  requested size comes from (the saved `Core/Video/Window/Width|Height`, or the monitor's work area).
-- Fix it where it lives: clamp the size to the monitor at creation (fall back to a default size when either side is
-  0), then reproduce with a settings file holding a zero height.
+- Confirm on the reports of the first release that ships the fix: this signature should disappear; then move the
+  read-side rule into the window documentation and delete the item.
+- Optional: find who writes a 0x0 size.
 
 ## References
 
