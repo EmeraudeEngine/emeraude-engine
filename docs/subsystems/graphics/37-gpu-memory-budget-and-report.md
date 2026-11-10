@@ -69,6 +69,43 @@ policy; "after" = `getGPUMemory()` 15 s after the load):
 operation for ever. Proof: citadel → sponza → citadel → sponza in one run, validation on, 0 `VUID-`, 0 `UNASSIGNED`,
 the pools empty at the end (citadel alone uploads through one 480 MiB staging buffer).
 
+## Swap-chain attachments are NOT reserved at a fixed size (owner decision 2026-11-10)
+
+**Seen in production** (a downstream application's crash reports, 4 sessions, 3 Windows NVIDIA machines, 8 GB and
+12 GB): after hours of use, another process on the same GPU (the application's web runtime GPU process) filled the
+VRAM. The engine's per-frame import of an external image failed first (`VK_ERROR_OUT_OF_DEVICE_MEMORY`, 800 to 1,900
+times per session), then the swap-chain recreation failed: twice on the engine's own depth buffer (VMA,
+`OUT_OF_DEVICE_MEMORY`), twice in `vkCreateSwapchainKHR` itself (`VK_ERROR_INITIALIZATION_FAILED`), until
+`Renderer::retryDegradedSwapChain()` gave up (exit 98). ⚠️ The budget warning above never fired in those sessions:
+**an allocation refused while the engine is under 98 % of its budget means another process holds the memory**, not an
+engine leak.
+
+**Considered and rejected: reserve the swap-chain's own attachments once.** The idea: allocate the per-frame
+depth/stencil (and the MSAA color / depth) memory once, sized for the largest connected monitor, and recreate the
+images at their exact size INSIDE that memory at each recreation (`vmaCreateImage` on a probe image then
+`vkDestroyImage` keeping the allocation, `vmaBindImageMemory` for the real image; `vmaDestroyImage` with a null
+allocation destroys the image only). No consumer would have changed (exact-size images). Rejected because:
+
+- **The cost is permanent.** D32S8 is about 8 bytes per pixel on NVIDIA, ×3 frames in flight: ≈ 47 MiB for a
+  1920×1017 window, ≈ 200 MiB reserved for a 4K monitor, ≈ 350 MiB for a 5K one, × the samples with MSAA (color and
+  depth) — held from the start on the machines that are already short of VRAM.
+- **It moves the failure instead of removing it.** `SwapChain::recreate()` destroys the attachments
+  (`resetFramebuffer()`) BEFORE `vkCreateSwapchainKHR`: today the driver finds that freed room for the presentable
+  images. A reservation keeps it taken during the call, so under pressure a depth-buffer failure becomes a
+  `vkCreateSwapchainKHR` failure — the other half of the reports.
+- **The presentable images cannot be reserved**: the driver allocates them inside `vkCreateSwapchainKHR`, no API takes
+  memory from the application.
+- **The application stays broken anyway**: the external-image import (one dedicated import per frame) fails first,
+  the composited view freezes whether the swap-chain survives or not.
+
+**Where the fix lives** (owner, 2026-11-10): in the application, whose web runtime must not consume the GPU memory
+without bound; the engine shares the GPU and cannot defend memory another process takes.
+
+The only variant without extra VRAM is a grow-only reservation (kept until the window outgrows its largest size so
+far): it saves the reallocations of a minimise/restore or a shrink, but still takes the room `vkCreateSwapchainKHR`
+gets today. Revisit only with a measurement showing the reallocation itself (fragmentation over long sessions) failing
+while the GPU is NOT full.
+
 ## To verify
 
 - MoltenVK and the Windows drivers: does `VK_EXT_memory_budget` report a real budget, and does VMA spill the same way?
