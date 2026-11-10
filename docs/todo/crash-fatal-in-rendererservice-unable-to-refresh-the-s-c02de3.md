@@ -43,8 +43,8 @@ Last error before the death (else the last trace), by number of reports:
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[OverlaySurface][Success] (vendors/emeraude-engine/src/Overlay/Surface.cpp `EmEn::Overlay::Surface::commitTransitionBuffer`) Surface 'ViewUI' transition buffer committed (3405x1384px, scale:<n>).
-[OverlaySurface][Success] (vendors/emeraude-engine/src/Overlay/Surface.cpp `EmEn::Overlay::Surface::commitTransitionBuffer`) Surface 'ViewLib' transition buffer committed (3x1px, scale:<n>).
+[OverlaySurface][Success] (vendors/emeraude-engine/src/Overlay/Surface.cpp `EmEn::Overlay::Surface::commitTransitionBuffer`) Surface 'ViewUI' transition buffer committed (<n>x<n>px, scale:<n>).
+[OverlaySurface][Success] (vendors/emeraude-engine/src/Overlay/Surface.cpp `EmEn::Overlay::Surface::commitTransitionBuffer`) Surface 'ViewLib' transition buffer committed (<n>x<n>px, scale:<n>).
 [VulkanPhysicalDevice][Error] (vendors/emeraude-engine/src/Vulkan/PhysicalDevice.cpp `EmEn::Vulkan::PhysicalDevice::getSurfaceFormats`) Unable to get surface format count : VK_ERROR_SURFACE_LOST_KHR !
 [VulkanPhysicalDevice][Error] (vendors/emeraude-engine/src/Vulkan/PhysicalDevice.cpp `EmEn::Vulkan::PhysicalDevice::getSurfacePresentModes`) Unable to get present mode count : VK_ERROR_SURFACE_LOST_KHR !
 [VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::chooseSurfaceFormat`) The surface reports no format (lost or not presentable by this device) ! Unable to create the swap-chain.

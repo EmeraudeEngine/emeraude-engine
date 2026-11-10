@@ -38,16 +38,14 @@ tags: [crash, crash-report-auto]
 Last error before the death (else the last trace), by number of reports:
 
 - ×60 `Core: The graphics device is lost or the renderer is no longer usable : the engine stops now (exit code <n>).`
+- ×12 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'View3D' (<n>x<n>px) !`
 - ×10 `OverlayManagerService: Failed to process screen 'ApplicationUI' updates!`
 - ×10 `UIManagerService: Failed to create the startup error overlay web view !`
-- ×9 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'View3D' (<n><hex>px) !`
+- ×3 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'ViewFile' (<n>x<n>px) !`
 - ×2 `VulkanDevice: DEVICE LOST (Queue::present) — GPU diagnostics follow: [checkpoints] last GPU markers reached per queue: - queue <hex> stage=<hex> marker='t`
-- ×2 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'ViewFile' (<n><hex>px) !`
 - ×1 `UIManagerService: The browser of the web-view 'ViewLib' did not complete its close within <n> ms : left to CEF.`
 - ×1 `VulkanDevice: DEVICE LOST (Fence::wait) — GPU diagnostics follow: [device_fault] extension not available on this driver. [checkpoints] last GPU markers re`
-- ×1 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'View3D' (1835x1042px) !`
-- ×1 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'View3D' (2561x1560px) !`
-- … 3 other(s), 3 report(s)
+- ×1 `WebView: [CEF-ACCEL] Unable to open the shared texture handle @<n> from browser #<n> ('View3D') on any adapter ! HRESULT <hex> - frame dropped.`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 

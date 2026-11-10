@@ -37,7 +37,7 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×1 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'ViewSplash' (<n><hex>px) !`
+- ×1 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'ViewSplash' (<n>x<n>px) !`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
