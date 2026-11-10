@@ -31,6 +31,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <chrono>
 #include <string_view>
 
 /* Forward declarations. */
@@ -51,8 +52,25 @@ namespace EmEn::FaultInjection
 	constexpr auto StartupFailureArgument{"--inject-startup-failure"};
 
 	/** @brief The command-line switch making every swap-chain recreation fail for lack of video memory:
-	 * `--inject-swap-chain-out-of-video-memory` (Graphics::Renderer::retryDegradedSwapChain()). */
+	 * `--inject-swap-chain-out-of-video-memory` (Graphics::Renderer::retryDegradedSwapChain()). Core degrades the
+	 * swap-chain once, runtimeFailureDelay() after the main loop started. */
 	constexpr auto SwapChainOutOfVideoMemoryArgument{"--inject-swap-chain-out-of-video-memory"};
+
+	/** @brief The command-line switch making Core stop as on a lost graphics device (Core::stopOnDeviceLoss()),
+	 * runtimeFailureDelay() after the main loop started: `--inject-device-loss`. */
+	constexpr auto DeviceLossArgument{"--inject-device-loss"};
+
+	/** @brief The command-line switch making Core stop as on a lost display connection (Core::stopOnDisplayLoss()),
+	 * runtimeFailureDelay() after the main loop started: `--inject-display-loss`. */
+	constexpr auto DisplayLossArgument{"--inject-display-loss"};
+
+	/** @brief The delay of the runtime injections after the main loop started, in seconds:
+	 * `--inject-runtime-failure-delay=N` (default DefaultRuntimeFailureDelay; time to load a scene before an emergency
+	 * save is tested). */
+	constexpr auto RuntimeFailureDelayArgument{"--inject-runtime-failure-delay"};
+
+	/** @brief The delay of the runtime injections when the argument is absent. */
+	constexpr std::chrono::seconds DefaultRuntimeFailureDelay{5};
 
 	/**
 	 * @brief Reads the argument once. Does nothing in a build without EMERAUDE_FAULT_INJECTION.
@@ -80,4 +98,27 @@ namespace EmEn::FaultInjection
 	 */
 	[[nodiscard]]
 	EMEN_API bool swapChainOutOfVideoMemoryInjected () noexcept;
+
+	/**
+	 * @brief Returns whether Core stops as on a lost graphics device. Always false in a build without
+	 * EMERAUDE_FAULT_INJECTION.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	EMEN_API bool deviceLossInjected () noexcept;
+
+	/**
+	 * @brief Returns whether Core stops as on a lost display connection. Always false in a build without
+	 * EMERAUDE_FAULT_INJECTION.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	EMEN_API bool displayLossInjected () noexcept;
+
+	/**
+	 * @brief Returns the delay of the runtime injections after the main loop started.
+	 * @return std::chrono::seconds
+	 */
+	[[nodiscard]]
+	EMEN_API std::chrono::seconds runtimeFailureDelay () noexcept;
 }

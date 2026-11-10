@@ -51,10 +51,11 @@
  * no leak (an ASan / LSan build), no hang, no VUID. Without the argument it is the reference run (every service up, a
  * clean exit). The sweep over every service name: tools/stress/startup-fault-sweep.sh, docs/subsystems/source-tree/08-startup-fault-injection.md.
  *
- * Two runtime modes stop on a swap-chain given up for lack of video memory (exit code Core::OutOfVideoMemoryExitCode,
- * docs/subsystems/vulkan/24-swap-chain-given-up-for-lack-of-video-memory.md):
- * - `--inject-swap-chain-out-of-video-memory` (FaultInjection): every recreation fails as a full video memory makes it
- *   fail — deterministic, the message printed instead of the dialog;
+ * The runtime stops (docs/subsystems/vulkan/24-swap-chain-given-up-for-lack-of-video-memory.md), each given to the
+ * application's onGraphicsFailure() first (printed here instead of a dialog):
+ * - `--inject-swap-chain-out-of-video-memory`, `--inject-device-loss`, `--inject-display-loss` (FaultInjection, provoked
+ *   by Core FaultInjection::runtimeFailureDelay() after the main loop started, `--inject-runtime-failure-delay=N`):
+ *   exit codes 95, 98, 96 — deterministic;
  * - `--eat-video-memory`: the real test — the runner itself fills the video memory with device-local allocations of
  *   decreasing size until the driver refuses them, then GROWS the window until a swap-chain recreation fails; the
  *   native dialog shows. ⚠️ It fills the GPU of the machine it runs on (freed at the stop). Its allocations go through
@@ -141,7 +142,7 @@ namespace
 				m_start = std::chrono::steady_clock::now();
 				m_started = true;
 				m_eatVideoMemory = arguments.isSwitchPresent(EatVideoMemoryArgument);
-				m_injectVideoMemory = FaultInjection::swapChainOutOfVideoMemoryInjected();
+				m_runtimeInjection = FaultInjection::swapChainOutOfVideoMemoryInjected() || FaultInjection::deviceLossInjected() || FaultInjection::displayLossInjected();
 
 				return true;
 			}
@@ -156,7 +157,7 @@ namespace
 
 				const auto elapsed = std::chrono::steady_clock::now() - m_start;
 
-				if ( !m_eatVideoMemory && !m_injectVideoMemory )
+				if ( !m_eatVideoMemory && !m_runtimeInjection )
 				{
 					if ( elapsed >= RunDuration )
 					{
@@ -188,25 +189,27 @@ namespace
 					return;
 				}
 
-				/* NOTE: The injection needs one degradation; the real test grows the window while the memory is full, so
-				 * each recreation needs more than it frees (a recreation that succeeds ends the episode, the next one starts
-				 * it again). */
-				if ( const auto now = std::chrono::steady_clock::now(); now - m_lastDegrade >= DegradeInterval && (m_eatVideoMemory || m_lastDegrade == std::chrono::steady_clock::time_point{}) )
+				/* NOTE: The injections are provoked by Core itself (Core::injectRuntimeFailure()); the real test grows the
+				 * window while the memory is full, so each recreation needs more than it frees (a recreation that succeeds
+				 * ends the episode, the next one starts it again). */
+				if ( !m_eatVideoMemory )
+				{
+					return;
+				}
+
+				if ( const auto now = std::chrono::steady_clock::now(); now - m_lastDegrade >= DegradeInterval )
 				{
 					m_lastDegrade = now;
 
-					if ( m_eatVideoMemory )
-					{
-						const auto size = this->window().getSize();
-						const auto width = std::min(size[0] + size[0] / 4, LargestWindowSide);
-						const auto height = std::min(size[1] + size[1] / 4, LargestWindowSide);
+					const auto size = this->window().getSize();
+					const auto width = std::min(size[0] + size[0] / 4, LargestWindowSide);
+					const auto height = std::min(size[1] + size[1] / 4, LargestWindowSide);
 
-						std::cout << "[StartupFaultInjection] the window grows from " << size[0] << "x" << size[1] << " to " << width << "x" << height << "." "\n";
+					std::cout << "[StartupFaultInjection] the window grows from " << size[0] << "x" << size[1] << " to " << width << "x" << height << "." "\n";
 
-						this->printMemoryHeaps();
+					this->printMemoryHeaps();
 
-						static_cast< void >(this->window().resize(static_cast< int32_t >(width), static_cast< int32_t >(height)));
-					}
+					static_cast< void >(this->window().resize(static_cast< int32_t >(width), static_cast< int32_t >(height)));
 
 					this->graphicsRenderer().setSwapChainDegraded();
 				}
@@ -341,7 +344,7 @@ namespace
 			bool m_started{false};
 			bool m_stopping{false};
 			bool m_eatVideoMemory{false};
-			bool m_injectVideoMemory{false};
+			bool m_runtimeInjection{false};
 			bool m_videoMemoryFull{false};
 	};
 }

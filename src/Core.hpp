@@ -313,9 +313,10 @@ namespace EmEn
 			};
 
 			/**
-			 * @brief Why a running engine stops because the graphics can no longer be drawn, in terms a user can act on
-			 * (owner decision 2026-11-10: only the swap-chain given up for lack of video memory; a failed load never
-			 * stops the engine).
+			 * @brief Why a running engine stops because the graphics can no longer be drawn or shown, in terms a user can
+			 * act on. The three runtime stops of the engine (owner decisions 2026-11-10/11: a failed load never stops the
+			 * engine; each stop first lets the application save its data, through onGraphicsFailure(); only the video
+			 * memory one is TOLD to the user, by the application or else by the engine's own dialog).
 			 */
 			struct GraphicsFailure final
 			{
@@ -323,8 +324,14 @@ namespace EmEn
 				enum class Cause : uint8_t
 				{
 					/** @brief The swap-chain could not be recreated for lack of video memory
-					 * (Graphics::Renderer::isSwapChainGivenUpForVideoMemory()). */
-					OutOfVideoMemory
+					 * (Graphics::Renderer::isSwapChainGivenUpForVideoMemory()). Exit code OutOfVideoMemoryExitCode. */
+					OutOfVideoMemory,
+					/** @brief The graphics device was lost (VK_ERROR_DEVICE_LOST) or the renderer is no longer usable.
+					 * Exit code DeviceLostExitCode. */
+					DeviceLost,
+					/** @brief The connection to the display server died (Window::OSLostDisplayConnection). Exit code
+					 * DisplayLostExitCode. */
+					DisplayLost
 				};
 
 				/** @brief The dialog title (English). */
@@ -335,7 +342,8 @@ namespace EmEn
 				 * @{ */
 				/** @brief The graphics device's name; empty when unknown. */
 				std::string deviceName;
-				/** @brief The size of its largest device-local memory heap, in bytes; 0 when unknown. */
+				/** @brief The size of its largest device-local memory heap, in bytes; 0 when unknown (and for the causes
+				 * other than OutOfVideoMemory, as the three below). */
 				uint64_t videoMemoryBytes{0};
 				/** @brief What this process used on that heap when it stopped (VK_EXT_memory_budget), in bytes. */
 				uint64_t usageBytes{0};
@@ -1641,23 +1649,34 @@ namespace EmEn
 			/**
 			 * @brief Stops the engine once, at once, after the renderer gave up its swap-chain for lack of video memory
 			 * (Graphics::Renderer::isSwapChainGivenUpForVideoMemory()).
-			 * @details The user is told first (tellGraphicsFailure(), owner decision 2026-11-10: while the window is still
-			 * there), then the application (onBeforeCoreStop(): it may save its data) cannot refuse. Exit code
-			 * OutOfVideoMemoryExitCode. No force-quit dialog. One-shot (shared with stopOnDeviceLoss()).
+			 * @details The application is called first (tellGraphicsFailure(): it saves its data, then tells the user),
+			 * then onBeforeCoreStop() (it cannot refuse). Exit code OutOfVideoMemoryExitCode. No force-quit dialog.
+			 * One-shot (shared with stopOnDeviceLoss()).
 			 * @note Main thread.
 			 */
 			void stopOnVideoMemoryExhaustion () noexcept;
 
 			/**
-			 * @brief Describes the video memory exhaustion that stops the engine: the GPU, its largest device-local heap,
-			 * this process's usage and budget on it.
+			 * @brief Test builds only (EMERAUDE_FAULT_INJECTION): once FaultInjection::runtimeFailureDelay() after the
+			 * main loop started, provokes the runtime failure the arguments ask for — degrades the swap-chain (its
+			 * recreations then fail for lack of video memory), or stops as on a lost device or display. One-shot.
+			 * @note Main thread, once per main-loop cycle.
+			 */
+			void injectRuntimeFailure () noexcept;
+
+			/**
+			 * @brief Describes the failure that stops the engine: the GPU, and for OutOfVideoMemory its largest
+			 * device-local heap and this process's usage and budget on it (never queried on a lost device).
+			 * @param cause The cause.
 			 * @return GraphicsFailure
 			 */
 			[[nodiscard]]
-			GraphicsFailure diagnoseVideoMemoryExhaustion () const noexcept;
+			GraphicsFailure diagnoseGraphicsFailure (GraphicsFailure::Cause cause) const noexcept;
 
 			/**
-			 * @brief Tells the user why the engine stops: the application's hook first, else a native dialog.
+			 * @brief Gives the application its last chance before a runtime stop (onGraphicsFailure(): it saves its data,
+			 * and tells the user itself when it wants); for OutOfVideoMemory only, the engine's native dialog when the
+			 * application told nothing.
 			 * @param failure The classified failure.
 			 */
 			void tellGraphicsFailure (const GraphicsFailure & failure) noexcept;
@@ -1915,13 +1934,17 @@ namespace EmEn
 			}
 
 			/**
-			 * @brief Called when the running engine stops because the graphics can no longer be drawn (GraphicsFailure),
-			 * before the engine shows its own native dialog and before onBeforeCoreStop().
-			 * @details The application may show its own message (its wording, its translations) and record the failure in
-			 * its reports; returning true replaces the engine's dialog. Nothing can be drawn any more: a message drawn by
-			 * the engine (a web view, an overlay) cannot show, only a native dialog can. Main thread.
+			 * @brief Called when the running engine stops because the graphics can no longer be drawn or shown
+			 * (GraphicsFailure: video memory full, device lost, display lost), before onBeforeCoreStop().
+			 * @details The application's last chance: save its data (its web content and its logic still run, only the
+			 * drawing or the display is gone — owner decision 2026-11-11, the emergency save), record the failure in its
+			 * reports, and tell the user with its own message (its wording, its translations). Only a native dialog can
+			 * show: anything the engine draws (a web view, an overlay) needs what just failed. The engine's own dialog
+			 * exists for OutOfVideoMemory only, and returning true replaces it. Main thread; the engine's loop is
+			 * stopped meanwhile.
 			 * @param failure The classified failure.
-			 * @return bool True when the application told the user itself (the engine shows nothing).
+			 * @return bool True when the application told the user itself (for OutOfVideoMemory, the engine then shows
+			 * nothing).
 			 */
 			[[nodiscard]]
 			virtual
@@ -2154,6 +2177,7 @@ namespace EmEn
 			int m_stopVetoCount{0}; ///< Consecutive `onBeforeCoreStop()` veto count. See stop().
 			std::optional< std::chrono::steady_clock::time_point > m_firstStopVetoTime; ///< When the first of these vetoes happened (ForceQuitMinimumDelay). Main thread only.
 			std::optional< std::chrono::steady_clock::time_point > m_systemStopDeadline; ///< Set by requestSystemStop(): past it, the stop proceeds whatever the application answers. Main thread only.
+			bool m_runtimeFailureInjected{false}; ///< injectRuntimeFailure() did its work (test builds). Main thread only.
 			bool m_deviceLossStopIssued{false}; ///< stopOnDeviceLoss() or stopOnDisplayLoss() ran (one-shot). Main thread only.
 			std::optional< PlatformSpecific::TerminationSignalCatcher > m_terminationSignals; ///< Catches SIGTERM / SIGHUP / SIGINT during the main loop (run()). Main thread only.
 			uint32_t m_mainLoopFrequency{DefaultMainLoopFrequencyHz< uint32_t >}; ///< Main event-loop tick ceiling (Hz), set at construction. @see mainLoopFrequencyHz()

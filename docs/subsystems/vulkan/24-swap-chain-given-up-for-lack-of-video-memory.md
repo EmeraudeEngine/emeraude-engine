@@ -32,18 +32,35 @@ stopped answering. Owner decisions 2026-11-10:
 
 ### What the user and the application get (`Core::GraphicsFailure`)
 
-`Core::diagnoseVideoMemoryExhaustion()` fills `title` ("Not enough video memory"), `message` (the GPU and the size of
-its largest device-local heap, "the window can no longer be drawn and the application closes", other programs may hold
-that memory) and the parts for a translated message: `deviceName`, `videoMemoryBytes`, and this process's `usageBytes`
-and `budgetBytes` on that heap (VK_EXT_memory_budget through VMA). `Core::tellGraphicsFailure()` traces it, calls
-`onGraphicsFailure()` (true = the application told the user itself), else shows an unparented native dialog. ⚠️ Only a
-native dialog can show: anything the engine draws (an overlay, a web view) needs the swap-chain that just failed.
+`Core::diagnoseGraphicsFailure(cause)` fills `title` ("Not enough graphics memory"), `message` (the GPU and the size of
+its largest device-local heap, "the application must close. Restart it to continue working. If this happens again,
+close other programs that use the graphics card, or contact support." — the wording of the downstream application,
+validated by the owner on 2026-11-11, without its name) and the parts for a translated message: `deviceName`,
+`videoMemoryBytes`, and this process's `usageBytes` and `budgetBytes` on that heap (VK_EXT_memory_budget through VMA),
+`sharedMemory` for an integrated GPU. `Core::tellGraphicsFailure()` traces it, calls `onGraphicsFailure()` (true = the
+application told the user itself), else shows an unparented native dialog. ⚠️ Only a native dialog can show: anything
+the engine draws (an overlay, a web view) needs the swap-chain that just failed.
+
+### The application's last chance on every runtime stop (owner decision 2026-11-11)
+
+`GraphicsFailure::Cause` has three values: `OutOfVideoMemory` (95), `DeviceLost` (98, `stopOnDeviceLoss()`) and
+`DisplayLost` (96, `stopOnDisplayLoss()`). Each stop calls `tellGraphicsFailure()` → `onGraphicsFailure()` AFTER
+`setAppReadyToQuit()` and BEFORE `onBeforeCoreStop()`: the application saves its data there — its logic and its web
+content still run, only the drawing or the display is gone (the downstream application's "emergency save": a bus request
+to its UI, at most 10 s, while the engine's loop is stopped). The engine's own dialog stays for `OutOfVideoMemory` only;
+`DeviceLost` and `DisplayLost` show nothing unless the application does (their `title` / `message` are filled for it:
+"Graphics card not responding", "Display connection lost"; no memory query on a lost device). Before, the two other
+stops went straight to `onBeforeCoreStop()`: an application that skips its quit handshake once the stop is decided
+(`setAppReadyToQuit()`) lost the unsaved work.
 
 ### Proof (`EmeraudeStartupFaultInjection`, a build with `EMERAUDE_FAULT_INJECTION`)
 
-- `--inject-swap-chain-out-of-video-memory` (`FaultInjection::swapChainOutOfVideoMemoryInjected()`): the runner
-  degrades the swap-chain once, every recreation then fails as a full video memory makes it fail; expected: the
-  "video memory is exhausted" Fatal after 30 attempts (≈ 3 s), the message printed by the runner's hook, exit code 95.
+- `--inject-swap-chain-out-of-video-memory` (`FaultInjection::swapChainOutOfVideoMemoryInjected()`): Core degrades the
+  swap-chain once, `--inject-runtime-failure-delay` seconds after the main loop started (default 5), every recreation
+  then fails as a full video memory makes it fail; expected: the "video memory is exhausted" Fatal after 30 attempts
+  (≈ 3 s), the message printed by the runner's hook, exit code 95. `--inject-device-loss` and `--inject-display-loss`
+  stop the same way through the other two causes (98, 96). Measured 2026-11-11 (Linux, RTX 3070 Ti, branch
+  `cef/emergency_save`): 95, 98, 96 with their texts, the reference 0.
 - `--eat-video-memory`: the real test. The runner fills the video memory with device-local allocations through
   `Vulkan::DeviceMemory` (256 MiB, then four times smaller after each refusal, down to 16 MiB; their refusal is
   recorded like a refused import), then grows the window by a quarter every 500 ms (at most 8192 px a side) until a

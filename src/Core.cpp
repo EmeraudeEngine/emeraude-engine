@@ -69,6 +69,7 @@
 #include "Console/Output.hpp"
 #include "Constants.hpp"
 #include "FastJSON.hpp"
+#include "FaultInjection.hpp"
 #include "FileSystem.hpp"
 #include "Graphics/Effects/Camera/DepthOfField.hpp"
 #include "Graphics/Effects/Camera/ToneMapping.hpp"
@@ -731,6 +732,11 @@ namespace EmEn
 			 * DirectInput: Copy the state of every input device to use it in the engine cycle.
 			 * NOTE: The regular timeout is bounded by a pending scheduleMainLoopCycle() deadline. */
 			m_inputManager.waitSystemEvents(this->mainLoopWaitTimeout(m_mainLoopEventTimeoutSeconds));
+
+			if constexpr ( FaultInjectionEnabled )
+			{
+				this->injectRuntimeFailure();
+			}
 
 			/* NOTE: Check if the graphics render do not have a problem (a lost device, or a swap-chain the renderer gave up
 			 * recreating). */
@@ -1974,9 +1980,12 @@ namespace EmEn
 
 		TraceError{ClassId} << "The graphics device is lost or the renderer is no longer usable : the engine stops now (exit code " << DeviceLostExitCode << ").";
 
-		/* NOTE: The application may save its data, but cannot refuse: nothing can be drawn anymore. */
 		this->setAppReadyToQuit(DeviceLostExitCode);
 
+		/* NOTE: The application's last chance: it saves its data (owner decision 2026-11-11), nothing is shown. */
+		this->tellGraphicsFailure(this->diagnoseGraphicsFailure(GraphicsFailure::Cause::DeviceLost));
+
+		/* NOTE: The application cannot refuse: nothing can be drawn anymore. */
 		static_cast< void >(this->onBeforeCoreStop());
 
 		this->proceedStop();
@@ -1994,9 +2003,12 @@ namespace EmEn
 
 		TraceError{ClassId} << "The connection to the display server is lost (on Wayland a compositor protocol error, printed on stderr by libwayland) : the engine stops now (exit code " << DisplayLostExitCode << ").";
 
-		/* NOTE: The application may save its data, but cannot refuse: nothing can be shown anymore. */
 		this->setAppReadyToQuit(DisplayLostExitCode);
 
+		/* NOTE: The application's last chance: it saves its data (owner decision 2026-11-11), nothing is shown. */
+		this->tellGraphicsFailure(this->diagnoseGraphicsFailure(GraphicsFailure::Cause::DisplayLost));
+
+		/* NOTE: The application cannot refuse: nothing can be shown anymore. */
 		static_cast< void >(this->onBeforeCoreStop());
 
 		this->proceedStop();
@@ -2016,31 +2028,90 @@ namespace EmEn
 
 		this->setAppReadyToQuit(OutOfVideoMemoryExitCode);
 
-		/* NOTE: Told before the application saves, while the window is still there (owner decision 2026-11-10). */
-		this->tellGraphicsFailure(this->diagnoseVideoMemoryExhaustion());
+		/* NOTE: The application's last chance: it saves its data, then tells the user (owner decisions 2026-11-10/11). */
+		this->tellGraphicsFailure(this->diagnoseGraphicsFailure(GraphicsFailure::Cause::OutOfVideoMemory));
 
-		/* NOTE: The application may save its data, but cannot refuse: nothing can be drawn anymore. */
+		/* NOTE: The application cannot refuse: nothing can be drawn anymore. */
 		static_cast< void >(this->onBeforeCoreStop());
 
 		this->proceedStop();
 	}
 
+	void
+	Core::injectRuntimeFailure () noexcept
+	{
+		static const auto mainLoopStart = std::chrono::steady_clock::now();
+
+		if ( m_runtimeFailureInjected || std::chrono::steady_clock::now() - mainLoopStart < FaultInjection::runtimeFailureDelay() )
+		{
+			return;
+		}
+
+		if ( FaultInjection::swapChainOutOfVideoMemoryInjected() )
+		{
+			m_runtimeFailureInjected = true;
+
+			Tracer::warning(ClassId, "FAULT INJECTION: the swap-chain is degraded; its recreations fail for lack of video memory.");
+
+			m_graphicsRenderer.setSwapChainDegraded();
+		}
+		else if ( FaultInjection::deviceLossInjected() )
+		{
+			m_runtimeFailureInjected = true;
+
+			Tracer::warning(ClassId, "FAULT INJECTION: the engine stops as on a lost graphics device.");
+
+			this->stopOnDeviceLoss();
+		}
+		else if ( FaultInjection::displayLossInjected() )
+		{
+			m_runtimeFailureInjected = true;
+
+			Tracer::warning(ClassId, "FAULT INJECTION: the engine stops as on a lost display connection.");
+
+			this->stopOnDisplayLoss();
+		}
+	}
+
 	Core::GraphicsFailure
-	Core::diagnoseVideoMemoryExhaustion () const noexcept
+	Core::diagnoseGraphicsFailure (GraphicsFailure::Cause cause) const noexcept
 	{
 		constexpr uint64_t MiB{1024ULL * 1024ULL};
 
 		GraphicsFailure failure;
-		failure.cause = GraphicsFailure::Cause::OutOfVideoMemory;
-		failure.title = "Not enough video memory";
+		failure.cause = cause;
 
-		if ( const auto & device = m_graphicsRenderer.device(); device != nullptr )
+		const auto & device = m_graphicsRenderer.device();
+
+		if ( device != nullptr )
 		{
 			const auto & properties = device->physicalDevice()->propertiesVK10();
 
 			failure.deviceName = properties.deviceName;
 			failure.sharedMemory = properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
+		}
 
+		/* NOTE: The two other causes are never shown by the engine; their texts serve an application that wants them. */
+		if ( cause == GraphicsFailure::Cause::DeviceLost )
+		{
+			failure.title = "Graphics card not responding";
+			failure.message = "The graphics card stopped responding" + ( failure.deviceName.empty() ? std::string{} : " (" + failure.deviceName + ")" ) + ": the application must close.";
+
+			return failure;
+		}
+
+		if ( cause == GraphicsFailure::Cause::DisplayLost )
+		{
+			failure.title = "Display connection lost";
+			failure.message = "The connection to the display was lost: the application must close.";
+
+			return failure;
+		}
+
+		failure.title = "Not enough graphics memory";
+
+		if ( device != nullptr )
+		{
 			for ( const auto & heap : device->memoryBudgets() )
 			{
 				if ( heap.deviceLocal && heap.size > failure.videoMemoryBytes )
@@ -2066,11 +2137,12 @@ namespace EmEn
 			named += ")";
 		}
 
-		/* NOTE: An integrated GPU has no memory of its own: its largest device-local heap is the system memory. */
+		/* NOTE: An integrated GPU has no memory of its own: its largest device-local heap is the system memory. The
+		 * wording mirrors the downstream application's validated text (owner, 2026-11-11), without an application name. */
 		failure.message =
-			std::string{failure.sharedMemory ? "The graphics memory, shared with the system, is full" : "The video memory of the graphics card is full"} + named +
-			": the window can no longer be drawn and the application closes. "
-			"Other programs using the graphics card may hold this memory: closing them before restarting may help.";
+			std::string{failure.sharedMemory ? "The graphics memory, shared with the system, is full" : "The graphics card's memory is full"} + named +
+			": the application must close. Restart it to continue working. "
+			"If this happens again, close other programs that use the graphics card, or contact support.";
 
 		return failure;
 	}
@@ -2084,6 +2156,12 @@ namespace EmEn
 		{
 			Tracer::info(ClassId, "The application told the user about the graphics failure itself.");
 
+			return;
+		}
+
+		/* NOTE: Only the video memory stop is told by the engine (owner decision 2026-11-10); the two others stay silent. */
+		if ( failure.cause != GraphicsFailure::Cause::OutOfVideoMemory )
+		{
 			return;
 		}
 

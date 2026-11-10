@@ -25,9 +25,13 @@ release), and the measure before the fixes.
   path is what is tested. Compiled out of a normal build (`if constexpr`).
 - Not injectable: the arguments service (read before the injection is configured), and the resource containers: their
   `initialize()` only reports their store and cannot fail, and the resource manager only logs it.
-- A runtime fault too (2026-11-10): `--inject-swap-chain-out-of-video-memory` makes every swap-chain recreation fail as
-  a full video memory makes it fail; the runner's `--eat-video-memory` is the real test (it fills the GPU). Both end on
-  `Core::OutOfVideoMemoryExitCode` (95): `docs/subsystems/vulkan/24-swap-chain-given-up-for-lack-of-video-memory.md`.
+- Runtime faults too (2026-11-10/11), provoked by `Core::injectRuntimeFailure()` once
+  `--inject-runtime-failure-delay=N` seconds (default 5) after the main loop started — in ANY application built with the
+  option, not only the runner (time to load a scene before an emergency save is tested):
+  `--inject-swap-chain-out-of-video-memory` (the swap-chain degraded, every recreation fails for lack of video memory:
+  exit 95), `--inject-device-loss` (`Core::stopOnDeviceLoss()`: 98), `--inject-display-loss`
+  (`Core::stopOnDisplayLoss()`: 96). The runner's `--eat-video-memory` is the real test (it fills the GPU).
+  `docs/subsystems/vulkan/24-swap-chain-given-up-for-lack-of-video-memory.md`.
 
 ### The tools
 
