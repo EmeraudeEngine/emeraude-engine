@@ -498,6 +498,19 @@ namespace EmEn
 			bool isIconified () const noexcept;
 
 			/**
+			 * @brief Returns whether the stored window size was invalid (a side <= 0) and replaced by the default size at
+			 * creation. An application may then give the window its own first-launch geometry (owner decision 2026-11-11:
+			 * a downstream application maximizes it).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			wasStoredSizeReplaced () const noexcept
+			{
+				return m_storedSizeReplaced;
+			}
+
+			/**
 			 * @brief Reduces the window to the OS toolbar or similar.
 			 */
 			void iconify () const noexcept;
@@ -1153,6 +1166,7 @@ namespace EmEn
 			Base::ScopedRegistration m_monitorCallbackRegistration;
 			bool m_windowLess{false};
 			bool m_saveWindowPropertiesAtExit{false};
+			bool m_storedSizeReplaced{false};
 			bool m_isUserResizing{false};
 #if IS_WINDOWS
 			/* Whether initializeNativeWindow() initialised COM, so that releaseNativeWindow() uninitialises it only then. */

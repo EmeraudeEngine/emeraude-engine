@@ -73,6 +73,8 @@ Archives:
   service now replaces a stored size with a side <= 0 by the default one, with a warning ("The stored window size 0x0
   is invalid : the default size 1280x720 is used."), and the launch goes on. Verified (Linux, the fault-injection
   runner with a settings file holding 0x0): the warning, exit 0, the settings repaired.
+- **2026-11-11**: `Window::wasStoredSizeReplaced()` tells an application that the stored size was replaced, so it can
+  give the window its own first-launch geometry (the owner's downstream application maximizes it) instead of 1280x720.
 
 ## What remains
 

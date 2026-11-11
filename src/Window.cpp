@@ -165,6 +165,8 @@ namespace EmEn
 
 				settings.set< int32_t >(WindowWidthKey, windowWidth);
 				settings.set< int32_t >(WindowHeightKey, windowHeight);
+
+				m_storedSizeReplaced = true;
 			}
 
 			const auto frameless = settings.getOrSetDefault< bool >(WindowFramelessKey, DefaultWindowFrameless);
