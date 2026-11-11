@@ -12,6 +12,10 @@ stopped answering. Owner decisions 2026-11-10:
   application's hook first, else the engine's native dialog in English.
 - A dedicated exit code, `Core::OutOfVideoMemoryExitCode` (95), so a crash reporter tells a full video memory from a
   device loss (98) without reading the journal.
+- **Given up is final** (2026-11-11): once `isSwapChainGivenUp()` is true, `retryDegradedSwapChain()` returns at once.
+  Frames still run while the application uses its last chance (`Core::onGraphicsFailure()`, up to 10 s for a
+  downstream application's emergency save). Before this, every one of those frames retried and traced a Fatal "after
+  31, 32… consecutive attempts". Measured on Linux and macOS.
 - The dialog shows at the stop, BEFORE the application saves (`onBeforeCoreStop()`), while the window is still there.
 - A device loss (98) and a lost display connection (96) are unchanged: a clean stop, no message.
 

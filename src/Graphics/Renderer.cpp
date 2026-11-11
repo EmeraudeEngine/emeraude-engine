@@ -3612,6 +3612,14 @@ namespace EmEn::Graphics
 	void
 	Renderer::retryDegradedSwapChain () noexcept
 	{
+		/* NOTE: Given up means given up: Core stops the engine, and while the application uses its last chance
+		 * (Core::onGraphicsFailure()) the frames go on; without this, every one of them retried and traced a Fatal
+		 * "after 31, 32… consecutive attempts" (measured on Linux and macOS, 2026-11-11). */
+		if ( m_swapChainGivenUp )
+		{
+			return;
+		}
+
 		const auto now = std::chrono::steady_clock::now();
 
 		if ( m_swapChainRecreationFailures > 0 && now - m_lastSwapChainRecreationFailure < SwapChainRecreationRetryInterval )
