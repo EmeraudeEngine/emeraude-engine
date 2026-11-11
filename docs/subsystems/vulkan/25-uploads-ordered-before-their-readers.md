@@ -59,6 +59,20 @@ Until then, nothing ordered an upload before the first draw that read it, nor tw
 Synchronization Validation was proven on in every run (the layer's `Current Validation Enabled` list includes
 `Synchronization`; `VK_KHRONOS_VALIDATION_VALIDATE_SYNC=true`).
 
+**The three OSes (engine bba9ce95, 2026-11-11):** macOS-PA (Apple M6, MoltenVK, one queue): AppleClang 460/460 with
+0 warning, `-Wdocumentation -Werror` clean on 9 TUs; `sponza --demo-options 1` ×3, `animation-debug` ×2,
+`light-and-shadow-debug --demo-options 0,1`: 0 `SYNC-HAZARD`, 0 VUID, 0 `[Error]`, exit 0. Windows-PA: MSVC 14.44
+Release and Debug 458/458 with 0 warning; Intel RaptorLake-S iGPU (one family, one queue — 1/5 then 3/11 runs with the
+hazard on 2026-10-25) `sky-lab` ×4, `reflexion-debug` ×4, `labyrinth` ×3, `sponza --demo-options 1` ×2, and the RTX 3500
+Ada `sponza --demo-options 1`, `light-and-shadow-debug --demo-options 0,1`: 15 runs, 0 `SYNC-HAZARD`, 0 VUID,
+0 `[Error]`, exit 0.
+
+**Cost (frame-time A/B, Linux, RTX 3070 Ti, no validation layer, vsync off, X11, idle machine):** engine 21081ebe
+against bba9ce95, 5 alternated runs each, the median of 5 `getStatus()` averages per run, ~15 s after the load:
+`sponza --demo-options 1` 31.90 ms → 31.60 ms, `animation-debug` 4.03 ms → 4.00 ms, with a run-to-run spread of 0.26 ms
+and 0.05 ms: no measurable cost in steady state (waiting reached timeline values is free). The load phase, where a frame
+may wait for an upload still running, was not measured.
+
 ### ⚠️ Traps
 
 - **A new writer of GPU data publishes its point** (`Device::publishUploadPoint()`) and waits for the previous writes of

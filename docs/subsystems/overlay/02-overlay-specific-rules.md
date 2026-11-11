@@ -488,7 +488,10 @@ as a band of every row, **still through the region path**.
 > frame, and its rows stayed stale on screen until the next paint touched them. Measured downstream as
 > a translucent band of a faded-out modal backdrop with a razor-straight edge at the bottom of the
 > next small repaint. The only full upload of an image is now its first one (`UNDEFINED` layout), and
-> a fresh image has no earlier upload to race. `docs/todo/overlay-surface-reupload-races-on-two-queues.md`.
+> a fresh image has no earlier upload to race. The region path itself rotated over the graphics queues
+> (`getPrimaryQueue()`): two region uploads stayed unordered — 10 `SYNC-HAZARD-WRITE-RACING-WRITE` on a web view —
+> until every write of an image waited on the GPU for its previous writes (engine bba9ce95, 2026-11-11,
+> `docs/subsystems/vulkan/25-uploads-ordered-before-their-readers.md`; 0 hazard on Linux, macOS and Windows).
 
 > [!CAUTION]
 > ⚠️⚠️ **The upload used to be full-frame, and this section used to claim otherwise.** It read *"both

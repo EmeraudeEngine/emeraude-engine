@@ -394,9 +394,11 @@ namespace EmEn::Overlay
 		}
 
 		/* NOTE: A resident image is refreshed through the region path ONLY, even for every row. The full upload
-		 * runs on the transfer queue, the region one on the graphics queue, and nothing orders the two: a full
+		 * runs on the transfer queue, the region one on the graphics queue, and nothing ordered the two: a full
 		 * upload overtaken by an older region upload left that band stale on screen until its rows were touched
-		 * again (docs/todo/overlay-surface-reupload-races-on-two-queues.md). */
+		 * again. Since 2026-11-11 every write of an image also waits on the GPU for its previous writes (engine
+		 * docs/subsystems/vulkan/25-uploads-ordered-before-their-readers.md), which closed the region-versus-region
+		 * case on the rotated graphics queues. */
 		uint32_t bandTop = 0;
 		uint32_t bandHeight = pixmap.height();
 
