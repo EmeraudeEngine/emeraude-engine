@@ -29,7 +29,6 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <cstddef>
 #include <functional>
 #include <sstream>
@@ -46,12 +45,10 @@
 #include "Graphics/Renderer.hpp"
 #include "Graphics/SharedUBOManager.hpp"
 #include "Graphics/Types.hpp"
-#include "Math/CartesianFrame.hpp"
 #include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scene.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
-#include "Scenes/Component/Abstract.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/Component/LineLight.hpp"
 #include "Scenes/Component/PointLight.hpp"
@@ -377,21 +374,30 @@ namespace EmEn::Scenes
 		/* Push the ambient properties and the environment luminance to every render target. */
 		scene.refreshAmbientLightProperties();
 
-		/* Create the RT light SSBO for ray query shaders.
-		 * This flat array contains all light types in a unified format. */
+		/* Create the RT light SSBOs for ray query shaders: one flat array of every light type, ONE PER FRAME IN FLIGHT.
+		 * ⚠️ A single host-mapped buffer was rewritten every frame while the submitted frames still traced it (RTGI,
+		 * RTR, the probes): the same race the light UBOs' frame regions close above (frameCount, same guard). */
 		{
 			constexpr auto bufferSize = static_cast< VkDeviceSize >(MaxRTLights * sizeof(GPULightData));
 
-			m_RTLightSSBO = std::make_unique< ShaderStorageBufferObject >(renderer.device(), bufferSize);
+			m_RTLightSSBOs.clear();
+			m_RTLightSSBOs.reserve(frameCount);
 
-			if ( !m_RTLightSSBO->createOnHardware() )
+			for ( uint32_t frameIndex = 0; frameIndex < frameCount; ++frameIndex )
 			{
-				Tracer::error(ClassId, "Unable to create the RT light SSBO !");
+				auto & buffer = m_RTLightSSBOs.emplace_back(std::make_unique< ShaderStorageBufferObject >(renderer.device(), bufferSize));
 
-				return false;
+				if ( !buffer->createOnHardware() )
+				{
+					TraceError{ClassId} << "Unable to create the RT light SSBO of frame " << frameIndex << " !";
+
+					m_RTLightSSBOs.clear();
+
+					return false;
+				}
 			}
 
-			TraceDebug{ClassId} << "RT light SSBO created (" << bufferSize << " bytes, max " << MaxRTLights << " lights).";
+			TraceDebug{ClassId} << "RT light SSBOs created (" << frameCount << " × " << bufferSize << " bytes, max " << MaxRTLights << " lights).";
 		}
 
 		m_initialized = true;
@@ -414,13 +420,17 @@ namespace EmEn::Scenes
 
 		m_initialized = false;
 
-		/* Release the RT light SSBO. */
-		if ( m_RTLightSSBO != nullptr )
+		/* Release the RT light SSBOs. */
+		for ( const auto & buffer : m_RTLightSSBOs )
 		{
-			m_RTLightSSBO->destroyFromHardware();
-			m_RTLightSSBO.reset();
-			m_RTLightCount = 0;
+			if ( buffer != nullptr )
+			{
+				buffer->destroyFromHardware();
+			}
 		}
+
+		m_RTLightSSBOs.clear();
+		m_RTLightCount = 0;
 
 		/* Release the directional light SharedUniformBuffer. */
 		{
@@ -839,10 +849,22 @@ namespace EmEn::Scenes
 			}
 		}
 
-		/* Update the RT light SSBO with all enabled lights. */
-		if ( m_RTLightSSBO != nullptr && m_RTLightSSBO->isCreated() )
+		/* Fill the RT light SSBO of the recorded frame with every light enabled in the frame's slot, from the PUBLISHED
+		 * state only — the raster and the deferred resolve read the same (DeferredLightResolve::prepare()): the live
+		 * coordinates, colour and intensity belong to the logic thread, and a moving light was placed differently by
+		 * the traced lanes and by the raster in the same frame. */
+		auto * lightBuffer = this->RTLightBuffer(frameIndex);
+
+		if ( lightBuffer == nullptr && !m_RTLightSSBOs.empty() )
 		{
-			auto * gpuData = m_RTLightSSBO->mapMemoryAs< GPULightData >();
+			TraceError{ClassId} << "No RT light SSBO for frame " << frameIndex << " (" << m_RTLightSSBOs.size() << " frames in flight) !";
+
+			errors++;
+		}
+
+		if ( lightBuffer != nullptr && lightBuffer->isCreated() )
+		{
+			auto * gpuData = lightBuffer->mapMemoryAs< GPULightData >();
 
 			if ( gpuData != nullptr )
 			{
@@ -856,18 +878,16 @@ namespace EmEn::Scenes
 						continue;
 					}
 
-					const auto worldCoords = static_cast< const Component::Abstract & >(*light).getWorldCoordinates();
-					const auto & lightColor = light->emissionChromaticity();
-
-					/* Directional light direction: THE rule of DirectionalLight (a light at the origin falls back to its
-					 * forward axis instead of a zero vector). */
-					const auto direction = light->resolveDirection(worldCoords);
+					/* The published emission, whatever the block layout (a CSM block carries it only while its cascades are
+					 * refitted); its direction is DirectionalLight::resolveDirection()'s. */
+					const auto & emission = light->publishedEmission(readStateIndex);
+					const auto & direction = emission.direction;
 
 					auto & entry = gpuData[lightIndex];
-					entry.colorR = lightColor[Math::X];
-					entry.colorG = lightColor[Math::Y];
-					entry.colorB = lightColor[Math::Z];
-					entry.intensity = light->intensity();
+					entry.colorR = emission.chromaticity[Math::X];
+					entry.colorG = emission.chromaticity[Math::Y];
+					entry.colorB = emission.chromaticity[Math::Z];
+					entry.intensity = emission.intensity;
 					entry.posX = 0.0F;
 					entry.posY = 0.0F;
 					entry.posZ = 0.0F;
@@ -911,23 +931,25 @@ namespace EmEn::Scenes
 						continue;
 					}
 
-					const auto worldCoords = static_cast< const Component::Abstract & >(*light).getWorldCoordinates();
-					const auto & position = worldCoords.position();
-					const auto & lightColor = light->emissionChromaticity();
+					using Component::PointLight;
+
+					const auto & block = light->publishedBlock(readStateIndex);
+					const Vector< 3, float > position{block[PointLight::PositionOffset + 0], block[PointLight::PositionOffset + 1], block[PointLight::PositionOffset + 2]};
+					const auto radius = block[PointLight::RadiusOffset];
 
 					auto & candidate = m_RTLightCandidates.emplace_back();
-					candidate.rank = rankOf(position, light->radius());
+					candidate.rank = rankOf(position, radius);
 					candidate.order = order++;
 
 					auto & entry = candidate.data;
-					entry.colorR = lightColor[Math::X];
-					entry.colorG = lightColor[Math::Y];
-					entry.colorB = lightColor[Math::Z];
-					entry.intensity = light->intensity();
+					entry.colorR = block[PointLight::ColorOffset + 0];
+					entry.colorG = block[PointLight::ColorOffset + 1];
+					entry.colorB = block[PointLight::ColorOffset + 2];
+					entry.intensity = block[PointLight::IntensityOffset];
 					entry.posX = position.x();
 					entry.posY = position.y();
 					entry.posZ = position.z();
-					entry.radius = light->radius();
+					entry.radius = radius;
 					entry.dirX = 0.0F;
 					entry.dirY = 0.0F;
 					entry.dirZ = 0.0F;
@@ -948,30 +970,33 @@ namespace EmEn::Scenes
 						continue;
 					}
 
-					const auto worldCoords = static_cast< const Component::Abstract & >(*light).getWorldCoordinates();
-					const auto & position = worldCoords.position();
-					const auto direction = worldCoords.forwardVector();
-					const auto & lightColor = light->emissionChromaticity();
+					using Component::SpotLight;
+
+					const auto & block = light->publishedBlock(readStateIndex);
+					const Vector< 3, float > position{block[SpotLight::PositionOffset + 0], block[SpotLight::PositionOffset + 1], block[SpotLight::PositionOffset + 2]};
+					const auto radius = block[SpotLight::RadiusOffset];
 
 					auto & candidate = m_RTLightCandidates.emplace_back();
-					candidate.rank = rankOf(position, light->radius());
+					candidate.rank = rankOf(position, radius);
 					candidate.order = order++;
 
 					auto & entry = candidate.data;
-					entry.colorR = lightColor[Math::X];
-					entry.colorG = lightColor[Math::Y];
-					entry.colorB = lightColor[Math::Z];
-					entry.intensity = light->intensity();
+					entry.colorR = block[SpotLight::ColorOffset + 0];
+					entry.colorG = block[SpotLight::ColorOffset + 1];
+					entry.colorB = block[SpotLight::ColorOffset + 2];
+					entry.intensity = block[SpotLight::IntensityOffset];
 					entry.posX = position.x();
 					entry.posY = position.y();
 					entry.posZ = position.z();
-					entry.radius = light->radius();
-					entry.dirX = direction.x();
-					entry.dirY = direction.y();
-					entry.dirZ = direction.z();
+					entry.radius = radius;
+					/* The forward axis of the light's frame (SpotLight::move()). */
+					entry.dirX = block[SpotLight::DirectionOffset + 0];
+					entry.dirY = block[SpotLight::DirectionOffset + 1];
+					entry.dirZ = block[SpotLight::DirectionOffset + 2];
 					entry.type = 2.0F;
-					entry.innerCosAngle = std::cos(Radian(light->innerAngle()));
-					entry.outerCosAngle = std::cos(Radian(light->outerAngle()));
+					/* Already cosines in the block (SpotLight::setConeAngles()). */
+					entry.innerCosAngle = block[SpotLight::InnerCosAngleOffset];
+					entry.outerCosAngle = block[SpotLight::OuterCosAngleOffset];
 					/* Raster shadow-casting flag: RT effects only trace shadow rays for lights that
 					 * cast shadows in the raster passes, so reflections/GI match the rendered scene. */
 					entry.pad0 = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
@@ -1060,7 +1085,7 @@ namespace EmEn::Scenes
 					lightIndex++;
 				}
 
-				m_RTLightSSBO->unmapMemory();
+				lightBuffer->unmapMemory();
 				m_RTLightCount = lightIndex;
 			}
 			else

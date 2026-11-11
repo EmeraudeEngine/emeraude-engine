@@ -109,7 +109,8 @@ for shadowed / projected lights and for translucent lists.
 7. Light data: proposed as the `LightSet` SSBO made one copy per frame in flight. ⚠️ As built: the
    resolve owns its OWN buffer per frame in flight, filled from each light's PUBLISHED block of the
    frame's render state (the forward UBO's bytes) in view space — the shared RT SSBO and its consumers
-   are untouched; its own race is item `rt-light-ssbo-rewritten-while-in-flight`.
+   are untouched. The RT SSBO followed the same model on 2026-11-11 (one per frame in flight, published
+   state: scenes doc 16).
 
 **Step 1 DONE (2026-10-04, engine 8c461d12; Linux, macOS M2, Windows NVIDIA + AMD validated — numbers in the reference doc)** — point and spot lights:
 `Graphics::DeferredLightResolve`, reference `docs/subsystems/graphics/38-deferred-punctual-lights.md`.

@@ -4227,7 +4227,7 @@ namespace EmEn::Graphics
 
 		writeStorage(1, sceneMetaData.meshMetaDataSSBO(m_currentFrameIndex));
 		writeStorage(2, sceneMetaData.materialDataSSBO(m_currentFrameIndex));
-		writeStorage(3, lightSet.RTLightBuffer());
+		writeStorage(3, lightSet.RTLightBuffer(m_currentFrameIndex));
 		writeStorage(4, sceneMetaData.subGeometryDataSSBO(m_currentFrameIndex));
 
 		m_RTLightCount = lightSet.RTLightCount();

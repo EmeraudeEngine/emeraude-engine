@@ -658,7 +658,8 @@ namespace EmEn::Scenes
 			void destroyRetiredLights (Scene & scene, uint32_t framesInFlight) noexcept;
 
 			/**
-			 * @brief Uploads every light's PUBLISHED uniform block to the GPU, and fills the RT light SSBO.
+			 * @brief Uploads every light's PUBLISHED uniform block to the GPU, and fills the RT light SSBO of @p frameIndex
+			 * from the same published state (the frames still in flight read their own SSBO).
 			 * @note Beyond MaxRTLights, the RT SSBO keeps the directional lights and the punctual and line-segment lights
 			 * CLOSEST to the view position, by max(0, distance - reach) (an unbounded light ranks by its distance). No
 			 * frustum test: the rays leave the screen. A stopgap for many lights — light sampling (light BVH, ReSTIR) is
@@ -672,19 +673,27 @@ namespace EmEn::Scenes
 			bool updateVideoMemory (uint32_t readStateIndex, uint32_t frameIndex, const std::optional< Base::Math::Vector< 3, float > > & viewPosition) const noexcept;
 
 			/**
-			 * @brief Returns the RT light SSBO for binding in descriptor sets.
-			 * @note Returns nullptr if the SSBO has not been created (lighting disabled or not initialized).
+			 * @brief Returns the RT light SSBO of a frame in flight, for its RT descriptor set.
+			 * @note One SSBO per frame in flight: updateVideoMemory() writes the recorded frame's while the submitted
+			 * frames still read theirs. Returns nullptr when it was not created (lighting disabled or not initialized) or
+			 * when @p frameIndex is beyond the frames in flight.
+			 * @param frameIndex The frame-in-flight index (Renderer::currentFrameIndex()).
 			 * @return Vulkan::ShaderStorageBufferObject *
 			 */
 			[[nodiscard]]
 			Vulkan::ShaderStorageBufferObject *
-			RTLightBuffer () const noexcept
+			RTLightBuffer (uint32_t frameIndex) const noexcept
 			{
-				return m_RTLightSSBO.get();
+				if ( frameIndex >= m_RTLightSSBOs.size() )
+				{
+					return nullptr;
+				}
+
+				return m_RTLightSSBOs[frameIndex].get();
 			}
 
 			/**
-			 * @brief Returns the number of lights currently stored in the RT SSBO.
+			 * @brief Returns the number of lights the last updateVideoMemory() wrote, in the SSBO of the frame it recorded.
 			 * @return uint32_t
 			 */
 			[[nodiscard]]
@@ -813,7 +822,9 @@ namespace EmEn::Scenes
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_pointLightUBO;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_spotLightUBO;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_lineLightUBO;
-			mutable std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_RTLightSSBO;
+			/** @brief The RT light SSBOs, one per frame in flight (created by initialize(), written by updateVideoMemory()
+			 * on the render thread for the frame it records). */
+			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_RTLightSSBOs;
 			mutable uint32_t m_RTLightCount{0};
 			/** @brief The punctual and line-segment entries competing for the RT SSBO (updateVideoMemory(), render thread,
 			 * guarded by m_lightsAccess, capacity kept across frames). */

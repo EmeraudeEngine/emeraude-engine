@@ -28,16 +28,30 @@
 
 /* STL inclusions. */
 #include <bit>
+#include <cmath>
 #include <cstring>
+#include <iterator>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/RenderTarget/ShadowMap.hpp"
+#include "Graphics/SharedUniformBuffer.hpp"
+#include "Graphics/Types.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Resources/ResourceTrait.hpp"
+#include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
+#include "Scenes/AVConsole/Types.hpp"
+#include "Scenes/Component/AbstractLightEmitter.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
+#include "Variant.hpp"
 #include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/TextureInterface.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -608,6 +622,27 @@ namespace EmEn::Scenes::Component
 		m_cloudShadowIndex = NoCloudShadow;
 
 		this->requestVideoMemoryUpdate();
+	}
+
+	void
+	DirectionalLight::publishStateForRendering (uint32_t writeStateIndex) noexcept
+	{
+		AbstractLightEmitter::publishStateForRendering(writeStateIndex);
+
+		if ( writeStateIndex >= m_publishedEmissions.size() )
+		{
+			Tracer::error(ClassId, "Render state slot overflow !");
+
+			return;
+		}
+
+		/* From the classic buffer whatever the layout the block was published with: every setter keeps its emission,
+		 * while a CSM block gets it only from updateCascades() (a shadow-casting light). Written on every call, the base
+		 * class's generation skip aside: seven floats. */
+		auto & emission = *std::next(m_publishedEmissions.begin(), writeStateIndex);
+		emission.chromaticity = {m_buffer[ColorOffset + 0], m_buffer[ColorOffset + 1], m_buffer[ColorOffset + 2]};
+		emission.direction = {m_buffer[DirectionOffset + 0], m_buffer[DirectionOffset + 1], m_buffer[DirectionOffset + 2]};
+		emission.intensity = m_buffer[IntensityOffset];
 	}
 
 	Matrix< 4, float >

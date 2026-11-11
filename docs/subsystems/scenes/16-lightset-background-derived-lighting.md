@@ -62,8 +62,24 @@ render thread the moment a barrel exploded):
   shadow map's suspension (`syncShadowMapRendering()`: at worst one frame shows its last content), and the main
   directional light's state as read by VolumetricClouds, VolumetricLight, VolumetricScattering, AtmosphericFog and
   LensFlare (`mainDirectionalLight()` — enabled, direction and illuminance live; engine item
-  `effects-read-the-live-main-light`), and the RT light SSBO's coordinates and colour (item
-  `rt-light-ssbo-rewritten-while-in-flight`).
+  `effects-read-the-live-main-light`).
+- **The RT light SSBO is one buffer PER FRAME IN FLIGHT, filled from the PUBLISHED state** (2026-11-11, owner decision;
+  `LightSet::RTLightBuffer(frameIndex)`, bound by `Renderer::updateRTDescriptorSet()` for `currentFrameIndex()` like
+  the three `SceneMetaData` SSBOs beside it). `LightSet::updateVideoMemory()` writes only the recorded frame's buffer,
+  from each light's `publishedBlock(readStateIndex)` (point and spot: position, radius, colour, intensity, the spot's
+  forward axis and cone cosines — the offsets `DeferredLightResolve::prepare()` decodes) and, for a directional light,
+  `DirectionalLight::publishedEmission(readStateIndex)` (chromaticity, `resolveDirection()`'s direction, intensity,
+  copied from the CLASSIC buffer at each publication: a CSM block carries the emission only while
+  `updateCascades()` refits it, i.e. for a shadow-casting light). **Why:** the single host-mapped buffer was rewritten
+  every frame while RTGI, RTR and the probes of the submitted frames still traced it, and it read the LIVE
+  coordinates, colour and intensity on the render thread (a data race with the logic thread). Measured on Linux
+  (RTX 3070 Ti, `basic-scenery`, the flying point lights, a temporary probe comparing the two per frame): the former
+  live entry sat up to **26.17 world units** from the published position the raster shaded with, the same frame
+  (two 120-frame windows: 20.22, 26.17); with static lights the two were bit-identical (`light-and-shadow-debug
+  --demo-options 1,0`: a CSM sun, a point, a spot; `labyrinth`: 548 spots; `basic-scenery`: 13 points, a sun), which
+  proves the published decode. 0 VUID, 0 `[Error]` in the three, validation on. ⚠️ The count of buffers is the
+  frames in flight at `initialize()`; a frame index beyond it gets nullptr (an error trace, the RT stand-in bound),
+  never another frame's buffer.
 - **`LightSet::remove()` RETIRES, it does not destroy.** The light is erased from the sets and
   pushed to `m_retiredLights` stamped with the render frame counter; `destroyRetiredLights()`, called
   from `Scene::beginRenderFrame()` **behind the in-flight fence**, destroys the hardware of lights

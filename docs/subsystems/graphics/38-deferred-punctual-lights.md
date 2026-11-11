@@ -113,7 +113,8 @@ the instance setter in `onBuilding()` found no instance, and the A/B ran without
 - The RT light SSBO (`LightSet::updateVideoMemory()`, `MaxRTLights` 128) ranks the same way around the main camera
   (`Scene::updateVideoMemory()` passes `mainRenderTarget()->viewMatrices().position()`), directional lights first,
   WITHOUT a frustum test (rays leave the screen). A stopgap: light sampling is the real answer (item
-  `rt-many-lights-sampling`). No main target = no ranking, the sets' order.
+  `rt-many-lights-sampling`). No main target = no ranking, the sets' order. One buffer per frame in flight, filled from
+  the published light state like this resolve's (scenes doc 16).
 - `Core.RendererService.getDeferredLightStatistics()`: eligible / outside the frustum / beyond their draw distance /
   resolved / dropped beyond the budget, for the last prepared frame (atomics: render thread writes, console reads).
   "Beyond their draw distance" also counts the shadowed or projected lights stopped by theirs (not among the eligible).

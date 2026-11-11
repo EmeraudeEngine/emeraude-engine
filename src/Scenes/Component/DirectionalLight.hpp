@@ -30,14 +30,39 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
+#include <cstdint>
+#include <cstring>
+#include <iterator>
+#include <memory>
+#include <sstream>
+#include <string>
 
 /* Local inclusions for inheritances. */
 #include "AbstractLightEmitter.hpp"
 
 /* Local inclusions for usages. */
+#include "Constants.hpp"
 #include "Graphics/ViewMatricesCascadedUBO.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 #include "Vulkan/DescriptorSet.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Graphics::RenderTarget
+	{
+		class Abstract;
+	}
+
+	namespace Scenes
+	{
+		class AbstractEntity;
+	}
+}
 
 namespace EmEn::Scenes::Component
 {
@@ -461,6 +486,36 @@ namespace EmEn::Scenes::Component
 			/** @brief The cloud shadow slot of a light that reads none. */
 			static constexpr uint32_t NoCloudShadow{0xFFFFFFFFU};
 
+			/** @brief The emission of a directional light as one render state slot published it. */
+			struct PublishedEmission
+			{
+				/** @brief The emitted chromaticity (unit luminance), as the classic block carries it. */
+				Base::Math::Vector< 3, float > chromaticity;
+				/** @brief The direction the light rays travel (resolveDirection()). */
+				Base::Math::Vector< 3, float > direction;
+				/** @brief The intensity. */
+				float intensity{0.0F};
+			};
+
+			/**
+			 * @brief Returns the emission the frame was published with [RENDER THREAD].
+			 * @note Independent of the published block's layout: a CSM block carries the emission only while
+			 * updateCascades() refits it (a shadow-casting light), the classic buffer always does (setDirection(),
+			 * onColorChange(), onIntensityChange()). The RT light buffer reads it (LightSet::updateVideoMemory()).
+			 * @pre readStateIndex < RenderStateSlotCount.
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return const PublishedEmission &
+			 */
+			[[nodiscard]]
+			const PublishedEmission &
+			publishedEmission (uint32_t readStateIndex) const noexcept
+			{
+				return *std::next(m_publishedEmissions.begin(), readStateIndex);
+			}
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::publishStateForRendering(uint32_t) */
+			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
+
 		private:
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
@@ -618,6 +673,9 @@ namespace EmEn::Scenes::Component
 			std::array< float, CSM_BufferSize > m_CSMBuffer{}; /**< CSM-specific buffer for cascade data. */
 			/** @brief The cloud shadow matrix, world -> (u, v, depth along the light), column-major. LOGIC THREAD. */
 			std::array< float, 16 > m_cloudShadowMatrix{1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F, 0.0F, 0.0F, 0.0F, 0.0F, 1.0F};
+			/** @brief The emission published per render state slot: written by publishStateForRendering() (logic thread),
+			 * read by publishedEmission() (render thread, the slot latched by the frame). */
+			std::array< PublishedEmission, RenderStateSlotCount > m_publishedEmissions{};
 			uint32_t m_cloudShadowIndex{NoCloudShadow};
 			bool m_useDirectionVector{false};
 			bool m_usesCSM{false};

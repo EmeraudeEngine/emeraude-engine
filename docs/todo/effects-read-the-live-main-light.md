@@ -31,13 +31,14 @@ over a sunless land). Found while inventorying the live reads; not measured in a
 
 ## What remains
 
-- Decide the source (owner): the published block of the main light (`publishedBlock(readStateIndex)`: direction,
-  colour, intensity — the uniform block's offsets differ per light type) plus `publishedEnabled()`, or a published
-  main-light record of the LightSet itself (which light is "main" may change too).
+- Decide the source (owner): the main light's `DirectionalLight::publishedEmission(readStateIndex)` (chromaticity,
+  direction, intensity, whatever its block layout — the RT light SSBO reads it since 2026-11-11, scenes doc 16) plus
+  `publishedEnabled()`, or a published main-light record of the LightSet itself (which light is "main" may change
+  too).
 - Convert the five effects, then a `temporalCapture(N, triggerFrame, command)` jump in a scene with fog and volumetric
   light (TAA off) to prove no frame leads.
 
 ## References
 
-- Scenes doc 16 (the published enabled state), graphics doc 13-12 § 43, item `rt-light-ssbo-rewritten-while-in-flight`
-  (the RT light SSBO's live coordinates, the same class).
+- Scenes doc 16 (the published enabled state; the RT light SSBO, the same class, closed 2026-11-11), graphics doc
+  13-12 § 43.

@@ -29,7 +29,8 @@ pops in the RT terms when the camera moves.
 
 ## ⚠️ Traps
 
-- The SSBO is rewritten each frame while frames are in flight: item `rt-light-ssbo-rewritten-while-in-flight`.
+- The SSBO is one buffer per frame in flight, filled from the published light state (scenes doc 16): a new layout
+  (a light tree, reservoirs) keeps both.
 
 ## References
 
