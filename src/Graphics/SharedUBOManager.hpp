@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
 #include <map>
 #include <memory>
 #include <string>
@@ -40,6 +41,21 @@
 /* Local inclusions for usages. */
 #include "Mutex.hpp"
 #include "SharedUniformBuffer.hpp"
+#include "ThreadSafety.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Graphics
+	{
+		class Renderer;
+	}
+
+	namespace Vulkan
+	{
+		class Device;
+	}
+}
 
 namespace EmEn::Graphics
 {
@@ -110,11 +126,13 @@ namespace EmEn::Graphics
 			 * given name MUST therefore request the same block size.
 			 * @param name A reference to a string.
 			 * @param uniformBlockSize The size of the uniform block.
+			 * @param frameCount The number of frame-in-flight regions. An existing buffer with another count is refused
+			 * (nullptr, traced): a region index valid for one caller would land past the end of the other's banks.
 			 * @param maxElementCount The max number of element to hold in one UBO. Default, compute the maximum according to structure size and UBO properties.
 			 * @return std::shared_ptr< SharedUniformBuffer >
 			 */
 			[[nodiscard]]
-			std::shared_ptr< SharedUniformBuffer > getOrCreateSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount = 0) noexcept;
+			std::shared_ptr< SharedUniformBuffer > getOrCreateSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t frameCount, uint32_t maxElementCount = 0) noexcept;
 
 			/**
 			 * @brief Returns a named shared buffer uniform.

@@ -32,8 +32,11 @@
 /* STL inclusions. */
 #include <array>
 #include <atomic>
+#include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <stop_token>
 #include <string>
@@ -48,9 +51,12 @@
 #include "Component/Interface.hpp"
 
 /* Local inclusions for usages. */
+#include "Constants.hpp"
+#include "DirtyFrameRegions.hpp"
 #include "Graphics/Types.hpp"
 #include "Hash/FNV1a.hpp"
 #include "Math/Vector.hpp"
+#include "Mutex.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/Types.hpp"
@@ -58,6 +64,7 @@
 #include "Resources/Types.hpp"
 #include "ScopedRegistration.hpp"
 #include "StaticVector.hpp"
+#include "ThreadSafety.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
 /* Forward declarations. */
@@ -448,7 +455,7 @@ namespace EmEn::Graphics::Material
 
 			/** @copydoc EmEn::Graphics::Material::Interface::descriptorSet() */
 			[[nodiscard]]
-			const Vulkan::DescriptorSet * descriptorSet () const noexcept override;
+			const Vulkan::DescriptorSet * descriptorSet (uint32_t frameIndex) const noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::getUniformBlock() */
 			[[nodiscard]]
@@ -871,6 +878,8 @@ namespace EmEn::Graphics::Material
 			float
 			opacity () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_materialProperties[OpacityOffset];
 			}
 
@@ -943,6 +952,8 @@ namespace EmEn::Graphics::Material
 			float
 			alphaThresholdToDiscard () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_materialProperties[AlphaThresholdOffset];
 			}
 
@@ -1674,7 +1685,7 @@ namespace EmEn::Graphics::Material
 			bool create (Renderer & renderer, const std::stop_token & stopToken) noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::updateVideoMemory() */
-			bool updateVideoMemory () noexcept override;
+			bool updateVideoMemory (uint32_t frameIndex) noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::destroy() noexcept */
 			void destroy () noexcept override;
@@ -1957,10 +1968,23 @@ namespace EmEn::Graphics::Material
 			bool parseTextureMapComponent (const Json::Value & data, const char * componentName, ComponentType componentType, const char * samplerName, const char * variableName, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
-			 * @brief Flags the material properties as changed and registers the material for the
-			 * renderer's per-frame flush (after creation) — the single path every dynamic setter takes.
+			 * @brief Raises every frame region after a change of the material properties, and registers the material for
+			 * the renderer's per-frame flush when it is not registered yet (DirtyFrameRegions) — the single path every
+			 * dynamic setter takes, AFTER it released the properties lock.
 			 */
-			void markVideoMemoryDirty () noexcept;
+			void markVideoMemoryDirty () noexcept EMEN_EXCLUDES(m_propertiesAccess);
+
+			/**
+			 * @brief Registers the material for the renderer's next flush.
+			 */
+			void requestFlush () noexcept;
+
+			/**
+			 * @brief Writes the material properties into every frame region, at the creation, and arms the region tracking.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool writeEveryRegion () noexcept EMEN_EXCLUDES(m_propertiesAccess);
 
 			/**
 			 * @brief Generates the fragment shader code for a specific texture component.
@@ -2355,17 +2379,75 @@ namespace EmEn::Graphics::Material
 			[[nodiscard]]
 			static const std::array< float, MaterialPropertiesSize > & neutralMaterialProperties () noexcept;
 
-			std::array< float, MaterialPropertiesSize > m_materialProperties{neutralMaterialProperties()};
+			/**
+			 * @brief Returns one material property, read under the properties lock.
+			 * @param offset The property's offset in the uniform block, below MaterialPropertiesSize.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float property (size_t offset) const noexcept EMEN_EXCLUDES(m_propertiesAccess);
+
+			/**
+			 * @brief Returns one material property by reference, the properties lock held.
+			 * @pre @p offset is below MaterialPropertiesSize (asserted in Debug: an internal offset, never data).
+			 * @param offset The property's offset in the uniform block.
+			 * @return float &
+			 */
+			[[nodiscard]]
+			float &
+			propertyAt (size_t offset) noexcept EMEN_REQUIRES(m_propertiesAccess)
+			{
+				assert(offset < MaterialPropertiesSize);
+
+				return *std::next(m_materialProperties.begin(), static_cast< std::ptrdiff_t >(offset));
+			}
+
+			/**
+			 * @brief Returns one material property, the properties lock held.
+			 * @pre @p offset is below MaterialPropertiesSize (asserted in Debug: an internal offset, never data).
+			 * @param offset The property's offset in the uniform block.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			propertyAt (size_t offset) const noexcept EMEN_REQUIRES(m_propertiesAccess)
+			{
+				assert(offset < MaterialPropertiesSize);
+
+				return *std::next(m_materialProperties.cbegin(), static_cast< std::ptrdiff_t >(offset));
+			}
+
+			/**
+			 * @brief Writes one material property under the properties lock, WITHOUT registering an upload (the setters
+			 * that run before the creation, which writes every region).
+			 * @param offset The property's offset in the uniform block, below MaterialPropertiesSize.
+			 * @param value The value.
+			 */
+			void setProperty (size_t offset, float value) noexcept EMEN_EXCLUDES(m_propertiesAccess);
+
+			/**
+			 * @brief Returns a consistent copy of every material property, read under the properties lock.
+			 * @return std::array< float, MaterialPropertiesSize >
+			 */
+			[[nodiscard]]
+			std::array< float, MaterialPropertiesSize > propertiesSnapshot () const noexcept EMEN_EXCLUDES(m_propertiesAccess);
+
+			/* NOTE: Guards the material properties (the uniform block's copy): written by the setters (logic, console,
+			 * loading threads), read by the flush and the ray-tracing export (render thread) and by the shader generation
+			 * (loading threads). */
+			mutable Base::Mutex m_propertiesAccess;
+			std::array< float, MaterialPropertiesSize > m_materialProperties EMEN_GUARDED_BY(m_propertiesAccess){neutralMaterialProperties()};
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
-			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
+			/* One per frame in flight, each on its own region of the block (Interface::updateVideoMemory()). */
+			Base::StaticVector< std::unique_ptr< Vulkan::DescriptorSet >, MaxFramesInFlight > m_descriptorSets;
 			std::shared_ptr< SharedUniformBuffer > m_sharedUniformBuffer;
 			/* The seat in m_sharedUniformBuffer (Ave Robustus II P4): its end frees it. Declared after the buffer. */
 			Base::ScopedRegistration m_sharedUBOSeat;
 			/** @brief The atlas of an imposter material (setImposterAtlas()), held so its textures outlive the material. */
 			std::shared_ptr< ImposterAtlas > m_imposterAtlas;
 			Renderer * m_renderer{nullptr}; ///< Set by create(): the flusher of dynamic properties (owned by the engine, outlives every material).
+			DirtyFrameRegions m_dirtyRegions; ///< The regions still holding an older copy of the properties, and the flush registration.
 			uint32_t m_sharedUBOIndex{0};
-			std::atomic< bool > m_videoMemoryUpdated{false}; ///< Raised by markVideoMemoryDirty() (any thread), lowered by updateVideoMemory() (render thread) BEFORE it reads the properties.
 			bool m_invertRoughness{false};
 			bool m_isUsingEnvironmentCubemap{false};
 			/** @brief Explicitly authored cubemap reflection (texture mode): never replaced by SSR/RTR. */

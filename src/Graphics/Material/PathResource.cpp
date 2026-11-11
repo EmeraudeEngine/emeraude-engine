@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <utility>
 
 /* Third-party inclusions. */
 #include "volk.h"
@@ -37,6 +38,7 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "FastJSON.hpp"
+#include "Graphics/Material/DirtyFrameRegions.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
@@ -134,7 +136,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->updateVideoMemory() )
+		if ( !this->writeEveryRegion() )
 		{
 			TraceError{ClassId} << "Unable to upload the initial data of path material '" << this->name() << "' !";
 
@@ -147,9 +149,12 @@ namespace EmEn::Graphics::Material
 	void
 	PathResource::destroy () noexcept
 	{
+		/* First: no change registers the material any more. */
+		m_dirtyRegions.disarm();
+
 		m_sharedUBOSeat.reset();
 
-		m_descriptorSet.reset();
+		m_descriptorSets.clear();
 		m_descriptorSetLayout.reset();
 		m_sharedUniformBuffer.reset();
 		m_sharedUBOIndex = 0;
@@ -210,59 +215,102 @@ namespace EmEn::Graphics::Material
 	bool
 	PathResource::createDescriptorSet (Renderer & renderer, const UniformBufferObject & /*uniformBufferObject*/) noexcept
 	{
-		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), m_descriptorSetLayout);
-		m_descriptorSet->setIdentifier(ClassId, this->name(), "DescriptorSet");
+		/* One descriptor set per frame in flight, each on its own region of the block (Interface::updateVideoMemory()). */
+		const auto regionCount = m_sharedUniformBuffer->frameCount();
 
-		if ( !m_descriptorSet->create() )
+		if ( regionCount > m_descriptorSets.capacity() )
 		{
-			TraceError{ClassId} << "Unable to create the descriptor set for path material '" << this->name() << "' !";
+			TraceError{ClassId} << "The shared uniform buffer has " << regionCount << " frame regions, beyond " << m_descriptorSets.capacity() << " for path material '" << this->name() << "' !";
 
 			return false;
 		}
 
-		if ( !m_descriptorSet->writeUniformBuffer(0, m_sharedUniformBuffer->getDescriptorInfoForElement(m_sharedUBOIndex)) )
-		{
-			TraceError{ClassId} << "Unable to write the uniform buffer to the descriptor set of path material '" << this->name() << "' !";
+		m_descriptorSets.clear();
 
-			return false;
+		for ( uint32_t region = 0; region < regionCount; ++region )
+		{
+			auto descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), m_descriptorSetLayout);
+			descriptorSet->setIdentifier(ClassId, this->name(), "DescriptorSet");
+
+			if ( !descriptorSet->create() )
+			{
+				TraceError{ClassId} << "Unable to create the descriptor set #" << region << " for path material '" << this->name() << "' !";
+
+				return false;
+			}
+
+			if ( !descriptorSet->writeUniformBuffer(0, m_sharedUniformBuffer->getDescriptorInfoForElement(m_sharedUBOIndex, region)) )
+			{
+				TraceError{ClassId} << "Unable to write the uniform buffer to the descriptor set #" << region << " of path material '" << this->name() << "' !";
+
+				return false;
+			}
+
+			m_descriptorSets.emplace_back(std::move(descriptorSet));
 		}
 
 		return true;
 	}
 
 	bool
-	PathResource::updateVideoMemory () noexcept
+	PathResource::writeEveryRegion () noexcept
 	{
-		if ( m_sharedUniformBuffer == nullptr )
-		{
-			return false;
-		}
+		const Base::MutexLock lock{m_propertiesAccess};
 
-		/* Lowered BEFORE the properties are read: a change made by another thread during the write registers the
-		 * material again (lowered after, it was lost until the next change — a panel could stay lit after its lamp
-		 * went out, 2026-10-06). */
-		m_videoMemoryUpdated.store(false, std::memory_order_release);
+		/* Armed BEFORE the write, under the lock: a change written after this section raises every region and
+		 * registers; a change written before it is in this write. */
+		m_dirtyRegions.arm(m_sharedUniformBuffer->frameCount());
 
-		/* NOTE: Frame region 0, like every material UBO: only the LOOK lives here, and a look change reaching a frame
-		 * in flight one frame early is harmless. The points, which move every tick, never come here. */
-		if ( !m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, 0, m_properties.data()) )
+		for ( uint32_t region = 0; region < m_sharedUniformBuffer->frameCount(); ++region )
 		{
-			return false;
+			if ( !m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, region, m_properties.data()) )
+			{
+				return false;
+			}
 		}
 
 		return true;
 	}
 
+	bool
+	PathResource::updateVideoMemory (uint32_t frameIndex) noexcept
+	{
+		bool success = true;
+
+		/* Lowered BEFORE the properties are read: a change written during the copy raises the region again. */
+		if ( m_dirtyRegions.lower(frameIndex) )
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			success = m_sharedUniformBuffer != nullptr && m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, frameIndex, m_properties.data());
+		}
+
+		/* The regions of the other frames in flight still hold the older copy: the next flushes rewrite them. */
+		if ( m_dirtyRegions.needsAnotherFlush() )
+		{
+			this->requestFlush();
+		}
+
+		return success;
+	}
+
 	void
 	PathResource::markVideoMemoryDirty () noexcept
 	{
-		/* One registration per flush: the flag is cleared by updateVideoMemory(). Before creation, create() uploads. */
-		if ( m_renderer == nullptr || !this->isCreated() || m_videoMemoryUpdated.exchange(true, std::memory_order_acq_rel) )
+		/* Before the creation armed the regions, it writes every region itself. */
+		if ( m_dirtyRegions.raiseAll() )
 		{
-			return;
+			this->requestFlush();
 		}
+	}
 
-		m_renderer->requestMaterialVideoMemoryUpdate(std::static_pointer_cast< Interface >(this->weak_from_this().lock()));
+	void
+	PathResource::requestFlush () noexcept
+	{
+		if ( m_renderer != nullptr )
+		{
+			m_renderer->requestMaterialVideoMemoryUpdate(std::static_pointer_cast< Interface >(this->weak_from_this().lock()));
+		}
 	}
 
 	uint32_t
@@ -401,26 +449,40 @@ namespace EmEn::Graphics::Material
 	void
 	PathResource::setColor (const Color< float > & color) noexcept
 	{
-		m_color = color;
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
 
-		this->updateRadiance();
+			m_color = color;
+
+			this->updateRadiance();
+		}
+
 		this->markVideoMemoryDirty();
 	}
 
 	void
 	PathResource::setLuminance (float nits) noexcept
 	{
-		m_luminance = std::max(0.0F, nits);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
 
-		this->updateRadiance();
+			m_luminance = std::max(0.0F, nits);
+
+			this->updateRadiance();
+		}
+
 		this->markVideoMemoryDirty();
 	}
 
 	void
 	PathResource::setWidth (float halfWidth, bool inPixels) noexcept
 	{
-		m_properties[StyleOffset] = std::max(0.0F, halfWidth);
-		m_properties[StyleOffset + 1] = inPixels ? 1.0F : 0.0F;
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_properties[StyleOffset] = std::max(0.0F, halfWidth);
+			m_properties[StyleOffset + 1] = inPixels ? 1.0F : 0.0F;
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -428,8 +490,12 @@ namespace EmEn::Graphics::Material
 	void
 	PathResource::setJoins (bool round, float miterLimit) noexcept
 	{
-		m_properties[StyleOffset + 2] = round ? 1.0F : 0.0F;
-		m_properties[StyleOffset + 3] = std::max(1.0F, miterLimit);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_properties[StyleOffset + 2] = round ? 1.0F : 0.0F;
+			m_properties[StyleOffset + 3] = std::max(1.0F, miterLimit);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -437,14 +503,18 @@ namespace EmEn::Graphics::Material
 	void
 	PathResource::setFlat (bool state, const Vector< 3, float > & up) noexcept
 	{
-		const auto length = up.length();
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
 
-		/* A zero or non-finite up cannot orient anything: the ribbon faces the eye. */
-		const bool flat = state && std::isfinite(length) && length > 1.0e-6F;
+			const auto length = up.length();
 
-		m_properties[PlacementOffset + 1] = flat ? up[X] / length : 0.0F;
-		m_properties[PlacementOffset + 2] = flat ? up[Y] / length : 0.0F;
-		m_properties[PlacementOffset + 3] = flat ? up[Z] / length : 0.0F;
+			/* A zero or non-finite up cannot orient anything: the ribbon faces the eye. */
+			const bool flat = state && std::isfinite(length) && length > 1.0e-6F;
+
+			m_properties[PlacementOffset + 1] = flat ? up[X] / length : 0.0F;
+			m_properties[PlacementOffset + 2] = flat ? up[Y] / length : 0.0F;
+			m_properties[PlacementOffset + 3] = flat ? up[Z] / length : 0.0F;
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -452,7 +522,11 @@ namespace EmEn::Graphics::Material
 	void
 	PathResource::setDepthOffset (float offset) noexcept
 	{
-		m_properties[PlacementOffset] = std::isfinite(offset) ? std::max(0.0F, offset) : 0.0F;
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_properties[PlacementOffset] = std::isfinite(offset) ? std::max(0.0F, offset) : 0.0F;
+		}
 
 		this->markVideoMemoryDirty();
 	}

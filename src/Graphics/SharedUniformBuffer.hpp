@@ -37,15 +37,28 @@
 #include <memory>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for usages. */
 #include "Mutex.hpp"
 #include "ScopedRegistration.hpp"
+#include "ThreadSafety.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
 
-namespace EmEn::Graphics
+/* Forward declarations. */
+namespace EmEn
 {
-	class Renderer;
+	namespace Graphics
+	{
+		class Renderer;
+	}
+
+	namespace Vulkan
+	{
+		class Device;
+	}
 }
 
 namespace EmEn::Graphics
@@ -153,10 +166,10 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Writes element data to the UBO.
-			 * @note There is no check in this function. All have been done at initialization time.
 			 * @param index The element index.
-			 * @param data A pointer to the source data.
-			 * @return bool
+			 * @param frameIndex The frame-in-flight region, below frameCount() (refused and traced otherwise).
+			 * @param data A pointer to the source data, uniform-block-size bytes.
+			 * @return bool False when the element's bank does not exist or the region is beyond frameCount().
 			 */
 			[[nodiscard]]
 			bool writeElementData (uint32_t index, uint32_t frameIndex, const void * data) noexcept;
@@ -215,10 +228,12 @@ namespace EmEn::Graphics
 			 * @note This is the preferred method for getting descriptor info as it ensures
 			 *	   the correct byte offset calculation is always used.
 			 * @param elementIndex The global element index.
-			 * @return VkDescriptorBufferInfo Ready to use in vkUpdateDescriptorSets.
+			 * @param frameIndex The frame-in-flight region, below frameCount(). Default 0.
+			 * @return VkDescriptorBufferInfo Ready to use in vkUpdateDescriptorSets. Empty (null buffer) when the element's
+			 * bank does not exist or the region is beyond frameCount() (traced).
 			 */
 			[[nodiscard]]
-			VkDescriptorBufferInfo getDescriptorInfoForElement (uint32_t elementIndex) const noexcept;
+			VkDescriptorBufferInfo getDescriptorInfoForElement (uint32_t elementIndex, uint32_t frameIndex = 0) const noexcept;
 
 		private:
 
@@ -305,8 +320,8 @@ namespace EmEn::Graphics
 			uint32_t m_blockAlignedSize{0};
 			/**
 			 * @brief Number of frame-in-flight regions each bank is split into.
-			 * @note 1 means "not frame-partitioned", which is what every non-light user wants: their
-			 * content does not change while the GPU reads it.
+			 * @note 1 means "not frame-partitioned": only for content that never changes while the GPU reads it. The
+			 * lights and the materials (their dynamic properties) are partitioned by the renderer's frames in flight.
 			 */
 			uint32_t m_frameCount{1};
 			/** @brief Byte distance between two frame regions of the same bank. */

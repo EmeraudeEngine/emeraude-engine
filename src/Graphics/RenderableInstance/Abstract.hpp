@@ -83,7 +83,6 @@ namespace EmEn
 
 	namespace Vulkan
 	{
-		class AccelerationStructure;
 		class Buffer;
 		class CommandBuffer;
 		class DeferredDestructor;
@@ -96,6 +95,7 @@ namespace EmEn
 	namespace Saphir
 	{
 		class Program;
+		class SetIndexes;
 	}
 
 	namespace Scenes
@@ -1232,16 +1232,18 @@ namespace EmEn::Graphics::RenderableInstance
 			 *
 			 * @param readStateIndex The render state-valid index to read data (for double/triple buffering).
 			 * @param renderTarget A reference to the shadow map render target.
+			 * @param frameIndex The frame in flight being recorded (Renderer::currentFrameIndex()): selects the material's descriptor set.
 			 * @param lodViewPosition World-space position of the MAIN camera — the receiver's — from
 			 * which an adaptive geometry (a terrain) picks its level of detail, so that the caster is the
 			 * very mesh the surface it shadows is drawn with. The shadow target's own frustum still
 			 * decides what the map contains. See Geometry::Interface::prepareAdaptiveRendering().
 			 * @param layerIndex The renderable layer index (for multi-layer materials).
 			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
+			 * @param LODLevel The desired LOD level.
 			 * @param commandBuffer A reference to the command buffer recording draw commands.
 			 * @param cascadeIndex The cascade this pass renders, on a cascaded shadow map (one pass per
 			 * cascade, see RenderTarget::Abstract::layerPassCount()); ignored by every other target.
-			 * @param LODLevel The desired LOD level. Default 0.
+			 * @param sceneTransformsDS The scene instance transforms set of this frame (the wind of a vegetation program).
 			 *
 			 * @note Shadow maps use depth-only rendering without material/lighting bindings.
 			 * @note ⚠️ An adaptive geometry is drawn by its selected ranges here as in render(), never
@@ -1251,7 +1253,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see pushMatricesForShadowCasting() For push constant strategy.
 			 * @version 0.8.35
 			 */
-			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Base::Math::Vector< 3, float > & lodViewPosition, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t cascadeIndex, uint32_t LODLevel = 0, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
+			void castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t frameIndex, const Base::Math::Vector< 3, float > & lodViewPosition, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, uint32_t LODLevel, const Vulkan::CommandBuffer & commandBuffer, uint32_t cascadeIndex, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target.
@@ -1264,6 +1266,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 *
 			 * @param readStateIndex The render state-valid index to read data (for double/triple buffering).
 			 * @param renderTarget A reference to the render target smart pointer.
+			 * @param frameIndex The frame in flight being recorded (Renderer::currentFrameIndex()): selects the material's descriptor set.
 			 * @param lightEmitter A pointer to an optional light emitter. Can be nullptr for unlit rendering.
 			 * @param renderPassType The render pass type into the render target.
 			 * @param layerIndex The renderable layer index (for multi-layer materials).
@@ -1278,7 +1281,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 * @see renderTBNSpace() For debug visualization.
 			 * @version 0.8.35
 			 */
-			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
+			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t frameIndex, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
 
 			/**
 			 * @brief Draws the instance in a render target with state tracking to skip redundant binds.
@@ -1292,6 +1295,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 *
 			 * @param readStateIndex The render state-valid index to read data (for double/triple buffering).
 			 * @param renderTarget A reference to the render target smart pointer.
+			 * @param frameIndex The frame in flight being recorded (Renderer::currentFrameIndex()): selects the material's descriptor set.
 			 * @param lightEmitter A pointer to an optional light emitter. Can be nullptr for unlit rendering.
 			 * @param renderPassType The render pass type into the render target.
 			 * @param layerIndex The renderable layer index (for multi-layer materials).
@@ -1303,7 +1307,7 @@ namespace EmEn::Graphics::RenderableInstance
 			 *
 			 * @see render() For the non-tracked version.
 			 */
-			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
+			void render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t frameIndex, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const Base::Math::CartesianFrame< float > * worldCoordinates, const Vulkan::CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel = 0, const BindlessTextureManager * bindlessTexturesManager = nullptr, const Vulkan::DescriptorSet * sceneTransformsDS = nullptr) const noexcept;
 
 			/**
 			 * @brief Renders the Tangent-Bitangent-Normal space vectors for debugging.
@@ -1587,6 +1591,99 @@ namespace EmEn::Graphics::RenderableInstance
 			 */
 			[[nodiscard]]
 			bool bindPerModelSet (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::PipelineLayout & pipelineLayout, uint32_t setIndex, uint32_t LODLevel, const RenderTarget::Abstract & renderTarget) const noexcept;
+
+			/**
+			 * @brief Binds the PerView set (the render target's view UBO) when the program's sealed layout declares it.
+			 * @param passContext The pass context (command buffer, view matrices).
+			 * @param pushContext The program's push-constant context (its pipeline layout).
+			 * @param setIndexes The program's sealed set indexes.
+			 * @param tracker The redundancy tracker of a state-sorted list, or nullptr to always bind.
+			 */
+			static void bindViewSet (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Saphir::SetIndexes & setIndexes, RenderStateTracker * tracker) noexcept;
+
+			/**
+			 * @brief Binds the PerSceneTransforms set (the scene instance transforms SSBO of this frame) when the
+			 * program's sealed layout declares it.
+			 * @param passContext The pass context (command buffer).
+			 * @param pushContext The program's push-constant context (its pipeline layout).
+			 * @param setIndexes The program's sealed set indexes.
+			 * @param renderTarget A reference to the render target (for the error trace).
+			 * @param sceneTransformsDS The scene instance transforms set of this frame, or nullptr.
+			 * @param tracker The redundancy tracker of a state-sorted list, or nullptr to always bind.
+			 * @return bool False if the layout declares the set and it is missing: the draw must be skipped.
+			 */
+			[[nodiscard]]
+			bool bindSceneTransformsSet (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Saphir::SetIndexes & setIndexes, const RenderTarget::Abstract & renderTarget, const Vulkan::DescriptorSet * sceneTransformsDS, RenderStateTracker * tracker) const noexcept;
+
+			/**
+			 * @brief Binds the PerLight set (the light UBO at its dynamic offset, and the shadow map of a shadowed pass)
+			 * when the program's sealed layout declares it.
+			 * @param passContext The pass context (command buffer).
+			 * @param pushContext The program's push-constant context (its pipeline layout).
+			 * @param setIndexes The program's sealed set indexes.
+			 * @param renderTarget A reference to the render target (for the error trace).
+			 * @param lightEmitter A pointer to the light of the pass, or nullptr.
+			 * @param renderPassType The pass type (whether it samples the shadow map).
+			 * @param tracker The redundancy tracker of a state-sorted list, or nullptr to always bind.
+			 * @return bool False if the layout declares the set and the light cannot provide it: the draw must be skipped.
+			 */
+			[[nodiscard]]
+			bool bindLightSet (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Saphir::SetIndexes & setIndexes, const RenderTarget::Abstract & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, RenderStateTracker * tracker) const noexcept;
+
+			/**
+			 * @brief Binds the PerModelLayer set (the material of the layer, its set of the frame being recorded) when the
+			 * program's sealed layout declares it.
+			 * @param passContext The pass context (command buffer, frame in flight).
+			 * @param pushContext The program's push-constant context (its pipeline layout, the layer).
+			 * @param setIndexes The program's sealed set indexes.
+			 * @param renderTarget A reference to the render target (for the error trace).
+			 * @param tracker The redundancy tracker of a state-sorted list, or nullptr to always bind.
+			 * @return bool False if the layout declares the set and the material has none for this frame: the draw must
+			 * be skipped.
+			 */
+			[[nodiscard]]
+			bool bindMaterialSet (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Saphir::SetIndexes & setIndexes, const RenderTarget::Abstract & renderTarget, RenderStateTracker * tracker) const noexcept;
+
+			/**
+			 * @brief Binds the PerBindless set (the bindless textures) when the program's sealed layout declares it.
+			 * @param passContext The pass context (command buffer).
+			 * @param pushContext The program's push-constant context (its pipeline layout).
+			 * @param setIndexes The program's sealed set indexes.
+			 * @param renderTarget A reference to the render target (for the error trace).
+			 * @param bindlessTexturesManager A pointer to the bindless textures manager, or nullptr.
+			 * @param tracker The redundancy tracker of a state-sorted list, or nullptr to always bind.
+			 * @return bool False if the layout declares the set and it is missing: the draw must be skipped.
+			 */
+			[[nodiscard]]
+			bool bindBindlessSet (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Saphir::SetIndexes & setIndexes, const RenderTarget::Abstract & renderTarget, const BindlessTextureManager * bindlessTexturesManager, RenderStateTracker * tracker) const noexcept;
+
+			/**
+			 * @brief Issues the draw of a rendered layer: a mesh-shading surface, an adaptive geometry by its selected
+			 * ranges, a sprite's frame, or the layer's sub-geometry.
+			 * @param geometry A reference to the geometry of the drawn level.
+			 * @param program A reference to the program bound for the draw.
+			 * @param renderTarget A reference to the render target.
+			 * @param passContext The pass context (command buffer, read state).
+			 * @param pushContext The program's push-constant context (the layer, the instance-transforms path).
+			 * @param drawnInstances The number of instances drawn, above 0.
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
+			 */
+			void drawRenderedGeometry (const Geometry::Interface & geometry, const Saphir::Program & program, const RenderTarget::Abstract & renderTarget, const RenderPassContext & passContext, const PushConstantContext & pushContext, uint32_t drawnInstances, const Base::Math::CartesianFrame< float > * worldCoordinates) const noexcept;
+
+			/**
+			 * @brief Issues the draw of a shadow caster: a mesh-shading surface, an adaptive geometry culled to the
+			 * pass's caster volume, a sprite's frame, a pulled-vertex path, or the layer's sub-geometry.
+			 * @param geometry A pointer to the geometry of the drawn level (the branches after the first two expect it).
+			 * @param program A reference to the shadow program bound for the draw.
+			 * @param renderTarget A reference to the shadow map render target.
+			 * @param passContext The pass context (command buffer, read state).
+			 * @param pushContext The program's push-constant context (the layer, the instance-transforms path).
+			 * @param drawnInstances The number of instances drawn, above 0.
+			 * @param lodViewPosition World-space position of the MAIN camera (an adaptive geometry's level of detail).
+			 * @param worldCoordinates A pointer to the world coordinates of the instance. nullptr means origin.
+			 * @param cascadeIndex The cascade this pass renders, on a cascaded shadow map.
+			 */
+			void drawShadowCaster (const Geometry::Interface * geometry, const Saphir::Program & program, const RenderTarget::Abstract & renderTarget, const RenderPassContext & passContext, const PushConstantContext & pushContext, uint32_t drawnInstances, const Base::Math::Vector< 3, float > & lodViewPosition, const Base::Math::CartesianFrame< float > * worldCoordinates, uint32_t cascadeIndex) const noexcept;
 
 			/**
 			 * @brief Returns whether the renderable declares skeletal data but the instance does

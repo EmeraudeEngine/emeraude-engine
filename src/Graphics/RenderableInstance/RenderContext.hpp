@@ -76,6 +76,13 @@ namespace EmEn::Graphics::RenderableInstance
 		uint32_t readStateIndex{0};
 
 		/**
+		 * @brief The frame in flight being recorded (Renderer::currentFrameIndex()).
+		 * @note Selects the material's descriptor set: each frame in flight reads its own region of the material's
+		 * uniform block (Material::Interface::descriptorSet()). 0 where no material is bound (the TBN debug pass).
+		 */
+		uint32_t frameIndex{0};
+
+		/**
 		 * @brief Whether the render target is a cubemap using multiview rendering.
 		 *
 		 * When true, the rendering uses Vulkan multiview extension where:

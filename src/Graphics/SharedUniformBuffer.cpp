@@ -29,14 +29,16 @@
 #include <algorithm>
 
 /* STL inclusions. */
-#include <ranges>
+#include <sstream>
+#include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Math/Base.hpp"
-#include "Renderer.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/MemoryRegion.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
 
 namespace EmEn::Graphics
 {
@@ -301,6 +303,15 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* A region beyond the buffer's own count lands past the end of the bank (the light defect recorded at
+		 * frameCount()): refused, never written. */
+		if ( frameIndex >= m_frameCount )
+		{
+			TraceError{ClassId} << "Frame region #" << frameIndex << " is beyond the " << m_frameCount << " region(s) of this buffer !";
+
+			return false;
+		}
+
 		/* NOTE: Use LOCAL offset within the specific UBO, not global offset.
 		 * Example: Element 300 with maxElementCountPerUBO=256 is at local index 44 in UBO #1.
 		 * The byte offset is 44 * blockAlignedSize, not 300 * blockAlignedSize! */
@@ -310,7 +321,7 @@ namespace EmEn::Graphics
 	}
 
 	VkDescriptorBufferInfo
-	SharedUniformBuffer::getDescriptorInfoForElement (uint32_t elementIndex) const noexcept
+	SharedUniformBuffer::getDescriptorInfoForElement (uint32_t elementIndex, uint32_t frameIndex) const noexcept
 	{
 		VkDescriptorBufferInfo descriptorInfo{};
 
@@ -323,8 +334,15 @@ namespace EmEn::Graphics
 			return descriptorInfo;
 		}
 
+		if ( frameIndex >= m_frameCount )
+		{
+			TraceError{ClassId} << "Cannot get descriptor info for element #" << elementIndex << " - frame region #" << frameIndex << " is beyond the " << m_frameCount << " region(s) of this buffer !";
+
+			return descriptorInfo;
+		}
+
 		descriptorInfo.buffer = ubo->handle();
-		descriptorInfo.offset = this->getByteOffsetForElement(elementIndex);
+		descriptorInfo.offset = this->getByteOffsetForElement(elementIndex, frameIndex);
 		descriptorInfo.range = m_blockAlignedSize;
 
 		return descriptorInfo;

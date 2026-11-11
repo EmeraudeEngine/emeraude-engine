@@ -77,7 +77,11 @@ render thread the moment a barrel exploded):
   live entry sat up to **26.17 world units** from the published position the raster shaded with, the same frame
   (two 120-frame windows: 20.22, 26.17); with static lights the two were bit-identical (`light-and-shadow-debug
   --demo-options 1,0`: a CSM sun, a point, a spot; `labyrinth`: 548 spots; `basic-scenery`: 13 points, a sun), which
-  proves the published decode. 0 VUID, 0 `[Error]` in the three, validation on. ⚠️ The count of buffers is the
+  proves the published decode. 0 VUID, 0 `[Error]` in the three, validation on. Three OSes (engine 70cd0936):
+  macOS-PA (Apple M6, AppleClang 391/391, 0 warning; raster only, no RT lane) `basic-scenery` and
+  `light-and-shadow-debug --demo-options 1,0`; Windows-PA (MSVC 14.44 Release and Debug 389/389, 0 warning) on the
+  RTX 3500 Ada, lane RayTracing, `basic-scenery`, `light-and-shadow-debug --demo-options 1,0` and `labyrinth`, and on
+  the Intel RaptorLake-S iGPU (ScreenSpace) `basic-scenery`: 0 VUID, 0 `[Error]`, exit 0 everywhere. ⚠️ The count of buffers is the
   frames in flight at `initialize()`; a frame index beyond it gets nullptr (an error trace, the RT stand-in bound),
   never another frame's buffer.
 - **`LightSet::remove()` RETIRES, it does not destroy.** The light is erased from the sets and

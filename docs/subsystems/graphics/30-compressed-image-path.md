@@ -175,7 +175,7 @@ for BC7 is 1 byte per pixel *amortised over a 4×4 block*, which is not what tho
 > material UBO was written once, by `create()`. Now they call `markVideoMemoryDirty()` (one
 > registration per flush) → `Renderer::requestMaterialVideoMemoryUpdate()` (any thread) →
 > `Renderer::flushMaterialVideoMemoryUpdates()` on the render thread, once per frame after the fence,
-> through the virtual `Material::Interface::updateVideoMemory()`. ⚠️ The material UBO has ONE frame
-> region: a value may be read one frame early by a frame still in flight — acceptable for a property,
-> to be frame-partitioned the day a property must be exact per frame. `docs/caution-points.md`
-> § "every dynamic material property was DEAD".
+> through the virtual `Material::Interface::updateVideoMemory(frameIndex)`. Since 2026-11-11 the
+> material block has one region per frame in flight, each bound by its own descriptor set, and the
+> properties are guarded by a per-material lock: graphics doc 05-5 § Per-frame regions and the
+> properties lock. `docs/caution-points.md` § "every dynamic material property was DEAD".

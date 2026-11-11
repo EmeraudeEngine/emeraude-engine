@@ -459,15 +459,17 @@ namespace EmEn::Graphics::Material
 			void enableBlendingFromJson (const Json::Value & data) noexcept;
 
 			/**
-			 * @brief Uploads the material properties to their uniform buffer element.
-			 * @note Called by create() for the initial content and by Renderer::flushMaterialVideoMemoryUpdates()
-			 * on the render thread for every material that changed a DYNAMIC property since the last
-			 * frame (see StandardResource::markVideoMemoryDirty()). ⚠️ A material element lives in ONE
-			 * frame region: the write lands while a previous frame may still read it, which for a
-			 * property value means "one frame early at worst" — never a structural hazard.
-			 * @return bool
+			 * @brief Uploads the material properties to the uniform block region of one frame in flight.
+			 * @note Called by Renderer::flushMaterialVideoMemoryUpdates() on the render thread, after the fence of
+			 * @p frameIndex, for every material registered by a DYNAMIC property change (DirtyFrameRegions). A material
+			 * block has one region per frame in flight, each read through its own descriptor set (descriptorSet()): the
+			 * write never lands in a region a submitted frame still reads. The region is rewritten only when it is
+			 * raised; the material registers itself again while other regions remain raised. The creation writes every
+			 * region itself.
+			 * @param frameIndex The frame in flight being recorded (Renderer::currentFrameIndex()).
+			 * @return bool False when the write failed (traced by the caller).
 			 */
-			virtual bool updateVideoMemory () noexcept = 0;
+			virtual bool updateVideoMemory (uint32_t frameIndex) noexcept = 0;
 
 			/**
 			 * @brief Returns whether the material is usable.
@@ -848,11 +850,15 @@ namespace EmEn::Graphics::Material
 			virtual uint32_t UBOOffset () const noexcept = 0;
 
 			/**
-			 * @brief Returns the descriptor set for this material.
-			 * @return const Vulkan::DescriptorSet *
+			 * @brief Returns the descriptor set of this material for one frame in flight.
+			 * @note Each frame in flight reads its own region of the material's uniform block through its own descriptor
+			 * set (see updateVideoMemory()): bind the one of the frame being recorded.
+			 * @param frameIndex The frame in flight being recorded (Renderer::currentFrameIndex()).
+			 * @return const Vulkan::DescriptorSet * Nullptr before the creation, or when @p frameIndex is beyond the
+			 * renderer's frames in flight.
 			 */
 			[[nodiscard]]
-			virtual const Vulkan::DescriptorSet * descriptorSet () const noexcept = 0;
+			virtual const Vulkan::DescriptorSet * descriptorSet (uint32_t frameIndex) const noexcept = 0;
 
 			/**
 			 * @brief Returns the uniform block explaining how the material works.
@@ -878,6 +884,7 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Returns the shared uniform buffer corresponding to this material.
+			 * @note Partitioned into one region per frame in flight (Renderer::framesInFlight()), see updateVideoMemory().
 			 * @param renderer A reference to the graphics renderer.
 			 * @param identifier A reference to a string.
 			 * @return std::shared_ptr< SharedUniformBuffer >

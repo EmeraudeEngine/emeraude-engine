@@ -1,14 +1,14 @@
 ---
 id: gpu-data-rewritten-under-frames-in-flight
-title: Bindless slots and material data still rewritten in place while submitted frames read them
+title: Bindless slots and the overlay surfaces still rewritten in place while submitted frames read them
 status: open
 priority: high
-scope: Graphics (BindlessTextureManager, Material dynamic properties, Renderer grab pass)
+scope: Graphics (BindlessTextureManager, Renderer grab pass, overlay surface images)
 opened: 2026-11-04
 tags: [vulkan, descriptors, frames-in-flight]
 ---
 
-# Bindless slots and material data still rewritten in place while submitted frames read them
+# Bindless slots and the overlay surfaces still rewritten in place while submitted frames read them
 
 ## Why
 
@@ -16,7 +16,9 @@ A frame SUBMITTED but not yet executed reads the GPU data as it is when the GPU 
 was recorded. `UPDATE_AFTER_BIND` does not freeze a submitted frame's descriptors. The IBL slots were the measured
 case: one shared group, rewritten each frame, gave two frames of a day sun over a night IBL on AMD RADV (4 frames in
 flight, GPU-bound). They now have one group per frame in flight (engine 4a29d706, graphics doc 06-6 § Reserved Slots;
-the former item `bindless-ibl-slots-rewritten-while-in-flight`). The same class remains elsewhere:
+the former item `bindless-ibl-slots-rewritten-while-in-flight`), and so do the material uniform blocks (2026-11-11,
+graphics doc 05-5 § Per-frame regions; AMD round 7's "glossy lift", graphics doc 13-12 § 43, was its likely visible
+case — not re-measured on AMD yet). The same class remains elsewhere:
 
 - **The animated textures' 2D views**: `BindlessTextureManager::syncTextureSet()` → `writeAnimatedTexture2D()`
   rewrites the slot every frame with the current frame's view. A pending frame shows a later animation frame.
@@ -24,11 +26,6 @@ the former item `bindless-ibl-slots-rewritten-while-in-flight`). The same class 
   while frames of that scene may still be pending. It also returns early, WITHOUT resetting the IBL groups, when the
   set has no 2D or cube entry.
 - **The grab pass**: `Renderer::refreshGrabPass()` rewrites `GrabPassSlot` / `GrabPassDepthSlot` when it is recreated.
-- **Material dynamic properties** (`StandardResource::setEmissiveStrengthValue()` and the other dynamic writes, flushed
-  by `Renderer::flushMaterialVideoMemoryUpdates()`): likely the same. AMD round 7 (graphics doc 13-12 § 43, "the
-  glossy lift"): the day frames recorded BEFORE a time-of-day jump, still pending, show the lamps' bulbs lit in the
-  reflections (251.3 against 251.0 on 1.9 % of the pixels); not at 8 FPS. Not proven: read how the material uniform
-  data is buffered (one region, or one per frame in flight) first.
 
 - **Overlay surface images** (2026-11-11): a region re-upload (`ImageTransferOperation::transferRegion()`) rewrites the
   ACTIVE image in place, on a rotated graphics queue, while frames in flight on the renderer's queue may still sample

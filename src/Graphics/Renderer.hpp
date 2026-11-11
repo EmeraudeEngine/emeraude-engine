@@ -236,7 +236,9 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Registers a material whose dynamic properties changed, for the next frame's flush.
 			 * @note Thread-safe: called from the logic or loading threads (StandardResource::markVideoMemoryDirty()),
-			 * drained by flushMaterialVideoMemoryUpdates() on the render thread before the scene's own uploads.
+			 * drained by flushMaterialVideoMemoryUpdates() on the render thread before the scene's own uploads. A material
+			 * registers once per flush, through its Material::DirtyFrameRegions, and again from its own flush while
+			 * regions of other frames in flight remain to rewrite.
 			 * @param material A weak pointer to the material.
 			 */
 			void requestMaterialVideoMemoryUpdate (std::weak_ptr< Material::Interface > material) noexcept;
@@ -2159,8 +2161,10 @@ namespace EmEn::Graphics
 			 * OVERRIDES the camera, which only ever requests them. */
 			bool m_depthOfFieldAllowed{true};
 			/**
-			 * @brief Uploads every material registered by requestMaterialVideoMemoryUpdate() since the last frame.
-			 * @note Render thread, once per frame, right before the scene uploads its own buffers.
+			 * @brief Uploads every material registered by requestMaterialVideoMemoryUpdate() since the last frame, into the
+			 * uniform block region of the current frame in flight (Material::Interface::updateVideoMemory()).
+			 * @note Render thread, once per frame, after the fence of m_currentFrameIndex, right before the scene uploads its
+			 * own buffers.
 			 */
 			void flushMaterialVideoMemoryUpdates () noexcept;
 

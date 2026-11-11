@@ -33,13 +33,11 @@
 #include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
-#include "Graphics/Geometry/Interface.hpp"
-#include "Graphics/Material/Interface.hpp"
 #include "Graphics/MDI/PerDrawData.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
-#include "Graphics/RenderableInstance/RenderStateTracker.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -358,7 +356,15 @@ namespace EmEn::Graphics::MDI
 
 					if ( material != nullptr )
 					{
-						const auto * materialDS = material->descriptorSet();
+						/* The material's set of THIS frame in flight: each reads its own region of the block. */
+						const auto * materialDS = material->descriptorSet(frameIndex);
+
+						if ( materialDS == nullptr )
+						{
+							TraceError{ClassId} << "The material '" << material->name() << "' has no descriptor set for frame #" << frameIndex << " ! Batch skipped.";
+
+							continue;
+						}
 
 						if ( tracker.lastMaterialDS != materialDS->handle() )
 						{
@@ -401,7 +407,7 @@ namespace EmEn::Graphics::MDI
 			/* Fallback: render ALL objects in the batch individually. */
 			for ( const auto * rb : batch.renderBatches )
 			{
-				rb->renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, rb->subGeometryIndex(), rb->worldCoordinates(), commandBuffer, tracker, rb->LODLevel(), bindlessTexturesManager);
+				rb->renderableInstance()->render(readStateIndex, renderTarget, frameIndex, nullptr, RenderPassType::SimplePass, rb->subGeometryIndex(), rb->worldCoordinates(), commandBuffer, tracker, rb->LODLevel(), bindlessTexturesManager);
 			}
 		}
 	}

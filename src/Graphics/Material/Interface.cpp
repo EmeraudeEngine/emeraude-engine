@@ -106,6 +106,17 @@ namespace EmEn::Graphics::Material
 		 * the buffer MUST be reached through a single atomic get-or-create: a get() then create()
 		 * sequence loses the race for every material but one, and a material that cannot reach its
 		 * shared uniform buffer fails to load entirely, removing its sub-meshes from the scene. */
-		return renderer.sharedUBOManager().getOrCreateSharedUniformBuffer(identifier, this->getUniformBlock(0, 0).bytes());
+		/* One region per frame in flight, each bound by its own descriptor set: before the renderer has its frames, a
+		 * material would get one region and no set for the other frames (never drawn, silently). */
+		const auto frameCount = renderer.framesInFlight();
+
+		if ( frameCount == 0 )
+		{
+			TraceError{TracerTag} << "The material '" << this->name() << "' is created before the renderer has its frames in flight !";
+
+			return nullptr;
+		}
+
+		return renderer.sharedUBOManager().getOrCreateSharedUniformBuffer(identifier, this->getUniformBlock(0, 0).bytes(), frameCount);
 	}
 }

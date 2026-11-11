@@ -31,7 +31,6 @@
 
 /* STL inclusions. */
 #include <array>
-#include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -40,14 +39,19 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
+#include "Constants.hpp"
+#include "DirtyFrameRegions.hpp"
 #include "Graphics/Types.hpp"
 #include "Hash/FNV1a.hpp"
 #include "Math/Vector.hpp"
+#include "Mutex.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
 #include "PixelFactory/Color.hpp"
 #include "Resources/ResourceTrait.hpp"
 #include "Resources/Types.hpp"
 #include "ScopedRegistration.hpp"
+#include "StaticVector.hpp"
+#include "ThreadSafety.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
 /* Forward declarations. */
@@ -185,7 +189,7 @@ namespace EmEn::Graphics::Material
 			}
 
 			/** @copydoc EmEn::Graphics::Material::Interface::updateVideoMemory() */
-			bool updateVideoMemory () noexcept override;
+			bool updateVideoMemory (uint32_t frameIndex) noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::isComplex() */
 			[[nodiscard]]
@@ -321,9 +325,9 @@ namespace EmEn::Graphics::Material
 			/** @copydoc EmEn::Graphics::Material::Interface::descriptorSet() */
 			[[nodiscard]]
 			const Vulkan::DescriptorSet *
-			descriptorSet () const noexcept override
+			descriptorSet (uint32_t frameIndex) const noexcept override
 			{
-				return m_descriptorSet.get();
+				return frameIndex < m_descriptorSets.size() ? m_descriptorSets[frameIndex].get() : nullptr;
 			}
 
 			/** @copydoc EmEn::Graphics::Material::Interface::getUniformBlock() */
@@ -338,12 +342,15 @@ namespace EmEn::Graphics::Material
 
 			/**
 			 * @brief Returns the colour of the path (linear).
-			 * @return const Base::PixelFactory::Color< float > &
+			 * @note A copy: the colour is guarded by the properties lock.
+			 * @return Base::PixelFactory::Color< float >
 			 */
 			[[nodiscard]]
-			const Base::PixelFactory::Color< float > &
+			Base::PixelFactory::Color< float >
 			color () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_color;
 			}
 
@@ -361,6 +368,8 @@ namespace EmEn::Graphics::Material
 			float
 			luminance () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_luminance;
 			}
 
@@ -380,6 +389,8 @@ namespace EmEn::Graphics::Material
 			float
 			halfWidth () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_properties[StyleOffset];
 			}
 
@@ -391,6 +402,8 @@ namespace EmEn::Graphics::Material
 			bool
 			isWidthInPixels () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_properties[StyleOffset + 1] > 0.5F;
 			}
 
@@ -409,6 +422,8 @@ namespace EmEn::Graphics::Material
 			bool
 			areJoinsRound () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_properties[StyleOffset + 2] > 0.5F;
 			}
 
@@ -420,6 +435,8 @@ namespace EmEn::Graphics::Material
 			float
 			miterLimit () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_properties[StyleOffset + 3];
 			}
 
@@ -454,6 +471,8 @@ namespace EmEn::Graphics::Material
 			bool
 			isFlat () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_properties[PlacementOffset + 1] != 0.0F || m_properties[PlacementOffset + 2] != 0.0F || m_properties[PlacementOffset + 3] != 0.0F;
 			}
 
@@ -465,6 +484,8 @@ namespace EmEn::Graphics::Material
 			Base::Math::Vector< 3, float >
 			flatUp () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return {m_properties[PlacementOffset + 1], m_properties[PlacementOffset + 2], m_properties[PlacementOffset + 3]};
 			}
 
@@ -476,6 +497,8 @@ namespace EmEn::Graphics::Material
 			float
 			depthOffset () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_properties[PlacementOffset];
 			}
 
@@ -511,12 +534,26 @@ namespace EmEn::Graphics::Material
 			/**
 			 * @brief Writes the radiance (linear colour × luminance) into the UBO copy.
 			 */
-			void updateRadiance () noexcept;
+			void updateRadiance () noexcept EMEN_REQUIRES(m_propertiesAccess);
 
 			/**
-			 * @brief Requests an upload of the UBO copy, once per frame at most, when the material is on the GPU.
+			 * @brief Writes the UBO copy into every frame region, at the creation, and arms the region tracking.
+			 * @return bool
 			 */
-			void markVideoMemoryDirty () noexcept;
+			[[nodiscard]]
+			bool writeEveryRegion () noexcept EMEN_EXCLUDES(m_propertiesAccess);
+
+			/**
+			 * @brief Raises every frame region after a change of the UBO copy, and registers the material for the
+			 * renderer's flush when it is not registered yet (DirtyFrameRegions).
+			 * @note Called AFTER the properties lock is released.
+			 */
+			void markVideoMemoryDirty () noexcept EMEN_EXCLUDES(m_propertiesAccess);
+
+			/**
+			 * @brief Registers the material for the renderer's next flush.
+			 */
+			void requestFlush () noexcept;
 
 			/* UBO layout (std140, three vec4 — Keys PathRadiance, PathStyle, PathPlacement). */
 			static constexpr auto RadianceOffset{0UL};
@@ -525,8 +562,11 @@ namespace EmEn::Graphics::Material
 			static constexpr auto PropertiesSize{12UL};
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
-			Base::PixelFactory::Color< float > m_color{Base::PixelFactory::White};
-			std::array< float, PropertiesSize > m_properties{
+			/* NOTE: Guards the UBO copy and the look it is derived from: written by the setters (logic, console, loading
+			 * threads), read by the flush (render thread). */
+			mutable Base::Mutex m_propertiesAccess;
+			Base::PixelFactory::Color< float > m_color EMEN_GUARDED_BY(m_propertiesAccess){Base::PixelFactory::White};
+			std::array< float, PropertiesSize > m_properties EMEN_GUARDED_BY(m_propertiesAccess){
 				/* Radiance (rgb), unused. */
 				0.0F, 0.0F, 0.0F, 0.0F,
 				/* Half width, in pixels, round, miter limit. */
@@ -538,11 +578,12 @@ namespace EmEn::Graphics::Material
 			/* The seat in m_sharedUniformBuffer (Ave Robustus II P4): its end frees it. Declared after the buffer. */
 			Base::ScopedRegistration m_sharedUBOSeat;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
-			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
+			/* One per frame in flight, each on its own region of the block (Interface::updateVideoMemory()). */
+			Base::StaticVector< std::unique_ptr< Vulkan::DescriptorSet >, MaxFramesInFlight > m_descriptorSets;
 			Renderer * m_renderer{nullptr}; ///< Set by create(): the flusher of dynamic properties (owned by the engine).
-			float m_luminance{DefaultLuminance};
+			DirtyFrameRegions m_dirtyRegions; ///< The regions still holding an older UBO copy, and the flush registration.
+			float m_luminance EMEN_GUARDED_BY(m_propertiesAccess){DefaultLuminance};
 			uint32_t m_sharedUBOIndex{0};
-			std::atomic< bool > m_videoMemoryUpdated{false}; ///< Raised by markVideoMemoryDirty() (any thread), lowered by updateVideoMemory() (render thread) BEFORE it reads the properties.
 	};
 }
 

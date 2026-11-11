@@ -64,7 +64,6 @@
 #include "Scenes/Component/AbstractLightEmitter.hpp"
 #include "Scenes/SceneInstanceTransforms.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/AccelerationStructure.hpp"
 #include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -75,13 +74,11 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
-#include "Vulkan/IndexBufferObject.hpp"
 #include "Vulkan/MemoryRegion.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/RenderPass.hpp"
 #include "Vulkan/ShaderStorageBufferObject.hpp"
-#include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Graphics::RenderableInstance
 {
@@ -1351,7 +1348,7 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	void
-	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Vector< 3, float > & lodViewPosition, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t cascadeIndex, uint32_t LODLevel, const DescriptorSet * sceneTransformsDS) const noexcept
+	Abstract::castShadows (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t frameIndex, const Vector< 3, float > & lodViewPosition, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, uint32_t LODLevel, const CommandBuffer & commandBuffer, uint32_t cascadeIndex, const DescriptorSet * sceneTransformsDS) const noexcept
 	{
 		/* NOTE: Read ONCE: a multiple instance's count is the logic's live value (not published per render state); an
 		 * emitter whose last particles just died has nothing to draw (a draw of 0 instances, the Debug "No instance
@@ -1387,63 +1384,12 @@ namespace EmEn::Graphics::RenderableInstance
 		/* NOTE: Set the dynamic viewport and scissor. */
 		renderTarget->setViewport(commandBuffer);
 
-		/* NOTE: Every set goes to the index DECLARED by the sealed pipeline layout, never to a
-		 * running counter — a set left unbound can then no longer shift the ones after it.
-		 * See the "Descriptor set binding" contract in src/Saphir/AGENTS.md. */
-		const auto & setIndexes = program->setIndexes();
-
-		/* NOTE: The view UBO is part of the layout when:
-		 * - Renderable instance uses GPU instancing (needs view matrix from UBO)
-		 * - OR render target is a cubemap (multiview needs 6 view matrices from UBO indexed by gl_ViewIndex)
-		 * - OR render target is a CSM (N cascade view matrices from UBO, selected by the pushed cascade index) */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerView) )
-		{
-			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerView));
-		}
-
-		/* Bind the scene instance transforms SSBO. On THIS pass it carries nothing but the wind
-		 * state, and only a vegetation renderable has the set in its layout — the sealed layout of
-		 * every other shadow caster is untouched. */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerSceneTransforms) )
-		{
-			if ( sceneTransformsDS == nullptr )
-			{
-				this->traceMissingDescriptorSet("PerSceneTransforms", *renderTarget);
-
-				return;
-			}
-
-			commandBuffer.bind(*sceneTransformsDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerSceneTransforms));
-		}
-
-		/* Bind the PerModel set: skinning SSBO of a skeletal mesh, or surface of a heightfield. */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModel) && !this->bindPerModelSet(commandBuffer, *pipelineLayout, setIndexes.set(Saphir::SetType::PerModel), LODLevel, *renderTarget) )
-		{
-			return;
-		}
-
-		/* Bind material descriptor set for alpha-tested shadows. */
-		const auto * material = m_renderable->material(layerIndex);
-
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModelLayer) )
-		{
-			if ( material == nullptr )
-			{
-				this->traceMissingDescriptorSet("PerModelLayer (material)", *renderTarget);
-
-				return;
-			}
-
-			commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModelLayer));
-		}
-
-		this->bindInstanceModelLayer(commandBuffer, layerIndex, LODLevel);
-
 		/* Build render pass context (created once per pass, reused for all objects). */
 		const RenderPassContext passContext{
 			.commandBuffer = &commandBuffer,
 			.viewMatrices = &renderTarget->viewMatrices(),
 			.readStateIndex = readStateIndex,
+			.frameIndex = frameIndex,
 			.isCubemap = renderTarget->isCubemap(),
 			.isCSM = renderTarget->isCascadedShadowMap()
 		};
@@ -1460,6 +1406,39 @@ namespace EmEn::Graphics::RenderableInstance
 			.useInstanceTransforms = program->wasInstanceTransformsEnabled()
 		};
 
+		/* NOTE: Every set goes to the index DECLARED by the sealed pipeline layout, never to a
+		 * running counter — a set left unbound can then no longer shift the ones after it.
+		 * See the "Descriptor set binding" contract in src/Saphir/AGENTS.md. */
+		const auto & setIndexes = program->setIndexes();
+
+		/* NOTE: The view UBO is part of the layout when:
+		 * - Renderable instance uses GPU instancing (needs view matrix from UBO)
+		 * - OR render target is a cubemap (multiview needs 6 view matrices from UBO indexed by gl_ViewIndex)
+		 * - OR render target is a CSM (N cascade view matrices from UBO, selected by the pushed cascade index) */
+		bindViewSet(passContext, pushContext, setIndexes, nullptr);
+
+		/* Bind the scene instance transforms SSBO. On THIS pass it carries nothing but the wind
+		 * state, and only a vegetation renderable has the set in its layout — the sealed layout of
+		 * every other shadow caster is untouched. */
+		if ( !this->bindSceneTransformsSet(passContext, pushContext, setIndexes, *renderTarget, sceneTransformsDS, nullptr) )
+		{
+			return;
+		}
+
+		/* Bind the PerModel set: skinning SSBO of a skeletal mesh, or surface of a heightfield. */
+		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModel) && !this->bindPerModelSet(commandBuffer, *pipelineLayout, setIndexes.set(Saphir::SetType::PerModel), LODLevel, *renderTarget) )
+		{
+			return;
+		}
+
+		/* Bind material descriptor set for alpha-tested shadows. */
+		if ( !this->bindMaterialSet(passContext, pushContext, setIndexes, *renderTarget, nullptr) )
+		{
+			return;
+		}
+
+		this->bindInstanceModelLayer(commandBuffer, layerIndex, LODLevel);
+
 		this->pushMatricesForShadowCasting(passContext, pushContext, worldCoordinates);
 
 		/* A cascaded shadow map renders one cascade per pass: the program selects the cascade matrix with this
@@ -1470,63 +1449,11 @@ namespace EmEn::Graphics::RenderableInstance
 			vkCmdPushConstants(commandBuffer.handle(), pipelineLayout->handle(), pushContext.stageFlags, program->cascadeIndexPushConstantOffset(), sizeof(uint32_t), &cascadeIndex);
 		}
 
-		/* ⚠️ The third argument is the SUB-GEOMETRY index, not a frame index. The two coincide
-		 * for a SPRITE only: SpriteResource bakes one quad group per frame AND enables 3D primary
-		 * texture coordinates, so selecting its sub-geometry IS selecting its frame. Every other
-		 * animated renderable drives its flipbook through the frameIndex PUSH CONSTANT on a
-		 * Texture2DArray, and its sub-geometry index must stay the LAYER index.
-		 * Discriminating on material->isAnimated() conflated the two and silently made every
-		 * animated layer of a multi-layer mesh draw layer 0's triangles. */
-		const auto * geometry = m_renderable->geometry(LODLevel);
-
-		/* The shadow of a mesh-shading surface is its displaced geometry, subdivided for the MAIN camera (the
-		 * receiver's), like a heightfield's levels. */
-		if ( geometry != nullptr && program->hasMeshShader() )
-		{
-			drawMeshShadingSurface(*geometry, commandBuffer, pushContext, *program, lodViewPosition, 0);
-		}
-		else if ( geometry != nullptr && geometry->isAdaptiveLOD() )
-		{
-			/* ⚠️ The CASTER volume of the pass (depth is clamped: see Graphics::Frustum::shadowCasterVolume()). A
-			 * cascade culls the nodes to ITS cascade: with no volume at all — what a cascaded map used to pass,
-			 * multiview forbidding one — the whole 16 km grid was drawn into every cascade. A cubemap has none. */
-			std::optional< Frustum > casterVolume;
-
-			if ( !renderTarget->isCubemap() )
-			{
-				casterVolume = renderTarget->viewMatrices().frustum(readStateIndex, renderTarget->isCascadedShadowMap() ? cascadeIndex : 0).shadowCasterVolume();
-			}
-
-			drawAdaptiveGeometry(*geometry, casterVolume.has_value() ? &casterVolume.value() : nullptr, lodViewPosition, worldCoordinates, commandBuffer, drawnInstances, 0, pushContext, *program);
-		}
-		else if ( geometry != nullptr && geometry->primaryTextureCoordinates3DEnabled() )
-		{
-			commandBuffer.draw(*geometry, this->frameIndexFor(layerIndex), drawnInstances);
-		}
-		else if ( pushContext.useInstanceTransforms )
-		{
-			/* The entry slot travels through firstInstance (gl_InstanceIndex), as in render(). */
-			if ( m_renderable->layerCount() == 1 )
-			{
-				commandBuffer.drawWithFirstInstance(*m_renderable->geometry(LODLevel), this->instanceTransformsSlot(), drawnInstances);
-			}
-			else
-			{
-				commandBuffer.drawWithFirstInstance(*m_renderable->geometry(LODLevel), this->instanceTransformsSlot(), layerIndex, drawnInstances);
-			}
-		}
-		else if ( m_renderable->layerCount() == 1 )
-		{
-			commandBuffer.draw(*m_renderable->geometry(LODLevel), drawnInstances);
-		}
-		else
-		{
-			commandBuffer.draw(*m_renderable->geometry(LODLevel), layerIndex, drawnInstances);
-		}
+		this->drawShadowCaster(m_renderable->geometry(LODLevel), *program, *renderTarget, passContext, pushContext, drawnInstances, lodViewPosition, worldCoordinates, cascadeIndex);
 	}
 
 	void
-	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager, const DescriptorSet * sceneTransformsDS) const noexcept
+	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t frameIndex, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager, const DescriptorSet * sceneTransformsDS) const noexcept
 	{
 		/* NOTE: Read ONCE: a multiple instance's count is the logic's live value (not published per render state); an
 		 * emitter whose last particles just died has nothing to draw (a draw of 0 instances, the Debug "No instance
@@ -1582,6 +1509,7 @@ namespace EmEn::Graphics::RenderableInstance
 			.commandBuffer = &commandBuffer,
 			.viewMatrices = &renderTarget->viewMatrices(),
 			.readStateIndex = readStateIndex,
+			.frameIndex = frameIndex,
 			.isCubemap = renderTarget->isCubemap()
 		};
 
@@ -1604,40 +1532,14 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto & setIndexes = program->setIndexes();
 
 		/* Bind view UBO. */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerView) )
+		bindViewSet(passContext, pushContext, setIndexes, nullptr);
+
+		/* Bind the scene instance transforms SSBO set and the light UBO: each when the SEALED layout declares it; a
+		 * missing one skips the draw. */
+		if ( !this->bindSceneTransformsSet(passContext, pushContext, setIndexes, *renderTarget, sceneTransformsDS, nullptr) ||
+			 !this->bindLightSet(passContext, pushContext, setIndexes, *renderTarget, lightEmitter, renderPassType, nullptr) )
 		{
-			commandBuffer.bind(*renderTarget->viewMatrices().descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerView));
-		}
-
-		/* Bind the scene instance transforms SSBO set.
-		 * NOTE: Driven by the SEALED pipeline layout (setIndexes), not by the shader flag —
-		 * the set may be part of the layout yet unreferenced by the shader (advanced
-		 * fallback). */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerSceneTransforms) )
-		{
-			if ( sceneTransformsDS == nullptr )
-			{
-				this->traceMissingDescriptorSet("PerSceneTransforms", *renderTarget);
-
-				return;
-			}
-
-			commandBuffer.bind(*sceneTransformsDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerSceneTransforms));
-		}
-
-		/* Bind light UBO (and shadow map sampler if applicable). */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerLight) )
-		{
-			if ( lightEmitter == nullptr || !lightEmitter->isCreated() )
-			{
-				this->traceMissingDescriptorSet("PerLight", *renderTarget);
-
-				return;
-			}
-
-			const bool useShadowMap = renderPassUsesShadowMap(renderPassType);
-
-			commandBuffer.bind(*lightEmitter->descriptorSet(useShadowMap), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerLight), lightEmitter->UBOOffset());
+			return;
 		}
 
 		/* Bind the PerModel set: skinning SSBO of a skeletal mesh, or surface of a heightfield. */
@@ -1646,74 +1548,18 @@ namespace EmEn::Graphics::RenderableInstance
 			return;
 		}
 
-		/* Bind material UBO and samplers. */
-		const auto * material = m_renderable->material(layerIndex);
-
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModelLayer) )
+		/* Bind the material UBO and samplers, and the bindless textures. */
+		if ( !this->bindMaterialSet(passContext, pushContext, setIndexes, *renderTarget, nullptr) ||
+			 !this->bindBindlessSet(passContext, pushContext, setIndexes, *renderTarget, bindlessTexturesManager, nullptr) )
 		{
-			if ( material == nullptr )
-			{
-				this->traceMissingDescriptorSet("PerModelLayer (material)", *renderTarget);
-
-				return;
-			}
-
-			commandBuffer.bind(*material->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModelLayer));
+			return;
 		}
 
-		/* Bind the bindless textures descriptor set. The layout declares it when the material
-		 * uses automatic reflection, the instance is lit (ambient-pass IBL reserved slots), or
-		 * the light uses bindless color projection — see the program-generation gating
-		 * (buildProgramCacheKey / getReadyForRender). */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerBindless) )
-		{
-			if ( bindlessTexturesManager == nullptr || bindlessTexturesManager->descriptorSet() == nullptr )
-			{
-				this->traceMissingDescriptorSet("PerBindless", *renderTarget);
-
-				return;
-			}
-
-			commandBuffer.bind(*bindlessTexturesManager->descriptorSet(), *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerBindless));
-		}
-
-		/* NOTE: The InstanceTransforms slot travels through the firstInstance draw
-		 * parameter (read as gl_InstanceIndex in the vertex shader, instanceCount == 1). */
-		const uint32_t firstInstance = pushContext.useInstanceTransforms ? this->instanceTransformsSlot() : 0;
-
-		/* A mesh-shading surface is re-tessellated by its task + mesh program, not drawn from its buffer. */
-		if ( program->hasMeshShader() )
-		{
-			drawMeshShadingSurface(*geometry, commandBuffer, pushContext, *program, renderTarget->viewMatrices().position(readStateIndex), firstInstance);
-		}
-		/* Check for adaptive LOD rendering. */
-		else if ( geometry->isAdaptiveLOD() )
-		{
-			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
-			const bool singleView = !renderTarget->isCubemap() && !renderTarget->isCascadedShadowMap();
-
-			drawAdaptiveGeometry(*geometry, singleView ? &renderTarget->viewMatrices().frustum(readStateIndex, 0) : nullptr, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, drawnInstances, firstInstance, pushContext, *program);
-		}
-		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
-		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,
-		 * addresses its frames that way. A flipbook on 2D UVs is driven by the frameIndex push
-		 * constant and needs its LAYER index here. */
-		else if ( geometry->primaryTextureCoordinates3DEnabled() )
-		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->frameIndexFor(layerIndex), drawnInstances);
-		}
-		else if ( m_renderable->layerCount() == 1 )
-		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, drawnInstances);
-		}
-		else
-		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, layerIndex, drawnInstances);
-		}
+		this->drawRenderedGeometry(*geometry, *program, *renderTarget, passContext, pushContext, drawnInstances, worldCoordinates);
 	}
 
 	void
-	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager, const DescriptorSet * sceneTransformsDS) const noexcept
+	Abstract::render (uint32_t readStateIndex, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, uint32_t frameIndex, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, uint32_t layerIndex, const CartesianFrame< float > * worldCoordinates, const CommandBuffer & commandBuffer, RenderStateTracker & tracker, uint32_t LODLevel, const BindlessTextureManager * bindlessTexturesManager, const DescriptorSet * sceneTransformsDS) const noexcept
 	{
 		/* NOTE: Read ONCE: a multiple instance's count is the logic's live value (not published per render state); an
 		 * emitter whose last particles just died has nothing to draw (a draw of 0 instances, the Debug "No instance
@@ -1814,6 +1660,7 @@ namespace EmEn::Graphics::RenderableInstance
 			.commandBuffer = &commandBuffer,
 			.viewMatrices = &renderTarget->viewMatrices(),
 			.readStateIndex = readStateIndex,
+			.frameIndex = frameIndex,
 			.isCubemap = renderTarget->isCubemap()
 		};
 
@@ -1836,61 +1683,13 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto & setIndexes = program->setIndexes();
 
 		/* Bind view UBO (skip if already bound for this pipeline). */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerView) )
+		bindViewSet(passContext, pushContext, setIndexes, &tracker);
+
+		/* The scene instance transforms SSBO set and the light UBO (each skipped if already bound). */
+		if ( !this->bindSceneTransformsSet(passContext, pushContext, setIndexes, *renderTarget, sceneTransformsDS, &tracker) ||
+			 !this->bindLightSet(passContext, pushContext, setIndexes, *renderTarget, lightEmitter, renderPassType, &tracker) )
 		{
-			const auto * viewDS = renderTarget->viewMatrices().descriptorSet();
-
-			if ( tracker.lastViewDS != viewDS->handle() )
-			{
-				commandBuffer.bind(*viewDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerView));
-				tracker.lastViewDS = viewDS->handle();
-			}
-		}
-
-		/* Bind the scene instance transforms SSBO set (skip if already bound).
-		 * NOTE: Driven by the SEALED pipeline layout (setIndexes), not by the shader flag —
-		 * the set may be part of the layout yet unreferenced by the shader (advanced
-		 * fallback). */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerSceneTransforms) )
-		{
-			if ( sceneTransformsDS == nullptr )
-			{
-				this->traceMissingDescriptorSet("PerSceneTransforms", *renderTarget);
-
-				return;
-			}
-
-			if ( tracker.lastSceneTransformsDS != sceneTransformsDS->handle() )
-			{
-				commandBuffer.bind(*sceneTransformsDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerSceneTransforms));
-				tracker.lastSceneTransformsDS = sceneTransformsDS->handle();
-			}
-		}
-
-		/* Bind light UBO (and shadow map sampler if applicable). */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerLight) )
-		{
-			if ( lightEmitter == nullptr || !lightEmitter->isCreated() )
-			{
-				this->traceMissingDescriptorSet("PerLight", *renderTarget);
-
-				return;
-			}
-
-			const bool useShadowMap = renderPassUsesShadowMap(renderPassType);
-			const auto * lightDS = lightEmitter->descriptorSet(useShadowMap);
-			const auto lightUBOOffset = lightEmitter->UBOOffset();
-
-			/* NOTE: Every light of a scene shares ONE descriptor set (shared UBO) — only
-			 * the dynamic offset tells them apart. The redundancy check MUST include the
-			 * offset: deduplicating on the handle alone made every light pass reuse the
-			 * first light's data (a single light lit the whole scene). */
-			if ( tracker.lastLightDS != lightDS->handle() || tracker.lastLightUBOOffset != lightUBOOffset )
-			{
-				commandBuffer.bind(*lightDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerLight), lightUBOOffset);
-				tracker.lastLightDS = lightDS->handle();
-				tracker.lastLightUBOOffset = lightUBOOffset;
-			}
+			return;
 		}
 
 		/* Bind the PerModel set: skinning SSBO of a skeletal mesh, or surface of a heightfield. */
@@ -1899,91 +1698,287 @@ namespace EmEn::Graphics::RenderableInstance
 			return;
 		}
 
-		/* Bind material UBO and samplers (skip if already bound). */
-		const auto * material = m_renderable->material(layerIndex);
-
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerModelLayer) )
+		/* The material UBO and samplers, and the bindless textures (each skipped if already bound). */
+		if ( !this->bindMaterialSet(passContext, pushContext, setIndexes, *renderTarget, &tracker) ||
+			 !this->bindBindlessSet(passContext, pushContext, setIndexes, *renderTarget, bindlessTexturesManager, &tracker) )
 		{
-			if ( material == nullptr )
-			{
-				this->traceMissingDescriptorSet("PerModelLayer (material)", *renderTarget);
-
-				return;
-			}
-
-			const auto * materialDS = material->descriptorSet();
-
-			if ( tracker.lastMaterialDS != materialDS->handle() )
-			{
-				commandBuffer.bind(*materialDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModelLayer));
-				tracker.lastMaterialDS = materialDS->handle();
-			}
-#ifdef DEBUG
-			else
-			{
-				tracker.savedMaterialBinds++;
-			}
-#endif
-		}
-
-		/* Bind the bindless textures descriptor set. The layout declares it when the material
-		 * uses automatic reflection, the instance is lit (ambient-pass IBL reserved slots), or
-		 * the light uses bindless color projection — see the program-generation gating
-		 * (buildProgramCacheKey / getReadyForRender). */
-		if ( setIndexes.isSetEnabled(Saphir::SetType::PerBindless) )
-		{
-			if ( bindlessTexturesManager == nullptr || bindlessTexturesManager->descriptorSet() == nullptr )
-			{
-				this->traceMissingDescriptorSet("PerBindless", *renderTarget);
-
-				return;
-			}
-
-			const auto * bindlessDS = bindlessTexturesManager->descriptorSet();
-
-			if ( tracker.lastBindlessDS != bindlessDS->handle() )
-			{
-				commandBuffer.bind(*bindlessDS, *pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerBindless));
-				tracker.lastBindlessDS = bindlessDS->handle();
-			}
+			return;
 		}
 
 #ifdef DEBUG
 		tracker.totalDrawCalls++;
 #endif
 
+		/* Issue the draw command (same logic as non-tracked render). */
+		this->drawRenderedGeometry(*geometry, *program, *renderTarget, passContext, pushContext, drawnInstances, worldCoordinates);
+	}
+
+	void
+	Abstract::drawRenderedGeometry (const Geometry::Interface & geometry, const Saphir::Program & program, const RenderTarget::Abstract & renderTarget, const RenderPassContext & passContext, const PushConstantContext & pushContext, uint32_t drawnInstances, const CartesianFrame< float > * worldCoordinates) const noexcept
+	{
+		const auto & commandBuffer = *passContext.commandBuffer;
+
 		/* NOTE: The InstanceTransforms slot travels through the firstInstance draw
 		 * parameter (read as gl_InstanceIndex in the vertex shader, instanceCount == 1). */
 		const uint32_t firstInstance = pushContext.useInstanceTransforms ? this->instanceTransformsSlot() : 0;
 
-		/* Issue the draw command (same logic as non-tracked render). */
-		if ( program->hasMeshShader() )
+		/* A mesh-shading surface is re-tessellated by its task + mesh program, not drawn from its buffer. */
+		if ( program.hasMeshShader() )
 		{
-			drawMeshShadingSurface(*geometry, commandBuffer, pushContext, *program, renderTarget->viewMatrices().position(readStateIndex), firstInstance);
+			drawMeshShadingSurface(geometry, commandBuffer, pushContext, program, renderTarget.viewMatrices().position(passContext.readStateIndex), firstInstance);
 		}
-		else if ( geometry->isAdaptiveLOD() )
+		/* Check for adaptive LOD rendering. */
+		else if ( geometry.isAdaptiveLOD() )
 		{
 			/* Its own camera picks the levels here; the shadow pass borrows THIS camera for the same job. */
-			const bool singleView = !renderTarget->isCubemap() && !renderTarget->isCascadedShadowMap();
+			const bool singleView = !renderTarget.isCubemap() && !renderTarget.isCascadedShadowMap();
 
-			drawAdaptiveGeometry(*geometry, singleView ? &renderTarget->viewMatrices().frustum(readStateIndex, 0) : nullptr, renderTarget->viewMatrices().position(readStateIndex), worldCoordinates, commandBuffer, drawnInstances, firstInstance, pushContext, *program);
+			drawAdaptiveGeometry(geometry, singleView ? &renderTarget.viewMatrices().frustum(passContext.readStateIndex, 0) : nullptr, renderTarget.viewMatrices().position(passContext.readStateIndex), worldCoordinates, commandBuffer, drawnInstances, firstInstance, pushContext, program);
 		}
 		/* ⚠️ See the note in castShadows(): the third argument is the SUB-GEOMETRY index. Only a
 		 * sprite, which bakes one quad group per frame and enables 3D primary texture coordinates,
 		 * addresses its frames that way. A flipbook on 2D UVs is driven by the frameIndex push
 		 * constant and needs its LAYER index here. */
-		else if ( geometry->primaryTextureCoordinates3DEnabled() )
+		else if ( geometry.primaryTextureCoordinates3DEnabled() )
 		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, this->frameIndexFor(layerIndex), drawnInstances);
+			commandBuffer.drawWithFirstInstance(geometry, firstInstance, this->frameIndexFor(pushContext.layerIndex), drawnInstances);
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, drawnInstances);
+			commandBuffer.drawWithFirstInstance(geometry, firstInstance, drawnInstances);
 		}
 		else
 		{
-			commandBuffer.drawWithFirstInstance(*geometry, firstInstance, layerIndex, drawnInstances);
+			commandBuffer.drawWithFirstInstance(geometry, firstInstance, pushContext.layerIndex, drawnInstances);
 		}
+	}
+
+	void
+	Abstract::drawShadowCaster (const Geometry::Interface * geometry, const Saphir::Program & program, const RenderTarget::Abstract & renderTarget, const RenderPassContext & passContext, const PushConstantContext & pushContext, uint32_t drawnInstances, const Vector< 3, float > & lodViewPosition, const CartesianFrame< float > * worldCoordinates, uint32_t cascadeIndex) const noexcept
+	{
+		const auto & commandBuffer = *passContext.commandBuffer;
+
+		/* ⚠️ The third argument is the SUB-GEOMETRY index, not a frame index. The two coincide
+		 * for a SPRITE only: SpriteResource bakes one quad group per frame AND enables 3D primary
+		 * texture coordinates, so selecting its sub-geometry IS selecting its frame. Every other
+		 * animated renderable drives its flipbook through the frameIndex PUSH CONSTANT on a
+		 * Texture2DArray, and its sub-geometry index must stay the LAYER index.
+		 * Discriminating on material->isAnimated() conflated the two and silently made every
+		 * animated layer of a multi-layer mesh draw layer 0's triangles. */
+		/* The shadow of a mesh-shading surface is its displaced geometry, subdivided for the MAIN camera (the
+		 * receiver's), like a heightfield's levels. */
+		if ( geometry != nullptr && program.hasMeshShader() )
+		{
+			drawMeshShadingSurface(*geometry, commandBuffer, pushContext, program, lodViewPosition, 0);
+		}
+		else if ( geometry != nullptr && geometry->isAdaptiveLOD() )
+		{
+			/* ⚠️ The CASTER volume of the pass (depth is clamped: see Graphics::Frustum::shadowCasterVolume()). A
+			 * cascade culls the nodes to ITS cascade: with no volume at all — what a cascaded map used to pass,
+			 * multiview forbidding one — the whole 16 km grid was drawn into every cascade. A cubemap has none. */
+			std::optional< Frustum > casterVolume;
+
+			if ( !renderTarget.isCubemap() )
+			{
+				casterVolume = renderTarget.viewMatrices().frustum(passContext.readStateIndex, renderTarget.isCascadedShadowMap() ? cascadeIndex : 0).shadowCasterVolume();
+			}
+
+			drawAdaptiveGeometry(*geometry, casterVolume.has_value() ? &casterVolume.value() : nullptr, lodViewPosition, worldCoordinates, commandBuffer, drawnInstances, 0, pushContext, program);
+		}
+		else if ( geometry != nullptr && geometry->primaryTextureCoordinates3DEnabled() )
+		{
+			commandBuffer.draw(*geometry, this->frameIndexFor(pushContext.layerIndex), drawnInstances);
+		}
+		else if ( pushContext.useInstanceTransforms )
+		{
+			/* The entry slot travels through firstInstance (gl_InstanceIndex), as in render(). */
+			if ( m_renderable->layerCount() == 1 )
+			{
+				commandBuffer.drawWithFirstInstance(*geometry, this->instanceTransformsSlot(), drawnInstances);
+			}
+			else
+			{
+				commandBuffer.drawWithFirstInstance(*geometry, this->instanceTransformsSlot(), pushContext.layerIndex, drawnInstances);
+			}
+		}
+		else if ( m_renderable->layerCount() == 1 )
+		{
+			commandBuffer.draw(*geometry, drawnInstances);
+		}
+		else
+		{
+			commandBuffer.draw(*geometry, pushContext.layerIndex, drawnInstances);
+		}
+	}
+
+	void
+	Abstract::bindViewSet (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Saphir::SetIndexes & setIndexes, RenderStateTracker * tracker) noexcept
+	{
+		if ( !setIndexes.isSetEnabled(Saphir::SetType::PerView) )
+		{
+			return;
+		}
+
+		const auto * viewDS = passContext.viewMatrices->descriptorSet();
+
+		if ( tracker != nullptr && tracker->lastViewDS == viewDS->handle() )
+		{
+			return;
+		}
+
+		passContext.commandBuffer->bind(*viewDS, *pushContext.pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerView));
+
+		if ( tracker != nullptr )
+		{
+			tracker->lastViewDS = viewDS->handle();
+		}
+	}
+
+	bool
+	Abstract::bindSceneTransformsSet (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Saphir::SetIndexes & setIndexes, const RenderTarget::Abstract & renderTarget, const DescriptorSet * sceneTransformsDS, RenderStateTracker * tracker) const noexcept
+	{
+		/* NOTE: Driven by the SEALED pipeline layout (setIndexes), not by the shader flag —
+		 * the set may be part of the layout yet unreferenced by the shader (advanced
+		 * fallback). */
+		if ( !setIndexes.isSetEnabled(Saphir::SetType::PerSceneTransforms) )
+		{
+			return true;
+		}
+
+		if ( sceneTransformsDS == nullptr )
+		{
+			this->traceMissingDescriptorSet("PerSceneTransforms", renderTarget);
+
+			return false;
+		}
+
+		if ( tracker != nullptr && tracker->lastSceneTransformsDS == sceneTransformsDS->handle() )
+		{
+			return true;
+		}
+
+		passContext.commandBuffer->bind(*sceneTransformsDS, *pushContext.pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerSceneTransforms));
+
+		if ( tracker != nullptr )
+		{
+			tracker->lastSceneTransformsDS = sceneTransformsDS->handle();
+		}
+
+		return true;
+	}
+
+	bool
+	Abstract::bindLightSet (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Saphir::SetIndexes & setIndexes, const RenderTarget::Abstract & renderTarget, const Scenes::Component::AbstractLightEmitter * lightEmitter, RenderPassType renderPassType, RenderStateTracker * tracker) const noexcept
+	{
+		/* The light UBO (and the shadow map sampler if applicable). */
+		if ( !setIndexes.isSetEnabled(Saphir::SetType::PerLight) )
+		{
+			return true;
+		}
+
+		if ( lightEmitter == nullptr || !lightEmitter->isCreated() )
+		{
+			this->traceMissingDescriptorSet("PerLight", renderTarget);
+
+			return false;
+		}
+
+		const bool useShadowMap = renderPassUsesShadowMap(renderPassType);
+		const auto * lightDS = lightEmitter->descriptorSet(useShadowMap);
+		const auto lightUBOOffset = lightEmitter->UBOOffset();
+
+		/* NOTE: Every light of a scene shares ONE descriptor set (shared UBO) — only
+		 * the dynamic offset tells them apart. The redundancy check MUST include the
+		 * offset: deduplicating on the handle alone made every light pass reuse the
+		 * first light's data (a single light lit the whole scene). */
+		if ( tracker != nullptr && tracker->lastLightDS == lightDS->handle() && tracker->lastLightUBOOffset == lightUBOOffset )
+		{
+			return true;
+		}
+
+		passContext.commandBuffer->bind(*lightDS, *pushContext.pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerLight), lightUBOOffset);
+
+		if ( tracker != nullptr )
+		{
+			tracker->lastLightDS = lightDS->handle();
+			tracker->lastLightUBOOffset = lightUBOOffset;
+		}
+
+		return true;
+	}
+
+	bool
+	Abstract::bindMaterialSet (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Saphir::SetIndexes & setIndexes, const RenderTarget::Abstract & renderTarget, RenderStateTracker * tracker) const noexcept
+	{
+		if ( !setIndexes.isSetEnabled(Saphir::SetType::PerModelLayer) )
+		{
+			return true;
+		}
+
+		/* The set of the frame in flight being recorded: each reads its own region of the material's block
+		 * (Material::Interface::updateVideoMemory()). */
+		const auto * material = m_renderable->material(pushContext.layerIndex);
+		const auto * materialDS = material != nullptr ? material->descriptorSet(passContext.frameIndex) : nullptr;
+
+		if ( materialDS == nullptr )
+		{
+			this->traceMissingDescriptorSet("PerModelLayer (material)", renderTarget);
+
+			return false;
+		}
+
+		if ( tracker != nullptr && tracker->lastMaterialDS == materialDS->handle() )
+		{
+#ifdef DEBUG
+			tracker->savedMaterialBinds++;
+#endif
+
+			return true;
+		}
+
+		passContext.commandBuffer->bind(*materialDS, *pushContext.pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerModelLayer));
+
+		if ( tracker != nullptr )
+		{
+			tracker->lastMaterialDS = materialDS->handle();
+		}
+
+		return true;
+	}
+
+	bool
+	Abstract::bindBindlessSet (const RenderPassContext & passContext, const PushConstantContext & pushContext, const Saphir::SetIndexes & setIndexes, const RenderTarget::Abstract & renderTarget, const BindlessTextureManager * bindlessTexturesManager, RenderStateTracker * tracker) const noexcept
+	{
+		/* The layout declares it when the material uses automatic reflection, the instance is lit (ambient-pass IBL
+		 * reserved slots), or the light uses bindless color projection — see the program-generation gating
+		 * (buildProgramCacheKey / getReadyForRender). */
+		if ( !setIndexes.isSetEnabled(Saphir::SetType::PerBindless) )
+		{
+			return true;
+		}
+
+		if ( bindlessTexturesManager == nullptr || bindlessTexturesManager->descriptorSet() == nullptr )
+		{
+			this->traceMissingDescriptorSet("PerBindless", renderTarget);
+
+			return false;
+		}
+
+		const auto * bindlessDS = bindlessTexturesManager->descriptorSet();
+
+		if ( tracker != nullptr && tracker->lastBindlessDS == bindlessDS->handle() )
+		{
+			return true;
+		}
+
+		passContext.commandBuffer->bind(*bindlessDS, *pushContext.pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, setIndexes.set(Saphir::SetType::PerBindless));
+
+		if ( tracker != nullptr )
+		{
+			tracker->lastBindlessDS = bindlessDS->handle();
+		}
+
+		return true;
 	}
 
 	void

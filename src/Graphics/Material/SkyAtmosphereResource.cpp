@@ -33,6 +33,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 
 /* Third-party inclusions. */
 #include "volk.h"
@@ -42,6 +43,7 @@
 #include "FastJSON.hpp"
 #include "Graphics/Effects/Shared/AtmosphereGLSL.hpp"
 #include "Graphics/ImageResource.hpp"
+#include "Graphics/Material/DirtyFrameRegions.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/MoonSurfacePhotometry.hpp"
 #include "Graphics/Renderer.hpp"
@@ -358,20 +360,19 @@ namespace EmEn::Graphics::Material
 	SkyAtmosphereResource::onBeforeCreation () noexcept
 	{
 		/* The textured planet: its sphere mean divided out (the magnitude already gives its light). */
-		m_properties[PlanetSurfaceOffset] = 0.0F;
-		m_properties[PlanetSurfaceOffset + 1] = static_cast< float >(m_planetSurfaceIndex);
+		float planetScale = 0.0F;
 
 		if ( m_planetSurface != nullptr )
 		{
 			if ( const auto mean = measurePlanetSurface(this->name(), m_planetSurfaceIndex, *m_planetSurface) )
 			{
-				m_properties[PlanetSurfaceOffset] = 1.0F / mean.value();
+				planetScale = 1.0F / mean.value();
 			}
 		}
 
 		/* The moons' surfaces: their near side's projected mean divided out, their photometry kept for the moons' light
-		 * (MoonSurfacePhotometry). Every index below is < MaxMoons, the size of the three arrays. */
-		const auto scales = std::span{m_properties}.subspan< MoonSurfacesOffset, MaxMoons >();
+		 * (MoonSurfacePhotometry). Every index below is < MaxMoons, the size of the arrays. */
+		std::array< float, MaxMoons > moonScales{};
 
 		for ( uint32_t index = 0; index < MaxMoons; ++index )
 		{
@@ -379,8 +380,16 @@ namespace EmEn::Graphics::Material
 			auto & photometry = *std::next(m_moonPhotometry.begin(), index);
 
 			photometry = surface != nullptr ? measureMoonSurface(this->name(), index, *surface) : nullptr;
-			scales[index] = photometry != nullptr ? 1.0F / photometry->nearSideMean() : 0.0F;
+			*std::next(moonScales.begin(), index) = photometry != nullptr ? 1.0F / photometry->nearSideMean() : 0.0F;
 		}
+
+		/* The measurements above run outside the lock; only the copy into the UBO copy takes it. */
+		const Base::MutexLock lock{m_propertiesAccess};
+
+		m_properties[PlanetSurfaceOffset] = planetScale;
+		m_properties[PlanetSurfaceOffset + 1] = static_cast< float >(m_planetSurfaceIndex);
+
+		std::ranges::copy(moonScales, std::span{m_properties}.subspan< MoonSurfacesOffset, MaxMoons >().begin());
 	}
 
 	bool
@@ -425,7 +434,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		if ( !this->updateVideoMemory() )
+		if ( !this->writeEveryRegion() )
 		{
 			TraceError{ClassId} << "Unable to upload the initial data of sky material '" << this->name() << "' !";
 
@@ -438,9 +447,12 @@ namespace EmEn::Graphics::Material
 	void
 	SkyAtmosphereResource::destroy () noexcept
 	{
+		/* First: no change registers the material any more. */
+		m_dirtyRegions.disarm();
+
 		m_sharedUBOSeat.reset();
 
-		m_descriptorSet.reset();
+		m_descriptorSets.clear();
 		m_descriptorSetLayout.reset();
 		m_sharedUniformBuffer.reset();
 		m_sharedUBOIndex = 0;
@@ -512,24 +524,70 @@ namespace EmEn::Graphics::Material
 	bool
 	SkyAtmosphereResource::createDescriptorSet (Renderer & renderer, const UniformBufferObject & /*uniformBufferObject*/) noexcept
 	{
-		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), m_descriptorSetLayout);
-		m_descriptorSet->setIdentifier(ClassId, this->name(), "DescriptorSet");
+		/* One descriptor set per frame in flight, each on its own region of the block (Interface::updateVideoMemory()).
+		 * Everything else they bind is shared. */
+		const auto regionCount = m_sharedUniformBuffer->frameCount();
 
-		if ( !m_descriptorSet->create() )
+		if ( regionCount > m_descriptorSets.capacity() )
 		{
-			TraceError{ClassId} << "Unable to create the descriptor set for sky material '" << this->name() << "' !";
+			TraceError{ClassId} << "The shared uniform buffer has " << regionCount << " frame regions, beyond " << m_descriptorSets.capacity() << " for sky material '" << this->name() << "' !";
 
 			return false;
 		}
 
-		if ( !m_descriptorSet->writeUniformBuffer(MaterialBinding, m_sharedUniformBuffer->getDescriptorInfoForElement(m_sharedUBOIndex)) )
+		/* Which surfaces were measured (onBeforeCreation()): read once, under the lock. */
+		std::array< bool, MaxMoons > moonMeasured{};
+		bool planetMeasured = false;
+
 		{
-			TraceError{ClassId} << "Unable to write the uniform buffer to the descriptor set of sky material '" << this->name() << "' !";
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			const auto scales = std::span{m_properties}.subspan< MoonSurfacesOffset, MaxMoons >();
+
+			for ( uint32_t index = 0; index < MaxMoons; ++index )
+			{
+				*std::next(moonMeasured.begin(), index) = scales[index] > 0.0F;
+			}
+
+			planetMeasured = m_properties[PlanetSurfaceOffset] > 0.0F;
+		}
+
+		m_descriptorSets.clear();
+
+		for ( uint32_t region = 0; region < regionCount; ++region )
+		{
+			auto descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), m_descriptorSetLayout);
+			descriptorSet->setIdentifier(ClassId, this->name(), "DescriptorSet");
+
+			if ( !descriptorSet->create() )
+			{
+				TraceError{ClassId} << "Unable to create the descriptor set #" << region << " for sky material '" << this->name() << "' !";
+
+				return false;
+			}
+
+			if ( !this->writeDescriptorSet(*descriptorSet, region, moonMeasured, planetMeasured) )
+			{
+				return false;
+			}
+
+			m_descriptorSets.emplace_back(std::move(descriptorSet));
+		}
+
+		return true;
+	}
+
+	bool
+	SkyAtmosphereResource::writeDescriptorSet (DescriptorSet & descriptorSet, uint32_t region, const std::array< bool, MaxMoons > & moonMeasured, bool planetMeasured) const noexcept
+	{
+		if ( !descriptorSet.writeUniformBuffer(MaterialBinding, m_sharedUniformBuffer->getDescriptorInfoForElement(m_sharedUBOIndex, region)) )
+		{
+			TraceError{ClassId} << "Unable to write the uniform buffer to the descriptor set #" << region << " of sky material '" << this->name() << "' !";
 
 			return false;
 		}
 
-		if ( !m_descriptorSet->writeUniformBuffer(AtmosphereBinding, m_atmosphere->parametersBuffer()->getDescriptorInfo(0, SkyAtmosphere::parametersBlockSize())) )
+		if ( !descriptorSet.writeUniformBuffer(AtmosphereBinding, m_atmosphere->parametersBuffer()->getDescriptorInfo(0, SkyAtmosphere::parametersBlockSize())) )
 		{
 			TraceError{ClassId} << "Unable to write the atmosphere parameters to the descriptor set of sky material '" << this->name() << "' !";
 
@@ -538,8 +596,8 @@ namespace EmEn::Graphics::Material
 
 		/* NOTE: The tables' layouts are written explicitly: the atmosphere moves them with its own barriers, the
 		 * image's tracked layout does not follow. Between the passes that write them, they are shader-read-only. */
-		const auto writeTable = [this] (uint32_t binding, const StorageTexture2D & table) {
-			return m_descriptorSet->writeCombinedImageSampler(binding, *table.imageView(), *table.sampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+		const auto writeTable = [&descriptorSet] (uint32_t binding, const StorageTexture2D & table) {
+			return descriptorSet.writeCombinedImageSampler(binding, *table.imageView(), *table.sampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 		};
 
 		if ( !writeTable(SkyViewBinding, m_atmosphere->skyView()) ||
@@ -551,13 +609,11 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		const auto scales = std::span{m_properties}.subspan< MoonSurfacesOffset, MaxMoons >();
-
 		for ( uint32_t index = 0; index < MaxMoons; ++index )
 		{
 			const auto & surface = *std::next(m_moonSurfaces.cbegin(), index);
-			const auto written = surface != nullptr && scales[index] > 0.0F ?
-				m_descriptorSet->writeCombinedImageSampler(MoonSurfaceBinding + index, *surface) :
+			const auto written = surface != nullptr && *std::next(moonMeasured.cbegin(), index) ?
+				descriptorSet.writeCombinedImageSampler(MoonSurfaceBinding + index, *surface) :
 				writeTable(MoonSurfaceBinding + index, m_atmosphere->transmittance());
 
 			if ( !written )
@@ -568,8 +624,8 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
-		const auto planetWritten = m_planetSurface != nullptr && m_properties[PlanetSurfaceOffset] > 0.0F ?
-			m_descriptorSet->writeCombinedImageSampler(PlanetSurfaceBinding, *m_planetSurface) :
+		const auto planetWritten = m_planetSurface != nullptr && planetMeasured ?
+			descriptorSet.writeCombinedImageSampler(PlanetSurfaceBinding, *m_planetSurface) :
 			writeTable(PlanetSurfaceBinding, m_atmosphere->transmittance());
 
 		if ( !planetWritten )
@@ -583,29 +639,64 @@ namespace EmEn::Graphics::Material
 	}
 
 	bool
-	SkyAtmosphereResource::updateVideoMemory () noexcept
+	SkyAtmosphereResource::writeEveryRegion () noexcept
 	{
-		if ( m_sharedUniformBuffer == nullptr )
+		const Base::MutexLock lock{m_propertiesAccess};
+
+		/* Armed BEFORE the write, under the lock: a change written after this section raises every region and
+		 * registers; a change written before it is in this write. */
+		m_dirtyRegions.arm(m_sharedUniformBuffer->frameCount());
+
+		for ( uint32_t region = 0; region < m_sharedUniformBuffer->frameCount(); ++region )
 		{
-			return false;
+			if ( !m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, region, m_properties.data()) )
+			{
+				return false;
+			}
 		}
 
-		/* Lowered BEFORE the properties are read (see BeamResource::updateVideoMemory()). */
-		m_videoMemoryUpdated.store(false, std::memory_order_release);
+		return true;
+	}
 
-		return m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, 0, m_properties.data());
+	bool
+	SkyAtmosphereResource::updateVideoMemory (uint32_t frameIndex) noexcept
+	{
+		bool success = true;
+
+		/* Lowered BEFORE the properties are read: a change written during the copy raises the region again. */
+		if ( m_dirtyRegions.lower(frameIndex) )
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			success = m_sharedUniformBuffer != nullptr && m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, frameIndex, m_properties.data());
+		}
+
+		/* The regions of the other frames in flight still hold the older copy: the next flushes rewrite them. */
+		if ( m_dirtyRegions.needsAnotherFlush() )
+		{
+			this->requestFlush();
+		}
+
+		return success;
 	}
 
 	void
 	SkyAtmosphereResource::markVideoMemoryDirty () noexcept
 	{
-		/* One registration per flush: the flag is cleared by updateVideoMemory(). Before creation, create() uploads. */
-		if ( m_renderer == nullptr || !this->isCreated() || m_videoMemoryUpdated.exchange(true, std::memory_order_acq_rel) )
+		/* Before the creation armed the regions, it writes every region itself. */
+		if ( m_dirtyRegions.raiseAll() )
 		{
-			return;
+			this->requestFlush();
 		}
+	}
 
-		m_renderer->requestMaterialVideoMemoryUpdate(std::static_pointer_cast< Interface >(this->weak_from_this().lock()));
+	void
+	SkyAtmosphereResource::requestFlush () noexcept
+	{
+		if ( m_renderer != nullptr )
+		{
+			m_renderer->requestMaterialVideoMemoryUpdate(std::static_pointer_cast< Interface >(this->weak_from_this().lock()));
+		}
 	}
 
 	uint32_t
@@ -948,10 +1039,14 @@ namespace EmEn::Graphics::Material
 	void
 	SkyAtmosphereResource::setGrading (const Color< float > & tint, float intensity) noexcept
 	{
-		m_properties[GradingOffset] = std::max(0.0F, tint.red());
-		m_properties[GradingOffset + 1] = std::max(0.0F, tint.green());
-		m_properties[GradingOffset + 2] = std::max(0.0F, tint.blue());
-		m_properties[GradingOffset + 3] = std::max(0.0F, intensity);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_properties[GradingOffset] = std::max(0.0F, tint.red());
+			m_properties[GradingOffset + 1] = std::max(0.0F, tint.green());
+			m_properties[GradingOffset + 2] = std::max(0.0F, tint.blue());
+			m_properties[GradingOffset + 3] = std::max(0.0F, intensity);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -959,7 +1054,11 @@ namespace EmEn::Graphics::Material
 	void
 	SkyAtmosphereResource::setSaturation (float saturation) noexcept
 	{
-		m_properties[StarOffset] = std::max(0.0F, saturation);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_properties[StarOffset] = std::max(0.0F, saturation);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -967,7 +1066,11 @@ namespace EmEn::Graphics::Material
 	void
 	SkyAtmosphereResource::enableStarDisc (bool state) noexcept
 	{
-		m_properties[StarOffset + 1] = state ? 1.0F : 0.0F;
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_properties[StarOffset + 1] = state ? 1.0F : 0.0F;
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -975,7 +1078,11 @@ namespace EmEn::Graphics::Material
 	void
 	SkyAtmosphereResource::setLimbDarkening (float coefficient) noexcept
 	{
-		m_properties[StarOffset + 2] = std::clamp(coefficient, 0.0F, 1.0F);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_properties[StarOffset + 2] = std::clamp(coefficient, 0.0F, 1.0F);
+		}
 
 		this->markVideoMemoryDirty();
 	}

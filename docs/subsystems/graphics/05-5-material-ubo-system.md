@@ -33,7 +33,7 @@ Each `StandardResource` has:
 > **Two invariants follow, both enforced in the engine — do not undo them:**
 >
 > 1. **Reaching a shared buffer is a single atomic call.** Use
->    `SharedUBOManager::getOrCreateSharedUniformBuffer(name, blockSize)`. Never write
+>    `SharedUBOManager::getOrCreateSharedUniformBuffer(name, blockSize, frameCount)`. Never write
 >    `getSharedUniformBuffer()` followed by `createSharedUniformBuffer()`: that check-then-act
 >    sequence hands a `nullptr` to every loser of the race, and a material that cannot reach its
 >    buffer **fails to load entirely**, silently removing every sub-mesh using it from the scene.
@@ -56,7 +56,8 @@ Each `StandardResource` has:
 >
 > `writeElementData()` is deliberately **not** guarded: once a seat is granted its owner holds it
 > exclusively and writes to a byte range that belongs to no one else. Do not add a lock there — it
-> would serialize every per-frame material update.
+> would serialize every per-frame material update. (The material's OWN properties are guarded by the
+> material: § Per-frame regions and the properties lock.)
 >
 > **Lived symptom (Aug 2026):** the `reflexion-debug` dragon loaded incomplete, missing its wings or
 > its body depending on the run. Log signature: the same `There is no shared uniform buffer named 'X'`
@@ -69,23 +70,99 @@ Each `StandardResource` has:
 > `Graphics/Material/Interface.cpp` (`getSharedUniformBuffer()`). Same pattern already applied in
 > `Vulkan/LayoutManager.cpp`.
 
+### Per-frame regions and the properties lock (Nov 2026)
+
+> [!CRITICAL]
+> **A material block has one region per frame in flight, and each frame binds its own descriptor set.**
+> Until 2026-11-11 every material lived in ONE region (region 0) and one descriptor set: a dynamic
+> property change (`setEmissiveStrengthValue()`, a flickering lamp's linked panel at every logic cycle,
+> the sky's grading) was copied by the flush while the frames already submitted still read that region,
+> and the property floats were written by the logic thread while the render thread copied them (a data
+> race: undefined behaviour). Owner decision (2026-11-11): a mutex per material plus per-frame regions,
+> one descriptor set per frame (not a dynamic offset), and the lock proven by Clang's thread-safety
+> analysis on every access.
+
+- **Regions.** `Material::Interface::getSharedUniformBuffer()` asks the manager for
+  `Renderer::framesInFlight()` regions (`getOrCreateSharedUniformBuffer(name, blockSize, frameCount)`;
+  an existing buffer with another count is refused). A material created before the renderer has its
+  frames is refused too (traced): with one region it would have no set for the other frames and never
+  be drawn. The count is fixed for the renderer's life (`createRenderingSystem()`, once).
+- **Descriptor sets.** `createDescriptorSet()` builds `frameCount()` sets
+  (`Base::StaticVector< std::unique_ptr< DescriptorSet >, MaxFramesInFlight >`), set `r` pointing at
+  region `r` (`getDescriptorInfoForElement(index, r)`), the textures identical in each.
+  `Interface::descriptorSet(frameIndex)` returns the set of the frame being recorded, nullptr beyond
+  the count. Every bind passes `Renderer::currentFrameIndex()`: `RenderableInstance::Abstract::castShadows()`
+  and both `render()` take a `frameIndex` (after `renderTarget`: never next to `readStateIndex`, the two are
+  `uint32_t`), carried to the per-set bind helpers (`bindMaterialSet()` and its siblings) by
+  `RenderPassContext::frameIndex`; the MDI dispatch uses its own. A null set is traced and the draw skipped,
+  never dereferenced.
+- **Uploads (`DirtyFrameRegions`).** A setter writes under the material's lock, releases it, then
+  calls `markVideoMemoryDirty()`: every region is raised and the material registers ONCE with
+  `Renderer::requestMaterialVideoMemoryUpdate()`. `Renderer::flushMaterialVideoMemoryUpdates()` (render
+  thread, after the fence of `m_currentFrameIndex`) calls `updateVideoMemory(m_currentFrameIndex)`:
+  the registration is released, region `f` is lowered and, if it was raised, rewritten under the lock;
+  while other regions remain raised the material registers itself again. A change therefore reaches
+  every region within `frameCount()` frames, and a region is only ever written after the fence of the
+  frame that last read it. A change made during the copy re-raises the region (lowered BEFORE the
+  read). The creation writes every region itself, under the lock, after ARMING the tracking: a change
+  written after that section raises and registers, one written before it is in the write — the old
+  window where a setter between the creation's write and `IsCreated` froze the material for ever is
+  closed (the flush no longer filters on `isCreated()`, which would have dropped a registered entry).
+  `destroy()` disarms first.
+- **The lock.** `m_propertiesAccess` (`mutable Base::Mutex`) guards the property array of the four
+  materials (`StandardResource::m_materialProperties`; `BeamResource` and `PathResource`:
+  `m_properties`, `m_color`, `m_luminance`; `SkyAtmosphereResource::m_properties`), declared
+  `EMEN_GUARDED_BY`: `-Wthread-safety -Werror` (clang, the gate's second build) refuses any unlocked
+  access. Readers outside the setters: `StandardResource::property()` / `propertiesSnapshot()` (the
+  shader generation, the deferred-lighting predicates, `exportRTMaterialData()` — one consistent copy
+  for the ray-tracing material table). No trace, no notification and no texture measurement runs
+  under the lock (`syncComponentUVWTransforms()` reports after it; `SkyAtmosphereResource::onBeforeCreation()`
+  measures the surfaces before it). Getters that returned a reference to a guarded member
+  (`BeamResource::color()`, `PathResource::color()`) return a copy.
+
+> ⚠️ **Traps.**
+> - Never bind `descriptorSet(0)` "because it exists": region 0 is the one the frame 0 reads; another
+>   frame reads stale or in-flight data. Pass the recorded frame's index.
+> - A new material type copies the protocol: `DirtyFrameRegions` member, `arm()` inside the creation's
+>   locked write of every region, `lower()` / `needsAnotherFlush()` in `updateVideoMemory()`,
+>   `disarm()` first in `destroy()`.
+> - Synchronization Validation does not see this class of hazard (host writes to a mapped buffer):
+>   the proof is the protocol plus the measurement below, not a clean layer.
+
+**Measured (2026-11-11, Linux, RTX 3070 Ti, 3 frames in flight, window-less, validation layer loaded, lane
+RayTracing).** A temporary probe, removed since, re-read EVERY region of a material's block from the mapped memory
+each time its mask fell to 0 after a flush, and compared it byte for byte with the properties, under the lock:
+
+| Scenario | Region writes | Convergence checks | Mismatches | Flush list (max) |
+|---|---|---|---|---|
+| `labyrinth` (55 flickering lamps' panels, a change every logic cycle) | 329 945 | 91 850 | 0 | 55 |
+| `beams`, 720 console calls (`Beam.setColor` / `setLuminance`, 6 beams) | 2 114 | 704 | 0 | 6 |
+| `paths`, 840 console calls (`Path.setColor` / `setLuminance`, 7 paths) | 2 479 | 826 | 0 | 7 |
+
+Writes ÷ checks = 3 on the driven runs: each change reached the three regions, then converged. The flush list never
+exceeded the number of changing materials (one registration each, no duplicate, no growth). 0 VUID, 0 `[Error]`,
+exit 0 in those three and in `sky-lab`, `basic-scenery` and `sponza` (MDI). `SkyAtmosphereResource`'s setters only
+run before its creation (`DynamicSkyResource`): its creation path (every region written) is what `sky-lab` exercised.
+Not measured: AMD (the GPU-bound device where a frame in flight showed the older value, graphics doc 13-12 § 43).
+
 ### Descriptor Binding (Preferred API)
 
 When creating descriptor sets, use the **explicit helper methods** that ensure correct byte offsets:
 
 ```cpp
 // PREFERRED - Uses SharedUniformBuffer's getDescriptorInfoForElement()
-// This method handles the element index → byte offset conversion internally
-const auto descriptorInfo = m_sharedUniformBuffer->getDescriptorInfoForElement(m_sharedUBOIndex);
-m_descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
+// This method handles the element index → byte offset conversion internally, and the frame region
+// (one descriptor set per frame in flight, § Per-frame regions and the properties lock).
+const auto descriptorInfo = m_sharedUniformBuffer->getDescriptorInfoForElement(m_sharedUBOIndex, region);
+descriptorSet->writeUniformBuffer(bindingPoint, descriptorInfo);
 ```
 
 **Available helper methods:**
 
 | Method | Returns | Purpose |
 |--------|---------|---------|
-| `getByteOffsetForElement(index)` | `VkDeviceSize` | Byte offset for element within its UBO |
-| `getDescriptorInfoForElement(index)` | `VkDescriptorBufferInfo` | Complete descriptor info ready to use |
+| `getByteOffsetForElement(index, frameIndex = 0)` | `VkDeviceSize` | Byte offset for element within its UBO, in a frame region |
+| `getDescriptorInfoForElement(index, frameIndex = 0)` | `VkDescriptorBufferInfo` | Complete descriptor info ready to use (empty, traced, beyond `frameCount()`) |
 
 **Why this API exists:** The old API passed an "offset" parameter that was ambiguous (element index vs byte offset). This caused bugs where all materials read from offset 0. The new explicit methods eliminate this ambiguity.
 

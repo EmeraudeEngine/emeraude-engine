@@ -235,6 +235,7 @@
 #include "Graphics/Material/Component/Interface.hpp"
 #include "Graphics/Material/Component/Texture.hpp"
 #include "Graphics/Material/Component/Value.hpp"
+#include "Graphics/Material/DirtyFrameRegions.hpp"
 #include "Graphics/Material/GPURTMaterialData.hpp"
 #include "Graphics/Material/Helpers.hpp"
 #include "Graphics/Material/Interface.hpp"

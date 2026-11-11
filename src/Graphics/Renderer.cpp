@@ -2050,8 +2050,8 @@ namespace EmEn::Graphics
 			 * header) sees the same jittered matrix. */
 			this->prepareFrameJitter(scene.get());
 
-			/* Materials whose dynamic properties changed: one region, so after the fence like
-			 * everything else this frame reads. */
+			/* Materials whose dynamic properties changed: the region of THIS frame in flight, after its fence
+			 * (the other regions may still be read by the frames in flight). */
 			this->flushMaterialVideoMemoryUpdates();
 			this->flushGeometryVideoMemoryUpdates();
 			this->updateSurfaceGeometries(scene->frameReadStateIndex());
@@ -4641,11 +4641,13 @@ namespace EmEn::Graphics
 			pending.swap(m_pendingMaterialUpdates);
 		}
 
+		/* NOTE: No isCreated() filter: a material registers only once its regions are armed by its creation
+		 * (DirtyFrameRegions), and dropping a registered entry here would leave it registered forever — frozen. */
 		for ( const auto & weakMaterial : pending )
 		{
-			if ( const auto material = weakMaterial.lock(); material != nullptr && material->isCreated() )
+			if ( const auto material = weakMaterial.lock(); material != nullptr )
 			{
-				if ( !material->updateVideoMemory() )
+				if ( !material->updateVideoMemory(m_currentFrameIndex) )
 				{
 					TraceError{ClassId} << "Unable to upload the changed properties of material '" << material->name() << "' !";
 				}

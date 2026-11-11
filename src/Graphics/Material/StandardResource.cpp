@@ -31,7 +31,6 @@
 #include <array>
 #include <cmath>
 #include <initializer_list>
-#include <iterator>
 #include <optional>
 #include <ranges>
 #include <span>
@@ -56,13 +55,14 @@
 #include "GPURTMaterialData.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/CompressedImageResource.hpp"
-#include "Graphics/GPUTextureSet.hpp"
 #include "Graphics/Geometry/HeightfieldSurface.hpp"
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Geometry/OceanSurface.hpp"
+#include "Graphics/GPUTextureSet.hpp"
 #include "Graphics/IBLTexture.hpp"
 #include "Graphics/ImageResource.hpp"
 #include "Graphics/ImposterAtlas.hpp"
+#include "Graphics/Material/DirtyFrameRegions.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
@@ -72,11 +72,11 @@
 #include "Graphics/TextureResource/Texture2D.hpp"
 #include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
-#include "PixelFactory/TextureName.hpp"
 #include "Helpers.hpp"
 #include "Logging/Severity.hpp"
 #include "Math/Base.hpp"
 #include "PixelFactory/Color.hpp"
+#include "PixelFactory/TextureName.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Container.hpp"
 #include "Saphir/AbstractVertexStage.hpp"
@@ -1545,7 +1545,7 @@ namespace EmEn::Graphics::Material
 		/* Parse optional emissive strength value (KHR_materials_emissive_strength). */
 		if ( data.isMember(EmissiveStrengthString) )
 		{
-			m_materialProperties[EmissiveStrengthOffset] = std::max(0.0F, FastJSON::getValue< float >(data, EmissiveStrengthString).value_or(DefaultEmissiveStrength));
+			this->setProperty(EmissiveStrengthOffset, std::max(0.0F, FastJSON::getValue< float >(data, EmissiveStrengthString).value_or(DefaultEmissiveStrength)));
 		}
 
 		/* Optional per-material atmospheric response. Both are neutral at 1.0, so a manifest that
@@ -1630,7 +1630,7 @@ namespace EmEn::Graphics::Material
 		{
 			const auto iterations = renderer.primaryServices().settings().getOrSetDefault< int >(GraphicsTexturePOMIterationsKey, DefaultGraphicsTexturePOMIterations);
 
-			m_materialProperties[ParallaxParametersOffset] = static_cast< float >(std::clamp(iterations, 0, MaxParallaxIterations));
+			this->setProperty(ParallaxParametersOffset, static_cast< float >(std::clamp(iterations, 0, MaxParallaxIterations)));
 		}
 
 		const auto identifier = this->getSharedUniformBufferIdentifier();
@@ -1661,7 +1661,7 @@ namespace EmEn::Graphics::Material
 		this->syncComponentUVWTransforms();
 
 		/* Initialize the material data in the GPU. */
-		if ( !this->updateVideoMemory() )
+		if ( !this->writeEveryRegion() )
 		{
 			Tracer::error(ClassId, "Unable to update the initial video memory !");
 
@@ -1674,56 +1674,140 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::syncComponentUVWTransforms () noexcept
 	{
-		/* Slot 0 is the identity and every component starts on it, so a material that declares no
-		 * transform is bit-exact whatever it indexes. */
-		for ( size_t slot = 0; slot < UVWTransformSlots; slot++ )
-		{
-			m_materialProperties[UVWTransformTableOffset + (slot * 4)] = 1.0F;
-			m_materialProperties[UVWTransformTableOffset + (slot * 4) + 1] = 1.0F;
-			m_materialProperties[UVWTransformTableOffset + (slot * 4) + 2] = 0.0F;
-			m_materialProperties[UVWTransformTableOffset + (slot * 4) + 3] = 0.0F;
-
-			m_materialProperties[UVWRotationTableOffset + (slot * 4)] = 1.0F;
-			m_materialProperties[UVWRotationTableOffset + (slot * 4) + 1] = 0.0F;
-			m_materialProperties[UVWRotationTableOffset + (slot * 4) + 2] = 0.0F;
-			m_materialProperties[UVWRotationTableOffset + (slot * 4) + 3] = 0.0F;
-		}
-
-		for ( size_t index = 0; index < UVWIndexVectors * 4; index++ )
-		{
-			m_materialProperties[UVWIndexTableOffset + index] = 0.0F;
-		}
-
-		/* The texture coordinate SET of each map (glTF's TextureInfo.texCoord, JSON "Channel"), folded into the same
-		 * UBO entry as its transform: bit 3 (+8) selects the secondary set, bits 0-2 the transform slot (fewer than 8
-		 * slots). A VALUE, never a literal: two materials differing only in a map's set share a program (2026-10-03). */
+		/* Reported after the lock is released (no trace under a lock). */
 		bool usesSecondarySet = false;
+		bool overflowed = false;
+		std::optional< uint32_t > unsupportedChannel;
 
-		for ( const auto & [componentType, component] : m_components )
 		{
-			if ( component->type() != Component::Type::Texture )
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			/* Slot 0 is the identity and every component starts on it, so a material that declares no
+			 * transform is bit-exact whatever it indexes. */
+			for ( size_t slot = 0; slot < UVWTransformSlots; slot++ )
 			{
-				continue;
+				this->propertyAt(UVWTransformTableOffset + (slot * 4)) = 1.0F;
+				this->propertyAt(UVWTransformTableOffset + (slot * 4) + 1) = 1.0F;
+				this->propertyAt(UVWTransformTableOffset + (slot * 4) + 2) = 0.0F;
+				this->propertyAt(UVWTransformTableOffset + (slot * 4) + 3) = 0.0F;
+
+				this->propertyAt(UVWRotationTableOffset + (slot * 4)) = 1.0F;
+				this->propertyAt(UVWRotationTableOffset + (slot * 4) + 1) = 0.0F;
+				this->propertyAt(UVWRotationTableOffset + (slot * 4) + 2) = 0.0F;
+				this->propertyAt(UVWRotationTableOffset + (slot * 4) + 3) = 0.0F;
 			}
 
-			const auto * textureComponent = static_cast< const Texture * >(component.get());
-
-			/* A volumetric map keeps its plain 3D lookup (transformedTexCoords()). */
-			if ( textureComponent->isVolumetricTexture() )
+			for ( size_t index = 0; index < UVWIndexVectors * 4; index++ )
 			{
-				continue;
+				this->propertyAt(UVWIndexTableOffset + index) = 0.0F;
 			}
 
-			const auto channel = textureComponent->UVWChannel();
+			/* The texture coordinate SET of each map (glTF's TextureInfo.texCoord, JSON "Channel"), folded into the same
+			 * UBO entry as its transform: bit 3 (+8) selects the secondary set, bits 0-2 the transform slot (fewer than 8
+			 * slots). A VALUE, never a literal: two materials differing only in a map's set share a program (2026-10-03). */
+			for ( const auto & [componentType, component] : m_components )
+			{
+				if ( component->type() != Component::Type::Texture )
+				{
+					continue;
+				}
 
-			if ( channel == 1 )
-			{
-				usesSecondarySet = true;
-				m_materialProperties[UVWIndexTableOffset + static_cast< size_t >(componentType)] = SecondaryTextureCoordinatesBit;
+				const auto * textureComponent = static_cast< const Texture * >(component.get());
+
+				/* A volumetric map keeps its plain 3D lookup (transformedTexCoords()). */
+				if ( textureComponent->isVolumetricTexture() )
+				{
+					continue;
+				}
+
+				const auto channel = textureComponent->UVWChannel();
+
+				if ( channel == 1 )
+				{
+					usesSecondarySet = true;
+					this->propertyAt(UVWIndexTableOffset + static_cast< size_t >(componentType)) = SecondaryTextureCoordinatesBit;
+				}
+				else if ( channel > 1 )
+				{
+					unsupportedChannel = channel;
+				}
 			}
-			else if ( channel > 1 )
+
+			/* ⚠️ EVERY texture component, not a fixed list of six. The transform belongs to the
+			 * component (`Texture::UVWScale/UVWOffset/UVWRotation`), so the sheen, clear coat,
+			 * specular, iridescence, transmission and volume maps all carry one — they simply had
+			 * nowhere to put it. */
+			size_t used = 1;
+
+			for ( const auto & [componentType, component] : m_components )
 			{
-				TraceWarning{ClassId} << "PBR material '" << this->name() << "' samples a map with texture coordinate set " << channel << "; only sets 0 and 1 exist, set 0 is used.";
+				if ( component->type() != Component::Type::Texture )
+				{
+					continue;
+				}
+
+				const auto * textureComponent = static_cast< const Texture * >(component.get());
+
+				const auto scaleX = textureComponent->UVWScale()[0];
+				const auto scaleY = textureComponent->UVWScale()[1];
+				const auto offsetX = textureComponent->UVWOffset()[0];
+				const auto offsetY = textureComponent->UVWOffset()[1];
+				/* ⚠️ The trig is resolved HERE, once per material, not per fragment: the angle is a
+				 * material constant, so a sin/cos in the shader would be paid on every pixel of every
+				 * frame for a value that never changes. */
+				const auto cosine = std::cos(textureComponent->UVWRotation());
+				const auto sine = std::sin(textureComponent->UVWRotation());
+
+				/* Slot 0 already holds the identity: a component that declares nothing keeps it. */
+				if ( scaleX == 1.0F && scaleY == 1.0F && offsetX == 0.0F && offsetY == 0.0F && textureComponent->UVWRotation() == 0.0F )
+				{
+					continue;
+				}
+
+				/* Reuse an identical entry — the common case by a wide margin: of 1347 materials
+				 * measured, 31 of the 38 declaring any transform declare exactly ONE, shared by every
+				 * map they carry. */
+				size_t slot = 0;
+
+				for ( size_t candidate = 1; candidate < used; candidate++ )
+				{
+					if ( this->propertyAt(UVWTransformTableOffset + (candidate * 4)) == scaleX
+					  && this->propertyAt(UVWTransformTableOffset + (candidate * 4) + 1) == scaleY
+					  && this->propertyAt(UVWTransformTableOffset + (candidate * 4) + 2) == offsetX
+					  && this->propertyAt(UVWTransformTableOffset + (candidate * 4) + 3) == offsetY
+					  && this->propertyAt(UVWRotationTableOffset + (candidate * 4)) == cosine
+					  && this->propertyAt(UVWRotationTableOffset + (candidate * 4) + 1) == sine )
+					{
+						slot = candidate;
+
+						break;
+					}
+				}
+
+				if ( slot == 0 )
+				{
+					if ( used >= UVWTransformSlots )
+					{
+						/* Reported once, and the surplus component keeps the identity: a wrong
+						 * transform would be far worse than an absent one, and silence worse still. */
+						overflowed = true;
+
+						continue;
+					}
+
+					slot = used++;
+
+					this->propertyAt(UVWTransformTableOffset + (slot * 4)) = scaleX;
+					this->propertyAt(UVWTransformTableOffset + (slot * 4) + 1) = scaleY;
+					this->propertyAt(UVWTransformTableOffset + (slot * 4) + 2) = offsetX;
+					this->propertyAt(UVWTransformTableOffset + (slot * 4) + 3) = offsetY;
+
+					this->propertyAt(UVWRotationTableOffset + (slot * 4)) = cosine;
+					this->propertyAt(UVWRotationTableOffset + (slot * 4) + 1) = sine;
+				}
+
+				/* The set bit written above is kept: the transform slot is added to it. */
+				this->propertyAt(UVWIndexTableOffset + static_cast< size_t >(componentType)) += static_cast< float >(slot);
 			}
 		}
 
@@ -1732,82 +1816,9 @@ namespace EmEn::Graphics::Material
 			this->enableFlag(UseSecondaryTextureCoordinates);
 		}
 
-		/* ⚠️ EVERY texture component, not a fixed list of six. The transform belongs to the
-		 * component (`Texture::UVWScale/UVWOffset/UVWRotation`), so the sheen, clear coat,
-		 * specular, iridescence, transmission and volume maps all carry one — they simply had
-		 * nowhere to put it. */
-		size_t used = 1;
-		bool overflowed = false;
-
-		for ( const auto & [componentType, component] : m_components )
+		if ( unsupportedChannel.has_value() )
 		{
-			if ( component->type() != Component::Type::Texture )
-			{
-				continue;
-			}
-
-			const auto * textureComponent = static_cast< const Texture * >(component.get());
-
-			const auto scaleX = textureComponent->UVWScale()[0];
-			const auto scaleY = textureComponent->UVWScale()[1];
-			const auto offsetX = textureComponent->UVWOffset()[0];
-			const auto offsetY = textureComponent->UVWOffset()[1];
-			/* ⚠️ The trig is resolved HERE, once per material, not per fragment: the angle is a
-			 * material constant, so a sin/cos in the shader would be paid on every pixel of every
-			 * frame for a value that never changes. */
-			const auto cosine = std::cos(textureComponent->UVWRotation());
-			const auto sine = std::sin(textureComponent->UVWRotation());
-
-			/* Slot 0 already holds the identity: a component that declares nothing keeps it. */
-			if ( scaleX == 1.0F && scaleY == 1.0F && offsetX == 0.0F && offsetY == 0.0F && textureComponent->UVWRotation() == 0.0F )
-			{
-				continue;
-			}
-
-			/* Reuse an identical entry — the common case by a wide margin: of 1347 materials
-			 * measured, 31 of the 38 declaring any transform declare exactly ONE, shared by every
-			 * map they carry. */
-			size_t slot = 0;
-
-			for ( size_t candidate = 1; candidate < used; candidate++ )
-			{
-				if ( m_materialProperties[UVWTransformTableOffset + (candidate * 4)] == scaleX
-				  && m_materialProperties[UVWTransformTableOffset + (candidate * 4) + 1] == scaleY
-				  && m_materialProperties[UVWTransformTableOffset + (candidate * 4) + 2] == offsetX
-				  && m_materialProperties[UVWTransformTableOffset + (candidate * 4) + 3] == offsetY
-				  && m_materialProperties[UVWRotationTableOffset + (candidate * 4)] == cosine
-				  && m_materialProperties[UVWRotationTableOffset + (candidate * 4) + 1] == sine )
-				{
-					slot = candidate;
-
-					break;
-				}
-			}
-
-			if ( slot == 0 )
-			{
-				if ( used >= UVWTransformSlots )
-				{
-					/* Reported once, and the surplus component keeps the identity: a wrong
-					 * transform would be far worse than an absent one, and silence worse still. */
-					overflowed = true;
-
-					continue;
-				}
-
-				slot = used++;
-
-				m_materialProperties[UVWTransformTableOffset + (slot * 4)] = scaleX;
-				m_materialProperties[UVWTransformTableOffset + (slot * 4) + 1] = scaleY;
-				m_materialProperties[UVWTransformTableOffset + (slot * 4) + 2] = offsetX;
-				m_materialProperties[UVWTransformTableOffset + (slot * 4) + 3] = offsetY;
-
-				m_materialProperties[UVWRotationTableOffset + (slot * 4)] = cosine;
-				m_materialProperties[UVWRotationTableOffset + (slot * 4) + 1] = sine;
-			}
-
-			/* The set bit written above is kept: the transform slot is added to it. */
-			m_materialProperties[UVWIndexTableOffset + static_cast< size_t >(componentType)] += static_cast< float >(slot);
+			TraceWarning{ClassId} << "PBR material '" << this->name() << "' samples a map with texture coordinate set " << unsupportedChannel.value() << "; only sets 0 and 1 exist, set 0 is used.";
 		}
 
 		if ( overflowed )
@@ -2515,36 +2526,52 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::createDescriptorSet (Renderer & renderer, const UniformBufferObject & /*uniformBufferObject*/) noexcept
 	{
-		m_descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), m_descriptorSetLayout);
-		m_descriptorSet->setIdentifier(ClassId, this->name(), "DescriptorSet");
+		/* One descriptor set per frame in flight, each on its own region of the block (Interface::updateVideoMemory()).
+		 * The textures are the same in every set. */
+		const auto regionCount = m_sharedUniformBuffer->frameCount();
 
-		if ( !m_descriptorSet->create() )
+		if ( regionCount > m_descriptorSets.capacity() )
 		{
-			TraceError{ClassId} << "Unable to create the descriptor set for PBR material '" << this->name() << "' !";
+			TraceError{ClassId} << "The shared uniform buffer has " << regionCount << " frame regions, beyond " << m_descriptorSets.capacity() << " for PBR material '" << this->name() << "' !";
 
 			return false;
 		}
 
-		uint32_t bindingPoint = 0;
+		m_descriptorSets.clear();
 
-		const auto descriptorInfo = m_sharedUniformBuffer->getDescriptorInfoForElement(m_sharedUBOIndex);
-
-		if ( !m_descriptorSet->writeUniformBuffer(bindingPoint++, descriptorInfo) )
+		for ( uint32_t region = 0; region < regionCount; ++region )
 		{
-			TraceError{ClassId} << "Unable to write the uniform buffer to the descriptor set of PBR material '" << this->name() << "' !";
+			auto descriptorSet = std::make_unique< DescriptorSet >(renderer.descriptorPool(), m_descriptorSetLayout);
+			descriptorSet->setIdentifier(ClassId, this->name(), "DescriptorSet");
 
-			return false;
-		}
-
-		/* One write per DISTINCT texture, in binding order (createTextureComponents()). */
-		for ( const auto & textureBinding : m_textureBindings )
-		{
-			if ( !m_descriptorSet->writeCombinedImageSampler(bindingPoint++, *textureBinding.leader->texture()) )
+			if ( !descriptorSet->create() )
 			{
-				TraceError{ClassId} << "Unable to write the texture to the descriptor set of PBR material '" << this->name() << "' !";
+				TraceError{ClassId} << "Unable to create the descriptor set #" << region << " for PBR material '" << this->name() << "' !";
 
 				return false;
 			}
+
+			uint32_t bindingPoint = 0;
+
+			if ( !descriptorSet->writeUniformBuffer(bindingPoint++, m_sharedUniformBuffer->getDescriptorInfoForElement(m_sharedUBOIndex, region)) )
+			{
+				TraceError{ClassId} << "Unable to write the uniform buffer to the descriptor set #" << region << " of PBR material '" << this->name() << "' !";
+
+				return false;
+			}
+
+			/* One write per DISTINCT texture, in binding order (createTextureComponents()). */
+			for ( const auto & textureBinding : m_textureBindings )
+			{
+				if ( !descriptorSet->writeCombinedImageSampler(bindingPoint++, *textureBinding.leader->texture()) )
+				{
+					TraceError{ClassId} << "Unable to write the texture to the descriptor set #" << region << " of PBR material '" << this->name() << "' !";
+
+					return false;
+				}
+			}
+
+			m_descriptorSets.emplace_back(std::move(descriptorSet));
 		}
 
 		return true;
@@ -2553,43 +2580,62 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::markVideoMemoryDirty () noexcept
 	{
-		/* One registration per flush: the flag is cleared by updateVideoMemory(). */
-		if ( m_videoMemoryUpdated.exchange(true, std::memory_order_acq_rel) )
+		/* Before the creation armed the regions, it writes every region itself. */
+		if ( m_dirtyRegions.raiseAll() )
 		{
-			return;
+			this->requestFlush();
 		}
+	}
 
-		/* Before creation the flag is consumed by create() itself. After it, nothing ever
-		 * consumed it until 2026-09-13: every "dynamic property" setter of this class raised a
-		 * flag nobody read, so a material never changed once on the GPU. The renderer now flushes
-		 * the registered materials once per frame, on the render thread. */
-		if ( m_renderer != nullptr && this->isCreated() )
+	void
+	StandardResource::requestFlush () noexcept
+	{
+		if ( m_renderer != nullptr )
 		{
 			m_renderer->requestMaterialVideoMemoryUpdate(std::static_pointer_cast< Interface >(this->weak_from_this().lock()));
 		}
 	}
 
 	bool
-	StandardResource::updateVideoMemory () noexcept
+	StandardResource::writeEveryRegion () noexcept
 	{
-		if ( m_sharedUniformBuffer == nullptr )
-		{
-			return false;
-		}
+		const Base::MutexLock lock{m_propertiesAccess};
 
-		/* Lowered BEFORE the properties are read: a change made by another thread during the write registers the
-		 * material again (lowered after, it was lost until the next change — a panel could stay lit after its lamp
-		 * went out, 2026-10-06). */
-		m_videoMemoryUpdated.store(false, std::memory_order_release);
+		/* Armed BEFORE the write, under the lock: a change written after this section raises every region and
+		 * registers; a change written before it is in this write. */
+		m_dirtyRegions.arm(m_sharedUniformBuffer->frameCount());
 
-		/* NOTE: Frame region 0 — a material UBO is not frame-partitioned; its content does not
-		 * change while the GPU reads it. */
-		if ( !m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, 0, m_materialProperties.data()) )
+		for ( uint32_t region = 0; region < m_sharedUniformBuffer->frameCount(); ++region )
 		{
-			return false;
+			if ( !m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, region, m_materialProperties.data()) )
+			{
+				return false;
+			}
 		}
 
 		return true;
+	}
+
+	bool
+	StandardResource::updateVideoMemory (uint32_t frameIndex) noexcept
+	{
+		bool success = true;
+
+		/* Lowered BEFORE the properties are read: a change written during the copy raises the region again. */
+		if ( m_dirtyRegions.lower(frameIndex) )
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			success = m_sharedUniformBuffer != nullptr && m_sharedUniformBuffer->writeElementData(m_sharedUBOIndex, frameIndex, m_materialProperties.data());
+		}
+
+		/* The regions of the other frames in flight still hold the older copy: the next flushes rewrite them. */
+		if ( m_dirtyRegions.needsAnotherFlush() )
+		{
+			this->requestFlush();
+		}
+
+		return success;
 	}
 
 	const std::array< float, StandardResource::MaterialPropertiesSize > &
@@ -2674,6 +2720,9 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::destroy () noexcept
 	{
+		/* First: no change registers the material any more. */
+		m_dirtyRegions.disarm();
+
 		m_sharedUBOSeat.reset();
 
 		/* Reset to defaults. */
@@ -2685,11 +2734,15 @@ namespace EmEn::Graphics::Material
 		m_textureBindings.clear();
 		m_components.clear();
 		m_blendingMode = BlendingMode::None;
-		m_materialProperties = neutralMaterialProperties();
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties = neutralMaterialProperties();
+		}
 		m_useParallaxOcclusionMapping = false;
 		m_parallaxIterationsSet = false;
 		m_descriptorSetLayout.reset();
-		m_descriptorSet.reset();
+		m_descriptorSets.clear();
 		m_sharedUniformBuffer.reset();
 		m_sharedUBOIndex = 0;
 	}
@@ -2800,15 +2853,18 @@ namespace EmEn::Graphics::Material
 	{
 		outData = GPURTMaterialData{};
 
+		/* One consistent copy, read under the lock (SceneMetaData calls this on the render thread). */
+		const auto properties = this->propertiesSnapshot();
+
 		/* Albedo. */
-		outData.albedo[0] = m_materialProperties[AlbedoColorOffset];
-		outData.albedo[1] = m_materialProperties[AlbedoColorOffset + 1];
-		outData.albedo[2] = m_materialProperties[AlbedoColorOffset + 2];
-		outData.albedo[3] = m_materialProperties[AlbedoColorOffset + 3];
+		outData.albedo[0] = properties[AlbedoColorOffset];
+		outData.albedo[1] = properties[AlbedoColorOffset + 1];
+		outData.albedo[2] = properties[AlbedoColorOffset + 2];
+		outData.albedo[3] = properties[AlbedoColorOffset + 3];
 
 		/* Core PBR scalars. */
-		outData.roughness = m_materialProperties[RoughnessOffset];
-		outData.metalness = m_materialProperties[MetalnessOffset];
+		outData.roughness = properties[RoughnessOffset];
+		outData.metalness = properties[MetalnessOffset];
 
 		/* Smoothness/gloss source: the RT hit shading must invert the sampled texel
 		 * exactly like the raster roughness component codegen does. */
@@ -2816,25 +2872,25 @@ namespace EmEn::Graphics::Material
 		{
 			outData.flags |= GPURTMaterialData::RoughnessTexInverted;
 		}
-		outData.ior = m_materialProperties[IOROffset];
-		outData.specularFactor = m_materialProperties[SpecularFactorOffset];
+		outData.ior = properties[IOROffset];
+		outData.specularFactor = properties[SpecularFactorOffset];
 
 		/* Specular color (KHR_materials_specular). */
-		outData.specularColor[0] = m_materialProperties[SpecularColorOffset];
-		outData.specularColor[1] = m_materialProperties[SpecularColorOffset + 1];
-		outData.specularColor[2] = m_materialProperties[SpecularColorOffset + 2];
-		outData.specularColor[3] = m_materialProperties[SpecularColorOffset + 3];
+		outData.specularColor[0] = properties[SpecularColorOffset];
+		outData.specularColor[1] = properties[SpecularColorOffset + 1];
+		outData.specularColor[2] = properties[SpecularColorOffset + 2];
+		outData.specularColor[3] = properties[SpecularColorOffset + 3];
 
 		/* Emission. */
-		const auto autoIllumAmount = m_materialProperties[AutoIlluminationAmountOffset];
+		const auto autoIllumAmount = properties[AutoIlluminationAmountOffset];
 
 		if ( autoIllumAmount > 0.0F )
 		{
-			outData.emissionColor[0] = m_materialProperties[AutoIlluminationColorOffset];
-			outData.emissionColor[1] = m_materialProperties[AutoIlluminationColorOffset + 1];
-			outData.emissionColor[2] = m_materialProperties[AutoIlluminationColorOffset + 2];
-			outData.emissionColor[3] = m_materialProperties[AutoIlluminationColorOffset + 3];
-			outData.emissiveStrength = m_materialProperties[EmissiveStrengthOffset] * autoIllumAmount;
+			outData.emissionColor[0] = properties[AutoIlluminationColorOffset];
+			outData.emissionColor[1] = properties[AutoIlluminationColorOffset + 1];
+			outData.emissionColor[2] = properties[AutoIlluminationColorOffset + 2];
+			outData.emissionColor[3] = properties[AutoIlluminationColorOffset + 3];
+			outData.emissiveStrength = properties[EmissiveStrengthOffset] * autoIllumAmount;
 			outData.flags |= GPURTMaterialData::IsEmissive;
 		}
 
@@ -2845,12 +2901,12 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Clear coat. */
-		const auto clearCoat = m_materialProperties[ClearCoatFactorOffset];
+		const auto clearCoat = properties[ClearCoatFactorOffset];
 
 		if ( clearCoat > 0.0F )
 		{
 			outData.clearCoatFactor = clearCoat;
-			outData.clearCoatRoughness = m_materialProperties[ClearCoatRoughnessOffset];
+			outData.clearCoatRoughness = properties[ClearCoatRoughnessOffset];
 			outData.flags |= GPURTMaterialData::HasClearCoat;
 		}
 
@@ -2859,7 +2915,7 @@ namespace EmEn::Graphics::Material
 		if ( this->isAlphaTest() )
 		{
 			outData.flags |= GPURTMaterialData::IsAlphaTest;
-			outData.alphaCutoff = m_materialProperties[AlphaThresholdOffset];
+			outData.alphaCutoff = properties[AlphaThresholdOffset];
 		}
 
 		/* ⚠️ A BLEND material must say so too. A ray query cannot blend — it confirms a hit or
@@ -2872,7 +2928,7 @@ namespace EmEn::Graphics::Material
 		}
 
 		/* Normal map intensity for the RT hit shading (same value the raster uses). */
-		outData.normalScale = m_materialProperties[NormalScaleOffset];
+		outData.normalScale = properties[NormalScaleOffset];
 
 		/* NOTE: Texture bindless indices are set by SceneMetaData during material collection.
 		 * The textures are accessible via m_components[ComponentType::Albedo], etc. */
@@ -3506,7 +3562,7 @@ namespace EmEn::Graphics::Material
 					ccRoughnessIt != m_components.cend() ? ccRoughnessIt->second->variableName() : MaterialUB(UniformBlock::Component::ClearCoatRoughness)
 				);
 			}
-			else if ( m_materialProperties[ClearCoatFactorOffset] > 0.0F )
+			else if ( this->property(ClearCoatFactorOffset) > 0.0F )
 			{
 				lightGenerator.declareSurfaceClearCoat(
 					MaterialUB(UniformBlock::Component::ClearCoatFactor),
@@ -3544,7 +3600,7 @@ namespace EmEn::Graphics::Material
 					lightGenerator.declareSurfaceSubsurfaceThickness(thicknessIt->second->variableName());
 				}
 			}
-			else if ( m_materialProperties[SubsurfaceIntensityOffset] > 0.0F )
+			else if ( this->property(SubsurfaceIntensityOffset) > 0.0F )
 			{
 				lightGenerator.declareSurfaceSubsurface(
 					MaterialUB(UniformBlock::Component::SubsurfaceIntensity),
@@ -3569,7 +3625,7 @@ namespace EmEn::Graphics::Material
 			{
 				lightGenerator.declareSurfaceSheen(componentIt->second->variableName(), sheenRoughness);
 			}
-			else if ( sheenRoughnessIt != m_components.cend() || m_materialProperties[SheenColorOffset] > 0.0F || m_materialProperties[SheenColorOffset+1] > 0.0F || m_materialProperties[SheenColorOffset+2] > 0.0F )
+			else if ( sheenRoughnessIt != m_components.cend() || this->property(SheenColorOffset) > 0.0F || this->property(SheenColorOffset + 1) > 0.0F || this->property(SheenColorOffset + 2) > 0.0F )
 			{
 				lightGenerator.declareSurfaceSheen(MaterialUB(UniformBlock::Component::SheenColor), sheenRoughness);
 			}
@@ -3593,7 +3649,7 @@ namespace EmEn::Graphics::Material
 					);
 				}
 			}
-			else if ( m_materialProperties[AnisotropyOffset] != 0.0F )
+			else if ( this->property(AnisotropyOffset) != 0.0F )
 			{
 				lightGenerator.declareSurfaceAnisotropy(
 					MaterialUB(UniformBlock::Component::Anisotropy),
@@ -3631,7 +3687,7 @@ namespace EmEn::Graphics::Material
 		{
 			const auto componentIt = m_components.find(ComponentType::Iridescence);
 
-			if ( componentIt != m_components.cend() || m_materialProperties[IridescenceFactorOffset] > 0.0F )
+			if ( componentIt != m_components.cend() || this->property(IridescenceFactorOffset) > 0.0F )
 			{
 				/* ⚠️ The thickness MAP is independent of the factor map: a material can declare
 				 * either, both or neither. Its absence is not a neutral value but the spec's
@@ -3706,6 +3762,8 @@ namespace EmEn::Graphics::Material
 			}
 		}
 
+		const Base::MutexLock lock{m_propertiesAccess};
+
 		return
 			m_materialProperties[ClearCoatFactorOffset] <= 0.0F &&
 			m_materialProperties[SubsurfaceIntensityOffset] <= 0.0F &&
@@ -3721,6 +3779,8 @@ namespace EmEn::Graphics::Material
 	{
 		/* F0 = ((ior - 1) / (ior + 1))² · specularFactor · specularColor = 0.04 exactly, the resolve's assumption. The
 		 * GPU half is the condition declared in setupLightGenerator(): the same comparisons on the same values. */
+		const Base::MutexLock lock{m_propertiesAccess};
+
 		return
 			m_materialProperties[IOROffset] == DefaultIOR &&
 			m_materialProperties[SpecularFactorOffset] == DefaultSpecularFactor &&
@@ -3796,9 +3856,33 @@ namespace EmEn::Graphics::Material
 	}
 
 	const DescriptorSet *
-	StandardResource::descriptorSet () const noexcept
+	StandardResource::descriptorSet (uint32_t frameIndex) const noexcept
 	{
-		return m_descriptorSet.get();
+		return frameIndex < m_descriptorSets.size() ? m_descriptorSets[frameIndex].get() : nullptr;
+	}
+
+	float
+	StandardResource::property (size_t offset) const noexcept
+	{
+		const Base::MutexLock lock{m_propertiesAccess};
+
+		return this->propertyAt(offset);
+	}
+
+	void
+	StandardResource::setProperty (size_t offset, float value) noexcept
+	{
+		const Base::MutexLock lock{m_propertiesAccess};
+
+		this->propertyAt(offset) = value;
+	}
+
+	std::array< float, StandardResource::MaterialPropertiesSize >
+	StandardResource::propertiesSnapshot () const noexcept
+	{
+		const Base::MutexLock lock{m_propertiesAccess};
+
+		return m_materialProperties;
 	}
 
 	Declaration::UniformBlock
@@ -4469,7 +4553,7 @@ namespace EmEn::Graphics::Material
 			/* NOTE: The world is Y-UP: a world direction samples the cubemap as-is (the former Y negation is gone).
 			 * For refraction, eta = 1.0 / IOR (air to material).
 			 * When chromatic dispersion is enabled, sample R/G/B with separate IORs (Cauchy dispersion). */
-			if ( m_materialProperties[DispersionOffset] > 0.0F )
+			if ( this->property(DispersionOffset) > 0.0F )
 			{
 				/* Chromatic dispersion: 3 refraction rays with different IORs per channel. */
 				Code(fragmentShader, Location::Top) <<
@@ -4717,7 +4801,7 @@ namespace EmEn::Graphics::Material
 					"const vec4 gpClipHere = gpProjection * vec4(gpPosView, 1.0);";
 			}
 
-			if ( m_materialProperties[DispersionOffset] > 0.0F )
+			if ( this->property(DispersionOffset) > 0.0F )
 			{
 				/* Chromatic dispersion: 3 GrabPass samples with different IOR offsets per channel. */
 				Code(fragmentShader, Location::Top) <<
@@ -5333,7 +5417,7 @@ namespace EmEn::Graphics::Material
 		 * map is still sampled at the base roughness, which is wrong for the same reason and is
 		 * recorded as remaining work. */
 		if ( m_isUsingEnvironmentCubemap && generator.bindlessTexturesEnabled() && generator.highQualityEnabled()
-			&& this->isComponentPresent(ComponentType::ClearCoatNormal) && m_materialProperties[ClearCoatFactorOffset] > 0.0F )
+			&& this->isComponentPresent(ComponentType::ClearCoatNormal) && this->property(ClearCoatFactorOffset) > 0.0F )
 		{
 			/* The frame's IBL group comes from the view block (ViewIBLCubeIndex()): idempotent. */
 			if ( !generator.declareViewUniformBlock(fragmentShader) )
@@ -5999,7 +6083,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setHeightScale (float value) noexcept
 	{
-		m_materialProperties[HeightScaleOffset] = value;
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[HeightScaleOffset] = value;
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -6007,8 +6095,12 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setParallaxIterations (int iterations) noexcept
 	{
-		m_materialProperties[ParallaxParametersOffset] = static_cast< float >(std::clamp(iterations, 0, MaxParallaxIterations));
-		m_parallaxIterationsSet = true;
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[ParallaxParametersOffset] = static_cast< float >(std::clamp(iterations, 0, MaxParallaxIterations));
+			m_parallaxIterationsSet = true;
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -6016,10 +6108,14 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setParallaxHandover (float start, float end) noexcept
 	{
-		const auto handoverStart = std::max(start, 0.0F);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
 
-		m_materialProperties[ParallaxHandoverOffset] = handoverStart;
-		m_materialProperties[ParallaxHandoverOffset + 1] = std::max(end, handoverStart);
+			const auto handoverStart = std::max(start, 0.0F);
+
+			m_materialProperties[ParallaxHandoverOffset] = handoverStart;
+			m_materialProperties[ParallaxHandoverOffset + 1] = std::max(end, handoverStart);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -6033,8 +6129,8 @@ namespace EmEn::Graphics::Material
 			return 0.0F;
 		}
 
-		const auto start = m_materialProperties[ParallaxHandoverOffset];
-		const auto end = m_materialProperties[ParallaxHandoverOffset + 1];
+		const auto start = this->property(ParallaxHandoverOffset);
+		const auto end = this->property(ParallaxHandoverOffset + 1);
 
 		return end > start ? end : 0.0F;
 	}
@@ -6042,10 +6138,14 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setParallaxFadeDistances (float start, float end) noexcept
 	{
-		const auto fadeStart = std::max(start, 0.0F);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
 
-		m_materialProperties[ParallaxParametersOffset + 1] = fadeStart;
-		m_materialProperties[ParallaxParametersOffset + 2] = std::max(end, fadeStart);
+			const auto fadeStart = std::max(start, 0.0F);
+
+			m_materialProperties[ParallaxParametersOffset + 1] = fadeStart;
+			m_materialProperties[ParallaxParametersOffset + 2] = std::max(end, fadeStart);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -6157,7 +6257,7 @@ namespace EmEn::Graphics::Material
 
 		m_isUsingEnvironmentCubemap = true;
 
-		m_materialProperties[IBLIntensityOffset] = std::clamp(IBLIntensity, 0.0F, 1.0F);
+		this->setProperty(IBLIntensityOffset, std::clamp(IBLIntensity, 0.0F, 1.0F));
 
 		return true;
 	}
@@ -6183,7 +6283,7 @@ namespace EmEn::Graphics::Material
 		 * values — so two materials differing only in this amount were one edit away from sharing
 		 * a program built with the other one's literal. The UBO slot is shared with the artistic
 		 * ReflectionAmount, which this path never sets. */
-		m_materialProperties[ReflectionAmountOffset] = std::clamp(amount, 0.0F, 1.0F);
+		this->setProperty(ReflectionAmountOffset, std::clamp(amount, 0.0F, 1.0F));
 
 		this->enableFlag(PostProcessReflectivityEnabled);
 
@@ -6488,15 +6588,19 @@ namespace EmEn::Graphics::Material
 
 		m_imposterAtlas = atlas;
 
-		m_materialProperties[ImposterBoundsOffset] = bounds[X];
-		m_materialProperties[ImposterBoundsOffset + 1] = bounds[Y];
-		m_materialProperties[ImposterBoundsOffset + 2] = bounds[Z];
-		m_materialProperties[ImposterBoundsOffset + 3] = bounds[W] > 0.0F ? bounds[W] : 1.0F;
-
 		const auto gridSize = static_cast< float >(atlas->gridSize());
 
-		m_materialProperties[ImposterGridOffset] = gridSize;
-		m_materialProperties[ImposterGridOffset + 1] = 1.0F / gridSize;
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[ImposterBoundsOffset] = bounds[X];
+			m_materialProperties[ImposterBoundsOffset + 1] = bounds[Y];
+			m_materialProperties[ImposterBoundsOffset + 2] = bounds[Z];
+			m_materialProperties[ImposterBoundsOffset + 3] = bounds[W] > 0.0F ? bounds[W] : 1.0F;
+
+			m_materialProperties[ImposterGridOffset] = gridSize;
+			m_materialProperties[ImposterGridOffset + 1] = 1.0F / gridSize;
+		}
 
 		this->enableFlag(ImposterAtlasEnabled);
 		this->enableHashedAlphaTest();
@@ -6751,7 +6855,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setClearCoatNormalScale (float value) noexcept
 	{
-		m_materialProperties[ClearCoatNormalScaleOffset] = value;
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[ClearCoatNormalScaleOffset] = value;
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7013,10 +7121,14 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setAlbedoColor (const PixelFactory::Color< float > & color) noexcept
 	{
-		m_materialProperties[AlbedoColorOffset] = color.red();
-		m_materialProperties[AlbedoColorOffset+1] = color.green();
-		m_materialProperties[AlbedoColorOffset+2] = color.blue();
-		m_materialProperties[AlbedoColorOffset+3] = color.alpha();
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[AlbedoColorOffset] = color.red();
+			m_materialProperties[AlbedoColorOffset+1] = color.green();
+			m_materialProperties[AlbedoColorOffset+2] = color.blue();
+			m_materialProperties[AlbedoColorOffset+3] = color.alpha();
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7024,7 +7136,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setRoughness (float value) noexcept
 	{
-		m_materialProperties[RoughnessOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[RoughnessOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7032,7 +7148,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setMetalness (float value) noexcept
 	{
-		m_materialProperties[MetalnessOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[MetalnessOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7040,7 +7160,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setNormalScale (float value) noexcept
 	{
-		m_materialProperties[NormalScaleOffset] = value;
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[NormalScaleOffset] = value;
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7048,7 +7172,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setIOR (float value) noexcept
 	{
-		m_materialProperties[IOROffset] = std::clamp(value, 1.0F, 3.0F);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[IOROffset] = std::clamp(value, 1.0F, 3.0F);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7056,7 +7184,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setIBLIntensity (float value) noexcept
 	{
-		m_materialProperties[IBLIntensityOffset] = std::clamp(value, 0.0F, 1.0F);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[IBLIntensityOffset] = std::clamp(value, 0.0F, 1.0F);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7064,10 +7196,14 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setAutoIlluminationColor (const PixelFactory::Color< float > & color) noexcept
 	{
-		m_materialProperties[AutoIlluminationColorOffset] = color.red();
-		m_materialProperties[AutoIlluminationColorOffset+1] = color.green();
-		m_materialProperties[AutoIlluminationColorOffset+2] = color.blue();
-		m_materialProperties[AutoIlluminationColorOffset+3] = color.alpha();
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[AutoIlluminationColorOffset] = color.red();
+			m_materialProperties[AutoIlluminationColorOffset+1] = color.green();
+			m_materialProperties[AutoIlluminationColorOffset+2] = color.blue();
+			m_materialProperties[AutoIlluminationColorOffset+3] = color.alpha();
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7075,7 +7211,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setAutoIlluminationAmount (float value) noexcept
 	{
-		m_materialProperties[AutoIlluminationAmountOffset] = std::max(0.0F, value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[AutoIlluminationAmountOffset] = std::max(0.0F, value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7083,7 +7223,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setOpacity (float value) noexcept
 	{
-		m_materialProperties[OpacityOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[OpacityOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7091,7 +7235,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setAlphaThresholdToDiscard (float threshold) noexcept
 	{
-		m_materialProperties[AlphaThresholdOffset] = clampToUnit(threshold);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[AlphaThresholdOffset] = clampToUnit(threshold);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7099,7 +7247,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setReflectionAmount (float value) noexcept
 	{
-		m_materialProperties[ReflectionAmountOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[ReflectionAmountOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7107,7 +7259,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setRefractionAmount (float value) noexcept
 	{
-		m_materialProperties[RefractionAmountOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[RefractionAmountOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7115,7 +7271,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setAOIntensity (float value) noexcept
 	{
-		m_materialProperties[AOIntensityOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[AOIntensityOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7123,7 +7283,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setFogResponse (float value) noexcept
 	{
-		m_materialProperties[FogResponseOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[FogResponseOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7131,7 +7295,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setAOResponse (float value) noexcept
 	{
-		m_materialProperties[AOResponseParametersOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[AOResponseParametersOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7139,7 +7307,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setDoFMask (float value) noexcept
 	{
-		m_materialProperties[DoFMaskOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[DoFMaskOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7147,7 +7319,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setLightFace (bool state) noexcept
 	{
-		m_materialProperties[LightFaceParametersOffset] = state ? 1.0F : 0.0F;
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[LightFaceParametersOffset] = state ? 1.0F : 0.0F;
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7155,13 +7331,17 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::isLightFace () const noexcept
 	{
-		return m_materialProperties[LightFaceParametersOffset] > 0.5F;
+		return this->property(LightFaceParametersOffset) > 0.5F;
 	}
 
 	void
 	StandardResource::setClearCoatFactor (float value) noexcept
 	{
-		m_materialProperties[ClearCoatFactorOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[ClearCoatFactorOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7169,7 +7349,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setClearCoatRoughness (float value) noexcept
 	{
-		m_materialProperties[ClearCoatRoughnessOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[ClearCoatRoughnessOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7177,7 +7361,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setSubsurfaceIntensity (float value) noexcept
 	{
-		m_materialProperties[SubsurfaceIntensityOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[SubsurfaceIntensityOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7185,7 +7373,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setSubsurfaceRadius (float value) noexcept
 	{
-		m_materialProperties[SubsurfaceRadiusOffset] = std::max(0.0F, value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[SubsurfaceRadiusOffset] = std::max(0.0F, value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7193,10 +7385,14 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setSubsurfaceColor (const PixelFactory::Color< float > & color) noexcept
 	{
-		m_materialProperties[SubsurfaceColorOffset] = color.red();
-		m_materialProperties[SubsurfaceColorOffset+1] = color.green();
-		m_materialProperties[SubsurfaceColorOffset+2] = color.blue();
-		m_materialProperties[SubsurfaceColorOffset+3] = color.alpha();
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[SubsurfaceColorOffset] = color.red();
+			m_materialProperties[SubsurfaceColorOffset+1] = color.green();
+			m_materialProperties[SubsurfaceColorOffset+2] = color.blue();
+			m_materialProperties[SubsurfaceColorOffset+3] = color.alpha();
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7204,10 +7400,14 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setSheenColor (const PixelFactory::Color< float > & color) noexcept
 	{
-		m_materialProperties[SheenColorOffset] = color.red();
-		m_materialProperties[SheenColorOffset+1] = color.green();
-		m_materialProperties[SheenColorOffset+2] = color.blue();
-		m_materialProperties[SheenColorOffset+3] = color.alpha();
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[SheenColorOffset] = color.red();
+			m_materialProperties[SheenColorOffset+1] = color.green();
+			m_materialProperties[SheenColorOffset+2] = color.blue();
+			m_materialProperties[SheenColorOffset+3] = color.alpha();
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7215,7 +7415,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setSheenRoughness (float value) noexcept
 	{
-		m_materialProperties[SheenRoughnessOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[SheenRoughnessOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7223,7 +7427,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setAnisotropy (float value) noexcept
 	{
-		m_materialProperties[AnisotropyOffset] = std::clamp(value, -1.0F, 1.0F);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[AnisotropyOffset] = std::clamp(value, -1.0F, 1.0F);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7231,7 +7439,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setAnisotropyRotation (float value) noexcept
 	{
-		m_materialProperties[AnisotropyRotationOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[AnisotropyRotationOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7357,13 +7569,17 @@ namespace EmEn::Graphics::Material
 			return;
 		}
 
-		m_materialProperties[ShoreFoamColorOffset] = color.red();
-		m_materialProperties[ShoreFoamColorOffset + 1] = color.green();
-		m_materialProperties[ShoreFoamColorOffset + 2] = color.blue();
-		m_materialProperties[ShoreFoamColorOffset + 3] = clampToUnit(coverage);
-		m_materialProperties[ShoreFoamParametersOffset] = std::max(width, 0.001F);
-		m_materialProperties[ShoreFoamParametersOffset + 1] = std::max(patternScale, 0.0F);
-		m_materialProperties[ShoreFoamParametersOffset + 2] = clampToUnit(roughness);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[ShoreFoamColorOffset] = color.red();
+			m_materialProperties[ShoreFoamColorOffset + 1] = color.green();
+			m_materialProperties[ShoreFoamColorOffset + 2] = color.blue();
+			m_materialProperties[ShoreFoamColorOffset + 3] = clampToUnit(coverage);
+			m_materialProperties[ShoreFoamParametersOffset] = std::max(width, 0.001F);
+			m_materialProperties[ShoreFoamParametersOffset + 1] = std::max(patternScale, 0.0F);
+			m_materialProperties[ShoreFoamParametersOffset + 2] = clampToUnit(roughness);
+		}
 
 		this->enableFlag(ShoreFoamEnabled);
 	}
@@ -7373,7 +7589,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setTransmissionFactor (float value) noexcept
 	{
-		m_materialProperties[TransmissionFactorOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[TransmissionFactorOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7381,10 +7601,14 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setAttenuationColor (const PixelFactory::Color< float > & color) noexcept
 	{
-		m_materialProperties[AttenuationColorOffset] = color.red();
-		m_materialProperties[AttenuationColorOffset+1] = color.green();
-		m_materialProperties[AttenuationColorOffset+2] = color.blue();
-		m_materialProperties[AttenuationColorOffset+3] = color.alpha();
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[AttenuationColorOffset] = color.red();
+			m_materialProperties[AttenuationColorOffset+1] = color.green();
+			m_materialProperties[AttenuationColorOffset+2] = color.blue();
+			m_materialProperties[AttenuationColorOffset+3] = color.alpha();
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7392,7 +7616,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setAttenuationDistance (float value) noexcept
 	{
-		m_materialProperties[AttenuationDistanceOffset] = std::max(0.0001F, value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[AttenuationDistanceOffset] = std::max(0.0001F, value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7400,7 +7628,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setThicknessFactor (float value) noexcept
 	{
-		m_materialProperties[ThicknessFactorOffset] = std::max(0.0F, value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[ThicknessFactorOffset] = std::max(0.0F, value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7478,7 +7710,7 @@ namespace EmEn::Graphics::Material
 	bool
 	StandardResource::declaresTransmission () const noexcept
 	{
-		return m_components.contains(ComponentType::Transmission) || m_materialProperties[TransmissionFactorOffset] > 0.0F;
+		return m_components.contains(ComponentType::Transmission) || this->property(TransmissionFactorOffset) > 0.0F;
 	}
 
 	std::string
@@ -7582,7 +7814,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setIridescenceFactor (float value) noexcept
 	{
-		m_materialProperties[IridescenceFactorOffset] = clampToUnit(value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[IridescenceFactorOffset] = clampToUnit(value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7590,7 +7826,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setIridescenceIOR (float value) noexcept
 	{
-		m_materialProperties[IridescenceIOROffset] = std::clamp(value, 1.0F, 2.333F);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[IridescenceIOROffset] = std::clamp(value, 1.0F, 2.333F);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7598,7 +7838,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setIridescenceThicknessMin (float value) noexcept
 	{
-		m_materialProperties[IridescenceThicknessMinOffset] = std::max(0.0F, value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[IridescenceThicknessMinOffset] = std::max(0.0F, value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7606,7 +7850,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setIridescenceThicknessMax (float value) noexcept
 	{
-		m_materialProperties[IridescenceThicknessMaxOffset] = std::max(0.0F, value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[IridescenceThicknessMaxOffset] = std::max(0.0F, value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7625,7 +7873,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		m_materialProperties[DispersionOffset] = std::max(dispersion, 0.0F);
+		this->setProperty(DispersionOffset, std::max(dispersion, 0.0F));
 
 		return true;
 	}
@@ -7635,7 +7883,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setDispersion (float value) noexcept
 	{
-		m_materialProperties[DispersionOffset] = std::max(value, 0.0F);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[DispersionOffset] = std::max(value, 0.0F);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7763,7 +8015,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setSpecularFactor (float value) noexcept
 	{
-		m_materialProperties[SpecularFactorOffset] = std::max(0.0F, value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[SpecularFactorOffset] = std::max(0.0F, value);
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7771,10 +8027,14 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setSpecularColor (const Base::PixelFactory::Color< float > & color) noexcept
 	{
-		m_materialProperties[SpecularColorOffset] = color.red();
-		m_materialProperties[SpecularColorOffset + 1] = color.green();
-		m_materialProperties[SpecularColorOffset + 2] = color.blue();
-		m_materialProperties[SpecularColorOffset + 3] = color.alpha();
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[SpecularColorOffset] = color.red();
+			m_materialProperties[SpecularColorOffset + 1] = color.green();
+			m_materialProperties[SpecularColorOffset + 2] = color.blue();
+			m_materialProperties[SpecularColorOffset + 3] = color.alpha();
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7782,14 +8042,18 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setSpecularColor (const Base::Math::Vector< 3, float > & factor) noexcept
 	{
-		/* ⚠️ Written VERBATIM, no clampToUnit: KHR_materials_specular allows this factor above 1
-		 * and the shader clamps the resulting F0, not its inputs. Passing through a
-		 * PixelFactory::Color here would silently cap it at 1 — which is the defect this overload
-		 * exists to undo. */
-		m_materialProperties[SpecularColorOffset] = factor[Base::Math::X];
-		m_materialProperties[SpecularColorOffset + 1] = factor[Base::Math::Y];
-		m_materialProperties[SpecularColorOffset + 2] = factor[Base::Math::Z];
-		m_materialProperties[SpecularColorOffset + 3] = 1.0F;
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			/* ⚠️ Written VERBATIM, no clampToUnit: KHR_materials_specular allows this factor above 1
+			 * and the shader clamps the resulting F0, not its inputs. Passing through a
+			 * PixelFactory::Color here would silently cap it at 1 — which is the defect this overload
+			 * exists to undo. */
+			m_materialProperties[SpecularColorOffset] = factor[Base::Math::X];
+			m_materialProperties[SpecularColorOffset + 1] = factor[Base::Math::Y];
+			m_materialProperties[SpecularColorOffset + 2] = factor[Base::Math::Z];
+			m_materialProperties[SpecularColorOffset + 3] = 1.0F;
+		}
 
 		this->markVideoMemoryDirty();
 	}
@@ -7963,7 +8227,7 @@ namespace EmEn::Graphics::Material
 			return false;
 		}
 
-		m_materialProperties[EmissiveStrengthOffset] = std::max(0.0F, strength);
+		this->setProperty(EmissiveStrengthOffset, std::max(0.0F, strength));
 
 		return true;
 	}
@@ -7971,7 +8235,11 @@ namespace EmEn::Graphics::Material
 	void
 	StandardResource::setEmissiveStrengthValue (float value) noexcept
 	{
-		m_materialProperties[EmissiveStrengthOffset] = std::max(0.0F, value);
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[EmissiveStrengthOffset] = std::max(0.0F, value);
+		}
 
 		this->markVideoMemoryDirty();
 	}

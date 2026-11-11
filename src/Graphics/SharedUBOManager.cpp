@@ -27,8 +27,12 @@
 #include "SharedUBOManager.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/SharedUniformBuffer.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
 
@@ -37,7 +41,7 @@ namespace EmEn::Graphics
 	using namespace Base;
 
 	std::shared_ptr< SharedUniformBuffer >
-	SharedUBOManager::getOrCreateSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t maxElementCount) noexcept
+	SharedUBOManager::getOrCreateSharedUniformBuffer (const std::string & name, uint32_t uniformBlockSize, uint32_t frameCount, uint32_t maxElementCount) noexcept
 	{
 		/* NOTE: The lookup and the insertion MUST stay in the same critical section. Material resources
 		 * are loaded concurrently from the resource thread pool and several of them legitimately share
@@ -50,11 +54,19 @@ namespace EmEn::Graphics
 
 		if ( const auto sharedUniformBufferIt = m_sharedUniformBuffers.find(name); sharedUniformBufferIt != m_sharedUniformBuffers.cend() )
 		{
+			if ( sharedUniformBufferIt->second->frameCount() != std::max(1U, frameCount) )
+			{
+				TraceError{ClassId} << "The shared uniform buffer '" << name << "' has " << sharedUniformBufferIt->second->frameCount() << " frame region(s), " << frameCount << " requested !";
+
+				return nullptr;
+			}
+
 			return sharedUniformBufferIt->second;
 		}
 
-		/* NOTE: One region — a material's block does not change while the GPU reads it. */
-		auto sharedUniformBuffer = std::make_shared< SharedUniformBuffer >(m_device, uniformBlockSize, maxElementCount);
+		/* NOTE: One region per frame in flight — a material's dynamic property changes while previous frames may still
+		 * read the block (graphics doc 05-5 § Per-frame regions). */
+		auto sharedUniformBuffer = std::make_shared< SharedUniformBuffer >(m_device, uniformBlockSize, maxElementCount, frameCount);
 
 		if ( !sharedUniformBuffer->usable() )
 		{

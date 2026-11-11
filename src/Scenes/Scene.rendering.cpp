@@ -687,7 +687,8 @@ namespace EmEn::Scenes
 		 * vegetation shadow draw was skipped, which is what logged the descriptor-set contract
 		 * violations. The wind is staged and uploaded in updateVideoMemory(), which runs just before
 		 * this pass, so the slot read here is written and is this frame's. */
-		const auto * sceneTransformsDS = m_instanceTransforms.descriptorSet(m_AVConsoleManager.graphicsRenderer().currentFrameIndex());
+		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
+		const auto * sceneTransformsDS = m_instanceTransforms.descriptorSet(frameIndex);
 
 		/* ⚠️ An adaptive geometry (a terrain) picks its level of detail from the MAIN camera — the
 		 * receiver's — never from the light: the caster must be the very mesh the shadowed surface is
@@ -700,7 +701,7 @@ namespace EmEn::Scenes
 
 		for ( const auto & renderBatch : m_renderLists[Shadows] | std::views::values )
 		{
-			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, lodViewPosition, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, cascadeIndex, renderBatch.LODLevel(), sceneTransformsDS);
+			renderBatch.renderableInstance()->castShadows(readStateIndex, renderTarget, frameIndex, lodViewPosition, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), renderBatch.LODLevel(), commandBuffer, cascadeIndex, sceneTransformsDS);
 		}
 	}
 
@@ -848,7 +849,8 @@ namespace EmEn::Scenes
 		auto & renderer = m_AVConsoleManager.graphicsRenderer();
 		const uint32_t readStateIndex = m_frameReadStateIndex;
 		/* The CURRENT frame's set (see castShadows()): the wind of a vegetation program. */
-		const auto * sceneTransformsDS = m_instanceTransforms.descriptorSet(renderer.currentFrameIndex());
+		const auto frameIndex = renderer.currentFrameIndex();
+		const auto * sceneTransformsDS = m_instanceTransforms.descriptorSet(frameIndex);
 		/* The target borrows the main camera: an adaptive geometry picks the level the scene pass drew. */
 		const auto & lodViewPosition = renderTarget->viewMatrices().position(readStateIndex);
 
@@ -907,7 +909,7 @@ namespace EmEn::Scenes
 						continue;
 					}
 
-					instance->castShadows(readStateIndex, renderTarget, lodViewPosition, layerIndex, &worldCoordinates, commandBuffer, 0, 0, sceneTransformsDS);
+					instance->castShadows(readStateIndex, renderTarget, frameIndex, lodViewPosition, layerIndex, &worldCoordinates, 0, commandBuffer, 0, sceneTransformsDS);
 
 					drawn = true;
 				}
@@ -1103,12 +1105,12 @@ namespace EmEn::Scenes
 		if ( !m_renderLists[Opaque].empty() )
 		{
 			auto * mdiBatchBuilder = m_AVConsoleManager.graphicsRenderer().MDIBatchBuilder();
+			const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
 
 			if ( mdiBatchBuilder != nullptr && mdiBatchBuilder->isReady() && m_renderLists[Opaque].size() > 1 )
 			{
-				const auto currentFrame = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
-				mdiBatchBuilder->buildBatches(m_renderLists[Opaque], currentFrame, m_preparedReadStateIndex);
-				mdiBatchBuilder->dispatch(renderTarget, commandBuffer, currentFrame, m_preparedReadStateIndex, m_preparedBindlessManager);
+				mdiBatchBuilder->buildBatches(m_renderLists[Opaque], frameIndex, m_preparedReadStateIndex);
+				mdiBatchBuilder->dispatch(renderTarget, commandBuffer, frameIndex, m_preparedReadStateIndex, m_preparedBindlessManager);
 
 				/* Render objects skipped by MDI (sprites, InfinityView, adaptive LOD). */
 				if ( mdiBatchBuilder->skippedCount() > 0 )
@@ -1132,7 +1134,7 @@ namespace EmEn::Scenes
 
 						if ( isSkipped )
 						{
-							renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
+							renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, frameIndex, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
 						}
 					}
 				}
@@ -1144,7 +1146,7 @@ namespace EmEn::Scenes
 
 				for ( const auto & renderBatch : m_renderLists[Opaque] | std::views::values )
 				{
-					renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
+					renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, frameIndex, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
 				}
 			}
 		}
@@ -1160,9 +1162,11 @@ namespace EmEn::Scenes
 	{
 		if ( !m_renderLists[Translucent].empty() )
 		{
+			const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
+
 			for ( const auto & renderBatch : m_renderLists[Translucent] | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
+				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, frameIndex, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
 			}
 		}
 
@@ -1177,9 +1181,11 @@ namespace EmEn::Scenes
 	{
 		if ( !m_renderLists[TranslucentGB].empty() )
 		{
+			const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
+
 			for ( const auto & renderBatch : m_renderLists[TranslucentGB] | std::views::values )
 			{
-				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
+				renderBatch.renderableInstance()->render(m_preparedReadStateIndex, renderTarget, frameIndex, nullptr, RenderPassType::SimplePass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, renderBatch.LODLevel(), m_preparedBindlessManager, m_preparedInstanceTransformsDS);
 			}
 		}
 
@@ -2476,6 +2482,8 @@ namespace EmEn::Scenes
 
 		/* NOTE: Check global shadow mapping setting from the renderer. */
 		const bool shadowMapsEnabled = m_AVConsoleManager.graphicsRenderer().isShadowMapsEnabled();
+		/* The frame in flight being recorded: selects each material's descriptor set. */
+		const auto frameIndex = m_AVConsoleManager.graphicsRenderer().currentFrameIndex();
 
 		/* Snapshot the light lists ONCE per call. The light-set mutex guards the CONTAINERS
 		 * (LightSet::add()/remove() from another thread), not the lights: a light's frame state
@@ -2551,7 +2559,7 @@ namespace EmEn::Scenes
 		for ( const auto & renderBatch : renderBatches | std::views::values )
 		{
 			/* Ambient pass. */
-			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
+			renderBatch.renderableInstance()->render(readStateIndex, renderTarget, frameIndex, nullptr, RenderPassType::AmbientPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 
 			/* Instance world bounding sphere, computed once for the per-light culling
 			 * below. Lights are tested against the whole instance VOLUME, not just its
@@ -2617,7 +2625,7 @@ namespace EmEn::Scenes
 					passType = RenderPassType::DirectionalLightPass;
 				}
 
-				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
+				instance->render(readStateIndex, renderTarget, frameIndex, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 			}
 
 			/* An instance kept out of the punctual lights (RenderableInstance::Abstract::setPunctualLightingEnabled()): the
@@ -2662,7 +2670,7 @@ namespace EmEn::Scenes
 					passType = RenderPassType::PointLightPass;
 				}
 
-				instance->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
+				instance->render(readStateIndex, renderTarget, frameIndex, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 			}
 
 			/* Loop through all spotlights. */
@@ -2700,7 +2708,7 @@ namespace EmEn::Scenes
 					passType = RenderPassType::SpotLightPass;
 				}
 
-				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
+				renderBatch.renderableInstance()->render(readStateIndex, renderTarget, frameIndex, light.get(), passType, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 			}
 
 			/* Loop through all line lights: one pass, no shadow nor colour projection (first pass, owner 2026-09-30). */
@@ -2720,7 +2728,7 @@ namespace EmEn::Scenes
 					continue;
 				}
 
-				instance->render(readStateIndex, renderTarget, light.get(), RenderPassType::LineLightPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
+				instance->render(readStateIndex, renderTarget, frameIndex, light.get(), RenderPassType::LineLightPass, renderBatch.subGeometryIndex(), renderBatch.worldCoordinates(), commandBuffer, tracker, renderBatch.LODLevel(), bindlessTexturesManager, sceneTransformsDS);
 			}
 		}
 

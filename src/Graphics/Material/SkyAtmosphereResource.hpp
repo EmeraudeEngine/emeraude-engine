@@ -31,7 +31,6 @@
 
 /* STL inclusions. */
 #include <array>
-#include <atomic>
 #include <cstdint>
 #include <iterator>
 #include <memory>
@@ -41,13 +40,18 @@
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
+#include "Constants.hpp"
+#include "DirtyFrameRegions.hpp"
 #include "Graphics/Types.hpp"
 #include "Hash/FNV1a.hpp"
+#include "Mutex.hpp"
 #include "Physics/SurfacePhysicalProperties.hpp"
 #include "PixelFactory/Color.hpp"
 #include "Resources/ResourceTrait.hpp"
 #include "Resources/Types.hpp"
 #include "ScopedRegistration.hpp"
+#include "StaticVector.hpp"
+#include "ThreadSafety.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
 /* Forward declarations. */
@@ -197,7 +201,7 @@ namespace EmEn::Graphics::Material
 			}
 
 			/** @copydoc EmEn::Graphics::Material::Interface::updateVideoMemory() noexcept */
-			bool updateVideoMemory () noexcept override;
+			bool updateVideoMemory (uint32_t frameIndex) noexcept override;
 
 			/** @copydoc EmEn::Graphics::Material::Interface::isComplex() const noexcept */
 			[[nodiscard]]
@@ -310,9 +314,9 @@ namespace EmEn::Graphics::Material
 			/** @copydoc EmEn::Graphics::Material::Interface::descriptorSet() const noexcept */
 			[[nodiscard]]
 			const Vulkan::DescriptorSet *
-			descriptorSet () const noexcept override
+			descriptorSet (uint32_t frameIndex) const noexcept override
 			{
-				return m_descriptorSet.get();
+				return frameIndex < m_descriptorSets.size() ? m_descriptorSets[frameIndex].get() : nullptr;
 			}
 
 			/** @copydoc EmEn::Graphics::Material::Interface::getUniformBlock() const noexcept */
@@ -418,6 +422,8 @@ namespace EmEn::Graphics::Material
 			Base::PixelFactory::Color< float >
 			tint () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return {m_properties[GradingOffset], m_properties[GradingOffset + 1], m_properties[GradingOffset + 2], 1.0F};
 			}
 
@@ -429,6 +435,8 @@ namespace EmEn::Graphics::Material
 			float
 			intensity () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_properties[GradingOffset + 3];
 			}
 
@@ -440,6 +448,8 @@ namespace EmEn::Graphics::Material
 			float
 			saturation () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_properties[StarOffset];
 			}
 
@@ -451,6 +461,8 @@ namespace EmEn::Graphics::Material
 			bool
 			isStarDiscEnabled () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_properties[StarOffset + 1] > 0.5F;
 			}
 
@@ -462,6 +474,8 @@ namespace EmEn::Graphics::Material
 			float
 			limbDarkening () const noexcept
 			{
+				const Base::MutexLock lock{m_propertiesAccess};
+
 				return m_properties[StarOffset + 2];
 			}
 
@@ -506,9 +520,35 @@ namespace EmEn::Graphics::Material
 			bool createDescriptorSet (Renderer & renderer, const Vulkan::UniformBufferObject & uniformBufferObject) noexcept override;
 
 			/**
-			 * @brief Registers the material for a video memory update after a property change (any thread).
+			 * @brief Writes one descriptor set: the region @p region of the material block, and the shared atmosphere
+			 * parameters, tables and surfaces.
+			 * @param descriptorSet The descriptor set, created.
+			 * @param region The frame region of the material block it reads.
+			 * @param moonMeasured Whether each moon's surface was measured (its scale is above 0).
+			 * @param planetMeasured Whether the planet's surface was measured.
+			 * @return bool
 			 */
-			void markVideoMemoryDirty () noexcept;
+			[[nodiscard]]
+			bool writeDescriptorSet (Vulkan::DescriptorSet & descriptorSet, uint32_t region, const std::array< bool, MaxMoons > & moonMeasured, bool planetMeasured) const noexcept;
+
+			/**
+			 * @brief Writes the UBO copy into every frame region, at the creation, and arms the region tracking.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool writeEveryRegion () noexcept EMEN_EXCLUDES(m_propertiesAccess);
+
+			/**
+			 * @brief Raises every frame region after a change of the UBO copy, and registers the material for the
+			 * renderer's flush when it is not registered yet (DirtyFrameRegions).
+			 * @note Any thread, AFTER the properties lock is released.
+			 */
+			void markVideoMemoryDirty () noexcept EMEN_EXCLUDES(m_propertiesAccess);
+
+			/**
+			 * @brief Registers the material for the renderer's next flush.
+			 */
+			void requestFlush () noexcept;
 
 			/* UBO layout (std140, four vec4 — Keys SkyGrading, SkyStar, SkyMoonSurfaces, SkyPlanetSurface). */
 			static constexpr auto GradingOffset{0UL};
@@ -518,7 +558,10 @@ namespace EmEn::Graphics::Material
 			static constexpr auto PropertiesSize{16UL};
 
 			Physics::SurfacePhysicalProperties m_physicalSurfaceProperties;
-			std::array< float, PropertiesSize > m_properties{
+			/* NOTE: Guards the UBO copy: written by the setters (logic, console, loading threads), read by the flush
+			 * (render thread). */
+			mutable Base::Mutex m_propertiesAccess;
+			std::array< float, PropertiesSize > m_properties EMEN_GUARDED_BY(m_propertiesAccess){
 				/* Tint (rgb), intensity. */
 				1.0F, 1.0F, 1.0F, 1.0F,
 				/* Saturation, star disc on, limb darkening, unused. */
@@ -538,10 +581,11 @@ namespace EmEn::Graphics::Material
 			/* The seat in m_sharedUniformBuffer (Ave Robustus II P4): its end frees it. Declared after the buffer. */
 			Base::ScopedRegistration m_sharedUBOSeat;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
-			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;
+			/* One per frame in flight, each on its own region of the block (Interface::updateVideoMemory()). */
+			Base::StaticVector< std::unique_ptr< Vulkan::DescriptorSet >, MaxFramesInFlight > m_descriptorSets;
 			Renderer * m_renderer{nullptr}; ///< Set by create(): the flusher of dynamic properties (owned by the engine).
+			DirtyFrameRegions m_dirtyRegions; ///< The regions still holding an older UBO copy, and the flush registration.
 			uint32_t m_sharedUBOIndex{0};
-			std::atomic< bool > m_videoMemoryUpdated{false}; ///< Raised by markVideoMemoryDirty() (any thread), lowered by updateVideoMemory() (render thread) BEFORE it reads the properties.
 	};
 }
 

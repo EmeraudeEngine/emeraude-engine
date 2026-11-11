@@ -1522,7 +1522,15 @@ sat on one).
 > could stay on the GPU for ever. `StandardResource`, `BeamResource` and `PathResource` now hold a
 > `std::atomic< bool >`, raised by `exchange(true)` and lowered BEFORE the properties are read. The
 > property floats themselves are still written by one thread while another copies them (engine item
-> `material-properties-written-across-threads`).
+> `material-properties-written-across-threads`, closed by the addendum below).
+>
+> **Superseded (2026-11-11): one region per frame in flight, and the properties under a lock.** The
+> "one frame early at worst" above was a write into the region the submitted frames still read, and
+> the floats were a data race. The four materials (Standard, Beam, Path, SkyAtmosphere) now have one
+> uniform-block region and one descriptor set per frame in flight, a `DirtyFrameRegions` mask (the
+> flush of frame f rewrites region f only, after its fence; the material stays registered until every
+> region holds the change), and a `Base::Mutex` the thread-safety analysis proves on every access. The
+> atomic flag is gone. Graphics doc 05-5 § Per-frame regions and the properties lock.
 
 ### Fixed: a component moving its OWN entity from processLogics() deadlocked the logic thread (Sep 2026)
 
