@@ -32,6 +32,7 @@
 
 /* STL inclusions. */
 #include <chrono>
+#include <cstdint>
 #include <string_view>
 
 /* Forward declarations. */
@@ -63,6 +64,16 @@ namespace EmEn::FaultInjection
 	/** @brief The command-line switch making Core stop as on a lost display connection (Core::stopOnDisplayLoss()),
 	 * runtimeFailureDelay() after the main loop started: `--inject-display-loss`. */
 	constexpr auto DisplayLossArgument{"--inject-display-loss"};
+
+	/** @brief The command-line switch making the main submission of ONE frame fail as a refused vkQueueSubmit()
+	 * (Graphics::Renderer::renderFrame()), runtimeFailureDelay() after the main loop started:
+	 * `--inject-frame-submit-failure`. Nothing reaches the queue, as the specification states for a failed submission. */
+	constexpr auto FrameSubmitFailureArgument{"--inject-frame-submit-failure"};
+
+	/** @brief The command-line argument replacing the swap-chain image count the driver answered with N, at every
+	 * swap-chain creation (Vulkan::SwapChain::prepareFrameData()): `--inject-swap-chain-image-count=N`. A driver may
+	 * create more images than requested; this proves the refusal beyond the engine's capacity. */
+	constexpr auto SwapChainImageCountArgument{"--inject-swap-chain-image-count"};
 
 	/** @brief The delay of the runtime injections after the main loop started, in seconds:
 	 * `--inject-runtime-failure-delay=N` (default DefaultRuntimeFailureDelay; time to load a scene before an emergency
@@ -114,6 +125,22 @@ namespace EmEn::FaultInjection
 	 */
 	[[nodiscard]]
 	EMEN_API bool displayLossInjected () noexcept;
+
+	/**
+	 * @brief Returns whether one frame's main submission is made to fail. Always false in a build without
+	 * EMERAUDE_FAULT_INJECTION.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	EMEN_API bool frameSubmitFailureInjected () noexcept;
+
+	/**
+	 * @brief Returns the swap-chain image count that replaces the driver's answer, 0 for none. Always 0 in a build
+	 * without EMERAUDE_FAULT_INJECTION.
+	 * @return uint32_t
+	 */
+	[[nodiscard]]
+	EMEN_API uint32_t swapChainImageCountInjected () noexcept;
 
 	/**
 	 * @brief Returns the delay of the runtime injections after the main loop started.

@@ -74,6 +74,13 @@ Archives:
 
 Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (the application 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, its kernel 1.3.1 → 1.3.2, its frontend `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
+## Journals read (2026-11-11, 5 of 9, 8.0.3, 5 machines)
+
+- The swap-chain creation logs NEITHER the requested extent, image count, format nor present mode, nor which device / queue family presents: none of the 20 journals read can give them. A creation should log them (once per creation, or on a failure).
+- None of the six swap-chain signatures appears in 8.0.4 (the VRAM stop, exit 95, and the device-loss stop, 98, now take these runs; not proven).
+- Windows 11; RTX 5070 Ti ×2, RTX 5060, RTX 4090 (+ UHD 750), RTX 5070 Ti Laptop (+ Intel): the dGPU selected each time.
+- All 5: **video memory exhausted** — `OUT_OF_DEVICE_MEMORY`, the D3D11 import failing, `Image::createWithVMA` OUT_OF_DEVICE_MEMORY, then "Unable to create image 'Frame<k>DepthStencilBuffer'" (k = 0 ×3, 1, 2). Over the journals: 54 "Unable to complete the framebuffer", 33 creations OUT_OF_DEVICE_MEMORY, one give-up after 30 attempts.
+
 ## What remains
 
 - Read the journals of the archives counted above (in the downstream application's crash-report mirror).

@@ -59,6 +59,12 @@ Archives:
 
 - **Owner**: the engine. 1 Windows machine (Radeon RX 580, driver 2.0.233), 8.0.3, 2 reports.
 
+## Journals read (2026-11-11, 2 of 2, 8.0.3, 1 machine)
+
+- The swap-chain creation logs NEITHER the requested extent, image count, format nor present mode, nor which device / queue family presents: none of the 20 journals read can give them. A creation should log them (once per creation, or on a failure).
+- None of the six swap-chain signatures appears in 8.0.4 (the VRAM stop, exit 95, and the device-loss stop, 98, now take these runs; not proven).
+- Windows 11, RX 580 (driver 22.20.27.09 / 2.0.233, Vulkan 1.3.217), the only device. Both: **video memory exhaustion surfacing as `VK_ERROR_UNKNOWN`** (repeated device-memory allocations failing UNKNOWN, D3D11 imports failing), then the creation UNKNOWN; 30 attempts and the give-up in one. No resize or monitor trace.
+
 ## What remains
 
 - See the triage above; the journals stay in the downstream application's crash-report mirror.

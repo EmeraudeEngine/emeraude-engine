@@ -1226,16 +1226,26 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns whether the renderer owes frames that no redraw request will ask for: an armed frame
-			 * capture (FrameCapture::needsFrames()) or a video recording. The on-demand gate keeps rendering while it is
-			 * true. Two atomic loads, no lock.
+			 * capture (FrameCapture::needsFrames()), a video recording, or a degraded swap-chain still to recreate
+			 * (owesSwapChainRecreation()). The on-demand gate keeps rendering while it is true. Atomic loads, no lock.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			owesFrames () const noexcept
 			{
-				return m_frameCapture.needsFrames() || m_recorder.isRecording();
+				return m_frameCapture.needsFrames() || m_recorder.isRecording() || this->owesSwapChainRecreation();
 			}
+
+			/**
+			 * @brief Returns whether the swap-chain is degraded and not given up: its recreation attempts run only in
+			 * frames (retryDegradedSwapChain(), from renderFrame()), so an application rendering on demand must keep
+			 * rendering until it is recreated or given up (owner decision 2026-11-11).
+			 * @note Defined out-of-line, see setSwapChainDegraded(). Atomic loads, no lock.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool owesSwapChainRecreation () const noexcept;
 
 			/**
 			 * @brief Returns the deferred-destruction queue for Vulkan-backed objects.
@@ -1659,6 +1669,18 @@ namespace EmEn::Graphics
 			 * Window/Framebuffer/CommandBuffer/ViewMatrices chain it drags in) out of this header.
 			 */
 			void setSwapChainDegraded () const noexcept;
+
+			/**
+			 * @brief Makes the main submission of the next rendered frame fail as a refused vkQueueSubmit() (fault
+			 * injection, FaultInjection::FrameSubmitFailureArgument): nothing reaches the queue.
+			 * @note Main thread (Core::injectRuntimeFailure()); consumed once by the rendering thread (renderFrame()).
+			 * Inert in a build without EMERAUDE_FAULT_INJECTION.
+			 */
+			void
+			injectFrameSubmitFailure () noexcept
+			{
+				m_frameSubmitFailureInjected.store(true, std::memory_order_release);
+			}
 
 			/**
 			 * @brief Tells the Core that the swap-chain must be recreated.
@@ -2154,6 +2176,8 @@ namespace EmEn::Graphics
 			uint32_t m_swapChainRecreationFailures{0};
 			std::atomic_bool m_swapChainGivenUpForVideoMemory{false};
 			std::atomic_bool m_swapChainGivenUp{false};
+			/* injectFrameSubmitFailure(): set by the main thread, consumed by the rendering thread. */
+			std::atomic_bool m_frameSubmitFailureInjected{false};
 			/* A failed recreation of the current episode followed an allocation refused for lack of video memory. */
 			bool m_swapChainFailingForVideoMemory{false};
 			/** @brief Settings: may the ACTIVE CAMERA materialize its depth of field / motion blur?

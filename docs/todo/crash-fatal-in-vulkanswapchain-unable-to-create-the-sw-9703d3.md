@@ -74,6 +74,15 @@ Archives:
 
 Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (the application 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, its kernel 1.3.1 → 1.3.2, its frontend `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
+## Journals read (2026-11-11, 3 of 7, 8.0.3, 3 machines)
+
+- The swap-chain creation logs NEITHER the requested extent, image count, format nor present mode, nor which device / queue family presents: none of the 20 journals read can give them. A creation should log them (once per creation, or on a failure).
+- None of the six swap-chain signatures appears in 8.0.4 (the VRAM stop, exit 95, and the device-loss stop, 98, now take these runs; not proven).
+- Windows 11; RTX PRO 4000 Blackwell (+ Radeon iGPU), RTX 5070 Ti, RTX 4090 (+ UHD 770): the NVIDIA selected each time.
+- 2 of 3: **video memory exhausted by imported content frames** (repeated ~32 MB `OUT_OF_DEVICE_MEMORY`, a 3840x2054 BGRA frame each, and failed D3D11 imports); in one, the overlay surfaces had just been recommitted at 1280x720 after full-screen frames (a size change shortly before).
+- 1 of 3 (at start): **a resize storm on a tiny window** — 16 "resized during the swap-chain (re)creation" lines, the surface at 4x3 px, VMA refusing the grab-pass colour and depth images.
+- Retries: the give-up after 30 attempts in 2 journals; "recreated after 2-3 failed attempts" in others; once a later depth-buffer failure (the `b57f2b` kind).
+
 ## What remains
 
 - Read the journals of the archives counted above (in the downstream application's crash-report mirror).

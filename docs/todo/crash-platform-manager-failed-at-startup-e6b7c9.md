@@ -55,6 +55,17 @@ Archives:
 
 - **Owner**: the engine. 1 Windows machine, 8.0.3, at `SessionOpened`: read the journal for the platform manager's own error (loader not found, code page).
 
+## Journal read (2026-11-11, 1 of 1, 8.0.3)
+
+1. the code-page warning (1252, not UTF-8 — not the cause: the install path is plain ASCII under Program Files);
+2. the layer search path;
+3. `Vulkan::Loader::open` — "Unable to load the Vulkan loader '<install dir>\vulkan\vulkan-1.dll' (error 32) !";
+4. the Fatal "PlatformManagerService service failed to execute!", the run ends with code 1.
+
+Windows error 32 is `ERROR_SHARING_VIOLATION`: the bundled `vulkan-1.dll` was locked by another process at load time
+(an installer or updater still writing it, an antivirus scan). A retry with a short back-off on error 32, or a message
+naming the lock, would cover it.
+
 ## What remains
 
 - See the triage above; the journals stay in the downstream application's crash-report mirror.

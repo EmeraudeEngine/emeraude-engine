@@ -26,6 +26,16 @@
 
 #include "Window.hpp"
 
+/* STL inclusions. */
+#include <array>
+#include <atomic>
+#include <cerrno>
+#include <cstdarg>
+#include <cstdint>
+#include <cstdio>
+#include <string_view>
+#include <system_error>
+
 /* Third-party inclusions. */
 #define GLFW_EXPOSE_NATIVE_X11
 #define GLFW_EXPOSE_NATIVE_WAYLAND
@@ -33,11 +43,13 @@
 #include <vulkan/vulkan_wayland.h>
 #include <dlfcn.h>
 #include <poll.h>
+#include <wayland-client-core.h>
 /* NOTE: Under linux, including X.h defines the MACRO "Success"
  * and enter in conflicts with Severity enum. */
 #undef Success
 
 /* Local inclusions. */
+#include "IO/IO.hpp"
 #include "PrimaryServices.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/Surface.hpp"
@@ -73,6 +85,84 @@ namespace
 	};
 
 	WaylandConnectionReader s_waylandReader{};
+
+	/**
+	 * @brief Whether libwayland's log goes to the tracer (Window::initializeNativeWindow() → releaseNativeWindow()).
+	 * @note A message logged outside that window is dropped: the handler stays installed in libwayland (nothing can
+	 * restore its stderr default without writing to stderr), and the tracer may be gone. A function-local static: the
+	 * handler is a C callback without a user pointer.
+	 * @return std::atomic_bool &
+	 */
+	[[nodiscard]]
+	std::atomic_bool &
+	waylandLogToTracer () noexcept
+	{
+		static std::atomic_bool enabled{false};
+
+		return enabled;
+	}
+
+	/**
+	 * @brief libwayland's log handler (wl_log_set_handler_client()): the protocol error that kills a connection is
+	 * written there ("error 3: …" with its interface and object), never into the journal before (production, a
+	 * downstream application: 13 Linux machines stopped with exit 96 and nothing told why).
+	 * @note Any thread that dispatches or reads the connection (the main thread, the rendering thread's reader).
+	 * @param format A printf format.
+	 * @param arguments Its arguments.
+	 */
+	WL_PRINTF(1, 0)
+	void
+	waylandLogHandler (const char * format, va_list arguments)
+	{
+		if ( !waylandLogToTracer().load(std::memory_order_acquire) || format == nullptr )
+		{
+			return;
+		}
+
+		std::array< char, 1024 > buffer{};
+
+		if ( std::vsnprintf(buffer.data(), buffer.size(), format, arguments) < 0 )
+		{
+			return;
+		}
+
+		std::string_view message{buffer.data()};
+
+		/* NOTE: libwayland ends its lines with a newline. */
+		while ( !message.empty() && (message.back() == '\n' || message.back() == '\r') )
+		{
+			message.remove_suffix(1);
+		}
+
+		EmEn::TraceError{"Wayland"} << "libwayland: " << message;
+	}
+
+	/**
+	 * @brief Resolves a libwayland-client entry point on the module GLFW loaded (never linked by the engine).
+	 * @tparam function_t The function pointer type.
+	 * @param name The symbol.
+	 * @return function_t The entry point, or nullptr.
+	 */
+	template< typename function_t >
+	[[nodiscard]]
+	function_t
+	waylandEntryPoint (const char * name) noexcept
+	{
+		/* NOTE: POSIX guarantees a data pointer from dlsym() converts to a function pointer of the same size. */
+		static_assert(sizeof(function_t) == sizeof(void *));
+
+		function_t function{nullptr};
+
+		/* NOTE: RTLD_NOLOAD: the very module GLFW opened (it stays loaded by GLFW, this handle only drops its reference). */
+		if ( auto * module = dlopen("libwayland-client.so.0", RTLD_NOW | RTLD_NOLOAD); module != nullptr )
+		{
+			function = reinterpret_cast< function_t >(dlsym(module, name));
+
+			dlclose(module);
+		}
+
+		return function;
+	}
 }
 
 namespace EmEn
@@ -106,23 +196,50 @@ namespace EmEn
 			return false;
 		}
 
-		using GetError = int (*) (struct wl_display *);
+		using GetError = decltype(&wl_display_get_error);
 
-		/* NOTE: RTLD_NOLOAD: the very module GLFW opened (it stays loaded by GLFW, this handle only drops its reference). */
-		static const auto getError = [] () -> GetError {
-			GetError function{nullptr};
+		static const auto getError = waylandEntryPoint< GetError >("wl_display_get_error");
 
-			if ( auto * module = dlopen("libwayland-client.so.0", RTLD_NOW | RTLD_NOLOAD); module != nullptr )
+		if ( getError == nullptr )
+		{
+			return false;
+		}
+
+		const auto error = getError(display);
+
+		if ( error == 0 )
+		{
+			return false;
+		}
+
+		/* NOTE: Once per run, the error that killed the connection: a protocol error names its interface, object and
+		 * code (wl_display_get_protocol_error()), anything else is an errno (the compositor went away: EPIPE...). */
+		static std::atomic_flag described = ATOMIC_FLAG_INIT;
+
+		if ( !described.test_and_set(std::memory_order_acq_rel) )
+		{
+			using GetProtocolError = decltype(&wl_display_get_protocol_error);
+
+			static const auto getProtocolError = waylandEntryPoint< GetProtocolError >("wl_display_get_protocol_error");
+
+			if ( error == EPROTO && getProtocolError != nullptr )
 			{
-				function = reinterpret_cast< GetError >(dlsym(module, "wl_display_get_error"));
+				const struct wl_interface * interface = nullptr;
+				uint32_t objectId = 0;
 
-				dlclose(module);
+				const auto code = getProtocolError(display, &interface, &objectId);
+
+				const auto * interfaceName = interface != nullptr ? interface->name : nullptr;
+
+				TraceError{ClassId} << "The Wayland connection is lost: protocol error " << code << " on " << ( interfaceName != nullptr ? interfaceName : "an unknown interface" ) << '#' << objectId << '.';
 			}
+			else
+			{
+				TraceError{ClassId} << "The Wayland connection is lost: " << Base::IO::systemErrorText(std::error_code{error, std::generic_category()}) << " (errno " << error << ").";
+			}
+		}
 
-			return function;
-		}();
-
-		return getError != nullptr && getError(display) != 0;
+		return true;
 	}
 
 	void
@@ -134,6 +251,23 @@ namespace EmEn
 	bool
 	Window::initializeNativeWindow () noexcept
 	{
+		/* NOTE: libwayland's log (the protocol error that kills a connection) goes to the tracer while the window lives. */
+		if ( glfwGetPlatform() == GLFW_PLATFORM_WAYLAND )
+		{
+			using SetLogHandler = decltype(&wl_log_set_handler_client);
+
+			if ( const auto setLogHandler = waylandEntryPoint< SetLogHandler >("wl_log_set_handler_client"); setLogHandler != nullptr )
+			{
+				waylandLogToTracer().store(true, std::memory_order_release);
+
+				setLogHandler(&waylandLogHandler);
+			}
+			else
+			{
+				Tracer::warning(ClassId, "libwayland's log cannot be routed to the journal (wl_log_set_handler_client() not found).");
+			}
+		}
+
 		return true;
 	}
 
@@ -148,6 +282,9 @@ namespace EmEn
 
 			s_waylandReader.queue = nullptr;
 		}
+
+		/* The tracer stops receiving libwayland's log (the handler stays installed, inert). */
+		waylandLogToTracer().store(false, std::memory_order_release);
 	}
 
 	void

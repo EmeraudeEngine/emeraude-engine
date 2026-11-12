@@ -1200,6 +1200,12 @@ namespace EmEn::Graphics
 	}
 
 	bool
+	Renderer::owesSwapChainRecreation () const noexcept
+	{
+		return m_swapChain != nullptr && !m_swapChainGivenUp.load(std::memory_order_acquire) && m_swapChain->status() == SwapChainStatus::Degraded;
+	}
+
+	bool
 	Renderer::isPresentBlocking () const noexcept
 	{
 		if ( m_swapChain == nullptr || m_swapChain->isHeadless() )
@@ -2340,7 +2346,20 @@ namespace EmEn::Graphics
 			 * after recording, so a resource found ready while recording is covered. */
 			const auto uploads = m_device->uploadFrontier();
 
-			if ( !m_graphicsQueue->submit(*commandBuffer, SynchInfo{}
+			/* Fault injection: this submission is refused before it reaches the queue (test builds only). */
+			bool submissionRefused = false;
+
+			if constexpr ( FaultInjectionEnabled )
+			{
+				submissionRefused = m_frameSubmitFailureInjected.exchange(false, std::memory_order_acq_rel);
+
+				if ( submissionRefused )
+				{
+					TraceError{ClassId} << "FAULT INJECTION: the main submission of the frame #" << m_currentFrameIndex << " is refused.";
+				}
+			}
+
+			if ( submissionRefused || !m_graphicsQueue->submit(*commandBuffer, SynchInfo{}
 					.waits(currentFrameScope.secondarySemaphores(), waitStages)
 					.waitsFor({uploads.data(), uploads.size()})
 					.signals({&presentSemaphoreHandle, 1})
@@ -3381,6 +3400,15 @@ namespace EmEn::Graphics
 	bool
 	Renderer::createRenderingSystem (uint32_t imageCount) noexcept
 	{
+		/* NOTE: One frame scope and one present semaphore per swap-chain image: a count beyond their capacity is
+		 * refused, never an overflow (the swap-chain refuses it first, SwapChain::prepareFrameData()). */
+		if ( imageCount == 0 || imageCount > m_rendererFrameScope.capacity() || imageCount > m_presentSemaphores.capacity() )
+		{
+			TraceError{ClassId} << "A swap-chain of " << imageCount << " images cannot be rendered: the renderer handles 1 to " << std::min(m_rendererFrameScope.capacity(), m_presentSemaphores.capacity()) << " !";
+
+			return false;
+		}
+
 		m_rendererFrameScope.resize(imageCount);
 
 		m_deferredDestructor.setFramesInFlight(imageCount);
@@ -3715,22 +3743,29 @@ namespace EmEn::Graphics
 		/* The frame slots may come back with another count: the video copies they carried are complete now. */
 		m_recorder.onDeviceIdle();
 
-		/* NOTE: Query the surface properties again. */
-		if ( !m_window.surface()->update(this->device()->physicalDevice()) )
+		/* NOTE: A headless swap-chain (window-less run) has no surface: its engine-owned images are recreated from the
+		 * published framebuffer size alone (owner decision 2026-11-11). Every surface query below is for a window. */
+		if ( !m_swapChain->isHeadless() )
 		{
-			Tracer::error(ClassId, "Unable to update the handle surface from a framebuffer resized!");
+			auto * surface = m_window.surface();
 
-			return false;
-		}
+			/* NOTE: Query the surface properties again. */
+			if ( surface == nullptr || !surface->update(this->device()->physicalDevice()) )
+			{
+				Tracer::error(ClassId, "Unable to update the handle surface from a framebuffer resized!");
 
-		/* NOTE: The published framebuffer size can lag the surface: on Windows a minimise makes the present report
-		 * VK_ERROR_OUT_OF_DATE_KHR before GLFW publishes the 0x0 size, while the surface already reports a 0x0
-		 * maximum extent (Intel UHD, 2026-10-13; the Vulkan spec allows it on Win32). No swap-chain can be made then
-		 * (VUID-VkSwapchainCreateInfoKHR-imageExtent-01689): same ruling as above, the frame is skipped, the
-		 * swap-chain stays degraded and this is retried on the next frame. */
-		if ( const auto & capabilities = m_window.surface()->capabilities(); capabilities.maxImageExtent.width == 0 || capabilities.maxImageExtent.height == 0 )
-		{
-			return true;
+				return false;
+			}
+
+			/* NOTE: The published framebuffer size can lag the surface: on Windows a minimise makes the present report
+			 * VK_ERROR_OUT_OF_DATE_KHR before GLFW publishes the 0x0 size, while the surface already reports a 0x0
+			 * maximum extent (Intel UHD, 2026-10-13; the Vulkan spec allows it on Win32). No swap-chain can be made then
+			 * (VUID-VkSwapchainCreateInfoKHR-imageExtent-01689): same ruling as above, the frame is skipped, the
+			 * swap-chain stays degraded and this is retried on the next frame. */
+			if ( const auto & capabilities = surface->capabilities(); capabilities.maxImageExtent.width == 0 || capabilities.maxImageExtent.height == 0 )
+			{
+				return true;
+			}
 		}
 
 		/* NOTE: Recreate the swap-chain. */

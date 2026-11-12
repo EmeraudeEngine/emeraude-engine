@@ -79,11 +79,31 @@ Archives:
   (the same desktops lose their Wayland connection).
 - Found on 2026-11-10 once the crash-report tool named the causes of crashes in a library without symbols.
 
+## Reading (2026-11-12) — a candidate, not proven
+
+GLFW's Wayland backend (`dependencies/glfw/src/wl_window.c`, fork `f4360311` = 3.5.1 + the fork's one patch):
+`incrementCursorImage()` (the animation timer, dispatched from `handleEvents`) advances `cursor->wl.currentImage`
+modulo the image count of the 1x cursor `cursor->wl.cursor`; `setCursorImage()` then, on a HiDPI window
+(`window->wl.bufferScale > 1` and a `cursorHiDPI` loaded), indexes `cursorHiDPI->images[currentImage]` — the 2x
+cursor's array with an index bounded by the 1x count. If the theme gives the 2x size fewer frames, the read is past the
+array: `wl_cursor_image_get_buffer()` (libwayland-cursor) receives a garbage image and calls `wl_shm_pool_create_buffer()`
+on a garbage proxy — a SIGSEGV inside libwayland-client, the stack of the report.
+
+- Not proven: the machine's theme and scale are unknown; the only theme installed on Linux main (Adwaita) has the same
+  frame counts at every size (2 animated cursors, `xcur-frames` count). The same index flaw seems to be upstream.
+- The fix would be one bound in `setCursorImage()` (`currentImage % wlCursor->image_count`): a SECOND patch on the
+  fork (`docs/glfw-fork.md` keeps exactly one) and an upstream report — the owner's decision.
+- Related public reports: a crash in `wl_cursor_image_get_buffer` reached through GLFW's cursor path (kitty, Fedora
+  retrace 288203); animated cursors crashing Qt on Wayland (QTBUG-78652, KDE 463709).
+
 ## What remains
 
-- Read `setCursorImage` and the cursor animation timer of the Wayland backend: what can be null or destroyed
-  there (the cursor surface, the theme, a dead display).
-- Reproduce: an animated cursor theme, a compositor restart or a display connection killed while the cursor moves.
+- **Owner decision 2026-11-12: the bound as a second fork patch + an upstream report** (`docs/glfw-fork.md` § 1b).
+  Prepared in the submodule's working tree; to do: the fork commit on `em/customization`, its push, the engine's
+  submodule pin, the upstream issue (each on the owner's OK).
+- Then watch the reports of the first release that ships it; delete this item when the signature is gone.
+- Reproduce: a HiDPI Wayland session with a theme whose animated cursor has fewer frames at 2x; else a compositor
+  restart or a display connection killed while an animated cursor shows.
 
 ## References
 

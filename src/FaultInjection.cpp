@@ -28,15 +28,15 @@
 #include "FaultInjection.hpp"
 
 /* Project configuration. */
-#include "emeraude_config.hpp"
+#include "emeraude_config.hpp" // IWYU pragma: keep (EMERAUDE_FAULT_INJECTION selects the code below)
 
 /* STL inclusions. */
-#include <charconv>
-#include <string>
+#include <charconv> // IWYU pragma: keep (the test build's arguments, EMERAUDE_FAULT_INJECTION)
+#include <string> // IWYU pragma: keep (the test build's injected service name, EMERAUDE_FAULT_INJECTION)
 
 /* Local inclusions. */
-#include "Arguments.hpp"
-#include "Tracer.hpp"
+#include "Arguments.hpp" // IWYU pragma: keep (the test build's arguments, EMERAUDE_FAULT_INJECTION)
+#include "Tracer.hpp" // IWYU pragma: keep (the test build's traces, EMERAUDE_FAULT_INJECTION)
 
 namespace EmEn::FaultInjection
 {
@@ -92,6 +92,26 @@ namespace EmEn::FaultInjection
 			return injected;
 		}
 
+		/** @brief Whether one frame's main submission fails (same discipline). */
+		[[nodiscard]]
+		bool &
+		frameSubmitFailure () noexcept
+		{
+			static bool injected{false};
+
+			return injected;
+		}
+
+		/** @brief The swap-chain image count replacing the driver's answer, 0 for none (same discipline). */
+		[[nodiscard]]
+		uint32_t &
+		swapChainImageCount () noexcept
+		{
+			static uint32_t count{0};
+
+			return count;
+		}
+
 		/** @brief The delay of the runtime injections (same discipline). */
 		[[nodiscard]]
 		std::chrono::seconds &
@@ -132,6 +152,29 @@ namespace EmEn::FaultInjection
 			displayLoss() = true;
 
 			TraceWarning{"FaultInjection"} << "FAULT INJECTION: the engine will stop as on a lost display connection (" << DisplayLossArgument << ").";
+		}
+
+		if ( arguments.isSwitchPresent(FrameSubmitFailureArgument) )
+		{
+			frameSubmitFailure() = true;
+
+			TraceWarning{"FaultInjection"} << "FAULT INJECTION: the main submission of one frame will fail (" << FrameSubmitFailureArgument << ").";
+		}
+
+		if ( const auto value = arguments.get(SwapChainImageCountArgument); value.has_value() && !value->empty() )
+		{
+			uint32_t count = 0;
+
+			if ( const auto [pointer, errorCode] = std::from_chars(value->data(), value->data() + value->size(), count); errorCode == std::errc{} && pointer == value->data() + value->size() )
+			{
+				swapChainImageCount() = count;
+
+				TraceWarning{"FaultInjection"} << "FAULT INJECTION: every swap-chain will report " << count << " images (" << SwapChainImageCountArgument << ").";
+			}
+			else
+			{
+				TraceError{"FaultInjection"} << "FAULT INJECTION: '" << value.value() << "' is not an image count (" << SwapChainImageCountArgument << "): ignored.";
+			}
 		}
 
 		if ( const auto value = arguments.get(RuntimeFailureDelayArgument); value.has_value() && !value->empty() )
@@ -180,6 +223,18 @@ namespace EmEn::FaultInjection
 		return displayLoss();
 	}
 
+	bool
+	frameSubmitFailureInjected () noexcept
+	{
+		return frameSubmitFailure();
+	}
+
+	uint32_t
+	swapChainImageCountInjected () noexcept
+	{
+		return swapChainImageCount();
+	}
+
 	std::chrono::seconds
 	runtimeFailureDelay () noexcept
 	{
@@ -214,6 +269,18 @@ namespace EmEn::FaultInjection
 	displayLossInjected () noexcept
 	{
 		return false;
+	}
+
+	bool
+	frameSubmitFailureInjected () noexcept
+	{
+		return false;
+	}
+
+	uint32_t
+	swapChainImageCountInjected () noexcept
+	{
+		return 0;
 	}
 
 	std::chrono::seconds

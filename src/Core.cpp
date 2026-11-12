@@ -55,6 +55,7 @@
 /* Third-party inclusions. */
 #include "GLFW/glfw3.h"
 #include "json/json.h"
+#include "volk.h"
 #ifdef IMGUI_ENABLED
 #include "imgui.h"
 #include "Overlay/ImGUIScreen.hpp"
@@ -110,6 +111,7 @@
 #include "Version.hpp"
 #include "Vulkan/AbstractObject.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
 
 namespace EmEn
 {
@@ -365,7 +367,8 @@ namespace EmEn
 			 * iteration. An active scene bypasses the gate entirely (v1: an active scene is treated as
 			 * always-dirty and renders continuously). The wait uses a 60 FPS-period safety timeout so a
 			 * missed dirty signal self-heals within one frame rather than freezing the display.
-			 * ⚠️ The renderer's own debts (Renderer::owesFrames(): an armed frame capture, a video recording)
+			 * ⚠️ The renderer's own debts (Renderer::owesFrames(): an armed frame capture, a video recording, a degraded
+			 * swap-chain whose recreation attempts run only in frames)
 			 * open the gate too, and nothing signals them: the safety timeout picks them up. A screenshot waits
 			 * on the MAIN thread, and in a CEF application that thread is the only source of redraw requests
 			 * (the WebView repaints), so a gate blind to the capture let every screenshot time out
@@ -2070,6 +2073,14 @@ namespace EmEn
 			Tracer::warning(ClassId, "FAULT INJECTION: the engine stops as on a lost display connection.");
 
 			this->stopOnDisplayLoss();
+		}
+		else if ( FaultInjection::frameSubmitFailureInjected() )
+		{
+			m_runtimeFailureInjected = true;
+
+			Tracer::warning(ClassId, "FAULT INJECTION: the main submission of the next frame fails.");
+
+			m_graphicsRenderer.injectFrameSubmitFailure();
 		}
 	}
 

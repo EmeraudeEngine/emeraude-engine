@@ -18,7 +18,7 @@ Until then, nothing ordered an upload before the first draw that read it, nor tw
   (one family, one queue), `sponza --demo-options 1`, window-less, Synchronization Validation on: **3 runs out of 3**
   report `SYNC-HAZARD-READ-AFTER-WRITE` — `vkCmdDrawIndexed` reads an index buffer of 10 016 880 bytes written by
   `vkCmdCopyBuffer` on the same queue — the layer rejects the submit (`VK_ERROR_VALIDATION_FAILED_EXT`), then the
-  process dies (SIGSEGV, exit 139: engine item `failed-frame-submit-crashes`). The same hazard was seen on the Apple M2
+  process dies (SIGSEGV, exit 139: a null window surface in the headless recreation, fixed: `26-swap-chain-failure-paths.md`). The same hazard was seen on the Apple M2
   (2026-09-03, 2026-10-04) and on the Windows Intel iGPU (2026-10-25). Across queues (NVIDIA) there was not even an
   execution order: it only held because the copy usually finished first.
 - **Write after write.** Two uploads of one image on two queues were unordered: the older one could land last. A

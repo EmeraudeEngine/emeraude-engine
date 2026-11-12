@@ -70,6 +70,12 @@ Archives:
 
 Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (the application 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, its kernel 1.3.1 → 1.3.2, its frontend `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
+## Journals read (2026-11-11, 1 of 3, 8.0.3)
+
+- The swap-chain creation logs NEITHER the requested extent, image count, format nor present mode, nor which device / queue family presents: none of the 20 journals read can give them. A creation should log them (once per creation, or on a failure).
+- None of the six swap-chain signatures appears in 8.0.4 (the VRAM stop, exit 95, and the device-loss stop, 98, now take these runs; not proven).
+- Windows 10, RX 6700 XT (2.0.353), the only device. Trigger: **a monitor change** — two "New monitor removed", three "Unable to query the primary monitor", then the creation DEVICE_LOST and "attempt 1/30" (in the whole run: 3 removals, 3 additions, 9 failed primary-monitor queries).
+
 ## What remains
 
 - Read the journals of the archives counted above (in the downstream application's crash-report mirror).

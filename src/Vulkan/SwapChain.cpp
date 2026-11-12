@@ -27,25 +27,40 @@
 #include "SwapChain.hpp"
 
 /* Project configuration. */
+#include "emeraude_config.hpp"
 #include "emeraude_platform.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <array>
+#include <span>
+#include <sstream>
 #if !IS_MACOS
 #include <format>
 #include <ranges>
 #endif
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "FaultInjection.hpp"
 #include "Graphics/Renderer.hpp"
-#include "PixelFactory/Processor.hpp"
+#include "Graphics/Types.hpp"
+#include "PixelFactory/Types.hpp"
+#include "SettingKeys.hpp"
 #include "Settings.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/AbstractDeviceDependentObject.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Framebuffer.hpp"
+#include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
-#include "Vulkan/Queue.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/Queue.hpp"
+#include "Vulkan/RenderSubPass.hpp"
+#include "Vulkan/Surface.hpp"
+#include "Vulkan/Sync/Semaphore.hpp"
 #include "Vulkan/Utility.hpp"
+#include "Window.hpp"
 
 namespace EmEn::Vulkan
 {
@@ -585,22 +600,41 @@ namespace EmEn::Vulkan
 		if ( m_headless )
 		{
 			m_imageCount = m_createInfo.minImageCount;
-			m_frames.resize(m_imageCount);
+		}
+		else
+		{
+			/* NOTE: Will set the image count for the swap-chain. */
+			if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, nullptr); result != VK_SUCCESS )
+			{
+				TraceError{ClassId} << "Unable to get image count from the swap-chain : " << vkResultToCString(result) << " !";
 
-			return true;
+				return false;
+			}
+
+			if ( m_showInformation )
+			{
+				TraceInfo{ClassId} << "The swap-chain will use " << m_imageCount << " images.";
+			}
 		}
 
-		/* NOTE: Will set the image count for the swap-chain. */
-		if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, nullptr); result != VK_SUCCESS )
+		/* Fault injection: the driver's answer replaced (test builds only). */
+		if constexpr ( FaultInjectionEnabled )
 		{
-			TraceError{ClassId} << "Unable to get image count from the swap-chain : " << vkResultToCString(result) << " !";
+			if ( const auto forcedCount = FaultInjection::swapChainImageCountInjected(); forcedCount > 0 )
+			{
+				TraceWarning{ClassId} << "FAULT INJECTION: the driver's " << m_imageCount << " swap-chain images are reported as " << forcedCount << '.';
+
+				m_imageCount = forcedCount;
+			}
+		}
+
+		/* NOTE: The driver may create MORE images than requested (the Vulkan specification allows it): beyond the
+		 * frame capacity the creation is refused, never an overflow (owner decision 2026-11-11). */
+		if ( m_imageCount == 0 || m_imageCount > m_frames.capacity() )
+		{
+			TraceError{ClassId} << "The driver created a swap-chain of " << m_imageCount << " images; the engine handles 1 to " << m_frames.capacity() << " : the swap-chain is refused !";
 
 			return false;
-		}
-
-		if ( m_showInformation )
-		{
-			TraceInfo{ClassId} << "The swap-chain will use " << m_imageCount << " images.";
 		}
 
 		m_frames.resize(m_imageCount);

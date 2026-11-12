@@ -71,6 +71,12 @@ Archives:
 
 Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (the application 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, its kernel 1.3.1 → 1.3.2, its frontend `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
+## Journals read (2026-11-11, 4 of 6, 4 machines)
+
+- Ubuntu 26.04 ×2, 24.04, Pop!_OS 24.04. Last engine line: an API client "Calling POST …" without an answer 2,
+  "Primary services up !" 1, "*** Core level created ***" 1. **In all 4 the last line is the downstream application's
+  own** (its crash reporter 3, its application 1). Adapters: amdgpu alone; i915 + nvidia (hybrid).
+
 ## What remains
 
 - Read the journals of the archives counted above (in the downstream application's crash-report mirror).

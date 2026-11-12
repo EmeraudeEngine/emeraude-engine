@@ -55,6 +55,11 @@ Archives:
 
 - **Owner**: the engine, like its Windows and Linux siblings (`476d7f`, `c91e92`). 1 machine, 8.0.3.
 
+## Journal read (2026-11-11, 1 of 1, 8.0.3)
+
+- The last engine line is "*** Core level created ***" (after the full resource container list); **the last line is
+  the downstream application's own**.
+
 ## What remains
 
 - See the triage above; the journals stay in the downstream application's crash-report mirror.

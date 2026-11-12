@@ -30,7 +30,10 @@ release), and the measure before the fixes.
   option, not only the runner (time to load a scene before an emergency save is tested):
   `--inject-swap-chain-out-of-video-memory` (the swap-chain degraded, every recreation fails for lack of video memory:
   exit 95), `--inject-device-loss` (`Core::stopOnDeviceLoss()`: 98), `--inject-display-loss`
-  (`Core::stopOnDisplayLoss()`: 96). The runner's `--eat-video-memory` is the real test (it fills the GPU).
+  (`Core::stopOnDisplayLoss()`: 96), `--inject-frame-submit-failure` (one frame's main submission refused: the frame
+  dropped, the swap-chain recreated, the run goes on), `--inject-swap-chain-image-count=N` (the driver's image count
+  replaced at every swap-chain creation: above 5 the swap-chain is refused) — `docs/subsystems/vulkan/26-swap-chain-failure-paths.md`.
+  The runner's `--eat-video-memory` is the real test (it fills the GPU).
   `docs/subsystems/vulkan/24-swap-chain-given-up-for-lack-of-video-memory.md`.
 
 ### The tools

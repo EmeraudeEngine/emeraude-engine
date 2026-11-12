@@ -1,10 +1,12 @@
-# The GLFW Fork — one patch, and how to move it forward
+# The GLFW Fork — two patches, and how to move it forward
 
 `dependencies/glfw` is **not** upstream GLFW: it is the fork
 [`EmeraudeEngine/glfw`](https://github.com/EmeraudeEngine/glfw), checked out as a submodule of the
 engine and pinned to a commit of its `em/customization` branch.
 
-**Current pin:** GLFW **3.5.1** + the custom patch (`f4360311`, rebased 2026-08-31).
+**Current pin:** GLFW **3.5.1** + the custom patch (`f4360311`, rebased 2026-08-31). A second patch, the Wayland
+HiDPI cursor bound (§ 1b, owner decision 2026-11-12), is prepared on top of it; its commit and the new pin are
+recorded here when they are made.
 The previous pin was `4263be2a` = 3.4-108, an untagged `master` state.
 
 What the pin change actually brings — 8 files, 28 insertions, of which only two touch code:
@@ -16,7 +18,7 @@ What the pin change actually brings — 8 files, 28 insertions, of which only tw
 
 The rest is the version bump (3.5.0 → 3.5.1), the changelog, `.gitattributes` and `CONTRIBUTORS.md`.
 
-## 1. What the fork adds — exactly one commit
+## 1. What the fork adds — the input-state commit
 
 `em/customization` carries **a single commit**, *"Add a way to get a copy of keyboard keys and mouse
 buttons state"* (author LondNoir, 2025-01-12), touching two files:
@@ -36,7 +38,20 @@ loop, sticky-key semantics preserved.
 A build that "works" is therefore *not* proof the patch survived: check the define, not the build.
 `update-glfw.py` now enforces exactly that (§ 2).
 
-## 2. Updating GLFW — `update-glfw.py`
+## 1b. The Wayland HiDPI cursor bound (owner decision 2026-11-12)
+
+`src/wl_window.c`, `setCursorImage()`: `incrementCursorImage()` (the animation timer) advances
+`cursorWayland->currentImage` modulo the image count of the 1x cursor, but on a HiDPI window
+(`bufferScale > 1`) the frame is read from `cursorHiDPI->images[]`, whose count may be smaller (a theme may give its
+2x size fewer frames). Past the end, `wl_cursor_image_get_buffer()` gets a garbage image and libwayland-client crashes
+in `wl_shm_pool_create_buffer()`. The patch indexes with `currentImage % wlCursor->image_count`.
+
+- Why: a production SIGSEGV in libwayland-client under `setCursorImage` (engine item
+  `crash-wayland-cursor-image-segfault-62c5eb`, 1 Manjaro machine, AMD RX 6600, 2 reports). The mechanism is a
+  reading, not a reproduction; the bound is correct either way. The same index exists upstream: to report there.
+- `update-glfw.py` then prints **2 commit(s)** above the target; the input-state patch keeps its patch-id
+  (`6cf953c0…`), this one gets its own, recorded here once committed.
+ — `update-glfw.py`
 
 ```sh
 cd <engine root>
@@ -62,7 +77,7 @@ the *next* version's development branch, so following it silently pins a `-dev` 
 patch-id of every commit above the target. If the marker is gone, it fails **before** the push:
 
 ```
-Customisation verified: GLFW_EM_CUSTOM_VERSION present, 1 commit(s) above 3.5.1.
+Customisation verified: GLFW_EM_CUSTOM_VERSION present, 1 commit(s) above 3.5.1.   (2 once § 1b is committed)
   f4360311  patch-id 6cf953c0cbc91fa356e2062e566af973c2a072f1  Add a way to get a copy of keyboard...
 ```
 

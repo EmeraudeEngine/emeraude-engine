@@ -3931,6 +3931,13 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 >   `Window::isDisplayConnectionLost()` (`wl_display_get_error()`, resolved on GLFW's libwayland) and notifies
 >   `OSLostDisplayConnection` → `Core::stopOnDisplayLoss()`: no dialog, exit code `DisplayLostExitCode` (96), a real
 >   incident under its own code.
+> - **The journal names the error since 2026-11-12** (`Window.linux.cpp`): libwayland's own log goes to the tracer
+>   (`wl_log_set_handler_client()`, "[Wayland] libwayland: …", between `initializeNativeWindow()` and
+>   `releaseNativeWindow()`; outside that window a message is dropped, never written to stderr), and the first time
+>   `isDisplayConnectionLost()` sees the loss it traces "The Wayland connection is lost: protocol error <code> on
+>   <interface>#<object>." (`wl_display_get_protocol_error()`, on `EPROTO`) or the errno. Before, 13 production
+>   machines stopped with 96 and nothing said why (the protocol error went to stderr). ⚠️ Not exercised on Linux main: no
+>   nested compositor here to provoke a protocol error; the production reports are the proof.
 
 ### The system's stop: termination signals and the Windows end of session (2026-10-11)
 

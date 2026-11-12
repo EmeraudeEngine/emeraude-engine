@@ -164,7 +164,8 @@ namespace EmEn::Resources
 
 		if ( containerIt == m_containers.end() )
 		{
-			Tracer::fatal(ClassId, "Container does not exist !");
+			/* NOTE: The type names the container (production, 2026-10-16: a bare "Container does not exist !" told nothing). */
+			TraceFatal{ClassId} << "No resource container for the type '" << typeIndex.name() << "' !";
 
 			return nullptr;
 		}
@@ -179,7 +180,8 @@ namespace EmEn::Resources
 
 		if ( containerIt == m_containers.end() )
 		{
-			Tracer::fatal(ClassId, "Container does not exist !");
+			/* NOTE: The type names the container (production, 2026-10-16: a bare "Container does not exist !" told nothing). */
+			TraceFatal{ClassId} << "No resource container for the type '" << typeIndex.name() << "' !";
 
 			return nullptr;
 		}

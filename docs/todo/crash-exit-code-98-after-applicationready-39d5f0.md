@@ -72,6 +72,13 @@ Archives:
 
 Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (the application 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, its kernel 1.3.1 → 1.3.2, its frontend `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
+## Journal read (2026-11-11, 1 of 1, 8.0.2)
+
+Windows 11, AMD RX 7700 XT (2.0.416): two overlay transition buffers committed, then `Queue::submit` DEVICE_LOST,
+`device_fault` "Device lost detected" without an address, no checkpoints on that driver, the accelerated-copy submit of
+an overlay surface failing, the stop (98). No marker; same family as `80d5c2` (whose markers name
+`transfer:image-layout-transition`).
+
 ## What remains
 
 - Read the journals of the archives counted above (in the downstream application's crash-report mirror).

@@ -80,6 +80,28 @@ Archives:
 
 Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (the application 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, its kernel 1.3.1 → 1.3.2, its frontend `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
+## Journals read (2026-11-11, 59 of 100: all 12 of 8.0.4 and 47 of 8.0.3, 39 machines)
+
+- Windows 50, macOS 7 (MoltenVK), Linux 2. The first DEVICE LOST dump came from `Fence::wait` 30, `Queue::submit` 15,
+  `Fence::getStatus` 5, `Queue::present` 2, `Device::waitIdle` 1.
+- **Every checkpoint dump names the SAME GPU marker: `transfer:image-layout-transition`** (37 journals, 22 machines,
+  on every queue listed, stages TOP_OF_PIPE / BOTTOM_OF_PIPE only). No other region is ever named. The checkpoints
+  extension was enabled in 45 journals (30 machines), `VK_EXT_device_fault` in 40 (26): most machines had the tooling,
+  and it always pointed there. `device_fault`: empty 18, unsupported 6, a `WRITE_INVALID` address 5 (2 machines).
+- No marker: 5 journals; no diagnostic extension: 11 (all 7 macOS + 4 Windows); no dump at all: 6.
+- Around the stop: the overlay's surface updates failing (28: "Unable to update the content of surface", the UI screen
+  disabled), staging buffers refused (23), semaphores refused `VK_ERROR_INITIALIZATION_FAILED` (20), device memory
+  `OUT_OF_DEVICE_MEMORY` (16), the D3D11 import failing (`importFromWin32Handle`, `VK_ERROR_UNKNOWN`), the grab pass
+  failing its own layout transition (3), monitor removals with "Unable to query the primary monitor" (3 + 5 first errors).
+- First engine error of the run: fence / submit DEVICE_LOST 27, "no timeline semaphores" on an Intel HD (9 short runs),
+  OUT_OF_DEVICE_MEMORY 7, the primary monitor query 5, INVALID_EXTERNAL_HANDLE 2.
+- Devices: GTX 1050 Ti ×10, Apple M1 ×7, RTX 5050 Laptop ×4, … ; one machine selected the Dozen (D3D12) translation
+  layer (fixed since: translation layers rank last).
+- **Lead**: the image layout transitions of `TransferManager::transitionImageLayout()` (the overlay surfaces, the
+  grab pass) are the last GPU work reached before the loss on every machine that could tell. To read next: which
+  images, which layouts and access masks, which queue, and whether the transition reads an imported image whose
+  external memory went away (the D3D11 imports fail around it).
+
 ## What remains
 
 - Read the journals of the archives counted above (in the downstream application's crash-report mirror).

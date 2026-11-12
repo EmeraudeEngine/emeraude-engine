@@ -62,9 +62,14 @@ Archives:
 - **Missing evidence**: libwayland prints the protocol error (interface, object, code) on stderr, which the journal does not capture: without it the faulty request cannot be named.
 - **Next step**: route libwayland's log into the tracer (`wl_log_set_handler_client`) and read `wl_display_get_protocol_error()` when the loss is detected; then attribute with `wayland-surface-lost-protocol-error`.
 
+- **2026-11-12, the next step done (engine)**: libwayland's log goes to the tracer and the loss traces its protocol
+  error (interface, object, code) or its errno (`docs/caution-points.md` § The force-quit dialog waits 10 s). Not
+  exercised locally (no nested compositor): the first reports of a release that ships it will name the faulty request.
+
 ## What remains
 
-- See the triage above; the journals stay in the downstream application's crash-report mirror.
+- Read the named protocol errors in the reports of the first release that ships the diagnostic; attribute them with
+  `wayland-surface-lost-protocol-error`.
 
 ## References
 

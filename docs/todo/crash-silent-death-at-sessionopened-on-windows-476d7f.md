@@ -82,6 +82,16 @@ Archives:
 
 Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (the application 1.1.1 → 1.1.2, engine 1.0.0 → 1.0.1, its kernel 1.3.1 → 1.3.2, its frontend `47cbe7cd9` → `c3ab7b390`); nothing relevant after 8.0.3. Proof only comes from the 8.0.3 reports (plan § 5).
 
+## Journals read (2026-11-11, 55 of 122: 22 of 8.0.4, 33 of 8.0.3, 46 machines)
+
+- The journal is never closed and the report names no GPU. Last ENGINE line: "*** Core level created ***" 27; an HTTP
+  request of the API client at startup (answered, or "Calling POST …") 12; "WindowService service up!" 4; "N physical
+  device(s) found" 4; a shader loaded from the binary cache 2; the recorder service disabled 2; single others.
+- **In 33 of 55 the very last line is the downstream application's own** (its crash reporter 22, its application object
+  11), written AFTER the engine's last line: those deaths happen after the engine handed control back — maybe not an
+  engine death at all.
+- 12 of 55 carry the code-page warning (1252, not UTF-8) and the Vulkan loader opened right after.
+
 ## What remains
 
 - Read the journals of the archives counted above (in the downstream application's crash-report mirror).

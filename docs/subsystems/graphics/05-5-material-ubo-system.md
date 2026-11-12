@@ -143,6 +143,12 @@ Writes ÷ checks = 3 on the driven runs: each change reached the three regions, 
 exceeded the number of changing materials (one registration each, no duplicate, no growth). 0 VUID, 0 `[Error]`,
 exit 0 in those three and in `sky-lab`, `basic-scenery` and `sponza` (MDI). `SkyAtmosphereResource`'s setters only
 run before its creation (`DynamicSkyResource`): its creation path (every region written) is what `sky-lab` exercised.
+Peers on engine 77168d0f (2026-11-11), `labyrinth`, `beams`, `paths`, `light-and-shadow-debug 1,0`, `sponza`,
+`animation-debug`, validation layer loaded: macOS M6 (AppleClang Release 284/284, Debug 623/623, 0 warning,
+`-Wdocumentation -Werror` clean, ScreenSpace) and Windows RTX 3500 Ada (MSVC 14.44 Release + Debug 280/280, 0 warning,
+lane RayTracing; `labyrinth` also on the Intel iGPU, ScreenSpace): 0 VUID, 0 `[Error]`, exit 0 in every run; the
+`sponza` and `light-and-shadow-debug` captures show every material and the shadows (the ground's coloured bands are
+that demo's option 0 = 1, the same on Linux).
 Not measured: AMD (the GPU-bound device where a frame in flight showed the older value, graphics doc 13-12 § 43).
 
 ### Descriptor Binding (Preferred API)

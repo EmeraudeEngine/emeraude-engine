@@ -83,6 +83,14 @@ for a session that recovered and was reported for another reason. ⚠️ From 1.
 by the renderer's Fatal ("Unable to refresh the swap-chain after N consecutive attempts", exit 98) — its absence on a
 1.1.0 release proves nothing.
 
+## Journals read (2026-11-11, 3 of 18, 8.0.3, 2 machines)
+
+- The swap-chain creation logs NEITHER the requested extent, image count, format nor present mode, nor which device / queue family presents: none of the 20 journals read can give them. A creation should log them (once per creation, or on a failure).
+- None of the six swap-chain signatures appears in 8.0.4 (the VRAM stop, exit 95, and the device-loss stop, 98, now take these runs; not proven).
+- Windows 11, AMD proprietary driver: Radeon 740M (2 journals), RX 7900 XTX (1).
+- 2 of 3 (740M, at start): **a resize storm** — 15 and 19 "resized during the swap-chain (re)creation" lines, the surface going from 1224x675 to 1x1 and 2x1 px.
+- 1 of 3 (7900 XTX, at quit): video memory first (`Queue::submit` OUT_OF_DEVICE_MEMORY, the accelerated copy failing, `acquireNextImage` OUT_OF_DEVICE_MEMORY), then the creation `OUT_OF_HOST_MEMORY`, during a resize.
+
 ## What remains
 
 - On the 8.0.3 reports: this signature (or exit 98 after a retried recreation) on an Intel UHD machine means the fix did
