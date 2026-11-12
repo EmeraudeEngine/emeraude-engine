@@ -66,9 +66,13 @@ Windows error 32 is `ERROR_SHARING_VIOLATION`: the bundled `vulkan-1.dll` was lo
 (an installer or updater still writing it, an antivirus scan). A retry with a short back-off on error 32, or a message
 naming the lock, would cover it.
 
+- **2026-11-12 (engine, owner decision)**: the lock is retried for 2 s, then the error names it
+  (`docs/caution-points.md`, the Vulkan loader section). Proof on Windows: a peer holds the file locked during a start
+  (released within 2 s: the start goes on; held: the named error).
+
 ## What remains
 
-- See the triage above; the journals stay in the downstream application's crash-report mirror.
+- The Windows proof above, then confirm on later reports; delete the item once the signature is gone.
 
 ## References
 

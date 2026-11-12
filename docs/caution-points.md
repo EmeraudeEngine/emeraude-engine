@@ -3991,6 +3991,18 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 >   file, config, cache and user-data folders → `openTextFile()` / `openFolder()`); an unexplained `open` during a demo
 >   load is such a key, typed or injected through the console (`keyPress` / `keyUp` carry modifiers) — macOS peer,
 >   M6, 2026-10-11: a full `terrain` load with no input runs none, `keyPress(296, 1)` spawns one and it succeeds.
+> - **A child process inherits NOTHING of the engine but its standard streams (2026-11-12, owner decision)**: a zenity
+>   dialog started through `popen()` inherited the console and MCP listening sockets and kept both ports after the
+>   engine was killed (the next launch could not bind them). Both sides are fixed: every engine and base socket is
+>   made close-on-exec / non-inheritable at creation (base `Network::preventSocketInheritance()`: the base's
+>   `HTTPServer` and `HappyEyeballs`, the engine's `RemoteListener` and `TCPServer`, acceptors and accepted
+>   connections), AND every launch closes the rest in the child — `runProcessAndWait()` and the new
+>   `runProcessCapturingOutput()` (stdout on a pipe; it replaces `popen()` in `executeCommand()` and the Wi-Fi scan)
+>   spawn with `posix_spawn_file_actions_addclosefrom_np(3)` on Linux, `POSIX_SPAWN_CLOEXEC_DEFAULT` + the three
+>   standard streams on macOS. Windows launches through `ShellExecuteW()` (no handle inheritance) and the sockets lose
+>   `HANDLE_FLAG_INHERIT`. Proof (Linux, the video-memory stop's dialog on Xvfb): the ports owned by the engine only,
+>   free once the engine is killed while the dialog lives; before, held by the dialog. ⚠️ `popen()` is not to be used
+>   again (the child inherits every descriptor that is not close-on-exec, including a third-party library's).
 
 ### Fixed: BLAS builds raced buffer uploads across transfer queues → DEVICE_LOST at load (Jul 2026)
 
@@ -8742,6 +8754,11 @@ stops if it is missing), and the engine **links no Vulkan library at all** (owne
   (no `volkLoadDevice()`), which serves the graphics AND the compute device.
 - CEF keeps its own `libvulkan.so.1` / `vulkan-1.dll` (1.4.361) next to the application for its GPU process: an explicit
   path (Linux `RTLD_LOCAL | RTLD_DEEPBIND`, Windows `LoadLibraryExW`) never shares it.
+- Windows: a `vulkan-1.dll` locked by another process (`ERROR_SHARING_VIOLATION`, 32: an installer or an updater still
+  writing it, an antivirus scanning it) is loaded again `Loader::SharingViolationRetryCount` (8) times,
+  `SharingViolationRetryInterval` (250 ms) apart; if the lock lasts, the error names it ("another program keeps the file
+  locked … wait for it to finish") and the startup fails as before (owner decision 2026-11-12; production 2026-11-03,
+  one report: the platform manager's Fatal after "error 32").
 - The validation layer is copied to `<build>/vulkan/explicit_layer.d/` (macOS `Contents/Resources/vulkan/
   explicit_layer.d/`). `PlatformManager::prepareVulkanLoaderEnvironment()` puts that directory first in
   `VK_ADD_LAYER_PATH` (and pins the macOS bundled driver, `VK_DRIVER_FILES`); **the consumer's `main()` calls it first,

@@ -115,24 +115,10 @@ namespace EmEn::PlatformSpecific
 	{
 		std::string output;
 
-		FILE * pipe = popen(cleanLoaderEnvCommand(command).c_str(), "r");
-
-		if ( pipe == nullptr )
-		{
-			exitCode = -1;
-
-			return output;
-		}
-
-		std::array< char, 4096 > buffer{};
-
-		while ( fgets(buffer.data(), static_cast< int >(buffer.size()), pipe) != nullptr )
-		{
-			output += buffer.data();
-		}
-
-		const int status = pclose(pipe);
-		exitCode = WEXITSTATUS(status);
+		/* NOTE: Not popen(): the child would inherit every descriptor of the engine (its server sockets: a dialog kept the
+		 * console and MCP ports after the engine was killed, 2026-11-11). runProcessCapturingOutput() gives the child its
+		 * standard streams only. */
+		exitCode = runProcessCapturingOutput({"/bin/sh", "-c", cleanLoaderEnvCommand(command)}, output).value_or(-1);
 
 		/* Remove trailing newline if any. */
 		while ( !output.empty() && output.back() == '\n' )

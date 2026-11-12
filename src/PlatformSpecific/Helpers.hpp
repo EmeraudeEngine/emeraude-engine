@@ -559,5 +559,19 @@ namespace EmEn::PlatformSpecific
 	 */
 	[[nodiscard]]
 	std::optional< int > runProcessAndWait (const std::vector< std::string > & arguments) noexcept;
+
+	/**
+	 * @brief Runs a program (looked up in PATH), captures its standard output and waits for its end.
+	 * @details posix_spawnp() with stdout on a pipe, read to the end, then the EINTR-safe wait. Replaces popen(): the
+	 * child keeps its three standard streams and NOTHING ELSE of this process (no socket, no other pipe), so a dialog
+	 * started from here never holds the engine's server ports (2026-11-11). For a shell command, pass
+	 * {"/bin/sh", "-c", command}.
+	 * @param arguments The program then its arguments.
+	 * @param output Receives the standard output (at most 1 MiB kept; the rest is read and dropped).
+	 * @return std::optional< int > The exit code, std::nullopt when the program could not be started or did not end
+	 * normally (logged).
+	 */
+	[[nodiscard]]
+	std::optional< int > runProcessCapturingOutput (const std::vector< std::string > & arguments, std::string & output) noexcept;
 #endif
 }

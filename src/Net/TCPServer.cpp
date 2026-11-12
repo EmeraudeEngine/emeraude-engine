@@ -37,7 +37,10 @@
 #include "asio.hpp"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Net/TCPClient.hpp"
+#include "Network/SocketInheritance.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Net
 {
@@ -138,6 +141,12 @@ namespace EmEn::Net
 			acceptor.reset();
 
 			return false;
+		}
+
+		/* NOTE: A process the engine starts must not inherit the listening socket (it would keep the port). */
+		if ( !Base::Network::preventSocketInheritance(*acceptor) )
+		{
+			TraceWarning{"TCPServer"} << "Unable to make the listening socket private to this process: a started process may inherit it.";
 		}
 
 		/* Binding the IPv6 any-address asks EXPLICITLY for a dual-stack socket,
@@ -310,6 +319,12 @@ namespace EmEn::Net
 			m_lastError = acceptEc;
 
 			return std::nullopt;
+		}
+
+		/* NOTE: accept() does not set close-on-exec: the peer connection is made private as well. */
+		if ( !Base::Network::preventSocketInheritance(peerSocket) )
+		{
+			TraceWarning{"TCPServer"} << "Unable to make a peer connection private to this process.";
 		}
 
 		/* Detach the accepted socket from the server's io_context. From this

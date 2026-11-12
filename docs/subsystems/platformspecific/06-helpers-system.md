@@ -12,7 +12,7 @@ Platform-specific utility functions are centralized in `Helpers.hpp` with separa
 | `isKdeDesktop()` | Checks `XDG_CURRENT_DESKTOP` for "KDE" |
 | `escapeShellArg(arg)` | Escapes string for shell (single quotes) |
 | `cleanLoaderEnvCommand(cmd)` | Prefixes a command with `env -u LD_LIBRARY_PATH -u LD_PRELOAD` so a spawned system tool (zenity/kdialog) runs with a pristine dynamic-loader environment |
-| `executeCommand(cmd, exitCode)` | Runs command via `popen` (through `cleanLoaderEnvCommand`), returns stdout |
+| `executeCommand(cmd, exitCode)` | Runs `/bin/sh -c` (through `cleanLoaderEnvCommand`) with `runProcessCapturingOutput()` (never `popen()`: the child gets its standard streams only, caution-points § A child process inherits NOTHING), returns stdout |
 | `executeCommandPumpingEvents(cmd, exitCode, pump)` | Same, but runs the child on a worker thread and calls `pump` on the caller's thread until it exits. **Every interactive dialog must use this one** — see § Linux below |
 | `buildZenityFilters(filters)` | Builds `--file-filter=` arguments |
 | `buildKdialogFilters(filters)` | Builds kdialog filter string |

@@ -33,6 +33,9 @@
 #include <optional>
 #include <charconv>
 
+/* Local inclusions. */
+#include "PlatformSpecific/Helpers.hpp"
+
 namespace EmEn::Net::WiFiScanner
 {
 	namespace
@@ -47,21 +50,8 @@ namespace EmEn::Net::WiFiScanner
 		{
 			std::string result;
 
-			auto * pipe = popen(command, "r");
-
-			if ( pipe == nullptr )
-			{
-				return result;
-			}
-
-			std::array< char, 256 > buffer{};
-
-			while ( fgets(buffer.data(), static_cast< int >(buffer.size()), pipe) != nullptr )
-			{
-				result += buffer.data();
-			}
-
-			pclose(pipe);
+			/* NOTE: Not popen(): the child gets its standard streams only, never the engine's sockets (2026-11-11). */
+			static_cast< void >(PlatformSpecific::runProcessCapturingOutput({"/bin/sh", "-c", command}, result));
 
 			return result;
 		}

@@ -27,9 +27,12 @@
 #include "RemoteListener.hpp"
 
 /* STL inclusions. */
+#include <ctime>
 #include <istream>
+#include <new>
 #include <stop_token>
-#include <string_view>
+#include <system_error>
+#include <utility>
 
 /* Third-party inclusions. */
 #ifndef _WIN32
@@ -38,7 +41,9 @@
 #endif
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "IO/IO.hpp"
+#include "Network/SocketInheritance.hpp"
 #include "RemoteProtocol.hpp"
 #include "Tracer.hpp"
 
@@ -178,6 +183,13 @@ namespace EmEn::Console
 			TraceError{ClassId} << "Failed to open acceptor: " << Base::IO::systemErrorText(ec);
 
 			return;
+		}
+
+		/* NOTE: A process the engine starts (a dialog) must not inherit the listening socket: it kept the port after the
+		 * engine was killed (2026-11-11). */
+		if ( !Base::Network::preventSocketInheritance(*m_acceptor) )
+		{
+			TraceWarning{ClassId} << "Unable to make the console's listening socket private to this process: a started process may inherit it.";
 		}
 
 		m_acceptor->set_option(asio::socket_base::reuse_address(true), ec);
@@ -352,6 +364,12 @@ namespace EmEn::Console
 		m_acceptor->async_accept(*socket, [this, socket] (const asio::error_code & error) {
 			if ( !error )
 			{
+				/* NOTE: accept() does not set close-on-exec: the client connection is made private as well. */
+				if ( !Base::Network::preventSocketInheritance(*socket) )
+				{
+					TraceWarning{ClassId} << "Unable to make a console client connection private to this process.";
+				}
+
 				size_t clientCount = 0;
 
 				{

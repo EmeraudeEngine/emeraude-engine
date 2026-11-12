@@ -30,6 +30,7 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <chrono>
 #include <cstdint>
 #include <filesystem>
 
@@ -52,6 +53,13 @@ namespace EmEn::Vulkan
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"VulkanLoader"};
+
+			/** @brief Windows: how many times a loader file locked by another process (ERROR_SHARING_VIOLATION) is loaded
+			 * again before the failure. */
+			static constexpr uint32_t SharingViolationRetryCount{8};
+
+			/** @brief Windows: the wait between two loads of a locked loader file (8 x 250 ms: 2 s at most). */
+			static constexpr std::chrono::milliseconds SharingViolationRetryInterval{250};
 
 			/** @brief Default constructor: nothing opened. */
 			Loader () noexcept = default;

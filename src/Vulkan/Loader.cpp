@@ -31,8 +31,13 @@
 
 /* STL inclusions. */
 #include <array>
+#include <string>
+#if IS_WINDOWS
+	#include <thread>
+#endif
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #if IS_WINDOWS
 	#include <Windows.h>
 #else
@@ -88,12 +93,44 @@ namespace EmEn::Vulkan
 			}
 
 #if IS_WINDOWS
-			/* NOTE: A full path loads THIS file even when CEF's vulkan-1.dll is already in the process. */
-			const auto module = LoadLibraryExW(candidate.wstring().c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+			/* NOTE: A full path loads THIS file even when CEF's vulkan-1.dll is already in the process.
+			 * A file locked by another process (ERROR_SHARING_VIOLATION: an installer or an updater still writing it, an
+			 * antivirus scanning it) is retried for SharingViolationRetryCount x SharingViolationRetryInterval before the
+			 * failure, which then names the lock (production, 2026-11-03: error 32 at startup, owner decision 2026-11-12). */
+			HMODULE module = nullptr;
+			DWORD lastError = ERROR_SUCCESS;
+
+			for ( uint32_t attempt = 0; attempt <= SharingViolationRetryCount; ++attempt )
+			{
+				if ( attempt > 0 )
+				{
+					std::this_thread::sleep_for(SharingViolationRetryInterval);
+				}
+
+				module = LoadLibraryExW(candidate.wstring().c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+				lastError = module == nullptr ? GetLastError() : ERROR_SUCCESS;
+
+				if ( module != nullptr || lastError != ERROR_SHARING_VIOLATION )
+				{
+					break;
+				}
+
+				if ( attempt == 0 )
+				{
+					TraceWarning{ClassId} << "The Vulkan loader '" << IO::toU8String(candidate) << "' is locked by another process : retrying for " << SharingViolationRetryCount * SharingViolationRetryInterval.count() << " ms.";
+				}
+			}
 
 			if ( module == nullptr )
 			{
-				TraceError{ClassId} << "Unable to load the Vulkan loader '" << IO::toU8String(candidate) << "' (error " << GetLastError() << ") !";
+				if ( lastError == ERROR_SHARING_VIOLATION )
+				{
+					TraceError{ClassId} << "Unable to load the Vulkan loader '" << IO::toU8String(candidate) << "' : another program keeps the file locked (an installer or an update still running, or an antivirus scan). Wait for it to finish, then start the application again.";
+				}
+				else
+				{
+					TraceError{ClassId} << "Unable to load the Vulkan loader '" << IO::toU8String(candidate) << "' (error " << lastError << ") !";
+				}
 
 				return false;
 			}
