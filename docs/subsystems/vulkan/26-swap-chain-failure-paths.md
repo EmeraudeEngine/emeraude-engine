@@ -65,6 +65,13 @@ recreation. Found by reading (2026-10-25), never observed on the cascade's machi
   at a recreation the attempts of doc 24 run, then the give-up.
 - Running on such a driver (frames in flight = min(images, 5), per-image arrays with their own cap) is a larger change,
   not done.
+- `retrieveSwapChainImages()` queries the images with a LOCAL count and refuses an answer different from the count
+  the frames were sized by (2026-11-12): macOS-PA found that `--inject-swap-chain-image-count=4` on a real 3-image
+  surface left 4 frames for 3 images (the second query wrote the driver's 3). ⚠️ So an injected count BELOW the capacity
+  takes effect on a HEADLESS swap-chain only (window-less); on a real surface it is refused at the second query. A count
+  ABOVE the capacity is refused first, everywhere. Measured 2026-11-12 (Linux, RTX 3070 Ti, Debug): `=4` on a real X11
+  surface (Xvfb) → "The swap-chain gave 3 images where 4 were counted : the swap-chain is refused !", exit 1, 0 VUID;
+  `=4` window-less → 4 frames in flight, exit 0.
 - **Proof** (`--inject-swap-chain-image-count=N`, a build with `EMERAUDE_FAULT_INJECTION`: the driver's answer replaced
   at every creation, headless included). Measured 2026-11-11, Linux main, RTX 3070 Ti, `basic-scenery --window-less`,
   Debug, validation layer loaded: N = 6 → the refusal, the renderer service fails, exit 1, 0 VUID, no abort; N = 4 →
@@ -90,6 +97,18 @@ draws when one of its web surfaces repaints rendered no frame while nothing chan
 - ⚠️ The stop of doc 24 shows the engine's native dialog (zenity on Linux) even in a window-less run, and the main
   thread waits for it to be closed: an unattended window-less run hangs there. A test on a desktop must run on Xvfb
   with `WAYLAND_DISPLAY` unset, else the dialog lands on the user's screen.
+
+### Peers (engine a9fe7200, 2026-11-12)
+
+- macOS (macOS-PA, Apple M6, MoltenVK): Release 389/389, Debug 389/389, a fault-injection tree 689/689, 0 warning;
+  `-Wdocumentation -Werror` clean; `basic-scenery` and `sponza 1` 0 VUID, 0 `[Error]`, exit 0. Injected refused
+  submission: the swap-chain recreated on its surface, the frames going on, exit 0; image count 6 → the refusal, exit 1,
+  no abort; image count 4 on a real surface → 3 frames in flight while the frames were sized for 4 (the finding that
+  made `retrieveSwapChainImages()` refuse a changed count, § A driver that creates more images).
+- Windows (Windows-PA, RTX 3500 Ada, window-less, lane RayTracing): MSVC 14.44 Release 387/387, Debug 387/387, a
+  fault-injection tree 683/683, 0 warning under /W4 /WX; `basic-scenery` and `sponza 1` 0 VUID, 0 `[Error]`, exit 0.
+  Injected refused submission: the headless swap-chain recreated 3 ms later, the frames going on, exit 0; image count 6
+  → the refusal, exit 1; image count 4 (headless) → 4 frames in flight, exit 0.
 
 ### Related
 

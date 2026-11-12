@@ -1099,7 +1099,7 @@ namespace EmEn::Vulkan
 			report << "\t[checkpoints] extension not available on this driver." "\n";
 		}
 
-		report << "\tNOTE: a checkpoint marker above is the LAST GPU region reached before the loss — that is where the faulting command lives.";
+		report << "\tNOTE: a checkpoint marker above is the LAST GPU region reached before the loss (TOP_OF_PIPE: started, BOTTOM_OF_PIPE: completed); the faulting work follows it, before the next marker.";
 
 		TraceError{ClassId} << report.str();
 	}

@@ -97,15 +97,22 @@ Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (th
   OUT_OF_DEVICE_MEMORY 7, the primary monitor query 5, INVALID_EXTERNAL_HANDLE 2.
 - Devices: GTX 1050 Ti ×10, Apple M1 ×7, RTX 5050 Laptop ×4, … ; one machine selected the Dozen (D3D12) translation
   layer (fixed since: translation layers rank last).
-- **Lead**: the image layout transitions of `TransferManager::transitionImageLayout()` (the overlay surfaces, the
-  grab pass) are the last GPU work reached before the loss on every machine that could tell. To read next: which
-  images, which layouts and access masks, which queue, and whether the transition reads an imported image whose
-  external memory went away (the D3D11 imports fail around it).
+- ⚠️ **NOT a lead (corrected 2026-11-12)**: the engine sets only THREE GPU checkpoints — `AS-build:begin`,
+  `AS-build:end` (`AccelerationStructureBuilder.cpp`) and `transfer:image-layout-transition`
+  (`TransferManager::transitionImageLayout()`). An application without ray tracing can reach only the last one, so
+  "always the same marker" says nothing about where the device was lost; stage `0x2000` (BOTTOM_OF_PIPE) even says
+  that transition had COMPLETED. The loss happens in work that carries no marker: the frame, the overlay
+  composition, the accelerated copies of imported D3D11 frames.
+- **2026-11-12 (engine, owner decision)**: checkpoints on that work — the frame's main command buffer (begin, scene,
+  post-process, composite, overlay, end), the sky, shadow maps and render-to-textures, the overlay accelerated
+  uploads / imported-frame copies, every transfer (`docs/subsystems/vulkan/02-vulkan-specific-rules.md` § GPU
+  device-lost diagnostics). NVIDIA only.
 
 ## What remains
 
-- Read the journals of the archives counted above (in the downstream application's crash-report mirror).
-- Find the defect, reproduce it, fix it where it lives.
+- Read the markers of the first release that ships the checkpoints (NVIDIA machines: most of these reports); the region
+  between the last marker reached and the next one holds the fault.
+- Then find the defect, reproduce it, fix it where it lives.
 
 ## References
 

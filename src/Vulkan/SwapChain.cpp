@@ -654,10 +654,22 @@ namespace EmEn::Vulkan
 		std::vector< VkImage > imageHandles{m_imageCount, VK_NULL_HANDLE};
 
 		/* NOTE: Not enumerate(): the count is the swap-chain's own (createImageArray() sizes every frame by it), so a
-		 * VK_INCOMPLETE here would mean images are missing — a failure for this caller, unlike a device list. */
-		if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &m_imageCount, imageHandles.data()); result != VK_SUCCESS )
+		 * VK_INCOMPLETE here would mean images are missing — a failure for this caller, unlike a device list.
+		 * A LOCAL count: the frames were sized by prepareFrameData(); a different answer here (only an injected count
+		 * can cause it, --inject-swap-chain-image-count on a real surface: the driver writes its own) is refused, never a
+		 * frame array out of step with the image count (macOS-PA, 2026-11-12). */
+		auto imageCount = m_imageCount;
+
+		if ( const auto result = vkGetSwapchainImagesKHR(this->device()->handle(), m_handle, &imageCount, imageHandles.data()); result != VK_SUCCESS )
 		{
 			TraceError{ClassId} << "Unable to get images from the swap-chain : " << vkResultToCString(result) << " !";
+
+			return {};
+		}
+
+		if ( imageCount != m_imageCount )
+		{
+			TraceError{ClassId} << "The swap-chain gave " << imageCount << " images where " << m_imageCount << " were counted : the swap-chain is refused !";
 
 			return {};
 		}

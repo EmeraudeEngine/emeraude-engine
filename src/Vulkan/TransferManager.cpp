@@ -318,6 +318,9 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		commandBuffer->setCheckpoint("transfer:buffer-download");
+
 		commandBuffer->copy(sourceBuffer, *stagingBuffer, 0, 0, bytes);
 
 		if ( !commandBuffer->end() )
@@ -467,6 +470,9 @@ namespace EmEn::Vulkan
 
 			return false;
 		}
+
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		commandBuffer->setCheckpoint("transfer:image-download");
 
 		/* The source declares TRANSFER_SRC_BIT (verified above): transition it straight to
 		 * TRANSFER_SRC_OPTIMAL, the copy reads it from there. */
@@ -850,6 +856,9 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_imageLayoutTransitionCommandBuffer->setCheckpoint("transfer:clear-depth-image");
+
 		VkClearDepthStencilValue clearValue{};
 		clearValue.depth = depthValue;
 		clearValue.stencil = stencilValue;
@@ -923,6 +932,9 @@ namespace EmEn::Vulkan
 
 			return false;
 		}
+
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_imageLayoutTransitionCommandBuffer->setCheckpoint("transfer:clear-color-image");
 
 		/* EVERY mip level: an image cleared at mip 0 only leaves its chain undefined, and a sampler
 		 * minifying it reads garbage (the imposter atlas samples its mips before its first bake). */

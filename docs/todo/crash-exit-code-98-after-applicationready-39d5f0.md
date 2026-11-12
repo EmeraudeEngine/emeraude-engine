@@ -76,8 +76,7 @@ Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (th
 
 Windows 11, AMD RX 7700 XT (2.0.416): two overlay transition buffers committed, then `Queue::submit` DEVICE_LOST,
 `device_fault` "Device lost detected" without an address, no checkpoints on that driver, the accelerated-copy submit of
-an overlay surface failing, the stop (98). No marker; same family as `80d5c2` (whose markers name
-`transfer:image-layout-transition`).
+an overlay surface failing, the stop (98). No marker; same family as `80d5c2` (whose only reachable marker, `transfer:image-layout-transition`, localizes nothing).
 
 ## What remains
 

@@ -154,6 +154,9 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_transferCommandBuffer->setCheckpoint("image-transfer:copy");
+
 		/* Prepare the image layout to receive data. */
 		{
 			Sync::ImageMemoryBarrier barrier{
@@ -264,6 +267,9 @@ namespace EmEn::Vulkan
 		{
 			return false;
 		}
+
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_graphicsCommandBuffer->setCheckpoint("image-transfer:finalize");
 
 		if ( dstImage.createInfo().mipLevels > 1 )
 		{
@@ -418,6 +424,9 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_transferCommandBuffer->setCheckpoint("image-transfer:compressed-copy");
+
 		{
 			/* Transition entire image to TRANSFER_DST. */
 			Sync::ImageMemoryBarrier barrier{
@@ -471,6 +480,9 @@ namespace EmEn::Vulkan
 		{
 			return false;
 		}
+
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_graphicsCommandBuffer->setCheckpoint("image-transfer:compressed-graphics-queue");
 
 		{
 			Sync::ImageMemoryBarrier barrier{
@@ -547,6 +559,9 @@ namespace EmEn::Vulkan
 		{
 			return false;
 		}
+
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_graphicsCommandBuffer->setCheckpoint("image-transfer:region");
 
 		{
 			Sync::ImageMemoryBarrier barrier{

@@ -147,6 +147,9 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_transferCommandBuffer->setCheckpoint("buffer-transfer:copy");
+
 		m_transferCommandBuffer->copy(*m_stagingBuffer, dstBuffer, offset, 0, dstBuffer.bytes());
 
 		/* Single queue family, or no ownership to transfer: one submission, done. */
@@ -214,6 +217,9 @@ namespace EmEn::Vulkan
 		{
 			return false;
 		}
+
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_graphicsCommandBuffer->setCheckpoint("buffer-transfer:graphics-queue");
 
 		/* The acquire half MUST mirror the release: same buffer, same range, same families.
 		 * The destination access mask covers every way the graphics family reads an uploaded

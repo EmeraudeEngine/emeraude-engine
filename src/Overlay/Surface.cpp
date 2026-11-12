@@ -1235,6 +1235,9 @@ namespace EmEn::Overlay
 			return false;
 		}
 
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_acceleratedCommandBuffer->setCheckpoint("overlay:accelerated-upload");
+
 		/* NOTE: The surface image leaves the sampled state (same ordering as importAcceleratedFrame()). */
 		const Sync::ImageMemoryBarrier toTransferDstBarrier{
 			*targetBuffer.image,
@@ -1378,6 +1381,9 @@ namespace EmEn::Overlay
 
 			return false;
 		}
+
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_acceleratedCommandBuffer->setCheckpoint("overlay:accelerated-import-copy");
 
 		const auto graphicsFamilyIndex = renderer.device()->getGraphicsFamilyIndex();
 
@@ -1631,6 +1637,9 @@ namespace EmEn::Overlay
 
 			return false;
 		}
+
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_acceleratedCommandBuffer->setCheckpoint("overlay:accelerated-popup-copy");
 
 		const auto graphicsFamilyIndex = renderer.device()->getGraphicsFamilyIndex();
 

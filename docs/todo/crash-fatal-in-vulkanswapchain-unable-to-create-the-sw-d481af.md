@@ -74,7 +74,7 @@ Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (th
 
 - The swap-chain creation logs NEITHER the requested extent, image count, format nor present mode, nor which device / queue family presents: none of the 20 journals read can give them. A creation should log them (once per creation, or on a failure).
 - None of the six swap-chain signatures appears in 8.0.4 (the VRAM stop, exit 95, and the device-loss stop, 98, now take these runs; not proven).
-- Windows 5, Ubuntu 24.04 1. Triggers: **after a device loss** 3 (DEVICE LOST at `Device::waitIdle` with the marker `transfer:image-layout-transition`, then the recreation fails `INITIALIZATION_FAILED`, exit 98 in 2); `waitIdle` answering `OUT_OF_DEVICE_MEMORY` 1; video memory exhausted by D3D11 imports after 23 "resized during (re)creation" lines 1; **the very first creation at startup** 1 (Ubuntu 24.04, Intel ARL on Mesa 25.2.8, llvmpipe also presenting, a simple-framebuffer adapter).
+- Windows 5, Ubuntu 24.04 1. Triggers: **after a device loss** 3 (DEVICE LOST at `Device::waitIdle`; its marker `transfer:image-layout-transition` is the only one a non-RT run can reach, see `crash-exit-code-98-after-stopping-80d5c2`; then the recreation fails `INITIALIZATION_FAILED`, exit 98 in 2); `waitIdle` answering `OUT_OF_DEVICE_MEMORY` 1; video memory exhausted by D3D11 imports after 23 "resized during (re)creation" lines 1; **the very first creation at startup** 1 (Ubuntu 24.04, Intel ARL on Mesa 25.2.8, llvmpipe also presenting, a simple-framebuffer adapter).
 - One machine selected the Dozen translation layer over the native NVIDIA device "(PREFERRED by the application)" — fixed since (translation layers rank last).
 
 ## What remains

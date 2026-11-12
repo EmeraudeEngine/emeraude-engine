@@ -2093,6 +2093,9 @@ namespace EmEn::Graphics
 			return;
 		}
 
+		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
+		m_device->setCheckpoint(commandBuffer->handle(), "frame:begin");
+
 		/* Query pool reset must be recorded outside a render pass: right here, before
 		 * any rendering strategy records its first pass. */
 		if ( m_GPUProfiler != nullptr )
@@ -2308,6 +2311,8 @@ namespace EmEn::Graphics
 			m_GPUProfiler->endFrame(*commandBuffer);
 		}
 
+		m_device->setCheckpoint(commandBuffer->handle(), "frame:end");
+
 		if ( !commandBuffer->end() )
 		{
 			if ( frameCaptured )
@@ -2420,6 +2425,8 @@ namespace EmEn::Graphics
 			scenePtr->recordCloudShadowMap(*commandBuffer, *this);
 		}
 
+		m_device->setCheckpoint(commandBuffer->handle(), "frame:scene");
+
 		/* Render pass 1: Scene rendering (clears buffers). */
 		commandBuffer->beginRenderPass(*m_swapChain->framebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -2504,6 +2511,8 @@ namespace EmEn::Graphics
 			m_postProcessor.setSkyStarMask(sceneStarMask(scenePtr));
 			this->recordIrradianceProbeUpdate(commandBuffer, scenePtr);
 
+			m_device->setCheckpoint(commandBuffer->handle(), "frame:post-process");
+
 			/* Process scene effects (multi-pass). */
 			if ( scenePtr->hasPostProcessStack() )
 			{
@@ -2557,6 +2566,8 @@ namespace EmEn::Graphics
 		{
 			editorManager->render(*commandBuffer);
 		}
+
+		m_device->setCheckpoint(commandBuffer->handle(), "frame:overlay");
 
 		/* Render the overlay system over the scene. */
 		overlayManager.render(m_swapChain, *commandBuffer);
@@ -2626,6 +2637,8 @@ namespace EmEn::Graphics
 			deferredLightsPrepared = true;
 			deferredLightsResolved = m_deferredLightResolve.prepare(*m_sceneTarget, scenePtr->lightSet(), scenePtr->preparedReadStateIndex(), m_sceneTarget->viewMatrices(), this->isShadowMapsEnabled());
 		}
+
+		m_device->setCheckpoint(commandBuffer->handle(), "frame:scene");
 
 		commandBuffer->beginRenderPass(*m_sceneTarget->framebuffer(), m_sceneTarget->renderArea(), std::span< const VkClearValue >{sceneClearValues.data(), sceneClearValues.size()}, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -2715,6 +2728,8 @@ namespace EmEn::Graphics
 
 		if ( cutFrame )
 		{
+			m_device->setCheckpoint(commandBuffer->handle(), "frame:post-process (pre-translucency)");
+
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain/PreTranslucency"};
 
 			m_postProcessor.recordBlit(*commandBuffer);
@@ -2774,6 +2789,8 @@ namespace EmEn::Graphics
 		 * this is the CLOSING half: every slot the pre-translucency half did not run. */
 		if ( scenePtr != nullptr && scenePtr->hasPostProcessStack() )
 		{
+			m_device->setCheckpoint(commandBuffer->handle(), "frame:post-process");
+
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain"};
 
 			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), cutFrame ? ChainPhase::PostTranslucency : ChainPhase::Whole);
@@ -2789,6 +2806,8 @@ namespace EmEn::Graphics
 		{
 			profiler->beginScope(*commandBuffer, "FinalComposite");
 		}
+
+		m_device->setCheckpoint(commandBuffer->handle(), "frame:composite");
 
 		commandBuffer->beginRenderPass(*m_swapChain->offscreenCompositeFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -2843,6 +2862,8 @@ namespace EmEn::Graphics
 		{
 			editorManager->render(*commandBuffer);
 		}
+
+		m_device->setCheckpoint(commandBuffer->handle(), "frame:overlay");
 
 		/* Render the overlay system over the post-processed scene. */
 		overlayManager.render(m_swapChain, *commandBuffer);
@@ -3001,6 +3022,8 @@ namespace EmEn::Graphics
 			return;
 		}
 
+		m_device->setCheckpoint(commandBuffer->handle(), "sky-atmosphere");
+
 		{
 			GPUProfiler * profiler = m_GPUProfiler != nullptr && m_GPUProfiler->profilesSideSubmissions() ? m_GPUProfiler.get() : nullptr;
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "SkyAtmosphere", "SkyView"};
@@ -3130,6 +3153,8 @@ namespace EmEn::Graphics
 				return;
 			}
 
+			m_device->setCheckpoint(commandBuffer->handle(), "shadow-map");
+
 			{
 				/* One scope per map, outside ScenePass: it is its own submission. */
 				GPUProfiler * profiler = m_GPUProfiler != nullptr && m_GPUProfiler->profilesSideSubmissions() ? m_GPUProfiler.get() : nullptr;
@@ -3246,6 +3271,8 @@ namespace EmEn::Graphics
 
 				return;
 			}
+
+			m_device->setCheckpoint(commandBuffer->handle(), "render-to-texture");
 
 			/* A bake needs alpha 0 behind its subject; the renderer's own clear colour is opaque, and a
 			 * card composited over it shows a rectangle of background. Every other target keeps it. */

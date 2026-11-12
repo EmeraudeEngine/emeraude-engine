@@ -39,14 +39,18 @@
 #include <memory>
 #include <span>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
 /* Local inclusions for usages. */
 #include "CommandPool.hpp"
-#include "Device.hpp"
 #include "Framebuffer.hpp"
 #include "PixelFactory/Color.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/RenderPass.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -65,7 +69,6 @@ namespace EmEn
 		class ComputePipeline;
 		class DescriptorSet;
 		class PipelineLayout;
-		class Framebuffer;
 		class VertexBufferObject;
 		class IndexBufferObject;
 		class Buffer;
@@ -188,6 +191,15 @@ namespace EmEn::Vulkan
 			{
 				return m_commandPool;
 			}
+
+			/**
+			 * @brief Records a GPU diagnostic checkpoint (VK_NV_device_diagnostic_checkpoints) into this command buffer
+			 * being recorded: a lost device names the last marker reached (Device::dumpDeviceLostDiagnostics()).
+			 * @note No-op without the extension (Device::setCheckpoint()). The marker MUST have static storage (a string
+			 * literal): the driver keeps the pointer until a device-lost readback.
+			 * @param marker A static string naming the GPU work that follows.
+			 */
+			void setCheckpoint (const char * marker) const noexcept;
 
 			/**
 			 * @brief Returns whether the buffer level is primary.

@@ -42,7 +42,6 @@
 #include "Graphics/Geometry/Interface.hpp"
 #include "GraphicsPipeline.hpp"
 #include "Image.hpp"
-#include "IndexBufferObject.hpp"
 #include "PipelineLayout.hpp"
 #include "Sync/BufferMemoryBarrier.hpp"
 #include "Sync/Event.hpp"
@@ -50,13 +49,26 @@
 #include "Sync/MemoryBarrier.hpp"
 #include "Tracer.hpp"
 #include "Utility.hpp"
-#include "VertexBufferObject.hpp"
 #include "Vulkan/CommandPool.hpp"
 #include "Vulkan/Device.hpp"
 
 namespace EmEn::Vulkan
 {
 	using namespace Base;
+
+	void
+	CommandBuffer::setCheckpoint (const char * marker) const noexcept
+	{
+		if ( m_commandPool == nullptr )
+		{
+			return;
+		}
+
+		if ( const auto device = m_commandPool->device(); device != nullptr )
+		{
+			device->setCheckpoint(m_handle, marker);
+		}
+	}
 
 	bool
 	CommandBuffer::begin (VkCommandBufferUsageFlagBits vkFlags) const noexcept

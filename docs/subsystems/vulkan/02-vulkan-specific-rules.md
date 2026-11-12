@@ -85,16 +85,29 @@ device advertises them (enabled in `Instance.cpp`, zero runtime cost until a fau
 DEVICE_LOST observation site — `Queue::submit`/`present`, `Fence::wait`/`waitAndReset`,
 `Device::waitIdle` — and is **self-guarded (reports once per device)** and **takes no device lock**
 (safe to call from inside a locked submit/wait path). It logs `device_fault` addresses + the last
-checkpoint marker(s) reached. **The marker is the answer**: it names the GPU region executing when
-the device died.
+checkpoint marker(s) reached: the LAST region reached (stage TOP_OF_PIPE: it started; BOTTOM_OF_PIPE: it
+completed). The faulting work follows it, before the next marker — so a marker localizes only as finely as the markers
+around it. ⚠️ Until 2026-11-12 a run without ray tracing could reach ONE marker only
+(`transfer:image-layout-transition`): 37 production dumps on 22 machines all named it, and it localized nothing
+(engine item `crash-exit-code-98-after-stopping-80d5c2`).
 
 **Placing markers** — `Device::setCheckpoint(commandBuffer, "literal")` records a checkpoint
 (no-op when the extension is absent). The marker **MUST** be a string literal (static storage —
-it is read back *after* the loss). Markers are currently placed at the two crash-window submissions:
-`AS-build:begin`/`:end` (`AccelerationStructureBuilder::submitOneShot`, covers all BLAS builds) and
-`transfer:image-layout-transition` (`TransferManager`). **Add a `setCheckpoint` at any new
-GPU-recording site you want to be able to blame** (render passes, TLAS inline build, compute
-dispatches).
+it is read back *after* the loss); `CommandBuffer::setCheckpoint("literal")` is the same on a command buffer. Markers
+(2026-11-12):
+
+| Work | Markers |
+|---|---|
+| The frame's main command buffer (`Renderer::renderFrame()` and its two strategies) | `frame:begin`, `frame:scene`, `frame:post-process (pre-translucency)`, `frame:post-process`, `frame:composite`, `frame:overlay`, `frame:end` |
+| Side submissions of the frame | `sky-atmosphere`, `shadow-map`, `render-to-texture` |
+| Acceleration structures | `AS-build:begin` / `:end` (`AccelerationStructureBuilder::submitOneShot`) |
+| Transfers | `buffer-transfer:copy` / `:graphics-queue`, `image-transfer:copy` / `:finalize` / `:compressed-copy` / `:compressed-graphics-queue` / `:region`, `transfer:image-layout-transition`, `transfer:clear-depth-image`, `transfer:clear-color-image`, `transfer:buffer-download`, `transfer:image-download` |
+| Overlay surfaces | `overlay:accelerated-upload`, `overlay:accelerated-import-copy` (an imported external frame copied), `overlay:accelerated-popup-copy` |
+
+**Add a checkpoint at any new GPU-recording site you want to be able to blame** (a new pass, a compute dispatch).
+NVIDIA only (`VK_NV_device_diagnostic_checkpoints`); AMD, Intel and MoltenVK record nothing. Verified 2026-11-12 (Linux,
+RTX 3070 Ti, the extension enabled, validation layer loaded): `sponza --demo-options 1` with every marker, an injected
+refused submission recovered, 0 VUID.
 
 ### GPU Memory Management
 - **VMA mandatory** for all GPU memory allocations
