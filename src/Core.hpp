@@ -260,6 +260,12 @@ namespace EmEn
 			 */
 			static constexpr int OutOfVideoMemoryExitCode{95};
 
+			/** @brief Exit code of a startup refused because the system reports no monitor (StartupRefusal::Cause::NoDisplay).
+			 * @details Distinct from IncompatibleSystemExitCode: nothing is wrong with the hardware, the session shows no
+			 * screen (a remote session, a switched-off display) — owner decision 2026-11-11.
+			 */
+			static constexpr int NoDisplayExitCode{94};
+
 			/** @brief The force-quit dialog of stop() opens at MaxStopVetoCount vetoes AND this long after the first one.
 			 * @details Owner decision 2026-10-22: three clicks on the close button within a few seconds, while the
 			 * application is saving or its interface is frozen, opened the dialog at once (≈ 35 force-quits of the
@@ -283,6 +289,9 @@ namespace EmEn
 					OutdatedDriver,
 					/** @brief No GPU that can run the engine, whatever its driver (a required feature missing). */
 					IncompatibleHardware,
+					/** @brief The system reports no monitor: the window cannot be shown (Window::noMonitorFound()). Exit code
+					 * NoDisplayExitCode, not IncompatibleSystemExitCode. */
+					NoDisplay,
 					/** @brief Anything else: the log says why. */
 					Other
 				};

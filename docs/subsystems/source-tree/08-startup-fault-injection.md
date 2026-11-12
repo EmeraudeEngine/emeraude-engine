@@ -32,7 +32,9 @@ release), and the measure before the fixes.
   exit 95), `--inject-device-loss` (`Core::stopOnDeviceLoss()`: 98), `--inject-display-loss`
   (`Core::stopOnDisplayLoss()`: 96), `--inject-frame-submit-failure` (one frame's main submission refused: the frame
   dropped, the swap-chain recreated, the run goes on), `--inject-swap-chain-image-count=N` (the driver's image count
-  replaced at every swap-chain creation: above 5 the swap-chain is refused) — `docs/subsystems/vulkan/26-swap-chain-failure-paths.md`.
+  replaced at every swap-chain creation: above 5 the swap-chain is refused) — `docs/subsystems/vulkan/26-swap-chain-failure-paths.md`;
+  `--inject-no-monitor[=N]` (the window service finds no monitor, for every read or the first N: the startup refusal
+  `NoDisplay`, exit 94, or a start after the re-reads — `docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md`).
   The runner's `--eat-video-memory` is the real test (it fills the GPU).
   `docs/subsystems/vulkan/24-swap-chain-given-up-for-lack-of-video-memory.md`.
 

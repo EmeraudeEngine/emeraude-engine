@@ -253,9 +253,25 @@ namespace EmEn
 				return refusal;
 			}
 
+			case CoreLevelFailure::Window :
+				/* NOTE: No monitor: nothing is wrong with the hardware, the session shows no screen (production, 2026-11-02:
+				 * one Windows machine, 3 reports — a remote session or a switched-off display). */
+				if ( m_window.noMonitorFound() )
+				{
+					refusal.cause = StartupRefusal::Cause::NoDisplay;
+					refusal.title = "No display found";
+					refusal.message =
+						"This application needs a screen, and the system reports none.\n\n"
+						"Connect or switch on a monitor, or open the session on the computer itself (a remote session may hide "
+						"the monitors), then start the application again.";
+
+					return refusal;
+				}
+
+				break;
+
 			case CoreLevelFailure::None :
 			case CoreLevelFailure::Platform :
-			case CoreLevelFailure::Window :
 			case CoreLevelFailure::Input :
 				break;
 		}

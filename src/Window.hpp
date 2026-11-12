@@ -35,6 +35,7 @@
 #include <cstdint>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <string>
@@ -115,6 +116,12 @@ namespace EmEn
 
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"WindowService"};
+
+			/** @brief How many times an empty monitor list is read again at startup before the startup is refused. */
+			static constexpr uint32_t NoMonitorRetryCount{12};
+
+			/** @brief The wait between two reads of an empty monitor list (12 x 250 ms: 3 s at most). */
+			static constexpr std::chrono::milliseconds NoMonitorRetryInterval{250};
 
 			/**
 			 * @brief Describe a connected monitor/display device.
@@ -508,6 +515,18 @@ namespace EmEn
 			wasStoredSizeReplaced () const noexcept
 			{
 				return m_storedSizeReplaced;
+			}
+
+			/**
+			 * @brief Returns whether the service failed to start because the system reported no monitor: Core tells the
+			 * user (Core::StartupRefusal::Cause::NoDisplay).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			noMonitorFound () const noexcept
+			{
+				return m_noMonitorFound;
 			}
 
 			/**
@@ -1167,6 +1186,7 @@ namespace EmEn
 			bool m_windowLess{false};
 			bool m_saveWindowPropertiesAtExit{false};
 			bool m_storedSizeReplaced{false};
+			bool m_noMonitorFound{false};
 			bool m_isUserResizing{false};
 #if IS_WINDOWS
 			/* Whether initializeNativeWindow() initialised COM, so that releaseNativeWindow() uninitialises it only then. */

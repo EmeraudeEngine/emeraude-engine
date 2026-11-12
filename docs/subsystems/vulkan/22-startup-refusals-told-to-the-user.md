@@ -52,12 +52,14 @@ graphics renderer WITHOUT a graphics device, `diagnoseStartupRefusal()` classifi
 | `NoVulkanDriver` | `vkCreateInstance()` → `VK_ERROR_INCOMPATIBLE_DRIVER`, or no physical device | "needs a graphics driver supporting Vulkan 1.3, and none was found" + the OS-listed GPUs + one driver page per vendor + "an old integrated graphics chip is not compatible" |
 | `OutdatedDriver` | a device refused below the minimum version, or without timeline semaphores | names the GPU, its driver version and Vulkan version (or what it lacks), "update the graphics driver" + the vendor's page |
 | `IncompatibleHardware` | a device lacking a required feature, or no compatible device | names the GPU and the missing features, "not compatible", "updating an old driver may help" |
+| `NoDisplay` | the WINDOW service failed because the system reports no monitor (`Window::noMonitorFound()`; 2026-11-11) | "needs a screen, and the system reports none" + "connect or switch on a monitor, or open the session on the computer itself" — exit code `Core::NoDisplayExitCode` (**94**), not 97 |
 | `Other` | not classified as above | (no dialog: `EXIT_FAILURE` as before) |
 
 Then `Core::onStartupRefused(refusal)` — the application may show its own message (wording, translations) and return
 `true` (since 2026-10-22 the refusal carries the parts of the message for that: `requiredVersion`, `knownGPUs`,
 `driverPages`, `supportedVersion`, `namedDevice` — a downstream application rebuilds it in 17 languages); otherwise a native `Dialog::Message` (error, unparented: the window may not exist yet). The process exits with
-`Core::IncompatibleSystemExitCode` (97), so a crash reporter can tell "incompatible system" from a crash. Driver pages:
+`Core::IncompatibleSystemExitCode` (97) — `NoDisplayExitCode` (94) for `NoDisplay`, where nothing is wrong with the
+hardware — so a crash reporter can tell "incompatible system" from a crash. Driver pages:
 NVIDIA `https://www.nvidia.com/drivers`, AMD `https://www.amd.com/en/support/download/drivers.html`, Intel
 `https://www.intel.com/content/www/us/en/support/detect.html`.
 
@@ -115,3 +117,22 @@ available !" (`Instance.cpp`), one whose every device is refused "Unable to find
 refusal under the engine 1.0.0 failure: it must read the exit code 97 first. Since 1.1.0 a `vkCreateDevice()` or
 swap-chain failure the engine recovers from (next device, retried recreation) is an Error, no longer a Fatal
 (`docs/tracer-system.md` § Available Severity Levels).
+
+### No monitor (owner decision 2026-11-11)
+
+Production (a downstream application, 2026-11-02): one Windows machine, 3 reports at startup, the window service
+failed with the Fatal "There is no monitor on the system !" (a remote session or a switched-off display, presumably).
+An empty list may be transient (a display waking up, a dock or a KVM reconnecting, a driver resetting the display),
+and a user who has a screen in front of them would be told there is none: `Window::onInitialize()` reads the list
+again `NoMonitorRetryCount` (12) times, `NoMonitorRetryInterval` (250 ms) apart, GLFW's events pumped in between (they
+update its list) — 3 s at most. Only then a told refusal: `Window::onInitialize()` traces an Error and records
+`noMonitorFound()`, `diagnoseStartupRefusal()` classifies `CoreLevelFailure::Window` with it as `NoDisplay` ("No
+display found"), the application's `onStartupRefused()` may tell it in its own words, else the native dialog; exit
+code 94. ⚠️ An application with an exhaustive `switch` over `StartupRefusal::Cause` must add the case.
+
+Proof (`--inject-no-monitor`: every read of the monitor list reported empty; `--inject-no-monitor=N`: the first N
+reads only; a build with `EMERAUDE_FAULT_INJECTION`), Linux main, projet-alpha Debug on Xvfb: 2026-11-12, engine
+branch `cef/startup-no-display`: every read empty → "reading the list again for 3000 ms", 12 new reads, one Fatal
+"Startup refused (No display found): …", the zenity dialog "No display found", once closed a clean teardown,
+**exit code 94**, 0 VUID; the first 5 reads empty → "A monitor appeared after 5 new read(s) of the list.", a normal
+startup, exit 0, 0 VUID.

@@ -1,8 +1,8 @@
 ---
 id: crash-window-no-monitor-on-the-system-fff0f1
 title: "Window — \"There is no monitor on the system\" is a Fatal"
-status: open
-priority: unranked
+status: in-progress
+priority: high
 scope: Window
 opened: 2026-11-10
 tags: [crash, crash-report-auto]
@@ -58,9 +58,15 @@ Archives:
 - **Owner**: the engine. 1 Windows machine, 8.0.3, 3 reports at `SessionOpened` (a remote session, a display switched off?).
 - **Question for the owner**: a defect (a Fatal where a told refusal would do) or an environment to refuse cleanly? Left `unranked` until ranked.
 
+- **2026-11-11, ranked and fixed in the engine (owner decision)**: a startup refusal told to the user,
+  `StartupRefusal::Cause::NoDisplay`, exit code 94 (`docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md`
+  § No monitor). The Window's Fatal is an Error now: this signature cannot come back from a release that ships it.
+
 ## What remains
 
-- See the triage above; the journals stay in the downstream application's crash-report mirror.
+- The downstream application adds the `NoDisplay` case to its refusal switches (its texts, its crash reporter's exit
+  code 94); then the engine change can be released together with it.
+- Then delete this item.
 
 ## References
 

@@ -666,7 +666,12 @@ namespace EmEn
 					 * the primary ones — Ave Robustus II, H1). */
 					static_cast< void >(this->terminate());
 
-					return refusal.has_value() ? IncompatibleSystemExitCode : EXIT_FAILURE;
+					if ( !refusal.has_value() )
+					{
+						return EXIT_FAILURE;
+					}
+
+					return refusal->cause == StartupRefusal::Cause::NoDisplay ? NoDisplayExitCode : IncompatibleSystemExitCode;
 				}
 
 				Tracer::success(ClassId, "Engine at application level initialized !");

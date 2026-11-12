@@ -34,9 +34,11 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <thread>
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "FaultInjection.hpp"
 #include "PlatformManager.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
@@ -96,10 +98,38 @@ namespace EmEn
 			return true;
 		}
 
-		/* Checks monitor presence. */
-		if ( !this->checkMonitors(showInformation) )
+		/* Checks monitor presence.
+		 * NOTE: An empty list may be transient (a display waking up, a dock or a KVM reconnecting, a driver resetting the
+		 * display): it is read again, the events pumped in between (GLFW updates its list from them), for
+		 * NoMonitorRetryCount x NoMonitorRetryInterval. Only then is the startup refused, TOLD to the user
+		 * (Core::StartupRefusal::Cause::NoDisplay): an error here, the told refusal traces the Fatal (owner decisions
+		 * 2026-11-11). */
+		bool monitorFound = this->checkMonitors(showInformation);
+
+		for ( uint32_t attempt = 1; !monitorFound && attempt <= NoMonitorRetryCount; ++attempt )
 		{
-			Tracer::fatal(ClassId, "There is no monitor connected to the system !");
+			if ( attempt == 1 )
+			{
+				TraceWarning{ClassId} << "The system reports no monitor : reading the list again for " << NoMonitorRetryCount * NoMonitorRetryInterval.count() << " ms.";
+			}
+
+			std::this_thread::sleep_for(NoMonitorRetryInterval);
+
+			glfwPollEvents();
+
+			monitorFound = this->checkMonitors(showInformation);
+
+			if ( monitorFound )
+			{
+				TraceInfo{ClassId} << "A monitor appeared after " << attempt << " new read(s) of the list.";
+			}
+		}
+
+		if ( !monitorFound )
+		{
+			m_noMonitorFound = true;
+
+			Tracer::error(ClassId, "There is no monitor connected to the system : the window cannot be shown !");
 
 			return false;
 		}
@@ -1539,10 +1569,20 @@ namespace EmEn
 		/* Populate the monitor cache. */
 		this->refreshMonitorDevices();
 
+		/* Fault injection: no monitor found (test builds only). */
+		if constexpr ( FaultInjectionEnabled )
+		{
+			if ( FaultInjection::consumeNoMonitorRead() )
+			{
+				Tracer::warning(ClassId, "FAULT INJECTION: the monitor list is reported empty.");
+
+				m_monitorDevices.clear();
+			}
+		}
+
+		/* NOTE: The caller decides (Window::onInitialize() reads the list again before refusing). */
 		if ( m_monitorDevices.empty() )
 		{
-			Tracer::fatal(ClassId, "There is no monitor on the system !");
-
 			return false;
 		}
 

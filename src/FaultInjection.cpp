@@ -32,6 +32,7 @@
 
 /* STL inclusions. */
 #include <charconv> // IWYU pragma: keep (the test build's arguments, EMERAUDE_FAULT_INJECTION)
+#include <limits> // IWYU pragma: keep (the test build's "every read" injection, EMERAUDE_FAULT_INJECTION)
 #include <string> // IWYU pragma: keep (the test build's injected service name, EMERAUDE_FAULT_INJECTION)
 
 /* Local inclusions. */
@@ -102,6 +103,17 @@ namespace EmEn::FaultInjection
 			return injected;
 		}
 
+		/** @brief The reads of the monitor list still reported empty (written by configure(), then counted down by the
+		 * main thread only, consumeNoMonitorRead()). */
+		[[nodiscard]]
+		uint32_t &
+		noMonitorReads () noexcept
+		{
+			static uint32_t reads{0};
+
+			return reads;
+		}
+
 		/** @brief The swap-chain image count replacing the driver's answer, 0 for none (same discipline). */
 		[[nodiscard]]
 		uint32_t &
@@ -159,6 +171,28 @@ namespace EmEn::FaultInjection
 			frameSubmitFailure() = true;
 
 			TraceWarning{"FaultInjection"} << "FAULT INJECTION: the main submission of one frame will fail (" << FrameSubmitFailureArgument << ").";
+		}
+
+		if ( const auto value = arguments.get(NoMonitorArgument); value.has_value() && !value->empty() )
+		{
+			uint32_t reads = 0;
+
+			if ( const auto [pointer, errorCode] = std::from_chars(value->data(), value->data() + value->size(), reads); errorCode == std::errc{} && pointer == value->data() + value->size() )
+			{
+				noMonitorReads() = reads;
+
+				TraceWarning{"FaultInjection"} << "FAULT INJECTION: the first " << reads << " read(s) of the monitor list will be empty (" << NoMonitorArgument << ").";
+			}
+			else
+			{
+				TraceError{"FaultInjection"} << "FAULT INJECTION: '" << value.value() << "' is not a read count (" << NoMonitorArgument << "): ignored.";
+			}
+		}
+		else if ( arguments.isSwitchPresent(NoMonitorArgument) )
+		{
+			noMonitorReads() = std::numeric_limits< uint32_t >::max();
+
+			TraceWarning{"FaultInjection"} << "FAULT INJECTION: the window service will find no monitor (" << NoMonitorArgument << ").";
 		}
 
 		if ( const auto value = arguments.get(SwapChainImageCountArgument); value.has_value() && !value->empty() )
@@ -235,6 +269,25 @@ namespace EmEn::FaultInjection
 		return swapChainImageCount();
 	}
 
+	bool
+	consumeNoMonitorRead () noexcept
+	{
+		auto & reads = noMonitorReads();
+
+		if ( reads == 0 )
+		{
+			return false;
+		}
+
+		/* NOTE: The "every read" value never runs out. */
+		if ( reads != std::numeric_limits< uint32_t >::max() )
+		{
+			--reads;
+		}
+
+		return true;
+	}
+
 	std::chrono::seconds
 	runtimeFailureDelay () noexcept
 	{
@@ -281,6 +334,12 @@ namespace EmEn::FaultInjection
 	swapChainImageCountInjected () noexcept
 	{
 		return 0;
+	}
+
+	bool
+	consumeNoMonitorRead () noexcept
+	{
+		return false;
 	}
 
 	std::chrono::seconds

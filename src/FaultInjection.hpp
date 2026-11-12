@@ -75,6 +75,11 @@ namespace EmEn::FaultInjection
 	 * create more images than requested; this proves the refusal beyond the engine's capacity. */
 	constexpr auto SwapChainImageCountArgument{"--inject-swap-chain-image-count"};
 
+	/** @brief The command-line argument making the window service find no monitor at startup (Window::checkMonitors()):
+	 * `--inject-no-monitor` for every read (the startup is refused with Core::StartupRefusal::Cause::NoDisplay), or
+	 * `--inject-no-monitor=N` for the first N reads only (a transient empty list: the startup goes on). */
+	constexpr auto NoMonitorArgument{"--inject-no-monitor"};
+
 	/** @brief The delay of the runtime injections after the main loop started, in seconds:
 	 * `--inject-runtime-failure-delay=N` (default DefaultRuntimeFailureDelay; time to load a scene before an emergency
 	 * save is tested). */
@@ -141,6 +146,15 @@ namespace EmEn::FaultInjection
 	 */
 	[[nodiscard]]
 	EMEN_API uint32_t swapChainImageCountInjected () noexcept;
+
+	/**
+	 * @brief Returns whether this read of the monitor list is reported empty, and counts it. Always false in a build
+	 * without EMERAUDE_FAULT_INJECTION.
+	 * @pre Main thread (the window service's startup).
+	 * @return bool
+	 */
+	[[nodiscard]]
+	EMEN_API bool consumeNoMonitorRead () noexcept;
 
 	/**
 	 * @brief Returns the delay of the runtime injections after the main loop started.
