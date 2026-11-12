@@ -163,6 +163,7 @@ namespace EmEn::Graphics
 			 * @brief Returns the table of a uniform surface: 1 everywhere.
 			 * @return std::array< float, LongitudeCount * LatitudeCount >
 			 */
+			/* cppcheck-suppress unusedPrivateFunction ; used by the default member initializer of m_table, which cppcheck does not see. */
 			[[nodiscard]]
 			static constexpr
 			std::array< float, LongitudeCount * LatitudeCount >

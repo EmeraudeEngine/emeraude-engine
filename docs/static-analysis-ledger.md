@@ -632,6 +632,17 @@ CodeChecker parse reports -i skip.txt
 The other CodeChecker analyzers are run on their own (clang-tidy, cppcheck: their sections). `gcc` (GCC's
 `-fanalyzer`, C++ support experimental in GCC 14) has not been run: an owner decision pending.
 
+### The release sweep (2026-11-12, engine 1.3.0 / base 1.6.0)
+
+The same command (the gate's clang database, the cascade's own sources, `-j 16`), 755 TUs analysed. **21 reports**:
+- 6 already triaged as false positives (the five lightusd `NewDeleteLeaks` in `USDParser`, projet-alpha's popup copy);
+- 12 `cplusplus.Move` in base tests (`test_ThreadPool`, `test_Time`, `test_Thread` ×3, `test_StaticVector`,
+  `test_ScopedRegistration` ×2, `test_Any` ×2…): each asserts the moved-from state, part of the documented contract
+  (the same lines carry the cppcheck `accessMoved` suppression) — ON PURPOSE;
+- fixed: 2 `security.FloatLoopCounter` and 1 `deadcode.DeadStores` in base tests (integer counters, the dead copy
+  removed), 1 `core.NullDereference` in projet-alpha's `City/Tiles.cpp` (a structured binding captured by a lambda,
+  read by the analyzer as an undefined pointer: plain copies). Re-run on those four TUs: 0 report.
+
 ## include-what-you-use (owner decision 2026-10-19, Ave Robustus II P-W (2))
 
 **Version: include-what-you-use 0.23**, the rules of emeraude-base's ledger § include-what-you-use (the files a lot
@@ -785,6 +796,12 @@ cppcheck --project=<projet-alpha build>/compile_commands.json --file-filter='*/e
 	--suppressions-list=cppcheck-suppressions.txt --cppcheck-build-dir=<scratch dir> -j $(nproc) \
 	--template='{file}:{line}:{column}: {severity}: {message} [{id}]' > cppcheck.out 2> cppcheck.txt
 ```
+
+**The release sweep (2026-11-12, engine 1.3.0)**: 3 findings, 0 after — `uninitMemberVarNoCtor` in
+`Instance.cpp`'s `CoreFeature` (the member pointer gets `{nullptr}`); `unknownMacro` on libwayland's `WL_PRINTF` in
+`Window.linux.cpp` (the standard `[[gnu::format(printf, 1, 0)]]` instead); `unusedPrivateFunction`
+`MoonSurfacePhotometry::uniformTable()`, a false positive (it initializes `m_table`, a default member initializer
+cppcheck does not follow): an inline suppression with that reason.
 
 ⚠️ **Three ways to a false zero or a skipped TU**, all met on the first sweep:
 - the base's former `*/dependencies/*` third-party pattern matched the engine's own path to emeraude-base: EVERY engine

@@ -2047,7 +2047,7 @@ namespace EmEn::Vulkan
 		 * does not advertise — one Info line, not one Warning per feature (2026-11-10: 18 Warnings on every macOS startup). */
 		struct CoreFeature
 		{
-			VkBool32 VkPhysicalDeviceFeatures::* member;
+			VkBool32 VkPhysicalDeviceFeatures::* member{nullptr};
 			std::string_view name;
 		};
 

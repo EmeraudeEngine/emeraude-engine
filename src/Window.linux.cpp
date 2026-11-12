@@ -110,7 +110,7 @@ namespace
 	 * @param format A printf format.
 	 * @param arguments Its arguments.
 	 */
-	WL_PRINTF(1, 0)
+	[[gnu::format(printf, 1, 0)]]
 	void
 	waylandLogHandler (const char * format, va_list arguments)
 	{
