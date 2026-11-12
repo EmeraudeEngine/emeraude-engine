@@ -262,6 +262,12 @@ namespace EmEn
 			 */
 			static constexpr int OutOfVideoMemoryExitCode{95};
 
+			/** @brief Exit code of a startup refused because the system reports no monitor (StartupRefusal::Cause::NoDisplay).
+			 * @details Distinct from IncompatibleSystemExitCode: nothing is wrong with the hardware, the session shows no
+			 * screen (a remote session, a switched-off display) — owner decision 2026-11-11.
+			 */
+			static constexpr int NoDisplayExitCode{94};
+
 			/**
 			 * @brief The shader compilation failures that may wait for the main loop at once
 			 * (onCoreShaderCompilationFailed()): beyond it a failure is traced and not handed to the application.
@@ -291,6 +297,9 @@ namespace EmEn
 					OutdatedDriver,
 					/** @brief No GPU that can run the engine, whatever its driver (a required feature missing). */
 					IncompatibleHardware,
+					/** @brief The system reports no monitor: the window cannot be shown (Window::noMonitorFound()). Exit code
+					 * NoDisplayExitCode, not IncompatibleSystemExitCode. */
+					NoDisplay,
 					/** @brief Anything else: the log says why. */
 					Other
 				};

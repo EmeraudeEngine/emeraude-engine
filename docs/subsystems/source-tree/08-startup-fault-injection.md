@@ -47,6 +47,9 @@ release), and the measure before the fixes.
   shader's name: the final pass WITH its sharpening, `shrpCenter`, and not the one without effects), and
   `--inject-shader-compilation-failure-count=N` fails the first N matching compilations only — the later ones
   succeed, so a retry is seen to repair (`Core.RendererService.retryFailedPrograms()`).
+  At startup too: `--inject-no-monitor[=N]` (2026-11-12) — the window service finds no monitor, for every read or the
+  first N: the startup refusal `NoDisplay`, exit 94, or a start after the re-reads —
+  `docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md`.
   The runner's `--eat-video-memory` is the real test (it fills the GPU).
   `docs/subsystems/vulkan/24-swap-chain-given-up-for-lack-of-video-memory.md`.
 

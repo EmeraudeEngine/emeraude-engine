@@ -102,6 +102,11 @@ namespace EmEn::FaultInjection
 	 * is then seen to repair. */
 	constexpr auto ShaderCompilationFailureCountArgument{"--inject-shader-compilation-failure-count"};
 
+	/** @brief The command-line argument making the window service find no monitor at startup (Window::checkMonitors()):
+	 * `--inject-no-monitor` for every read (the startup is refused with Core::StartupRefusal::Cause::NoDisplay), or
+	 * `--inject-no-monitor=N` for the first N reads only (a transient empty list: the startup goes on). */
+	constexpr auto NoMonitorArgument{"--inject-no-monitor"};
+
 	/** @brief The delay of the runtime injections after the main loop started, in seconds:
 	 * `--inject-runtime-failure-delay=N` (default DefaultRuntimeFailureDelay; time to load a scene before an emergency
 	 * save is tested). */
@@ -197,6 +202,15 @@ namespace EmEn::FaultInjection
 	 */
 	[[nodiscard]]
 	EMEN_API bool shaderCompilationFailureInjected (std::string_view shaderName, std::string_view sourceCode) noexcept;
+
+	/**
+	 * @brief Returns whether this read of the monitor list is reported empty, and counts it. Always false in a build
+	 * without EMERAUDE_FAULT_INJECTION.
+	 * @pre Main thread (the window service's startup).
+	 * @return bool
+	 */
+	[[nodiscard]]
+	EMEN_API bool consumeNoMonitorRead () noexcept;
 
 	/**
 	 * @brief Returns the delay of the runtime injections after the main loop started.
