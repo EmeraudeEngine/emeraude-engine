@@ -45,6 +45,7 @@
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
+#include "SharedMutex.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn
@@ -257,6 +258,9 @@ namespace EmEn
 		return prepared;
 	}
 
+	Base::SharedMutex PlatformManager::s_GLFWAccess;
+	bool PlatformManager::s_GLFWReady{false};
+
 	PlatformManager::GLFWLibrary::~GLFWLibrary ()
 	{
 		this->terminate();
@@ -267,7 +271,10 @@ namespace EmEn
 	{
 		if ( !m_initialized )
 		{
+			const Base::SharedMutexWriteLock lock{s_GLFWAccess};
+
 			m_initialized = glfwInit() == GLFW_TRUE;
+			s_GLFWReady = m_initialized;
 		}
 
 		return m_initialized;
@@ -278,9 +285,24 @@ namespace EmEn
 	{
 		if ( m_initialized )
 		{
+			const Base::SharedMutexWriteLock lock{s_GLFWAccess};
+
+			s_GLFWReady = false;
+
 			glfwTerminate();
 
 			m_initialized = false;
+		}
+	}
+
+	void
+	PlatformManager::postEmptyEvent () noexcept
+	{
+		const Base::SharedMutexReadLock lock{s_GLFWAccess};
+
+		if ( s_GLFWReady )
+		{
+			glfwPostEmptyEvent();
 		}
 	}
 

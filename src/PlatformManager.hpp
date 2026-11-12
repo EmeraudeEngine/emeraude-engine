@@ -29,8 +29,13 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <string>
+
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
+#include "SharedMutex.hpp" // IWYU pragma: keep (the thread-safety analysis needs the capability type of s_GLFWAccess, not a forward declaration)
+#include "ThreadSafety.hpp"
 
 /* Local inclusions for usages. */
 #include "Vulkan/Loader.hpp"
@@ -123,6 +128,16 @@ namespace EmEn
 			[[nodiscard]]
 			static bool isUsingWayland () noexcept;
 
+			/**
+			 * @brief Wakes up the thread blocked in GLFW's event wait (glfwPostEmptyEvent()), only while GLFW is
+			 * initialized.
+			 * @note Any thread (CEF asks for a main-loop cycle from its own threads, Core::scheduleMainLoopCycle()). Before
+			 * glfwInit() — a startup that failed earlier — or after glfwTerminate(), nothing is posted: GLFW reported
+			 * GLFW_NOT_INITIALIZED as an error for each call, and read its global state while the main thread initialized
+			 * or terminated it (a data race). The initialization and the termination take the same lock exclusively.
+			 */
+			static void postEmptyEvent () noexcept;
+
 		private:
 
 			/**
@@ -161,6 +176,11 @@ namespace EmEn
 
 					bool m_initialized{false};
 			};
+
+			/** @brief Serializes GLFW's initialization and termination against postEmptyEvent() from other threads. */
+			static Base::SharedMutex s_GLFWAccess;
+			/** @brief Whether GLFW is initialized (GLFWLibrary::initialize() / terminate()). */
+			static bool s_GLFWReady EMEN_GUARDED_BY(s_GLFWAccess);
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
 			bool onInitialize () noexcept override;

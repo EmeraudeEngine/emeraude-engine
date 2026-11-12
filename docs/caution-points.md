@@ -6169,6 +6169,17 @@ safe: `run()` refuses to start in `Error` mode and returns `EXIT_FAILURE`. `--he
 service "terminated gracefully", "Core level terminated", exit 1. The only remaining `std::terminate()` in `Core` is
 the console's deliberate `HardExit` command.
 
+### GLFW is woken only while it is initialized (2026-11-12, owner decision)
+
+`Input::Manager::wakeUpEventsLoop()` (CEF asks for a main-loop cycle from its own threads: `Core::scheduleMainLoopCycle()`)
+called `glfwPostEmptyEvent()` whatever GLFW's state, as "a harmless no-op" before `glfwInit()`. It was not: each call
+traced `[Error] The GLFW library is not initialized` (9 lines in the teardown of a startup whose platform manager failed —
+Windows peer, a locked Vulkan loader; one in a production journal of that failure), and it read GLFW's global state while
+the main thread initialized or terminated it (a data race). Now `PlatformManager::postEmptyEvent()` posts only while GLFW
+is initialized, under `s_GLFWAccess` (shared); `GLFWLibrary::initialize()` / `terminate()` take it exclusively. Proof
+(Linux, the shipped loader removed to fail the platform manager inside `onInitialize()`): 0 such line, before a burst
+caught under gdb from `ProjetAlpha::Application::OnScheduleMessagePumpWork`; a normal on-demand run unchanged, 0 VUID.
+
 ### ⚠️⚠️ Threads start through base `Base::Thread` — a refused thread is a value, not an abort (2026-10-07)
 
 `std::thread`'s constructor throws when the system cannot start a thread; under `-fno-exceptions` the process

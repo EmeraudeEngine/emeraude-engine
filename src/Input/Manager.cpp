@@ -33,7 +33,9 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
+#include <functional>
 #include <ranges>
+#include <sstream>
 #include <utility>
 #include <vector>
 
@@ -41,17 +43,29 @@
 #include "GLFW/glfw3.h"
 
 /* Local inclusions. */
-#include "Console/Command.hpp"
-#include "GamepadController.hpp"
-#include "JoystickController.hpp"
-#include "PointerController.hpp"
-#include "IO/IO.hpp"
+#include "Any.hpp"
 #include "Arguments.hpp"
-#include "BaseUtility.hpp"
+#include "BlobTrait.hpp"
+#include "Console/Output.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
+#include "CoreTypes.hpp"
 #include "FileSystem.hpp"
+#include "GamepadController.hpp"
+#include "Input/KeyboardController.hpp"
+#include "Input/KeyboardListenerInterface.hpp"
+#include "Input/PointerListenerInterface.hpp"
+#include "Input/Types.hpp"
+#include "IO/IO.hpp"
+#include "JoystickController.hpp"
+#include "Logging/Severity.hpp"
+#include "PlatformManager.hpp"
+#include "PointerController.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
+#include "Tracer.hpp"
+#include "Vulkan/Loader.hpp"
 #include "Window.hpp"
 
 namespace EmEn::Input
@@ -908,10 +922,9 @@ namespace EmEn::Input
 	void
 	Manager::wakeUpEventsLoop () noexcept
 	{
-		/* NOTE: Documented callable from any thread. Before GLFW initialization (or after
-		 * termination), GLFW reports GLFW_NOT_INITIALIZED through the error callback and
-		 * the call is a harmless no-op. */
-		glfwPostEmptyEvent();
+		/* NOTE: Any thread. Only while GLFW is initialized: before glfwInit() (a startup that failed earlier) or after
+		 * glfwTerminate(), GLFW traced an error per call and raced the main thread on its global state (2026-11-12). */
+		PlatformManager::postEmptyEvent();
 	}
 
 	ScopedRegistration
