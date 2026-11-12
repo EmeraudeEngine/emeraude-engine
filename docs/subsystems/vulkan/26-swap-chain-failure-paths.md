@@ -110,6 +110,10 @@ draws when one of its web surfaces repaints rendered no frame while nothing chan
   Injected refused submission: the headless swap-chain recreated 3 ms later, the frames going on, exit 0; image count 6
   → the refusal, exit 1; image count 4 (headless) → 4 frames in flight, exit 0.
 
+- Engine c72d165c (the second-query guard): macOS-PA, `=4` on its real surface → "The swap-chain gave 3 images where 4
+  were counted : the swap-chain is refused !", the startup refused, exit 1, no abort, 0 VUID; Windows-PA, the injected
+  refused submission again recovered headless, exit 0, 0 VUID.
+
 ### Related
 
 - `24-swap-chain-given-up-for-lack-of-video-memory.md` — the recreation attempts, the give-up and its exit codes.

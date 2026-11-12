@@ -107,7 +107,10 @@ it is read back *after* the loss); `CommandBuffer::setCheckpoint("literal")` is 
 **Add a checkpoint at any new GPU-recording site you want to be able to blame** (a new pass, a compute dispatch).
 NVIDIA only (`VK_NV_device_diagnostic_checkpoints`); AMD, Intel and MoltenVK record nothing. Verified 2026-11-12 (Linux,
 RTX 3070 Ti, the extension enabled, validation layer loaded): `sponza --demo-options 1` with every marker, an injected
-refused submission recovered, 0 VUID.
+refused submission recovered, 0 VUID. Peers on engine c72d165c: Windows (RTX 3500 Ada, the extension enabled) `basic-scenery`
+and `sponza 1` window-less, 0 VUID, 0 `[Error]`, an injected refused submission recovered; macOS (MoltenVK, no-op
+markers) the same demos 0 VUID; MSVC and AppleClang 0 warning in Release, Debug and a fault-injection tree (the
+`Device.hpp` include gone from `CommandBuffer.hpp` breaks no TU).
 
 ### GPU Memory Management
 - **VMA mandatory** for all GPU memory allocations

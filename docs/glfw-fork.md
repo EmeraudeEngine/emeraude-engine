@@ -47,7 +47,8 @@ in `wl_shm_pool_create_buffer()`. The patch indexes with `currentImage % wlCurso
 
 - Why: a production SIGSEGV in libwayland-client under `setCursorImage` (engine item
   `crash-wayland-cursor-image-segfault-62c5eb`, 1 Manjaro machine, AMD RX 6600, 2 reports). The mechanism is a
-  reading, not a reproduction; the bound is correct either way. The same index exists upstream: to report there.
+  reading, not a reproduction; the bound is correct either way. The same index exists upstream: reported as
+  [glfw/glfw#2929](https://github.com/glfw/glfw/issues/2929) (2026-11-12).
 - Commit `27737a13` on `em/customization`, **patch-id `31f9e91abd46cd4c46004009d6e8ed22d860e07d`**. `update-glfw.py`
   now prints **2 commit(s)** above the target; the input-state patch keeps `6cf953c0…`. A rebase that conflicts here
   re-expresses the same bound (upstream may fix it: then this patch is dropped, its patch-id gone from the list).
