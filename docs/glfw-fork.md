@@ -4,9 +4,8 @@
 [`EmeraudeEngine/glfw`](https://github.com/EmeraudeEngine/glfw), checked out as a submodule of the
 engine and pinned to a commit of its `em/customization` branch.
 
-**Current pin:** GLFW **3.5.1** + the custom patch (`f4360311`, rebased 2026-08-31). A second patch, the Wayland
-HiDPI cursor bound (§ 1b, owner decision 2026-11-12), is prepared on top of it; its commit and the new pin are
-recorded here when they are made.
+**Current pin:** GLFW **3.5.1** + the input-state patch (`f4360311`, rebased 2026-08-31) + the Wayland HiDPI cursor
+bound (§ 1b, `27737a13`, 2026-11-12, owner decision). The previous pin was `f4360311` alone.
 The previous pin was `4263be2a` = 3.4-108, an untagged `master` state.
 
 What the pin change actually brings — 8 files, 28 insertions, of which only two touch code:
@@ -20,7 +19,7 @@ The rest is the version bump (3.5.0 → 3.5.1), the changelog, `.gitattributes` 
 
 ## 1. What the fork adds — the input-state commit
 
-`em/customization` carries **a single commit**, *"Add a way to get a copy of keyboard keys and mouse
+`em/customization` carries this commit first, *"Add a way to get a copy of keyboard keys and mouse
 buttons state"* (author LondNoir, 2025-01-12), touching two files:
 
 | File | Addition |
@@ -49,8 +48,9 @@ in `wl_shm_pool_create_buffer()`. The patch indexes with `currentImage % wlCurso
 - Why: a production SIGSEGV in libwayland-client under `setCursorImage` (engine item
   `crash-wayland-cursor-image-segfault-62c5eb`, 1 Manjaro machine, AMD RX 6600, 2 reports). The mechanism is a
   reading, not a reproduction; the bound is correct either way. The same index exists upstream: to report there.
-- `update-glfw.py` then prints **2 commit(s)** above the target; the input-state patch keeps its patch-id
-  (`6cf953c0…`), this one gets its own, recorded here once committed.
+- Commit `27737a13` on `em/customization`, **patch-id `31f9e91abd46cd4c46004009d6e8ed22d860e07d`**. `update-glfw.py`
+  now prints **2 commit(s)** above the target; the input-state patch keeps `6cf953c0…`. A rebase that conflicts here
+  re-expresses the same bound (upstream may fix it: then this patch is dropped, its patch-id gone from the list).
  — `update-glfw.py`
 
 ```sh
@@ -77,7 +77,7 @@ the *next* version's development branch, so following it silently pins a `-dev` 
 patch-id of every commit above the target. If the marker is gone, it fails **before** the push:
 
 ```
-Customisation verified: GLFW_EM_CUSTOM_VERSION present, 1 commit(s) above 3.5.1.   (2 once § 1b is committed)
+Customisation verified: GLFW_EM_CUSTOM_VERSION present, 2 commit(s) above 3.5.1.
   f4360311  patch-id 6cf953c0cbc91fa356e2062e566af973c2a072f1  Add a way to get a copy of keyboard...
 ```
 

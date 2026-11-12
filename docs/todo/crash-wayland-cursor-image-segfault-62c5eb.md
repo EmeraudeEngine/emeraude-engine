@@ -98,9 +98,8 @@ on a garbage proxy — a SIGSEGV inside libwayland-client, the stack of the repo
 
 ## What remains
 
-- **Owner decision 2026-11-12: the bound as a second fork patch + an upstream report** (`docs/glfw-fork.md` § 1b).
-  Prepared in the submodule's working tree; to do: the fork commit on `em/customization`, its push, the engine's
-  submodule pin, the upstream issue (each on the owner's OK).
+- **Owner decision 2026-11-12: the bound as a second fork patch + an upstream report** (`docs/glfw-fork.md` § 1b):
+  fork commit `27737a13` on `em/customization`, pinned by the engine. To do: the upstream issue.
 - Then watch the reports of the first release that ships it; delete this item when the signature is gone.
 - Reproduce: a HiDPI Wayland session with a theme whose animated cursor has fewer frames at 2x; else a compositor
   restart or a display connection killed while an animated cursor shows.
