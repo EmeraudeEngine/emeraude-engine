@@ -6179,6 +6179,8 @@ the main thread initialized or terminated it (a data race). Now `PlatformManager
 is initialized, under `s_GLFWAccess` (shared); `GLFWLibrary::initialize()` / `terminate()` take it exclusively. Proof
 (Linux, the shipped loader removed to fail the platform manager inside `onInitialize()`): 0 such line, before a burst
 caught under gdb from `ProjetAlpha::Application::OnScheduleMessagePumpWork`; a normal on-demand run unchanged, 0 VUID.
+Windows peer (engine 91d825ab, a `vulkan-1.dll` held locked until exit, 3 runs): the named-lock error and exit 1, 0 such
+line (9 per run before); macOS peer: AppleClang `-Wthread-safety` 0 warning on the guarded state.
 
 ### ⚠️⚠️ Threads start through base `Base::Thread` — a refused thread is a value, not an abort (2026-10-07)
 
@@ -8769,7 +8771,8 @@ stops if it is missing), and the engine **links no Vulkan library at all** (owne
   writing it, an antivirus scanning it) is loaded again `Loader::SharingViolationRetryCount` (8) times,
   `SharingViolationRetryInterval` (250 ms) apart; if the lock lasts, the error names it ("another program keeps the file
   locked … wait for it to finish") and the startup fails as before (owner decision 2026-11-12; production 2026-11-03,
-  one report: the platform manager's Fatal after "error 32").
+  one report: the platform manager's Fatal after "error 32"). Windows peer (engine 7e21d7e0, the file held with share
+  mode 0): released 1 s after the warning → loaded 1.3 s later, a normal start, 0 VUID; held → the named error, exit 1.
 - The validation layer is copied to `<build>/vulkan/explicit_layer.d/` (macOS `Contents/Resources/vulkan/
   explicit_layer.d/`). `PlatformManager::prepareVulkanLoaderEnvironment()` puts that directory first in
   `VK_ADD_LAYER_PATH` (and pins the macOS bundled driver, `VK_DRIVER_FILES`); **the consumer's `main()` calls it first,

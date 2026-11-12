@@ -67,12 +67,12 @@ Windows error 32 is `ERROR_SHARING_VIOLATION`: the bundled `vulkan-1.dll` was lo
 naming the lock, would cover it.
 
 - **2026-11-12 (engine, owner decision)**: the lock is retried for 2 s, then the error names it
-  (`docs/caution-points.md`, the Vulkan loader section). Proof on Windows: a peer holds the file locked during a start
-  (released within 2 s: the start goes on; held: the named error).
+  (`docs/caution-points.md`, the Vulkan loader section). Proven on Windows (engine 7e21d7e0): released within the retry,
+  the start goes on; held, the named error and exit 1 — and since 91d825ab without the GLFW errors that followed.
 
 ## What remains
 
-- The Windows proof above, then confirm on later reports; delete the item once the signature is gone.
+- Confirm on the reports of the first release that ships it; delete the item once the signature is gone.
 
 ## References
 
