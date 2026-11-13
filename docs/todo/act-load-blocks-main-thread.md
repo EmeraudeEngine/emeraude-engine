@@ -40,7 +40,14 @@ connection*), and it still leaves the compositor's `xdg_wm_base.ping` unanswered
   TSan at device creation, item `tsan-logic-render-shared-state-races` § Traps): 132 reports, 127 in uninstrumented
   third-party code (glycin, glib), 5 in the engine between the LOGIC and RENDERING threads only (filed as that item);
   the build thread is party to none (it only allocated the objects). Clean start and `Core.shutdown()`.
-- [ ] TSan on `terrain` (RADV): same reading expected; run and record.
+- [x] TSan on `terrain` (2026-11-13, RADV forced, 10.5 GB, 415 s to the start, the owner closed it with the window's
+  close button): 145 reports, the build thread an ACCESS party in none (the allocator of the racing objects in 10),
+  the rest the glycin / glib noise and the logic ↔ rendering family of `tsan-logic-render-shared-state-races` (the
+  ready flag also from `MultiLayerMeshResource`). ⚠️ The Debug teardown after that close printed VMA assertions
+  ("Some allocations were not freed before destruction of this memory block", "Unfreed dedicated allocations",
+  then a null allocator and TSan's DEADLYSIGNAL) with `CloudShape… is still used 3 times` just before: to check on
+  the Linux workstation in Debug WITHOUT TSan, terrain closed by the close button, on this commit and on its
+  parent (a Release close is silent: VMA asserts are compiled out).
 - [ ] `world-lobby` and `jungle-ruins` (their USD loads are now synchronous on the Stage's worker) on a machine that has
   the USD assets: the Ubuntu laptop's data checkout has no `data-stores/USD/`, so both failed there for the missing
   file, cleanly (2026-11-13: exit 0, 0 loss, 0 VUID, the failure traced by the worker).
