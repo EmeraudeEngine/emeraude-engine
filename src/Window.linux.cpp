@@ -27,12 +27,15 @@
 #include "Window.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cerrno>
+#include <cmath>
 #include <cstdarg>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <string_view>
 #include <system_error>
 
@@ -58,16 +61,19 @@
 namespace
 {
 	/**
-	 * @brief The reader of the Wayland connection on the rendering thread (Window::drainDisplayConnection()).
-	 * @note libwayland is loaded at runtime by GLFW (never linked): its entry points are resolved on the module GLFW
-	 * already loaded. The reader uses a PRIVATE event queue, always empty, so wl_display_prepare_read_queue() never
-	 * refuses: the default queue belongs to GLFW (main thread) and is never dispatched here.
-	 * Rendering thread only; released by Window::releaseNativeWindow() once that thread is joined.
+	 * @brief The libwayland-client entry points the window uses beside GLFW, and the private event queue of the rendering
+	 * thread's reader (Window::drainDisplayConnection()).
+	 * @note libwayland is loaded at runtime by GLFW (never linked): the entry points are resolved on the module GLFW
+	 * already loaded, once, by Window::initializeNativeWindow() on the main thread before the logic and rendering threads
+	 * exist, and released by Window::releaseNativeWindow() once they are joined. In between, read-only from any thread.
+	 * The private queue is always empty, so wl_display_prepare_read_queue() never refuses: the default queue belongs to
+	 * GLFW (main thread) and is never dispatched by the reader.
 	 */
-	struct WaylandConnectionReader
+	struct WaylandClient
 	{
 		using CreateQueue = struct wl_event_queue * (*) (struct wl_display *);
 		using DestroyQueue = void (*) (struct wl_event_queue *);
+		using PrepareRead = int (*) (struct wl_display *);
 		using PrepareReadQueue = int (*) (struct wl_display *, struct wl_event_queue *);
 		using ReadEvents = int (*) (struct wl_display *);
 		using CancelRead = void (*) (struct wl_display *);
@@ -75,16 +81,28 @@ namespace
 
 		CreateQueue createQueue{nullptr};
 		DestroyQueue destroyQueue{nullptr};
+		PrepareRead prepareRead{nullptr};
 		PrepareReadQueue prepareReadQueue{nullptr};
 		ReadEvents readEvents{nullptr};
 		CancelRead cancelRead{nullptr};
 		GetFD getFD{nullptr};
-		struct wl_event_queue * queue{nullptr};
-		bool resolved{false};
+		struct wl_event_queue * readerQueue{nullptr};
 		bool usable{false};
 	};
 
-	WaylandConnectionReader s_waylandReader{};
+	/**
+	 * @brief The process's libwayland-client entry points (WaylandClient): written by Window::initializeNativeWindow()
+	 * and Window::releaseNativeWindow() on the main thread, read by the rendering thread in between.
+	 * @return WaylandClient &
+	 */
+	[[nodiscard]]
+	WaylandClient &
+	waylandClient () noexcept
+	{
+		static WaylandClient client{};
+
+		return client;
+	}
 
 	/**
 	 * @brief Whether libwayland's log goes to the tracer (Window::initializeNativeWindow() → releaseNativeWindow()).
@@ -251,21 +269,55 @@ namespace EmEn
 	bool
 	Window::initializeNativeWindow () noexcept
 	{
-		/* NOTE: libwayland's log (the protocol error that kills a connection) goes to the tracer while the window lives. */
-		if ( glfwGetPlatform() == GLFW_PLATFORM_WAYLAND )
+		if ( glfwGetPlatform() != GLFW_PLATFORM_WAYLAND )
 		{
-			using SetLogHandler = decltype(&wl_log_set_handler_client);
+			return true;
+		}
 
-			if ( const auto setLogHandler = waylandEntryPoint< SetLogHandler >("wl_log_set_handler_client"); setLogHandler != nullptr )
-			{
-				waylandLogToTracer().store(true, std::memory_order_release);
+		/* NOTE: libwayland's log (the protocol error that kills a connection) goes to the tracer while the window lives. */
+		using SetLogHandler = decltype(&wl_log_set_handler_client);
 
-				setLogHandler(&waylandLogHandler);
-			}
-			else
+		if ( const auto setLogHandler = waylandEntryPoint< SetLogHandler >("wl_log_set_handler_client"); setLogHandler != nullptr )
+		{
+			waylandLogToTracer().store(true, std::memory_order_release);
+
+			setLogHandler(&waylandLogHandler);
+		}
+		else
+		{
+			Tracer::warning(ClassId, "libwayland's log cannot be routed to the journal (wl_log_set_handler_client() not found).");
+		}
+
+		/* NOTE: The entry points of the rendering thread's reader (drainDisplayConnection()) and of the main thread's wait
+		 * (waitEvents()), resolved once here: no other thread exists yet. */
+		auto & client = waylandClient();
+
+		client.createQueue = waylandEntryPoint< WaylandClient::CreateQueue >("wl_display_create_queue");
+		client.destroyQueue = waylandEntryPoint< WaylandClient::DestroyQueue >("wl_event_queue_destroy");
+		client.prepareRead = waylandEntryPoint< WaylandClient::PrepareRead >("wl_display_prepare_read");
+		client.prepareReadQueue = waylandEntryPoint< WaylandClient::PrepareReadQueue >("wl_display_prepare_read_queue");
+		client.readEvents = waylandEntryPoint< WaylandClient::ReadEvents >("wl_display_read_events");
+		client.cancelRead = waylandEntryPoint< WaylandClient::CancelRead >("wl_display_cancel_read");
+		client.getFD = waylandEntryPoint< WaylandClient::GetFD >("wl_display_get_fd");
+
+		client.usable =
+			client.createQueue != nullptr && client.destroyQueue != nullptr && client.prepareRead != nullptr &&
+			client.prepareReadQueue != nullptr && client.readEvents != nullptr && client.cancelRead != nullptr &&
+			client.getFD != nullptr;
+
+		if ( client.usable )
+		{
+			if ( auto * display = glfwGetWaylandDisplay(); display != nullptr )
 			{
-				Tracer::warning(ClassId, "libwayland's log cannot be routed to the journal (wl_log_set_handler_client() not found).");
+				client.readerQueue = client.createQueue(display);
 			}
+
+			client.usable = client.readerQueue != nullptr;
+		}
+
+		if ( !client.usable )
+		{
+			Tracer::warning(ClassId, "Unable to resolve libwayland-client: the display connection is read by the main thread only, and its wait holds the native-surface lock.");
 		}
 
 		return true;
@@ -274,14 +326,18 @@ namespace EmEn
 	void
 	Window::releaseNativeWindow () noexcept
 	{
+		auto & client = waylandClient();
+
 		/* The rendering thread is joined: nobody reads through the private queue any more, and it must be gone
 		 * before GLFW disconnects the display. */
-		if ( s_waylandReader.queue != nullptr && s_waylandReader.destroyQueue != nullptr )
+		if ( client.readerQueue != nullptr && client.destroyQueue != nullptr )
 		{
-			s_waylandReader.destroyQueue(s_waylandReader.queue);
+			client.destroyQueue(client.readerQueue);
 
-			s_waylandReader.queue = nullptr;
+			client.readerQueue = nullptr;
 		}
+
+		client.usable = false;
 
 		/* The tracer stops receiving libwayland's log (the handler stays installed, inert). */
 		waylandLogToTracer().store(false, std::memory_order_release);
@@ -290,7 +346,9 @@ namespace EmEn
 	void
 	Window::drainDisplayConnection () const noexcept
 	{
-		if ( glfwGetPlatform() != GLFW_PLATFORM_WAYLAND )
+		const auto & client = waylandClient();
+
+		if ( !client.usable )
 		{
 			return;
 		}
@@ -302,63 +360,99 @@ namespace EmEn
 			return;
 		}
 
-		auto & reader = s_waylandReader;
-
-		if ( !reader.resolved )
-		{
-			reader.resolved = true;
-
-			/* RTLD_NOLOAD: the very module GLFW opened, never a second copy. */
-			if ( auto * module = dlopen("libwayland-client.so.0", RTLD_NOW | RTLD_NOLOAD); module != nullptr )
-			{
-				reader.createQueue = reinterpret_cast< WaylandConnectionReader::CreateQueue >(dlsym(module, "wl_display_create_queue"));
-				reader.destroyQueue = reinterpret_cast< WaylandConnectionReader::DestroyQueue >(dlsym(module, "wl_event_queue_destroy"));
-				reader.prepareReadQueue = reinterpret_cast< WaylandConnectionReader::PrepareReadQueue >(dlsym(module, "wl_display_prepare_read_queue"));
-				reader.readEvents = reinterpret_cast< WaylandConnectionReader::ReadEvents >(dlsym(module, "wl_display_read_events"));
-				reader.cancelRead = reinterpret_cast< WaylandConnectionReader::CancelRead >(dlsym(module, "wl_display_cancel_read"));
-				reader.getFD = reinterpret_cast< WaylandConnectionReader::GetFD >(dlsym(module, "wl_display_get_fd"));
-
-				/* The module stays loaded by GLFW: this handle only drops the reference it took. */
-				dlclose(module);
-			}
-
-			reader.usable = reader.createQueue != nullptr && reader.destroyQueue != nullptr && reader.prepareReadQueue != nullptr &&
-				reader.readEvents != nullptr && reader.cancelRead != nullptr && reader.getFD != nullptr;
-
-			if ( reader.usable )
-			{
-				reader.queue = reader.createQueue(display);
-				reader.usable = reader.queue != nullptr;
-			}
-
-			if ( !reader.usable )
-			{
-				Tracer::warning(ClassId, "Unable to resolve libwayland-client: the display connection is read by the main thread only.");
-			}
-		}
-
-		if ( !reader.usable )
-		{
-			return;
-		}
-
 		/* The private queue is always empty, so the intention to read is always granted. */
-		if ( reader.prepareReadQueue(display, reader.queue) != 0 )
+		if ( client.prepareReadQueue(display, client.readerQueue) != 0 )
 		{
 			return;
 		}
 
 		/* Never blocks: read only what is already waiting. When the main thread also prepared a read (it polls),
 		 * the same data wakes it, and the last reader performs the read for both. */
-		pollfd descriptor{.fd = reader.getFD(display), .events = POLLIN, .revents = 0};
+		pollfd descriptor{.fd = client.getFD(display), .events = POLLIN, .revents = 0};
 
 		if ( ::poll(&descriptor, 1, 0) > 0 && (descriptor.revents & POLLIN) != 0 )
 		{
-			static_cast< void >(reader.readEvents(display));
+			static_cast< void >(client.readEvents(display));
 		}
 		else
 		{
-			reader.cancelRead(display);
+			client.cancelRead(display);
 		}
+	}
+
+	void
+	Window::waitEvents (double timeoutSeconds) const noexcept
+	{
+		const auto & client = waylandClient();
+
+		auto * display = m_nativeSurfaceSerialized && client.usable ? glfwGetWaylandDisplay() : nullptr;
+
+		if ( display == nullptr )
+		{
+			/* NOTE: X11, a window-less run, or libwayland out of reach: GLFW's own wait, under the lock when it matters
+			 * (the lock owns nothing outside Wayland). */
+			const auto surfaceLock = this->lockNativeSurface();
+
+			if ( timeoutSeconds > 0.0 )
+			{
+				glfwWaitEventsTimeout(timeoutSeconds);
+			}
+			else
+			{
+				glfwWaitEvents();
+			}
+
+			return;
+		}
+
+		/* 1. What is pending is dispatched under the lock, and GLFW flushes the requests of its handlers. */
+		this->pumpEvents();
+
+		/* 2. Register as a reader of the default queue: refused while it holds events (the rendering thread's reader may
+		 * have filed some since the pump above), dispatched again then. Bounded: a queue that never empties means the
+		 * main loop must cycle anyway. */
+		constexpr uint32_t MaxRegistrationAttempts{8};
+
+		bool registered = false;
+
+		for ( uint32_t attempt = 0; attempt < MaxRegistrationAttempts && !registered; ++attempt )
+		{
+			registered = client.prepareRead(display) == 0;
+
+			if ( !registered )
+			{
+				this->pumpEvents();
+			}
+		}
+
+		if ( !registered )
+		{
+			return;
+		}
+
+		/* 3. The wait itself, WITHOUT the lock: the rendering thread presents meanwhile. GLFW's timers are not polled
+		 * here (key repeat, cursor animation), so an indefinite wait is bounded and they are served at the next pass. */
+		const auto timeoutMilliseconds = timeoutSeconds > 0.0 ?
+			static_cast< int >(std::clamp(std::ceil(timeoutSeconds * 1000.0), 1.0, static_cast< double >(std::numeric_limits< int >::max()))) :
+			WaylandIndefiniteWaitMilliseconds;
+
+		pollfd descriptor{.fd = client.getFD(display), .events = POLLIN, .revents = 0};
+
+		const auto ready = ::poll(&descriptor, 1, timeoutMilliseconds);
+
+		/* 4. The events read join their queues (GLFW's, the driver's); a timeout, a signal or a dead socket gives the
+		 * read up. */
+		if ( ready > 0 && (descriptor.revents & POLLIN) != 0 )
+		{
+			static_cast< void >(client.readEvents(display));
+		}
+		else
+		{
+			client.cancelRead(display);
+		}
+
+		/* 5. Dispatched under the lock. A dead connection is seen by GLFW here (its flush fails) and becomes the close
+		 * request Window::windowCloseCallback() turns into the display-loss stop. */
+		this->pumpEvents();
 	}
 }

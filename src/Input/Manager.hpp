@@ -396,8 +396,8 @@ namespace EmEn::Input
 			void unlockPointer () noexcept;
 
 			/**
-			 * @brief Waits for a system event.
-			 * @param until Sets a duration until the cancellation of the waiting in seconds.
+			 * @brief Copies the device states, then waits for a system event (Window::waitEvents()) [MAIN THREAD].
+			 * @param until Sets a duration until the cancellation of the waiting in seconds; zero waits until an event.
 			 */
 			void waitSystemEvents (double until = 0.0) const noexcept;
 

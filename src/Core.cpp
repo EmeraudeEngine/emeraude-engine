@@ -2693,7 +2693,7 @@ namespace EmEn
 
 		while ( true )
 		{
-			glfwWaitEvents();
+			m_window.waitEvents(0.0);
 
 			if ( glfwGetKey(m_window.handle(), GLFW_KEY_SPACE) == GLFW_PRESS )
 			{

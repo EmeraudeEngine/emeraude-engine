@@ -1,7 +1,7 @@
 ---
 id: act-load-blocks-main-thread
 title: A built-in act is loaded on the main thread, which stops answering the window system for its whole duration
-status: open
+status: in-progress
 priority: high
 scope: projet-alpha Stage/Loader, engine Core (main loop)
 opened: 2026-09-25
@@ -19,7 +19,35 @@ now reads the display, `Window::drainDisplayConnection()`, `docs/caution-points.
 connection*), and it still leaves the compositor's `xdg_wm_base.ping` unanswered: GNOME may dim the window as
 "not responding" during a long load, and no input is taken.
 
+## Fixed downstream (2026-11-13, owner decision: the loader on a worker, the Stage pumps)
+
+- projet-alpha `Stage::buildPumpingWindow(build)`, the one generic loading behaviour (owner, 2026-11-13: no demo acts
+  differently): the build step of every act (`Builtin::Loader::load()`, `Scenes::Manager::loadScene()`) runs on a
+  dedicated `Base::Thread` (never the resource pool) while the main thread waits in `Window::waitEvents(0.016)`; a
+  load requested meanwhile (the UI's callbacks run during the pump) is refused with a warning; `loadActiveAct()` stays
+  on the main thread. `AbstractDemo::pumpEventsUntil()` is gone: WorldLobby and JungleRuins call the USD loader
+  synchronously like any demo (they used to spawn their own thread and pump GLFW from `onBuilding()`).
+- Engine side: `Window::waitEvents()` is the wait (the ping is answered by GLFW's dispatch at every pass); the
+  measurement that opened this item is in projet-alpha's `docs/caution-points.md` § Core Application.
+- Symptom that confirmed the mechanism (owner, Ubuntu 26.04, GNOME 50.1): the "Wait / Force Quit" dialog on every
+  interaction during terrain's load; mutter's `check-alive-timeout` is 5000 ms and it pings on each click / key / focus.
+- Measured after (2026-11-13, same machine, `terrain`, validation ON): 61.3 s of build with the owner clicking, typing
+  and moving the pointer, no dialog, 0 VUID, 0 loss, clean shutdown.
+
 ## What remains
+
+- [x] TSan on `default` (2026-11-13, Debug + TSan, `--disable-cef`, the RADV device forced: the NVIDIA driver dies under
+  TSan at device creation, item `tsan-logic-render-shared-state-races` § Traps): 132 reports, 127 in uninstrumented
+  third-party code (glycin, glib), 5 in the engine between the LOGIC and RENDERING threads only (filed as that item);
+  the build thread is party to none (it only allocated the objects). Clean start and `Core.shutdown()`.
+- [ ] TSan on `terrain` (RADV): same reading expected; run and record.
+- [ ] `world-lobby` and `jungle-ruins` (their USD loads are now synchronous on the Stage's worker) on a machine that has
+  the USD assets: the Ubuntu laptop's data checkout has no `data-stores/USD/`, so both failed there for the missing
+  file, cleanly (2026-11-13: exit 0, 0 loss, 0 VUID, the failure traced by the worker).
+- [ ] Peers (macOS-PA, Windows-PA): a built-in load with the window answering (move the pointer during terrain's load).
+- [ ] Then delete this item (its knowledge lives in projet-alpha's caution-points and `src/AGENTS.md`).
+
+## Former plan
 
 - Load the act on a worker while the main loop runs (a loading state the stage shows), then enable the scene;
   or pump the window events between the loader's steps — the second is simpler but runs input callbacks in the

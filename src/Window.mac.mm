@@ -236,6 +236,20 @@ namespace EmEn
 		/* NOTE: The Cocoa event queue does not drop its window when it is not pumped for a while. */
 	}
 
+	void
+	Window::waitEvents (double timeoutSeconds) const noexcept
+	{
+		/* NOTE: No native-surface lock to split the wait around (Wayland only, Window.linux.cpp). */
+		if ( timeoutSeconds > 0.0 )
+		{
+			glfwWaitEventsTimeout(timeoutSeconds);
+		}
+		else
+		{
+			glfwWaitEvents();
+		}
+	}
+
 	id
 	Window::getCocoaWindow () const noexcept
 	{

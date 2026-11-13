@@ -908,15 +908,9 @@ namespace EmEn::Input
 			}
 		}
 
-		/* This function is blocking the process by waiting for an event from a system. */
-		if ( until > 0.0 )
-		{
-			glfwWaitEventsTimeout(until);
-		}
-		else
-		{
-			glfwWaitEvents();
-		}
+		/* NOTE: The window's wait: on Wayland its blocking part runs outside the native-surface lock, so the rendering
+		 * thread presents meanwhile (Window::waitEvents()). */
+		m_window.waitEvents(until);
 	}
 
 	void

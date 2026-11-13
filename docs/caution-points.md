@@ -6501,8 +6501,95 @@ After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and
 - ⚠️ A window that closes by itself: read `Core`'s stop trace first (`Stop requested by the window system (close
   request)` / `by the Escape key` / `by the console` / `the graphics renderer is no longer usable`, 2026-09-25), then
   the compositor's journal. A GLFW "close request" can be a dead connection.
-- Still open by design: the main thread is busy for the whole load, so the compositor's `xdg_wm_base.ping` is
-  answered late (GNOME may mark the window unresponsive). Only an asynchronous act load would answer it.
+- The ping: a main thread busy for the whole load answered the compositor's `xdg_wm_base.ping` late, and GNOME offered
+  to kill the application after 5 s on every interaction (mutter's `check-alive-timeout`). Fixed downstream on
+  2026-11-13: projet-alpha builds its act on a worker while the main thread waits in `Window::waitEvents()`, THE
+  wait of the main loop (projet-alpha `docs/caution-points.md` § Core Application).
+
+### TSan on a machine whose display GPU runs the NVIDIA driver (2026-11-13)
+
+> A ThreadSanitizer build of projet-alpha died at device creation on the NVIDIA driver 595.99.02 (`ThreadSanitizer:
+> DEADLYSIGNAL`, a SEGV in a driver thread, then "nested bug in the same thread, aborting"), 133 s after launch, before
+> the engine started: the driver is uninstrumented and its threads do not survive the runtime. Force a Mesa device in
+> a settings COPY (`Core/Video/VulkanDevice/ForceGPU`, `--settings-filepath`): the AMD iGPU (RADV) on a hybrid laptop,
+> `llvmpipe` anywhere. The run then starts in ~140 s and `Core.shutdown()` works; TSan's exit code is 66 whenever it
+> reported something, the engine's own code is the journal's "User exit code". The reports of uninstrumented libraries
+> (glycin, glib: ~127 on `default`) are noise to filter; the engine's own are an item
+> (`tsan-logic-render-shared-state-races`).
+
+### Fixed: a buffer-less commit of the window surface from the main thread raced the driver's present — Wayland explicit sync (2026-11-13)
+
+> **Symptom (owner, Ubuntu 26.04, GNOME 50.1 / mutter 50.1, NVIDIA 595.99.02 beside an AMD iGPU, libdecor 0.2.5 GTK
+> plugin):** hovering the window's close button killed the application at once, every time: `[Wayland] libwayland:
+> wp_linux_drm_syncobj_surface_v1#82: error 3: Release or Acquire point set but no buffer attached`, then the clean stop
+> with exit code 96. The same error had been intermittent for months (engine item `wayland-surface-lost-protocol-error`:
+> 1 run in 8, 2 demos in 37, 13 production machines) and never attributed.
+
+**The chain, read in the protocol trace (`tools/wayland-protocol-trace.py`, libwayland 1.24 tags each request with its
+event queue, which names the thread).** One frame, times in ms:
+
+```
+1035700.814            -> wp_linux_drm_syncobj_surface_v1#82.set_acquire_point(...)   NVIDIA WSI, inside vkQueuePresentKHR (rendering thread)
+1035700.821            -> wp_linux_drm_syncobj_surface_v1#82.set_release_point(...)
+1035700.832 {Default}  -> wl_surface#46.attach(wl_buffer#111)   libdecor-gtk redraws the title bar (a 1280x37 shm buffer)
+1035700.851 {Default}  -> wl_surface#36.commit()                 libdecor_frame_toplevel_commit → GLFW libdecorFrameHandleCommit: NO buffer
+1035700.859            -> wl_surface#36.attach(wl_buffer#93)     the driver's own attach, 8 µs too late
+1035700.867            -> wl_surface#36.commit()
+1035700.958 {Display}  wl_display#1.error(wp_linux_drm_syncobj_surface_v1#82, 3, "Release or Acquire point set but no buffer attached")
+```
+
+1. The presentation engine (the driver's WSI, inside `vkQueuePresentKHR()` on the rendering thread) sets the surface's
+   two explicit-synchronization points, then attaches the buffer, damages and commits: five requests, 20 to 45 µs from
+   the first point to the attach. libwayland serializes each request, never the sequence.
+2. libdecor-gtk redraws the title bar and commits the toplevel surface on EVERY pointer motion over the header
+   (`pointer_motion` → `draw_title_bar` → `libdecor_frame_toplevel_commit`; 17 call sites in the plugin, enter, leave,
+   press, title and output changes among them). The toplevel commit is the client's callback: GLFW's
+   `libdecorFrameHandleCommit()` → `wl_surface_commit(window->wl.surface)` with no buffer, on the main thread inside
+   `glfwPollEvents()`. GLFW commits the same surface on its own on a configure, a show, a hide.
+3. A main-thread commit landing between the points and the attach reaches mutter with points set and no buffer:
+   `WP_LINUX_DRM_SYNCOBJ_SURFACE_V1_ERROR_NO_BUFFER` (the points live in the surface's pending state, validated at every
+   commit: `meta_wayland_surface_explicit_sync_validate`), the connection is killed, every Wayland object with it.
+4. At ~240 presents per second (MAILBOX) the surface is armed ~1 % of the time; the hover is "instant" because the
+   pointer sends hundreds of motion events per second over the header, each one a commit. The intermittent losses
+   "during desktop activity" are the configure commits buying the same lottery ticket.
+
+Nobody is wrong alone: mutter follows the protocol, the driver sends its requests in order, GLFW and libdecor know
+nothing of a presenting thread. The defect is the multi-threaded client: the SAME shape as Collabora's Zink / Firefox
+race (2025-10-27, Mesa's present thread vs the browser's main thread) and Godot #93669 ("misuse of the protocol by
+clients like us"). Only the engine knows both threads.
+
+**Fix (owner decision 2026-11-13: a lock owned by `Window`, no GLFW patch).** `Window::lockNativeSurface()`, a
+recursive mutex that owns nothing outside Wayland:
+- the rendering thread holds it around `vkQueuePresentKHR()` (`Renderer::renderFrame()`) and the swap-chain creation
+  and recreation (their protocol work on the surface);
+- the main thread holds it around every GLFW dispatch (`Window::pumpEvents()`, `executeWithoutCallbacks()`) and every
+  Window method that commits (title, size, show, hide, iconify, restore, maximize, focus, monitor);
+- recursive because a GLFW callback dispatched under it may pump again: the close request calls `Core::stop()`, whose
+  force-quit dialog pumps the window from its modal loop (`executeCommandPumpingEvents()`);
+- `Window::waitEvents(timeout)` is THE wait of the main loop (`Input::Manager::waitSystemEvents()`) and of any
+  main-thread wait that must keep the window alive: on Wayland it pumps under the lock, registers as a reader of the
+  connection (`wl_display_prepare_read`, retried after a pump while the default queue holds events, bounded), `poll()`s
+  the display WITHOUT the lock, `wl_display_read_events` / `cancel_read`, then pumps under the lock. The rendering
+  thread's reader (`drainDisplayConnection()`) follows the same reader protocol as before. GLFW's own timers (key
+  repeat, cursor animation) are not in that `poll()`: served at the next pass, at most the timeout away, so an indefinite
+  wait is bounded to `WaylandIndefiniteWaitMilliseconds` (10 ms) on Wayland. Elsewhere `waitEvents()` is GLFW's wait.
+- The libwayland entry points are resolved once by `initializeNativeWindow()` on the main thread, before the logic and
+  rendering threads exist (they were resolved lazily on the rendering thread).
+
+**Measured (2026-11-13, the same machine, `default`, validation layer ON):** before, 2 runs / 2 lost the connection
+within seconds of the pointer reaching the close button; after, the owner hovered the close button and moved over the
+title bar for more than a minute: alive, 0 `libwayland:` line, 0 `VUID-`, 0 `WL: error` in gnome-shell's journal,
+clean `Core.shutdown()`.
+
+**Rules.**
+- ⚠️ On Wayland, **two threads never send requests to the same `wl_surface` without the lock**: a new present path, a new
+  GLFW call that may commit (anything that changes the surface's state) goes under `lockNativeSurface()`; never a
+  `glfwWaitEvents*()` under it (the wait would stall the presents), always `Window::waitEvents()`.
+- A libwayland ≥ 1.23 trace names the committer: `{Default Queue}` is GLFW / libdecor on the main thread, an untagged
+  request is the driver's (unnamed queue). `tools/wayland-protocol-trace.py --analyse` prints it for the judged commit.
+- The first capture was lost to the tool's `@` regexes (libwayland now writes `wl_surface#36`): a capture tool is
+  checked against the library's current output before a measurement is trusted, and a "clean" run with a dead client
+  in the journal is a tool defect, not a result.
 
 ### Fixed: the render thread waited on the compositor while holding the scene lock (Sep 2026)
 

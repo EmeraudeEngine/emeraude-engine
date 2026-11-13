@@ -37,6 +37,7 @@
 #include <atomic>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 #include <vector>
@@ -724,6 +725,8 @@ namespace EmEn
 			 * native dialogs: without it a zenity/kdialog box gets the application force-quit prompt.
 			 * @note A no-op until the window exists: a native dialog may run before GLFW is initialized (or after it
 			 * failed to), where glfwPollEvents() would raise GLFW_NOT_INITIALIZED at every pump.
+			 * @note The dispatch runs under the native-surface lock (lockNativeSurface()): GLFW and libdecor commit the
+			 * surface from their handlers. A wait on the main thread goes through waitEvents().
 			 */
 			void
 			pumpEvents () const noexcept
@@ -733,7 +736,50 @@ namespace EmEn
 					return;
 				}
 
+				const auto surfaceLock = this->lockNativeSurface();
+
 				glfwPollEvents();
+			}
+
+			/**
+			 * @brief Waits for the next OS window event, at most the timeout, then drains the pending events (callbacks
+			 * delivered) [MAIN THREAD].
+			 * @note THE wait of the main loop (Input::Manager::waitSystemEvents()) and of any main-thread wait that must keep
+			 * the window alive, such as an act built on a worker. On Wayland the blocking part runs OUTSIDE the
+			 * native-surface lock (lockNativeSurface()): the thread registers as a reader of the connection, poll()s its
+			 * descriptor, reads the events into their queues, then dispatches them under the lock, so the rendering thread
+			 * presents meanwhile. GLFW's own timers (key repeat, cursor animation) are served at the next pass, at most the
+			 * timeout away, which is why an indefinite wait is bounded to WaylandIndefiniteWaitMilliseconds there. Elsewhere
+			 * this is glfwWaitEventsTimeout() / glfwWaitEvents().
+			 * @param timeoutSeconds The longest wait, in seconds; zero or negative waits until an event.
+			 */
+			void waitEvents (double timeoutSeconds) const noexcept;
+
+			/**
+			 * @brief Serializes the requests sent to the window's native surface between the thread that pumps the window
+			 * (GLFW's dispatch, libdecor, the Window methods that commit) and the thread that presents (the Vulkan WSI inside
+			 * vkQueuePresentKHR(), the swap-chain creation and recreation) [ANY THREAD].
+			 * @details Wayland only. The presentation engine sets the explicit-synchronization points of the surface, then
+			 * attaches the buffer and commits: separate requests ~30 µs apart, and libwayland serializes each request, not
+			 * the sequence. A commit of the same surface from the main thread in between (libdecor redraws the title bar
+			 * and commits the toplevel on EVERY pointer motion over it; GLFW commits on a configure, a show, a hide) reaches
+			 * the compositor with the points set and no buffer attached: a protocol error, the connection is killed and the
+			 * engine stops (exit code 96). Measured 2026-11-13 (NVIDIA 595, mutter 50; docs/caution-points.md). The lock is
+			 * recursive: a GLFW callback dispatched under it may pump again (the force-quit dialog Core::stop() opens from
+			 * the close request). Elsewhere (X11, Windows, macOS) the presentation engine shares no per-commit contract with
+			 * the toolkit and the returned lock owns nothing.
+			 * @return std::unique_lock< std::recursive_mutex > Owning on Wayland, empty elsewhere.
+			 */
+			[[nodiscard]]
+			std::unique_lock< std::recursive_mutex >
+			lockNativeSurface () const noexcept
+			{
+				if ( !m_nativeSurfaceSerialized )
+				{
+					return std::unique_lock< std::recursive_mutex >{m_nativeSurfaceAccess, std::defer_lock};
+				}
+
+				return std::unique_lock< std::recursive_mutex >{m_nativeSurfaceAccess};
 			}
 
 			/**
@@ -757,6 +803,9 @@ namespace EmEn
 
 					return;
 				}
+
+				/* The pump below and the function (a swap-chain recreation) send requests to the native surface. */
+				const auto surfaceLock = this->lockNativeSurface();
 
 				auto * window = m_handle.get();
 
@@ -1140,6 +1189,9 @@ namespace EmEn
 			static LRESULT CALLBACK windowProc (HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 #endif
 
+			/* An indefinite wait on Wayland polls the display only: GLFW's timers are served at each pass (waitEvents()). */
+			static constexpr int WaylandIndefiniteWaitMilliseconds{10};
+
 			PrimaryServices & m_primaryServices;
 			const Vulkan::Instance & m_instance;
 			std::string m_title;
@@ -1148,6 +1200,8 @@ namespace EmEn
 			/* The window user pointer of m_handle: its address is stable for the Window's whole life. */
 			CallbackContext m_callbackContext{.window = this, .inputManager = nullptr};
 			std::unique_ptr< Vulkan::Surface > m_surface;
+			/* The native-surface lock (lockNativeSurface()): recursive, the close request's dialog pumps again under it. */
+			mutable std::recursive_mutex m_nativeSurfaceAccess;
 #if IS_WINDOWS
 			WNDPROC m_originalWndProc{nullptr};
 #endif
@@ -1165,6 +1219,8 @@ namespace EmEn
 			/* The monitor hot-plug callback and its receiver (checkMonitors()): its end uninstalls both. */
 			Base::ScopedRegistration m_monitorCallbackRegistration;
 			bool m_windowLess{false};
+			/* Whether lockNativeSurface() owns the lock: Wayland, set by onInitialize() before any other thread exists. */
+			bool m_nativeSurfaceSerialized{false};
 			bool m_saveWindowPropertiesAtExit{false};
 			bool m_storedSizeReplaced{false};
 			bool m_isUserResizing{false};

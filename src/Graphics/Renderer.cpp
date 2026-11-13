@@ -892,6 +892,9 @@ namespace EmEn::Graphics
 		m_swapChain = std::make_shared< SwapChain >(*this, m_primaryServices.settings(), m_vulkanInstance.showInformation());
 		m_swapChain->setIdentifier(ClassId, "Main", "SwapChain");
 
+		/* NOTE: The swap-chain's requests to the native surface, serialized with the window's own (Window::lockNativeSurface()). */
+		const auto surfaceLock = m_window.lockNativeSurface();
+
 		if ( !m_swapChain->createOnHardware() )
 		{
 			Tracer::fatal(ClassId, "Unable to create the swap-chain!");
@@ -2396,7 +2399,13 @@ namespace EmEn::Graphics
 				m_recorder.confirmSubmit(true);
 			}
 
-			m_swapChain->present(imageIndex, m_graphicsQueue, presentSemaphoreHandle);
+			{
+				/* NOTE: vkQueuePresentKHR() sets the surface's explicit-synchronization points, attaches and commits as separate
+				 * requests: no other thread may commit the surface in between (Window::lockNativeSurface(), Wayland). */
+				const auto surfaceLock = m_window.lockNativeSurface();
+
+				m_swapChain->present(imageIndex, m_graphicsQueue, presentSemaphoreHandle);
+			}
 		}
 
 		/* NOTE: The modulo is below the frame scope count (at most 5, a StaticVector). */
@@ -3795,19 +3804,24 @@ namespace EmEn::Graphics
 			}
 		}
 
-		/* NOTE: Recreate the swap-chain. */
-		if ( withSurface )
+		/* NOTE: Recreate the swap-chain, its requests to the native surface serialized with the window's own; the lock
+		 * covers the swap-chain only, not the render targets below (the main thread dispatches meanwhile). */
 		{
-			if ( !m_swapChain->fullRecreate() )
+			const auto surfaceLock = m_window.lockNativeSurface();
+
+			if ( withSurface )
 			{
-				return false;
+				if ( !m_swapChain->fullRecreate() )
+				{
+					return false;
+				}
 			}
-		}
-		else
-		{
-			if ( !m_swapChain->recreate() )
+			else
 			{
-				return false;
+				if ( !m_swapChain->recreate() )
+				{
+					return false;
+				}
 			}
 		}
 

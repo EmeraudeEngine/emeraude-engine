@@ -1,7 +1,7 @@
 ---
 id: wayland-surface-lost-protocol-error
 title: Wayland — a compositor protocol error kills the surface mid-load
-status: open
+status: in-progress
 priority: high
 scope: Platform/Window
 opened: 2026-08-04
@@ -83,7 +83,48 @@ then GLFW's close requests at 60 Hz (its `flushDisplay()` failing on the dead co
 own with `DisplayLostExitCode` (96, `Core::stopOnDisplayLoss()`): the downstream reports now count this item's
 occurrences under exit code 96. The protocol error itself is on stderr only (libwayland), not in the journals.
 
+## Attributed and fixed (2026-11-13, Ubuntu 26.04, GNOME 50.1 / mutter 50.1, NVIDIA 595.99.02 + AMD iGPU, libdecor 0.2.5 GTK plugin)
+
+**The committer is libdecor's title-bar redraw, through GLFW, on the main thread.** Deterministic trigger found by the
+owner: hovering the window's close button killed the connection within seconds, every time (2 / 2 under trace). The
+kept trace (`WAYLAND_DEBUG=1`, libwayland 1.24, which tags each request with its event queue) reads, in one frame:
+
+```
+1035700.814            -> wp_linux_drm_syncobj_surface_v1#82.set_acquire_point(...)   the NVIDIA WSI, inside vkQueuePresentKHR (rendering thread)
+1035700.821            -> wp_linux_drm_syncobj_surface_v1#82.set_release_point(...)
+1035700.832 {Default}  -> wl_surface#46.attach(wl_buffer#111)   libdecor-gtk: the 1280x37 title-bar buffer (shm)
+1035700.851 {Default}  -> wl_surface#36.commit()                 libdecor_frame_toplevel_commit → GLFW libdecorFrameHandleCommit: NO buffer
+1035700.859            -> wl_surface#36.attach(wl_buffer#93)     the driver's own attach, 8 µs too late
+1035700.867            -> wl_surface#36.commit()
+1035700.958 {Display}  wl_display#1.error(wp_linux_drm_syncobj_surface_v1#82, 3, "Release or Acquire point set but no buffer attached")
+```
+
+- The driver's window is 20 to 45 µs per present (points → attach), ~240 presents per second in MAILBOX: ~1 % of the
+  time armed. What makes the hover "instant" is the ticket count: libdecor-gtk redraws the title bar and commits the
+  toplevel on EVERY pointer motion event over the header (`pointer_motion` → `draw_title_bar` →
+  `libdecor_frame_toplevel_commit`, 17 call sites in the plugin: enter, leave, press, title change, output change), not
+  only on a hover transition. The same race explains the losses "during desktop activity" (configure commits).
+- mutter is right (`meta_wayland_surface_explicit_sync_validate`, points in the pending state, checked at every commit);
+  the driver is right (its five requests are in order); GLFW and libdecor are right alone. The defect is the
+  multi-threaded client: nobody serialized the surface between the presenting thread and the dispatching thread. Same
+  shape as Collabora's Zink / Firefox race (2025-10-27) and Godot #93669 ("misuse of the protocol by clients like us").
+- **Fix (engine, owner decision 2026-11-13: a lock in `Window`, no GLFW patch):** `Window::lockNativeSurface()`, held by
+  the rendering thread around the present and the swap-chain (re)creation, by the main thread around every dispatch and
+  every committing Window method; `Window::waitEvents()` splits the main loop's wait around it (`docs/caution-points.md`
+  § *Fixed: a buffer-less commit of the window surface from the main thread raced the driver's present*).
+- The trace tool threw the first capture away: libwayland ≥ 1.23 writes `#` instead of `@`. Fixed, and it now names the
+  queue of the judged commit.
+
 ## What remains — in order
+
+- [x] **(A) Measured on the reproducer** (2026-11-13, `default`, validation ON): the owner hovered the close button and
+  moved over the title bar for more than a minute, alive, 0 `libwayland:` line, 0 VUID, 0 `WL: error` in gnome-shell's
+  journal; before, 2 / 2 runs died within seconds. Still to re-check: the 37-demo sweep's 2 / 37 losses, next sweep.
+- [ ] **(B) Peers**: `Window.windows.cpp` / `Window.mac.mm` gained `waitEvents()` (a plain GLFW wait): build + a run on
+  macOS-PA and Windows-PA; LinuxB-PA is this machine. Then the lasting knowledge is already in caution-points: delete
+  this item.
+
+## Former plan (before the attribution)
 
 **New data, 2026-10-12 (Linux, engine 9054be48 + uncommitted lot 2, Release, no validation layer):** reproduced at the
 main menu (no demo) with a FRESH config directory (`--config-directory=<new empty dir>`, so every setting at its

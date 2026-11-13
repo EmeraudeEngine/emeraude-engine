@@ -185,6 +185,10 @@ void Core::scheduleMainLoopCycle (int64_t delayMS) noexcept;
 - Only tightens the next wake-up, never delays it: the regular cadence stays the floor.
 - **Works while paused**: the pause loop's indefinite `waitSystemEvents()` is bounded by the
   pending deadline, so an external pump (e.g., CEF UI) stays serviced during engine pause.
+- The wait itself is `Window::waitEvents()` (2026-11-13): on Wayland its blocking part runs outside the
+  native-surface lock the rendering thread takes to present, and an indefinite wait is bounded to 10 ms there
+  (GLFW's timers are served at each pass). Engine `docs/caution-points.md` § *Fixed: a buffer-less commit of the
+  window surface from the main thread raced the driver's present*.
 
 **Implementation**: atomic monotonic deadline (`m_scheduledCycleDueTimeMS`, sentinel
 `MainLoopCycleNotScheduled`). The cycle body is defined once in the private, non-virtual

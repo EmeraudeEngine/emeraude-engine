@@ -23,6 +23,11 @@ Notes:
     - WAYLAND_DEBUG=1 logs every request and event, which slows the client down a lot. A race can
       stop reproducing under trace: 12 clean runs is a RESULT (a tight race), not a failed attempt.
     - Requests (client -> compositor) are the lines carrying "->"; everything else is an event.
+    - libwayland >= 1.23 writes object ids as "wl_surface#36" (older: "wl_surface@36") and prefixes each line with
+      the event queue of the proxy, "{Default Queue}" for GLFW and libdecor on the main thread; a request WITHOUT a
+      queue tag comes from a proxy on an unnamed queue, i.e. the Vulkan driver's WSI (its present). The queue names
+      the thread outright: that is how the 2026-11-13 trace attributed the buffer-less commit to libdecor's
+      title-bar redraw racing the driver's present (engine docs/caution-points.md).
 """
 
 import argparse
@@ -36,13 +41,15 @@ DEFAULT_RUNS = 12
 DEFAULT_TIMEOUT = 60
 DEFAULT_WINDOW = 40
 
-# [ 1234.567] wl_display@1.error(wp_linux_drm_syncobj_surface_v1@94, 3, "Release or Acquire ...")
+# [ 1234.567] {Display Queue} wl_display#1.error(wp_linux_drm_syncobj_surface_v1#94, 3, "Release or Acquire ...")
 ERROR_EVENT = re.compile(
-    r"wl_display@\d+\.error\((?P<interface>[a-zA-Z0-9_]+)@(?P<id>\d+),\s*(?P<code>\d+),\s*\"(?P<message>[^\"]*)\""
+    r"wl_display[@#]\d+\.error\((?P<interface>[a-zA-Z0-9_]+)[@#](?P<id>\d+),\s*(?P<code>\d+),\s*\"(?P<message>[^\"]*)\""
 )
-# [ 1234.567]  -> wp_linux_drm_syncobj_manager_v1@42.get_surface(new id ...@94, wl_surface@23)
-GET_SURFACE = re.compile(r"get_surface\(new id [a-zA-Z0-9_]+@(?P<object>\d+),\s*wl_surface@(?P<surface>\d+)\)")
-REQUEST = re.compile(r"->\s*(?P<interface>[a-zA-Z0-9_]+)@(?P<id>\d+)\.(?P<name>[a-zA-Z0-9_]+)\((?P<args>.*)\)")
+# [ 1234.567]  -> wp_linux_drm_syncobj_manager_v1#42.get_surface(new id ...#94, wl_surface#23)
+GET_SURFACE = re.compile(r"get_surface\(new id [a-zA-Z0-9_]+[@#](?P<object>\d+),\s*wl_surface[@#](?P<surface>\d+)\)")
+REQUEST = re.compile(r"->\s*(?P<interface>[a-zA-Z0-9_]+)[@#](?P<id>\d+)\.(?P<name>[a-zA-Z0-9_]+)\((?P<args>.*)\)")
+# [ 1234.567] {Default Queue}  -> ... : the proxy's event queue, absent for an unnamed queue (the Vulkan driver's).
+QUEUE = re.compile(r"\{(?P<queue>[^}]*)\}")
 
 # Requests that decide whether a commit is legal with respect to explicit synchronisation.
 ATTACH = "attach"
@@ -113,6 +120,21 @@ def describe_request(match: re.Match) -> str:
     return ""
 
 
+def describe_queue(line: str) -> str:
+    """Names the thread behind a request from its event queue tag (libwayland >= 1.23)."""
+    found = QUEUE.search(line)
+
+    if found is None:
+        return "an unnamed queue: the Vulkan driver's WSI (the presenting thread)"
+
+    queue = found.group("queue")
+
+    if queue == "Default Queue":
+        return "the default queue: GLFW and libdecor, dispatched by the main thread"
+
+    return f"the queue '{queue}'"
+
+
 def analyse(path: str, window: int) -> int:
     """Extract the error, the surface it belongs to, and the requests that led to it."""
     with open(path, encoding="utf-8", errors="replace") as log:
@@ -137,7 +159,7 @@ def analyse(path: str, window: int) -> int:
 
     print("=" * 100)
     print(f"PROTOCOL ERROR at line {error_index + 1}")
-    print(f"  object    : {interface}@{object_id}")
+    print(f"  object    : {interface}#{object_id}")
     print(f"  code      : {error.group('code')}")
     print(f"  message   : {error.group('message')}")
 
@@ -150,7 +172,7 @@ def analyse(path: str, window: int) -> int:
 
             if found and found.group("object") == object_id:
                 surface_id = found.group("surface")
-                print(f"  wraps     : wl_surface@{surface_id}")
+                print(f"  wraps     : wl_surface#{surface_id}")
                 break
 
     if surface_id is None:
@@ -159,13 +181,13 @@ def analyse(path: str, window: int) -> int:
     print("=" * 100)
 
     # Requests touching that surface, and the sync-point requests on the offending object.
-    targets = {f"wl_surface@{surface_id}", f"{interface}@{object_id}"} if surface_id else {f"{interface}@{object_id}"}
+    targets = {("wl_surface", surface_id), (interface, object_id)} if surface_id else {(interface, object_id)}
     history = []
 
     for index, line in enumerate(lines[:error_index]):
         match = REQUEST.search(line)
 
-        if match and f"{match.group('interface')}@{match.group('id')}" in targets:
+        if match and (match.group("interface"), match.group("id")) in targets:
             history.append((index + 1, line.strip(), describe_request(match)))
 
     print(f"\nLAST {min(window, len(history))} REQUESTS ON THAT SURFACE (of {len(history)} total)\n")
@@ -175,7 +197,9 @@ def analyse(path: str, window: int) -> int:
 
     # The contract: acquire/release points are legal only when a non-null buffer is attached in the
     # SAME commit. A "commit" here means everything staged since the PREVIOUS commit, up to and
-    # including the last one -- which is the double-buffered state the compositor rejected.
+    # including that commit -- the double-buffered state the compositor validates. The client keeps
+    # sending after the fatal commit (the error event arrives later), so the violation is the FIRST
+    # commit that carried sync points and no attach, not the last commit before the error.
     commits = [index for index, (_, text, _) in enumerate(history) if f".{COMMIT}(" in text]
 
     if not commits:
@@ -183,19 +207,33 @@ def analyse(path: str, window: int) -> int:
 
         return 0
 
-    previous = commits[-2] if len(commits) > 1 else -1
-    frame = [text for _, text, _ in history[previous + 1 : commits[-1] + 1]]
+    def frame_of(commit: int) -> list[str]:
+        start = max((other for other in commits if other < commit), default=-1)
 
-    attached = any(f".{ATTACH}(" in text and not re.search(rf"\.{ATTACH}\(\s*nil", text) for text in frame)
-    pointed = any(any(f".{point}(" in text for point in SYNC_POINTS) for text in frame)
+        return [text for _, text, _ in history[start + 1 : commit + 1]]
+
+    def carries(frame: list[str]) -> tuple[bool, bool]:
+        attached = any(f".{ATTACH}(" in text and not re.search(rf"\.{ATTACH}\(\s*nil", text) for text in frame)
+        pointed = any(any(f".{point}(" in text for point in SYNC_POINTS) for text in frame)
+
+        return attached, pointed
+
+    violation = next((commit for commit in commits if carries(frame_of(commit)) == (False, True)), None)
+    judged = violation if violation is not None else commits[-1]
+    attached, pointed = carries(frame_of(judged))
+    line_number, line_text, _ = history[judged]
 
     print("\n" + "=" * 100)
     print("READING")
-    print(f"  the last commit before the error carried an attach : {'yes' if attached else 'NO'}")
+    print(f"  the commit judged (line {line_number})              : {line_text}")
+    print(f"  it carried an attach                               : {'yes' if attached else 'NO'}")
     print(f"  ... and acquire/release sync points                : {'yes' if pointed else 'no'}")
+    print(f"  it was sent from                                   : {describe_queue(line_text)}")
 
     if pointed and not attached:
-        print("  => sync points without a buffer in the same commit: this commit is the violation.")
+        print("  => sync points without a buffer in the same commit: this commit is the violation. The points belong")
+        print("     to the presenting thread (vkQueuePresentKHR sets them right before its own attach + commit): the")
+        print("     commit above slipped in between, from the thread its queue names.")
     elif not pointed and not attached:
         print("  => a commit carrying neither: the sync points were set on an EARLIER commit, so")
         print("     whoever issued this bare commit is the culprit. Look at the requests around it:")

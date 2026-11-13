@@ -361,6 +361,9 @@ namespace EmEn
 
 		this->notify(Created);
 
+		/* NOTE: Decided once, before the logic and rendering threads exist: they read it through lockNativeSurface(). */
+		m_nativeSurfaceSerialized = PlatformManager::isUsingWayland();
+
 		if ( !this->initializeNativeWindow() )
 		{
 			Tracer::error(ClassId, "Native dialogs are not available !");
@@ -426,6 +429,8 @@ namespace EmEn
 	{
 		if ( !m_windowLess )
 		{
+			const auto surfaceLock = this->lockNativeSurface();
+
 			glfwSetWindowTitle(m_handle.get(), title.c_str());
 		}
 
@@ -507,6 +512,8 @@ namespace EmEn
 				height = closest[1];
 			}
 		}
+
+		const auto surfaceLock = this->lockNativeSurface();
 
 		glfwSetWindowSize(m_handle.get(), width, height);
 
@@ -697,6 +704,8 @@ namespace EmEn
 			return;
 		}
 
+		const auto surfaceLock = this->lockNativeSurface();
+
 		glfwIconifyWindow(m_handle.get());
 	}
 
@@ -710,6 +719,8 @@ namespace EmEn
 		{
 			return;
 		}
+
+		const auto surfaceLock = this->lockNativeSurface();
 
 		glfwRestoreWindow(m_handle.get());
 	}
@@ -739,6 +750,8 @@ namespace EmEn
 			return;
 		}
 
+		const auto surfaceLock = this->lockNativeSurface();
+
 		glfwMaximizeWindow(m_handle.get());
 	}
 
@@ -749,6 +762,8 @@ namespace EmEn
 		{
 			return;
 		}
+
+		const auto surfaceLock = this->lockNativeSurface();
 
 		glfwRestoreWindow(m_handle.get());
 	}
@@ -783,6 +798,8 @@ namespace EmEn
 			return;
 		}
 
+		const auto surfaceLock = this->lockNativeSurface();
+
 		glfwFocusWindow(m_handle.get());
 	}
 
@@ -811,6 +828,8 @@ namespace EmEn
 			return;
 		}
 
+		const auto surfaceLock = this->lockNativeSurface();
+
 		glfwHideWindow(m_handle.get());
 	}
 
@@ -821,6 +840,8 @@ namespace EmEn
 		{
 			return;
 		}
+
+		const auto surfaceLock = this->lockNativeSurface();
 
 		glfwShowWindow(m_handle.get());
 	}
@@ -877,6 +898,8 @@ namespace EmEn
 		{
 			const auto monitorSize = getDesktopSize(monitor);
 
+			const auto surfaceLock = this->lockNativeSurface();
+
 			glfwSetWindowMonitor(
 				m_handle.get(),
 				monitor,
@@ -901,6 +924,8 @@ namespace EmEn
 				settings.set< uint32_t >(VideoFullscreenHeightKey, static_cast< uint32_t >(height));
 			}
 
+			const auto surfaceLock = this->lockNativeSurface();
+
 			glfwSetWindowMonitor(m_handle.get(), monitor, 0, 0, width, height, refreshRate);
 		}
 	}
@@ -919,6 +944,8 @@ namespace EmEn
 		const auto windowHeight = settings.getOrSetDefault< int32_t >(WindowHeightKey, DefaultWindowHeight);
 		const auto XPosition = settings.getOrSetDefault< int32_t >(WindowXPositionKey, DefaultWindowXPosition);
 		const auto YPosition = settings.getOrSetDefault< int32_t >(WindowYPositionKey, DefaultWindowYPosition);
+
+		const auto surfaceLock = this->lockNativeSurface();
 
 		glfwSetWindowMonitor(m_handle.get(), nullptr, XPosition, YPosition, windowWidth, windowHeight, GLFW_DONT_CARE);
 	}

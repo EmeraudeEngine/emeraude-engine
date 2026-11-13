@@ -1,5 +1,10 @@
 # Development History Log
 
+## Unreleased
+ - **Wayland: the window surface is committed by one thread at a time.** `Window::lockNativeSurface()` (recursive, Wayland only, empty elsewhere) is held by the rendering thread around `vkQueuePresentKHR()` and the swap-chain creation / recreation, and by the main thread around every GLFW dispatch and every Window method that commits. The driver's present sets the explicit-synchronization points, attaches and commits as separate requests; libdecor commits the toplevel on every pointer motion over the title bar (through GLFW's `libdecorFrameHandleCommit`), and a commit landing between the points and the attach killed the connection (`wp_linux_drm_syncobj_surface_v1` error 3, exit code 96). Attributed with the protocol trace on 2026-11-13.
+ - `Window::waitEvents()`: the main loop's wait (`Input::Manager::waitSystemEvents()`). On Wayland its blocking part runs outside the native-surface lock (a reader of the connection around `poll()`), so the rendering thread presents meanwhile; an indefinite wait is bounded to 10 ms there (GLFW's timers are served at the next pass). The libwayland entry points are resolved once by `initializeNativeWindow()`.
+ - `tools/wayland-protocol-trace.py` reads libwayland ≥ 1.23's format (`wl_surface#36`, the proxy's event queue tag on each line) and judges the first commit that carried sync points without an attach, naming the queue, hence the thread, that sent it.
+
 ## Version 1.3.0 (2026-11-12)
  - Requires emeraude-base 1.6.0.
  - **Swap-chain failure paths.** A refused frame submission recovers; a degraded headless (window-less) swap-chain is recreated without querying a surface (it dereferenced the null window surface); a driver that creates more swap-chain images than the engine handles (5) is refused with an error naming the count, and the image count is checked again at its second query; a degraded swap-chain counts as a renderer debt, so an application rendering on demand keeps retrying it; a given-up swap-chain is no longer retried. libwayland's log goes to the Tracer.
