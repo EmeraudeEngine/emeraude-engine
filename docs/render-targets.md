@@ -59,7 +59,7 @@ names.
 - ⚠️ A `Texture`'s depth image has no `TRANSFER_SRC` (table above): `capture(…, withDepthBuffer = true, …)` gets a
   warning and an empty `result[1]`.
 - **Measured** (`offscreen-rendering`, RTX 3070 Ti, Debug, validation layer loaded, 0 `VUID-`): the 2D target
-  (`SecurityCubemap`, one layer) dumps layer 0 and refuses 1 to 6 ("has 1 layer(s)"); the real cubemap
+  (`SecurityCubemap` that day, `SecurityTexture2D` since its renaming; one layer) dumps layer 0 and refuses 1 to 6 ("has 1 layer(s)"); the real cubemap
   (`OffscreenRenderingCubemap`) refuses layer 6 ("has 6 layer(s)") and, being HDR, cannot be downloaded. With the probe
   created in 8 bits and without convolution FOR THE MEASUREMENT (a local change, not committed), its six faces were
   dumped: every pair differs on 47 % to 83 % of its pixels, layer 0 dumped twice 21 s apart is identical bit for bit,

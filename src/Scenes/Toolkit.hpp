@@ -1495,7 +1495,9 @@ namespace EmEn::Scenes
 			 * @param precision The render target size in pixels. Default, 512.
 			 * @param distance The view distance of the render target. Default, 5000.
 			 * @param showModel Display a model to visualize the camera. Default, 'false'.
-			 * @return std::pair< BuiltEntity< entity_t, Component::Camera >, std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > >
+			 * @note The render target is named `<name>Texture2D` (it was `<name>Cubemap` until 2026-11-14, the suffix of the
+			 * cubemap renderer below: a 2D target read as a cubemap in every log and console command).
+			 * @return std::pair< BuiltEntity< entity_t, Component::Camera >, std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices2DUBO > > >
 			 */
 			template< typename entity_t = StaticEntity >
 			[[nodiscard]]
@@ -1512,7 +1514,7 @@ namespace EmEn::Scenes
 					return {};
 				}
 
-				const auto texture = m_scene->createRenderToTexture2D(name + "Cubemap", precision, precision, 4, distance, false);
+				const auto texture = m_scene->createRenderToTexture2D(name + "Texture2D", precision, precision, 4, distance, false);
 
 				if ( texture == nullptr || !texture->isCreated() )
 				{

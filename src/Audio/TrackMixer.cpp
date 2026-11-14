@@ -235,6 +235,7 @@ namespace EmEn::Audio
 		}
 
 		m_playingTrack = PlayingTrack::None;
+		m_playingMusic.reset();
 		m_isFading = false;
 		m_loadingTrack.reset();
 
@@ -377,6 +378,7 @@ namespace EmEn::Audio
 		Status status;
 		status.playlist = m_playlist;
 		status.currentTrack = m_musicIndex < m_playlist.size() ? m_playlist[m_musicIndex] : nullptr;
+		status.playingTrack = m_playingMusic;
 		status.loadedPlaylist = m_loadedPlaylist;
 		status.trackIndex = m_musicIndex;
 		status.gain = m_gain;
@@ -573,8 +575,15 @@ namespace EmEn::Audio
 			m_isFading = false;
 			m_playingTrack = m_crossFaderEnabled ? previousTrack : PlayingTrack::None;
 
+			if ( m_playingTrack == PlayingTrack::None )
+			{
+				m_playingMusic.reset();
+			}
+
 			return false;
 		}
+
+		m_playingMusic = track;
 
 		if ( m_isFading )
 		{
@@ -1097,6 +1106,7 @@ namespace EmEn::Audio
 			}
 
 			m_playingTrack = PlayingTrack::None;
+			m_playingMusic.reset();
 			m_isFading = false;
 		}
 

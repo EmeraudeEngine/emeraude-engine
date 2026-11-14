@@ -696,6 +696,12 @@ an Apple-libc++-only suggestion, not applied. The planet identity lot touched `S
 debt list): brought clean, +54 −2 and a forward declaration of `Console::Argument`; IWYU's removal of
 `Component/Camera.hpp` / `Microphone.hpp` refused (`componentBuilder< Component::Camera >` instantiates a template
 that needs the complete type: the build failed) — `// IWYU pragma: keep (<reason>)`.
+The track mixer lot (2026-11-14; `Audio/TrackMixer.{hpp,cpp,console.cpp}`): brought clean, the `.console.cpp` +14,
+the header +5 and a forward declaration of `PlaylistResource` (a `shared_ptr` member). IWYU's replacement of
+`"Source.hpp"` by a forward declaration is refused in `TrackMixer.hpp`: the class holds `std::unique_ptr< Source >`
+members and its constructor is INLINE, so a consumer built with exceptions needs the complete type wherever the header
+is (the cascade builds without exceptions: Linux would never see that failure) — `// IWYU pragma: keep (<reason>)`,
+accepted by the owner the same day.
 The sky's own IBL lot (same day; `Graphics/SkyEnvironment` new, `Compute/IBLBaker`, `IBLTexture`, `SkyAtmosphere`,
 `Material/SkyAtmosphereResource`, `Renderable/DynamicSkyResource`, `Renderer`, `Scene.lighting.cpp`, `Constants.hpp`):
 clang-tidy 21.1.6 on the changed lines 8 fixed (swappable parameters → named structs `IBLBaker::CubeBarrier`,

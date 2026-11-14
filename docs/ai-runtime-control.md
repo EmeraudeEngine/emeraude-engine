@@ -1003,8 +1003,8 @@ layout.
 ⚠️ **An HDR target cannot be dumped today**: `TransferManager::downloadImage()` reads the 8-bit colour
 formats and the depth / stencil formats only, and the environment probes are `R16G16B16A16_SFLOAT`
 (`Scene::createRenderToCubemap()`, 16 colour bits by default) — "Unable to download the image", format 97
-(item `render-target-download-refuses-hdr-color-formats`). ⚠️ A fragment such as `Cubemap` also matches the
-2D target of `Toolkit::generateTexture2DRenderer()`, which is NAMED `<name>Cubemap` and has one layer.
+(item `render-target-download-refuses-hdr-color-formats`). The 2D target of
+`Toolkit::generateTexture2DRenderer()` is named `<name>Texture2D` (it was `<name>Cubemap` until 2026-11-14).
 
 ### Reading per-pass GPU timings (built-in profiler)
 

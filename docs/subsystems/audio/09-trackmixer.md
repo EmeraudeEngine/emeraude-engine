@@ -92,10 +92,24 @@ Bound in `TrackMixer.console.cpp`. Prefix with the engine service path, e.g.:
 | `crossfade` | `[on\|off]` | Get or toggle crossfade transitions. |
 | `seek` | `[seconds]` | Get or set playback position. |
 | `status` | — | Overview of mixer state (volume, modes, index, position). |
-| `nowPlaying`,`np` | — | **Atomic current-track query.** Returns title (filename fallback for MIDI/untagged files), artist, position, index. |
+| `nowPlaying`,`np` | — | **Atomic current-track query.** Returns title (filename fallback for MIDI/untagged files), artist, position, index — or "Index: outside the playlist" for a music played by name that the playlist does not hold. |
 | `playlist`,`pl` | `[clear\|add <name>\|play <index>]` | List playlist or modify it. |
 
 **`nowPlaying` rationale:** `status` only shows the playlist index (`N/32`), not the track identity. `nowPlaying` returns it atomically so scripts/AI agents don't race against shuffle-driven track changes (short MIDI + crossfade can switch tracks in ≈1 s). Output format is stable and one-block parseable.
+
+### The playing track is recorded, the index is only its place in the playlist (2026-11-14)
+
+`play("BaroqueSonata")` — a store music the playlist does not hold — plays it and sets `m_musicIndex` to `SIZE_MAX`
+("outside the playlist", on purpose: `play()` without argument then restarts the playlist from its start). `status()`
+built its track from the playlist alone, so `nowPlaying` answered "Playing state is inconsistent (no playlist entry
+at current index) !" for a legal state. The mixer now keeps the resource its source holds (`m_playingMusic`, set by
+`startTrack()`, emptied wherever `m_playingTrack` becomes `None`) and `Status::playingTrack` reports it whatever the
+index; `Status::currentTrack` stays the playlist entry at the index.
+
+Measured (Debian 13, Debug): `play(BaroqueSonata)` then `nowPlaying` — "Title: BaroqueSonata", "Index: outside the
+playlist"; `status` — "Current track: outside the playlist"; `play()` — "Playing track 1/21.", `nowPlaying` —
+"Index: 1/21"; `stop()` — "No track is currently playing." ⚠️ The duration of that script music reads 0 s
+(`Position: 6.272s / 0s`): not looked into.
 
 ### m_musicIndex Invariant (play(track) sync)
 

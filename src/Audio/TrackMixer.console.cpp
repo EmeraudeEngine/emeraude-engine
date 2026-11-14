@@ -27,14 +27,28 @@
 #include "TrackMixer.hpp"
 
 /* STL inclusions. */
+#include <cstddef>
+#include <cstdint>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 /* Local inclusions. */
-#include "String.hpp"
+#include "Audio/MusicResource.hpp"
+#include "Audio/PlaylistResource.hpp"
+#include "Audio/Types.hpp"
+#include "Console/CommandResult.hpp"
+#include "Console/Output.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
+#include "CoreTypes.hpp"
+#include "Logging/Severity.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
+#include "String.hpp"
 
 namespace EmEn::Audio
 {
@@ -407,6 +421,10 @@ namespace EmEn::Audio
 			{
 				status << "Current track: " << (current.trackIndex + 1) << "/" << current.playlist.size() << "\n";
 			}
+			else if ( current.playingTrack != nullptr )
+			{
+				status << "Current track: outside the playlist" "\n";
+			}
 
 			/* Current playback info. */
 			if ( current.hasTrack )
@@ -430,16 +448,13 @@ namespace EmEn::Audio
 				return Console::CommandResult::info("No track is currently playing.");
 			}
 
-			if ( current.trackIndex >= current.playlist.size() )
-			{
-				return refuse("Playing state is inconsistent (no playlist entry at current index) !");
-			}
-
-			const auto & track = current.currentTrack;
+			/* NOTE: The track the source holds, not the playlist entry at the index: a track played by name outside
+			 * the playlist has no index (SIZE_MAX), which read as an inconsistent state here. */
+			const auto & track = current.playingTrack;
 
 			if ( track == nullptr )
 			{
-				return Console::CommandResult::error("Current playlist entry is a null pointer !");
+				return refuse("Playing state is inconsistent (a source holds a track the mixer did not record) !");
 			}
 
 			std::stringstream info;
@@ -447,7 +462,15 @@ namespace EmEn::Audio
 			info << "Title: " << track->title() << "\n";
 			info << "Artist: " << track->artist() << "\n";
 			info << "Position: " << this->currentPosition() << "s / " << this->currentDuration() << "s" "\n";
-			info << "Index: " << (current.trackIndex + 1) << "/" << current.playlist.size();
+
+			if ( current.trackIndex < current.playlist.size() )
+			{
+				info << "Index: " << (current.trackIndex + 1) << "/" << current.playlist.size();
+			}
+			else
+			{
+				info << "Index: outside the playlist";
+			}
 
 			return Console::CommandResult::info(info.str());
 		}, Console::CommandHint::ReadOnly);

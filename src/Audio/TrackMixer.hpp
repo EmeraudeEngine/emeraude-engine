@@ -30,13 +30,17 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <condition_variable>
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <random>
 #include <stop_token>
 #include <string>
 #include <vector>
+
+/* Third-party inclusions. */
+#include "AL/al.h"
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
@@ -44,11 +48,13 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Mutex.hpp"
-#include "Thread.hpp"
+#include "Hash/FNV1a.hpp"
 #include "MusicResource.hpp"
-#include "PlaylistResource.hpp"
-#include "Source.hpp"
+#include "Mutex.hpp"
+#include "ObservableTrait.hpp"
+#include "Source.hpp" // IWYU pragma: keep (the inline constructor needs the complete type of its std::unique_ptr< Source > members when a consumer builds with exceptions)
+#include "Thread.hpp"
+#include "ThreadSafety.hpp"
 #include "Types.hpp"
 
 /* Forward declarations. */
@@ -57,6 +63,7 @@ namespace EmEn
 	namespace Audio
 	{
 		class Manager;
+		class PlaylistResource;
 	}
 
 	namespace Resources
@@ -121,6 +128,9 @@ namespace EmEn::Audio
 				std::vector< std::shared_ptr< MusicResource > > playlist;
 				/** @brief The playlist entry at the current index, nullptr when the index is outside the playlist. */
 				std::shared_ptr< MusicResource > currentTrack;
+				/** @brief The track the playing source holds (playing or paused), a playlist entry or not; nullptr when
+				 * no source holds one. */
+				std::shared_ptr< MusicResource > playingTrack;
 				/** @brief The manifest backing the playlist, nullptr for an ad-hoc playlist. */
 				std::shared_ptr< PlaylistResource > loadedPlaylist;
 				/** @brief The current index in the playlist (SIZE_MAX for a track played outside of it). */
@@ -619,6 +629,9 @@ namespace EmEn::Audio
 			std::vector< std::shared_ptr< MusicResource > > m_playlist EMEN_GUARDED_BY(m_stateAccess);
 			std::shared_ptr< PlaylistResource > m_loadedPlaylist EMEN_GUARDED_BY(m_stateAccess);
 			std::shared_ptr< MusicResource > m_loadingTrack EMEN_GUARDED_BY(m_stateAccess);
+			/** @brief The track the playing source holds (startTrack()), whatever the playlist index: a track played
+			 * outside the playlist has no index (SIZE_MAX). Empty whenever m_playingTrack is None. */
+			std::shared_ptr< MusicResource > m_playingMusic EMEN_GUARDED_BY(m_stateAccess);
 			std::vector< size_t > m_shuffleOrder EMEN_GUARDED_BY(m_stateAccess);
 			std::mt19937 m_shuffleGenerator EMEN_GUARDED_BY(m_stateAccess){std::random_device{}()};
 			size_t m_musicIndex EMEN_GUARDED_BY(m_stateAccess){0};

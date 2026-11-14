@@ -31,8 +31,9 @@ next render pass, or right after its clear, would explain a uniform colour. That
 **2026-11-14, Linux (RTX 3070 Ti, Debug, validation layer loaded):** the first dump of 2 sessions of
 `offscreen-rendering`, 25 s after the start line, was a real image both times (1024², about 49 000 distinct colours,
 0 pure-blue pixel). The command is now `dumpRenderTarget(nameFragment, layer = 0)` and its file is named
-`rt-dump-<timestamp>-layer<N>.png`. ⚠️ `SecurityCubemap` is a 2D target despite its name
-(`Toolkit::generateTexture2DRenderer()`), so this item is about a plain single-layer image.
+`rt-dump-<timestamp>-layer<N>.png`. ⚠️ `SecurityCubemap` was a 2D target despite its name
+(`Toolkit::generateTexture2DRenderer()`), renamed `SecurityTexture2D` the same day: this item is about a plain
+single-layer image, and the command to repeat is now `dumpRenderTarget(SecurityTexture2D)`.
 
 ## What remains
 
