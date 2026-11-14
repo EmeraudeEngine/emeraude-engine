@@ -62,8 +62,17 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
 - **File fetch** (`PeerStore::fetch()`, thread pool, one at a time): the peer lists the directory (or the path is
   taken as a file); into the first data directory that has a `data-stores/`; a file present with the peer's size
   is kept; otherwise written to `<file>.part`, its SHA-256 compared with the peer's `/sha256/`, then renamed. A
-  mismatch, a cancel or an error deletes the side file. Cancel (`cancelPeerFetch()`, shutdown) stops at the next
-  transport read or during the verification hash.
+  mismatch, a cancel or an error deletes the side file. Cancel (`cancelPeerFetch()`, shutdown) stops the exchange
+  in flight at once, or the verification hash at its next block.
+- **A cancellation is not an error** (owner decision 2026-11-15; it was traced `[Error]`, added to `errors` and
+  counted in `filesFailed`). `PeerStore::noteCancellation()`: one line of INFORMATION saying what the stop cut
+  ("cancelled before the peer listed it", "cancelled during its download, nothing is kept", "cancelled during its
+  verification, the copy is deleted"), then the job's summary ("Fetch of '…' cancelled: N fetched, N kept, N failed,
+  N not fetched."), and `"cancelled": true` in the status. The file a stop cut is neither fetched, nor kept, nor
+  failed; `errors` and `filesFailed` now mean what they say — something went WRONG. A download is told cancelled by
+  the HTTP client's own outcome (`DownloadOutcome::Cancelled`), never guessed from the token: a download which
+  failed for another reason while a stop arrived stays an error. A stop which arrives once every file is done cut
+  nothing: that job is "done", not "cancelled".
 - **The cancellation is a `std::stop_source`** (2026-11-14, Ave Robustus II; it was an `std::atomic< bool >`
   member whose address went to the foundation's HTTP client). `PeerStore` holds ONE source per job — `fetch()`
   replaces it under the state lock, because a stop source is stopped once and for all — and `cancel()` and the
@@ -72,8 +81,8 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
   **Latency**: a stop is seen between two transport reads (0.04 s during a download), within 50 ms of the pauses
   between two questions about a digest, and — since the foundation's connection takes the token itself
   (`TLSConnection::setStopToken()`, 2026-11-14, base doc 24) — at once by an exchange PARKED on a silent peer, which
-  used to wait its timeout (§ Measurements, a silent peer). A listing the stop ended is reported "Fetch cancelled.",
-  not "the peer did not list". ⚠️ The one stage a stop does not end at once is a name resolution in flight (the
+  used to wait its timeout (§ Measurements, a silent peer). A listing the stop ended is a cancellation, not "the
+  peer did not list". ⚠️ The one stage a stop does not end at once is a name resolution in flight (the
   foundation's limit, base `docs/plans/network-tls/README.md` § The total budget).
 - **The digest of a large file is POLLED** (2026-11-14, owner decision). `/sha256/` used to answer when the hash
   was done, on a connection silent meanwhile, under the client's 30 s request budget: a slower hash made the client
@@ -100,8 +109,8 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
 |---|---|
 | `sharingStatus()` | Server URL (when serving) and peer URL |
 | `fetchFromPeer(path)` | Copy `path` (a file or a directory, relative to `data-stores/`) from the peer, in the background |
-| `peerFetchStatus()` | Files listed / fetched / kept / failed, the current file's bytes, the errors |
-| `cancelPeerFetch()` | Stop the running fetch |
+| `peerFetchStatus()` | Files listed / fetched / kept / failed, the current file's bytes, the errors, `cancelled` (a stop kept the job from doing all its work — not an error) |
+| `cancelPeerFetch()` | Stop the running fetch at once; the file in flight is not kept |
 
 ## Measurements (Linux, 2026-10-04, two instances on one machine over 192.168.1.10)
 
@@ -145,13 +154,28 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
 
   | | before (Debug) | after (Debug) | after (Release) |
   |---|---|---|---|
-  | The peer silent BEFORE the first request, a cancel 1 s later | effective after 28.66 s, "the peer did not list" | 0.05 s, "Fetch cancelled." | 0.05 s |
-  | The peer silent DURING the download (parked between 0.7 and 1.4 of the 1.6 GB), a cancel 1 s later | 28.66 s, reported `Protocol` | 0.18 s, reported `Cancelled` | 0.17 s |
+  | The peer silent BEFORE the first request, a cancel 1 s later | effective after 28.66 s, "the peer did not list" | 0.05 s, said cancelled | 0.05 s |
+  | The peer silent DURING the download (parked between 0.7 and 1.4 of the 1.6 GB), a cancel 1 s later | 28.66 s, reported `Protocol` | 0.18 s, said cancelled | 0.17 s |
   | The same, a shutdown of the client instead | exit 0 after 28.66 s | exit 0 after 3.04 s (a Debug shutdown takes that long without any fetch) | exit 0 after 0.54 s |
 
   The control fetch through the relay (`Musics/Kyrandia2`) gave 32 / 32 files with the original's SHA-256 in every
   run; no `.part` left; the client's `[Error]` lines went from 8 (aborted reads, a connect timed out, an expired
-  budget) to the 3 reports of the cancellations themselves.
+  budget) to the 3 reports of the cancellations themselves — and to none once a cancellation stopped being an
+  error (next point).
+- **A cancellation is not an error, measured** (2026-11-15, Release, the same pair, with and without the relay).
+  Each of the four places where a stop can cut a job ends with `"cancelled": true`, `"errors": []`,
+  `"filesFailed": 0` in the status, one or two lines of information, and 0 `[Error]` line on the client:
+
+  | The stop arrives | Effective after | The log says |
+  |---|---|---|
+  | before the peer listed the path (the peer silent) | 0.05 s | "Fetch of '…' cancelled before the peer listed it." |
+  | during a download (the peer silent at 1.4–1.6 of 1.6 GB) | 0.17 s | "'…': cancelled during its download, nothing is kept." |
+  | during a verification (the download complete) | 0.16–0.17 s | "'…': cancelled during its verification, the copy is deleted." |
+  | in the middle of a directory (the relay silent after 120 000 bytes of answers) | 0.05 s | "Fetch of 'Musics/Kyrandia2' cancelled: 17 fetched, 0 kept, 0 failed, 15 not fetched." |
+
+  The 17 files of the last row are on disk, without any `.part`; a fetch which ran to its end (the directory, the
+  whole 1.6 GB file in 7.7 s, SHA-256 equal) reports `"cancelled": false`; the client's shutdown during a fetch
+  takes 0.54 to 0.59 s, exit 0.
 
 ## Testing a pair on one machine
 
@@ -175,6 +199,20 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
   directory fetch takes the siblings).
 - One peer only (`Core/Resources/Peer/URL`).
 - The index is merged once, at start-up: a resource the peer gains later needs a restart.
+
+## Validated on the three OS (2026-11-15: the stop token, the polled digest)
+
+Engine `a909e0d2`, base `ce85f4a`, two Release instances on one machine, the validation layer loaded, 0 `VUID-`:
+
+| | Linux (RTX 3070 Ti) | macOS (Apple M6) | Windows (RTX 3500 Ada) |
+|---|---|---|---|
+| `Musics/Kyrandia2` | 32 / 32 | 32 / 32, identical to the original | 32 / 32 |
+| `USD/WorldLobby.usdz` (1 610 429 961 bytes), SHA-256 equal | 7.7 s | 9.85 s | 15.43 s |
+| A cancel during the verification, effective after | 0.16 s | 0.02 s | 0.177 s |
+| A shutdown of the client during the verification, exit 0 after | 0.58 s | 0.08 s | 0.790 s |
+
+No `.part` left and the data repository untouched on the three. The client's only `[Error]` lines were the reports
+of the cancellations — which are no longer errors since the same day (§ A cancellation is not an error).
 
 ## Validated on the three OS (2026-10-04)
 

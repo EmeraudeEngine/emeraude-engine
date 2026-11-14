@@ -164,13 +164,17 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Returns the state of the last fetch as JSON.
+			 * @note "cancelled" is true when a stop (cancel(), the destruction) kept the job from doing all its work.
+			 * A cancellation is not a failure (owner decision 2026-11-15): it adds nothing to "errors", and the file
+			 * it cut is not counted in "filesFailed" — that file is neither fetched, nor kept, nor failed.
 			 * @return Json::Value
 			 */
 			[[nodiscard]]
 			Json::Value status () const noexcept;
 
 			/**
-			 * @brief Asks a fetch in flight to stop (at the next read), through the job's std::stop_source.
+			 * @brief Asks a fetch in flight to stop, through the job's std::stop_source: the exchange in flight ends at
+			 * once, the file it was fetching is not kept, and the status says "cancelled".
 			 */
 			void cancel () noexcept;
 
@@ -246,6 +250,13 @@ namespace EmEn::Resources
 			 */
 			void reportError (const std::string & message) noexcept;
 
+			/**
+			 * @brief Records that a stop cut the job: "cancelled" in the status, one line of information in the log.
+			 * @note Not an error: whoever asked for the stop knows, and nothing went wrong.
+			 * @param message What the stop cut.
+			 */
+			void noteCancellation (const std::string & message) noexcept;
+
 			/** @brief The state a status() reports. */
 			struct State
 			{
@@ -261,6 +272,7 @@ namespace EmEn::Resources
 				size_t filesFailed{0};
 				bool running{false};
 				bool truncatedListing{false};
+				bool cancelled{false};
 			};
 
 			const FileSystem & m_fileSystem;

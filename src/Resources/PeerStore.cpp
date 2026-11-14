@@ -259,6 +259,7 @@ namespace EmEn::Resources
 		status["filesKept"] = static_cast< Json::UInt64 >(m_state.filesKept);
 		status["filesFailed"] = static_cast< Json::UInt64 >(m_state.filesFailed);
 		status["truncatedListing"] = m_state.truncatedListing;
+		status["cancelled"] = m_state.cancelled;
 
 		Json::Value errors{Json::arrayValue};
 
@@ -299,6 +300,16 @@ namespace EmEn::Resources
 		{
 			m_state.errors.emplace_back(message);
 		}
+	}
+
+	void
+	PeerStore::noteCancellation (const std::string & message) noexcept
+	{
+		TraceInfo{ClassId} << message;
+
+		const Base::MutexLock lock{m_stateAccess};
+
+		m_state.cancelled = true;
 	}
 
 	std::optional< std::vector< PeerStore::RemoteFile > >
@@ -393,7 +404,7 @@ namespace EmEn::Resources
 			/* A listing the stop ended is a cancellation, said as one: the peer did nothing wrong. */
 			if ( stopToken.stop_requested() )
 			{
-				this->reportError("Fetch cancelled.");
+				this->noteCancellation("Fetch of '" + relativePath + "' cancelled before the peer listed it.");
 			}
 			else
 			{
@@ -415,15 +426,28 @@ namespace EmEn::Resources
 		{
 			if ( stopToken.stop_requested() )
 			{
-				this->reportError("Fetch cancelled.");
+				/* Files are left: the job did not do all its work (the summary below says how many). */
+				const Base::MutexLock lock{m_stateAccess};
 
-				return;
+				m_state.cancelled = true;
+
+				break;
 			}
 
 			this->fetchFile(*root, file, stopToken);
 		}
 
 		const Base::MutexLock lock{m_stateAccess};
+
+		if ( m_state.cancelled )
+		{
+			/* NOTE: A stop which arrives once every file is done cut nothing: that job is "done". */
+			const auto handled = m_state.filesFetched + m_state.filesKept + m_state.filesFailed;
+
+			TraceInfo{ClassId} << "Fetch of '" << relativePath << "' cancelled: " << m_state.filesFetched << " fetched, " << m_state.filesKept << " kept, " << m_state.filesFailed << " failed, " << ( m_state.filesListed > handled ? m_state.filesListed - handled : 0 ) << " not fetched.";
+
+			return;
+		}
 
 		TraceSuccess{ClassId} << "Fetch of '" << relativePath << "' done: " << m_state.filesFetched << " fetched, " << m_state.filesKept << " kept, " << m_state.filesFailed << " failed.";
 	}
@@ -550,6 +574,14 @@ namespace EmEn::Resources
 
 		if ( !m_downloadClient->download(Network::URI{this->fileURL(file.path)}, partial, std::move(options), progress, &report) )
 		{
+			/* The HTTP client says why: a download the stop ended is not a failed one (it removed the side file). */
+			if ( report.outcome == Network::DownloadOutcome::Cancelled )
+			{
+				this->noteCancellation("'" + file.path + "': cancelled during its download, nothing is kept.");
+
+				return;
+			}
+
 			this->reportError("'" + file.path + "' was not downloaded (" + Network::to_cstring(report.outcome) + ", HTTP " + std::to_string(report.statusCode) + ").");
 			countFailure();
 
@@ -562,9 +594,8 @@ namespace EmEn::Resources
 
 		if ( stopToken.stop_requested() )
 		{
-			this->reportError("'" + file.path + "': cancelled during its verification, the copy is deleted.");
+			this->noteCancellation("'" + file.path + "': cancelled during its verification, the copy is deleted.");
 			std::filesystem::remove(partial, errorCode);
-			countFailure();
 
 			return;
 		}

@@ -28,14 +28,29 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <cstddef>
 #include <functional>
+#include <memory>
+#include <optional>
 #include <ranges>
 #include <string>
+#include <typeindex>
+#include <unordered_map>
+#include <utility>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "json/json.h"
+
 /* Local inclusions. */
+#include "Console/CommandResult.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
 #include "FastJSON.hpp"
 #include "PeerStore.hpp"
+#include "Resources/Container.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
 #include "SharingServer.hpp"
 #include "String.hpp"
 
@@ -71,7 +86,7 @@ namespace EmEn::Resources
 				return Console::CommandResult::success(Base::String::concatenate("Fetching '", path, "' from ", m_peerStore->baseURL(), " ..."));
 			});
 
-		this->bindCommand("peerFetchStatus", "Returns the state of the last fetchFromPeer() as JSON (files listed, fetched, kept, failed; the current file's progress; the errors).", [this] () {
+		this->bindCommand("peerFetchStatus", "Returns the state of the last fetchFromPeer() as JSON (files listed, fetched, kept, failed; the current file's progress; the errors; 'cancelled' when a stop kept it from doing all its work: a cancellation is not an error).", [this] () {
 			if ( m_peerStore == nullptr )
 			{
 				return Console::CommandResult::error("No peer: 'Core/Resources/Peer/URL' is empty.");
@@ -80,7 +95,7 @@ namespace EmEn::Resources
 			return Console::CommandResult::json(Base::FastJSON::stringify(m_peerStore->status()));
 		}, Console::CommandHint::ReadOnly);
 
-		this->bindCommand("cancelPeerFetch", "Stops a running fetchFromPeer() at its next read (the file in flight is not kept).", [this] () {
+		this->bindCommand("cancelPeerFetch", "Stops a running fetchFromPeer() at once (the file in flight is not kept; peerFetchStatus() then says 'cancelled').", [this] () {
 			if ( m_peerStore == nullptr )
 			{
 				return Console::CommandResult::error("No peer: 'Core/Resources/Peer/URL' is empty.");
