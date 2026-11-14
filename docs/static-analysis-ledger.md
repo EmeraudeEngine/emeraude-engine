@@ -839,8 +839,9 @@ Kept ON PURPOSE (inline, each with its reason): `knownEmptyContainer` (`VideoEnc
 `knownConditionTrueFalse` ×7 (a const member's default read instead of the constructor's value ×2, flags set by a
 by-reference lambda or another method ×2, the RenderDoc and fault-injection stubs ×3), `duplicateAssignExpression`
 (`Sequence`), `redundantInitialization` (`Net::Manager`: every variable initialized), `duplicateCondition` ×5 (two
-documented generation phases or concerns), `unreadVariable` ×2 (ShadowMap / Texture `capture()`: the download ignores
-the layer — engine item `render-target-capture-ignores-the-layer-index`).
+documented generation phases or concerns). The two `unreadVariable` of ShadowMap / Texture `capture()` were a real
+defect (the download ignored the layer): fixed on 2026-11-14, their suppressions removed (`docs/render-targets.md`
+§ *Reading a target back*).
 
 **Windows (Windows peer, 2026-10-19, the corrected defines of the base ledger):** 0 finding outside the
 `*.windows.cpp` (which Linux never analyses), 8 in them, fixed: `createConsole()` / `attachToParentConsole()` ignored

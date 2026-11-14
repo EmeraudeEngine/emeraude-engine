@@ -55,7 +55,6 @@
 #include "Component/Microphone.hpp" // IWYU pragma: keep (componentBuilder< Component::Microphone > needs the complete type)
 #include "Component/Vehicle.hpp"
 #include "Component/Visual.hpp"
-#include "Console/CommandResult.hpp"
 #include "Console/ControllableTrait.hpp"
 #include "Console/JSONNumber.hpp"
 #include "Console/Output.hpp"
@@ -120,6 +119,7 @@
 #include "String.hpp"
 #include "VertexFactory/CapUVMapping.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/Image.hpp"
 #include "Vulkan/TextureInterface.hpp"
 #include "Vulkan/TransferManager.hpp"
 
@@ -1923,11 +1923,19 @@ namespace EmEn::Scenes
 				return Console::CommandResult::success(message.str());
 			}, Console::CommandHint::Idempotent);
 
-		this->bindCommand("dumpRenderTarget", "Dumps the color image (layer 0) of the first render-to-texture target of the active scene whose id contains a fragment, as a PNG in the captures directory.",
+		this->bindCommand("dumpRenderTarget", "Dumps one layer of the color image of the first render-to-texture target of the active scene whose id contains a fragment, as a PNG in the captures directory.",
 			{
-				{"nameFragment", "A substring of the render target id."}
+				{"nameFragment", "A substring of the render target id."},
+				{"layer", "The array layer to dump: a cubemap face (0 = +X, 1 = -X, 2 = +Y, 3 = -Y, 4 = +Z, 5 = -Z); 0 for a plain target.", 0}
 			},
-			[this] (const std::string & nameFragment) {
+			[this] (const std::string & nameFragment, int32_t layer) {
+				if ( layer < 0 )
+				{
+					return Console::CommandResult::error("dumpRenderTarget(): the layer cannot be negative.");
+				}
+
+				const auto arrayLayer = static_cast< uint32_t >(layer);
+
 				Console::Outputs outputs;
 				bool dumped = false;
 
@@ -1958,6 +1966,14 @@ namespace EmEn::Scenes
 							return;
 						}
 
+						/* NOTE: Refused here with the target's name; the download refuses it too, never clamps it. */
+						if ( const auto layerCount = textureInterface->image()->createInfo().arrayLayers; arrayLayer >= layerCount )
+						{
+							outputs.emplace_back(Severity::Error, std::stringstream{} << "Render target '" << renderTarget->id() << "' has " << layerCount << " layer(s): the layer " << arrayLayer << " does not exist !");
+
+							return;
+						}
+
 						auto & renderer = scene->AVConsoleManager().graphicsRenderer();
 
 						PixelFactory::Pixmap< uint8_t > pixmap;
@@ -1968,9 +1984,9 @@ namespace EmEn::Scenes
 						renderer.device()->waitIdle("dumpRenderTarget console command");
 
 						/* NOTE: The render pass leaves the color attachment in SHADER_READ_ONLY_OPTIMAL
-						 * (it is sampled). Layer 0 only (+X face for a cubemap) — enough to tell a
-						 * black/dead probe from a live one. */
-						if ( !renderer.transferManager().downloadImage(*textureInterface->image(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, pixmap) )
+						 * (it is sampled). One layer per call: layer 0 (the +X face of a cubemap) tells a
+						 * black/dead probe from a live one, the others show what each face baked. */
+						if ( !renderer.transferManager().downloadImage(*textureInterface->image(), arrayLayer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, pixmap) )
 						{
 							outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to download the image of '" << renderTarget->id() << "' !");
 
@@ -1980,7 +1996,9 @@ namespace EmEn::Scenes
 						auto captureDirectory = renderer.primaryServices().fileSystem().userDataDirectory("captures");
 
 						std::stringstream filename;
-						filename << "rt-dump-" << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count() << ".png";
+						/* NOTE: The layer is in the name: two faces dumped within the same second would otherwise overwrite
+						 * each other. */
+						filename << "rt-dump-" << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count() << "-layer" << arrayLayer << ".png";
 
 						const auto filepath = captureDirectory /= Base::IO::u8path(filename.str());
 
@@ -1991,7 +2009,7 @@ namespace EmEn::Scenes
 							return;
 						}
 
-						outputs.emplace_back(Severity::Success, std::stringstream{} << "Render target '" << renderTarget->id() << "' dumped: " << Base::IO::toU8String(filepath));
+						outputs.emplace_back(Severity::Success, std::stringstream{} << "Render target '" << renderTarget->id() << "' (layer " << arrayLayer << ") dumped: " << Base::IO::toU8String(filepath));
 
 						dumped = true;
 					});

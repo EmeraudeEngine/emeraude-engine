@@ -29,7 +29,7 @@ this wrong produces a VUID cascade in which only the first message names the rea
 | Target | Image | Usage | Why |
 |---|---|---|---|
 | `ShadowMap` | depth | `DEPTH_STENCIL_ATTACHMENT \| SAMPLED \| TRANSFER_DST` | `TRANSFER_DST` is required by the initial `clearDepthImage(1.0F)` — see § 4 below. Dropping it disables the shadow pass entirely. |
-| `Texture` | color | `COLOR_ATTACHMENT \| SAMPLED \| TRANSFER_SRC` (`+ STORAGE` when GGX-convolved) | `TRANSFER_SRC` makes the target readable back: `capture()` and the `dumpRenderTarget` console command. |
+| `Texture` | color | `COLOR_ATTACHMENT \| SAMPLED \| TRANSFER_SRC` (`+ STORAGE` when GGX-convolved) | `TRANSFER_SRC` makes the target readable back: `capture()` and the `dumpRenderTarget` console command, one array layer per call (see below). |
 | `Texture` | depth | `DEPTH_STENCIL_ATTACHMENT` | Deliberately **no** `TRANSFER_SRC`: nothing reads it back, and that flag is the one that costs depth-compression metadata on some architectures. |
 | `SceneRenderTarget` | all color + depth | `… \| TRANSFER_SRC` | Every G-buffer attachment is blitted to the grab pass. |
 | `SwapChain` | color | `COLOR_ATTACHMENT \| TRANSFER_SRC` | Screenshots. |
@@ -39,6 +39,31 @@ this wrong produces a VUID cascade in which only the first message names the rea
 > (`clearDepthImage()`, `clearColorImage()`) to an existing target means **editing its
 > `createImages()` first**. `downloadImage()` refuses an image without `TRANSFER_SRC_BIT`
 > outright — there is no fallback, by design.
+
+### Reading a target back — one array layer, 8-bit colour or depth only (2026-11-14)
+
+`TransferManager::downloadImage(image, arrayLayer, layout, aspect, pixmap)` copies ONE array layer of mip 0: a cubemap
+face (0 = +X, 1 = -X, 2 = +Y, 3 = -Y, 4 = +Z, 5 = -Z), a shadow cascade, 0 for a plain image. The layer is never
+clamped: one the image does not have is refused (the caller would get another layer's pixels without knowing it). The
+barriers move the WHOLE image to `TRANSFER_SRC_OPTIMAL` and back, so every layer must be in the layout the caller
+names.
+
+- Until 2026-11-14 the function had no layer parameter and copied `baseArrayLayer = 0`: `ShadowMap::capture()` and
+  `Texture::capture()` validated their `layerIndex`, then returned layer 0 (found by cppcheck, `unreadVariable`).
+  They now pass it; `View`, `SceneRenderTarget` and `ImposterAtlas` have single-layer images and pass 0;
+  `ImposterBake`, `SelectionDepthTarget` and `SwapChain` do not download.
+- ⚠️ **Formats**: 8-bit RGB(A) / BGR(A) (UNORM or sRGB) and the depth / stencil formats; anything else is REFUSED
+  (owner ruling 2026-10-01: sized as RGBA8, a 16-bit target overflowed its staging buffer). The environment probes are
+  `R16G16B16A16_SFLOAT`, so **no cubemap probe can be read back today** (item
+  `render-target-download-refuses-hdr-color-formats`).
+- ⚠️ A `Texture`'s depth image has no `TRANSFER_SRC` (table above): `capture(…, withDepthBuffer = true, …)` gets a
+  warning and an empty `result[1]`.
+- **Measured** (`offscreen-rendering`, RTX 3070 Ti, Debug, validation layer loaded, 0 `VUID-`): the 2D target
+  (`SecurityCubemap`, one layer) dumps layer 0 and refuses 1 to 6 ("has 1 layer(s)"); the real cubemap
+  (`OffscreenRenderingCubemap`) refuses layer 6 ("has 6 layer(s)") and, being HDR, cannot be downloaded. With the probe
+  created in 8 bits and without convolution FOR THE MEASUREMENT (a local change, not committed), its six faces were
+  dumped: every pair differs on 47 % to 83 % of its pixels, layer 0 dumped twice 21 s apart is identical bit for bit,
+  and the faces read as the four sides, the sky (+Y, layer 2) and the ground (-Y, layer 3) of the night city.
 
 ## Architecture
 

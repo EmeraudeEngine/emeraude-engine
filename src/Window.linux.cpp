@@ -77,6 +77,7 @@ namespace
 		using DestroyQueue = void (*) (struct wl_event_queue *);
 		using PrepareRead = int (*) (struct wl_display *);
 		using PrepareReadQueue = int (*) (struct wl_display *, struct wl_event_queue *);
+		using DispatchQueuePending = int (*) (struct wl_display *, struct wl_event_queue *);
 		using ReadEvents = int (*) (struct wl_display *);
 		using CancelRead = void (*) (struct wl_display *);
 		using GetFD = int (*) (struct wl_display *);
@@ -85,6 +86,7 @@ namespace
 		DestroyQueue destroyQueue{nullptr};
 		PrepareRead prepareRead{nullptr};
 		PrepareReadQueue prepareReadQueue{nullptr};
+		DispatchQueuePending dispatchQueuePending{nullptr};
 		ReadEvents readEvents{nullptr};
 		CancelRead cancelRead{nullptr};
 		GetFD getFD{nullptr};
@@ -225,6 +227,17 @@ namespace EmEn
 			return false;
 		}
 
+		/* NOTE: An error that a reader READ is not SET yet: it is an event of the display's own queue, set when ANY
+		 * queue is dispatched. The engine has two readers that never dispatch (waitEvents(), the rendering thread's
+		 * drainDisplayConnection()); after them the first dispatch was libdecor's, inside its reader loop, which then
+		 * never ended (control program, libwayland 1.23.1: wl_display_get_error() answers 0 after the read, and the
+		 * loop ran its million-iteration cap). The private reader queue is always empty: dispatching it dispatches the
+		 * display's events and nothing else. */
+		if ( const auto & client = waylandClient(); client.usable && client.readerQueue != nullptr )
+		{
+			static_cast< void >(client.dispatchQueuePending(display, client.readerQueue));
+		}
+
 		const auto error = getError(display);
 
 		if ( error == 0 )
@@ -298,14 +311,15 @@ namespace EmEn
 		client.destroyQueue = waylandEntryPoint< WaylandClient::DestroyQueue >("wl_event_queue_destroy");
 		client.prepareRead = waylandEntryPoint< WaylandClient::PrepareRead >("wl_display_prepare_read");
 		client.prepareReadQueue = waylandEntryPoint< WaylandClient::PrepareReadQueue >("wl_display_prepare_read_queue");
+		client.dispatchQueuePending = waylandEntryPoint< WaylandClient::DispatchQueuePending >("wl_display_dispatch_queue_pending");
 		client.readEvents = waylandEntryPoint< WaylandClient::ReadEvents >("wl_display_read_events");
 		client.cancelRead = waylandEntryPoint< WaylandClient::CancelRead >("wl_display_cancel_read");
 		client.getFD = waylandEntryPoint< WaylandClient::GetFD >("wl_display_get_fd");
 
 		client.usable =
 			client.createQueue != nullptr && client.destroyQueue != nullptr && client.prepareRead != nullptr &&
-			client.prepareReadQueue != nullptr && client.readEvents != nullptr && client.cancelRead != nullptr &&
-			client.getFD != nullptr;
+			client.prepareReadQueue != nullptr && client.dispatchQueuePending != nullptr && client.readEvents != nullptr &&
+			client.cancelRead != nullptr && client.getFD != nullptr;
 
 		if ( client.usable )
 		{

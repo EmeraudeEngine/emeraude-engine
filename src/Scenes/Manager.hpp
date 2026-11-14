@@ -315,13 +315,35 @@ namespace EmEn::Scenes
 			bool deleteScene (const std::string & sceneName) noexcept;
 
 			/**
-			 * @brief Sets a scene as active.
+			 * @brief Sets a scene as active [MAIN THREAD].
 			 * @note This function will check the completeness of the scene with Scene::check().
 			 * It will register every notifier with all concerned services.
+			 * @note An active TRANSIENT scene (enableTransientScene()) is replaced: disabled and deleted before this one
+			 * is enabled, even when this one then fails to initialize. A regular active scene is never replaced: the
+			 * call is refused, disable that scene first.
 			 * @param scene A reference to a smart pointer of the scene.
 			 * @return bool
 			 */
 			bool enableScene (const std::shared_ptr< Scene > & scene) noexcept;
+
+			/**
+			 * @brief Sets a TRANSIENT scene as active: a scene that any other scene replaces [MAIN THREAD].
+			 * @details For a scene the engine shows on its own, that nobody is expected to disable (the file viewers of
+			 * Core; owner decision, 2026-10-18). Same rules as enableScene(): it replaces an active transient scene and is
+			 * refused while a regular scene is active. The mark lasts until the scene is disabled.
+			 * @pre The scene is the one this manager holds under its name (newScene()): replacing it deletes it by name.
+			 * Checked, refused otherwise.
+			 * @param scene A reference to a smart pointer of the scene.
+			 * @return bool
+			 */
+			bool enableTransientScene (const std::shared_ptr< Scene > & scene) noexcept;
+
+			/**
+			 * @brief Disables and deletes the active scene when it is a transient one [MAIN THREAD].
+			 * @return bool True when a transient scene was active and is now deleted. False when no scene or a regular
+			 * scene is active (nothing changed), or when the deletion failed.
+			 */
+			bool deleteTransientScene () noexcept;
 
 			/**
 			 * @brief Disables the active scene if one exists.
@@ -367,6 +389,21 @@ namespace EmEn::Scenes
 				const Base::SharedMutexReadLock lock{m_activeSceneSharedAccess};
 
 				return m_activeScene != nullptr;
+			}
+
+			/**
+			 * @brief Returns whether the active scene is a transient one (enableTransientScene()) [Thread-safe].
+			 * @return bool False when no scene is active.
+			 */
+			[[nodiscard]]
+			bool
+			isActiveSceneTransient () const noexcept
+			{
+				this->waitForAnnouncedExclusiveAccesses();
+
+				const Base::SharedMutexReadLock lock{m_activeSceneSharedAccess};
+
+				return m_activeScene != nullptr && m_activeSceneTransient;
 			}
 
 			/**
@@ -565,6 +602,14 @@ namespace EmEn::Scenes
 				return m_activeScene;
 			}
 
+			/**
+			 * @brief The body of enableScene() and of enableTransientScene() [MAIN THREAD].
+			 * @param scene A reference to a smart pointer of the scene.
+			 * @param transient Whether the scene is marked transient once active.
+			 * @return bool
+			 */
+			bool activateScene (const std::shared_ptr< Scene > & scene, bool transient) noexcept;
+
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
 			bool onInitialize () noexcept override;
 
@@ -600,5 +645,7 @@ namespace EmEn::Scenes
 			mutable std::atomic< uint32_t > m_announcedExclusiveAccesses{0};
 			mutable Base::Mutex m_exclusiveAnnouncementAccess;
 			mutable Base::ConditionVariable m_exclusiveAccessesWithdrawn;
+			/** @brief Whether the active scene is a transient one (enableTransientScene()): any other scene replaces it. */
+			bool m_activeSceneTransient EMEN_GUARDED_BY(m_activeSceneSharedAccess){false};
 	};
 }

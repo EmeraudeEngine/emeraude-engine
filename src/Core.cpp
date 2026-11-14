@@ -372,7 +372,8 @@ namespace EmEn
 			 * open the gate too, and nothing signals them: the safety timeout picks them up. A screenshot waits
 			 * on the MAIN thread, and in a CEF application that thread is the only source of redraw requests
 			 * (the WebView repaints), so a gate blind to the capture let every screenshot time out
-			 * (AppSystem, 2026-09-30). A capture also needs framesInFlight() frames past its copy to retire it. */
+			 * (a downstream application, 2026-09-30). A capture also needs framesInFlight() frames past its copy to
+			 * retire it. */
 			if ( m_renderingMode == RenderingMode::OnDemand && !m_sceneManager.hasActiveScene() )
 			{
 				Base::MutexLock lock{m_redrawMutex};
@@ -2257,10 +2258,10 @@ namespace EmEn
 		return errors > 0 ? EXIT_FAILURE : m_userExitCode;
 	}
 
-	size_t
+	Core::UnopenedFiles
 	Core::openFiles (const std::vector< std::filesystem::path > & filepaths) noexcept
 	{
-		size_t unopenedCount = 0;
+		UnopenedFiles unopened;
 
 		std::vector< std::filesystem::path > remainingFilepaths;
 		remainingFilepaths.reserve(filepaths.size());
@@ -2282,7 +2283,7 @@ namespace EmEn
 
 					this->notifyUser(BlobTrait{} << "The file '" << IO::toU8String(filepath.filename()) << "' is too large to open.");
 
-					++unopenedCount;
+					++unopened.refused;
 
 					continue;
 				}
@@ -2299,7 +2300,7 @@ namespace EmEn
 		/* NOTE: If all files are used by Core, we stop the operation. */
 		if ( remainingFilepaths.empty() )
 		{
-			return unopenedCount;
+			return unopened;
 		}
 
 		/* NOTE: The application overrides the Core default behaviors by
@@ -2326,7 +2327,10 @@ namespace EmEn
 
 			if ( std::ranges::find(imageFileExtensions, extension) != imageFileExtensions.cend() )
 			{
-				this->openImageViewer(filepath);
+				if ( this->openImageViewer(filepath) == ViewerOpening::Ignored )
+				{
+					++unopened.ignored;
+				}
 
 				continue;
 			}
@@ -2339,7 +2343,14 @@ namespace EmEn
 			}
 
 			/* NOTE: The scene loaders decide the composite asset formats themselves. */
-			if ( this->openModelViewer(filepath) )
+			const auto modelOpening = this->openModelViewer(filepath);
+
+			if ( modelOpening == ViewerOpening::Ignored )
+			{
+				++unopened.ignored;
+			}
+
+			if ( modelOpening != ViewerOpening::NotHandled )
 			{
 				continue;
 			}
@@ -2348,10 +2359,10 @@ namespace EmEn
 
 			this->notifyUser(BlobTrait{} << "Unable to open the file '" << IO::toU8String(filepath.filename()) << "'.");
 
-			++unopenedCount;
+			++unopened.refused;
 		}
 
-		return unopenedCount;
+		return unopened;
 	}
 
 	bool
@@ -2421,8 +2432,9 @@ namespace EmEn
 			return true;
 		}
 
-		/* NOTE: Never disturb an active scene, the loaded scene stays available. */
-		if ( m_sceneManager.hasActiveScene() )
+		/* NOTE: Never disturb a regular active scene, the loaded scene stays available. A viewer scene (transient) is
+		 * replaced by enableScene(). */
+		if ( m_sceneManager.hasActiveScene() && !m_sceneManager.isActiveSceneTransient() )
 		{
 			this->notifyUser(BlobTrait{} << "Scene '" << scene->name() << "' loaded. Disable the active scene to enable it.");
 
@@ -2492,30 +2504,25 @@ namespace EmEn
 			return true;
 		}
 
-		std::string activeSceneName;
-
-		m_sceneManager.withSharedActiveScene([&activeSceneName] (const std::shared_ptr< Scenes::Scene > & scene) {
-			activeSceneName = scene->name();
-		}, true);
-
 		/* NOTE: A regular active scene is never disturbed by a viewer. */
-		if ( activeSceneName != Viewers::ImageViewer::SceneName && activeSceneName != Viewers::ModelViewer::SceneName )
+		if ( !m_sceneManager.isActiveSceneTransient() )
 		{
 			this->notifyUser("A scene is running, the file was ignored.");
 
 			return false;
 		}
 
-		/* NOTE: An active viewer scene is replaced by the incoming one. */
-		return m_sceneManager.deleteScene(activeSceneName);
+		/* NOTE: An active viewer scene is replaced by the incoming one, which carries the same name: deleted now,
+		 * before the incoming scene is created. */
+		return m_sceneManager.deleteTransientScene();
 	}
 
-	void
+	Core::ViewerOpening
 	Core::openImageViewer (const std::filesystem::path & filepath) noexcept
 	{
 		if ( !this->clearStageForViewerScene() )
 		{
-			return;
+			return ViewerOpening::Ignored;
 		}
 
 		Viewers::ImageViewer viewer{m_resourceManager, m_sceneManager};
@@ -2526,10 +2533,11 @@ namespace EmEn
 		{
 			this->notifyUser(BlobTrait{} << "Unable to display the image '" << IO::toU8String(filepath.filename()) << "'.");
 
-			return;
+			return ViewerOpening::Taken;
 		}
 
-		if ( !m_sceneManager.enableScene(scene) )
+		/* NOTE: A viewer scene is transient: the scene the application enables next replaces it. */
+		if ( !m_sceneManager.enableTransientScene(scene) )
 		{
 			TraceError{ClassId} << "Unable to enable the image viewer scene for '" << IO::toU8String(filepath) << "' !";
 
@@ -2537,24 +2545,26 @@ namespace EmEn
 
 			m_sceneManager.deleteScene(Viewers::ImageViewer::SceneName);
 
-			return;
+			return ViewerOpening::Taken;
 		}
 
 		this->notifyUser(BlobTrait{} << "Viewing '" << IO::toU8String(filepath.filename()) << "'.");
+
+		return ViewerOpening::Taken;
 	}
 
-	bool
+	Core::ViewerOpening
 	Core::openModelViewer (const std::filesystem::path & filepath) noexcept
 	{
 		/* NOTE: Neither a composite asset nor a raw geometry file, let the dispatch continue. */
 		if ( !Viewers::ModelViewer::handlesFile(m_sceneManager, filepath) )
 		{
-			return false;
+			return ViewerOpening::NotHandled;
 		}
 
 		if ( !this->clearStageForViewerScene() )
 		{
-			return true;
+			return ViewerOpening::Ignored;
 		}
 
 		Viewers::ModelViewer viewer{m_resourceManager, m_sceneManager, m_primaryServices.settings()};
@@ -2565,10 +2575,11 @@ namespace EmEn
 		{
 			this->notifyUser(BlobTrait{} << "Unable to display the model '" << IO::toU8String(filepath.filename()) << "'.");
 
-			return true;
+			return ViewerOpening::Taken;
 		}
 
-		if ( !m_sceneManager.enableScene(scene) )
+		/* NOTE: A viewer scene is transient: the scene the application enables next replaces it. */
+		if ( !m_sceneManager.enableTransientScene(scene) )
 		{
 			TraceError{ClassId} << "Unable to enable the model viewer scene for '" << IO::toU8String(filepath) << "' !";
 
@@ -2576,7 +2587,7 @@ namespace EmEn
 
 			m_sceneManager.deleteScene(Viewers::ModelViewer::SceneName);
 
-			return true;
+			return ViewerOpening::Taken;
 		}
 
 		/* NOTE: The asset was imported at rest (ModelViewer disables the autoplay), so the cycle
@@ -2598,7 +2609,7 @@ namespace EmEn
 
 		this->notifyUser(notice);
 
-		return true;
+		return ViewerOpening::Taken;
 	}
 
 	bool

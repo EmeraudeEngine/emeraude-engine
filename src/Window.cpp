@@ -1959,7 +1959,13 @@ namespace EmEn
 		 * no user's close, the engine must stop on its own (Core::stopOnDisplayLoss()). */
 		if ( _this->isDisplayConnectionLost() )
 		{
-			_this->raiseNotification(OSLostDisplayConnection);
+			/* Once: the pump's own test (refuseDispatchOnLostDisplay()) then stays silent, and so does the next poll. */
+			if ( !_this->m_displayConnectionLost )
+			{
+				_this->m_displayConnectionLost = true;
+
+				_this->raiseNotification(OSLostDisplayConnection);
+			}
 
 			return;
 		}

@@ -32,9 +32,11 @@
 /* STL inclusions. */
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <span>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -45,10 +47,15 @@
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Mutex.hpp"
+#include "BlobTrait.hpp"
 #include "BufferTransferOperation.hpp"
 #include "ImageTransferOperation.hpp"
+#include "Mutex.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "ThreadSafety.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/Sync/Fence.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
@@ -349,15 +356,18 @@ namespace EmEn::Vulkan
 			bool transitionImageLayout (Image & image, VkImageAspectFlags aspectMask, VkImageLayout oldLayout, VkImageLayout newLayout) const noexcept;
 
 			/**
-			 * @brief Downloads an image from GPU memory to a pixmap.
+			 * @brief Downloads one array layer of an image (its first mip level) from GPU memory to a pixmap.
 			 * @param sourceImage A reference to the source image in GPU memory.
-			 * @param currentLayout The current layout of the source image.
+			 * @param arrayLayer The array layer to copy: a cubemap face (0 = +X, 1 = -X, 2 = +Y, 3 = -Y, 4 = +Z, 5 = -Z),
+			 * a shadow cascade, 0 for a plain image. Never clamped: a layer the image does not have is refused.
+			 * @param currentLayout The current layout of the source image (the whole image is moved to the transfer
+			 * layout and back).
 			 * @param aspectMask The aspect flags (color, depth, or stencil).
 			 * @param pixmap A reference to the destination pixmap to fill with data.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool downloadImage (const Image & sourceImage, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
+			bool downloadImage (const Image & sourceImage, uint32_t arrayLayer, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
 
 			/**
 			 * @brief Downloads a whole buffer from GPU memory: a copy into a temporary host-readable (cached) buffer on

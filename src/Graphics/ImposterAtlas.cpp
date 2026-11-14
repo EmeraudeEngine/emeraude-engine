@@ -28,12 +28,15 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <array>
 #include <bit>
+#include <functional>
+#include <utility>
 
 /* Local inclusions. */
-#include "PixelFactory/FileIO.hpp"
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
+#include "PixelFactory/FileIO.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/Image.hpp"
@@ -42,6 +45,12 @@
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "Vulkan/TextureInterface.hpp"
 #include "Vulkan/TransferManager.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Settings;
+}
 
 namespace EmEn::Graphics
 {
@@ -344,7 +353,7 @@ namespace EmEn::Graphics
 
 		Base::PixelFactory::Pixmap< uint8_t > pixmap;
 
-		if ( !transferManager.downloadImage(*m_albedoImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, pixmap) )
+		if ( !transferManager.downloadImage(*m_albedoImage, 0, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, pixmap) )
 		{
 			TraceError{ClassId} << "Unable to download the albedo of the imposter atlas '" << m_name << "' !";
 

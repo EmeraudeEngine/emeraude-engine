@@ -637,11 +637,13 @@ namespace EmEn
 			void drainDisplayConnection () const noexcept;
 
 			/**
-			 * @brief Tells whether the connection to the display server is dead.
+			 * @brief Tells whether the connection to the display server is dead [MAIN THREAD].
 			 * @note Linux / Wayland only (wl_display_get_error(), libwayland resolved on the module GLFW loaded): after a
 			 * compositor protocol error GLFW turns every event poll into a close request (60 per second), which burnt the
 			 * three stop vetoes in 32 ms and opened the force-quit dialog — measured in production crash reports. Always
 			 * false elsewhere (an X11 connection error ends the process in Xlib).
+			 * @note On Wayland the display's own events are dispatched first (through the always empty reader queue): an
+			 * error a reader has read is only set by a dispatch, and must be known BEFORE GLFW's.
 			 * @return bool
 			 */
 			[[nodiscard]]

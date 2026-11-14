@@ -364,7 +364,7 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	TransferManager::downloadImage (const Image & sourceImage, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Pixmap< uint8_t > & pixmap) noexcept
+	TransferManager::downloadImage (const Image & sourceImage, uint32_t arrayLayer, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Pixmap< uint8_t > & pixmap) noexcept
 	{
 		/* [VULKAN-CPU-SYNC] Transfer from GPU (Abusive lock!) */
 		const Base::MutexLock lock{m_transferOperationsAccess};
@@ -393,6 +393,15 @@ namespace EmEn::Vulkan
 				"The image '" << sourceImage.identifier() << "' has not been created with "
 				"VK_IMAGE_USAGE_TRANSFER_SRC_BIT, it cannot be downloaded ! "
 				"Add the usage flag where the image is created.";
+
+			return false;
+		}
+
+		/* NOTE: Refused, never clamped: the caller would get another layer's pixels without knowing it (the copy read
+		 * layer 0 whatever was asked until 2026-11-14). */
+		if ( arrayLayer >= imageCreateInfo.arrayLayers )
+		{
+			TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' has " << imageCreateInfo.arrayLayers << " array layer(s), the layer " << arrayLayer << " cannot be downloaded !";
 
 			return false;
 		}
@@ -515,7 +524,7 @@ namespace EmEn::Vulkan
 		region.bufferImageHeight = 0;
 		region.imageSubresource.aspectMask = aspectMask;
 		region.imageSubresource.mipLevel = 0;
-		region.imageSubresource.baseArrayLayer = 0;
+		region.imageSubresource.baseArrayLayer = arrayLayer;
 		region.imageSubresource.layerCount = 1;
 		region.imageOffset = {.x = 0, .y = 0, .z = 0};
 		region.imageExtent = extent;

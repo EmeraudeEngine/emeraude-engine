@@ -329,7 +329,7 @@ python3 tools/temporal-analysis.py <stem>          # or the .json path it printe
   included) and answer once the files are written. ⚠️ Read the path they ANSWER: the stem is unique,
   so a burst of captures moves it past the clock (two screenshots in one second used to collide). A
   capture that times out is cancelled, and the next one arms normally. ⚠️ In `RenderingMode::OnDemand`
-  with no active scene (AppSystem), an armed capture now keeps the rendering thread drawing until it is
+  with no active scene (the usual state of a downstream application), an armed capture now keeps the rendering thread drawing until it is
   retired (`Renderer::owesFrames()`, 2026-09-30); before that, every capture there timed out with "is the
   window rendering?", because the waiting main thread was the only source of redraws. See
   `docs/subsystems/source-tree/02-main-components.md` § Core - On-Demand Rendering. A temporal capture writes
@@ -474,7 +474,9 @@ Per-file behavior (after the application's `onCoreOpenFiles()` hook declined):
 | Anything else | On-screen notification `Unable to open the file '...'` |
 
 Viewer policy: a regular active scene is **never disturbed** (notification `A scene is running,
-the file was ignored.`); an active `+ImageViewer`/`+ModelViewer` is **replaced** by the new drop.
+the file was ignored.`, and `Core.openFiles()` answers `N of M file(s) ignored…`, a failure when no file
+was opened); an active `+ImageViewer`/`+ModelViewer` is a TRANSIENT scene, **replaced** by the new drop
+and by any scene enabled afterwards (`Stage.loadDemo()`, `enableScene`): it is deleted, not paused.
 In the viewers: left-drag orbits around the content, mouse wheel dollies in/out.
 
 #### `+ModelViewer` animations — OFF on arrival, space bar walks them (Aug 2026)
@@ -979,21 +981,30 @@ python3 tools/remote-console.py "Core.RendererService.screenshot()"
 # Response: Screenshot saved: "/path/to/captures/<timestamp>.png"
 ```
 
-Screenshots are saved to `fileSystem().userDataDirectory("captures")`, i.e. **`<user data dir>/captures/`** — on Linux `~/.local/share/<org>/<app-name>/captures/` (projet-alpha: `LNIsle/projet-alpha`, LycheeSlicer: `Lychee/LycheeSlicer`); macOS and Windows follow the same `<org>/<app-name>` resolution under their user-data root (`src/FileSystem.cpp`). The Unix-timestamp file names make before/after diffs free.
+Screenshots are saved to `fileSystem().userDataDirectory("captures")`, i.e. **`<user data dir>/captures/`** — on Linux `~/.local/share/<org>/<app-name>/captures/` (projet-alpha: `LNIsle/projet-alpha`); macOS and Windows follow the same `<org>/<app-name>` resolution under their user-data root (`src/FileSystem.cpp`). The Unix-timestamp file names make before/after diffs free.
 
 ### Dumping a render-to-texture target (probe diagnostics)
 
 ```bash
 python3 tools/remote-console.py "Core.SceneManagerService.dumpRenderTarget(ProbeCubemap)"
-# Response: Render target 'MyProbe_...' dumped: "/path/to/captures/rt-dump-<timestamp>.png"
+# Response: Render target 'MyProbe_...' (layer 0) dumped: "/path/to/captures/rt-dump-<timestamp>-layer0.png"
+python3 tools/remote-console.py "Core.SceneManagerService.dumpRenderTarget(ProbeCubemap, 3)"   # the -Y face
 ```
 
-Matches the target by NAME FRAGMENT and writes its color image (layer 0 — the +X face for
-a cubemap) as a PNG in the captures directory. This is the ground-truth tool for any
+`dumpRenderTarget(nameFragment, layer = 0)` matches the target by NAME FRAGMENT and writes ONE layer of
+its color image as a PNG in the captures directory: a cubemap face (0 = +X, 1 = -X, 2 = +Y, 3 = -Y,
+4 = +Z, 5 = -Z), layer 0 of a plain target. A layer the target does not have is refused with the
+target's layer count; a negative one is refused. This is the ground-truth tool for any
 "the reflection looks wrong" investigation: it answers "what did the probe actually bake?"
 without inferring it through a curved reflection. A target that never rendered (an unfired
 "once" probe, a suspended target) is refused cleanly instead of being read in an undefined
 layout.
+
+⚠️ **An HDR target cannot be dumped today**: `TransferManager::downloadImage()` reads the 8-bit colour
+formats and the depth / stencil formats only, and the environment probes are `R16G16B16A16_SFLOAT`
+(`Scene::createRenderToCubemap()`, 16 colour bits by default) — "Unable to download the image", format 97
+(item `render-target-download-refuses-hdr-color-formats`). ⚠️ A fragment such as `Cubemap` also matches the
+2D target of `Toolkit::generateTexture2DRenderer()`, which is NAMED `<name>Cubemap` and has one layer.
 
 ### Reading per-pass GPU timings (built-in profiler)
 

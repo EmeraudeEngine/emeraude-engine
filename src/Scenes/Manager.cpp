@@ -461,6 +461,62 @@ namespace EmEn::Scenes
 	bool
 	Manager::enableScene (const std::shared_ptr< Scene > & scene) noexcept
 	{
+		return this->activateScene(scene, false);
+	}
+
+	bool
+	Manager::enableTransientScene (const std::shared_ptr< Scene > & scene) noexcept
+	{
+		/* NOTE: A transient scene is deleted by its name when another scene replaces it: it must be the scene this
+		 * manager holds under that name. */
+		if ( scene != nullptr && this->getScene(scene->name()) != scene )
+		{
+			TraceError{ClassId} << "The scene '" << scene->name() << "' is not the one registered under that name: it cannot be enabled as a transient scene !";
+
+			return false;
+		}
+
+		return this->activateScene(scene, true);
+	}
+
+	bool
+	Manager::deleteTransientScene () noexcept
+	{
+		std::string sceneName;
+
+		{
+			const Base::SharedMutexReadLock lock{m_activeSceneSharedAccess};
+
+			if ( m_activeScene == nullptr || !m_activeSceneTransient )
+			{
+				return false;
+			}
+
+			sceneName = m_activeScene->name();
+		}
+
+		/* NOTE: Outside the shared access: deleteScene() takes the scene list, then the exclusive access. */
+		return this->deleteScene(sceneName);
+	}
+
+	bool
+	Manager::activateScene (const std::shared_ptr< Scene > & scene, bool transient) noexcept
+	{
+		if ( scene == nullptr )
+		{
+			Tracer::error(ClassId, "The scene pointer is null !");
+
+			return false;
+		}
+
+		/* NOTE: An active transient scene (a file viewer of Core) is replaced by any other scene (owner decision,
+		 * 2026-10-18): it is deleted here, before the exclusive access (deleteScene() takes the scene list first). A
+		 * regular active scene is refused below; so is the active scene enabled a second time, never deleted. */
+		if ( this->activeSceneSnapshot() != scene && this->deleteTransientScene() )
+		{
+			TraceInfo{ClassId} << "The transient scene was removed: the scene '" << scene->name() << "' replaces it.";
+		}
+
 		{
 			/* NOTE: Be sure the active is not currently used within the rendering or the logics update tasks.
 			 * Announced first: the render loop would otherwise take the shared access back before this
@@ -476,13 +532,6 @@ namespace EmEn::Scenes
 				return false;
 			}
 
-			if ( scene == nullptr )
-			{
-				Tracer::error(ClassId, "The scene pointer is null !");
-
-				return false;
-			}
-
 			/* Checks whether the scene is usable and tries to complete it otherwise. */
 			if ( !scene->enable(m_inputManager, m_primaryServices.settings()) )
 			{
@@ -492,6 +541,7 @@ namespace EmEn::Scenes
 			}
 
 			m_activeScene = scene;
+			m_activeSceneTransient = transient;
 
 			/* The active scene's post-process chain becomes addressable as
 			 * `Core.SceneManagerService.PostProcess.*`, and stops being so when the scene is
@@ -563,6 +613,7 @@ namespace EmEn::Scenes
 			}
 
 			disabledScene = std::exchange(m_activeScene, nullptr);
+			m_activeSceneTransient = false;
 		}
 
 		/* Send out a message that the scene has been deactivated, once the exclusive access is released (see

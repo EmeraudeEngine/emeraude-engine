@@ -48,7 +48,7 @@ private:
 - `onCoreKeyPress()` / `onCoreKeyRelease()` - Keyboard input
 - `onCoreCharacterType()` - Unicode text input
 - `onCoreNotification()` - Observer pattern
-- `onCoreOpenFiles(std::vector<std::filesystem::path> &)` - File drag & drop. The application REMOVES from the list every file it consumes; leftovers fall back to the Core default behaviors. Core has already consumed engine-level files (JSON resource store indexes) before this hook. Defaults after the hook: JSON scene definition → `Scenes::Manager::loadScene()`; image → `Scenes::Viewers::ImageViewer` scene; composite asset (per scene-loader `supportsExtension()`) → `Scenes::Viewers::ModelViewer` scene; audio file → ad-hoc `MusicResource` played through the TrackMixer; anything else → on-screen notification. Viewer policy: a regular active scene is NEVER disturbed (notification instead); an active viewer scene is replaced. Console: `Core.openFiles(path[, path...])` exercises the whole pipeline without a real drag & drop.
+- `onCoreOpenFiles(std::vector<std::filesystem::path> &)` - File drag & drop. The application REMOVES from the list every file it consumes; leftovers fall back to the Core default behaviors (an application that removes them all never gets one: no viewer scene, no playback). Core has already consumed engine-level files (JSON resource store indexes) before this hook. Defaults after the hook: JSON scene definition → `Scenes::Manager::loadScene()`; image → `Scenes::Viewers::ImageViewer` scene; composite asset (per scene-loader `supportsExtension()`) → `Scenes::Viewers::ModelViewer` scene; audio file → ad-hoc `MusicResource` played through the TrackMixer; anything else → on-screen notification. Viewer policy: a regular active scene is NEVER disturbed (notification instead); an active viewer scene is replaced. Console: `Core.openFiles(path[, path...])` exercises the whole pipeline without a real drag & drop.
 - `onCoreSurfaceRefreshed()` - Window resize
 
 ### Core - Automatic Settings Reset on Version Change
@@ -247,7 +247,7 @@ draining included) or a video recording (`Recorder::isRecording()`). Nothing sig
 safety re-check picks them up within one period. ⚠️ **Why it exists**: `screenshot()` / `temporalCapture()`
 wait on the **main** thread (console and MCP commands run there), and in a CEF application the main thread
 pumps CEF, i.e. it is the only source of redraw requests (the WebView repaints). A gate blind to the capture
-therefore rendered **nothing** while the capture waited — measured in AppSystem on Linux: 0 frames in the
+therefore rendered **nothing** while the capture waited — measured in a downstream application on Linux: 0 frames in the
 5 s wait at rest, 7 then none with a CSS animation running (901 frames in 5 s with the main thread free) —
 and every screenshot timed out on all three OSes. A capture also needs `framesInFlight()` frames past its
 copy, because a copy completes when its slot's fence is waited again. With the fix: one screenshot = 4
@@ -262,7 +262,7 @@ is just the clear color plus whatever the overlay draws.
 
 **Caveat**: ImGUI overlay screens (immediate-mode, `Overlay::Manager::m_ImGUIScreens`) are **not** covered
 by the redraw signal — a continuously-animating ImGUI screen needs an explicit `requestRedraw()` or
-`Continuous` mode. AppSystem's production UI is WebView-based (`UIScreen` surfaces), which **is** covered.
+`Continuous` mode. A downstream application's production UI is WebView-based (`UIScreen` surfaces), which **is** covered.
 
 **Files**: `Core.cpp` (`renderingTask` gate, `requestRedraw`, `onNotification` overlay/scene cases,
 `onWindowChanged`), `Core.hpp` (`RenderingMode`, `setRenderingMode`, redraw members), `Constants.hpp`

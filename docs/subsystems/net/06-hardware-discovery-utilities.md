@@ -357,7 +357,7 @@ namespace EmEn::Net
   1. Phase 1 — shared lock + `shutdown(SHUT_RDWR)`: wakes up any thread currently blocked in `::recv()` / `::send()` on this handle (kernel returns 0/EOF or `EPIPE`). The handle stays valid here.
   2. Phase 2 — exclusive lock + `closesocket()`: blocks until every in-flight `send`/`receive` has released its shared lock, then invalidates the handle. This eliminates the close-during-receive race (where the kernel could reuse the freed handle behind a syscall still in progress on another thread).
 - **Multiple `TCPClient` instances** are fully independent and safe to use concurrently from different threads.
-- **One single instance** is safe for full-duplex use from two threads (one `send` thread, one `receive`-polling thread) — this is the canonical pattern for printer sessions, RTSP control, and the WebModule `TCP.client.*` bindings in AppSystem.
+- **One single instance** is safe for full-duplex use from two threads (one `send` thread, one `receive`-polling thread) — this is the canonical pattern for printer sessions, RTSP control, and the `TCP.client.*` bindings of a downstream application.
 - Hostname resolution supports both IPv4 and IPv6 endpoints.
 - Move-only via `std::unique_ptr< std::shared_mutex >` + raw handle.
 

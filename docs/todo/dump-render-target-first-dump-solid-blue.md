@@ -28,6 +28,12 @@ The command runs on the console thread. It calls `device()->waitIdle()` and then
 the render thread from submitting the next frame between the two. A copy that reads the target in the middle of its
 next render pass, or right after its clear, would explain a uniform colour. That is a guess: nothing has measured it.
 
+**2026-11-14, Linux (RTX 3070 Ti, Debug, validation layer loaded):** the first dump of 2 sessions of
+`offscreen-rendering`, 25 s after the start line, was a real image both times (1024², about 49 000 distinct colours,
+0 pure-blue pixel). The command is now `dumpRenderTarget(nameFragment, layer = 0)` and its file is named
+`rt-dump-<timestamp>-layer<N>.png`. ⚠️ `SecurityCubemap` is a 2D target despite its name
+(`Toolkit::generateTexture2DRenderer()`), so this item is about a plain single-layer image.
+
 ## What remains
 
 - [ ] Reproduce: 6+ fresh launches of `offscreen-rendering`, the first dump at ~30 s (Windows first, then Linux).

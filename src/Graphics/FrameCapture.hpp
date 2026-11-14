@@ -194,7 +194,7 @@ namespace EmEn::Graphics
 			 * after its own). Also true while a cancelled capture drains. One atomic load, no lock.
 			 * @note The on-demand rendering gate reads it (Core::renderingTask()): the waiter blocks the main thread,
 			 * which in a CEF application is the only source of redraw requests, so nothing else would wake the
-			 * rendering thread (AppSystem, 2026-09-30: every screenshot timed out).
+			 * rendering thread (a downstream application, 2026-09-30: every screenshot timed out).
 			 * @return bool
 			 */
 			[[nodiscard]]

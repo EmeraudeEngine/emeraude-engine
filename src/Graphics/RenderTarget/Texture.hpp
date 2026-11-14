@@ -445,7 +445,6 @@ namespace EmEn::Graphics::RenderTarget
 					{
 						TraceWarning{ClassId} << "Single-layer texture does not support layer " << layerIndex << ". Using layer 0 instead for texture '" << this->id() << "'.";
 
-						/* cppcheck-suppress unreadVariable ; the download ignores the layer: engine item render-target-capture-ignores-the-layer-index. */
 						layerIndex = 0;
 					}
 					else
@@ -459,7 +458,8 @@ namespace EmEn::Graphics::RenderTarget
 				/* Capture color buffer. */
 				if ( m_colorImage != nullptr && m_colorImage->isCreated() )
 				{
-					if ( !transferManager.downloadImage(*m_colorImage, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
+					/* NOTE: The color and the depth / stencil images of a cubemap target carry the same six layers. */
+					if ( !transferManager.downloadImage(*m_colorImage, layerIndex, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
 					{
 						TraceError{ClassId} << "Failed to capture color buffer for texture '" << this->id() << "' !";
 						return false;
@@ -475,7 +475,7 @@ namespace EmEn::Graphics::RenderTarget
 				/* Capture depth buffer (optional). */
 				if ( withDepthBuffer && m_depthStencilImage != nullptr && m_depthStencilImage->isCreated() && this->precisions().depthBits() > 0 )
 				{
-					if ( !transferManager.downloadImage(*m_depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
+					if ( !transferManager.downloadImage(*m_depthStencilImage, layerIndex, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
 					{
 						TraceWarning{ClassId} << "Failed to capture depth buffer for texture '" << this->id() << "' !";
 					}
@@ -484,7 +484,7 @@ namespace EmEn::Graphics::RenderTarget
 				/* Capture stencil buffer (optional). */
 				if ( withStencilBuffer && m_depthStencilImage != nullptr && m_depthStencilImage->isCreated() && this->precisions().stencilBits() > 0 )
 				{
-					if ( !transferManager.downloadImage(*m_depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_STENCIL_BIT, result[2]) )
+					if ( !transferManager.downloadImage(*m_depthStencilImage, layerIndex, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_STENCIL_BIT, result[2]) )
 					{
 						TraceWarning{ClassId} << "Failed to capture stencil buffer for texture '" << this->id() << "' !";
 					}

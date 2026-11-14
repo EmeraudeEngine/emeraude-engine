@@ -1,12 +1,13 @@
-# The GLFW Fork — two patches, and how to move it forward
+# The GLFW Fork — three patches, and how to move it forward
 
 `dependencies/glfw` is **not** upstream GLFW: it is the fork
 [`EmeraudeEngine/glfw`](https://github.com/EmeraudeEngine/glfw), checked out as a submodule of the
 engine and pinned to a commit of its `em/customization` branch.
 
 **Current pin:** GLFW **3.5.1** + the input-state patch (`f4360311`, rebased 2026-08-31) + the Wayland HiDPI cursor
-bound (§ 1b, `27737a13`, 2026-11-12, owner decision). The previous pin was `f4360311` alone.
-The previous pin was `4263be2a` = 3.4-108, an untagged `master` state.
+bound (§ 1b, `27737a13`, 2026-11-12, owner decision) + the reader loops left on a display in error (§ 1c, `e7bb6749`,
+2026-11-14, owner decision). The pins before: `27737a13` (two patches), `f4360311` alone, and `4263be2a` = 3.4-108, an untagged
+`master` state.
 
 What the pin change actually brings — 8 files, 28 insertions, of which only two touch code:
 
@@ -50,9 +51,33 @@ in `wl_shm_pool_create_buffer()`. The patch indexes with `currentImage % wlCurso
   reading, not a reproduction; the bound is correct either way. The same index exists upstream: reported as
   [glfw/glfw#2929](https://github.com/glfw/glfw/issues/2929) (2026-11-12).
 - Commit `27737a13` on `em/customization`, **patch-id `31f9e91abd46cd4c46004009d6e8ed22d860e07d`**. `update-glfw.py`
-  now prints **2 commit(s)** above the target; the input-state patch keeps `6cf953c0…`. A rebase that conflicts here
+  then printed **2 commit(s)** above the target; the input-state patch keeps `6cf953c0…`. A rebase that conflicts here
   re-expresses the same bound (upstream may fix it: then this patch is dropped, its patch-id gone from the list).
- — `update-glfw.py`
+
+## 1c. No reader loop on a display in error (owner decision 2026-11-14)
+
+`src/wl_window.c`, `handleEvents()`; `src/wl_platform.h` and `src/wl_init.c` resolve one more libwayland entry point,
+`wl_display_get_error()`. On a display in error libwayland dispatches nothing more and its queues never empty, so a
+loop "prepare the read, else dispatch what is pending" never ends as soon as one event is left in its queue. There are
+two in `handleEvents()`: GLFW's own on the default queue, and the one of libdecor's GTK plugin, which
+`libdecor_dispatch()` runs first. The patch:
+
+- at the top of every iteration, a display in error requests the closing of every window and returns
+  (`requestCloseOnDisplayLoss()`: what the failed flush further down already did);
+- in GLFW's own loop, a failed `wl_display_dispatch_pending()` (a negative count) does the same.
+
+- Why: after a compositor protocol error the main thread never came back from `glfwPollEvents()` (engine
+  `docs/caution-points.md` § *Fixed: a dead Wayland display kept the main thread inside libdecor's reader loop*, item
+  `wayland-surface-lost-protocol-error`). The engine tests the connection before calling GLFW; this patch covers the
+  error GLFW reads itself in one iteration and would meet in the next.
+- What it cannot do: stop libdecor's loop once inside it (the error set by another thread meanwhile). That loop is
+  libdecor's.
+- Commit `e7bb6749` on `em/customization`, **patch-id `5e5956fa9d4031e80953f27ab983db32e97f3813`**; `update-glfw.py`
+  prints **3 commit(s)** above the target.
+  Not reported upstream, neither this patch to GLFW nor its loop to libdecor (owner decision 2026-11-14). A rebase
+  that conflicts here re-expresses the two tests; if upstream bounds its loop, this patch is dropped.
+
+## 2. Updating GLFW — `update-glfw.py`
 
 ```sh
 cd <engine root>
@@ -78,7 +103,7 @@ the *next* version's development branch, so following it silently pins a `-dev` 
 patch-id of every commit above the target. If the marker is gone, it fails **before** the push:
 
 ```
-Customisation verified: GLFW_EM_CUSTOM_VERSION present, 2 commit(s) above 3.5.1.
+Customisation verified: GLFW_EM_CUSTOM_VERSION present, 3 commit(s) above 3.5.1.
   f4360311  patch-id 6cf953c0cbc91fa356e2062e566af973c2a072f1  Add a way to get a copy of keyboard...
 ```
 
@@ -156,7 +181,7 @@ build requirements, dropping the `libgtk-3-dev` umbrella — which had been pull
 transitively. Every TU reaching `Window.hpp` then died on
 `glfw3.h:241: fatal error: GL/gl.h: No such file or directory`, while every developer machine kept
 building (GL headers are always installed there). The `#define GLFW_INCLUDE_NONE` scattered in
-`Input/*`, `Vulkan/Instance.cpp` and a downstream application's `UI/WebView.cpp` protected only *those* files.
+`Input/*`, `Vulkan/Instance.cpp` and one file of a downstream application protected only *those* files.
 
 ⚠️ **Do not re-add a local `#define GLFW_INCLUDE_NONE` before an `#include "GLFW/glfw3.h"`.** Now
 that the define comes from the command line (`-DGLFW_INCLUDE_NONE`, value `1`), a source-level

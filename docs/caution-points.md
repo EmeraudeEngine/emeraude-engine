@@ -6665,6 +6665,11 @@ new items).
   **from the binary's directory** (the engine library and CEF are loaded by relative path: from elsewhere every engine
   frame reads `??`). `print this->m_nativeSurfaceAccess._M_mutex.__data.__owner` in the waiter's frame names the
   holder's LWP. A hung instance ignores SIGTERM: kill it by PID once the stacks are saved.
+- **Peers (2026-11-14, engine `6ddb6f09`):** macOS (Apple M6, MoltenVK; Release and Debug, 0 warning with
+  `-Wdocumentation -Werror`) and Windows (MSVC 14.44, /W4 /WX, Release and Debug, 0 warning) compile the non-const
+  `pumpEvents()` / `waitEvents()` and the callbacks' records; `default` and `terrain` run with the validation layer
+  loaded, exit 0, 0 `VUID-`, 0 `[Error]`. Off Wayland the delivery is immediate, as before. The close button and real
+  keyboard / mouse input were not exercised there (nobody at those screens).
 
 ### Fixed: a dead Wayland display kept the main thread inside libdecor's reader loop (2026-11-14)
 
@@ -6690,11 +6695,32 @@ protocol error at every launch).** Before: the instance spun until killed (1 / 1
 the error READ during an act's build, the connection reset during a build, the error read in the main loop with no
 scene — each stops by itself in about 8 s, `Core level terminated`, exit code 96.
 
-- ⚠️ **What is NOT covered:** an error the MAIN thread reads itself, inside a dispatch (`wl_display_read_events()` in
-  GLFW or in libdecor), is still followed by the same loops before the engine is asked again. It was never the measured
-  case (the presentation engine's thread reads the error at its present). Closing it needs the test inside GLFW's
-  `handleEvents()`, a patch of the fork: an owner decision.
-- The error is set by whichever thread reads it; the test costs one call per pump.
+**Second lot, same day — an error that was READ is not SET.** `wl_display.error` is an event of the display's own
+queue: a reader files it there, and the error is only SET when some queue is next dispatched. The engine has two
+readers that never dispatch (`Window::waitEvents()`, the rendering thread's `drainDisplayConnection()`): after their
+read `wl_display_get_error()` still answered 0, the test above let GLFW in, and the first dispatch was libdecor's,
+inside its reader loop. **Control program** (libwayland-client 1.23.1, mutter 48.7; it provokes
+`wl_surface.invalid_scale` on a surface of its own and reads the answer on a private queue, without dispatching):
+after the read, `wl_display_get_error()` = 0; the loop "prepare the read, else dispatch what is pending" on a queue
+holding one event then ran its cap of 1 000 000 iterations, each dispatch returning -1, the event never dispatched;
+with the display's events dispatched first through an empty queue, the error reads 71 (`EPROTO`) before the loop.
+
+- **Engine:** `Window::isDisplayConnectionLost()` first dispatches the always empty reader queue
+  (`wl_display_dispatch_queue_pending()`): that dispatches the display's own events and nothing else. The close
+  callback raises `OSLostDisplayConnection` once too (`m_displayConnectionLost`).
+- **GLFW fork, third patch** (owner decision 2026-11-14, `docs/glfw-fork.md` § 1c): `handleEvents()` leaves — a close
+  request for every window, what its failed flush already did — when the display is in error at the top of an
+  iteration, and when `wl_display_dispatch_pending()` fails inside its own reader loop. It covers the error GLFW reads
+  itself, between the engine's test and GLFW's own poll.
+- **Measured:** 6 / 6 provoked losses (4 during `default`, 2 on the main menu) stop by themselves with exit code 96, in
+  7.5 to 12 s (Debug); a normal run after the patch: 0 `VUID-`, exit 0. ⚠️ The binary with the first lot ALONE also
+  stopped 6 / 6 (and 3 / 3 before): the application never showed this second shape here. It is proven by the control
+  program, not by a hang of the application.
+- ⚠️ **Still not covered, and only libdecor can cover it:** the error set by ANOTHER thread while the main thread is
+  inside libdecor's own loop with events in its queue (`libdecor_plugin_gtk_dispatch()`, 0.2.2 and 0.2.5), that is
+  between the engine's test and the end of that loop. A bounded loop there is an upstream matter, not reported (owner
+  decision 2026-11-14).
+- The test costs two libwayland calls per pump (a mutex, two empty lists).
 
 ### The renderer's sampler cache is shared by the loading threads and the rendering thread (2026-11-14)
 

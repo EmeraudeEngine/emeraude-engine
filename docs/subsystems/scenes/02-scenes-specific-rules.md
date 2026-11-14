@@ -203,7 +203,34 @@ no event until one is attached.
 
 Engine-built, ready-to-enable scenes displaying ONE dropped/opened file. These are the **Core
 default behaviors** for files dropped onto the window (see `Core::openFiles()`); reserved scene
-names use the manual-resource `+` prefix so Core can recognize (and replace) them.
+names use the manual-resource `+` prefix.
+
+**A viewer scene is a TRANSIENT scene** (owner decision 2026-10-18, done 2026-11-14). Core enables it with
+`Scenes::Manager::enableTransientScene()`; the mark lives in the manager beside the active scene, until that scene is
+disabled. Nothing compares scene names any more.
+
+- **Any scene replaces a transient scene.** `enableScene()` and `enableTransientScene()` DELETE an active transient
+  scene (disabled, then destroyed with the GPU drained, `deleteScene()`) before enabling the incoming one. It is
+  deleted, not paused: a viewer shows one file, dropping the file again rebuilds it. The deletion happens even when
+  the incoming scene then fails to initialize.
+- **A regular active scene is never replaced**: `enableScene()` refuses ("still active", disable it first), and a
+  viewer leaves its file aside (`Core::clearStageForViewerScene()`: "A scene is running, the file was ignored.").
+- **The viewers are an application's choice.** `Core::openFiles()` gives the files to `onCoreOpenFiles()` first; an
+  application that removes them all from the list never gets a Core default, so no viewer scene and no transient
+  scene ever exists in it, and `enableScene()` behaves for it exactly as before.
+- `enableTransientScene()` refuses a scene that is not the one registered under its name (`newScene()`): replacing
+  deletes by name.
+- `Core::openFiles()` returns `Core::UnopenedFiles` (`refused`, `ignored`); the console `Core.openFiles()` prints
+  "N of M file(s) ignored: a scene is running…" and FAILS when no file was opened. The word "ignored" appears only
+  then: `tools/gltf-conformance-bench/bench.py` reads it.
+
+**Measured 2026-11-14** (Debian 13, RTX 3070 Ti, Debug, validation layer loaded, no demo at launch). Before, with the
+previous binary: an FBX opened by `Core.openFiles()`, then `Stage.loadDemo("animation-debug")` — "Unable to load the
+demo", `The scene '+ModelViewer' is still active. Disable it before !`, the scene list kept `+ModelViewer` beside the
+demo's scene. After: FBX → PNG → FBX (the list holds one viewer scene at a time), then `Stage.loadDemo` — "Demo
+'animation-debug' loaded and active.", the list holds `animation-debug` alone, `The transient scene was removed`; the
+same FBX opened during the demo answers "1 of 1 file(s) ignored…", "None of the 1 file(s) was opened." (a failure).
+0 `VUID-`, 0 `[Error]`, exit 0.
 
 | Builder | Scene name | Content |
 |---------|------------|---------|

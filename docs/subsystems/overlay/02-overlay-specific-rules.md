@@ -263,8 +263,8 @@ work per event.
 > [!IMPORTANT]
 > **`disablePixmapCopyInTransitionBuffer(true)` is the answer, not a thread pool.** Parallelising
 > the resize would still burn fourteen cores computing pixels nobody sees, and would still be three
-> times slower than not doing it. AppSystem sets the flag on every `WebView` (`src/UI/WebView.cpp`,
-> constructor). An engine surface that genuinely displays its transition buffer before content
+> times slower than not doing it. A downstream application sets the flag on every one of its web views, at
+> construction. An engine surface that genuinely displays its transition buffer before content
 > arrives would need the copy — none does today.
 
 ### Initial clear of the surface image (⚠️ not cosmetic — and only on the ACTIVE buffer)
@@ -273,7 +273,7 @@ Neither asynchronous-provider path writes a single pixel at creation time — th
 for its CPU producer, the accelerated path for its first GPU→GPU copy. A buffer that can be
 **sampled** before its first frame therefore shows raw device memory, which is `UNDEFINED`: desktop
 drivers happen to hand back zeroed pages, while **Metal/MoltenVK hands back real garbage, reading as
-a uniform magenta rectangle**. That was the pink flash the Lychee Slicer splash screen showed on
+a uniform magenta rectangle**. That was the pink flash the splash screen of a downstream application showed on
 macOS before its image appeared (fixed 2026-09-20), on every CEF web-view and not only the splash.
 Same class of bug, same fix, as `Graphics::IntermediateRenderTarget::create()`.
 

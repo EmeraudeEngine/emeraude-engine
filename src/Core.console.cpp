@@ -27,14 +27,26 @@
 #include "Core.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <utility>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "json/json.h"
+
 /* Local inclusions. */
+#include "Console/CommandResult.hpp"
+#include "Console/Controller.hpp"
+#include "Console/Output.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
+#include "CoreTypes.hpp"
 #include "FastJSON.hpp"
 #include "IO/IO.hpp"
+#include "Logging/Severity.hpp"
 
 namespace EmEn
 {
@@ -161,17 +173,31 @@ namespace EmEn
 
 				const auto fileCount = filepaths.size();
 
-				/* NOTE: The reply said "submitted" with a success even when no file could be opened. */
-				const auto unopenedCount = this->openFiles(filepaths);
+				/* NOTE: The reply said "submitted" with a success even when no file could be opened, then "taken" for a
+				 * file a viewer had ignored because a scene was running. The word "ignored" appears ONLY for such a
+				 * file: tools read it (tools/gltf-conformance-bench). */
+				const auto unopened = this->openFiles(filepaths);
+				const auto unopenedCount = std::min(unopened.total(), fileCount);
+				const auto fileCountText = std::to_string(fileCount);
+
+				if ( unopened.ignored > 0 )
+				{
+					outputs.emplace_back(Severity::Warning, std::to_string(unopened.ignored) + " of " + fileCountText + " file(s) ignored: a scene is running, and a viewer never disturbs it.");
+				}
+
+				if ( unopened.refused > 0 )
+				{
+					outputs.emplace_back(Severity::Warning, std::to_string(unopened.refused) + " of " + fileCountText + " file(s) could not be opened (refused, or no behavior for them).");
+				}
 
 				if ( unopenedCount == fileCount )
 				{
-					outputs.emplace_back(Severity::Error, "None of the " + std::to_string(fileCount) + " file(s) could be opened (refused, or no behavior for them).");
+					outputs.emplace_back(Severity::Error, "None of the " + fileCountText + " file(s) was opened.");
 
 					return Console::CommandResult::fromOutputs(std::move(outputs), false);
 				}
 
-				outputs.emplace_back(Severity::Success, std::to_string(fileCount - unopenedCount) + " of " + std::to_string(fileCount) + " file(s) taken by the opening pipeline.");
+				outputs.emplace_back(Severity::Success, std::to_string(fileCount - unopenedCount) + " of " + fileCountText + " file(s) taken by the opening pipeline.");
 
 				return Console::CommandResult::fromOutputs(std::move(outputs), true);
 			});

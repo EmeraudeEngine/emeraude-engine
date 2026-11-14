@@ -586,24 +586,52 @@ namespace EmEn
 			void cancelStopRequest () noexcept;
 
 			/**
+			 * @brief What openFiles() did not open, by reason.
+			 */
+			struct UnopenedFiles final
+			{
+				/** @brief Files no stage opened (refused, or no behavior for them); each one raised a notification. */
+				size_t refused{0};
+				/** @brief Files a viewer left aside because a regular scene is running (never disturbed); each one raised
+				 * a notification. */
+				size_t ignored{0};
+
+				/**
+				 * @brief Returns the number of files that were not opened, whatever the reason.
+				 * @return size_t
+				 */
+				[[nodiscard]]
+				size_t
+				total () const noexcept
+				{
+					return refused + ignored;
+				}
+			};
+
+			/**
 			 * @brief Handles files dropped onto the application window.
 			 * @details This method is called when users drag and drop files onto the window.
 			 * The files go through three stages, in order :
 			 *  -# Core first view : engine-level content is consumed directly (a JSON resource
 			 *     index carrying the Resources::Manager::StoresKey object completes the resource stores).
 			 *  -# Application : onCoreOpenFiles() receives the remaining files and removes
-			 *     every file the application consumes from the list.
+			 *     every file the application consumes from the list. An application that removes them all
+			 *     never gets a Core default behavior: no viewer scene, no playback.
 			 *  -# Core default behaviors : a JSON scene definition is loaded through the scene
-			 *     manager and an audio file is played through the track mixer. A file no stage
-			 *     consumed raises an on-screen notification.
+			 *     manager, an image or a composite asset is shown in a viewer scene (a TRANSIENT scene,
+			 *     Scenes::Manager::enableTransientScene()) and an audio file is played through the track
+			 *     mixer. A file no stage consumed raises an on-screen notification.
 			 * @note This runs synchronously on the main thread.
+			 * @note A viewer never disturbs a regular active scene: its file is ignored. A viewer scene is replaced by
+			 * the next viewer and by any scene enabled afterwards.
 			 * @param filepaths A reference to a vector of filesystem paths representing the dropped files.
-			 * @return size_t The number of files no stage opened (refused, or no behavior for them); each one raised a
-			 * notification. A file a stage took but failed to load is reported by that stage, not counted here.
+			 * @return UnopenedFiles The files no stage opened (refused, or no behavior for them) and the files a viewer
+			 * ignored; each one raised a notification. A file a stage took but failed to load is reported by that stage,
+			 * not counted here.
 			 * @see onCoreOpenFiles()
 			 */
 			[[nodiscard]]
-			size_t openFiles (const std::vector< std::filesystem::path > & filepaths) noexcept;
+			UnopenedFiles openFiles (const std::vector< std::filesystem::path > & filepaths) noexcept;
 
 			/**
 			 * @brief Walks the animation clips of the asset shown by the model viewer.
@@ -1812,8 +1840,9 @@ namespace EmEn
 			/**
 			 * @brief Default behavior for an opened JSON scene definition.
 			 * @details Identifies a scene definition by its structural top-level keys, loads
-			 * it through Scenes::Manager::loadScene() and enables the scene when none is active.
-			 * When a scene is already active, the loaded scene is kept available but not enabled.
+			 * it through Scenes::Manager::loadScene() and enables the scene when none is active, or in
+			 * place of a viewer scene. When a regular scene is already active, the loaded scene is kept
+			 * available but not enabled.
 			 * @param filepath A reference to a filesystem path.
 			 * @return bool true when the file was identified as a scene definition, even if the loading failed.
 			 * @see openFiles()
@@ -1832,9 +1861,23 @@ namespace EmEn
 			void openAudioTrack (const std::filesystem::path & filepath) noexcept;
 
 			/**
+			 * @brief What a viewer of openFiles() did with a file.
+			 */
+			enum class ViewerOpening : uint8_t
+			{
+				/** @brief The file is not for this viewer: the dispatch goes on. */
+				NotHandled,
+				/** @brief The viewer took the file (a failure is reported to the user where it occurs). */
+				Taken,
+				/** @brief The viewer left the file aside: a regular scene is running and is never disturbed. */
+				Ignored
+			};
+
+			/**
 			 * @brief Clears the stage for a viewer scene, respecting the running application.
-			 * @details A viewer scene may appear when no scene is active, and replaces an
-			 * active viewer scene. A regular active scene is never disturbed.
+			 * @details A viewer scene may appear when no scene is active, and replaces an active viewer scene (a
+			 * transient scene, deleted here: the incoming viewer scene carries the same name). A regular active scene is
+			 * never disturbed: the user is told that the file was ignored.
 			 * @return bool true when a viewer scene can be enabled.
 			 * @see openImageViewer()
 			 * @see openModelViewer()
@@ -1845,21 +1888,24 @@ namespace EmEn
 			/**
 			 * @brief Default behavior for an opened image file : display it in the image viewer scene.
 			 * @param filepath A reference to a filesystem path.
-			 * @note The image viewer takes the file whatever happens (a failure is reported to the user where it occurs).
+			 * @return ViewerOpening Taken (even on a failure, reported to the user where it occurs), or Ignored when a
+			 * regular scene is running. Never NotHandled.
 			 * @see Scenes::Viewers::ImageViewer
 			 * @see openFiles()
 			 */
-			void openImageViewer (const std::filesystem::path & filepath) noexcept;
+			[[nodiscard]]
+			ViewerOpening openImageViewer (const std::filesystem::path & filepath) noexcept;
 
 			/**
 			 * @brief Default behavior for an opened composite asset file : display it in the model viewer scene.
 			 * @param filepath A reference to a filesystem path.
-			 * @return bool true when the file was taken by the model viewer, even on failure.
+			 * @return ViewerOpening NotHandled when no scene loader reads the file, Taken (even on a failure), or Ignored
+			 * when a regular scene is running.
 			 * @see Scenes::Viewers::ModelViewer
 			 * @see openFiles()
 			 */
 			[[nodiscard]]
-			bool openModelViewer (const std::filesystem::path & filepath) noexcept;
+			ViewerOpening openModelViewer (const std::filesystem::path & filepath) noexcept;
 
 			/** @} */ // End of Internal Engine Methods group
 

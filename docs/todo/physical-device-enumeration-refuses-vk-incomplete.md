@@ -95,7 +95,7 @@ its signature is the Fatal "No physical device available !" (`src/Vulkan/Instanc
 for a machine with no device at all before the `NoVulkanDriver` dialog and exit 97 — and the downstream tool classifies
 by the first Fatal, before the exit code. Closed now, the 22 no-device reports would come back on 8.0.3 as false
 regressions. It closes once the tool tells exit 97 apart (a downstream application item)
-and the 8.0.3 reports show no `VK_INCOMPLETE`.
+and the 8.0.3 reports show no `VK_INCOMPLETE`. Confirmed by the owner on 2026-11-14: it stays open until both.
 
 ## What remains
 

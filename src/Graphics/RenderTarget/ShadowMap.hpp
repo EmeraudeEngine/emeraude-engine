@@ -515,7 +515,6 @@ namespace EmEn::Graphics::RenderTarget
 					{
 						TraceWarning{ClassId} << "Single-layer shadow map does not support layer " << layerIndex << ". Using layer 0 instead for shadow map '" << this->id() << "'.";
 
-						/* cppcheck-suppress unreadVariable ; the download ignores the layer: engine item render-target-capture-ignores-the-layer-index. */
 						layerIndex = 0;
 					}
 					else
@@ -532,7 +531,7 @@ namespace EmEn::Graphics::RenderTarget
 				 * The depth data goes into result[1] to maintain consistency with the capture() interface. */
 				if ( m_depthImage != nullptr && m_depthImage->isCreated() )
 				{
-					if ( !transferManager.downloadImage(*m_depthImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
+					if ( !transferManager.downloadImage(*m_depthImage, layerIndex, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
 					{
 						TraceWarning{ClassId} << "Failed to capture depth buffer for shadow map '" << this->id() << "' !";
 					}

@@ -26,14 +26,26 @@
 
 #include "SceneRenderTarget.hpp"
 
+/* STL inclusions. */
+#include <array>
+#include <initializer_list>
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/Types.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/Processor.hpp"
+#include "Scenes/AVConsole/Types.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/RenderPass.hpp"
+#include "Vulkan/RenderSubPass.hpp"
+#include "Vulkan/TransferManager.hpp"
 
 namespace EmEn::Graphics
 {
@@ -238,7 +250,7 @@ namespace EmEn::Graphics
 
 		if ( m_colorImage != nullptr && m_colorImage->isCreated() )
 		{
-			if ( !transferManager.downloadImage(*m_colorImage, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
+			if ( !transferManager.downloadImage(*m_colorImage, 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, result[0]) )
 			{
 				TraceError{ClassId} << "Failed to capture color buffer for '" << this->id() << "' !";
 				return false;
@@ -252,7 +264,7 @@ namespace EmEn::Graphics
 
 		if ( withDepthBuffer && m_depthStencilImage != nullptr && m_depthStencilImage->isCreated() )
 		{
-			if ( !transferManager.downloadImage(*m_depthStencilImage, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
+			if ( !transferManager.downloadImage(*m_depthStencilImage, 0, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, result[1]) )
 			{
 				TraceWarning{ClassId} << "Failed to capture depth buffer for '" << this->id() << "' !";
 			}
