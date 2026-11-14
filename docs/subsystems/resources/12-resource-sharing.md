@@ -46,7 +46,7 @@ stores, `startSharingServer()` after them; `onTerminate()` stops the server firs
 | `/index.json` | `{"FormatVersion", "Stores": {store: [entry]}}` — a local file as `{"Name", "Path", "Size"}` (`Path` relative to `data-stores/`, never this machine's absolute path), an external or direct entry as it is. Sorted: two calls give the same document. |
 | `/files/<path>` | The file, streamed in 256 KiB chunks, `Accept-Ranges: bytes`, a single `Range` honoured (206 / 416) |
 | `/list/<directory>` | `{"files": [{"path", "size"}], "truncated"}`, recursive, at most 100 000 entries |
-| `/sha256/<path>` | `{"sha256", "size"}`, computed on the thread pool (at most 4 at once, else 503 + `Retry-After`) |
+| `/sha256/<path>` | `{"sha256", "size"}`, computed on the thread pool (at most 4 at once, else 503 + `Retry-After`). A file up to 64 MiB is answered when its hash is done; a LARGER one at once and is polled: `202 {"hashed", "size"}` while its hash runs in the background, `200` once it is known (2026-11-14, see below) |
 
 A path is percent-decoded, then refused if it holds a NUL or a backslash (a separator on Windows only: one request
 would mean two things on two OS), then confined under each data directory's `data-stores/`; the first data
@@ -69,11 +69,27 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
   replaces it under the state lock, because a stop source is stopped once and for all — and `cancel()` and the
   destructor request its stop. Its token goes to the HTTP exchanges (`HTTPRequestOptions::stopToken`), to the wait
   for the peer's digest and to `SharingServer::fileSHA256(path, stopToken)` (checked before each 1 MiB block).
-  ⚠️ **Latency**: a stop is seen between two transport reads. During the download that is immediate (0.04 s
-  measured); while the client waits for the peer's `/sha256/` answer it is the time that answer takes — 3.5 s for
-  1.6 GB between two Release instances, and up to the 30 s request budget when the peer is slow (29.8 s measured
-  with a Debug peer). The engine's shutdown waits that long (item `peer-fetch-digest-request-times-out-on-large-files`
-  and base item `http-client-stop-does-not-wake-a-parked-read`).
+  **Latency**: a stop is seen between two transport reads (0.04 s during a download) and within 50 ms of the pauses
+  between two questions about a digest. ⚠️ An exchange parked on a silent peer still waits its timeout (base item
+  `http-client-stop-does-not-wake-a-parked-read`); the wait for a digest no longer is one, see the next point.
+- **The digest of a large file is POLLED** (2026-11-14, owner decision). `/sha256/` used to answer when the hash
+  was done, on a connection silent meanwhile, under the client's 30 s request budget: a slower hash made the client
+  DELETE a complete copy ("the peer gave no SHA-256"), and a stop waited for that answer. Now:
+  - the server (`SharingServer::answerBackgroundDigest()`) answers a file larger than `BackgroundDigestSize`
+    (64 MiB) at once: the first request starts the hash on the thread pool and gets `202 {"hashed": 0, "size"}`;
+    the next ones get `202` with the bytes hashed so far, then `200 {"sha256", "size"}`. The digests are remembered
+    (`MaxRememberedDigests` = 64, the oldest finished one leaves; an entry is tied to the file's size and
+    modification time, a changed file is hashed again; a failed hash is answered 500 once, then forgotten). A file
+    up to 64 MiB keeps the direct answer: a directory of small files pays no pause.
+  - the client (`PeerStore::peerDigest()`) asks again after 100 ms, then twice as long each time up to 1 s; its
+    patience (`DigestPatience`, 120 s) counts the time WITHOUT progress of `hashed`, so a hash which advances is
+    waited for however long it takes.
+  - the server's hashes take its own `std::stop_source`: its destructor stops them, then waits (a background hash
+    outlives the request that started it).
+  - ⚠️ Both engines must carry this protocol for a large file: an older client reads the `202` as a refusal and
+    deletes its copy; an older server still answers a newer client the old way (200 when done).
+  - Not done: the client hashes its copy AFTER the peer's digest is known; hashing both at once would halve the wait
+    for a large file.
 
 ## Console / MCP (`Core.ResourcesManagerService.*`)
 
@@ -105,7 +121,20 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
   3.24 s; no `.part` left anywhere. With two DEBUG instances a cancel during the download itself was effective after
   0.04 s (`Cancelled`), and ⚠️ the whole file FAILED: the peer's hash took longer than the client's 30 s request
   budget, "the peer gave no SHA-256, the copy is deleted" after 146 s — on both binaries' logic, a limit of the
-  protocol, not of the conversion (item `peer-fetch-digest-request-times-out-on-large-files`).
+  protocol, not of the conversion.
+- **The polled digest, before / after** (2026-11-14, the same pair and the same 1 610 429 961-byte file):
+
+  | | before | after |
+  |---|---|---|
+  | Release: the whole file | 7.9 s, SHA-256 equal | 7.7 s, SHA-256 equal |
+  | Release: a cancel during the verification | 3.46 s | 0.16 s |
+  | Release: a shutdown of the client during the verification | 3.24 s | 0.58 s |
+  | Debug (a hash far longer than 30 s): the whole file | FAILED after 146 s, the copy deleted | fetched in 213.9 s, SHA-256 equal |
+  | Debug: a cancel during the verification | 29.77 s | 0.17 s |
+  | Debug: a shutdown of the client during the verification | 29.69 s | 3.09 s |
+  | `Musics/Kyrandia2` (32 small files) | 32 / 32 in 0.0 s | 32 / 32 in 0.0 s |
+
+  Exit 0 on both sides, no `.part` left, the data repository untouched.
 
 ## Testing a pair on one machine
 

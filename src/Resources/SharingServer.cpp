@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <chrono>
 #include <fstream>
 #include <system_error>
 #include <type_traits>
@@ -107,6 +108,9 @@ namespace EmEn::Resources
 		/* No new digest can start once the network thread is gone; the ones in flight post into a stopped loop,
 		 * which drops them, but they read m_http: wait for them before it goes. */
 		m_http->stop();
+
+		/* A hash in flight ends before its next block: a background one may have minutes left. */
+		m_stopSource.request_stop();
 
 		{
 			Base::MutexLock lock{m_jobsAccess};
@@ -189,7 +193,7 @@ namespace EmEn::Resources
 	}
 
 	std::optional< std::string >
-	SharingServer::fileSHA256 (const std::filesystem::path & filepath, const std::stop_token & stopToken) noexcept
+	SharingServer::fileSHA256 (const std::filesystem::path & filepath, const std::stop_token & stopToken, const std::function< void (uint64_t) > & progress) noexcept
 	{
 		/* NOTE: Through Base::IO::openInputFile(): a FIFO blocked the open forever (2026-10-18). */
 		std::ifstream file;
@@ -201,6 +205,7 @@ namespace EmEn::Resources
 
 		Hash::SHA256 hash;
 		std::vector< char > buffer(size_t{1024} * 1024);
+		uint64_t hashedBytes = 0;
 
 		while ( file )
 		{
@@ -216,6 +221,13 @@ namespace EmEn::Resources
 			if ( readBytes > 0 )
 			{
 				hash.update(reinterpret_cast< const uint8_t * >(buffer.data()), static_cast< size_t >(readBytes));
+
+				hashedBytes += static_cast< uint64_t >(readBytes);
+
+				if ( progress )
+				{
+					progress(hashedBytes);
+				}
 			}
 		}
 
@@ -412,6 +424,25 @@ namespace EmEn::Resources
 	void
 	SharingServer::answerDigest (const std::shared_ptr< Connection > & connection, const std::filesystem::path & filepath) noexcept
 	{
+		std::error_code sizeError;
+
+		/* NOTE: A large file is answered AT ONCE and polled: its hash can outlast any request (2026-11-14). */
+		if ( const auto size = std::filesystem::file_size(filepath, sizeError); !sizeError && size > BackgroundDigestSize )
+		{
+			const auto answer = this->answerBackgroundDigest(filepath, size);
+
+			if ( answer.body.empty() )
+			{
+				connection->respondEmpty(answer.status, answer.status == 503 ? "Retry-After: 5\r\n" : "");
+			}
+			else
+			{
+				connection->respond(answer.status, "application/json", answer.body, NoStore);
+			}
+
+			return;
+		}
+
 		{
 			const Base::MutexLock lock{m_jobsAccess};
 
@@ -427,8 +458,8 @@ namespace EmEn::Resources
 
 		const std::weak_ptr< Connection > weakConnection = connection;
 
-		const auto enqueued = m_threadPool->enqueue([this, weakConnection, filepath] () {
-			auto digest = SharingServer::fileSHA256(filepath);
+		const auto enqueued = m_threadPool->enqueue([this, weakConnection, filepath, stopToken = m_stopSource.get_token()] () {
+			auto digest = SharingServer::fileSHA256(filepath, stopToken);
 
 			std::error_code errorCode;
 			const auto size = std::filesystem::file_size(filepath, errorCode);
@@ -476,6 +507,161 @@ namespace EmEn::Resources
 			}
 
 			connection->respondEmpty(503, "Retry-After: 5\r\n");
+		}
+	}
+
+	SharingServer::DigestAnswer
+	SharingServer::answerBackgroundDigest (const std::filesystem::path & filepath, uint64_t size) noexcept
+	{
+		std::error_code errorCode;
+		const auto modified = std::filesystem::last_write_time(filepath, errorCode);
+
+		if ( errorCode )
+		{
+			return {};
+		}
+
+		const auto key = IO::toU8String(filepath);
+
+		/* The progress counter of a hash to start: set when this request is the first one about the file. */
+		std::shared_ptr< std::atomic< uint64_t > > toStart;
+		Json::Value answer{Json::objectValue};
+		int status = 202;
+
+		{
+			const Base::MutexLock lock{m_jobsAccess};
+
+			auto entry = m_backgroundDigests.find(key);
+
+			if ( entry != m_backgroundDigests.end() )
+			{
+				const auto & known = entry->second;
+
+				/* A hash which failed is reported once, then forgotten: the next request starts it again. */
+				if ( known.failed )
+				{
+					m_backgroundDigests.erase(entry);
+
+					return {};
+				}
+
+				/* A digest of another state of the file is forgotten: the file changed since. A hash still running is
+				 * left to end, its client keeps polling; its digest is then forgotten here, and the file hashed again. */
+				if ( !known.digest.empty() && (known.size != size || known.modified != modified) )
+				{
+					m_backgroundDigests.erase(entry);
+
+					entry = m_backgroundDigests.end();
+				}
+			}
+
+			if ( entry == m_backgroundDigests.end() )
+			{
+				if ( m_threadPool == nullptr || m_jobsInFlight >= MaxDigestJobs )
+				{
+					return {.body = {}, .status = 503};
+				}
+
+				this->makeRoomForADigest();
+
+				toStart = std::make_shared< std::atomic< uint64_t > >(0);
+
+				entry = m_backgroundDigests.emplace(key, BackgroundDigest{.modified = modified, .size = size, .hashed = toStart, .digest = {}, .rank = m_nextDigestRank++, .failed = false}).first;
+
+				/* Counted here, under the lock, as the foreground job is: the job is started once the lock is released. */
+				++m_jobsInFlight;
+			}
+
+			answer["size"] = static_cast< Json::UInt64 >(entry->second.size);
+
+			if ( entry->second.digest.empty() )
+			{
+				answer["hashed"] = static_cast< Json::UInt64 >(entry->second.hashed->load());
+			}
+			else
+			{
+				answer["sha256"] = entry->second.digest;
+				status = 200;
+			}
+		}
+
+		/* NOTE: Outside the lock: the job takes it when it ends. */
+		if ( toStart != nullptr && !this->startBackgroundDigest(key, filepath, toStart) )
+		{
+			return {.body = {}, .status = 503};
+		}
+
+		return {.body = FastJSON::stringify(answer), .status = status};
+	}
+
+	bool
+	SharingServer::startBackgroundDigest (const std::string & key, const std::filesystem::path & filepath, const std::shared_ptr< std::atomic< uint64_t > > & hashed) noexcept
+	{
+		/* NOTE: 'this' is captured by a job the destructor stops (m_stopSource) and waits for (m_jobsInFlight). */
+		const auto enqueued = m_threadPool->enqueue([this, key, filepath, hashed, stopToken = m_stopSource.get_token()] () {
+			auto digest = SharingServer::fileSHA256(filepath, stopToken, [&hashed] (uint64_t hashedBytes) {
+				hashed->store(hashedBytes);
+			});
+
+			/* NOTE: notified UNDER the lock, as the foreground job does: the destructor waits on this condition. */
+			const Base::MutexLock lock{m_jobsAccess};
+
+			if ( const auto entry = m_backgroundDigests.find(key); entry != m_backgroundDigests.end() )
+			{
+				if ( digest.has_value() )
+				{
+					entry->second.digest = std::move(*digest);
+				}
+				else
+				{
+					entry->second.failed = true;
+				}
+			}
+
+			--m_jobsInFlight;
+
+			m_jobsDone.notifyAll();
+		});
+
+		if ( !enqueued )
+		{
+			const Base::MutexLock lock{m_jobsAccess};
+
+			--m_jobsInFlight;
+
+			m_backgroundDigests.erase(key);
+
+			/* NOTE: The destructor may already wait (a refused enqueue happens when the pool stops): wake it. */
+			m_jobsDone.notifyAll();
+		}
+
+		return enqueued;
+	}
+
+	void
+	SharingServer::makeRoomForADigest () noexcept
+	{
+		if ( m_backgroundDigests.size() < MaxRememberedDigests )
+		{
+			return;
+		}
+
+		/* The oldest FINISHED entry: one still running belongs to a client which polls it (at most MaxDigestJobs). */
+		auto oldest = m_backgroundDigests.end();
+
+		for ( auto entry = m_backgroundDigests.begin(); entry != m_backgroundDigests.end(); ++entry )
+		{
+			const bool finished = !entry->second.digest.empty() || entry->second.failed;
+
+			if ( finished && (oldest == m_backgroundDigests.end() || entry->second.rank < oldest->second.rank) )
+			{
+				oldest = entry;
+			}
+		}
+
+		if ( oldest != m_backgroundDigests.end() )
+		{
+			m_backgroundDigests.erase(oldest);
 		}
 	}
 }

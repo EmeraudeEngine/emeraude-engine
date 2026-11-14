@@ -27,8 +27,10 @@
 #include "PeerStore.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <chrono>
 #include <compare>
+#include <ratio>
 #include <system_error>
 #include <thread>
 #include <utility>
@@ -63,8 +65,36 @@ namespace EmEn::Resources
 		/** @brief How long a file may take: hours, a multi-gigabyte file over a slow link must finish. */
 		constexpr auto DownloadBudget{std::chrono::hours{6}};
 
-		/** @brief How long a digest the peer is busy computing is waited for (it answers 503 meanwhile). */
+		/** @brief How long a digest is waited for WITHOUT progress. The peer hashes a large file in the background and
+		 * says how far it is (202): a hash which advances is waited for, however long it takes. */
 		constexpr auto DigestPatience{std::chrono::seconds{120}};
+
+		/** @brief The first and the longest pause between two questions about a digest (doubled from one to the other). */
+		constexpr auto DigestFirstPause{std::chrono::milliseconds{100}};
+		constexpr auto DigestLongestPause{std::chrono::milliseconds{1000}};
+
+		/**
+		 * @brief Waits for a duration, unless a stop is requested: it is looked at every 50 ms.
+		 * @param duration The duration.
+		 * @param stopToken The token of the job.
+		 */
+		void
+		waitUnlessStopped (std::chrono::milliseconds duration, const std::stop_token & stopToken) noexcept
+		{
+			const auto end = std::chrono::steady_clock::now() + duration;
+
+			while ( !stopToken.stop_requested() )
+			{
+				const auto remaining = std::chrono::duration_cast< std::chrono::milliseconds >(end - std::chrono::steady_clock::now());
+
+				if ( remaining <= std::chrono::milliseconds::zero() )
+				{
+					return;
+				}
+
+				std::this_thread::sleep_for(std::min(remaining, std::chrono::milliseconds{50}));
+			}
+		}
 
 		/**
 		 * @brief Returns the HTTP client options for a peer.
@@ -393,30 +423,49 @@ namespace EmEn::Resources
 	std::optional< std::string >
 	PeerStore::peerDigest (const std::string & relativePath, const std::stop_token & stopToken) const noexcept
 	{
-		const auto patienceEnd = std::chrono::steady_clock::now() + DigestPatience;
+		const auto target = "/sha256/" + Network::PercentEncoding::encode(relativePath, Network::PercentEncoding::Component::Path);
+
+		/* NOTE: Each question is a short exchange (2026-11-14). The peer used to answer when its hash was done, on a
+		 * connection silent meanwhile: a hash longer than the request budget made this side delete a complete copy,
+		 * and a stop waited for that answer. The patience counts the time WITHOUT progress. */
+		auto patienceEnd = std::chrono::steady_clock::now() + DigestPatience;
+		auto pause = std::chrono::duration_cast< std::chrono::milliseconds >(DigestFirstPause);
+		uint64_t hashedBytes = 0;
 
 		while ( !stopToken.stop_requested() && std::chrono::steady_clock::now() < patienceEnd )
 		{
 			Network::DownloadReport report;
-			const auto result = this->get("/sha256/" + Network::PercentEncoding::encode(relativePath, Network::PercentEncoding::Component::Path), report);
+			const auto result = this->get(target, report);
 
-			/* The peer is busy with other digests: asked again, within the patience. */
-			if ( result && report.statusCode == 503 )
+			if ( !result )
 			{
-				std::this_thread::sleep_for(std::chrono::seconds{1});
-
-				continue;
+				break;
 			}
 
-			if ( result && report.statusCode == 200 )
+			const auto answer = FastJSON::getRootFromString(result->body, 4, true);
+			const bool isObject = answer && answer->isObject();
+
+			if ( report.statusCode == 200 )
 			{
-				if ( const auto answer = FastJSON::getRootFromString(result->body, 4, true); answer && answer->isObject() )
-				{
-					return FastJSON::getValue< std::string >(*answer, "sha256");
-				}
+				return isObject ? FastJSON::getValue< std::string >(*answer, "sha256") : std::nullopt;
 			}
 
-			break;
+			/* 202: the peer hashes the file in the background and says how far it is. 503: it is busy with other
+			 * digests. Anything else is a refusal. */
+			if ( report.statusCode != 202 && report.statusCode != 503 )
+			{
+				break;
+			}
+
+			if ( const auto hashed = isObject ? FastJSON::getValue< uint64_t >(*answer, "hashed") : std::nullopt; hashed && *hashed > hashedBytes )
+			{
+				hashedBytes = *hashed;
+				patienceEnd = std::chrono::steady_clock::now() + DigestPatience;
+			}
+
+			waitUnlessStopped(pause, stopToken);
+
+			pause = std::min(pause * 2, std::chrono::duration_cast< std::chrono::milliseconds >(DigestLongestPause));
 		}
 
 		return std::nullopt;
