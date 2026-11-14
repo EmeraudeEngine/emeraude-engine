@@ -144,7 +144,8 @@ title (const std::string & text)
 	std::cout << "\n=== " << text << " ===\n";
 }
 
-static long
+/* NOTE: 64 bits: 'long' is 32 bits wide on Windows, and the count of a std::chrono duration is not (MSVC C4244). */
+static int64_t
 elapsedMs (Clock::time_point start)
 {
 	return std::chrono::duration_cast< std::chrono::milliseconds >(Clock::now() - start).count();
@@ -528,7 +529,7 @@ testCloseWakesReceive ()
 	}
 
 	std::atomic_bool returned{false};
-	long tookMs = 0;
+	int64_t tookMs = 0;
 
 	std::thread receiver([&client, &returned, &tookMs] {
 		std::array< char, 1024 > buffer{};

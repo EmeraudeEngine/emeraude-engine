@@ -18,7 +18,7 @@ found). `shutdown_semantics.cpp` still needs nothing.
 ## Build & run
 
 ```bash
-# Linux / macOS (verified on Linux, 2026-11-14: 48 pass, 0 fail)
+# Linux / macOS (verified on Linux, 2026-11-14: 48 pass, 0 fail, 1 warn; on macOS, 2026-11-15: the same)
 c++ -std=c++20 -O2 -Wall -Wextra -fno-exceptions -I../../src \
     -I../../dependencies/emeraude-base/src -I<build>/Emeraude/emeraude-base/include \
     net_check.cpp ../../src/Net/UDPClient.cpp ../../src/Net/NetworkInterfaces.cpp \
@@ -30,11 +30,18 @@ c++ -std=c++20 -O2 -Wall -Wextra shutdown_semantics.cpp -o shutdown_semantics
 ```
 
 ```bat
-:: Windows, from an MSVC developer prompt.
+:: Windows, from an MSVC developer prompt (vcvars64), in tools\net-check. B = the Release build tree of the
+:: application, O = an output directory ending with a backslash.
+:: Verified 2026-11-15 (MSVC 14.44): 47 pass, 0 fail, 2 warn (the second one is LAN-dependent: no SSDP device).
+:: ⚠️ The flags follow the foundation's library: /MT, no exceptions (/EHs-c- with _HAS_EXCEPTIONS=0), and its
+:: sources, its generated include directory and its built library are needed, as on the other systems.
 :: ⚠️ Iphlpapi.lib is REQUIRED — NetworkInterfaces calls GetAdaptersAddresses, and without it the
 :: link fails with LNK2019 on __imp_GetAdaptersAddresses. ws2_32 comes from a #pragma in the source.
-cl /std:c++20 /EHsc /W4 /I..\..\src net_check.cpp ..\..\src\Net\UDPClient.cpp ..\..\src\Net\NetworkInterfaces.cpp /link Iphlpapi.lib
-net_check.exe
+cl /nologo /std:c++20 /MT /O2 /W4 /permissive- /utf-8 /EHs-c- /D_HAS_EXCEPTIONS=0 /DNOMINMAX /DWIN32_LEAN_AND_MEAN ^
+   /I..\..\src /I..\..\dependencies\emeraude-base\src /I%B%\Emeraude\emeraude-base\include ^
+   net_check.cpp ..\..\src\Net\UDPClient.cpp ..\..\src\Net\NetworkInterfaces.cpp ^
+   /Fo%O% /Fe%O%net_check.exe /link %B%\Release\EmeraudeBase.lib Iphlpapi.lib
+%O%net_check.exe
 ```
 
 Run it under sanitizers at least once per platform — the moved-from and close-race cases are
