@@ -30,8 +30,10 @@ A device that cannot present to the surface is set aside and the next one by sco
 - ~~Find the SIGSEGV after the Wayland protocol error~~ Found and fixed downstream (2026-11-14, § Observed below): the
   display-loss stop arrived while the act was being built. With projet-alpha's stage serving the stop when the build
   returns, the same run (Debug + TSan, the Intel device forced) ends with exit code 96, 0 VMA assertion, no SIGSEGV.
-  What is left of the failure path is the hang when the protocol error is READ before a flush fails: step (4) of
-  `wayland-surface-lost-protocol-error`.
+  The hang when the protocol error is READ before a flush fails is fixed too (2026-11-14, step (4) of
+  `wayland-surface-lost-protocol-error`): the forced Intel device now ends every run in about 8 s with exit code 96 and
+  "The Wayland connection is lost: protocol error 7". What this item still asks is the FIRST bullet: the explicit
+  Fatal that names the forced device, and the fallback to the next device when it was not forced.
 
 ## Observed 2026-10-11: the failed instance does not stop
 

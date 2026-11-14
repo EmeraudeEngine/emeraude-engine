@@ -183,7 +183,12 @@ taken under X11 (`Core/Video/Window/GLFW/UsePlatform = "X11"` in a settings copy
   extra buffer-less commit, not a wrong size — but it does mean **every measurement above was taken
   on a different GLFW**, and the 1-in-8 frequency has to be re-established on the new pin before it
   is compared to anything. Step (1) is still the next action.
-- [ ] **(4) Stop cleanly on a dead display connection** (independent of (1)-(3); seen again 2026-11-14 on the fixed
+- [x] **(4) Done 2026-11-14** (`Window::refuseDispatchOnLostDisplay()`, `docs/caution-points.md` § *Fixed: a dead
+  Wayland display kept the main thread inside libdecor's reader loop*): 3 / 3 losses stop by themselves in about 8 s
+  with exit code 96, where the instance spun until killed. Left, an owner decision: the error read by the main thread
+  INSIDE a dispatch still meets GLFW's and libdecor's loops — the test would have to be in GLFW's `handleEvents()` (a
+  patch of the fork). The former text:
+  **Stop cleanly on a dead display connection** (independent of (1)-(3); seen again 2026-11-14 on the fixed
   pump, four gdb samples in libdecor-gtk 0.2.2's loop: `igpu-presentation-under-nvidia-wayland` § Observed
   2026-11-14 — GLFW's `handleEvents()` calls `libdecor_dispatch()` first, `wl_window.c:1400`, so the test must come
   BEFORE the engine calls GLFW): make the window service detect it

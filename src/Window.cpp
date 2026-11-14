@@ -1754,6 +1754,28 @@ namespace EmEn
 		this->notify(code);
 	}
 
+	bool
+	Window::refuseDispatchOnLostDisplay () noexcept
+	{
+		if ( m_displayConnectionLost )
+		{
+			return true;
+		}
+
+		if ( !this->isDisplayConnectionLost() )
+		{
+			return false;
+		}
+
+		m_displayConnectionLost = true;
+
+		/* NOTE: Once. The engine stops on its own (Core::stopOnDisplayLoss()); GLFW would have said it through a close
+		 * request at its next flush, had its dispatch come back. */
+		this->raiseNotification(OSLostDisplayConnection);
+
+		return true;
+	}
+
 	void
 	Window::deliverRecordedEvents () noexcept
 	{

@@ -31,6 +31,7 @@
 #include <array>
 #include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <cmath>
 #include <cstdarg>
 #include <cstdint>
@@ -38,6 +39,7 @@
 #include <limits>
 #include <string_view>
 #include <system_error>
+#include <thread>
 
 /* Third-party inclusions. */
 #define GLFW_EXPOSE_NATIVE_X11
@@ -384,6 +386,22 @@ namespace EmEn
 	Window::waitEvents (double timeoutSeconds) noexcept
 	{
 		const auto & client = waylandClient();
+
+		/* NOTE: A dead display connection: nothing to wait for on its socket, which poll() reports ready for ever, and
+		 * nothing GLFW may dispatch (refuseDispatchOnLostDisplay()). The wait becomes a plain sleep, so the main loop
+		 * keeps its pace and still serves the console and the stop. */
+		if ( this->refuseDispatchOnLostDisplay() )
+		{
+			const auto pause = timeoutSeconds > 0.0 ?
+				std::chrono::duration< double >{timeoutSeconds} :
+				std::chrono::duration< double >{static_cast< double >(WaylandIndefiniteWaitMilliseconds) / 1000.0};
+
+			std::this_thread::sleep_for(pause);
+
+			this->deliverRecordedEvents();
+
+			return;
+		}
 
 		auto * display = m_nativeSurfaceSerialized && client.usable ? glfwGetWaylandDisplay() : nullptr;
 

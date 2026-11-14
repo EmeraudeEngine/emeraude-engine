@@ -6666,6 +6666,36 @@ new items).
   frame reads `??`). `print this->m_nativeSurfaceAccess._M_mutex.__data.__owner` in the waiter's frame names the
   holder's LWP. A hung instance ignores SIGTERM: kill it by PID once the stacks are saved.
 
+### Fixed: a dead Wayland display kept the main thread inside libdecor's reader loop (2026-11-14)
+
+> **Symptom (2026-10-12 to 2026-11-14, every machine):** after a compositor protocol error the window was dead AND the
+> application could no longer be driven or stopped: the console accepted `Core.shutdown()` and never ran it, a caught
+> SIGTERM was never served, the main thread spun at 100 %. Test instances had to be killed; the gate ran them on X11.
+
+**Mechanism (gdb, four samples).** On a display in error libwayland dispatches nothing more: `wl_display_dispatch_*`
+returns -1 and leaves the queued events where they are. GLFW's `handleEvents()` starts with `libdecor_dispatch()`
+(`wl_window.c:1400`), whose GTK plugin loops "prepare the read, else dispatch what is pending" on its own queue
+(libdecor 0.2.2 and 0.2.5) — with one event left in that queue the loop never ends; GLFW's own loop has the same shape.
+The main thread never came back from `glfwPollEvents()`, which it runs under the native-surface lock: the rendering
+thread then waited for that lock too (`Renderer::recreateRenderingSubSystem()`).
+
+**Fix (engine, no GLFW patch).** `Window::refuseDispatchOnLostDisplay()`: `pumpEvents()` and `waitEvents()` ask
+`wl_display_get_error()` BEFORE each dispatch; on a dead connection GLFW is not called again, `OSLostDisplayConnection`
+is raised once (`Core::stopOnDisplayLoss()`, exit code 96), and the wait becomes a plain sleep of its timeout — the
+socket of a dead display is "ready" for ever, a `poll()` on it would spin. The main loop keeps its pace and serves the
+console and the stop.
+
+**Measured (Debian 13, mutter 48.7, the Intel iGPU forced: the NVIDIA-driven compositor refuses its first buffer, a
+protocol error at every launch).** Before: the instance spun until killed (1 / 1 under `WAYLAND_DEBUG=1`). After, 3 / 3:
+the error READ during an act's build, the connection reset during a build, the error read in the main loop with no
+scene — each stops by itself in about 8 s, `Core level terminated`, exit code 96.
+
+- ⚠️ **What is NOT covered:** an error the MAIN thread reads itself, inside a dispatch (`wl_display_read_events()` in
+  GLFW or in libdecor), is still followed by the same loops before the engine is asked again. It was never the measured
+  case (the presentation engine's thread reads the error at its present). Closing it needs the test inside GLFW's
+  `handleEvents()`, a patch of the fork: an owner decision.
+- The error is set by whichever thread reads it; the test costs one call per pump.
+
 ### The renderer's sampler cache is shared by the loading threads and the rendering thread (2026-11-14)
 
 > `Renderer::getSampler()` did its `find()` and its `emplace()` on `m_samplers` with no lock, under a class comment that

@@ -775,6 +775,8 @@ namespace EmEn
 					return;
 				}
 
+				/* NOTE: A dead display connection is never dispatched again (refuseDispatchOnLostDisplay()). */
+				if ( !this->refuseDispatchOnLostDisplay() )
 				{
 					const auto surfaceLock = this->lockNativeSurface();
 
@@ -1188,6 +1190,19 @@ namespace EmEn
 			void deliverRecordedEvents () noexcept;
 
 			/**
+			 * @brief Tells whether the display connection is dead, in which case GLFW must not dispatch any more; the
+			 * first time, raises OSLostDisplayConnection [MAIN THREAD].
+			 * @note Wayland. On a display in error libwayland dispatches nothing more, and the reader loops of libdecor's
+			 * GTK plugin and of GLFW ("prepare the read, else dispatch what is pending") then never end: the main thread
+			 * spun at 100 % inside glfwPollEvents(), under the native-surface lock, and the application could no longer be
+			 * driven nor stopped (console, termination signal) — measured 2026-10-12 to 2026-11-14. The error is set by
+			 * whichever thread reads it, most often the presentation engine's; it is tested BEFORE each dispatch.
+			 * @return bool True when the connection is lost: the caller skips GLFW's dispatch.
+			 */
+			[[nodiscard]]
+			bool refuseDispatchOnLostDisplay () noexcept;
+
+			/**
 			 * @brief Notifies the window is focused by the host system.
 			 * @param window A pointer to the system window handle.
 			 * @param focused The state from the OS.
@@ -1296,6 +1311,8 @@ namespace EmEn
 			bool m_windowLess{false};
 			/* Whether lockNativeSurface() owns the lock: Wayland, set by onInitialize() before any other thread exists. */
 			bool m_nativeSurfaceSerialized{false};
+			/* Whether the display connection was found dead (refuseDispatchOnLostDisplay(), main thread). */
+			bool m_displayConnectionLost{false};
 			bool m_saveWindowPropertiesAtExit{false};
 			bool m_storedSizeReplaced{false};
 			bool m_isUserResizing{false};
