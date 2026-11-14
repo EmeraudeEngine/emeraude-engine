@@ -32,6 +32,7 @@
 #include <compare>
 #include <cstddef>
 #include <mutex>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -54,6 +55,174 @@ namespace EmEn::Vulkan
 {
 	using namespace Base;
 	using namespace Base::PixelFactory;
+
+	namespace
+	{
+		/** @brief How the values of one image layer leave the staging buffer as floats. */
+		enum class FloatLayout : uint8_t
+		{
+			/** Four half-floats per pixel: R16G16B16A16_SFLOAT. */
+			HalfRGBA,
+			/** One 32-bit float per pixel: the depth of D32_SFLOAT and D32_SFLOAT_S8_UINT. */
+			Float32,
+			/** One 16-bit unsigned normalized value per pixel: the depth of D16_UNORM and D16_UNORM_S8_UINT. */
+			UNorm16,
+			/** One 32-bit word per pixel, its low 24 bits an unsigned normalized value: the depth of
+			 * X8_D24_UNORM_PACK32 and D24_UNORM_S8_UINT. */
+			UNorm24
+		};
+
+		/**
+		 * @brief Returns whether a format holds a depth.
+		 * @param format The format of an image.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		constexpr
+		bool
+		isDepthFormat (VkFormat format) noexcept
+		{
+			switch ( format )
+			{
+				case VK_FORMAT_D16_UNORM :
+				case VK_FORMAT_X8_D24_UNORM_PACK32 :
+				case VK_FORMAT_D32_SFLOAT :
+				case VK_FORMAT_D16_UNORM_S8_UINT :
+				case VK_FORMAT_D24_UNORM_S8_UINT :
+				case VK_FORMAT_D32_SFLOAT_S8_UINT :
+					return true;
+
+				default :
+					return false;
+			}
+		}
+
+		/**
+		 * @brief Returns the aspects a layout transition of an image must name to read one of them.
+		 * @note A combined depth / stencil image changes its layout as a whole: a barrier naming its depth alone is
+		 * invalid without separate depth / stencil layouts.
+		 * @param format The format of the image.
+		 * @param aspectMask The aspect which is read.
+		 * @return VkImageAspectFlags
+		 */
+		[[nodiscard]]
+		constexpr
+		VkImageAspectFlags
+		transitionAspects (VkFormat format, VkImageAspectFlags aspectMask) noexcept
+		{
+			switch ( format )
+			{
+				case VK_FORMAT_D16_UNORM_S8_UINT :
+				case VK_FORMAT_D24_UNORM_S8_UINT :
+				case VK_FORMAT_D32_SFLOAT_S8_UINT :
+					return VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT;
+
+				default :
+					return aspectMask;
+			}
+		}
+
+		/**
+		 * @brief Returns how an aspect of a format is read as floats.
+		 * @param format The format of the image.
+		 * @param aspectMask The aspect which is read.
+		 * @return std::optional< FloatLayout > Nothing for what is not read as floats.
+		 */
+		[[nodiscard]]
+		constexpr
+		std::optional< FloatLayout >
+		floatLayoutOf (VkFormat format, VkImageAspectFlags aspectMask) noexcept
+		{
+			if ( format == VK_FORMAT_R16G16B16A16_SFLOAT && aspectMask == VK_IMAGE_ASPECT_COLOR_BIT )
+			{
+				return FloatLayout::HalfRGBA;
+			}
+
+			if ( aspectMask != VK_IMAGE_ASPECT_DEPTH_BIT )
+			{
+				return std::nullopt;
+			}
+
+			switch ( format )
+			{
+				case VK_FORMAT_D32_SFLOAT :
+				case VK_FORMAT_D32_SFLOAT_S8_UINT :
+					return FloatLayout::Float32;
+
+				case VK_FORMAT_D16_UNORM :
+				case VK_FORMAT_D16_UNORM_S8_UINT :
+					return FloatLayout::UNorm16;
+
+				case VK_FORMAT_X8_D24_UNORM_PACK32 :
+				case VK_FORMAT_D24_UNORM_S8_UINT :
+					return FloatLayout::UNorm24;
+
+				default :
+					return std::nullopt;
+			}
+		}
+
+		/**
+		 * @brief Returns the number of bytes one pixel takes in the staging buffer.
+		 * @param layout How the layer is read.
+		 * @return size_t
+		 */
+		[[nodiscard]]
+		constexpr
+		size_t
+		bytesPerPixel (FloatLayout layout) noexcept
+		{
+			switch ( layout )
+			{
+				case FloatLayout::HalfRGBA :
+					return 4 * sizeof(uint16_t);
+
+				case FloatLayout::UNorm16 :
+					return sizeof(uint16_t);
+
+				case FloatLayout::Float32 :
+				case FloatLayout::UNorm24 :
+					return sizeof(uint32_t);
+			}
+
+			return 0;
+		}
+
+		/**
+		 * @brief Decodes a mapped staging buffer into floats, as the layout says.
+		 * @param mapped The start of the mapped buffer, holding at least values.size() values of the layout's type.
+		 * @param layout How the layer is read.
+		 * @param values The floats to fill: four per pixel for HalfRGBA, one otherwise.
+		 */
+		void
+		decodeAsFloats (const void * mapped, FloatLayout layout, std::span< float > values) noexcept
+		{
+			switch ( layout )
+			{
+				case FloatLayout::HalfRGBA :
+					std::ranges::transform(std::span< const uint16_t >{static_cast< const uint16_t * >(mapped), values.size()}, values.begin(), [] (uint16_t half) {
+						return Math::halfToFloat(half);
+					});
+					break;
+
+				case FloatLayout::Float32 :
+					std::ranges::copy(std::span< const float >{static_cast< const float * >(mapped), values.size()}, values.begin());
+					break;
+
+				case FloatLayout::UNorm16 :
+					std::ranges::transform(std::span< const uint16_t >{static_cast< const uint16_t * >(mapped), values.size()}, values.begin(), [] (uint16_t depth) {
+						return static_cast< float >(depth) / 65535.0F;
+					});
+					break;
+
+				case FloatLayout::UNorm24 :
+					std::ranges::transform(std::span< const uint32_t >{static_cast< const uint32_t * >(mapped), values.size()}, values.begin(), [] (uint32_t word) {
+						return static_cast< float >(word & 0x00FFFFFFU) / 16777215.0F;
+					});
+					break;
+			}
+		}
+	}
 
 	bool
 	TransferManager::onInitialize () noexcept
@@ -410,6 +579,7 @@ namespace EmEn::Vulkan
 	{
 		const auto currentLayout = read.currentLayout;
 		const auto aspectMask = read.aspectMask;
+		const auto barrierAspects = transitionAspects(sourceImage.createInfo().format, aspectMask);
 
 		/* NOTE: A temporary staging buffer of its own, CPU-cached for the read. A reusable image transfer operation is
 		 * only freed by its own fence, which this download never signalled: every call used to leave one reserved for
@@ -462,6 +632,12 @@ namespace EmEn::Vulkan
 				srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
 				sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			}
+			else if ( currentLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL )
+			{
+				/* A shadow map between two frames: sampled by the lighting, tested by its own pass. */
+				srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+				sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+			}
 
 			const Sync::ImageMemoryBarrier barrier{
 				sourceImage,
@@ -469,7 +645,7 @@ namespace EmEn::Vulkan
 				VK_ACCESS_TRANSFER_READ_BIT,
 				currentLayout,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-				aspectMask
+				barrierAspects
 			};
 			commandBuffer->pipelineBarrier(barrier, sourceStage, VK_PIPELINE_STAGE_TRANSFER_BIT);
 		}
@@ -516,6 +692,11 @@ namespace EmEn::Vulkan
 				dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 				destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 			}
+			else if ( currentLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL )
+			{
+				dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+				destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+			}
 
 			const Sync::ImageMemoryBarrier barrier{
 				sourceImage,
@@ -523,7 +704,7 @@ namespace EmEn::Vulkan
 				dstAccessMask,
 				VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
 				currentLayout,
-				aspectMask
+				barrierAspects
 			};
 			commandBuffer->pipelineBarrier(barrier, VK_PIPELINE_STAGE_TRANSFER_BIT, destinationStage);
 		}
@@ -582,6 +763,16 @@ namespace EmEn::Vulkan
 		const auto format = imageCreateInfo.format;
 
 		/* Calculate bytes per pixel based on format. */
+		/* NOTE: A depth is not a byte. Until 2026-11-14 the depth formats were sized at four bytes per pixel and handed to
+		 * a one-channel 8-bit pixmap, which refused that size AFTER the GPU copy: no depth was ever read back. A depth
+		 * goes into a Pixmap< float > (the other overload); the stencil of a combined format is not read. */
+		if ( isDepthFormat(format) )
+		{
+			TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' has the depth format " << static_cast< int32_t >(format) << ": a depth is downloaded as floats, into a Pixmap< float > !";
+
+			return false;
+		}
+
 		uint32_t bytesPerPixel = 0;
 		ChannelMode channelMode = ChannelMode::RGBA;
 
@@ -603,13 +794,6 @@ namespace EmEn::Vulkan
 				channelMode = ChannelMode::RGB;
 				break;
 
-			case VK_FORMAT_D32_SFLOAT:
-			case VK_FORMAT_D32_SFLOAT_S8_UINT:
-			case VK_FORMAT_D24_UNORM_S8_UINT:
-				bytesPerPixel = 4; /* The depth as a float32, or Depth24 + Stencil8. */
-				channelMode = ChannelMode::Grayscale;
-				break;
-
 			case VK_FORMAT_S8_UINT:
 				bytesPerPixel = 1; /* Stencil only. */
 				channelMode = ChannelMode::Grayscale;
@@ -618,7 +802,7 @@ namespace EmEn::Vulkan
 			default:
 				/* NOTE: Owner ruling (2026-10-01): an unknown format is REFUSED. Sizing it as RGBA8 gave a 16-bit
 				 * colour target (8 bytes per pixel) a staging buffer half too small: the GPU copy wrote past it. */
-				TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' has the format " << static_cast< int32_t >(format) << ", which cannot be downloaded as bytes (8-bit RGB(A) / BGR(A), UNORM or sRGB, and the depth / stencil formats only; R16G16B16A16_SFLOAT goes into a Pixmap< float >) !";
+				TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' has the format " << static_cast< int32_t >(format) << ", which cannot be downloaded as bytes (8-bit RGB(A) / BGR(A), UNORM or sRGB, and S8_UINT only; R16G16B16A16_SFLOAT goes into a Pixmap< float >) !";
 
 				return false;
 		}
@@ -662,52 +846,44 @@ namespace EmEn::Vulkan
 		const auto & imageCreateInfo = sourceImage.createInfo();
 		const auto extent = imageCreateInfo.extent;
 
-		/* NOTE: ONE format, on purpose (owner ruling 2026-10-01: an unknown format is refused, the staging buffer is
-		 * sized from the real one). R16G16B16A16_SFLOAT is the engine's HDR colour target: the environment probes and
-		 * the scene's own target. */
-		if ( imageCreateInfo.format != VK_FORMAT_R16G16B16A16_SFLOAT )
+		/* NOTE: A short list, on purpose (owner ruling 2026-10-01: an unknown format is refused, the staging buffer is
+		 * sized from the real one): the colour of R16G16B16A16_SFLOAT — the engine's HDR targets — and the depth of
+		 * the six depth formats, one value per pixel (a shadow map; 2026-11-14). */
+		const auto layout = floatLayoutOf(imageCreateInfo.format, aspectMask);
+
+		if ( !layout.has_value() )
 		{
-			TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' has the format " << static_cast< int32_t >(imageCreateInfo.format) << ", which cannot be downloaded as floats (R16G16B16A16_SFLOAT only) !";
+			TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' has the format " << static_cast< int32_t >(imageCreateInfo.format) << ", whose aspect " << aspectMask << " cannot be downloaded as floats (the colour of R16G16B16A16_SFLOAT, or the depth of a depth format) !";
 
 			return false;
 		}
 
-		if ( aspectMask != VK_IMAGE_ASPECT_COLOR_BIT )
-		{
-			TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' is a colour image: only its colour aspect can be downloaded as floats !";
+		const bool isColor = *layout == FloatLayout::HalfRGBA;
+		const size_t pixelCount = static_cast< size_t >(extent.width) * extent.height;
 
-			return false;
-		}
-
-		/* Four half-floats per pixel: 8 bytes, where the 8-bit path counts 4. */
-		const size_t valueCount = static_cast< size_t >(extent.width) * extent.height * 4;
-		const size_t requiredBytes = valueCount * sizeof(uint16_t);
-
-		const auto stagingBuffer = this->copyImageLayerToHostBuffer(sourceImage, {.arrayLayer = arrayLayer, .currentLayout = currentLayout, .aspectMask = aspectMask}, requiredBytes);
+		const auto stagingBuffer = this->copyImageLayerToHostBuffer(sourceImage, {.arrayLayer = arrayLayer, .currentLayout = currentLayout, .aspectMask = aspectMask}, pixelCount * bytesPerPixel(*layout));
 
 		if ( stagingBuffer == nullptr )
 		{
 			return false;
 		}
 
-		if ( !pixmap.initialize(extent.width, extent.height, ChannelMode::RGBA) )
+		if ( !pixmap.initialize(extent.width, extent.height, isColor ? ChannelMode::RGBA : ChannelMode::Grayscale) )
 		{
 			TraceError{ClassId} << "Unable to initialize a " << extent.width << "x" << extent.height << " floating-point pixmap !";
 
 			return false;
 		}
 
-		const auto * halves = stagingBuffer->mapMemoryAs< uint16_t >();
+		const auto * mapped = stagingBuffer->mapMemory();
 
-		if ( halves == nullptr )
+		if ( mapped == nullptr )
 		{
 			return false;
 		}
 
 		/* NOTE: Every value is kept as the GPU wrote it, a NaN or an infinity included: the caller decides. */
-		std::ranges::transform(std::span< const uint16_t >{halves, valueCount}, pixmap.data().begin(), [] (uint16_t half) {
-			return Math::halfToFloat(half);
-		});
+		decodeAsFloats(mapped, *layout, pixmap.data());
 
 		stagingBuffer->unmapMemory();
 

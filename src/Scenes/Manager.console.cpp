@@ -401,8 +401,152 @@ namespace EmEn::Scenes
 			return true;
 		}
 
+		/** @brief What the depths of an image layer are, for the reply of a dump and for its grey rendition. */
+		struct DepthStatistics
+		{
+			double mean{0.0};
+			size_t finiteCount{0};
+			/** The pixels still at 1: nothing was drawn there since the clear. */
+			size_t atFarPlane{0};
+			float minimum{0.0F};
+			float maximum{0.0F};
+		};
+
 		/**
-		 * @brief Dumps the requested layer of a render-to-texture target into the captures directory.
+		 * @brief Measures the depths of a one-channel pixmap, the non-finite values left aside.
+		 * @param depths A reference to the pixmap.
+		 * @return DepthStatistics
+		 */
+		[[nodiscard]]
+		DepthStatistics
+		measureDepths (const PixelFactory::Pixmap< float > & depths) noexcept
+		{
+			DepthStatistics statistics;
+			double sum = 0.0;
+
+			for ( const auto depth : depths.data() )
+			{
+				if ( !std::isfinite(depth) )
+				{
+					continue;
+				}
+
+				statistics.minimum = statistics.finiteCount == 0 ? depth : std::min(statistics.minimum, depth);
+				statistics.maximum = statistics.finiteCount == 0 ? depth : std::max(statistics.maximum, depth);
+				statistics.atFarPlane += depth >= 1.0F ? 1U : 0U;
+
+				sum += static_cast< double >(depth);
+
+				++statistics.finiteCount;
+			}
+
+			if ( statistics.finiteCount > 0 )
+			{
+				statistics.mean = sum / static_cast< double >(statistics.finiteCount);
+			}
+
+			return statistics;
+		}
+
+		/**
+		 * @brief Renders depths as an 8-bit grey image: the range found stretched from black (the nearest) to white.
+		 * @note A raw depth is unreadable as it is (a perspective depth crowds near 1): the stretch shows the shapes,
+		 * the statistics of the reply and the float file give the values.
+		 * @param depths A reference to the one-channel pixmap of depths.
+		 * @param statistics A reference to its statistics (measureDepths()).
+		 * @param destination A reference to the 8-bit one-channel pixmap to fill.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		stretchToGrey (const PixelFactory::Pixmap< float > & depths, const DepthStatistics & statistics, PixelFactory::Pixmap< uint8_t > & destination) noexcept
+		{
+			if ( depths.colorCount() != 1 || !destination.initialize(depths.width(), depths.height(), PixelFactory::ChannelMode::Grayscale) )
+			{
+				return false;
+			}
+
+			const auto range = statistics.maximum - statistics.minimum;
+
+			std::ranges::transform(depths.data(), destination.data().begin(), [&statistics, range] (float depth) {
+				/* A flat image or a non-finite value has no place in the range: drawn black. */
+				if ( !(range > 0.0F) || !std::isfinite(depth) )
+				{
+					return uint8_t{0};
+				}
+
+				return static_cast< uint8_t >(std::lround(255.0F * std::clamp((depth - statistics.minimum) / range, 0.0F, 1.0F)));
+			});
+
+			return true;
+		}
+
+		/**
+		 * @brief Dumps one layer of a depth image (a shadow map): an 8-bit grey PNG to look at, and the depths
+		 * themselves as a Portable FloatMap (owner decisions 2026-11-14).
+		 * @param transferManager A reference to the transfer manager.
+		 * @param image A reference to the depth image of the target.
+		 * @param dump A reference to the layer and its destination.
+		 * @param exposureGiven Whether an exposure was passed: it does not apply here, and the reply says so.
+		 * @param outputs A reference to the console outputs.
+		 * @return bool True when both files were written.
+		 */
+		[[nodiscard]]
+		bool
+		dumpLayerAsDepth (Vulkan::TransferManager & transferManager, const Vulkan::Image & image, const LayerDump & dump, bool exposureGiven, Console::Outputs & outputs) noexcept
+		{
+			/* NOTE: Said here with its remedy: the download would only name the missing usage. */
+			if ( (image.createInfo().usage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) == 0 )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Render target '" << dump.targetId << "' holds a depth image created without read-back: launch with " << Graphics::Renderer::DepthReadbackArgument << " to dump it.");
+
+				return false;
+			}
+
+			PixelFactory::Pixmap< float > depths;
+
+			/* NOTE: A shadow map rests in DEPTH_STENCIL_READ_ONLY_OPTIMAL between two frames: its render pass ends there. */
+			if ( !transferManager.downloadImage(image, dump.arrayLayer, VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_DEPTH_BIT, depths) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to download the depth image of '" << dump.targetId << "' !");
+
+				return false;
+			}
+
+			const auto statistics = measureDepths(depths);
+			const auto filepath = dump.basePath + ".png";
+			const auto depthFilepath = dump.basePath + ".pfm";
+
+			PixelFactory::Pixmap< uint8_t > rendition;
+
+			if ( !stretchToGrey(depths, statistics, rendition) || !PixelFactory::FileIO::write(rendition, Base::IO::u8path(filepath)) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write the dump to " << filepath);
+
+				return false;
+			}
+
+			if ( !PixelFactory::FileIO::write(depths, Base::IO::u8path(depthFilepath)) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write the depths to " << depthFilepath);
+
+				return false;
+			}
+
+			if ( exposureGiven )
+			{
+				outputs.emplace_back(Severity::Warning, std::stringstream{} << "Render target '" << dump.targetId << "' is a depth target: the exposure applies to a floating-point colour one, it was ignored.");
+			}
+
+			const auto pixelCount = depths.data().size();
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Render target '" << dump.targetId << "' (layer " << dump.arrayLayer << ") dumped: " << filepath << " (8-bit grey, the depths " << statistics.minimum << " to " << statistics.maximum << " stretched from black to white) and " << depthFilepath << " (the depths, 32-bit floats). Mean " << statistics.mean << "; " << statistics.atFarPlane << " of " << pixelCount << " pixel(s) at the far plane (1); " << (pixelCount - statistics.finiteCount) << " non-finite.");
+
+			return true;
+		}
+
+		/**
+		 * @brief Dumps the requested layer of a render-to-texture target or of a shadow map into the captures directory.
 		 * @param scene A reference to the scene which owns the target.
 		 * @param renderTarget A reference to the render target.
 		 * @param request A reference to the validated request.
@@ -461,6 +605,11 @@ namespace EmEn::Scenes
 				.basePath = Base::IO::toU8String(renderer.primaryServices().fileSystem().userDataDirectory("captures") / Base::IO::u8path(basename.str())),
 				.arrayLayer = request.arrayLayer
 			};
+
+			if ( (image.createInfo().usage & VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0 )
+			{
+				return dumpLayerAsDepth(renderer.transferManager(), image, dump, request.exposure.has_value(), outputs);
+			}
 
 			if ( image.createInfo().format == VK_FORMAT_R16G16B16A16_SFLOAT )
 			{
@@ -2257,10 +2406,10 @@ namespace EmEn::Scenes
 				return Console::CommandResult::success(message.str());
 			}, Console::CommandHint::Idempotent);
 
-		this->bindCommand("dumpRenderTarget", "Dumps one layer of the color image of the first render-to-texture target of the active scene whose id contains a fragment, as a PNG in the captures directory. A floating-point (HDR) target gives two files: an exposed 8-bit sRGB PNG, and a Radiance .hdr holding the linear values.",
+		this->bindCommand("dumpRenderTarget", "Dumps one layer of the image of the first render-to-texture target, else shadow map, of the active scene whose id contains a fragment, as a PNG in the captures directory. A floating-point (HDR) target gives two files: an exposed 8-bit sRGB PNG, and a Radiance .hdr holding the linear values. A shadow map (launch with --enable-depth-readback) gives a grey PNG of its depths and a .pfm holding them as floats.",
 			{
 				{"nameFragment", "A substring of the render target id."},
-				{"layer", "The array layer to dump: a cubemap face (0 = +X, 1 = -X, 2 = +Y, 3 = -Y, 4 = +Z, 5 = -Z); 0 for a plain target.", 0},
+				{"layer", "The array layer to dump: a cubemap face (0 = +X, 1 = -X, 2 = +Y, 3 = -Y, 4 = +Z, 5 = -Z), a shadow cascade; 0 for a plain target.", 0},
 				{"exposure", "For a floating-point target, the exposure of the PNG in stops (EV): the values are multiplied by 2^exposure before the sRGB transfer. Omit it for an automatic exposure (the 99th percentile of the brightest channel maps to 1)."}
 			},
 			[this] (const std::string & nameFragment, int32_t layer, std::optional< float > exposure) {
@@ -2281,19 +2430,23 @@ namespace EmEn::Scenes
 				bool dumped = false;
 
 				this->withSharedActiveScene([&] (const std::shared_ptr< Scene > & scene) {
-					scene->forEachRenderToTexture([&] (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) {
+					const auto dumpMatchingTarget = [&] (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) {
 						if ( dumped || renderTarget->id().find(nameFragment) == std::string::npos )
 						{
 							return;
 						}
 
 						dumped = dumpRenderTargetLayer(*scene, *renderTarget, request, outputs);
-					});
+					};
+
+					/* The render-to-textures first (their colour), then the shadow maps (their depth). */
+					scene->forEachRenderToTexture(dumpMatchingTarget);
+					scene->forEachRenderToShadowMap(dumpMatchingTarget);
 				}, true);
 
 				if ( !dumped && outputs.empty() )
 				{
-					outputs.emplace_back(Severity::Error, std::stringstream{} << "No render-to-texture target matching '" << nameFragment << "' in the active scene.");
+					outputs.emplace_back(Severity::Error, std::stringstream{} << "No render-to-texture nor shadow map target matching '" << nameFragment << "' in the active scene.");
 				}
 
 				return Console::CommandResult::fromOutputs(std::move(outputs), dumped);

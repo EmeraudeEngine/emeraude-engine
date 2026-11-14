@@ -780,19 +780,29 @@ namespace EmEn::Graphics::RenderTarget
 						layerCount = m_cascadeCount;
 					}
 
+					/* NOTE: TRANSFER_DST is NOT optional here, it is what the initial
+					 * clearDepthImage() below requires. Dropping it makes every barrier and
+					 * the clear itself invalid (VUID-VkImageMemoryBarrier-oldLayout-01213,
+					 * VUID-vkCmdClearDepthStencilImage-pRanges-02659/02660), the image never
+					 * leaves VK_IMAGE_LAYOUT_UNDEFINED, and the shadow pass submit is then
+					 * rejected on EVERY frame (VUID-vkCmdDraw-None-09600). Drivers let that
+					 * slide silently when the validation layers are off. */
+					VkImageUsageFlags usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+					/* NOTE: TRANSFER_SRC, which makes the depth readable back (the dumpRenderTarget console command), is
+					 * granted ONLY to a run launched with --enable-depth-readback: it is the usage that can cost a depth
+					 * image its compression on some architectures (owner decision 2026-11-14). */
+					if ( renderer.isDepthReadbackEnabled() )
+					{
+						usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+					}
+
 					m_depthImage = std::make_shared< Vulkan::Image >(
 						device,
 						VK_IMAGE_TYPE_2D,
 						Vulkan::Instance::findDepthStencilFormat(device, this->precisions()), /* Should be VK_FORMAT_D32_SFLOAT or VK_FORMAT_D16_UNORM */
 						this->extent(),
-						/* NOTE: TRANSFER_DST is NOT optional here, it is what the initial
-						 * clearDepthImage() below requires. Dropping it makes every barrier and
-						 * the clear itself invalid (VUID-VkImageMemoryBarrier-oldLayout-01213,
-						 * VUID-vkCmdClearDepthStencilImage-pRanges-02659/02660), the image never
-						 * leaves VK_IMAGE_LAYOUT_UNDEFINED, and the shadow pass submit is then
-						 * rejected on EVERY frame (VUID-vkCmdDraw-None-09600). Drivers let that
-						 * slide silently when the validation layers are off. */
-						VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+						usage,
 						flags,
 						1,
 						layerCount

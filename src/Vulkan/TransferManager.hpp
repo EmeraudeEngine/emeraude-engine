@@ -370,17 +370,19 @@ namespace EmEn::Vulkan
 			bool downloadImage (const Image & sourceImage, uint32_t arrayLayer, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
 
 			/**
-			 * @brief Downloads one array layer of a floating-point colour image (its first mip level) from GPU memory
-			 * to a pixmap of floats.
-			 * @note R16G16B16A16_SFLOAT only (the engine's HDR colour targets); any other format is refused, as the
-			 * 8-bit overload refuses this one. The values are the ones the GPU wrote, linear, a NaN or an infinity
-			 * included: nothing is clamped nor filtered.
+			 * @brief Downloads one array layer of an image (its first mip level) from GPU memory to a pixmap of floats:
+			 * a floating-point colour, or a depth.
+			 * @note The colour of R16G16B16A16_SFLOAT (the engine's HDR targets), as an RGBA pixmap; or, with
+			 * VK_IMAGE_ASPECT_DEPTH_BIT, the depth of D32_SFLOAT, D32_SFLOAT_S8_UINT, D16_UNORM, D16_UNORM_S8_UINT,
+			 * X8_D24_UNORM_PACK32 or D24_UNORM_S8_UINT (a shadow map), as a one-channel pixmap in [0, 1]. Anything else
+			 * is refused, as the 8-bit overload refuses these. The values are the ones the GPU wrote, a NaN or an
+			 * infinity included: nothing is clamped nor filtered.
 			 * @param sourceImage A reference to the source image in GPU memory.
 			 * @param arrayLayer The array layer to copy, as in the 8-bit overload. Never clamped.
 			 * @param currentLayout The current layout of the source image (the whole image is moved to the transfer
 			 * layout and back).
-			 * @param aspectMask The aspect flags: VK_IMAGE_ASPECT_COLOR_BIT, anything else is refused.
-			 * @param pixmap A reference to the destination pixmap, initialized as RGBA.
+			 * @param aspectMask The aspect flags: VK_IMAGE_ASPECT_COLOR_BIT or VK_IMAGE_ASPECT_DEPTH_BIT.
+			 * @param pixmap A reference to the destination pixmap, initialized as RGBA or as Grayscale.
 			 * @return bool
 			 */
 			[[nodiscard]]

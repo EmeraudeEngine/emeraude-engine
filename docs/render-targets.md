@@ -28,7 +28,7 @@ this wrong produces a VUID cascade in which only the first message names the rea
 
 | Target | Image | Usage | Why |
 |---|---|---|---|
-| `ShadowMap` | depth | `DEPTH_STENCIL_ATTACHMENT \| SAMPLED \| TRANSFER_DST` | `TRANSFER_DST` is required by the initial `clearDepthImage(1.0F)` — see § 4 below. Dropping it disables the shadow pass entirely. |
+| `ShadowMap` | depth | `DEPTH_STENCIL_ATTACHMENT \| SAMPLED \| TRANSFER_DST` | `TRANSFER_DST` is required by the initial `clearDepthImage(1.0F)` — see § 4 below. Dropping it disables the shadow pass entirely. `+ TRANSFER_SRC` ONLY in a run launched with `--enable-depth-readback` (`Renderer::isDepthReadbackEnabled()`): the depth is then readable back; never by default, it is the usage that can cost depth compression. |
 | `Texture` | color | `COLOR_ATTACHMENT \| SAMPLED \| TRANSFER_SRC` (`+ STORAGE` when GGX-convolved) | `TRANSFER_SRC` makes the target readable back: `capture()` and the `dumpRenderTarget` console command, one array layer per call (see below). |
 | `Texture` | depth | `DEPTH_STENCIL_ATTACHMENT` | Deliberately **no** `TRANSFER_SRC`: nothing reads it back, and that flag is the one that costs depth-compression metadata on some architectures. |
 | `SceneRenderTarget` | all color + depth | `… \| TRANSFER_SRC` | Every G-buffer attachment is blitted to the grab pass. |
@@ -61,13 +61,32 @@ image's real format.
   (owner ruling 2026-10-01: sized as RGBA8, a 16-bit target overflowed its staging buffer).
 - `RenderTarget::*::capture()` still fills 8-bit pixmaps: on a floating-point target it fails with the refusal above
   (no caller in the cascade today). The console command `dumpRenderTarget` is the reader of an HDR target: it writes
-  the linear values as a Radiance `.hdr` and an exposed 8-bit PNG (`docs/ai-runtime-control.md` § *Dumping a
-  render-to-texture target*).
+  the linear values as a Radiance `.hdr` and an exposed 8-bit PNG (`docs/ai-runtime-control.md` § *Dumping a render-to-texture target or a shadow map*).
 - ⚠️ A `Texture`'s depth image has no `TRANSFER_SRC` (table above): `capture(…, withDepthBuffer = true, …)` gets a
   warning and an empty `result[1]`.
-- ⚠️ **A depth image cannot be read back at all today**, whatever its usage flags: the 8-bit overload copies four
-  bytes per pixel and hands them to a one-channel 8-bit pixmap, which refuses the size (item
-  `image-download-depth-formats-always-fail`; read, not run — nothing calls a `capture()`).
+- **A depth is read back as floats** (2026-11-14). The `Pixmap< float >` overload takes `VK_IMAGE_ASPECT_DEPTH_BIT`
+  and gives a one-channel pixmap in [0, 1]: `D32_SFLOAT` / `D32_SFLOAT_S8_UINT` as they are, `D16_UNORM(_S8_UINT)`
+  over 65535, `X8_D24_UNORM_PACK32` / `D24_UNORM_S8_UINT` from the low 24 bits over 16777215. A combined depth /
+  stencil image is moved to the transfer layout by BOTH aspects; a shadow map is read from
+  `DEPTH_STENCIL_READ_ONLY_OPTIMAL`, where its render pass leaves it. ⚠️ Only `D32_SFLOAT` (what a shadow map gets
+  on the measured GPU) has RUN: the two UNORM decodings and the combined formats are written from the specification.
+- The 8-bit overload REFUSES a depth format at once. Until 2026-11-14 it sized the depth at four bytes per pixel and
+  handed them to a one-channel 8-bit pixmap, which refused that size after the GPU copy: no depth had ever been read
+  back. `ShadowMap::capture()`, `Texture::capture(withDepthBuffer)` and `SceneRenderTarget::capture()` call that
+  overload: they still fail on their depth (no caller in the cascade); the stencil of a combined format is not read.
+- **A shadow map is dumped by `dumpRenderTarget`** (it walks the render-to-textures, then the shadow maps): a grey
+  PNG, the depths found stretched from black (nearest) to white, and a `.pfm` holding the depths as 32-bit floats
+  (emeraude-base `FileFormatPFM`; a Radiance file keeps about 1 % of relative precision — 0.990 and 0.995 would be
+  one value). The reply gives the minimum, the maximum, the mean and the count of pixels still at the far plane.
+  ⚠️ The shadow maps must have been created readable: launch with `--enable-depth-readback`, else the command says so.
+- **Measured, the depth read-back** (2026-11-14, `light-and-shadow-debug`, RTX 3070 Ti, Debug, validation layer
+  loaded, shadow maps in `D32_SFLOAT`). Without the switch: "holds a depth image created without read-back: launch
+  with --enable-depth-readback". With it: `SunShadowMap` (4 cascades of 2048²) layers 0 and 3 dumped, layer 4 refused;
+  `BulbShadowMap` (a cube of 1024²) layer 0 — depths 0.139505 to 1, 566 073 of 1 048 576 pixels at the far plane — and
+  layer 5, entirely at 1; `SpotShadowMap` depths 0.987627 to 1 (a perspective depth crowds near 1). 0 `VUID-`,
+  0 `[Error]`, exit 0. Checked on the files: the minimum, maximum, mean and far-plane count recomputed from each
+  `.pfm` equal the reply's, and every sampled PNG byte equals the stretch of its float (the `.pfm` rows read from
+  the bottom). The images show the ground, a sphere, a cube and a palm tree as the lights see them.
 - **Measured** (`offscreen-rendering`, RTX 3070 Ti, Debug, validation layer loaded, 0 `VUID-`): the 2D target
   (`SecurityCubemap` that day, `SecurityTexture2D` since its renaming; one layer) dumps layer 0 and refuses 1 to 6 ("has 1 layer(s)"); the real cubemap
   (`OffscreenRenderingCubemap`) refuses layer 6 ("has 6 layer(s)") and, being HDR, cannot be downloaded. With the probe

@@ -266,6 +266,9 @@ namespace EmEn::Graphics
 			/** @brief Class identifier. */
 			static constexpr auto ClassId{"RendererService"};
 
+			/** @brief The launch switch which creates the depth images of the shadow maps readable back (isDepthReadbackEnabled()). */
+			static constexpr auto DepthReadbackArgument{"--enable-depth-readback"};
+
 			/** @brief Consecutive failed swap-chain recreations before the renderer gives up (owner decision 2026-10-13:
 			 * degraded with a retry limit, then a stop). With RetryInterval, about 3 s of attempts. */
 			static constexpr uint32_t MaxSwapChainRecreationFailures{30};
@@ -739,6 +742,21 @@ namespace EmEn::Graphics
 			isWindowLess () const noexcept
 			{
 				return m_windowLess;
+			}
+
+			/**
+			 * @brief Returns whether the depth images of the shadow maps are created readable back (the launch switch
+			 * --enable-depth-readback).
+			 * @note A diagnostic choice made at launch, for the run: the usage it adds (VK_IMAGE_USAGE_TRANSFER_SRC_BIT) is
+			 * the one that can cost a depth image its compression on some architectures, so it is never granted by
+			 * default (owner decision 2026-11-14). Without it the dump of a shadow map is refused, and says so.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDepthReadbackEnabled () const noexcept
+			{
+				return m_depthReadbackEnabled;
 			}
 
 			/**
@@ -2154,6 +2172,7 @@ namespace EmEn::Graphics
 			Base::Thread m_pipelineCacheRestore;
 			bool m_debugMode{false};
 			bool m_windowLess{false};
+			bool m_depthReadbackEnabled{false};
 			/** @brief Settings: cut the frame around the translucent pass so a glass transmits the indirect diffuse (see EffectSlot::isPreTranslucencySlot). An A/B switch, default true. */
 			bool m_cutFrameAroundTranslucency{true};
 			/** @brief Settings: resolve the unshadowed punctual lights deferred (DeferredLightResolve). An A/B switch, default true. */

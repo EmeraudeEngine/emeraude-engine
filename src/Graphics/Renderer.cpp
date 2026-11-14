@@ -712,6 +712,7 @@ namespace EmEn::Graphics
 	Renderer::initializeRenderingStack () noexcept
 	{
 		m_windowLess = m_primaryServices.arguments().isSwitchPresent("-W", "--window-less");
+		m_depthReadbackEnabled = m_primaryServices.arguments().isSwitchPresent(DepthReadbackArgument);
 
 		/* NOTE: Reserve capacity for cache maps to avoid rehashing during initialization.
 		 * Typical usage patterns: ~30-50 samplers, ~50-100 pipelines/programs. */

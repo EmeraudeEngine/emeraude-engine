@@ -35,10 +35,25 @@ next render pass, or right after its clear, would explain a uniform colour. That
 (`Toolkit::generateTexture2DRenderer()`), renamed `SecurityTexture2D` the same day: this item is about a plain
 single-layer image, and the command to repeat is now `dumpRenderTarget(SecurityTexture2D)`.
 
+**2026-11-14, read in the code (nothing run):**
+- the blue is NOT the target's clear colour: the renderer clears every render-to-texture with its own clear colour,
+  which is black (`Renderer::setClearColor(Black)`, no other setter in the cascade);
+- the demo creates its security camera with `showModel = true`: `Toolkit::generatePerspectiveCamera()` then calls
+  `enableVisualDebug(VisualDebugType::Camera)` on the camera's OWN entity — a debug mesh
+  (`AbstractEntity::getCameraVisualDebug()`) at the camera's position, so the camera sits inside it. Its colour was
+  not established (the default standard material is grey; the mesh may carry vertex colours). Observed the same day:
+  a saturated blue shape near the centre of the probe's faces, not identified;
+- a candidate that does not involve the dump at all follows from it: a frame in which that mesh covers the camera's
+  view. It is told from the thread race by one check — the `TV` cuboid of the scene shows the same target, so a
+  screenshot taken beside a blue dump shows a blue screen (the target WAS blue) or a normal one (the read was wrong).
+
 ## What remains
 
 - [ ] Reproduce: 6+ fresh launches of `offscreen-rendering`, the first dump at ~30 s (Windows first, then Linux).
-- [ ] Find where the blue comes from: the target's clear colour, the scene's background, or memory never written.
+- [ ] Find where the blue comes from: NOT the clear colour (black, read 2026-11-14). Take a
+  `Core.RendererService.screenshot()` beside a blue dump: a blue `TV` screen means the target itself was blue (look
+  at the camera's debug mesh, then at what is drawn while resources load); a normal one means the read was wrong
+  (the thread race, or memory never written).
 - [ ] If the console thread races the render thread, run the download on the render thread (a deferred request served
   at a frame boundary), as `Graphics::FrameCapture` does for screenshots (the copy happens inside the frame), rather
   than with `waitIdle()` from the console thread.

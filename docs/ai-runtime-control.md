@@ -983,7 +983,7 @@ python3 tools/remote-console.py "Core.RendererService.screenshot()"
 
 Screenshots are saved to `fileSystem().userDataDirectory("captures")`, i.e. **`<user data dir>/captures/`** — on Linux `~/.local/share/<org>/<app-name>/captures/` (projet-alpha: `LNIsle/projet-alpha`); macOS and Windows follow the same `<org>/<app-name>` resolution under their user-data root (`src/FileSystem.cpp`). The Unix-timestamp file names make before/after diffs free.
 
-### Dumping a render-to-texture target (probe diagnostics)
+### Dumping a render-to-texture target or a shadow map (probe and shadow diagnostics)
 
 ```bash
 python3 tools/remote-console.py "Core.SceneManagerService.dumpRenderTarget(ProbeCubemap)"
@@ -1015,6 +1015,23 @@ layout.
   pass the same `exposure` to both, or compare the `.hdr` files.
 - `exposure` is refused outside [-64, 64] stops or when it is not finite; on an 8-bit target it is ignored, with a
   warning. A pixel holding a NaN or an infinity is written as 0 in both files and counted in a warning line.
+
+**A shadow map is dumped the same way** (2026-11-14): the command walks the render-to-textures, then the shadow
+maps, whose ids start with `<light component name>ShadowMap`; `layer` is a cascade or a cube face.
+
+```bash
+# The shadow maps are created readable back ONLY by this launch switch (a diagnostic: the usage it adds may cost depth
+# compression on some GPUs). Without it the command answers that the image was created without read-back.
+./projet-alpha --load-demo light-and-shadow-debug --enable-depth-readback …
+python3 tools/remote-console.py "Core.SceneManagerService.dumpRenderTarget(SunShadowMap, 2)"   # the third cascade
+```
+
+- `rt-dump-<timestamp>-layer<N>.pfm` — the depths, 32-bit floats in [0, 1] (Portable FloatMap, one channel, the
+  bottom row first). This file is the measurement.
+- `rt-dump-<timestamp>-layer<N>.png` — an 8-bit grey image to LOOK at: the range of depths found stretched from
+  black (the nearest) to white. The reply states that range, the mean and the count of pixels still at the far plane:
+  `… (8-bit grey, the depths 0.987627 to 1 stretched from black to white) and ….pfm (the depths, 32-bit floats). Mean 0.995355; 268602 of 1048576 pixel(s) at the far plane (1); 0 non-finite.`
+- A layer entirely at 1 is a face or a cascade where nothing was drawn.
 
 The 2D target of `Toolkit::generateTexture2DRenderer()` is named `<name>Texture2D` (it was `<name>Cubemap` until
 2026-11-14).
