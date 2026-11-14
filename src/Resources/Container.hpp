@@ -2101,8 +2101,9 @@ namespace EmEn::Resources
 					 * the request was built from a std::shared_ptr< resource_t > by this container. */
 					this->notify(ResourceLoaded, static_cast< resource_t * >(request.resource().get()));
 				}
-				else
+				else if ( !request.resource()->loadAbandoned() )
 				{
+					/* NOTE: Not for a load the stop cut short (ResourceTrait::loadAbandoned()): it is no failure to report. */
 					TraceError{resource_t::ClassId} << "The resource (" << resource_t::ClassId << ") '" << infos.name() << "' failed to load ! [CONTAINER]";
 				}
 

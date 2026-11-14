@@ -26,6 +26,9 @@
 
 #include "SoundResource.hpp"
 
+/* STL inclusions. */
+#include <stop_token>
+
 /* Local inclusions. */
 #include "Audio/Buffer.hpp"
 #include "BlobTrait.hpp"
@@ -127,9 +130,19 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		if ( !WaveFactory::FileIO::read(filepath, m_localData) )
+		/* NOTE: The token of the task loading this resource (never stopped outside one): the decode and the resampling
+		 * give up when the owner stops its background work. A stopped load fails without an error line. */
+		const auto stopToken = this->loadStopToken();
+
+		WaveFactory::ReadOptions readOptions;
+		readOptions.stopToken = stopToken;
+
+		if ( !WaveFactory::FileIO::read(filepath, m_localData, readOptions) )
 		{
-			TraceError{ClassId} << "Unable to load the sound file '" << filepath << "' !";
+			if ( !stopToken.stop_requested() )
+			{
+				TraceError{ClassId} << "Unable to load the sound file '" << filepath << "' !";
+			}
 
 			return this->setLoadSuccess(false);
 		}
@@ -169,9 +182,12 @@ namespace EmEn::Audio
 					   "Resampling the wave from " << m_localData.frequency().hz() << "Hz to " << frequencyPlayback.hz() << "Hz ...";
 				}
 
-				if ( !processor.resample(frequencyPlayback) )
+				if ( !processor.resample(frequencyPlayback, stopToken) )
 				{
-					TraceError{ClassId} << "Unable to resample the wave to " << frequencyPlayback.hz() << "Hz !";
+					if ( !stopToken.stop_requested() )
+					{
+						TraceError{ClassId} << "Unable to resample the wave to " << frequencyPlayback.hz() << "Hz !";
+					}
 
 					return this->setLoadSuccess(false);
 				}

@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -262,10 +263,12 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Renders the pending MIDI file using the loaded soundfont.
+			 * @param stopToken The stop token of the load task the completion runs on: the rendering gives up once a
+			 * stop is requested, without an error line.
 			 * @return true on success, false on failure.
 			 */
 			[[nodiscard]]
-			bool renderPendingMidi () noexcept;
+			bool renderPendingMidi (const std::stop_token & stopToken) noexcept;
 
 			static constexpr auto DefaultInfo{"Unknown"};
 

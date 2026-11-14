@@ -664,11 +664,25 @@ namespace EmEn::Resources
 		{
 			m_status = Status::Failed;
 
+			/* NOTE: A load the stop cut short is ABANDONED, not failed (owner decision 2026-10-15, as
+			 * finalizeDependencies() and abandonLoading()): no error line here, in the container nor in its parents.
+			 * Set before the observers and the parents are told below. */
+			const auto stopToken = this->loadStopToken();
+			const bool abandoned = stopToken.stop_requested();
+
+			if ( abandoned )
+			{
+				m_loadAbandoned.store(true, std::memory_order_release);
+			}
+
 			this->notify(LoadFailed, this->name());
 
-			TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this << ") failed to load ...";
+			if ( !abandoned )
+			{
+				TraceError{TracerTag} << "Resource '" << this->name() << "' (" << this << ") failed to load ...";
+			}
 
-			this->releaseLinksAfterFailure(this->loadStopToken());
+			this->releaseLinksAfterFailure(stopToken);
 		}
 
 		return status;

@@ -119,6 +119,19 @@ to 4 cores).
 - **A completion the stop cuts short is ABANDONED**: `onDependenciesLoaded()` returns false with the stop requested →
   `m_loadAbandoned`, no error line (here, in the texture and material creations, nor in the parents) — the 2026-10-15
   rule of `abandonLoading()`.
+- **A LOAD the stop cuts short is abandoned too (2026-11-14)**: `setLoadSuccess(false)` while the loading task's token
+  is stopped → `m_loadAbandoned`, no "failed to load ..." line in `ResourceTrait`, no "failed to load ! [CONTAINER]"
+  line in the container. The `load()` overloads keep their signature (the narrow form): a derived `load()` reads the
+  token with `ResourceTrait::loadStopToken()` (protected since that day; never stopped outside a container task),
+  hands it to its long stages and keeps its own error line for a real failure only
+  (`if ( !stopToken.stop_requested() )`).
+- `MusicResource` and `SoundResource` do it (item `music-load-honours-stop-token`, closed): the decode
+  (`WaveFactory::ReadOptions::stopToken`), the resampling (`Processor::resample(frequency, token)`) and the MIDI
+  rendering of the completion. **Measured 2026-11-14** (Debian 13; `playlistAdd("Kyrandia/Medley")`, a 328 s MP3,
+  `play()`, then `Core.shutdown()` 0.5 s later): before (Release), `the 'Music manager' tasks took 4880 ms to stop` /
+  4861 ms, 5.32 s / 5.27 s from the stop to the exit; after (Release), 0.37 s / 0.36 s from the stop to the exit and
+  no "took … to stop" line; after (Debug), 18 ms / 15 ms / 18 ms. 0 `[Error]` line, exit 0. The same track left to
+  load plays to its 328 s; a file that is not audio keeps its four error lines.
 - Who checks it: `AnimatedTexture2D` before each frame (its frames are now encoded IN PARALLEL on the pool,
   `ThreadPool::parallelFor()`, the calling worker taking its share — no deadlock from a pool worker; a stop waits for one
   frame's encoding at most) and before each frame's uncompressed chain; `Texture2D` before its one encoding; and

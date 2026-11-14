@@ -65,12 +65,12 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
+	MusicResource::onDependenciesLoaded (const std::stop_token & stopToken) noexcept
 	{
 		/* If we have a pending MIDI file, render it now that the soundfont is loaded. */
 		if ( !m_pendingMidiPath.empty() )
 		{
-			if ( !this->renderPendingMidi() )
+			if ( !this->renderPendingMidi(stopToken) )
 			{
 				return false;
 			}
@@ -102,7 +102,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	MusicResource::renderPendingMidi () noexcept
+	MusicResource::renderPendingMidi (const std::stop_token & stopToken) noexcept
 	{
 		if ( m_soundfontDependency == nullptr || !m_soundfontDependency->isValid() )
 		{
@@ -118,10 +118,15 @@ namespace EmEn::Audio
 		WaveFactory::ReadOptions midiOptions;
 		midiOptions.synthesisFrequency = m_frequency;
 		midiOptions.soundfont = m_soundfontDependency->handle();
+		midiOptions.stopToken = stopToken;
 
 		if ( !WaveFactory::FileIO::read(m_pendingMidiPath, m_localData, midiOptions) )
 		{
-			TraceError{ClassId} << "Unable to render MIDI file '" << Base::IO::toU8String(m_pendingMidiPath) << "' !";
+			/* NOTE: A stopped rendering is the owner's doing, not an error (the cancelled loads get one summary line). */
+			if ( !stopToken.stop_requested() )
+			{
+				TraceError{ClassId} << "Unable to render MIDI file '" << Base::IO::toU8String(m_pendingMidiPath) << "' !";
+			}
 
 			return false;
 		}
@@ -360,6 +365,14 @@ namespace EmEn::Audio
 			return false;
 		}
 
+		/* NOTE: The token of the task loading this resource (never stopped outside one): the decode and the resampling
+		 * of a whole track give up as soon as the owner stops its background work, instead of holding the shutdown
+		 * until the end of the file (4.3 s measured on a medley). A stopped load fails without an error line. */
+		const auto stopToken = this->loadStopToken();
+
+		WaveFactory::ReadOptions readOptions;
+		readOptions.stopToken = stopToken;
+
 		/* Check if this is a MIDI file that might need a soundfont. */
 		const auto extension = Base::IO::toU8String(filepath.extension());
 
@@ -403,9 +416,12 @@ namespace EmEn::Audio
 			}
 
 			/* No soundfont configured or available - use additive synthesis. */
-			if ( !WaveFactory::FileIO::read(filepath, m_localData) )
+			if ( !WaveFactory::FileIO::read(filepath, m_localData, readOptions) )
 			{
-				TraceError{ClassId} << "Unable to load the MIDI file '" << Base::IO::toU8String(filepath) << "' with additive synthesis !";
+				if ( !stopToken.stop_requested() )
+				{
+					TraceError{ClassId} << "Unable to load the MIDI file '" << Base::IO::toU8String(filepath) << "' with additive synthesis !";
+				}
 
 				return this->setLoadSuccess(false);
 			}
@@ -413,9 +429,12 @@ namespace EmEn::Audio
 		else
 		{
 			/* Standard audio file loading (WAV, MP3, OGG, etc.). */
-			if ( !WaveFactory::FileIO::read(filepath, m_localData) )
+			if ( !WaveFactory::FileIO::read(filepath, m_localData, readOptions) )
 			{
-				TraceError{ClassId} << "Unable to load the music file '" << Base::IO::toU8String(filepath) << "' !";
+				if ( !stopToken.stop_requested() )
+				{
+					TraceError{ClassId} << "Unable to load the music file '" << Base::IO::toU8String(filepath) << "' !";
+				}
 
 				return this->setLoadSuccess(false);
 			}
@@ -439,9 +458,12 @@ namespace EmEn::Audio
 			WaveFactory::Processor processor{m_localData};
 
 			/* Launch a resampling process ... */
-			if ( !processor.resample(m_frequency) )
+			if ( !processor.resample(m_frequency, stopToken) )
 			{
-				TraceError{ClassId} << "Unable to resample the wave to " << m_frequency.hz() << "Hz !";
+				if ( !stopToken.stop_requested() )
+				{
+					TraceError{ClassId} << "Unable to resample the wave to " << m_frequency.hz() << "Hz !";
+				}
 
 				return this->setLoadSuccess(false);
 			}

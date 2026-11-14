@@ -711,8 +711,9 @@ namespace EmEn::Resources
 			bool abandonLoading () noexcept;
 
 			/**
-			 * @brief Returns whether the load was abandoned because the application stopped (abandonLoading(), or a
-			 * dependency abandoned that way): the dependency messages of its parents stay silent.
+			 * @brief Returns whether the load was abandoned because the application stopped (abandonLoading(), a load or
+			 * a completion the stop cut short, or a dependency abandoned that way): the dependency messages of its
+			 * parents and the container's failure line stay silent.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -1298,6 +1299,17 @@ namespace EmEn::Resources
 			[[nodiscard]]
 			static std::string getResourceNameFromFilepath (const std::filesystem::path & filepath, const std::string & storeName) noexcept;
 
+			/**
+			 * @brief Returns the stop token of the container task loading this resource right now (LoadStopScope), or a
+			 * token that never stops.
+			 * @note For a derived load(): a long stage (a decode, a resampling, a bake) takes this token and gives up
+			 * once a stop is requested, failing the load WITHOUT an error line (the cancelled loads get one summary
+			 * line). onDependenciesLoaded() receives the same token as its parameter.
+			 * @return std::stop_token A copy, taken under the resource's lock.
+			 */
+			[[nodiscard]]
+			std::stop_token loadStopToken () const noexcept;
+
 		private:
 
 			/**
@@ -1342,14 +1354,6 @@ namespace EmEn::Resources
 			 */
 			[[nodiscard]]
 			bool goOnAfterDependencyFailure (const ResourceTrait & dependency, const std::stop_token & stopToken) noexcept;
-
-			/**
-			 * @brief Returns the stop token of the container task loading this resource right now (LoadStopScope), or a
-			 * token that never stops.
-			 * @return std::stop_token A copy, taken under the resource's lock.
-			 */
-			[[nodiscard]]
-			std::stop_token loadStopToken () const noexcept;
 
 			/**
 			 * @brief Checks if all dependencies are loaded and propagates notifications.
