@@ -27,28 +27,70 @@
 #include "SceneDataConsumer.hpp"
 
 /* STL inclusions. */
+#include <functional>
+#include <map>
+#include <optional>
 #include <ranges>
+#include <string>
+#include <utility>
+#include <vector>
 
 /* Local inclusions. */
-#include "Math/Vector.hpp"
+#include "Animation/AnimationChannel.hpp"
+#include "Animation/AnimationClip.hpp"
+#include "Animations/AnimationClipResource.hpp"
+#include "BlobTrait.hpp"
+#include "Component/NodeAnimation.hpp"
+#include "Component/PointLight.hpp" // IWYU pragma: keep (componentBuilder< Component::PointLight > needs the complete type)
+#include "Component/SpotLight.hpp" // IWYU pragma: keep (componentBuilder< Component::SpotLight > needs the complete type)
+#include "Component/Visual.hpp"
 #include "Graphics/Photometry.hpp"
-#include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
 #include "InstanceCluster.hpp"
 #include "Loaders/SceneData.hpp"
-#include "Animations/AnimationClipResource.hpp"
-#include "Component/DirectionalLight.hpp"
-#include "Component/NodeAnimation.hpp"
-#include "Component/PointLight.hpp"
-#include "Component/SpotLight.hpp"
-#include "Component/Visual.hpp"
-#include "Scene.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 #include "Node.hpp"
+#include "PixelFactory/Color.hpp"
+#include "Scene.hpp"
+#include "Scenes/AbstractEntity.hpp"
+#include "Scenes/DirectionalShadowOptions.hpp"
 #include "StaticEntity.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Scenes
 {
 	using namespace Base::Math;
+
+	namespace
+	{
+		/**
+		 * @brief Returns the name a node of the asset takes among the children of an engine node.
+		 * @note ⚠️ A node name is NOT unique in glTF or FBX, and Node::createChild() refuses a name a sibling already
+		 * holds: the node — in hierarchy mode its whole subtree — was skipped and the build failed, so the model
+		 * viewer refused the file. Only the DUPLICATES are renamed: the first holder of a name keeps it verbatim (what
+		 * resolved by name still does), the next ones get their node index, as processNodeAsStatic() does for the
+		 * static entities. The test is made against the ENGINE parent, not the asset's: a flattened pivot hands its
+		 * children to its own parent, where they meet names they never met in the file.
+		 * @note A renamed duplicate can still meet a sibling that carries that very name ("Wheel-7" beside a second
+		 * "Wheel" at index 7): createChild() refuses it and the build reports the failure, as before.
+		 * @param parent A reference to the engine node which receives the child.
+		 * @param name A reference to the name of the node in the asset.
+		 * @param nodeIndex The index of the node in the asset: unique, it tells the duplicates apart.
+		 * @return std::string
+		 */
+		[[nodiscard]]
+		std::string
+		childNodeName (const Node & parent, const std::string & name, size_t nodeIndex) noexcept
+		{
+			if ( !parent.children().contains(name) )
+			{
+				return name;
+			}
+
+			return name + '-' + std::to_string(nodeIndex);
+		}
+	}
 
 	bool
 	SceneDataConsumer::build (const Scenes::Loaders::SceneData & sceneData, Scene & scene, const std::shared_ptr< Node > & parentNode) noexcept
@@ -127,9 +169,11 @@ namespace EmEn::Scenes
 					}
 					else
 					{
-						auto childNode = parentNode->createChild(nodeDesc.name);
+						const auto childName = childNodeName(*parentNode, nodeDesc.name, nodeIndex);
+						auto childNode = parentNode->createChild(childName);
 
-						/* NOTE: createChild() refuses a duplicate name or a node beyond Node::MaxDepth (it says why). */
+						/* NOTE: createChild() refuses a node beyond Node::MaxDepth, or a renamed duplicate which still
+						 * meets a sibling of that name (it says why). */
 						if ( childNode == nullptr )
 						{
 							m_buildFailed = true;
@@ -137,7 +181,7 @@ namespace EmEn::Scenes
 							continue;
 						}
 
-						childNode->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
+						childNode->componentBuilder< Component::Visual >(childName + "/Visual")
 							.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 					}
 				}
@@ -165,7 +209,7 @@ namespace EmEn::Scenes
 
 		if ( m_buildFailed )
 		{
-			Tracer::error(ClassId, "Some nodes of the asset could not be created (see above: a duplicate name, or a hierarchy deeper than Node::MaxDepth): the build failed.");
+			Tracer::error(ClassId, "Some nodes of the asset could not be created (see above: a hierarchy deeper than Node::MaxDepth, or a name which still collides once renamed): the build failed.");
 
 			return false;
 		}
@@ -551,10 +595,13 @@ namespace EmEn::Scenes
 			else
 			{
 				/* Additional mesh or structural node with transform: create a child. */
-				targetNode = engineParent->createChild(nodeDesc.name, frame);
+				const auto childName = childNodeName(*engineParent, nodeDesc.name, nodeIndex);
 
-				/* NOTE: refused (a duplicate name, or deeper than Node::MaxDepth — a hostile file): the subtree is
-				 * skipped and the build reports a failure; it used to dereference the null node. */
+				targetNode = engineParent->createChild(childName, frame);
+
+				/* NOTE: refused (deeper than Node::MaxDepth — a hostile file —, or a renamed duplicate which still
+				 * meets a sibling of that name): the subtree is skipped and the build reports a failure; it used to
+				 * dereference the null node. */
 				if ( targetNode == nullptr )
 				{
 					m_buildFailed = true;
@@ -568,7 +615,7 @@ namespace EmEn::Scenes
 
 					if ( meshIndex < sceneData.meshes.size() && sceneData.meshes[meshIndex].renderable != nullptr )
 					{
-						targetNode->componentBuilder< Component::Visual >(nodeDesc.name + "/Visual")
+						targetNode->componentBuilder< Component::Visual >(childName + "/Visual")
 							.build(sceneData.meshes[meshIndex].renderable, sceneData.meshes[meshIndex].lightingEnabled ? Graphics::RenderableInstance::Lighting::Lit : Graphics::RenderableInstance::Lighting::Unlit);
 					}
 				}

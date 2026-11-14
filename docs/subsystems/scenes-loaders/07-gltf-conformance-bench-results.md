@@ -2,7 +2,8 @@
 
 > Moved here on 2026-10-11 from the former item `gltf-conformance-loader-gaps`. Its open points became one item each
 > in `docs/todo/`: `gltf-transmission-texture`, `gltf-clearcoat-without-normal-map-base-roughness`,
-> `gltf-hierarchy-import-duplicate-names`, `fbx-pbr-specular-branch-unexercised`, `modelviewer-extents-fallback-framing`.
+> `gltf-hierarchy-import-duplicate-names` (closed 2026-11-14, see *The structural control* below),
+> `fbx-pbr-specular-branch-unexercised`, `modelviewer-extents-fallback-framing`.
 > Relative links below were written from `docs/todo/`; the ones to `../../src/` and `../../tools/` are corrected for
 > this folder.
 
@@ -41,6 +42,15 @@ reports `entities / meshNodes` for every model and flags a deficit. Measured on 
 It exists because `TransmissionTest` was marked PASS for weeks with **two of its twelve spheres
 absent**: its three nodes named `BlueTransWithMask` collided in a registry keyed by name, and the
 reading criterion only asked whether the four declared hues appeared *somewhere in the frame*.
+
+The two NODE paths of `SceneDataConsumer` (hierarchy and flattened) rename the duplicates too since
+2026-11-14. The bench never saw them fail: the viewer builds static entities unless the asset animates
+plain nodes, and no Khronos sample has both a node animation and named sibling duplicates (3 samples
+have such duplicates: `TransmissionTest` 5, `NodeVisibilityTest` 1, `SheenTestGrid` 1). With a node
+animation added to `TransmissionTest`, the file did not open at all before the fix (5 refused nodes,
+the build failed, the viewer's scene deleted); after it, 22 entities carry a Visual for 22 mesh-bearing
+nodes. The same count through `Core.SceneManagerService.listEntities()` is the control for a node-mode
+load. Details: `docs/caution-points.md` § *A duplicate ENTITY NAME cost the whole node*.
 
 ### The numbers each verdict rests on
 

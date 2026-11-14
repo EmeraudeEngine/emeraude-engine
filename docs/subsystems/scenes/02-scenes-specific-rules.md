@@ -231,6 +231,10 @@ demo's scene. After: FBX → PNG → FBX (the list holds one viewer scene at a t
 'animation-debug' loaded and active.", the list holds `animation-debug` alone, `The transient scene was removed`; the
 same FBX opened during the demo answers "1 of 1 file(s) ignored…", "None of the 1 file(s) was opened." (a failure).
 0 `VUID-`, 0 `[Error]`, exit 0.
+**Peers (2026-11-14, engine `466f2527`):** macOS (Apple M6) and Windows (MSVC 14.44, RTX 3500 Ada) build Release and
+Debug with 0 warning and get the same replies in Release with the validation layer loaded — the FBX taken, the demo
+loaded over it, `The transient scene was removed` once, no "is still active", the second opening ignored — exit 0,
+0 `VUID-`, 0 `[Error]`.
 
 | Builder | Scene name | Content |
 |---------|------------|---------|

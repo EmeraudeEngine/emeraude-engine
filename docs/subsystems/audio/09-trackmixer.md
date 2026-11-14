@@ -108,8 +108,16 @@ index; `Status::currentTrack` stays the playlist entry at the index.
 
 Measured (Debian 13, Debug): `play(BaroqueSonata)` then `nowPlaying` — "Title: BaroqueSonata", "Index: outside the
 playlist"; `status` — "Current track: outside the playlist"; `play()` — "Playing track 1/21.", `nowPlaying` —
-"Index: 1/21"; `stop()` — "No track is currently playing." ⚠️ The duration of that script music reads 0 s
-(`Position: 6.272s / 0s`): not looked into.
+"Index: 1/21"; `stop()` — "No track is currently playing."
+
+**`currentDuration()` reads that track too (same day, second fix).** It still indexed the playlist, so a track played
+outside it had a duration of 0 s — whatever the music, not the script music alone — and the console refused every
+`seek`: "Position must be between 0 and 0 seconds." (`Position: 5.87s / 0s`; the macOS and Windows peers reported the
+same line). It now returns the duration of the track the source holds, and of the playlist entry at the index only
+when no source plays. Measured (Debian 13, Debug, `default`, the playlist `RetroWave`):
+`play("Kyrandia2/Animated Scarecrow")` — before `5.87s / 0s`, `seek(5)` refused; after `5.89s / 15.8969s`, `seek(5)`
+"Seeked to 5s" (position 7.03 s two seconds later), `seek(99)` "Position must be between 0 and 15.8969 seconds.";
+`play(BaroqueSonata)` — `4.29s / 45s`; `play()` — `Mall Dreams`, `5.03s / 192.641s`, "Index: 1/21". 0 `[Error]`.
 
 ### m_musicIndex Invariant (play(track) sync)
 

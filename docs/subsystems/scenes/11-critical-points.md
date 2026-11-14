@@ -20,8 +20,11 @@
 - **The rule** (owner decision): `Node` stores its `depth()` (the root is 0; fixed at construction, a node is never
   re-parented); `createChild()` REFUSES a node deeper than `MaxDepth` (an error, `nullptr`). 256 = 8× the deepest
   real asset measured (30 levels, 349 assets: `RecursiveSkeletons`; `Dragon.glb` 22).
-- `createChild()` also returns `nullptr` for a DUPLICATE name at the same level: `SceneDataConsumer` now handles both
-  (the subtree is skipped, `build()` returns false); it used to dereference the null node.
+- `createChild()` also returns `nullptr` for a DUPLICATE name at the same level. `SceneDataConsumer` renames the
+  duplicates before it creates a child (`<name>-<nodeIndex>`, the first holder verbatim, 2026-11-14: a node name is
+  not unique in glTF or FBX — `docs/caution-points.md` § *A duplicate ENTITY NAME cost the whole node*); a refusal
+  that remains (deeper than `MaxDepth`, or a renamed name that still collides) skips the subtree and `build()` returns
+  false; it used to dereference the null node.
 - `forEachComponent()` / `forEachModifiers()` call their callable as an LVALUE: it is invoked once per element, a
   `std::forward` inside the loop would reuse a moved-from rvalue callable (clang-tidy bugprone-use-after-move).
 

@@ -443,6 +443,8 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Returns the duration of the current track in seconds.
+			 * @note The track the source holds (Status::playingTrack), in the playlist or not; with no source playing,
+			 * the playlist entry at the current index. 0 when there is neither.
 			 * @return float
 			 */
 			[[nodiscard]]

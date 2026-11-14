@@ -3707,10 +3707,23 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 > When something is missing and nothing is logged, look for a map keyed on a name the format does
 > not make unique.
 >
-> ⚠️ **The node-hierarchy import path is NOT covered by this fix.** `SceneDataConsumer` also builds
-> children with `createChild(nodeDesc.name)` (the `+ModelViewer` file path, `AssetRoot`); whether
-> that registry tolerates a duplicate is unverified. Measure it the same way — entity count against
-> the asset's node count — before assuming either answer.
+> **The node paths, fixed on 2026-11-14.** `SceneDataConsumer` also builds children with
+> `Node::createChild()` — the hierarchy path and the flattened one, reached by a caller that passes a
+> parent node (an application's asset root) and by `+ModelViewer` **only when the asset animates plain
+> nodes** (static mode otherwise). `createChild()` refuses a name a sibling holds: the node, and in
+> hierarchy mode its whole subtree, was skipped and `build()` returned false, so the viewer deleted
+> its scene — the file did not open at all. Both paths now rename the duplicates as the static path
+> does (`childNodeName()`: `<name>-<nodeIndex>`, the first holder verbatim), tested against the ENGINE
+> parent's children, since a flattened pivot hands its children to its own parent.
+> **Measured** (Debian 13, RTX 3070 Ti, Debug, validation layer loaded): `TransmissionTest` with one
+> still node animation added (a scratch copy: no sample asset has both duplicate sibling names and a
+> node animation — 3 of the Khronos samples have named sibling duplicates, none is node-animated),
+> opened through `Core.openFiles()`. Before: 5 `The node name '…' is already used at this level !`,
+> `the build failed`, `Unable to build the scene`, no scene left. After: `listEntities()` gives 22
+> entities with a Visual component for 22 mesh-bearing nodes (`BlueTransWithMask`,
+> `BlueTransWithMask-8`, `BlueTransWithMask-13`), the 3×4 grid complete in the image, 0 `[Error]`,
+> 0 `VUID-`. A renamed duplicate that still meets a sibling of that very name is refused by
+> `createChild()` and fails the build, as before.
 
 ### Fixed: IntermediateRenderTarget VK_DEPENDENCY_BY_REGION_BIT → stale-frame block corruption in motion (Jun 2026)
 

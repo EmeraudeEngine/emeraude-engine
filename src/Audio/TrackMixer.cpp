@@ -786,12 +786,17 @@ namespace EmEn::Audio
 		{
 			const MutexLock lock{m_stateAccess};
 
-			if ( m_musicIndex >= m_playlist.size() )
+			/* NOTE: The track the source holds first: a track played by name outside the playlist has no index
+			 * (SIZE_MAX), so its duration read as 0 s and the console refused every seek ("between 0 and 0 seconds").
+			 * With no source playing, the playlist entry at the index, as before. */
+			if ( m_playingMusic != nullptr )
 			{
-				return 0.0F;
+				track = m_playingMusic;
 			}
-
-			track = m_playlist[m_musicIndex];
+			else if ( m_musicIndex < m_playlist.size() )
+			{
+				track = m_playlist[m_musicIndex];
+			}
 		}
 
 		return track != nullptr ? track->duration() : 0.0F;

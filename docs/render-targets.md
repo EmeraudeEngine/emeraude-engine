@@ -64,6 +64,11 @@ names.
   created in 8 bits and without convolution FOR THE MEASUREMENT (a local change, not committed), its six faces were
   dumped: every pair differs on 47 % to 83 % of its pixels, layer 0 dumped twice 21 s apart is identical bit for bit,
   and the faces read as the four sides, the sky (+Y, layer 2) and the ground (-Y, layer 3) of the night city.
+- **Peers (2026-11-14, engine `466f2527`):** macOS (Apple M6) and Windows (MSVC 14.44, RTX 3500 Ada), Release,
+  validation layer loaded, `offscreen-rendering`: `SecurityTexture2D` dumps its layer 0 (a 1024×1024 RGBA image) and
+  refuses layers 1 and -1, `OffscreenRenderingCubemap` refuses layer 6 and its HDR download (the one expected
+  `[Error]`), no target answers to `SecurityCubemap` any more; 0 `VUID-`, exit 0. In a Release build the refusal line
+  names the image `''`: the debug identifier is not kept there, read the target's name in the command's reply.
 
 ## Architecture
 
