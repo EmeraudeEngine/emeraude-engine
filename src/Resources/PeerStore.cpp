@@ -390,7 +390,15 @@ namespace EmEn::Resources
 
 		if ( !files )
 		{
-			this->reportError("The peer " + m_baseURL + " did not list '" + relativePath + "'.");
+			/* A listing the stop ended is a cancellation, said as one: the peer did nothing wrong. */
+			if ( stopToken.stop_requested() )
+			{
+				this->reportError("Fetch cancelled.");
+			}
+			else
+			{
+				this->reportError("The peer " + m_baseURL + " did not list '" + relativePath + "'.");
+			}
 
 			return;
 		}

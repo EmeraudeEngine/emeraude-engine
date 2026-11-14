@@ -42,7 +42,9 @@ single-layer image, and the command to repeat is now `dumpRenderTarget(SecurityT
   `enableVisualDebug(VisualDebugType::Camera)` on the camera's OWN entity — a debug mesh
   (`AbstractEntity::getCameraVisualDebug()`) at the camera's position, so the camera sits inside it. Its colour was
   not established (the default standard material is grey; the mesh may carry vertex colours). Observed the same day:
-  a saturated blue shape near the centre of the probe's faces, not identified;
+  a saturated blue shape near the centre of the probe's faces, not identified — the macOS peer saw it too
+  (2026-11-15, Apple M6, `dumpRenderTarget(OffscreenRenderingCubemap)` layer 0: a pure-blue blob about 70 px across
+  at the centre, on the waterline): it belongs to the scene, on every OS;
 - a candidate that does not involve the dump at all follows from it: a frame in which that mesh covers the camera's
   view. It is told from the thread race by one check — the `TV` cuboid of the scene shows the same target, so a
   screenshot taken beside a blue dump shows a blue screen (the target WAS blue) or a normal one (the read was wrong).

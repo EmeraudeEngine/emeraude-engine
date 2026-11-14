@@ -69,9 +69,12 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
   replaces it under the state lock, because a stop source is stopped once and for all — and `cancel()` and the
   destructor request its stop. Its token goes to the HTTP exchanges (`HTTPRequestOptions::stopToken`), to the wait
   for the peer's digest and to `SharingServer::fileSHA256(path, stopToken)` (checked before each 1 MiB block).
-  **Latency**: a stop is seen between two transport reads (0.04 s during a download) and within 50 ms of the pauses
-  between two questions about a digest. ⚠️ An exchange parked on a silent peer still waits its timeout (base item
-  `http-client-stop-does-not-wake-a-parked-read`); the wait for a digest no longer is one, see the next point.
+  **Latency**: a stop is seen between two transport reads (0.04 s during a download), within 50 ms of the pauses
+  between two questions about a digest, and — since the foundation's connection takes the token itself
+  (`TLSConnection::setStopToken()`, 2026-11-14, base doc 24) — at once by an exchange PARKED on a silent peer, which
+  used to wait its timeout (§ Measurements, a silent peer). A listing the stop ended is reported "Fetch cancelled.",
+  not "the peer did not list". ⚠️ The one stage a stop does not end at once is a name resolution in flight (the
+  foundation's limit, base `docs/plans/network-tls/README.md` § The total budget).
 - **The digest of a large file is POLLED** (2026-11-14, owner decision). `/sha256/` used to answer when the hash
   was done, on a connection silent meanwhile, under the client's 30 s request budget: a slower hash made the client
   DELETE a complete copy ("the peer gave no SHA-256"), and a stop waited for that answer. Now:
@@ -135,12 +138,33 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
   | `Musics/Kyrandia2` (32 small files) | 32 / 32 in 0.0 s | 32 / 32 in 0.0 s |
 
   Exit 0 on both sides, no `.part` left, the data repository untouched.
+- **A silent peer, before / after the foundation's immediate stop** (2026-11-15, the same pair and file, the client
+  reaching the server through a relay made silent on demand — § Testing a pair on one machine; RTX 3070 Ti, the
+  machine otherwise idle). "Before" is the Debug build of the polled digest, "after" the same engine on the
+  foundation whose connection takes the stop token:
+
+  | | before (Debug) | after (Debug) | after (Release) |
+  |---|---|---|---|
+  | The peer silent BEFORE the first request, a cancel 1 s later | effective after 28.66 s, "the peer did not list" | 0.05 s, "Fetch cancelled." | 0.05 s |
+  | The peer silent DURING the download (parked between 0.7 and 1.4 of the 1.6 GB), a cancel 1 s later | 28.66 s, reported `Protocol` | 0.18 s, reported `Cancelled` | 0.17 s |
+  | The same, a shutdown of the client instead | exit 0 after 28.66 s | exit 0 after 3.04 s (a Debug shutdown takes that long without any fetch) | exit 0 after 0.54 s |
+
+  The control fetch through the relay (`Musics/Kyrandia2`) gave 32 / 32 files with the original's SHA-256 in every
+  run; no `.part` left; the client's `[Error]` lines went from 8 (aborted reads, a connect timed out, an expired
+  budget) to the 3 reports of the cancellations themselves.
 
 ## Testing a pair on one machine
 
 - Run two instances: the server on console port 7780 with sharing port 17791; the client on console port 7781 with
   a `--data-directory` copy that lacks the store under test and its own `--cache-directory`, so every fetched file
   provably came over the wire.
+- **A silent peer** is a TCP relay between the two (the client's `Core/Resources/Peer/URL` names the relay's port)
+  which, on demand, keeps its connections open and forwards nothing: the client's exchange is then parked in the
+  foundation's transport, where no test of the engine could put it otherwise. ⚠️ The server answers 403 to a `Host`
+  header which is not its own address (the foundation's HTTP server, against DNS rebinding): the relay rewrites the
+  port of the request's `Host` line, else every request fails at once and the run measures nothing. Check the
+  relay with a plain fetch first (`Musics/Kyrandia2`: 32 / 32), and read the byte count twice before the cancel:
+  it must be above zero and no longer move.
 - A peer session (another AI session on another machine) loads or publishes a LAN-fetched file only on its own
   owner's confirmation; an approval relayed by another session does not count.
 
