@@ -31,14 +31,17 @@
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <iomanip>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <span>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -99,6 +102,8 @@
 #include "PixelFactory/Color.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "PixelFactory/Pixmap.hpp"
+#include "PixelFactory/Reduction.hpp"
+#include "PixelFactory/Types.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
@@ -136,6 +141,335 @@ namespace EmEn::Scenes
 	/* NOTE: The hand-streamed JSON answers write their floats through the console's ONE rule (Console/JSONNumber.hpp). */
 	using Console::jsonNumber;
 	using Console::writeJSONVector;
+
+	namespace
+	{
+		/** @brief The largest exposure, in stops, dumpRenderTarget() accepts on either side: 2^64 is still a finite float. */
+		constexpr auto MaxDumpExposureEV{64.0F};
+
+		/** @brief The share of the pixels the automatic exposure of a dump keeps at or below 1. */
+		constexpr auto AutomaticExposureShare{0.99};
+
+		/**
+		 * @brief Writes 0 into every pixel which holds a non-finite component.
+		 * @note Neither an 8-bit rendition nor the Radiance RGBE encoding has a value for a NaN or an infinity: the
+		 * count is what tells the reader that the image held some.
+		 * @param pixmap A reference to a pixmap of floats.
+		 * @return size_t The number of pixels changed.
+		 */
+		[[nodiscard]]
+		size_t
+		zeroNonFinitePixels (PixelFactory::Pixmap< float > & pixmap) noexcept
+		{
+			const std::span< float > values{pixmap.data()};
+			const auto colorCount = static_cast< size_t >(pixmap.colorCount());
+
+			size_t count = 0;
+
+			for ( size_t offset = 0; colorCount > 0 && offset + colorCount <= values.size(); offset += colorCount )
+			{
+				const auto pixel = values.subspan(offset, colorCount);
+
+				if ( std::ranges::all_of(pixel, [] (float value) {return std::isfinite(value);}) )
+				{
+					continue;
+				}
+
+				std::ranges::fill(pixel, 0.0F);
+
+				++count;
+			}
+
+			return count;
+		}
+
+		/**
+		 * @brief Returns the value which a share of the pixels do not exceed on their brightest colour channel.
+		 * @param pixmap A reference to an RGB or RGBA pixmap of FINITE floats (zeroNonFinitePixels()).
+		 * @param share The share of the pixels, in [0, 1]: 0.99 gives the 99th percentile.
+		 * @return float 0 for an empty pixmap or one with fewer than three channels.
+		 */
+		[[nodiscard]]
+		float
+		brightestChannelPercentile (const PixelFactory::Pixmap< float > & pixmap, double share) noexcept
+		{
+			const std::span< const float > values{pixmap.data()};
+			const auto colorCount = static_cast< size_t >(pixmap.colorCount());
+
+			if ( colorCount < 3 || values.size() < colorCount )
+			{
+				return 0.0F;
+			}
+
+			std::vector< float > peaks;
+			peaks.reserve(values.size() / colorCount);
+
+			for ( size_t offset = 0; offset + colorCount <= values.size(); offset += colorCount )
+			{
+				peaks.push_back(std::ranges::max(values.subspan(offset, 3)));
+			}
+
+			const auto rank = static_cast< std::ptrdiff_t >(std::clamp(share, 0.0, 1.0) * static_cast< double >(peaks.size() - 1));
+			const auto position = std::next(peaks.begin(), rank);
+
+			std::ranges::nth_element(peaks, position);
+
+			return *position;
+		}
+
+		/**
+		 * @brief Renders linear floats as an 8-bit sRGB image: each colour channel times a scale, clamped to [0, 1],
+		 * then encoded with the sRGB transfer. The alpha channel is dropped.
+		 * @param source A reference to an RGB or RGBA pixmap of floats.
+		 * @param scale The factor applied before the transfer (2 to the power of the exposure in stops).
+		 * @param destination A reference to the 8-bit RGB pixmap to fill.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		exposeToSRGB (const PixelFactory::Pixmap< float > & source, float scale, PixelFactory::Pixmap< uint8_t > & destination) noexcept
+		{
+			const std::span< const float > values{source.data()};
+			const auto colorCount = static_cast< size_t >(source.colorCount());
+
+			if ( colorCount < 3 || !destination.initialize(source.width(), source.height(), PixelFactory::ChannelMode::RGB) )
+			{
+				return false;
+			}
+
+			auto output = destination.data().begin();
+
+			for ( size_t offset = 0; offset + colorCount <= values.size(); offset += colorCount )
+			{
+				for ( const auto value : values.subspan(offset, 3) )
+				{
+					*output = PixelFactory::linearToSRGBByte(value * scale);
+
+					++output;
+				}
+			}
+
+			return true;
+		}
+
+		/** @brief What dumpRenderTarget() was asked, once its arguments are validated. */
+		struct DumpRequest
+		{
+			/** The exposure of the 8-bit rendition of a floating-point target, in stops; automatic when absent. */
+			std::optional< float > exposure;
+			uint32_t arrayLayer{0};
+		};
+
+		/** @brief One layer of a render target's colour image to dump, and where its files go. */
+		struct LayerDump
+		{
+			std::string targetId;
+			/** The path of the files without their extension: <captures>/rt-dump-<timestamp>-layer<N>. */
+			std::string basePath;
+			uint32_t arrayLayer{0};
+		};
+
+		/**
+		 * @brief Returns the factor applied to the linear values of a floating-point dump before the sRGB transfer.
+		 * @param exposure The exposure asked for, in stops; absent for the automatic one.
+		 * @param percentile The 99th percentile of the brightest channel (brightestChannelPercentile()).
+		 * @return float
+		 */
+		[[nodiscard]]
+		float
+		dumpExposureScale (std::optional< float > exposure, float percentile) noexcept
+		{
+			if ( exposure.has_value() )
+			{
+				return std::exp2(*exposure);
+			}
+
+			/* NOTE: A black image has no percentile to bring to 1: it is left as it is. */
+			return percentile > 0.0F ? 1.0F / percentile : 1.0F;
+		}
+
+		/**
+		 * @brief Dumps one layer of an 8-bit colour image as a PNG.
+		 * @param transferManager A reference to the transfer manager.
+		 * @param image A reference to the colour image of the target.
+		 * @param dump A reference to the layer and its destination.
+		 * @param exposureGiven Whether an exposure was passed: it does not apply here, and the reply says so.
+		 * @param outputs A reference to the console outputs.
+		 * @return bool True when the file was written.
+		 */
+		[[nodiscard]]
+		bool
+		dumpLayerAsBytes (Vulkan::TransferManager & transferManager, const Vulkan::Image & image, const LayerDump & dump, bool exposureGiven, Console::Outputs & outputs) noexcept
+		{
+			PixelFactory::Pixmap< uint8_t > pixmap;
+
+			/* NOTE: The render pass leaves the color attachment in SHADER_READ_ONLY_OPTIMAL (it is sampled). */
+			if ( !transferManager.downloadImage(image, dump.arrayLayer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, pixmap) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to download the image of '" << dump.targetId << "' !");
+
+				return false;
+			}
+
+			const auto filepath = dump.basePath + ".png";
+
+			if ( !PixelFactory::FileIO::write(pixmap, Base::IO::u8path(filepath)) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write the dump to " << filepath);
+
+				return false;
+			}
+
+			if ( exposureGiven )
+			{
+				outputs.emplace_back(Severity::Warning, std::stringstream{} << "Render target '" << dump.targetId << "' is an 8-bit target: the exposure applies to a floating-point one, it was ignored.");
+			}
+
+			outputs.emplace_back(Severity::Success, std::stringstream{} << "Render target '" << dump.targetId << "' (layer " << dump.arrayLayer << ") dumped: " << filepath);
+
+			return true;
+		}
+
+		/**
+		 * @brief Dumps one layer of a floating-point (HDR) colour image: its linear values as a Radiance file, and an
+		 * EXPOSED 8-bit sRGB image beside it (owner decision 2026-11-14).
+		 * @note A clamp alone gives a white image on a photometric scene: without an exposure, the 99th percentile of
+		 * the brightest channel maps to 1, and the reply states what was applied.
+		 * @param transferManager A reference to the transfer manager.
+		 * @param image A reference to the colour image of the target.
+		 * @param dump A reference to the layer and its destination.
+		 * @param exposure The exposure asked for, in stops; absent for the automatic one.
+		 * @param outputs A reference to the console outputs.
+		 * @return bool True when both files were written.
+		 */
+		[[nodiscard]]
+		bool
+		dumpLayerAsFloats (Vulkan::TransferManager & transferManager, const Vulkan::Image & image, const LayerDump & dump, std::optional< float > exposure, Console::Outputs & outputs) noexcept
+		{
+			PixelFactory::Pixmap< float > linear;
+
+			if ( !transferManager.downloadImage(image, dump.arrayLayer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, linear) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to download the image of '" << dump.targetId << "' !");
+
+				return false;
+			}
+
+			const auto nonFinitePixels = zeroNonFinitePixels(linear);
+			const auto percentile = brightestChannelPercentile(linear, AutomaticExposureShare);
+			const auto scale = dumpExposureScale(exposure, percentile);
+			const auto filepath = dump.basePath + ".png";
+			const auto linearFilepath = dump.basePath + ".hdr";
+
+			PixelFactory::Pixmap< uint8_t > rendition;
+
+			if ( !exposeToSRGB(linear, scale, rendition) || !PixelFactory::FileIO::write(rendition, Base::IO::u8path(filepath)) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write the dump to " << filepath);
+
+				return false;
+			}
+
+			if ( !PixelFactory::FileIO::write(linear, Base::IO::u8path(linearFilepath)) )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write the linear values to " << linearFilepath);
+
+				return false;
+			}
+
+			if ( nonFinitePixels > 0 )
+			{
+				outputs.emplace_back(Severity::Warning, std::stringstream{} << "Render target '" << dump.targetId << "' (layer " << dump.arrayLayer << ") holds " << nonFinitePixels << " pixel(s) with a non-finite value (NaN or infinity): written as 0 in both files.");
+			}
+
+			std::stringstream message;
+			message << "Render target '" << dump.targetId << "' (layer " << dump.arrayLayer << ") dumped: " << filepath << " (8-bit sRGB, exposure " << std::log2(scale) << " EV, ";
+
+			if ( exposure.has_value() )
+			{
+				message << "as asked; the 99th percentile of the brightest channel is " << percentile;
+			}
+			else
+			{
+				message << "automatic: the 99th percentile of the brightest channel, " << percentile << ", maps to 1";
+			}
+
+			message << ") and " << linearFilepath << " (the linear values, RGB)";
+
+			outputs.emplace_back(Severity::Success, message);
+
+			return true;
+		}
+
+		/**
+		 * @brief Dumps the requested layer of a render-to-texture target into the captures directory.
+		 * @param scene A reference to the scene which owns the target.
+		 * @param renderTarget A reference to the render target.
+		 * @param request A reference to the validated request.
+		 * @param outputs A reference to the console outputs: what was written, or why nothing was.
+		 * @return bool True when the layer was dumped.
+		 */
+		[[nodiscard]]
+		bool
+		dumpRenderTargetLayer (Scene & scene, const Graphics::RenderTarget::Abstract & renderTarget, const DumpRequest & request, Console::Outputs & outputs) noexcept
+		{
+			const auto * textureInterface = dynamic_cast< const Vulkan::TextureInterface * >(&renderTarget);
+
+			if ( textureInterface == nullptr || textureInterface->image() == nullptr )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Render target '" << renderTarget.id() << "' has no readable image !");
+
+				return false;
+			}
+
+			/* A target that never rendered still holds its image in the UNDEFINED layout:
+			 * the SHADER_READ_ONLY readback below is then undefined behaviour (measured:
+			 * process crash, even after waitIdle). The on-demand policies make this state
+			 * perfectly reachable — an unfired "once" probe, a suspended target. */
+			if ( !renderTarget.hasBeenRendered() )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Render target '" << renderTarget.id() << "' has never been rendered — nothing to dump yet.");
+
+				return false;
+			}
+
+			const auto & image = *textureInterface->image();
+
+			/* NOTE: Refused here with the target's name; the download refuses it too, never clamps it. */
+			if ( const auto layerCount = image.createInfo().arrayLayers; request.arrayLayer >= layerCount )
+			{
+				outputs.emplace_back(Severity::Error, std::stringstream{} << "Render target '" << renderTarget.id() << "' has " << layerCount << " layer(s): the layer " << request.arrayLayer << " does not exist !");
+
+				return false;
+			}
+
+			auto & renderer = scene.AVConsoleManager().graphicsRenderer();
+
+			/* Debug tool: this runs on the console thread while the render thread may be
+			 * drawing INTO this very target — a raw download crashed the process. Full
+			 * device sync first; brutal, but correct for a diagnostic command. */
+			renderer.device()->waitIdle("dumpRenderTarget console command");
+
+			/* NOTE: The layer is in the name: two faces dumped within the same second would otherwise overwrite each
+			 * other. One layer per call: layer 0 (the +X face of a cubemap) tells a black/dead probe from a live one, the
+			 * others show what each face baked. */
+			std::stringstream basename;
+			basename << "rt-dump-" << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count() << "-layer" << request.arrayLayer;
+
+			const LayerDump dump{
+				.targetId = renderTarget.id(),
+				.basePath = Base::IO::toU8String(renderer.primaryServices().fileSystem().userDataDirectory("captures") / Base::IO::u8path(basename.str())),
+				.arrayLayer = request.arrayLayer
+			};
+
+			if ( image.createInfo().format == VK_FORMAT_R16G16B16A16_SFLOAT )
+			{
+				return dumpLayerAsFloats(renderer.transferManager(), image, dump, request.exposure, outputs);
+			}
+
+			return dumpLayerAsBytes(renderer.transferManager(), image, dump, request.exposure.has_value(), outputs);
+		}
+	}
 
 	void
 	Manager::onRegisterToConsole () noexcept
@@ -1923,18 +2257,25 @@ namespace EmEn::Scenes
 				return Console::CommandResult::success(message.str());
 			}, Console::CommandHint::Idempotent);
 
-		this->bindCommand("dumpRenderTarget", "Dumps one layer of the color image of the first render-to-texture target of the active scene whose id contains a fragment, as a PNG in the captures directory.",
+		this->bindCommand("dumpRenderTarget", "Dumps one layer of the color image of the first render-to-texture target of the active scene whose id contains a fragment, as a PNG in the captures directory. A floating-point (HDR) target gives two files: an exposed 8-bit sRGB PNG, and a Radiance .hdr holding the linear values.",
 			{
 				{"nameFragment", "A substring of the render target id."},
-				{"layer", "The array layer to dump: a cubemap face (0 = +X, 1 = -X, 2 = +Y, 3 = -Y, 4 = +Z, 5 = -Z); 0 for a plain target.", 0}
+				{"layer", "The array layer to dump: a cubemap face (0 = +X, 1 = -X, 2 = +Y, 3 = -Y, 4 = +Z, 5 = -Z); 0 for a plain target.", 0},
+				{"exposure", "For a floating-point target, the exposure of the PNG in stops (EV): the values are multiplied by 2^exposure before the sRGB transfer. Omit it for an automatic exposure (the 99th percentile of the brightest channel maps to 1)."}
 			},
-			[this] (const std::string & nameFragment, int32_t layer) {
+			[this] (const std::string & nameFragment, int32_t layer, std::optional< float > exposure) {
 				if ( layer < 0 )
 				{
 					return Console::CommandResult::error("dumpRenderTarget(): the layer cannot be negative.");
 				}
 
-				const auto arrayLayer = static_cast< uint32_t >(layer);
+				/* A boundary: the value comes from the console or from an MCP client. */
+				if ( exposure.has_value() && (!std::isfinite(*exposure) || std::abs(*exposure) > MaxDumpExposureEV) )
+				{
+					return Console::CommandResult::error("dumpRenderTarget(): the exposure is a finite number of stops between -64 and 64.");
+				}
+
+				const DumpRequest request{.exposure = exposure, .arrayLayer = static_cast< uint32_t >(layer)};
 
 				Console::Outputs outputs;
 				bool dumped = false;
@@ -1946,72 +2287,7 @@ namespace EmEn::Scenes
 							return;
 						}
 
-						const auto * textureInterface = dynamic_cast< const Vulkan::TextureInterface * >(renderTarget.get());
-
-						if ( textureInterface == nullptr || textureInterface->image() == nullptr )
-						{
-							outputs.emplace_back(Severity::Error, std::stringstream{} << "Render target '" << renderTarget->id() << "' has no readable image !");
-
-							return;
-						}
-
-						/* A target that never rendered still holds its image in the UNDEFINED layout:
-						 * the SHADER_READ_ONLY readback below is then undefined behaviour (measured:
-						 * process crash, even after waitIdle). The on-demand policies make this state
-						 * perfectly reachable — an unfired "once" probe, a suspended target. */
-						if ( !renderTarget->hasBeenRendered() )
-						{
-							outputs.emplace_back(Severity::Error, std::stringstream{} << "Render target '" << renderTarget->id() << "' has never been rendered — nothing to dump yet.");
-
-							return;
-						}
-
-						/* NOTE: Refused here with the target's name; the download refuses it too, never clamps it. */
-						if ( const auto layerCount = textureInterface->image()->createInfo().arrayLayers; arrayLayer >= layerCount )
-						{
-							outputs.emplace_back(Severity::Error, std::stringstream{} << "Render target '" << renderTarget->id() << "' has " << layerCount << " layer(s): the layer " << arrayLayer << " does not exist !");
-
-							return;
-						}
-
-						auto & renderer = scene->AVConsoleManager().graphicsRenderer();
-
-						PixelFactory::Pixmap< uint8_t > pixmap;
-
-						/* Debug tool: this runs on the console thread while the render thread may be
-						 * drawing INTO this very target — a raw download crashed the process. Full
-						 * device sync first; brutal, but correct for a diagnostic command. */
-						renderer.device()->waitIdle("dumpRenderTarget console command");
-
-						/* NOTE: The render pass leaves the color attachment in SHADER_READ_ONLY_OPTIMAL
-						 * (it is sampled). One layer per call: layer 0 (the +X face of a cubemap) tells a
-						 * black/dead probe from a live one, the others show what each face baked. */
-						if ( !renderer.transferManager().downloadImage(*textureInterface->image(), arrayLayer, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_ASPECT_COLOR_BIT, pixmap) )
-						{
-							outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to download the image of '" << renderTarget->id() << "' !");
-
-							return;
-						}
-
-						auto captureDirectory = renderer.primaryServices().fileSystem().userDataDirectory("captures");
-
-						std::stringstream filename;
-						/* NOTE: The layer is in the name: two faces dumped within the same second would otherwise overwrite
-						 * each other. */
-						filename << "rt-dump-" << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count() << "-layer" << arrayLayer << ".png";
-
-						const auto filepath = captureDirectory /= Base::IO::u8path(filename.str());
-
-						if ( !PixelFactory::FileIO::write(pixmap, filepath) )
-						{
-							outputs.emplace_back(Severity::Error, std::stringstream{} << "Unable to write the dump to " << Base::IO::toU8String(filepath));
-
-							return;
-						}
-
-						outputs.emplace_back(Severity::Success, std::stringstream{} << "Render target '" << renderTarget->id() << "' (layer " << arrayLayer << ") dumped: " << Base::IO::toU8String(filepath));
-
-						dumped = true;
+						dumped = dumpRenderTargetLayer(*scene, *renderTarget, request, outputs);
 					});
 				}, true);
 

@@ -28,15 +28,25 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <bit>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
+#include <initializer_list>
 #include <numbers>
+#include <span>
 #include <sstream>
 #include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Math/Base.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -48,9 +58,11 @@
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
+#include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/ShaderModule.hpp"
+#include "Vulkan/Types.hpp"
 
 namespace EmEn::Graphics
 {
@@ -381,48 +393,6 @@ void main ()
 					}
 				}
 			}
-		}
-
-		/** @brief IEEE half to float. */
-		float
-		halfToFloat (uint16_t half) noexcept
-		{
-			const uint32_t sign = static_cast< uint32_t >(half & 0x8000U) << 16U;
-			uint32_t exponent = (half >> 10U) & 0x1FU;
-			uint32_t mantissa = half & 0x3FFU;
-			uint32_t bits = 0;
-
-			if ( exponent == 0 )
-			{
-				if ( mantissa != 0 )
-				{
-					/* Subnormal: normalise. */
-					exponent = 127 - 15 + 1;
-
-					while ( (mantissa & 0x400U) == 0 )
-					{
-						mantissa <<= 1U;
-						--exponent;
-					}
-
-					mantissa &= 0x3FFU;
-					bits = sign | (exponent << 23U) | (mantissa << 13U);
-				}
-				else
-				{
-					bits = sign;
-				}
-			}
-			else if ( exponent == 0x1FU )
-			{
-				bits = sign | 0x7F800000U | (mantissa << 13U);
-			}
-			else
-			{
-				bits = sign | ((exponent + 127 - 15) << 23U) | (mantissa << 13U);
-			}
-
-			return std::bit_cast< float >(bits);
 		}
 	}
 
@@ -976,11 +946,14 @@ void main ()
 		displacement.resize(values);
 		slopes.resize(values);
 
-		for ( size_t index = 0; index < values; ++index )
-		{
-			displacement[index] = halfToFloat(mapped[index]);
-			slopes[index] = halfToFloat(mapped[values + index]);
-		}
+		/* The displacement halves, then the slope halves. */
+		const std::span< const uint16_t > halves{mapped, values * 2};
+		const auto decode = [] (uint16_t half) {
+			return Math::halfToFloat(half);
+		};
+
+		std::ranges::transform(halves.first(values), displacement.begin(), decode);
+		std::ranges::transform(halves.subspan(values), slopes.begin(), decode);
 
 		staging->unmapMemory();
 

@@ -2831,9 +2831,9 @@ above) and the orbit controller's lower distance limit at `max(radius * 0.05F, 0
 `OrbitController::setDistance()` clamps against. A magic 0.01 or 0.1 in a viewer, a controller or a
 projection is a scale assumption; grep for the others before declaring a scale bug fixed.
 
-⚠️⚠️ **THE VIEW MATRICES HAVE FIVE OWNERS AND NO COMMON HOLDER** — `Vulkan::SwapChain`,
-`Graphics::SceneRenderTarget`, and the templated `RenderTarget::View`, `Texture` and `ShadowMap` each
-hold their own `ViewMatrices2DUBO`. A property that belongs to a projection has to be forwarded by
+⚠️⚠️ **THE VIEW MATRICES HAVE FOUR OWNERS AND NO COMMON HOLDER** — `Vulkan::SwapChain`,
+`Graphics::SceneRenderTarget`, and the templated `RenderTarget::Texture` and `ShadowMap` each
+hold their own `ViewMatrices2DUBO` (five until 2026-11-14, with the removed `RenderTarget::View`). A property that belongs to a projection has to be forwarded by
 every one of them that carries a perspective. **And the one a scene camera actually connects to is
 the SWAP CHAIN**, not `SceneRenderTarget`: implementing the forward on the latter alone left the near
 plane at its default while the caller believed it proportional, and the two small conformance models

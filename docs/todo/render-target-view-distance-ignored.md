@@ -18,7 +18,7 @@ tags: [ave-robustus-ii, graphics, render-target, api, defect]
 - in the Ave Robustus II warning pass (2026-10-08). That pass marked it `[[maybe_unused]]` with a NOTE, now at
   `Abstract.hpp:744`, through 03608b668.
 
-Every subclass constructor takes one too and only forwards it to the base: `View`, `Texture`, `ShadowMap` ×3,
+Every subclass constructor takes one too and only forwards it to the base: `Texture`, `ShadowMap` ×3,
 `SceneRenderTarget`, `SelectionDepthTarget`, `ImposterBake` and `Vulkan::SwapChain`. `SwapChain` reads
 `Core/Graphics/ViewDistance` only for this. Every `Scene::createRenderTo*()` passes a view distance that has no effect.
 

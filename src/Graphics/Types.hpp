@@ -51,7 +51,6 @@ namespace EmEn::Graphics
 	enum class EMEN_API RenderTargetType : uint8_t
 	{
 		View,
-		CubicView,
 		ShadowMap,
 		ShadowCubemap,
 		Texture,
@@ -62,7 +61,6 @@ namespace EmEn::Graphics
 	};
 
 	constexpr auto ViewString{"View"};
-	constexpr auto CubicViewString{"CubicView"};
 	constexpr auto ShadowMapString{"ShadowMap"};
 	constexpr auto ShadowCubemapString{"ShadowCubemap"};
 	constexpr auto TextureString{"Texture"};

@@ -57,7 +57,7 @@ Use search for `[CONCEPT: RENDERING]`, `[CONCEPT: PHYSICS]`, etc. to navigate qu
 │   • Physics Octree (collision broad-phase, 32 entities/sector)      │
 ├─────────────────────────────────────────────────────────────────────┤
 │ Render Targets:                                                     │
-│   • RenderToView (final output, 2D or cubemap)                      │
+│   • RenderToView (the main view: the swap chain)                    │
 │   • RenderToTexture (RTT for effects, 2D or cubemap)               │
 │   • RenderToShadowMap (shadow casting, 2D or cubemap)              │
 ├─────────────────────────────────────────────────────────────────────┤
@@ -156,15 +156,9 @@ Scene scene(
 ### Render Target Creation
 
 ```cpp
-// Create render-to-view (2D perspective)
-auto view = scene.createRenderToView(
-    "MainView",       // Name
-    1920, 1080,       // Resolution
-    precisions,       // Framebuffer precisions
-    1000.0f,          // View distance
-    false,            // Orthographic projection
-    true              // Primary device
-);
+// NOTE: The main view is the renderer's swap chain, registered by the scene itself. There is no secondary view:
+// the unused RenderTarget::View class and createRenderToView() / createRenderToCubicView() were removed on
+// 2026-11-14 (nothing rendered them; item `secondary-views`).
 
 // Create render-to-texture (for effects like mirrors, portals)
 auto texture = scene.createRenderToTexture2D(
@@ -185,7 +179,6 @@ auto shadowMap = scene.createRenderToShadowMap(
 
 // Create cubemap variants for point lights
 auto cubicShadowMap = scene.createRenderToCubicShadowMap(...);
-auto cubicView = scene.createRenderToCubicView(...);
 auto cubemap = scene.createRenderToCubemap(...);
 ```
 

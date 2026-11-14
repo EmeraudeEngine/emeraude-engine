@@ -40,30 +40,48 @@ this wrong produces a VUID cascade in which only the first message names the rea
 > `createImages()` first**. `downloadImage()` refuses an image without `TRANSFER_SRC_BIT`
 > outright — there is no fallback, by design.
 
-### Reading a target back — one array layer, 8-bit colour or depth only (2026-11-14)
+### Reading a target back — one array layer, as bytes or as floats (2026-11-14)
 
 `TransferManager::downloadImage(image, arrayLayer, layout, aspect, pixmap)` copies ONE array layer of mip 0: a cubemap
 face (0 = +X, 1 = -X, 2 = +Y, 3 = -Y, 4 = +Z, 5 = -Z), a shadow cascade, 0 for a plain image. The layer is never
 clamped: one the image does not have is refused (the caller would get another layer's pixels without knowing it). The
 barriers move the WHOLE image to `TRANSFER_SRC_OPTIMAL` and back, so every layer must be in the layout the caller
-names.
+names. Two overloads, chosen by the pixmap: `Pixmap< uint8_t >` for the 8-bit colour and the depth / stencil formats,
+`Pixmap< float >` for `R16G16B16A16_SFLOAT`. Each refuses the other's formats; both share the refusals
+(`isImageLayerDownloadable()`) and the GPU copy (`copyImageLayerToHostBuffer()`), and size the staging buffer from the
+image's real format.
 
 - Until 2026-11-14 the function had no layer parameter and copied `baseArrayLayer = 0`: `ShadowMap::capture()` and
   `Texture::capture()` validated their `layerIndex`, then returned layer 0 (found by cppcheck, `unreadVariable`).
-  They now pass it; `View`, `SceneRenderTarget` and `ImposterAtlas` have single-layer images and pass 0;
+  They now pass it; `SceneRenderTarget` and `ImposterAtlas` have single-layer images and pass 0;
   `ImposterBake`, `SelectionDepthTarget` and `SwapChain` do not download.
-- ⚠️ **Formats**: 8-bit RGB(A) / BGR(A) (UNORM or sRGB) and the depth / stencil formats; anything else is REFUSED
-  (owner ruling 2026-10-01: sized as RGBA8, a 16-bit target overflowed its staging buffer). The environment probes are
-  `R16G16B16A16_SFLOAT`, so **no cubemap probe can be read back today** (item
-  `render-target-download-refuses-hdr-color-formats`).
+- ⚠️ **Formats**: as bytes, 8-bit RGB(A) / BGR(A) (UNORM or sRGB) and the depth / stencil formats; as floats,
+  `R16G16B16A16_SFLOAT` (the environment probes, the scene's HDR target), decoded with the foundation's
+  `Math::halfToFloat()` — the values the GPU wrote, linear, a NaN or an infinity included. Anything else is REFUSED
+  (owner ruling 2026-10-01: sized as RGBA8, a 16-bit target overflowed its staging buffer).
+- `RenderTarget::*::capture()` still fills 8-bit pixmaps: on a floating-point target it fails with the refusal above
+  (no caller in the cascade today). The console command `dumpRenderTarget` is the reader of an HDR target: it writes
+  the linear values as a Radiance `.hdr` and an exposed 8-bit PNG (`docs/ai-runtime-control.md` § *Dumping a
+  render-to-texture target*).
 - ⚠️ A `Texture`'s depth image has no `TRANSFER_SRC` (table above): `capture(…, withDepthBuffer = true, …)` gets a
   warning and an empty `result[1]`.
+- ⚠️ **A depth image cannot be read back at all today**, whatever its usage flags: the 8-bit overload copies four
+  bytes per pixel and hands them to a one-channel 8-bit pixmap, which refuses the size (item
+  `image-download-depth-formats-always-fail`; read, not run — nothing calls a `capture()`).
 - **Measured** (`offscreen-rendering`, RTX 3070 Ti, Debug, validation layer loaded, 0 `VUID-`): the 2D target
   (`SecurityCubemap` that day, `SecurityTexture2D` since its renaming; one layer) dumps layer 0 and refuses 1 to 6 ("has 1 layer(s)"); the real cubemap
   (`OffscreenRenderingCubemap`) refuses layer 6 ("has 6 layer(s)") and, being HDR, cannot be downloaded. With the probe
   created in 8 bits and without convolution FOR THE MEASUREMENT (a local change, not committed), its six faces were
   dumped: every pair differs on 47 % to 83 % of its pixels, layer 0 dumped twice 21 s apart is identical bit for bit,
   and the faces read as the four sides, the sky (+Y, layer 2) and the ground (-Y, layer 3) of the night city.
+- **Measured, the HDR read-back** (2026-11-14, `offscreen-rendering`, RTX 3070 Ti, Debug, validation layer loaded,
+  no local change): the six faces of `OffscreenRenderingCubemap` (1024², `R16G16B16A16_SFLOAT`) are dumped, each as
+  a PNG and a `.hdr`; automatic exposures between 2.37 and 3.03 EV (99th percentiles 0.123 to 0.193: a night
+  scene); layer 6 refused; `…, 0, -3` gives the same face at -3 EV; `…, 0, 100` is refused; the 8-bit
+  `SecurityTexture2D` still gives its PNG, with a warning when an exposure is passed. 0 `VUID-`, 0 `[Error]`,
+  exit 0. Checked on the files: the percentile recomputed from each `.hdr` matches the reply within the RGBE
+  precision (0.147461 for 0.147705), and on 241 980 samples per face every PNG byte lies inside the interval its
+  `.hdr` value allows; the six faces differ pairwise on 47 % to 83 % of their pixels, as the 8-bit probe did.
 - **Peers (2026-11-14, engine `466f2527`):** macOS (Apple M6) and Windows (MSVC 14.44, RTX 3500 Ada), Release,
   validation layer loaded, `offscreen-rendering`: `SecurityTexture2D` dumps its layer 0 (a 1024×1024 RGBA image) and
   refuses layers 1 and -1, `OffscreenRenderingCubemap` refuses layer 6 and its HDR download (the one expected

@@ -68,7 +68,6 @@
 #include "Graphics/RenderTarget/ImposterBake.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
-#include "Graphics/RenderTarget/View.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Graphics/Types.hpp"
 #include "Graphics/ViewMatrices2DUBO.hpp"
@@ -113,7 +112,6 @@ namespace EmEn::Base
 
 namespace EmEn::Graphics
 {
-	class FramebufferPrecisions;
 }
 
 namespace EmEn::Scenes::AVConsole
@@ -496,75 +494,6 @@ namespace EmEn::Scenes
 		}
 
 		m_renderToTextures.emplace(renderTarget);
-
-		return renderTarget;
-	}
-
-	std::shared_ptr< RenderTarget::View< ViewMatrices2DUBO > >
-	Scene::createRenderToView (const std::string & name, uint32_t width, uint32_t height, const FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice) noexcept
-	{
-		const Base::MutexLock lock{m_renderToViewAccess};
-
-		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
-		{
-			TraceError{ClassId} << "A virtual device named '" << name << "' already exists ! Render to view creation canceled ...";
-
-			return {};
-		}
-
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices2DUBO > >(name, width, height, precisions, viewDistance, isOrthographicProjection);
-
-		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
-		{
-			TraceError{ClassId} << "Unable to create the render to view '" << name << "' !";
-
-			return {};
-		}
-
-		if ( !m_AVConsoleManager.addVideoDevice(renderTarget, primaryDevice) )
-		{
-			TraceError{ClassId} << "Unable to add the render to view '" << name << "' as a virtual video device !";
-
-			return {};
-		}
-
-		m_renderToViews.emplace(renderTarget);
-
-		return renderTarget;
-	}
-
-	std::shared_ptr< RenderTarget::View< ViewMatrices3DUBO > >
-	Scene::createRenderToCubicView (const std::string & name, uint32_t size, const FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice) noexcept
-	{
-		const Base::MutexLock lock{m_renderToViewAccess};
-
-		/* Checks name availability. */
-		if ( m_AVConsoleManager.isVideoDeviceExists(name) )
-		{
-			TraceError{ClassId} << "A virtual device named '" << name << "' already exists ! Render to cubic view creation canceled ...";
-
-			return {};
-		}
-
-		/* Create the render target. */
-		auto renderTarget = std::make_shared< RenderTarget::View< ViewMatrices3DUBO > >(name, size, precisions, viewDistance, isOrthographicProjection);
-
-		if ( !renderTarget->createRenderTarget(m_AVConsoleManager.graphicsRenderer()) )
-		{
-			TraceError{ClassId} << "Unable to create the render to cubic view '" << name << "' !";
-
-			return {};
-		}
-
-		if ( !m_AVConsoleManager.addVideoDevice(renderTarget, primaryDevice) )
-		{
-			TraceError{ClassId} << "Unable to add the render to cubic view '" << name << "' as a virtual video device !";
-
-			return {};
-		}
-
-		m_renderToViews.emplace(renderTarget);
 
 		return renderTarget;
 	}

@@ -370,6 +370,23 @@ namespace EmEn::Vulkan
 			bool downloadImage (const Image & sourceImage, uint32_t arrayLayer, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Base::PixelFactory::Pixmap< uint8_t > & pixmap) noexcept;
 
 			/**
+			 * @brief Downloads one array layer of a floating-point colour image (its first mip level) from GPU memory
+			 * to a pixmap of floats.
+			 * @note R16G16B16A16_SFLOAT only (the engine's HDR colour targets); any other format is refused, as the
+			 * 8-bit overload refuses this one. The values are the ones the GPU wrote, linear, a NaN or an infinity
+			 * included: nothing is clamped nor filtered.
+			 * @param sourceImage A reference to the source image in GPU memory.
+			 * @param arrayLayer The array layer to copy, as in the 8-bit overload. Never clamped.
+			 * @param currentLayout The current layout of the source image (the whole image is moved to the transfer
+			 * layout and back).
+			 * @param aspectMask The aspect flags: VK_IMAGE_ASPECT_COLOR_BIT, anything else is refused.
+			 * @param pixmap A reference to the destination pixmap, initialized as RGBA.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool downloadImage (const Image & sourceImage, uint32_t arrayLayer, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Base::PixelFactory::Pixmap< float > & pixmap) noexcept;
+
+			/**
 			 * @brief Downloads a whole buffer from GPU memory: a copy into a temporary host-readable (cached) buffer on
 			 * the graphics queue, then a wait.
 			 * @note Blocking: for a load-time reader (a released CPU copy rebuilt from its GPU copy), never per frame.
@@ -424,6 +441,38 @@ namespace EmEn::Vulkan
 
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
+
+			/** @brief What copyImageLayerToHostBuffer() reads of an image: one array layer, in a layout, by an aspect. */
+			struct ImageLayerRead
+			{
+				uint32_t arrayLayer;
+				VkImageLayout currentLayout;
+				VkImageAspectFlags aspectMask;
+			};
+
+			/**
+			 * @brief Tells whether a layer of an image can be downloaded, and says why when it cannot.
+			 * @note The refusals common to the downloadImage() overloads: a manager that is not usable, an image
+			 * created without VK_IMAGE_USAGE_TRANSFER_SRC_BIT, a layer the image does not have (never clamped).
+			 * @param sourceImage A reference to the source image.
+			 * @param arrayLayer The array layer asked for.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isImageLayerDownloadable (const Image & sourceImage, uint32_t arrayLayer) const noexcept;
+
+			/**
+			 * @brief Copies one array layer of an image (its first mip level) into a temporary host-readable buffer:
+			 * the barriers to the transfer layout and back, the copy, its submission and the wait.
+			 * @note The GPU part common to the downloadImage() overloads, which size the buffer from the image's real
+			 * format and decode it.
+			 * @param sourceImage A reference to the source image, checked by isImageLayerDownloadable().
+			 * @param read The layer, its current layout and the aspect to copy.
+			 * @param requiredBytes The size of that layer in the image's own format.
+			 * @return std::unique_ptr< Buffer > The buffer holding the layer; nullptr on a failure (it is logged).
+			 */
+			[[nodiscard]]
+			std::unique_ptr< Buffer > copyImageLayerToHostBuffer (const Image & sourceImage, const ImageLayerRead & read, size_t requiredBytes) noexcept EMEN_REQUIRES(m_transferOperationsAccess);
 
 			/**
 			 * @brief Returns a locked buffer transfer operation.

@@ -37,9 +37,9 @@ defaulted no-op, so the five other video devices and every audio device are unto
 `SceneRenderTarget` → `ViewMatricesInterface::setNearestObjectDistance()`. A caller that says nothing
 keeps `DefaultNearestObjectDistance` (0.1 m) and behaves exactly as before.
 
-⚠️⚠️ **The property has to be forwarded by FIVE separate owners.** `Vulkan::SwapChain`,
-`Graphics::SceneRenderTarget` and the templated `RenderTarget::View`, `Texture` and `ShadowMap` each
-hold their own `ViewMatrices2DUBO`; there is no common holder. **The one a scene camera actually
+⚠️⚠️ **The property has to be forwarded by FOUR separate owners.** `Vulkan::SwapChain`,
+`Graphics::SceneRenderTarget` and the templated `RenderTarget::Texture` and `ShadowMap` each
+hold their own `ViewMatrices2DUBO` (five until 2026-11-14, with the removed `RenderTarget::View`); there is no common holder. **The one a scene camera actually
 connects to is the SWAP CHAIN** — doing only `SceneRenderTarget` left the near plane at its default
 and the two small conformance models rendered entirely empty. `ShadowMap` alone may ignore it (a
 light's frustum has no subject).

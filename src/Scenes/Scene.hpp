@@ -65,11 +65,12 @@
 #include "Graphics/RenderTarget/ImposterBake.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
-#include "Graphics/RenderTarget/View.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Renderable/Types.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Graphics/ViewMatrices2DUBO.hpp"
+#include "Graphics/ViewMatrices3DUBO.hpp"
 #include "DirectionalShadowOptions.hpp"
 #include "GroundLevelInterface.hpp"
 #include "Randomizer.hpp"
@@ -1719,45 +1720,6 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Graphics::RenderTarget::Texture< Graphics::ViewMatrices3DUBO > > createRenderToCubemap (const std::string & name, uint32_t size, uint32_t colorCount, float viewDistance, bool isOrthographicProjection, uint32_t colorBits = 16U) noexcept;
-
-			/**
-			 * @brief Creates a 2D view render target for final output.
-			 *
-			 * Views are high-quality render targets suitable for final display
-			 * or post-processing input. Support configurable framebuffer precision.
-			 *
-			 * @param name Unique name for the virtual video device (must not exist).
-			 * @param width View width in pixels.
-			 * @param height View height in pixels.
-			 * @param precisions Framebuffer bit depths (color, depth, stencil).
-			 * @param viewDistance Maximum render distance in meters.
-			 * @param isOrthographicProjection True for 2D/UI, false for 3D.
-			 * @param primaryDevice True to set as the main output (receives camera feed).
-			 * @return Shared pointer to the view target, or nullptr on failure.
-			 *
-			 * @see createRenderToCubicView() For VR/panoramic rendering.
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices2DUBO > > createRenderToView (const std::string & name, uint32_t width, uint32_t height, const Graphics::FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice = false) noexcept;
-
-			/**
-			 * @brief Creates a cubic view render target for VR or panoramic rendering.
-			 *
-			 * Renders to all 6 cubemap faces for omnidirectional viewing.
-			 * Useful for VR environments or 360° captures.
-			 *
-			 * @param name Unique name for the virtual video device (must not exist).
-			 * @param size Cubemap face size in pixels.
-			 * @param precisions Framebuffer bit depths (color, depth, stencil).
-			 * @param viewDistance Maximum render distance in meters.
-			 * @param isOrthographicProjection Usually false for cubic views.
-			 * @param primaryDevice True to set as the main output.
-			 * @return Shared pointer to the cubic view target, or nullptr on failure.
-			 *
-			 * @see createRenderToView() For standard 2D views.
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Graphics::RenderTarget::View< Graphics::ViewMatrices3DUBO > > createRenderToCubicView (const std::string & name, uint32_t size, const Graphics::FramebufferPrecisions & precisions, float viewDistance, bool isOrthographicProjection, bool primaryDevice = false) noexcept;
 
 			/**
 			 * @brief Executes a function with thread-safe access to all shadow maps.

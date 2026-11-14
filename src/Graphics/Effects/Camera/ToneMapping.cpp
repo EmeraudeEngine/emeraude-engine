@@ -28,7 +28,6 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <bit>
 #include <cmath>
 #include <cstring>
 #include <string>
@@ -41,6 +40,7 @@
 #include "Graphics/Effects/Camera/VeilingGlare.hpp"
 #include "Graphics/Photometry.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Math/Base.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Saphir/Types.hpp"
 #include "Scenes/Component/Camera.hpp"
@@ -53,7 +53,6 @@
 #include "Vulkan/Sync/BufferMemoryBarrier.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 
-
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
@@ -63,51 +62,6 @@ namespace EmEn::Vulkan
 namespace
 {
 	using namespace EmEn;
-
-	/**
-	 * @brief Decodes an IEEE 754 binary16 into a float32.
-	 * @note The adaptation history is RGBA16F: the metered-exposure readback decodes its R
-	 * channel CPU-side. Subnormals, infinities and NaN are handled (a NaN stays a NaN, which
-	 * the caller treats as "no valid measurement").
-	 * @param value The half-float bit pattern.
-	 * @return float
-	 */
-	float
-	halfToFloat (uint16_t value) noexcept
-	{
-		const uint32_t sign = static_cast< uint32_t >(value & 0x8000U) << 16U;
-		const uint32_t exponent = (value & 0x7C00U) >> 10U;
-		uint32_t mantissa = value & 0x03FFU;
-
-		uint32_t bits = sign;
-
-		if ( exponent == 0U )
-		{
-			if ( mantissa != 0U )
-			{
-				/* Subnormal half: renormalize into the float32 exponent range. */
-				uint32_t unbiased = 127U - 15U + 1U;
-
-				while ( (mantissa & 0x0400U) == 0U )
-				{
-					mantissa <<= 1U;
-					--unbiased;
-				}
-
-				bits |= (unbiased << 23U) | ((mantissa & 0x03FFU) << 13U);
-			}
-		}
-		else if ( exponent == 0x1FU )
-		{
-			bits |= 0x7F800000U | (mantissa << 13U); /* Inf / NaN. */
-		}
-		else
-		{
-			bits |= ((exponent + (127U - 15U)) << 23U) | (mantissa << 13U);
-		}
-
-		return std::bit_cast< float >(bits);
-	}
 
 	/* ---- Internal push constant structures ---- */
 
@@ -1196,12 +1150,12 @@ namespace EmEn::Graphics::Effects::Camera
 					uint16_t rejectedBits = 0;
 					std::memcpy(&rejectedBits, slot.mappedPtr + sizeof(halfBits), sizeof(rejectedBits));
 
-					if ( halfToFloat(rejectedBits) > 0.5F )
+					if ( Math::halfToFloat(rejectedBits) > 0.5F )
 					{
 						++m_meteredRejectedCount;
 					}
 
-					const auto adaptedLogLum = halfToFloat(halfBits);
+					const auto adaptedLogLum = Math::halfToFloat(halfBits);
 
 					/* The shader now guarantees a plausible value, so a non-finite reading here
 					 * means the READBACK itself was corrupted: keep the last good measurement

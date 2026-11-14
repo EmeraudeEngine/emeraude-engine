@@ -38,9 +38,6 @@
  * once in a program; MSVC refuses the repeat, C4661).
  * See docs/static-analysis-ledger.md § The template guard. */
 
-/* STL inclusions. */
-#include <memory>
-
 /* Local inclusions: every header of the engine. */
 // IWYU pragma: begin_keep
 #include "Animations/AnimatableInterface.hpp"
@@ -261,7 +258,6 @@
 #include "Graphics/RenderTarget/ImposterBake.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
-#include "Graphics/RenderTarget/View.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderable/BasicGroundResource.hpp"
@@ -633,8 +629,6 @@ template class EmEn::Graphics::RenderTarget::ShadowMap< EmEn::Graphics::ViewMatr
 template class EmEn::Graphics::RenderTarget::ShadowMap< EmEn::Graphics::ViewMatricesCascadedUBO >;
 template class EmEn::Graphics::RenderTarget::Texture< EmEn::Graphics::ViewMatrices2DUBO >;
 template class EmEn::Graphics::RenderTarget::Texture< EmEn::Graphics::ViewMatrices3DUBO >;
-template class EmEn::Graphics::RenderTarget::View< EmEn::Graphics::ViewMatrices2DUBO >;
-template class EmEn::Graphics::RenderTarget::View< EmEn::Graphics::ViewMatrices3DUBO >;
 template class EmEn::Scenes::NodeCrawler< EmEn::Scenes::Node >;
 template class EmEn::Scenes::NodeCrawler< const EmEn::Scenes::Node >;
 template class EmEn::Scenes::OctreeSector< EmEn::Scenes::AbstractEntity, true >;

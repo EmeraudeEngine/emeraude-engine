@@ -26,24 +26,41 @@
 
 #include "CubemapResource.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <filesystem>
 #include <iterator>
+#include <memory>
 #include <numbers>
+#include <optional>
 
 /* STL inclusions. */
 #include <cstring>
 
+/* Third-party inclusions. */
+#include "json/json.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "Graphics/TextureResource/Abstract.hpp"
+#include "Graphics/Types.hpp"
 #include "IO/IO.hpp"
+#include "Math/Space2D/AARectangle.hpp"
 #include "PixelFactory/FileIO.hpp"
-#include "Resources/Manager.hpp"
+#include "PixelFactory/Gradient.hpp"
+#include "PixelFactory/Processor.hpp"
+#include "PixelFactory/Types.hpp"
+#include "PrimaryServices.hpp"
+#include "Resources/BaseInformation.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Graphics
 {
@@ -640,18 +657,14 @@ namespace EmEn::Graphics
 				auto * out = debugFace.data().data();
 				const auto & face = m_facesHDR[faceIndex];
 
-				const auto halfToFloat = [] (uint16_t half) {
-					const auto exponent = static_cast< int32_t >((half >> 10) & 0x1FU);
-					const auto mantissa = half & 0x3FFU;
-					if ( exponent == 0 ) { return 0.0F; }
-					return std::ldexp(1.0F + static_cast< float >(mantissa) / 1024.0F, exponent - 15);
-				};
-
 				for ( size_t index = 0; index < static_cast< size_t >(faceSize) * faceSize; ++index )
 				{
 					for ( size_t channel = 0; channel < 3; ++channel )
 					{
-						const auto value = halfToFloat(face[index * 4 + channel]);
+						/* NOTE: The tone curve below has no value for a negative or a non-finite input (and a NaN converted
+						 * to a byte is undefined behaviour): such a value is drawn black. */
+						const auto decoded = Math::halfToFloat(face[index * 4 + channel]);
+						const auto value = std::isfinite(decoded) ? std::max(decoded, 0.0F) : 0.0F;
 						out[index * 3 + channel] = static_cast< uint8_t >(std::pow(value / (1.0F + value), 1.0F / 2.2F) * 255.0F);
 					}
 				}
@@ -959,7 +972,6 @@ namespace EmEn::Graphics
 
 		return m_hemisphereIlluminanceFactor;
 	}
-
 
 	void
 	CubemapResource::extractMetadata () noexcept

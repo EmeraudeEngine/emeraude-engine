@@ -989,9 +989,10 @@ Screenshots are saved to `fileSystem().userDataDirectory("captures")`, i.e. **`<
 python3 tools/remote-console.py "Core.SceneManagerService.dumpRenderTarget(ProbeCubemap)"
 # Response: Render target 'MyProbe_...' (layer 0) dumped: "/path/to/captures/rt-dump-<timestamp>-layer0.png"
 python3 tools/remote-console.py "Core.SceneManagerService.dumpRenderTarget(ProbeCubemap, 3)"   # the -Y face
+python3 tools/remote-console.py "Core.SceneManagerService.dumpRenderTarget(ProbeCubemap, 3, -8)"   # the same face, exposed at -8 EV
 ```
 
-`dumpRenderTarget(nameFragment, layer = 0)` matches the target by NAME FRAGMENT and writes ONE layer of
+`dumpRenderTarget(nameFragment, layer = 0, exposure)` matches the target by NAME FRAGMENT and writes ONE layer of
 its color image as a PNG in the captures directory: a cubemap face (0 = +X, 1 = -X, 2 = +Y, 3 = -Y,
 4 = +Z, 5 = -Z), layer 0 of a plain target. A layer the target does not have is refused with the
 target's layer count; a negative one is refused. This is the ground-truth tool for any
@@ -1000,11 +1001,23 @@ without inferring it through a curved reflection. A target that never rendered (
 "once" probe, a suspended target) is refused cleanly instead of being read in an undefined
 layout.
 
-⚠️ **An HDR target cannot be dumped today**: `TransferManager::downloadImage()` reads the 8-bit colour
-formats and the depth / stencil formats only, and the environment probes are `R16G16B16A16_SFLOAT`
-(`Scene::createRenderToCubemap()`, 16 colour bits by default) — "Unable to download the image", format 97
-(item `render-target-download-refuses-hdr-color-formats`). The 2D target of
-`Toolkit::generateTexture2DRenderer()` is named `<name>Texture2D` (it was `<name>Cubemap` until 2026-11-14).
+**A floating-point (HDR) target gives two files** (2026-11-14; the environment probes are `R16G16B16A16_SFLOAT`,
+`Scene::createRenderToCubemap()`, 16 colour bits by default):
+
+- `rt-dump-<timestamp>-layer<N>.hdr` — Radiance RGBE, the LINEAR values (RGB; the alpha is dropped, about 1 % of
+  relative precision on the brightest channel of a pixel). This file is the measurement.
+- `rt-dump-<timestamp>-layer<N>.png` — an 8-bit sRGB rendition to LOOK at: the values times `2^exposure`, clamped,
+  then the sRGB transfer. Without the `exposure` argument it is automatic: the 99th percentile of the brightest
+  channel maps to 1, so the image is readable whatever the scene's scale (a clamp alone gives a white image on a
+  photometric scene). The reply states the exposure applied and that percentile:
+  `… dumped: …layer0.png (8-bit sRGB, exposure 2.75921 EV, automatic: the 99th percentile of the brightest channel, 0.147705, maps to 1) and …layer0.hdr (the linear values, RGB)`.
+- ⚠️ Two faces dumped with the automatic exposure are NOT comparable through their PNG (each has its own exposure):
+  pass the same `exposure` to both, or compare the `.hdr` files.
+- `exposure` is refused outside [-64, 64] stops or when it is not finite; on an 8-bit target it is ignored, with a
+  warning. A pixel holding a NaN or an infinity is written as 0 in both files and counted in a warning line.
+
+The 2D target of `Toolkit::generateTexture2DRenderer()` is named `<name>Texture2D` (it was `<name>Cubemap` until
+2026-11-14).
 
 ### Reading per-pass GPU timings (built-in profiler)
 

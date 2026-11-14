@@ -40,9 +40,6 @@ namespace EmEn::Graphics
 			case RenderTargetType::View :
 				return ViewString;
 
-			case RenderTargetType::CubicView :
-				return CubicViewString;
-
 			case RenderTargetType::ShadowMap :
 				return ShadowMapString;
 

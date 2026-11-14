@@ -40,6 +40,7 @@
 #include "CommandBuffer.hpp"
 #include "Device.hpp"
 #include "Image.hpp"
+#include "Math/Base.hpp"
 #include "PixelFactory/Types.hpp"
 #include "Sync/Fence.hpp"
 #include "Sync/ImageMemoryBarrier.hpp"
@@ -364,11 +365,8 @@ namespace EmEn::Vulkan
 	}
 
 	bool
-	TransferManager::downloadImage (const Image & sourceImage, uint32_t arrayLayer, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Pixmap< uint8_t > & pixmap) noexcept
+	TransferManager::isImageLayerDownloadable (const Image & sourceImage, uint32_t arrayLayer) const noexcept
 	{
-		/* [VULKAN-CPU-SYNC] Transfer from GPU (Abusive lock!) */
-		const Base::MutexLock lock{m_transferOperationsAccess};
-
 		if ( !this->usable() )
 		{
 			TraceError{ClassId} << "The transfer manager is not usable !";
@@ -377,8 +375,6 @@ namespace EmEn::Vulkan
 		}
 
 		const auto & imageCreateInfo = sourceImage.createInfo();
-		const auto extent = imageCreateInfo.extent;
-		const auto format = imageCreateInfo.format;
 
 		/* NOTE: Reading an image back is a TRANSFER_SRC operation, and no layout transition can
 		 * substitute for the missing usage: vkCmdCopyImageToBuffer and vkCmdBlitImage both require
@@ -406,58 +402,19 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		/* Calculate bytes per pixel based on format. */
-		uint32_t bytesPerPixel = 0;
-		ChannelMode channelMode = ChannelMode::RGBA;
+		return true;
+	}
 
-		switch ( format )
-		{
-			case VK_FORMAT_R8G8B8A8_UNORM:
-			case VK_FORMAT_B8G8R8A8_UNORM:
-			case VK_FORMAT_R8G8B8A8_SRGB:
-			case VK_FORMAT_B8G8R8A8_SRGB:
-				bytesPerPixel = 4;
-				channelMode = ChannelMode::RGBA;
-				break;
-
-			case VK_FORMAT_R8G8B8_UNORM:
-			case VK_FORMAT_B8G8R8_UNORM:
-			case VK_FORMAT_R8G8B8_SRGB:
-			case VK_FORMAT_B8G8R8_SRGB:
-				bytesPerPixel = 3;
-				channelMode = ChannelMode::RGB;
-				break;
-
-			case VK_FORMAT_D32_SFLOAT:
-			case VK_FORMAT_D32_SFLOAT_S8_UINT:
-				bytesPerPixel = 4; /* Depth as float32. */
-				channelMode = ChannelMode::Grayscale;
-				break;
-
-			case VK_FORMAT_D24_UNORM_S8_UINT:
-				bytesPerPixel = 4; /* Depth24 + Stencil8. */
-				channelMode = ChannelMode::Grayscale;
-				break;
-
-			case VK_FORMAT_S8_UINT:
-				bytesPerPixel = 1; /* Stencil only. */
-				channelMode = ChannelMode::Grayscale;
-				break;
-
-			default:
-				/* NOTE: Owner ruling (2026-10-01): an unknown format is REFUSED. Sizing it as RGBA8 gave a 16-bit
-				 * colour target (8 bytes per pixel) a staging buffer half too small: the GPU copy wrote past it. */
-				TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' has the format " << static_cast< int32_t >(format) << ", which cannot be downloaded (8-bit RGB(A) / BGR(A), UNORM or sRGB, and the depth / stencil formats only) !";
-
-				return false;
-		}
-
-		const size_t requiredBytes = static_cast< size_t >(extent.width) * extent.height * bytesPerPixel;
+	std::unique_ptr< Buffer >
+	TransferManager::copyImageLayerToHostBuffer (const Image & sourceImage, const ImageLayerRead & read, size_t requiredBytes) noexcept
+	{
+		const auto currentLayout = read.currentLayout;
+		const auto aspectMask = read.aspectMask;
 
 		/* NOTE: A temporary staging buffer of its own, CPU-cached for the read. A reusable image transfer operation is
 		 * only freed by its own fence, which this download never signalled: every call used to leave one reserved for
 		 * the engine's life (measured 2026-10-04: 13 operations busy after 13 downloads). */
-		const auto stagingBuffer = std::make_unique< Buffer >(m_device, 0, requiredBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true);
+		auto stagingBuffer = std::make_unique< Buffer >(m_device, 0, requiredBytes, VK_BUFFER_USAGE_TRANSFER_DST_BIT, true);
 		stagingBuffer->setHostReadable(true);
 		stagingBuffer->setIdentifier(ClassId, "ImageDownload", "Buffer");
 
@@ -465,7 +422,7 @@ namespace EmEn::Vulkan
 		{
 			TraceError{ClassId} << "Unable to create a " << requiredBytes << " bytes download buffer !";
 
-			return false;
+			return nullptr;
 		}
 
 		/* Use graphics command pool to match the graphics queue family. */
@@ -477,7 +434,7 @@ namespace EmEn::Vulkan
 		{
 			TraceError{ClassId} << "Unable to begin image download command buffer !";
 
-			return false;
+			return nullptr;
 		}
 
 		/* GPU checkpoint (VK_NV_device_diagnostic_checkpoints): a lost device names the last region reached. */
@@ -524,10 +481,10 @@ namespace EmEn::Vulkan
 		region.bufferImageHeight = 0;
 		region.imageSubresource.aspectMask = aspectMask;
 		region.imageSubresource.mipLevel = 0;
-		region.imageSubresource.baseArrayLayer = arrayLayer;
+		region.imageSubresource.baseArrayLayer = read.arrayLayer;
 		region.imageSubresource.layerCount = 1;
 		region.imageOffset = {.x = 0, .y = 0, .z = 0};
-		region.imageExtent = extent;
+		region.imageExtent = sourceImage.createInfo().extent;
 
 		vkCmdCopyImageToBuffer(
 			commandBuffer->handle(),
@@ -575,7 +532,7 @@ namespace EmEn::Vulkan
 		{
 			TraceError{ClassId} << "Unable to end image download command buffer !";
 
-			return false;
+			return nullptr;
 		}
 
 		// Create fence for synchronization
@@ -586,7 +543,7 @@ namespace EmEn::Vulkan
 		{
 			TraceError{ClassId} << "Unable to create image download fence !";
 
-			return false;
+			return nullptr;
 		}
 
 		/* Submit and wait. */
@@ -596,13 +553,82 @@ namespace EmEn::Vulkan
 		{
 			TraceError{ClassId} << "Unable to submit image download command buffer !";
 
-			return false;
+			return nullptr;
 		}
 
 		if ( !downloadFence->wait() )
 		{
 			TraceError{ClassId} << "Unable to wait for image download fence !";
 
+			return nullptr;
+		}
+
+		return stagingBuffer;
+	}
+
+	bool
+	TransferManager::downloadImage (const Image & sourceImage, uint32_t arrayLayer, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Pixmap< uint8_t > & pixmap) noexcept
+	{
+		/* [VULKAN-CPU-SYNC] Transfer from GPU (Abusive lock!) */
+		const Base::MutexLock lock{m_transferOperationsAccess};
+
+		if ( !this->isImageLayerDownloadable(sourceImage, arrayLayer) )
+		{
+			return false;
+		}
+
+		const auto & imageCreateInfo = sourceImage.createInfo();
+		const auto extent = imageCreateInfo.extent;
+		const auto format = imageCreateInfo.format;
+
+		/* Calculate bytes per pixel based on format. */
+		uint32_t bytesPerPixel = 0;
+		ChannelMode channelMode = ChannelMode::RGBA;
+
+		switch ( format )
+		{
+			case VK_FORMAT_R8G8B8A8_UNORM:
+			case VK_FORMAT_B8G8R8A8_UNORM:
+			case VK_FORMAT_R8G8B8A8_SRGB:
+			case VK_FORMAT_B8G8R8A8_SRGB:
+				bytesPerPixel = 4;
+				channelMode = ChannelMode::RGBA;
+				break;
+
+			case VK_FORMAT_R8G8B8_UNORM:
+			case VK_FORMAT_B8G8R8_UNORM:
+			case VK_FORMAT_R8G8B8_SRGB:
+			case VK_FORMAT_B8G8R8_SRGB:
+				bytesPerPixel = 3;
+				channelMode = ChannelMode::RGB;
+				break;
+
+			case VK_FORMAT_D32_SFLOAT:
+			case VK_FORMAT_D32_SFLOAT_S8_UINT:
+			case VK_FORMAT_D24_UNORM_S8_UINT:
+				bytesPerPixel = 4; /* The depth as a float32, or Depth24 + Stencil8. */
+				channelMode = ChannelMode::Grayscale;
+				break;
+
+			case VK_FORMAT_S8_UINT:
+				bytesPerPixel = 1; /* Stencil only. */
+				channelMode = ChannelMode::Grayscale;
+				break;
+
+			default:
+				/* NOTE: Owner ruling (2026-10-01): an unknown format is REFUSED. Sizing it as RGBA8 gave a 16-bit
+				 * colour target (8 bytes per pixel) a staging buffer half too small: the GPU copy wrote past it. */
+				TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' has the format " << static_cast< int32_t >(format) << ", which cannot be downloaded as bytes (8-bit RGB(A) / BGR(A), UNORM or sRGB, and the depth / stencil formats only; R16G16B16A16_SFLOAT goes into a Pixmap< float >) !";
+
+				return false;
+		}
+
+		const size_t requiredBytes = static_cast< size_t >(extent.width) * extent.height * bytesPerPixel;
+
+		const auto stagingBuffer = this->copyImageLayerToHostBuffer(sourceImage, {.arrayLayer = arrayLayer, .currentLayout = currentLayout, .aspectMask = aspectMask}, requiredBytes);
+
+		if ( stagingBuffer == nullptr )
+		{
 			return false;
 		}
 
@@ -620,6 +646,72 @@ namespace EmEn::Vulkan
 		stagingBuffer->unmapMemory();
 
 		return copied;
+	}
+
+	bool
+	TransferManager::downloadImage (const Image & sourceImage, uint32_t arrayLayer, VkImageLayout currentLayout, VkImageAspectFlags aspectMask, Pixmap< float > & pixmap) noexcept
+	{
+		/* [VULKAN-CPU-SYNC] Transfer from GPU (Abusive lock!) */
+		const Base::MutexLock lock{m_transferOperationsAccess};
+
+		if ( !this->isImageLayerDownloadable(sourceImage, arrayLayer) )
+		{
+			return false;
+		}
+
+		const auto & imageCreateInfo = sourceImage.createInfo();
+		const auto extent = imageCreateInfo.extent;
+
+		/* NOTE: ONE format, on purpose (owner ruling 2026-10-01: an unknown format is refused, the staging buffer is
+		 * sized from the real one). R16G16B16A16_SFLOAT is the engine's HDR colour target: the environment probes and
+		 * the scene's own target. */
+		if ( imageCreateInfo.format != VK_FORMAT_R16G16B16A16_SFLOAT )
+		{
+			TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' has the format " << static_cast< int32_t >(imageCreateInfo.format) << ", which cannot be downloaded as floats (R16G16B16A16_SFLOAT only) !";
+
+			return false;
+		}
+
+		if ( aspectMask != VK_IMAGE_ASPECT_COLOR_BIT )
+		{
+			TraceError{ClassId} << "The image '" << sourceImage.identifier() << "' is a colour image: only its colour aspect can be downloaded as floats !";
+
+			return false;
+		}
+
+		/* Four half-floats per pixel: 8 bytes, where the 8-bit path counts 4. */
+		const size_t valueCount = static_cast< size_t >(extent.width) * extent.height * 4;
+		const size_t requiredBytes = valueCount * sizeof(uint16_t);
+
+		const auto stagingBuffer = this->copyImageLayerToHostBuffer(sourceImage, {.arrayLayer = arrayLayer, .currentLayout = currentLayout, .aspectMask = aspectMask}, requiredBytes);
+
+		if ( stagingBuffer == nullptr )
+		{
+			return false;
+		}
+
+		if ( !pixmap.initialize(extent.width, extent.height, ChannelMode::RGBA) )
+		{
+			TraceError{ClassId} << "Unable to initialize a " << extent.width << "x" << extent.height << " floating-point pixmap !";
+
+			return false;
+		}
+
+		const auto * halves = stagingBuffer->mapMemoryAs< uint16_t >();
+
+		if ( halves == nullptr )
+		{
+			return false;
+		}
+
+		/* NOTE: Every value is kept as the GPU wrote it, a NaN or an infinity included: the caller decides. */
+		std::ranges::transform(std::span< const uint16_t >{halves, valueCount}, pixmap.data().begin(), [] (uint16_t half) {
+			return Math::halfToFloat(half);
+		});
+
+		stagingBuffer->unmapMemory();
+
+		return true;
 	}
 
 	BufferTransferOperation *
