@@ -35,8 +35,11 @@
 #include <filesystem>
 #include <functional>
 #include <ranges>
+#include <span>
 #include <sstream>
+#include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -52,6 +55,7 @@
 #include "CoreTypes.hpp"
 #include "FileSystem.hpp"
 #include "GamepadController.hpp"
+#include "Input/Events.hpp"
 #include "Input/KeyboardController.hpp"
 #include "Input/KeyboardListenerInterface.hpp"
 #include "Input/PointerListenerInterface.hpp"
@@ -253,6 +257,35 @@ namespace EmEn::Input
 		return context != nullptr ? context->inputManager : nullptr;
 	}
 
+	std::array< double, 2 >
+	Manager::cursorPosition (GLFWwindow * window) noexcept
+	{
+		double xPosition = 0.0;
+		double yPosition = 0.0;
+
+		glfwGetCursorPos(window, &xPosition, &yPosition);
+
+		return {xPosition, yPosition};
+	}
+
+	std::array< float, 2 >
+	Manager::scaledPointerLocation (double xPosition, double yPosition) const noexcept
+	{
+		/* NOTE: If the pointer is locked (mouse view), we don't care about computing the position. */
+		if ( this->isPointerLocked() )
+		{
+			return {0.5F, 0.5F};
+		}
+
+		if ( m_pointerCoordinatesScalingEnabled )
+		{
+			xPosition *= m_pointerScalingFactors[0];
+			yPosition *= m_pointerScalingFactors[1];
+		}
+
+		return {static_cast< float >(xPosition), static_cast< float >(yPosition)};
+	}
+
 	std::array< float, 2 >
 	Manager::pointerLocation (GLFWwindow * window) const noexcept
 	{
@@ -262,18 +295,113 @@ namespace EmEn::Input
 			return {0.5F, 0.5F};
 		}
 
-		double xPosition = 0.0;
-		double yPosition = 0.0;
+		const auto position = cursorPosition(window);
 
-		glfwGetCursorPos(window, &xPosition, &yPosition);
+		return this->scaledPointerLocation(position[0], position[1]);
+	}
 
-		if ( m_pointerCoordinatesScalingEnabled )
+	void
+	Manager::raise (const Event & event) noexcept
+	{
+		/* NOTE: A GLFW callback of a Wayland window runs under the window's native-surface lock, which the rendering
+		 * thread takes to present: nothing but the record may run there, a listener that waits for the rendering thread
+		 * (the scene access) would never return. The window's pump delivers once the lock is released. */
+		if ( m_window.isDeliveryDeferred() )
 		{
-			xPosition *= m_pointerScalingFactors[0];
-			yPosition *= m_pointerScalingFactors[1];
+			m_window.recordInputEvent(event);
+
+			return;
 		}
 
-		return {static_cast< float >(xPosition), static_cast< float >(yPosition)};
+		this->deliverEvent(event);
+	}
+
+	void
+	Manager::deliverEvent (const Event & event) noexcept
+	{
+		std::visit([this] (const auto & recorded) {
+			this->deliver(recorded);
+		}, event);
+	}
+
+	void
+	Manager::deliver (const KeyEvent & event) noexcept
+	{
+		this->dispatchKeyEvent(event.key, event.scancode, event.action, event.modifiers);
+	}
+
+	void
+	Manager::deliver (const CharacterEvent & event) noexcept
+	{
+		this->dispatchCharacter(event.codepoint);
+	}
+
+	void
+	Manager::deliver (const CursorPositionEvent & event) noexcept
+	{
+		this->processCursorPosition(event.xPosition, event.yPosition);
+	}
+
+	void
+	Manager::deliver (const CursorEnterEvent & event) noexcept
+	{
+		this->processCursorEnter(this->scaledPointerLocation(event.xPosition, event.yPosition), event.entered);
+	}
+
+	void
+	Manager::deliver (const MouseButtonEvent & event) noexcept
+	{
+		this->processMouseButton(this->scaledPointerLocation(event.xPosition, event.yPosition), event.button, event.action, event.modifiers);
+	}
+
+	void
+	Manager::deliver (const MouseWheelEvent & event) noexcept
+	{
+		this->dispatchMouseWheel(this->scaledPointerLocation(event.xPosition, event.yPosition), event.xOffset, event.yOffset, event.modifiers);
+	}
+
+	void
+	Manager::deliver (const JoystickEvent & event) noexcept
+	{
+		this->processJoystickEvent(event.deviceID, event.event);
+	}
+
+	void
+	Manager::deliver (const DroppedFilesEvent & /*event*/) noexcept
+	{
+		if ( m_recordedDrops.empty() )
+		{
+			return;
+		}
+
+		/* NOTE: One set per event, oldest first; taken out before the notification, whose observer may pump the window
+		 * again and reach the next event. */
+		const auto droppedPaths = std::move(m_recordedDrops.front());
+
+		m_recordedDrops.erase(m_recordedDrops.begin());
+
+		std::vector< std::filesystem::path > fsPaths;
+		fsPaths.reserve(droppedPaths.size());
+
+		for ( const auto & droppedPath : droppedPaths )
+		{
+			if ( auto fsPath = IO::u8path(droppedPath); IO::fileExists(fsPath) )
+			{
+				TraceDebug{ClassId} << "Path dropped : " << IO::toU8String(fsPath);
+
+				fsPaths.emplace_back(std::move(fsPath));
+			}
+			else
+			{
+				TraceWarning{ClassId} << "The file '" << IO::toU8String(fsPath) << "' does not exist or is not a regular file! Skipping ...";
+			}
+		}
+
+		/* NOTE: Only send existing files. */
+		if ( !fsPaths.empty() )
+		{
+			this->notify(DroppedFiles, fsPaths);
+		}
 	}
 
 	void
@@ -349,7 +477,7 @@ namespace EmEn::Input
 
 		if ( auto * manager = fromHandle(handle); manager != nullptr )
 		{
-			manager->dispatchKeyEvent(key, scancode, action, modifiers);
+			manager->raise(KeyEvent{.key = key, .scancode = scancode, .action = action, .modifiers = modifiers});
 		}
 	}
 
@@ -365,7 +493,7 @@ namespace EmEn::Input
 
 		if ( auto * manager = fromHandle(handle); manager != nullptr )
 		{
-			manager->dispatchCharacter(codepoint);
+			manager->raise(CharacterEvent{.codepoint = codepoint});
 		}
 	}
 
@@ -382,7 +510,7 @@ namespace EmEn::Input
 
 		if ( auto * manager = fromHandle(handle); manager != nullptr )
 		{
-			manager->dispatchCharacter(codepoint);
+			manager->raise(CharacterEvent{.codepoint = codepoint});
 		}
 	}
 
@@ -476,20 +604,17 @@ namespace EmEn::Input
 
 		if ( auto * manager = fromHandle(handle); manager != nullptr )
 		{
-			manager->processCursorPosition(xPosition, yPosition);
+			manager->raise(CursorPositionEvent{.xPosition = xPosition, .yPosition = yPosition});
 		}
 	}
 
 	void
-	Manager::processCursorEnter (GLFWwindow * window, int entered) noexcept
+	Manager::processCursorEnter (const std::array< float, 2 > & position, bool entered) noexcept
 	{
-		/* NOTE: Retrieve the pointer position to set the entering/leaving coordinates. */
-		const auto position = this->pointerLocation(window);
-
 		/* NOTE: This must always be processed to avoid bug. */
 		if ( m_moveEventsTracking != nullptr )
 		{
-			if ( entered == GLFW_TRUE )
+			if ( entered )
 			{
 				m_moveEventsTracking->onPointerEnter(position[0], position[1]);
 
@@ -512,7 +637,7 @@ namespace EmEn::Input
 				return false;
 			}
 
-			return entered == GLFW_TRUE ?
+			return entered ?
 				listener.onPointerEnter(position[0], position[1]) :
 				listener.onPointerLeave(position[0], position[1]);
 		});
@@ -530,16 +655,16 @@ namespace EmEn::Input
 
 		if ( auto * manager = fromHandle(handle); manager != nullptr )
 		{
-			manager->processCursorEnter(handle, entered);
+			/* NOTE: The position is read now: the event may be delivered after later motions (Events.hpp). */
+			const auto position = cursorPosition(handle);
+
+			manager->raise(CursorEnterEvent{.xPosition = position[0], .yPosition = position[1], .entered = entered == GLFW_TRUE});
 		}
 	}
 
 	void
-	Manager::processMouseButton (GLFWwindow * window, int button, int action, int modifiers) noexcept
+	Manager::processMouseButton (const std::array< float, 2 > & position, int32_t button, int32_t action, int32_t modifiers) noexcept
 	{
-		/* NOTE: Retrieve the pointer position to set the click coordinates. */
-		const auto position = this->pointerLocation(window);
-
 		if constexpr ( PointerInputDebugEnabled )
 		{
 			TraceDebug{ClassId} <<
@@ -586,7 +711,10 @@ namespace EmEn::Input
 	{
 		if ( auto * manager = fromHandle(handle); manager != nullptr )
 		{
-			manager->processMouseButton(handle, button, action, modifiers);
+			/* NOTE: The position is read now: the click is where the pointer was when the button changed (Events.hpp). */
+			const auto position = cursorPosition(handle);
+
+			manager->raise(MouseButtonEvent{.xPosition = position[0], .yPosition = position[1], .button = button, .action = action, .modifiers = modifiers});
 		}
 	}
 
@@ -628,8 +756,8 @@ namespace EmEn::Input
 			return;
 		}
 
-		/* NOTE: Retrieve the pointer position to set the scroll coordinates. */
-		const auto position = manager->pointerLocation(handle);
+		/* NOTE: Retrieve the pointer position to set the scroll coordinates: read now, scaled at the delivery (Events.hpp). */
+		const auto position = cursorPosition(handle);
 
 		/* NOTE: Retrieve keyboard modifiers (Ctrl, Shift, Alt, Super) during scroll */
 		int32_t modifiers = 0;
@@ -654,7 +782,13 @@ namespace EmEn::Input
 			modifiers |= GLFW_MOD_SUPER;
 		}
 
-		manager->dispatchMouseWheel(position, static_cast< float >(xOffset), static_cast< float >(yOffset), modifiers);
+		manager->raise(MouseWheelEvent{
+			.xPosition = position[0],
+			.yPosition = position[1],
+			.xOffset = static_cast< float >(xOffset),
+			.yOffset = static_cast< float >(yOffset),
+			.modifiers = modifiers
+		});
 	}
 
 	void
@@ -672,29 +806,27 @@ namespace EmEn::Input
 			return;
 		}
 
-		std::vector< std::filesystem::path > fsPaths;
-		/* NOTE: GLFW never reports a negative count; the loop below does not run when count <= 0. */
-		fsPaths.reserve(count > 0 ? static_cast< size_t >(count) : 0);
+		/* NOTE: GLFW's strings live for the callback only: copied here, one set per event. They are checked and converted
+		 * at the delivery (deliver(DroppedFilesEvent)): no file system work under the window's native-surface lock.
+		 * GLFW never reports a negative count; nothing is read when count <= 0. */
+		auto & droppedPaths = manager->m_recordedDrops.emplace_back();
 
-		for ( auto index = 0; index < count; index++ )
+		if ( count > 0 && paths != nullptr )
 		{
-			if ( auto fsPath = IO::u8path(paths[index]); IO::fileExists(fsPath) )
-			{
-				TraceDebug{ClassId} << "Path dropped : " << IO::toU8String(fsPath);
+			const std::span< const char * const > givenPaths{paths, static_cast< size_t >(count)};
 
-				fsPaths.emplace_back(std::move(fsPath));
-			}
-			else
+			droppedPaths.reserve(givenPaths.size());
+
+			for ( const auto * givenPath : givenPaths )
 			{
-				TraceWarning{ClassId} << "The file '" << IO::toU8String(fsPath) << "' does not exist or is not a regular file! Skipping ...";
+				if ( givenPath != nullptr )
+				{
+					droppedPaths.emplace_back(givenPath);
+				}
 			}
 		}
 
-		/* NOTE: Only send existing files. */
-		if ( !fsPaths.empty() )
-		{
-			manager->notify(DroppedFiles, fsPaths);
-		}
+		manager->raise(DroppedFilesEvent{});
 	}
 
 	void
@@ -751,7 +883,7 @@ namespace EmEn::Input
 
 		if ( s_joystickCallbackReceiver != nullptr )
 		{
-			s_joystickCallbackReceiver->processJoystickEvent(jid, event);
+			s_joystickCallbackReceiver->raise(JoystickEvent{.deviceID = jid, .event = event});
 		}
 	}
 
@@ -860,6 +992,9 @@ namespace EmEn::Input
 	bool
 	Manager::onTerminate () noexcept
 	{
+		/* NOTE: The dropped paths of events nobody will deliver any more. */
+		m_recordedDrops.clear();
+
 		if ( !m_window.usable() )
 		{
 			Tracer::warning(ClassId, "No handle was available!");

@@ -189,6 +189,11 @@ void Core::scheduleMainLoopCycle (int64_t delayMS) noexcept;
   native-surface lock the rendering thread takes to present, and an indefinite wait is bounded to 10 ms there
   (GLFW's timers are served at each pass). Engine `docs/caution-points.md` § *Fixed: a buffer-less commit of the
   window surface from the main thread raced the driver's present*.
+- The pump is also where the window and input events are DELIVERED on Wayland (2026-11-14): a GLFW callback records
+  under the native-surface lock (`Window::isDeliveryDeferred()`), `Window::pumpEvents()` serves the observers and the
+  input listeners once the lock is released, in the order of the callbacks. Nothing that may wait for the rendering
+  thread runs inside the dispatch. Engine `docs/caution-points.md` § *Fixed: the close button hung the application
+  on Wayland*.
 
 **Implementation**: atomic monotonic deadline (`m_scheduledCycleDueTimeMS`, sentinel
 `MainLoopCycleNotScheduled`). The cycle body is defined once in the private, non-virtual

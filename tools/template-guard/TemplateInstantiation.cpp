@@ -325,6 +325,7 @@
 #include "Help/ShortcutDoc.hpp"
 #include "Identification.hpp"
 #include "Input/ControllerInterface.hpp"
+#include "Input/Events.hpp"
 #include "Input/GamepadController.hpp"
 #include "Input/JoystickController.hpp"
 #include "Input/KeyboardController.hpp"

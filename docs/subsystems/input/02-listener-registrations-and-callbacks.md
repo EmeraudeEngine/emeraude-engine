@@ -57,6 +57,29 @@ member, set as the user pointer at creation (`Window::callbackContext(handle)`).
 - macOS: the pinch gesture monitor captures the manager; it is removed by `unlinkWindowCallbacks()` and by the
   destructor, and a second install replaces the first.
 
+### A GLFW callback records, the delivery serves the listeners (2026-11-14)
+
+Every GLFW input callback is two halves:
+1. **the callback** reads what only it can read (the key, the offsets, the cursor position and the modifiers AT that
+   moment, the dropped paths) into an `Input::Event` (`src/Input/Events.hpp`: `KeyEvent`, `CharacterEvent`,
+   `CursorPositionEvent`, `CursorEnterEvent`, `MouseButtonEvent`, `MouseWheelEvent`, `JoystickEvent`,
+   `DroppedFilesEvent`; a trivially copyable `std::variant`) and hands it to `Manager::raise()`;
+2. **the delivery** (`Manager::deliverEvent()` → the `deliver()` overloads) scales the position and serves the
+   listeners / notifies the observers.
+
+`raise()` delivers at once, except on Wayland (`Window::isDeliveryDeferred()`): there the callback runs under the
+window's native-surface lock, so the event is recorded in the window's queue (`Window::recordInputEvent()`) and
+`Window::pumpEvents()` delivers it once the lock is released, in order with the window's own notifications.
+- A listener may therefore load or remove a scene, open a dialog, wait for the rendering thread: it never runs inside
+  the GLFW dispatch on Wayland. Engine `docs/caution-points.md` § *Fixed: the close button hung the application on
+  Wayland*.
+- A new GLFW input callback goes through `raise()`, with a new event type when it carries new data; never a listener
+  call or a `notify()` from the callback.
+- The dropped paths are no plain values: one set per `DroppedFilesEvent` waits in `m_recordedDrops`, oldest first; the
+  existence check and the conversion run at the delivery.
+- The console injections (`injectKeyEvent()`, …) call the dispatch directly: they do not come from a GLFW dispatch.
+- The polled STATE (the modifier keys written by the key callback) is still written in the callback.
+
 ### Verified (Linux, 2026-10-16)
 
 - GCC Release and clang `-fsyntax-only -Wdocumentation -Wthread-safety` on the touched TUs: 0 warning; clang-tidy

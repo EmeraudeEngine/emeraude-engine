@@ -120,8 +120,18 @@ kept trace (`WAYLAND_DEBUG=1`, libwayland 1.24, which tags each request with its
 - [x] **(A) Measured on the reproducer** (2026-11-13, `default`, validation ON): the owner hovered the close button and
   moved over the title bar for more than a minute, alive, 0 `libwayland:` line, 0 VUID, 0 `WL: error` in gnome-shell's
   journal; before, 2 / 2 runs died within seconds. Still to re-check: the 37-demo sweep's 2 / 37 losses, next sweep.
-- [ ] **(B) Peers**: `Window.windows.cpp` / `Window.mac.mm` gained `waitEvents()` (a plain GLFW wait): build + a run on
-  macOS-PA and Windows-PA; LinuxB-PA is this machine. Then the lasting knowledge is already in caution-points: delete
+- [x] **(A') The lock hung the close button** (2026-11-14, Linux main, `terrain`, Debug): the handlers of the GLFW
+  callbacks ran under the lock, and the close request waited for the scene access the rendering thread held while it
+  waited for that lock. Fixed the same day: on Wayland a callback records, the pump delivers after the release
+  (`docs/caution-points.md` § *Fixed: the close button hung the application on Wayland*). Close button on the fixed
+  build: clean exit, 0 `libwayland:` line, 0 VUID; the same after a file dropped on the window. ThreadSanitizer
+  (`default`, `llvmpipe`): 0 lock-order inversion through a console stop and through the close button.
+- [ ] **(A'') Re-measure (A) on the fixed build**, on the machine that reproduced the protocol error (LinuxB, NVIDIA
+  595 + mutter 50): hover the close button and the title bar for a minute, then CLOSE WITH THE BUTTON — the pump
+  changed, and (A) was closed by the console.
+- [ ] **(B) Peers**: `Window.windows.cpp` / `Window.mac.mm` gained `waitEvents()` (a plain GLFW wait; no longer
+  `const` since 2026-11-14, a change neither file was compiled with on Linux): build + a run on macOS-PA and
+  Windows-PA, the window closed by its close button. Then the lasting knowledge is already in caution-points: delete
   this item.
 
 ## Former plan (before the attribution)
@@ -173,7 +183,10 @@ taken under X11 (`Core/Video/Window/GLFW/UsePlatform = "X11"` in a settings copy
   extra buffer-less commit, not a wrong size — but it does mean **every measurement above was taken
   on a different GLFW**, and the 1-in-8 frequency has to be re-established on the new pin before it
   is compared to anything. Step (1) is still the next action.
-- [ ] **(4) Stop cleanly on a dead display connection** (independent of (1)-(3)): make the window service detect it
+- [ ] **(4) Stop cleanly on a dead display connection** (independent of (1)-(3); seen again 2026-11-14 on the fixed
+  pump, four gdb samples in libdecor-gtk 0.2.2's loop: `igpu-presentation-under-nvidia-wayland` § Observed
+  2026-11-14 — GLFW's `handleEvents()` calls `libdecor_dispatch()` first, `wl_window.c:1400`, so the test must come
+  BEFORE the engine calls GLFW): make the window service detect it
   (`wl_display_get_error()` through GLFW, or a GLFW error callback) and stop the application instead of entering
   libdecor's loop; then `Core.shutdown()` and SIGTERM must work after a lost surface. Also closes the second defect of
   `igpu-presentation-under-nvidia-wayland` (re-check it there once done).

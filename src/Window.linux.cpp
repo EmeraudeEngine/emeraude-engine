@@ -381,7 +381,7 @@ namespace EmEn
 	}
 
 	void
-	Window::waitEvents (double timeoutSeconds) const noexcept
+	Window::waitEvents (double timeoutSeconds) noexcept
 	{
 		const auto & client = waylandClient();
 
@@ -391,16 +391,21 @@ namespace EmEn
 		{
 			/* NOTE: X11, a window-less run, or libwayland out of reach: GLFW's own wait, under the lock when it matters
 			 * (the lock owns nothing outside Wayland). */
-			const auto surfaceLock = this->lockNativeSurface();
+			{
+				const auto surfaceLock = this->lockNativeSurface();
 
-			if ( timeoutSeconds > 0.0 )
-			{
-				glfwWaitEventsTimeout(timeoutSeconds);
+				if ( timeoutSeconds > 0.0 )
+				{
+					glfwWaitEventsTimeout(timeoutSeconds);
+				}
+				else
+				{
+					glfwWaitEvents();
+				}
 			}
-			else
-			{
-				glfwWaitEvents();
-			}
+
+			/* NOTE: What the callbacks recorded under the lock (Wayland without libwayland's reader entry points). */
+			this->deliverRecordedEvents();
 
 			return;
 		}

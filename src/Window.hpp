@@ -40,6 +40,7 @@
 #include <mutex>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -51,7 +52,9 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Hash/FNV1a.hpp"
 #include "Identification.hpp"
+#include "Input/Events.hpp"
 #include "ScopedRegistration.hpp"
 #include "StaticVector.hpp"
 #include "Vulkan/Surface.hpp"
@@ -331,6 +334,34 @@ namespace EmEn
 				}
 
 				return static_cast< CallbackContext * >(glfwGetWindowUserPointer(handle));
+			}
+
+			/**
+			 * @brief Returns whether an event raised by a GLFW callback is recorded for the next pump (pumpEvents()) rather
+			 * than delivered at once [MAIN THREAD].
+			 * @details True on Wayland while the window exists: every GLFW callback may run under the native-surface lock
+			 * (lockNativeSurface()), which the rendering thread takes to present, so nothing that may wait for that thread
+			 * runs in a callback. False elsewhere: the lock owns nothing and a callback delivers at once.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isDeliveryDeferred () const noexcept
+			{
+				return m_nativeSurfaceSerialized && m_handle != nullptr;
+			}
+
+			/**
+			 * @brief Records an input event read by a GLFW callback: pumpEvents() hands it back to the attached input manager
+			 * (Input::Manager::deliverEvent()), in the order of the callbacks, once the native-surface lock is released
+			 * [MAIN THREAD].
+			 * @pre isDeliveryDeferred().
+			 * @param event A reference to the event.
+			 */
+			void
+			recordInputEvent (const Input::Event & event) noexcept
+			{
+				m_recordedEvents.emplace_back(event);
 			}
 
 			/**
@@ -727,18 +758,27 @@ namespace EmEn
 			 * failed to), where glfwPollEvents() would raise GLFW_NOT_INITIALIZED at every pump.
 			 * @note The dispatch runs under the native-surface lock (lockNativeSurface()): GLFW and libdecor commit the
 			 * surface from their handlers. A wait on the main thread goes through waitEvents().
+			 * @note On Wayland the GLFW callbacks only RECORD under that lock (isDeliveryDeferred()); the observers and the
+			 * input listeners are served here, in the order of the callbacks, once the lock is released: a handler may wait
+			 * for the rendering thread (the close request removes the scene), which takes the lock to present. This is the
+			 * single delivery point: an event recorded by a Window method that commits (resize(), show()...) is delivered
+			 * by the next pump. A handler may pump again (a native dialog's modal loop): the delivery goes on from there.
 			 */
 			void
-			pumpEvents () const noexcept
+			pumpEvents () noexcept
 			{
 				if ( m_handle == nullptr )
 				{
 					return;
 				}
 
-				const auto surfaceLock = this->lockNativeSurface();
+				{
+					const auto surfaceLock = this->lockNativeSurface();
 
-				glfwPollEvents();
+					glfwPollEvents();
+				}
+
+				this->deliverRecordedEvents();
 			}
 
 			/**
@@ -751,9 +791,10 @@ namespace EmEn
 			 * presents meanwhile. GLFW's own timers (key repeat, cursor animation) are served at the next pass, at most the
 			 * timeout away, which is why an indefinite wait is bounded to WaylandIndefiniteWaitMilliseconds there. Elsewhere
 			 * this is glfwWaitEventsTimeout() / glfwWaitEvents().
+			 * @note The events recorded under the lock are delivered before this returns (pumpEvents()).
 			 * @param timeoutSeconds The longest wait, in seconds; zero or negative waits until an event.
 			 */
-			void waitEvents (double timeoutSeconds) const noexcept;
+			void waitEvents (double timeoutSeconds) noexcept;
 
 			/**
 			 * @brief Serializes the requests sent to the window's native surface between the thread that pumps the window
@@ -764,10 +805,12 @@ namespace EmEn
 			 * the sequence. A commit of the same surface from the main thread in between (libdecor redraws the title bar
 			 * and commits the toplevel on EVERY pointer motion over it; GLFW commits on a configure, a show, a hide) reaches
 			 * the compositor with the points set and no buffer attached: a protocol error, the connection is killed and the
-			 * engine stops (exit code 96). Measured 2026-11-13 (NVIDIA 595, mutter 50; docs/caution-points.md). The lock is
-			 * recursive: a GLFW callback dispatched under it may pump again (the force-quit dialog Core::stop() opens from
-			 * the close request). Elsewhere (X11, Windows, macOS) the presentation engine shares no per-commit contract with
-			 * the toolkit and the returned lock owns nothing.
+			 * engine stops (exit code 96). Measured 2026-11-13 (NVIDIA 595, mutter 50; docs/caution-points.md). Elsewhere
+			 * (X11, Windows, macOS) the presentation engine shares no per-commit contract with the toolkit and the returned
+			 * lock owns nothing.
+			 * @warning The rendering thread takes it while it holds the scene access: on the main thread NOTHING runs under
+			 * it but GLFW, libdecor and the record of a callback's event (isDeliveryDeferred()). A notification or a listener
+			 * served under it that waits for the rendering thread never returns (the close button's deadlock, 2026-11-14).
 			 * @return std::unique_lock< std::recursive_mutex > Owning on Wayland, empty elsewhere.
 			 */
 			[[nodiscard]]
@@ -1127,6 +1170,21 @@ namespace EmEn
 			static void windowCloseCallback (GLFWwindow * window) noexcept;
 
 			/**
+			 * @brief Hands a notification raised by a GLFW callback to its delivery: recorded for the next pump while the
+			 * delivery is deferred (isDeliveryDeferred()), notified at once otherwise [MAIN THREAD].
+			 * @param code The notification code.
+			 */
+			void raiseNotification (NotificationCode code) noexcept;
+
+			/**
+			 * @brief Serves the recorded events to the observers and to the attached input manager, oldest first, until none
+			 * is left [MAIN THREAD].
+			 * @pre The calling thread does not hold the native-surface lock.
+			 * @note Re-entrant: a handler that pumps the window again continues the same queue.
+			 */
+			void deliverRecordedEvents () noexcept;
+
+			/**
 			 * @brief Notifies the window is focused by the host system.
 			 * @param window A pointer to the system window handle.
 			 * @param focused The state from the OS.
@@ -1189,6 +1247,16 @@ namespace EmEn
 			static LRESULT CALLBACK windowProc (HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 #endif
 
+			/** @brief A notification raised by a GLFW callback of this window, waiting for its delivery (pumpEvents()). */
+			struct RecordedNotification final
+			{
+				NotificationCode code{MaxEnum};
+			};
+
+			/** @brief What a GLFW callback records while the delivery is deferred (isDeliveryDeferred()): the window's own
+			 * notifications and the input manager's events share ONE queue, so the order of the callbacks is kept. */
+			using RecordedEvent = std::variant< RecordedNotification, Input::Event >;
+
 			/* An indefinite wait on Wayland polls the display only: GLFW's timers are served at each pass (waitEvents()). */
 			static constexpr int WaylandIndefiniteWaitMilliseconds{10};
 
@@ -1200,8 +1268,12 @@ namespace EmEn
 			/* The window user pointer of m_handle: its address is stable for the Window's whole life. */
 			CallbackContext m_callbackContext{.window = this, .inputManager = nullptr};
 			std::unique_ptr< Vulkan::Surface > m_surface;
-			/* The native-surface lock (lockNativeSurface()): recursive, the close request's dialog pumps again under it. */
+			/* The native-surface lock (lockNativeSurface()). */
 			mutable std::recursive_mutex m_nativeSurfaceAccess;
+			/* What the GLFW callbacks recorded under that lock, and the next one to deliver (deliverRecordedEvents()): main
+			 * thread only. The storage is kept from one pump to the next. */
+			std::vector< RecordedEvent > m_recordedEvents;
+			size_t m_recordedEventCursor{0};
 #if IS_WINDOWS
 			WNDPROC m_originalWndProc{nullptr};
 #endif

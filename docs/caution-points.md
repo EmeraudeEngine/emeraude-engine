@@ -6563,9 +6563,11 @@ recursive mutex that owns nothing outside Wayland:
 - the rendering thread holds it around `vkQueuePresentKHR()` (`Renderer::renderFrame()`) and the swap-chain creation
   and recreation (their protocol work on the surface);
 - the main thread holds it around every GLFW dispatch (`Window::pumpEvents()`, `executeWithoutCallbacks()`) and every
-  Window method that commits (title, size, show, hide, iconify, restore, maximize, focus, monitor);
-- recursive because a GLFW callback dispatched under it may pump again: the close request calls `Core::stop()`, whose
-  force-quit dialog pumps the window from its modal loop (`executeCommandPumpingEvents()`);
+  Window method that commits (title, size, show, hide, iconify, restore, maximize, focus, monitor) — around GLFW's and
+  libdecor's own work ONLY: since 2026-11-14 a GLFW callback records its event and the handlers run after the release
+  (next section; the first version served them under the lock and hung on the close button);
+- recursive, kept as such: since 2026-11-14 no handler runs under it, so nothing re-enters it any more (the force-quit
+  dialog of `Core::stop()` used to pump the window again from inside the dispatch);
 - `Window::waitEvents(timeout)` is THE wait of the main loop (`Input::Manager::waitSystemEvents()`) and of any
   main-thread wait that must keep the window alive: on Wayland it pumps under the lock, registers as a reader of the
   connection (`wl_display_prepare_read`, retried after a pump while the default queue holds events, bounded), `poll()`s
@@ -6590,6 +6592,79 @@ clean `Core.shutdown()`.
 - The first capture was lost to the tool's `@` regexes (libwayland now writes `wl_surface#36`): a capture tool is
   checked against the library's current output before a measurement is trusted, and a "clean" run with a dead client
   in the journal is a tool defect, not a result.
+
+### Fixed: the close button hung the application on Wayland — a handler served under the native-surface lock (2026-11-14)
+
+> **Symptom (owner, Debian 13, GNOME on Wayland, RTX 3070 Ti / NVIDIA 620.70.06, `terrain`, Debug, validation layer ON,
+> the day after the lock above):** a click on the window's close button froze the application for good. The journal
+> ends on `Removing the act 'terrain' ...`; no exit; SIGTERM ignored (the main loop turns it into a stop, and the main
+> loop was the blocked thread). 1 run / 1. `Core.shutdown()` from the console stopped the same build in 3.7 s.
+
+**The cycle, read in the hung process** (`gdb -p <pid>`, `thread apply all bt`):
+
+| Thread | Holds | Waits for |
+|---|---|---|
+| main | the native-surface lock, taken by `Window::pumpEvents()` around `glfwPollEvents()` | the scene access, EXCLUSIVE: `libdecorFrameHandleClose` → `Window::windowCloseCallback()` → `notify(OSRequestsToTerminate)` → `Core::stop()` → the application's `onBeforeCoreStop()` → `Scenes::Manager::disableActiveScene()` |
+| rendering | the scene access, SHARED (`withSharedActiveScene()`) | the native-surface lock, before `vkQueuePresentKHR()` (`Renderer::renderFrame()`) |
+| logic | nothing | the announced writer (`waitForAnnouncedExclusiveAccesses()`) |
+
+Read beside the stacks: the owner of `m_nativeSurfaceAccess` was the main thread's LWP, and the scene's
+`pthread_rwlock_t` held `__readers = 10` (one reader, the writer-waiting bit) with `__cur_writer = 0`.
+
+**Cause.** The lock above was taken around every GLFW dispatch, hence around every GLFW CALLBACK and around everything
+a callback notifies: an observer or a listener that waits for the rendering thread there never returns. The close
+request was the measured case. A key or a dropped file that loads a scene had the same shape, and so had
+`Window::resize()`: on Wayland `glfwSetWindowSize()` calls the framebuffer-size callback back synchronously, under the
+lock the method took. The console's stop was spared because it does not run inside the dispatch. Never in a release
+(the lock landed after 1.3.0).
+
+**Fix (owner decisions 2026-11-14: deliver after the dispatch; only where the lock is owned; typed events; one ordered
+queue owned by the window; the next pump is the single delivery point).**
+- On Wayland (`Window::isDeliveryDeferred()`) a GLFW callback only RECORDS. The window's callbacks push a
+  `RecordedNotification` (`Window::raiseNotification()`); the input manager's push an `Input::Event`
+  (`src/Input/Events.hpp`, through `Input::Manager::raise()` → `Window::recordInputEvent()`): plain values read IN the
+  callback, so a click keeps the cursor position it had. One `std::vector`, its storage kept from one pump to the next:
+  no allocation in steady state, pointer motion included.
+- `Window::pumpEvents()` releases the lock, THEN `deliverRecordedEvents()` serves the observers (`notify()`) and the
+  input manager (`Input::Manager::deliverEvent()`) in the order of the callbacks. A handler may pump again (the
+  force-quit dialog of `Core::stop()`, an act built while the main thread pumps): the delivery goes on from the same
+  queue. A side effect: such a nested pump no longer re-enters `glfwPollEvents()` from one of GLFW's own callbacks.
+- An event recorded by a `Window` method that commits (`resize()`, `show()`, …) is delivered by the NEXT pump, at most
+  ~10 ms away in the main loop — as on X11, where those notifications come through the event loop anyway. The window's
+  STATE (`m_state`, the published framebuffer size) is still written in the callback itself.
+- Elsewhere (X11, Windows, macOS, a window-less run) the lock owns nothing and a callback delivers at once, as before.
+- Dropped files: the paths are copied in the callback (one set per event, kept by the manager) and checked / converted
+  at the delivery — no file-system work under the lock.
+
+**Measured (2026-11-14, the same machine, `terrain`, Debug, validation layer ON and proven loaded):** before, close
+button: hung 1 / 1; after, close button: `Stop requested by the window system`, the act removed, `Core level
+terminated`, exit 0, 0 `VUID-`, 0 VMA assertion, 0 `libwayland:` line. The console's stop: clean before and after.
+On the final binary the owner dropped a file on the window first (a non-ASCII path, delivered: `Path dropped : …`),
+then closed with the button: the same clean exit.
+
+**The tool's reading (ThreadSanitizer, GCC 14.2).** A control program of the same shape — a recursive mutex and a
+shared mutex taken in both orders by two threads, one after the other — reports `lock-order-inversion (potential
+deadlock)` with the old order and nothing with the new one: the detector does see this shape, read side included.
+Two engine runs (Debug + TSan, projet-alpha `default`, `--disable-cef`, the `llvmpipe` device forced — the NVIDIA
+driver dies under TSan and the Intel iGPU cannot present to this compositor): the start, the act's build, 9 minutes of
+rendering and a console stop; then a start and the window's CLOSE BUTTON (`Stop requested by the window system`, the
+act removed, `Core level terminated`, exit code 0). Both: 0 lock-order inversion, 0 report naming `Window` or
+`Input::Manager` (the 13 and 9 data races they did report are the logic / rendering family already filed and three
+new items).
+
+**Rules.**
+- ⚠️ **On the main thread NOTHING runs under the native-surface lock but GLFW, libdecor and the record of an event**: no
+  `notify()`, no listener, no file-system work. A lock taken around a dispatch is taken around every handler the
+  dispatch reaches, and the rendering thread takes this one while it holds the scene access. It is the general rule
+  (never emit while holding a mutex a handler may take) applied to a lock that looked local to the window.
+- A new GLFW callback raises its event through `Window::raiseNotification()` or `Input::Manager::raise()`, never
+  through `notify()` or a listener call.
+- A stop from the console proves nothing about the close button: they reach `Core::stop()` from different places of
+  the main loop. A teardown is checked through BOTH.
+- Reading a hung instance: `gdb -q -batch -iex "set debuginfod enabled off" -p <pid> -ex "thread apply all bt"`
+  **from the binary's directory** (the engine library and CEF are loaded by relative path: from elsewhere every engine
+  frame reads `??`). `print this->m_nativeSurfaceAccess._M_mutex.__data.__owner` in the waiter's frame names the
+  holder's LWP. A hung instance ignores SIGTERM: kill it by PID once the stacks are saved.
 
 ### Fixed: the render thread waited on the compositor while holding the scene lock (Sep 2026)
 

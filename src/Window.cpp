@@ -34,12 +34,25 @@
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <sstream>
+#include <variant>
+
+/* Third-party inclusions. */
+#include "GLFW/glfw3.h"
+#include "volk.h"
 
 /* Local inclusions. */
+#include "Any.hpp"
 #include "Arguments.hpp"
+#include "BlobTrait.hpp"
+#include "CoreTypes.hpp"
+#include "Input/Events.hpp"
+#include "Input/Manager.hpp"
 #include "PlatformManager.hpp"
 #include "PrimaryServices.hpp"
 #include "SettingKeys.hpp"
+#include "Settings.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/Device.hpp"
 #include "Vulkan/Instance.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
@@ -418,6 +431,10 @@ namespace EmEn
 		/* Reset the window pointer.
 		 * NOTE: It will automatically remove all callbacks. */
 		m_handle.reset();
+
+		/* NOTE: What the last dispatch recorded has nobody left to reach. */
+		m_recordedEvents.clear();
+		m_recordedEventCursor = 0;
 
 		m_monitorCallbackRegistration.reset();
 
@@ -1712,6 +1729,47 @@ namespace EmEn
 	}
 
 	void
+	Window::raiseNotification (NotificationCode code) noexcept
+	{
+		/* NOTE: A GLFW callback of a Wayland window runs under the native-surface lock, which the rendering thread takes
+		 * to present while it holds the scene access: nothing but the record may run there. An observer that waits for
+		 * the rendering thread (Core::stop() removes the scene) would never return. pumpEvents() delivers. */
+		if ( this->isDeliveryDeferred() )
+		{
+			m_recordedEvents.emplace_back(RecordedNotification{.code = code});
+
+			return;
+		}
+
+		this->notify(code);
+	}
+
+	void
+	Window::deliverRecordedEvents () noexcept
+	{
+		while ( m_recordedEventCursor < m_recordedEvents.size() )
+		{
+			/* NOTE: Taken by value and counted as delivered FIRST: a handler may pump the window again (a native dialog's
+			 * modal loop), which appends to the queue, delivers what follows from here and leaves the queue empty. */
+			const auto recorded = m_recordedEvents[m_recordedEventCursor];
+
+			++m_recordedEventCursor;
+
+			if ( const auto * notification = std::get_if< RecordedNotification >(&recorded); notification != nullptr )
+			{
+				this->notify(notification->code);
+			}
+			else if ( const auto * inputEvent = std::get_if< Input::Event >(&recorded); inputEvent != nullptr && m_callbackContext.inputManager != nullptr )
+			{
+				m_callbackContext.inputManager->deliverEvent(*inputEvent);
+			}
+		}
+
+		m_recordedEvents.clear();
+		m_recordedEventCursor = 0;
+	}
+
+	void
 	Window::framebufferSizeCallback (GLFWwindow * window, int width, int height) noexcept
 	{
 		if constexpr ( WindowEventsDebugEnabled )
@@ -1742,7 +1800,7 @@ namespace EmEn
 			_this->m_state.windowHeight = static_cast< uint32_t >(heightPts);
 		}
 
-		_this->notify(OSNotifiesFramebufferResized);
+		_this->raiseNotification(OSNotifiesFramebufferResized);
 	}
 
 	void
@@ -1760,7 +1818,7 @@ namespace EmEn
 			return;
 		}
 
-		_this->notify(OSRequestsToRefreshContent);
+		_this->raiseNotification(OSRequestsToRefreshContent);
 	}
 
 	void
@@ -1791,7 +1849,7 @@ namespace EmEn
 			&_this->m_state.borderBottomSize
 		);
 
-		_this->notify(OSNotifiesWindowResized);
+		_this->raiseNotification(OSNotifiesWindowResized);
 	}
 
 	void
@@ -1813,7 +1871,7 @@ namespace EmEn
 		_this->m_state.windowXPosition = xPosition;
 		_this->m_state.windowYPosition = yPosition;
 
-		_this->notify(OSNotifiesWindowMovedTo);
+		_this->raiseNotification(OSNotifiesWindowMovedTo);
 	}
 
 	void
@@ -1842,7 +1900,7 @@ namespace EmEn
 		if ( s_monitorCallbackReceiver != nullptr )
 		{
 			s_monitorCallbackReceiver->refreshMonitorDevices();
-			s_monitorCallbackReceiver->notify(OSMonitorConfigurationChanged);
+			s_monitorCallbackReceiver->raiseNotification(OSMonitorConfigurationChanged);
 		}
 	}
 
@@ -1869,13 +1927,13 @@ namespace EmEn
 		 * no user's close, the engine must stop on its own (Core::stopOnDisplayLoss()). */
 		if ( _this->isDisplayConnectionLost() )
 		{
-			_this->notify(OSLostDisplayConnection);
+			_this->raiseNotification(OSLostDisplayConnection);
 
 			return;
 		}
 
 		/* Send the signal to the engine */
-		_this->notify(OSRequestsToTerminate);
+		_this->raiseNotification(OSRequestsToTerminate);
 	}
 
 	void
@@ -1893,7 +1951,7 @@ namespace EmEn
 			return;
 		}
 
-		_this->notify(focused == GLFW_TRUE ? OSNotifiesWindowGetFocus : OSNotifiesWindowLostFocus);
+		_this->raiseNotification(focused == GLFW_TRUE ? OSNotifiesWindowGetFocus : OSNotifiesWindowLostFocus);
 	}
 
 	void
@@ -1911,7 +1969,7 @@ namespace EmEn
 			return;
 		}
 
-		_this->notify(hidden == GLFW_TRUE ? OSNotifiesWindowHidden : OSNotifiesWindowVisible);
+		_this->raiseNotification(hidden == GLFW_TRUE ? OSNotifiesWindowHidden : OSNotifiesWindowVisible);
 	}
 
 	void
@@ -1929,7 +1987,7 @@ namespace EmEn
 			return;
 		}
 
-		_this->notify(maximized == GLFW_TRUE ? OSNotifiesWindowSizeMaximized : OSNotifiesWindowSizeMinimized);
+		_this->raiseNotification(maximized == GLFW_TRUE ? OSNotifiesWindowSizeMaximized : OSNotifiesWindowSizeMinimized);
 	}
 
 	void
@@ -1951,6 +2009,6 @@ namespace EmEn
 		_this->m_state.contentXScale = xScale;
 		_this->m_state.contentYScale = yScale;
 
-		_this->notify(OSRequestsToRescaleContentBy);
+		_this->raiseNotification(OSRequestsToRescaleContentBy);
 	}
 }

@@ -37,6 +37,7 @@
 #include <cstddef>
 #include <array>
 #include <set>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -49,15 +50,21 @@
 #include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Events.hpp"
+#include "Hash/FNV1a.hpp"
 #include "KeyboardController.hpp"
-#include "KeyboardListenerInterface.hpp"
 #include "PointerController.hpp"
-#include "PointerListenerInterface.hpp"
 #include "ScopedRegistration.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
+	namespace Input
+	{
+		class KeyboardListenerInterface;
+		class PointerListenerInterface;
+	}
+
 	class PrimaryServices;
 	class Window;
 }
@@ -396,6 +403,16 @@ namespace EmEn::Input
 			void unlockPointer () noexcept;
 
 			/**
+			 * @brief Delivers an input event read by a GLFW callback to the listeners and the observers [MAIN THREAD].
+			 * @details The second half of every GLFW input callback. It runs at once where the window delivers at once, and
+			 * from the window's pump (Window::pumpEvents()) where the callback ran under the native-surface lock (Wayland,
+			 * Window::isDeliveryDeferred()): a listener may then wait for the rendering thread, which takes that lock to
+			 * present.
+			 * @param event A reference to the event.
+			 */
+			void deliverEvent (const Event & event) noexcept;
+
+			/**
 			 * @brief Copies the device states, then waits for a system event (Window::waitEvents()) [MAIN THREAD].
 			 * @param until Sets a duration until the cancellation of the waiting in seconds; zero waits until an event.
 			 */
@@ -613,6 +630,40 @@ namespace EmEn::Input
 			static Manager * fromHandle (GLFWwindow * handle) noexcept;
 
 			/**
+			 * @brief Hands an event read by a GLFW callback to its delivery: recorded in the window's queue while the window
+			 * defers the delivery (Window::isDeliveryDeferred()), delivered at once otherwise [MAIN THREAD].
+			 * @param event A reference to the event.
+			 */
+			void raise (const Event & event) noexcept;
+
+			/** @brief Delivers a key event (deliverEvent()). */
+			void deliver (const KeyEvent & event) noexcept;
+
+			/** @brief Delivers a typed character (deliverEvent()). */
+			void deliver (const CharacterEvent & event) noexcept;
+
+			/** @brief Delivers a pointer motion (deliverEvent()). */
+			void deliver (const CursorPositionEvent & event) noexcept;
+
+			/** @brief Delivers the pointer entering or leaving the window (deliverEvent()). */
+			void deliver (const CursorEnterEvent & event) noexcept;
+
+			/** @brief Delivers a pointer button event (deliverEvent()). */
+			void deliver (const MouseButtonEvent & event) noexcept;
+
+			/** @brief Delivers a wheel event (deliverEvent()). */
+			void deliver (const MouseWheelEvent & event) noexcept;
+
+			/** @brief Delivers a joystick or gamepad connection change (deliverEvent()). */
+			void deliver (const JoystickEvent & event) noexcept;
+
+			/**
+			 * @brief Delivers the oldest set of dropped files (deliverEvent()): the paths that exist are notified as
+			 * DroppedFiles, the others are traced and skipped.
+			 */
+			void deliver (const DroppedFilesEvent & event) noexcept;
+
+			/**
 			 * @brief Serves a key event to the keyboard listeners.
 			 * @param key The key code.
 			 * @param scancode The OS scancode (0 for an injected event).
@@ -645,19 +696,19 @@ namespace EmEn::Input
 
 			/**
 			 * @brief Handles the cursor entering or leaving the window.
-			 * @param window The GLFW window.
-			 * @param entered GLFW_TRUE when entering.
+			 * @param position The pointer position when the event occurred (scaledPointerLocation()).
+			 * @param entered True when entering.
 			 */
-			void processCursorEnter (GLFWwindow * window, int entered) noexcept;
+			void processCursorEnter (const std::array< float, 2 > & position, bool entered) noexcept;
 
 			/**
 			 * @brief Handles a pointer button event.
-			 * @param window The GLFW window.
+			 * @param position The pointer position when the event occurred (scaledPointerLocation()).
 			 * @param button Which pointer button.
 			 * @param action Pressed or released.
 			 * @param modifiers The modifier keys mask.
 			 */
-			void processMouseButton (GLFWwindow * window, int button, int action, int modifiers) noexcept;
+			void processMouseButton (const std::array< float, 2 > & position, int32_t button, int32_t action, int32_t modifiers) noexcept;
 
 			/**
 			 * @brief Handles a joystick or gamepad connection change.
@@ -694,6 +745,24 @@ namespace EmEn::Input
 			 */
 			[[nodiscard]]
 			std::array< float, 2 > pointerLocation (GLFWwindow * window) const noexcept;
+
+			/**
+			 * @brief Returns the pointer location the listeners are given for a GLFW cursor position: the fixed centre while
+			 * the pointer is locked, else the position with the pointer scaling applied.
+			 * @param xPosition The X position of the cursor, as GLFW gave it.
+			 * @param yPosition The Y position of the cursor, as GLFW gave it.
+			 * @return std::array< float, 2 >
+			 */
+			[[nodiscard]]
+			std::array< float, 2 > scaledPointerLocation (double xPosition, double yPosition) const noexcept;
+
+			/**
+			 * @brief Returns the cursor position of a GLFW window, as GLFW gives it [MAIN THREAD].
+			 * @param window A pointer to the window.
+			 * @return std::array< double, 2 >
+			 */
+			[[nodiscard]]
+			static std::array< double, 2 > cursorPosition (GLFWwindow * window) noexcept;
 
 			/**
 			 * @brief The callback for the glfw API to handle key inputs.
@@ -795,6 +864,8 @@ namespace EmEn::Input
 			std::vector< PointerListenerInterface * > m_pointerListeners;
 			std::vector< KeyboardListenerInterface * > m_pendingKeyboardListeners;
 			std::vector< std::pair< PointerListenerInterface *, bool > > m_pendingPointerListeners;
+			/* The paths of the dropped files not delivered yet: one set per DroppedFilesEvent, oldest first (main thread). */
+			std::vector< std::vector< std::string > > m_recordedDrops;
 			/** @brief The listener served first, kept at index 0 of the vector above — the whole
 			 * invariant, which is why the dispatch loops need no special case. nullptr when none. */
 			PointerListenerInterface * m_priorityPointerListener{nullptr};

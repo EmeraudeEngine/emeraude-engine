@@ -48,6 +48,20 @@ connection*), and it still leaves the compositor's `xdg_wm_base.ping` unanswered
   then a null allocator and TSan's DEADLYSIGNAL) with `CloudShape… is still used 3 times` just before: to check on
   the Linux workstation in Debug WITHOUT TSan, terrain closed by the close button, on this commit and on its
   parent (a Release close is silent: VMA asserts are compiled out).
+  **Checked 2026-11-14 on the Linux workstation (Debian 13, RTX 3070 Ti, NVIDIA 620.70.06, Debug WITHOUT TSan,
+  validation ON): NOT reproduced.** `Core.shutdown()` 20 s after the start: exit 0 in 3.7 s, 0 VMA assertion, 0 VUID,
+  32 `CloudShapeResource` unloaded. The close button first HUNG there (the native-surface lock's deadlock, engine
+  item `wayland-surface-lost-protocol-error` (A'), fixed the same day); on the fixed build the close button exits 0
+  with 0 VMA assertion, 0 VUID, the same 32 cloud shapes unloaded. What still differs from the laptop's run: TSan
+  itself (its timing) and the RADV device.
+  **A mechanism with this exact signature was found the same day** (Debug + TSan, `default`): a stop SERVED WHILE THE
+  ACT IS STILL BEING BUILT — the pump of `Stage::buildPumpingWindow()` delivers it — runs the application's stop hook
+  before the act exists for the stage; the act is activated afterwards and destroyed after the engine, its scene
+  releasing buffers on a dead allocator (7 VMA "not freed" assertions, a null allocator, a real SIGSEGV in
+  `vmaDestroyBuffer`, which TSan prints as DEADLYSIGNAL). Filed downstream: projet-alpha item
+  `stop-during-act-build-crashes-at-exit`. Whether the laptop's close came during terrain's 415 s load was not
+  recorded: ask the owner, or reproduce there with a close DURING the load. ⚠️ The Intel UHD 770 cannot stand in for
+  the Mesa device here (`igpu-presentation-under-nvidia-wayland`).
 - [ ] `world-lobby` and `jungle-ruins` (their USD loads are now synchronous on the Stage's worker) on a machine that has
   the USD assets: the Ubuntu laptop's data checkout has no `data-stores/USD/`, so both failed there for the missing
   file, cleanly (2026-11-13: exit 0, 0 loss, 0 VUID, the failure traced by the worker).

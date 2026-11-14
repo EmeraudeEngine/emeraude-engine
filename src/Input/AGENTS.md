@@ -239,6 +239,11 @@ Whether scaling is enabled is decided by **`Core::updatePointerScaling()`** (`Co
   window's callback context (no static instance):
   [`docs/subsystems/input/02-listener-registrations-and-callbacks.md`](../../docs/subsystems/input/02-listener-registrations-and-callbacks.md).
 
+- **A GLFW callback records, the delivery serves the listeners** — an `Input::Event` (`Events.hpp`) raised by the
+  callback, delivered at once, or by the window's pump on Wayland (never under the window's native-surface lock):
+  [`docs/subsystems/input/02-listener-registrations-and-callbacks.md`](../../docs/subsystems/input/02-listener-registrations-and-callbacks.md)
+  § A GLFW callback records.
+
 - **The device state crosses threads** — written on the main thread, polled by the logic thread (the player): one
   `std::atomic` per key / button / axis / hat, relaxed, no whole-device snapshot; the TSan proof `EmeraudeInputStateStress`:
   [`docs/subsystems/input/03-device-state-across-threads.md`](../../docs/subsystems/input/03-device-state-across-threads.md).

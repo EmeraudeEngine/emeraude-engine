@@ -237,7 +237,7 @@ namespace EmEn
 	}
 
 	void
-	Window::waitEvents (double timeoutSeconds) const noexcept
+	Window::waitEvents (double timeoutSeconds) noexcept
 	{
 		/* NOTE: No native-surface lock to split the wait around (Wayland only, Window.linux.cpp). */
 		if ( timeoutSeconds > 0.0 )
