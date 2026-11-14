@@ -131,7 +131,10 @@ to 4 cores).
   `play()`, then `Core.shutdown()` 0.5 s later): before (Release), `the 'Music manager' tasks took 4880 ms to stop` /
   4861 ms, 5.32 s / 5.27 s from the stop to the exit; after (Release), 0.37 s / 0.36 s from the stop to the exit and
   no "took … to stop" line; after (Debug), 18 ms / 15 ms / 18 ms. 0 `[Error]` line, exit 0. The same track left to
-  load plays to its 328 s; a file that is not audio keeps its four error lines.
+  load plays to its 328 s; a file that is not audio keeps its four error lines. Peers (2026-11-15, Release, engine
+  `a909e0d2`): macOS (Apple M6) 0.32 s / 0.31 s, no "took … to stop" line; Windows (RTX 3500 Ada) 0.778 s / 0.732 s
+  with "took 15 ms / 12 ms to stop" (4.3 s before the fix, measured there on 2026-10-18); 0 `[Error]`, exit 0, and
+  the track left to load plays on both.
 - Who checks it: `AnimatedTexture2D` before each frame (its frames are now encoded IN PARALLEL on the pool,
   `ThreadPool::parallelFor()`, the calling worker taking its share — no deadlock from a pool worker; a stop waits for one
   frame's encoding at most) and before each frame's uncompressed chain; `Texture2D` before its one encoding; and

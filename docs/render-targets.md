@@ -106,6 +106,40 @@ image's real format.
   refuses layers 1 and -1, `OffscreenRenderingCubemap` refuses layer 6 and its HDR download (the one expected
   `[Error]`), no target answers to `SecurityCubemap` any more; 0 `VUID-`, exit 0. In a Release build the refusal line
   names the image `''`: the debug identifier is not kept there, read the target's name in the command's reply.
+- **Peers, the HDR and the depth read-back (2026-11-15, engine `a909e0d2`, base `ce85f4a`):** macOS (Apple M6,
+  MoltenVK) and Windows (MSVC 14.44, RTX 3500 Ada), Release, validation layer loaded, 0 `VUID-`, 0 `[Error]`, exit 0.
+  `OffscreenRenderingCubemap` layer 0: exposure 2.75802 EV / percentile 0.147827 on macOS, 2.75921 / 0.147705 on
+  Windows as on Linux; layer 2: 2.37247 EV / 0.193115 on the three; each `.hdr` 4 194 355 bytes; the refusals of
+  layer 6 and of an exposure of 100 word for word; an 8-bit target ignores the exposure with its warning. Depth
+  (`light-and-shadow-debug`, `--enable-depth-readback`): without the switch the refusal; with it `SunShadowMap`
+  layer 1 mean 0.606477 (macOS) / 0.606481 (Windows), 1 433 600 pixels at the far plane on both, `.pfm` 16 777 234
+  bytes; `SpotShadowMap` depths 0.987627 to 1 on both; `BulbShadowMap` layer 2 right on macOS (845 117 pixels at
+  the far plane) and ENTIRELY at the far plane on Windows — item `point-light-shadow-face-intermittently-empty`.
+  No OS states its depth format in the log; the 32-bit float is inferred from the data (199 257 distinct depths
+  in one face): the D16 / D24 decodings have still never run.
+- ⚠️ **A uniform dump is first of all a picture** (2026-11-15; the former item
+  `dump-render-target-first-dump-solid-blue`, opened 2026-10-01, closed that day). On Windows the first
+  `dumpRenderTarget(SecurityTexture2D)` of a session of `offscreen-rendering`, 30 s after the start line, was
+  sometimes ONE colour — (0, 0, 255, 255) on all 1 048 576 pixels, a 6502-byte PNG — and the next dump always
+  normal: 3 launches of 6 on 2026-10-01 and again on 2026-11-15 (RTX 3500 Ada), 0 of 6 in a series with slower
+  launches; 0 `VUID-`. It was read for six weeks as a wrong read (a console thread racing the render thread). It
+  is what that camera renders for a quarter of each of its turns:
+  - thirty dumps about 1.3 s apart on Linux (RTX 3070 Ti, Release) are solid blue at 9.30 and 10.55 s, 19.66 and
+    20.92 s, 30.06 and 31.31 s, 40.46 and 41.72 s after the start line, and normal at the 22 other instants: two
+    samples out of eight, with a period of 10.4 s — the camera's (its entity is yawed by 0.01 rad per logic tick,
+    one turn in 10.47 s);
+  - the `TV` of the scene, which shows the target, is the same single colour at those moments ((0, 0, 25) on a
+    screenshot, after the exposure);
+  - a blue phase starts between 28.75 and 30.06 s and ends between 31.31 and 32.56 s: a dump at 30 s sits on its
+    leading edge (3 of 6), one at 32 s on its trailing edge (0 of 6). The "first" dump was never special: the
+    30th second was.
+  What the camera looks at during that quarter turn is the item `camera-debug-model-in-its-own-target`.
+  **Rule:** before suspecting the transfer, read the target SEVERAL times over a few seconds, and look at whatever
+  shows it in the scene. The blue is not the clear colour either (render-to-texture clears with the renderer's,
+  black).
+- ⚠️ **Two dumps of the same layer within one second: the second is refused** ("the file … already exists", an
+  `[Error]` of `FileIO::write()`): the file name holds the second (`rt-dump-<seconds>-layer<N>`). Space the dumps
+  of a series by more than a second (item `dump-render-target-same-second-refused`).
 
 ## Architecture
 
