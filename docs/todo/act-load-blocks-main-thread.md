@@ -58,8 +58,9 @@ connection*), and it still leaves the compositor's `xdg_wm_base.ping` unanswered
   ACT IS STILL BEING BUILT — the pump of `Stage::buildPumpingWindow()` delivers it — runs the application's stop hook
   before the act exists for the stage; the act is activated afterwards and destroyed after the engine, its scene
   releasing buffers on a dead allocator (7 VMA "not freed" assertions, a null allocator, a real SIGSEGV in
-  `vmaDestroyBuffer`, which TSan prints as DEADLYSIGNAL). Filed downstream: projet-alpha item
-  `stop-during-act-build-crashes-at-exit`. Whether the laptop's close came during terrain's 415 s load was not
+  `vmaDestroyBuffer`, which TSan prints as DEADLYSIGNAL). Fixed downstream the same day (owner: the stop waits for the
+  build; measured on a display loss and on the close button during terrain's load: projet-alpha `docs/caution-points.md`
+  § Core Application). Whether the laptop's close came during terrain's 415 s load was not
   recorded: ask the owner, or reproduce there with a close DURING the load. ⚠️ The Intel UHD 770 cannot stand in for
   the Mesa device here (`igpu-presentation-under-nvidia-wayland`).
 - [ ] `world-lobby` and `jungle-ruins` (their USD loads are now synchronous on the Stage's worker) on a machine that has

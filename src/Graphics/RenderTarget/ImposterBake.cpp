@@ -28,17 +28,22 @@
 
 /* STL inclusions. */
 #include <array>
+#include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/ImposterAtlas.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/Types.hpp"
+#include "Math/Vector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
-#include "Vulkan/Instance.hpp"
 #include "Vulkan/RenderPass.hpp"
+#include "Vulkan/RenderSubPass.hpp"
 
 namespace EmEn::Graphics::RenderTarget
 {
@@ -67,6 +72,9 @@ namespace EmEn::Graphics::RenderTarget
 	{
 		/* The bake renders when a job asks for it, and every render is a job's. */
 		this->setAutomaticRenderingState(true);
+
+		/* No job yet: suspended until enqueue() resumes it (the renderer skips a suspended target silently). */
+		this->suspendRendering(true);
 
 		/* ⚠️ Transparent black: the atlas reads its coverage from the albedo's alpha, and the renderer's own clear is
 		 * OPAQUE — without this every empty texel of the atlas is a covered black one. */
@@ -107,6 +115,9 @@ namespace EmEn::Graphics::RenderTarget
 		}
 
 		m_hasJobs.store(true, std::memory_order_release);
+
+		/* NOTE: After the flag: a renderer that sees the target resumed finds its job. */
+		this->suspendRendering(false);
 
 		return true;
 	}
@@ -251,6 +262,10 @@ namespace EmEn::Graphics::RenderTarget
 		{
 			this->setBakeSubject(nullptr);
 
+			/* NOTE: Nothing left to bake: the target is SUSPENDED, which the renderer skips silently — it is done,
+			 * not "not yet ready" (that trace repeated for the rest of the scene's life, 2026-11-14). */
+			this->suspendRendering(true);
+
 			m_hasJobs.store(false, std::memory_order_release);
 		}
 		else
@@ -372,6 +387,9 @@ namespace EmEn::Graphics::RenderTarget
 			const Base::MutexLock lock{m_jobsAccess};
 
 			m_jobs.clear();
+
+			this->suspendRendering(true);
+
 			m_hasJobs.store(false, std::memory_order_release);
 		}
 

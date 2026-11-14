@@ -20,7 +20,7 @@ the application exits with code 1 before a window is shown.
 
 Measured in user crash reports of a downstream application, 2026-10-15 (Windows 10, engine 1.0.0, bundled loader
 1.4.363), two machines, three sessions, both AMD Ryzen "H" laptop CPUs (Radeon iGPU, very likely a discrete GPU too —
-the log cannot tell, see `gpu-inventory-without-vulkan`):
+the log could not tell then: the operating system's adapter list came later, `docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md`):
 
 - on the FIRST call (count query): `Unable to get physical device count : VK_INCOMPLETE !`;
 - on the SECOND call (fill): `Unable to get physical devices : VK_INCOMPLETE !` — the device count grew between the

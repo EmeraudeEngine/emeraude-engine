@@ -225,6 +225,8 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @brief Suspends or resumes the rendering of this target, whatever its update policy.
+			 * @note Honoured by the renderer for the shadow maps and for the render-to-textures alike. An imposter
+			 * bake suspends itself while its queue is empty (RenderTarget::ImposterBake).
 			 * @note A shadow map whose light is switched off is suspended by that light
 			 * (Scenes::Component::AbstractLightEmitter): nothing samples it, and it used to cost its full render
 			 * every frame (2026-10-05, basic-scenery: about 3 ms per point light cubemap). Set from the logic thread,

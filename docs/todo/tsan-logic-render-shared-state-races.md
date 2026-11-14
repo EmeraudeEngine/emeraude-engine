@@ -46,6 +46,15 @@ below.
   a SEGV in a driver thread, "nested bug in the same thread, aborting"), before the engine started. Run TSan on a Mesa
   device: `Core/Video/VulkanDevice/ForceGPU` in a settings COPY (`--settings-filepath`), `"AMD Radeon Graphics (RADV …)"`
   here, `"llvmpipe (…)"` on any machine.
+- **Not the Intel iGPU on a machine whose compositor runs on the NVIDIA GPU** (tried 2026-11-14 on the Linux
+  workstation): the compositor refuses its buffers at the first present and the instance loses its display
+  (`igpu-presentation-under-nvidia-wayland`). `ForceGPU = "llvmpipe (LLVM …)"` works there: `default` started in 6 s
+  with the window reduced to 960 x 540 in the same settings copy (software rendering under TSan is slow, the main
+  thread still answers), and the suppression file the build copies beside the binary already covers it
+  (`TSAN_OPTIONS=… suppressions=tsan_suppressions.txt`, `race:libLLVM*`, `race:libgallium*`).
+- That llvmpipe run reported three more races outside this item's family: the renderer's sampler cache and the
+  local-data release pass (both fixed the same day, `docs/caution-points.md`), and downstream projet-alpha's
+  `act-activation-races-the-logic-thread` (open).
 - TSan exits with code 66 when it reported anything (`halt_on_error=0` keeps the run going): the engine's own exit code
   is in the journal ("User exit code").
 - The recipe: `cmake -S . -B .claude-build-tsan -DCMAKE_BUILD_TYPE=Debug -DEMERAUDE_ENABLE_TSAN=On -G Ninja`, then

@@ -6666,6 +6666,58 @@ new items).
   frame reads `??`). `print this->m_nativeSurfaceAccess._M_mutex.__data.__owner` in the waiter's frame names the
   holder's LWP. A hung instance ignores SIGTERM: kill it by PID once the stacks are saved.
 
+### The renderer's sampler cache is shared by the loading threads and the rendering thread (2026-11-14)
+
+> `Renderer::getSampler()` did its `find()` and its `emplace()` on `m_samplers` with no lock, under a class comment that
+> said the caches were "written during initialization only". ThreadSanitizer (projet-alpha `default`, `llvmpipe`) caught
+> the rendering thread looking a sampler up (`PostProcessStack::syncCameraEffects()` → `VeilingGlare::create()`) while a
+> resource-pool worker inserted one (`AnimatedTexture2D::createTexture()` in `onDependenciesLoaded()`): a rehash under a
+> reader is a crash or a sampler for the wrong key. **Fixed:** the whole lookup-or-create runs under
+> `m_samplersAccess` (owner: a plain mutex — the function runs when a resource or an effect is created, never per
+> frame); the caller's setup function runs BEFORE the lock. The report showed in 1 of 2 runs before, in 0 of 1 after:
+> the proof is the lock, not the count. ⚠️ `m_programs` and `m_graphicsPipelines` carry no lock: they are reached
+> through the Saphir generators, on the rendering thread as far as it was read
+> (item `renderer-program-and-pipeline-caches-thread-audit`).
+
+### The local-data release pass asks the atomic status before anything else (2026-11-14)
+
+> `ResourceTrait::releaseLocalDataIfIdle()` tested `!releasesLocalData() || !isLoaded()`. The pass walks containers
+> that already hold resources another pool thread is still creating, and the virtual `releasesLocalData()` reads plain
+> members their loader writes before it publishes Loaded (`ImageResource::m_encodedSource`, set "before load()" by the
+> FBX / glTF / USD loaders): ThreadSanitizer, a write against a read. **Fixed** by the order — the atomic `isLoaded()`
+> first — and stated as the virtual's `@pre`. An override may read, without a lock, only what the loader writes before
+> the status becomes Loaded.
+
+### A render target with nothing to render is SUSPENDED, it is not "not ready" (2026-11-14)
+
+> An imposter bake target is ready only while a job is queued; once its 20 atlases were baked (`terrain`), the renderer
+> traced `The render-to-texture …ImposterBake_… is not yet ready for rendering!` at every visit for the rest of the
+> scene's life (Debug), drowning a target that really is not ready. **Fixed with the existing contract**
+> (`RenderTarget::Abstract::suspendRendering()`, until then honoured for the shadow maps only): the bake target is
+> suspended from its creation and whenever its queue empties, resumed by `enqueue()`; `renderRenderToTextures()` skips a
+> suspended target silently, before it asks for the readiness. Measured: 20 atlases baked, 0 such line (181 before).
+
+### Device selection: MSAA does not need `sampleRateShading` (2026-11-14)
+
+> `Instance::checkDevicesFeaturesForGraphics()` refused a device without the Vulkan 1.0 feature `sampleRateShading`
+> whenever `Core/Video/Framebuffer/Samples` > 1 (its own comment: "Maybe incorrect assertion"). It was: multisampled
+> rasterization is core and bounded by the framebuffer sample-count LIMITS, which `Device::checkMultisampleCount()`
+> clamps the request to; `sampleRateShading` only enables SAMPLE shading, which the engine never turns on. The refusal
+> is removed. A device is never refused for a setting the engine can lower; a mode that needs a feature requests it
+> where it is used and disables the mode. First run with 4 samples since the default became 1 (`default`, RTX 3070 Ti,
+> validation loaded): 0 `VUID-`, the same picture as with 1 sample — MSAA's supported scope and cost are item
+> `msaa-supported-scope-and-status`.
+
+### Wayland has no monitor gamma: `Window::setGamma()` does not call GLFW there (2026-11-14)
+
+> Every Wayland launch printed `[Error][GLFW] Wayland: Gamma ramp access is not available` (`GLFW_FEATURE_UNAVAILABLE`:
+> the gamma ramp is a privileged protocol, GLFW documents that its three gamma functions always fail there), because
+> the window applies `Core/Video/Window/Gamma` at its creation whatever the platform. A run's `[Error]` count was never
+> zero on Wayland. **Owner decision:** no call on Wayland, one Info line says the gamma is not applied (the settings
+> and the numeric-pad shortcuts have no effect there). ⚠️ By reading, not verified: where a ramp exists `glfwSetGamma()`
+> replaces the ramp of the whole MONITOR, in windowed mode too — a desktop calibration curve is gone while the
+> application runs (GLFW restores it at termination).
+
 ### Fixed: the render thread waited on the compositor while holding the scene lock (Sep 2026)
 
 Seen with the Wayland disconnect above, and a defect of its own: `Core::renderingTask()` called

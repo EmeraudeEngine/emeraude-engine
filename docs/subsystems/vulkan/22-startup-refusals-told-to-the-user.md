@@ -40,7 +40,19 @@ The operating system's adapter list, independent of Vulkan, logged at startup ("
 N | …") and exposed by `SystemInfo::getGPUDeviceInformation()` (`GPUDevice`: names, ids, bus, driver name and
 version, `software` for a framebuffer / Basic Render adapter). Linux: `/sys/class/drm/cardN/device` (vendor, device,
 `uevent` DRIVER / PCI_SLOT_NAME, `/sys/module/<driver>/version`), the names from the system's `pci.ids` when present;
-integrated vs discrete is a heuristic (an iGPU sits on the root PCI bus). Windows: DXGI; macOS: IOKit / Metal.
+integrated vs discrete is a heuristic (an iGPU sits on the root PCI bus). Windows: DXGI `EnumAdapters1` (the UMD
+version as the driver version, the LUID as the bus; the "Microsoft Basic Render Driver" is flagged `software`, never
+counted as a GPU; integrated when the dedicated memory is <= 512 MiB, a stated heuristic; every call checks its
+`HRESULT`, no COM exception). macOS: IOKit `IOAccelerator` only — NOT Metal, which would load the very drivers being
+diagnosed (owner decision, 2026-10-15).
+
+- Why it exists: when the instance cannot be created (`VK_ERROR_INCOMPATIBLE_DRIVER`) or the enumeration fails, the
+  only other inventory, Vulkan's, is empty — the log could not tell "an old integrated GPU without a Vulkan driver" from
+  "a capable GPU whose driver is missing or broken".
+- Taken by the main process only: a child process (`Settings::isChildProcess()`, the CEF helpers) skips it (it logged
+  three lines per launch).
+- ⚠️ The Intel-Mac branch of the macOS implementation (the `IOPCIDevice` parent of the accelerator) has NEVER run: no
+  such machine. Closed on that limit (owner, 2026-11-14).
 
 ### The refusal told to the user (`Core.startup.cpp`)
 

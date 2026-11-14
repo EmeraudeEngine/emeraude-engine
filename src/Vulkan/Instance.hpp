@@ -708,8 +708,9 @@ namespace EmEn::Vulkan
 			 * @brief Checks the device features a graphics device needs, for the device selector.
 			 * @note The Vulkan 1.0 core features are only a census: the absent ones are listed in ONE Info line and
 			 * refuse nothing (the features actually requested are checked by createGraphicsDevice()). A device is
-			 * refused for multisampling enabled in the settings without 'sampleRateShading', or, when the scene is
-			 * rendered, for a missing Vulkan 1.2 descriptor-indexing feature (bindless textures), each with an Error.
+			 * refused, when the scene is rendered, for a missing Vulkan 1.2 descriptor-indexing feature (bindless
+			 * textures), with an Error. MSAA enabled in the settings refuses no device: multisampling does not need
+			 * 'sampleRateShading', and Device::checkMultisampleCount() clamps the sample count to what the device has.
 			 * @param physicalDevice A reference to the physical device smart pointer.
 			 * @param score A reference to a score to sort the preferred device (unused by this check).
 			 * @return bool

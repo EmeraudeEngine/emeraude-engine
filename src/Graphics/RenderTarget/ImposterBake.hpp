@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <atomic>
 #include <cstdint>
@@ -34,6 +37,9 @@
 #include <string>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "Graphics/RenderTarget/Abstract.hpp"
 
@@ -41,6 +47,8 @@
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Mutex.hpp"
+#include "Scenes/AVConsole/Types.hpp"
+#include "ThreadSafety.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -56,6 +64,12 @@ namespace EmEn
 	namespace Graphics
 	{
 		class ImposterAtlas;
+		class Renderer;
+
+		namespace RenderableInstance
+		{
+			class Abstract;
+		}
 	}
 }
 
@@ -184,8 +198,9 @@ namespace EmEn::Graphics::RenderTarget
 
 			/**
 			 * @copydoc EmEn::Graphics::RenderTarget::Abstract::isReadyForRendering()
-			 * @note Ready only while a job is queued: the renderer skips the target otherwise, at the cost of one
-			 * atomic load.
+			 * @note Ready only while a job is queued. The target is also SUSPENDED (suspendRendering()) from its
+			 * creation and whenever its queue empties, resumed by enqueue(): the renderer skips a suspended target
+			 * before it asks for the readiness, at the cost of one atomic load, and without the "not yet ready" trace.
 			 */
 			[[nodiscard]]
 			bool isReadyForRendering () const noexcept override;

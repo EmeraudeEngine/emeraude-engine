@@ -451,6 +451,9 @@ namespace EmEn
 
 			/**
 			 * @brief Sets a gamma value to a specific monitor.
+			 * @note It replaces the gamma ramp of the whole MONITOR (GLFW restores the original one at termination).
+			 * On Wayland no client can reach that ramp: nothing is applied there, and an Info line says so. A value
+			 * that is not finite and positive is refused with a warning.
 			 * @param value A gamma value.
 			 * @param desiredMonitor The number of the monitor for multiple monitors configuration. Default initial monitor.
 			 */

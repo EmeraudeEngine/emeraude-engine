@@ -2128,18 +2128,11 @@ namespace EmEn::Vulkan
 			}
 		}
 
-		if ( features.sampleRateShading == VK_FALSE )
-		{
-			// TODO: Maybe incorrect assertion !
-			if ( m_primaryServices.settings().getOrSetDefault< uint32_t >(VideoFramebufferSamplesKey, DefaultVideoFramebufferSamples) > 1 )
-			{
-				TraceError{ClassId} <<
-					"MSAA is enabled in settings !"
-					"The physical device '" << properties.deviceName << "' cannot perform multisampling !";
-
-				return false;
-			}
-		}
+		/* NOTE: No device is refused for 'sampleRateShading' when MSAA is enabled in the settings (it was, until
+		 * 2026-11-14). Multisampled rasterization is core Vulkan 1.0, bounded by the framebuffer sample-count LIMITS, which
+		 * Device::checkMultisampleCount() clamps the request to; 'sampleRateShading' only enables SAMPLE shading, which the
+		 * engine never turns on (GraphicsPipeline: sampleShadingEnable = VK_FALSE). A mode that uses it one day requests the
+		 * feature where it is used (createGraphicsDevice(), requestOptionalVK10) and disables that mode, not the device. */
 
 		/* NOTE: Below the scene-rendering target the engine draws the overlay only: no bindless, nothing more to check. */
 		if ( !this->sceneRenderingEnabled() )

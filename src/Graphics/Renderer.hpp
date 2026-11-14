@@ -222,12 +222,11 @@ namespace EmEn::Graphics
 	 *
 	 * # Thread Safety
 	 *
-	 * All cache maps (m_programs, m_pipelines, m_samplers) are written during initialization
-	 * phase only. Once rendering begins, maps are read-only from the render thread
-	 * (no mutex needed for O(1) lookup performance).
-	 *
-	 * **Future consideration:** If dynamic pipeline creation is needed during runtime,
-	 * protect cache modifications with std::shared_mutex (read-write lock).
+	 * - `m_samplers` is read AND grown at run time by several threads (a texture finishing its load on the resource
+	 *   pool, an effect created by the rendering thread): getSampler() does its whole lookup-or-create under
+	 *   `m_samplersAccess` (ThreadSanitizer, 2026-11-14). It runs when a resource or an effect is created, never per frame.
+	 * - `m_programs` and `m_graphicsPipelines` are reached through the Saphir generators, which the rendering thread
+	 *   runs at an instance's first use; they carry NO lock. A generator run from another thread needs the same guard.
 	 */
 	class EMEN_API Renderer final : public ServiceInterface, public Base::ObserverTrait, public Base::ObservableTrait, public Console::ControllableTrait
 	{
@@ -1549,6 +1548,8 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns or creates a sampler.
+			 * @note Callable from any thread (the loading threads and the rendering thread do): the cache lookup and
+			 * the creation are one critical section. @p setupCreateInfo runs BEFORE that section, outside any lock.
 			 * @param identifier A string.
 			 * @param setupCreateInfo A function to configure the creation info structure.
 			 * @return std::shared_ptr< Vulkan::Sampler >
@@ -2066,7 +2067,8 @@ namespace EmEn::Graphics
 			std::unordered_map< Base::ExactKey, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
 			/* NOTE: Keyed by the EXACT CREATE-INFO CONTENT (every field, Base::ExactKey), not by the identifier passed
 			 * to getSampler() — see the ⚠️ block there. The identifier is a debug label only. */
-			std::unordered_map< Base::ExactKey, std::shared_ptr< Vulkan::Sampler > > m_samplers;
+			Base::Mutex m_samplersAccess; ///< Guards m_samplers (the loading threads and the rendering thread look up and create).
+			std::unordered_map< Base::ExactKey, std::shared_ptr< Vulkan::Sampler > > m_samplers EMEN_GUARDED_BY(m_samplersAccess);
 			Base::Time::Statistics::RealTime< std::chrono::high_resolution_clock > m_statistics{30};
 			/* Layout: [0]=color, [1]=normals, [2]=materialProperties, [3]=albedo, [4]=velocity, [5]=depth, [6]=reactive
 			 * (appended last so the depth keeps its index). The scene target picks its own subset, in attachment order

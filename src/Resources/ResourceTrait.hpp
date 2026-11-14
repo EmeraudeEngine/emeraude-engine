@@ -1041,6 +1041,9 @@ namespace EmEn::Resources
 
 			/**
 			 * @brief Returns whether this type releases its CPU copy once uploaded ("GPU only" by type). Default false.
+			 * @pre The resource is Loaded when another thread than its loader asks (releaseLocalDataIfIdle() tests the
+			 * atomic status first): an override may then read, without a lock, what the loader wrote before it published
+			 * that status.
 			 * @return bool
 			 */
 			[[nodiscard]]

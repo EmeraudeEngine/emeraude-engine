@@ -888,7 +888,10 @@ namespace EmEn::Resources
 	bool
 	ResourceTrait::releaseLocalDataIfIdle (std::chrono::steady_clock::time_point now, std::chrono::steady_clock::duration graceDelay) noexcept
 	{
-		if ( !this->releasesLocalData() || !this->isLoaded() )
+		/* NOTE: The atomic status FIRST. This pass walks containers that already hold resources still being created on
+		 * another pool thread, and releasesLocalData() reads plain members their loader writes before it publishes
+		 * Loaded (ImageResource's encoded source: ThreadSanitizer, 2026-11-14). */
+		if ( !this->isLoaded() || !this->releasesLocalData() )
 		{
 			return false;
 		}

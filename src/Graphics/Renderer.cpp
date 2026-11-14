@@ -715,7 +715,12 @@ namespace EmEn::Graphics
 
 		/* NOTE: Reserve capacity for cache maps to avoid rehashing during initialization.
 		 * Typical usage patterns: ~30-50 samplers, ~50-100 pipelines/programs. */
-		m_samplers.reserve(50);
+		{
+			const Base::MutexLock samplersLock{m_samplersAccess};
+
+			m_samplers.reserve(50);
+		}
+
 		m_graphicsPipelines.reserve(100);
 		m_programs.reserve(100);
 
@@ -1118,12 +1123,16 @@ namespace EmEn::Graphics
 
 		/* NOTE: Stacked resources on the runtime. */
 		{
-			for ( const auto & sampler: m_samplers | std::views::values )
 			{
-				sampler->destroyFromHardware();
-			}
+				const Base::MutexLock samplersLock{m_samplersAccess};
 
-			m_samplers.clear();
+				for ( const auto & sampler: m_samplers | std::views::values )
+				{
+					sampler->destroyFromHardware();
+				}
+
+				m_samplers.clear();
+			}
 
 			for ( const auto & pipeline: m_graphicsPipelines | std::views::values )
 			{
@@ -1638,6 +1647,11 @@ namespace EmEn::Graphics
 		}
 
 		auto key = samplerKey(createInfo);
+
+		/* NOTE: The whole lookup-or-create, so two threads asking for the same content get the same sampler. A texture
+		 * finishing its load on the resource pool and an effect created by the rendering thread both come here
+		 * (ThreadSanitizer, 2026-11-14: a find() against an emplace()). Taken AFTER the caller's setup function ran. */
+		const Base::MutexLock samplersLock{m_samplersAccess};
 
 		if ( const auto samplerIt = m_samplers.find(key); samplerIt != m_samplers.cend() )
 		{
@@ -3249,6 +3263,13 @@ namespace EmEn::Graphics
 
 		scene.forEachRenderToTexture([&] (const std::shared_ptr< RenderTarget::Abstract > & renderToTexture)
 		{
+			/* A suspended target has nothing to render and says so itself (an imposter bake whose queue is empty):
+			 * skipped silently, the way a switched-off light's shadow map is. It is not "not yet ready". */
+			if ( renderToTexture->isRenderingSuspended() )
+			{
+				return;
+			}
+
 			if ( !renderToTexture->isReadyForRendering() )
 			{
 				TraceDebug{ClassId} << "The render-to-texture " << renderToTexture->id() << " is not yet ready for rendering!";

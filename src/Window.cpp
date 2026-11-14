@@ -881,6 +881,16 @@ namespace EmEn
 			return;
 		}
 
+		/* NOTE: Wayland gives a client no access to a monitor's gamma ramp (a privileged protocol): GLFW's call can only
+		 * raise GLFW_FEATURE_UNAVAILABLE there, an [Error] line at every launch for a request that never succeeds
+		 * (owner, 2026-11-14: no call on Wayland, and the refusal is said). */
+		if ( PlatformManager::isUsingWayland() )
+		{
+			TraceInfo{ClassId} << "The monitor gamma (" << value << ") is not applied: Wayland gives no access to the gamma ramp.";
+
+			return;
+		}
+
 		if ( auto * monitor = Window::getMonitor(desiredMonitor); monitor != nullptr )
 		{
 			glfwSetGamma(monitor, value);
