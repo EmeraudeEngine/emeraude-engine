@@ -24,16 +24,24 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-
 #include "SharingServer.hpp"
+
+/* Project configuration. */
+#include "emeraude_platform.hpp"
 
 /* STL inclusions. */
 #include <array>
 #include <fstream>
+#include <system_error>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "json/json.h"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "Hash/SHA256.hpp"
@@ -181,7 +189,7 @@ namespace EmEn::Resources
 	}
 
 	std::optional< std::string >
-	SharingServer::fileSHA256 (const std::filesystem::path & filepath, const std::atomic< bool > * cancel) noexcept
+	SharingServer::fileSHA256 (const std::filesystem::path & filepath, const std::stop_token & stopToken) noexcept
 	{
 		/* NOTE: Through Base::IO::openInputFile(): a FIFO blocked the open forever (2026-10-18). */
 		std::ifstream file;
@@ -196,7 +204,7 @@ namespace EmEn::Resources
 
 		while ( file )
 		{
-			if ( cancel != nullptr && cancel->load() )
+			if ( stopToken.stop_requested() )
 			{
 				return std::nullopt;
 			}

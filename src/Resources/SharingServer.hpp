@@ -24,19 +24,16 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-
 #pragma once
 
 /* STL inclusions. */
-#include <atomic>
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
 
@@ -44,6 +41,7 @@
 #include "ConditionVariable.hpp"
 #include "Mutex.hpp"
 #include "Network/HTTPServer.hpp"
+#include "ThreadSafety.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -161,11 +159,12 @@ namespace EmEn::Resources
 			/**
 			 * @brief Computes the SHA-256 of a file, streamed (1 MiB at a time).
 			 * @param filepath The file.
-			 * @param cancel Optional: raised by another thread, it stops the computation (a 1.6 GB file takes seconds).
-			 * @return std::optional< std::string > The lowercase hexadecimal digest, nothing on a read error or a cancel.
+			 * @param stopToken Optional: once its source has requested a stop, the computation ends before the next block
+			 * (a 1.6 GB file takes seconds). A default token never stops.
+			 * @return std::optional< std::string > The lowercase hexadecimal digest, nothing on a read error or a stop.
 			 */
 			[[nodiscard]]
-			static std::optional< std::string > fileSHA256 (const std::filesystem::path & filepath, const std::atomic< bool > * cancel = nullptr) noexcept;
+			static std::optional< std::string > fileSHA256 (const std::filesystem::path & filepath, const std::stop_token & stopToken = {}) noexcept;
 
 		private:
 

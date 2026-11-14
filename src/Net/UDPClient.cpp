@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <atomic> // IWYU pragma: keep (the _WIN32 branch: the cached WSARecvMsg pointer)
 #include <chrono>
 #include <compare>
 #include <cstring>
@@ -306,23 +307,23 @@ namespace EmEn::Net
 	 * on a blocking socket parked the calling thread forever with no way to wake it.
 	 * ⚠️ The wait is SLICED, and that is not an optimisation: shutdown() cannot wake a reader
 	 * on an unconnected datagram socket (ENOTCONN / WSAENOTCONN — Linux is the one stack
-	 * lenient enough to do it anyway), so close() signals through 'closing' and the reader has
-	 * to come up for air to see it. See the m_closing comment in the header. */
+	 * lenient enough to do it anyway), so close() requests a stop through 'closing' and the reader
+	 * has to come up for air to see it. See the m_closing comment in the header. */
 	namespace
 	{
 		bool
-		waitReadable (SocketType sock, uint32_t timeoutMs, const std::atomic_bool * closing) noexcept
+		waitReadable (SocketType sock, std::chrono::milliseconds timeout, const std::stop_token & closing) noexcept
 		{
 			/* ⚠️ The remaining time is recomputed from a DEADLINE, never by subtracting the nominal
 			 * slice. A select() slice returns after *at least* its timeout, never exactly it, so
 			 * counting slices accumulates the scheduling error: measured +13.8% on a 3 s wait, and the
 			 * shorter the slice the worse the ratio. The caller's timeout is a contract — the JS side
 			 * builds watchdogs and scan budgets on it — so it stays honest to within one slice. */
-			const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{timeoutMs};
+			const auto deadline = std::chrono::steady_clock::now() + timeout;
 
 			while ( true )
 			{
-				if ( closing != nullptr && closing->load(std::memory_order_acquire) )
+				if ( closing.stop_requested() )
 				{
 					return false;
 				}
@@ -532,16 +533,9 @@ namespace EmEn::Net
 			m_handleMutex = std::make_unique< std::shared_mutex >();
 		}
 
-		if ( m_closing == nullptr )
-		{
-			m_closing = std::make_unique< std::atomic_bool >(false);
-		}
-		else
-		{
-			/* Clear the flag left by a previous close(), or this socket would refuse to
-			 * wait for a single datagram. */
-			m_closing->store(false, std::memory_order_release);
-		}
+		/* A NEW stop source for this socket: the previous close() stopped the last one for good (this socket would
+		 * refuse to wait for a single datagram), and a moved-from instance holds none. */
+		m_closing = std::stop_source{};
 
 #ifdef _WIN32
 		/* NOTE: Each open socket takes its own Winsock reference, given back by close() (it used to be taken once
@@ -657,10 +651,7 @@ namespace EmEn::Net
 
 		/* Raised BEFORE anything else: this, not the shutdown() below, is what returns a
 		 * parked receive() — see the m_closing comment in the header. */
-		if ( m_closing != nullptr )
-		{
-			m_closing->store(true, std::memory_order_release);
-		}
+		m_closing.request_stop();
 
 		/* Phase 1 — shared lock: shutdown() also wakes a thread parked in recvfrom()/select()
 		 * on this descriptor, while the handle is still valid. Kept because it is immediate
@@ -830,7 +821,7 @@ namespace EmEn::Net
 #endif
 
 		/* Apply timeout using select(). */
-		if ( !waitReadable(sock, timeoutMs, m_closing.get()) )
+		if ( !waitReadable(sock, std::chrono::milliseconds{timeoutMs}, m_closing.get_token()) )
 		{
 			/* ⚠️ Returning 0 alone is ambiguous, because a zero-length datagram is legal in UDP
 			 * and returns 0 too. Report the difference to whoever asked for it. */
@@ -993,7 +984,7 @@ namespace EmEn::Net
 		const auto sock = m_fd;
 #endif
 
-		if ( !waitReadable(sock, timeoutMs, m_closing.get()) )
+		if ( !waitReadable(sock, std::chrono::milliseconds{timeoutMs}, m_closing.get_token()) )
 		{
 			/* Reset here too: info used to be left UNTOUCHED on this path, so a caller reusing
 			 * the struct read the PREVIOUS datagram's sender as if it had just arrived. */

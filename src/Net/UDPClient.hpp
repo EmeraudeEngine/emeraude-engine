@@ -30,11 +30,12 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <atomic>
+#include <cstddef>
 #include <cstdint>
 #include <map>
 #include <memory>
 #include <shared_mutex>
+#include <stop_token>
 #include <string>
 #include <utility>
 #include <vector>
@@ -317,9 +318,10 @@ namespace EmEn::Net
 			 * is why this went unnoticed: measured on macOS 26, close() waited out the full
 			 * receive() timeout instead of returning, and since UDPModule binds close() as a
 			 * SYNCHRONOUS method, that stall lands on the renderer's main thread.
-			 * So receive() polls in slices and watches this flag rather than trusting the
-			 * kernel for the wake-up. Held by pointer, like the mutex, to stay movable. */
-			std::unique_ptr< std::atomic_bool > m_closing{std::make_unique< std::atomic_bool >(false)};
+			 * So receive() polls in slices and watches this stop source rather than trusting the
+			 * kernel for the wake-up. A std::stop_source is movable (the class stays so) and is stopped
+			 * once and for all: open() arms a new one for each socket. */
+			std::stop_source m_closing;
 
 			/* Joined multicast groups, as (group, interface) pairs in network byte order.
 			 * Held to make join/leave idempotent without having to read errno. */

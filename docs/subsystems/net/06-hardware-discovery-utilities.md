@@ -77,7 +77,7 @@ opposite (2026-08-27).
 covers each syscall and `close()` takes the exclusive lock before invalidating the descriptor —
 without it, a `close()` from another thread let the kernel recycle the fd under a `recvfrom` still in
 flight, and the reader then read from an unrelated file. What actually **returns** the reader is
-`m_closing`, an atomic flag `waitReadable()` checks between poll slices: `shutdown()` is called too,
+`m_closing`, a `std::stop_source` (an atomic flag until 2026-11-14) whose token `waitReadable()` checks between poll slices: `shutdown()` is called too,
 but it fails with `ENOTCONN` on an unconnected datagram socket everywhere except Linux, so it cannot
 be relied on. See § *What macOS taught us* above. Do not delete the flag as redundant.
 

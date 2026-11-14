@@ -1,9 +1,14 @@
 # net-check — runtime check for `EmEn::Net`, without building the engine
 
 Two standalone programs that compile the **real** `src/Net/` sources out-of-tree. No CMake, no
-Vulkan, no engine build: a compiler and this directory are enough. They exist because the Net
-utilities deliberately depend on nothing but `emeraude_export.hpp`, and because a compile check
-proves nothing about a socket option the kernel silently refuses.
+Vulkan, no engine build. They exist because the Net utilities depend on almost nothing, and because
+a compile check proves nothing about a socket option the kernel silently refuses.
+
+⚠️ **Since 2026-10-08 `UDPClient.cpp` uses the foundation's `Base::String`**: `net_check` needs
+emeraude-base's sources, its generated configuration header and its built library (`<build>` below
+is any configured build tree of the engine or of an application; the three paths are the ones the
+engine's own compile commands carry). The commands were stale until 2026-11-14 (`String.hpp` not
+found). `shutdown_semantics.cpp` still needs nothing.
 
 | File | Answers |
 |---|---|
@@ -13,9 +18,11 @@ proves nothing about a socket option the kernel silently refuses.
 ## Build & run
 
 ```bash
-# Linux / macOS
-c++ -std=c++20 -O2 -Wall -Wextra -I../../src \
-    net_check.cpp ../../src/Net/UDPClient.cpp ../../src/Net/NetworkInterfaces.cpp -o net_check
+# Linux / macOS (verified on Linux, 2026-11-14: 48 pass, 0 fail)
+c++ -std=c++20 -O2 -Wall -Wextra -fno-exceptions -I../../src \
+    -I../../dependencies/emeraude-base/src -I<build>/Emeraude/emeraude-base/include \
+    net_check.cpp ../../src/Net/UDPClient.cpp ../../src/Net/NetworkInterfaces.cpp \
+    <build>/<Debug|Release>/libEmeraudeBase.a -o net_check
 ./net_check
 
 c++ -std=c++20 -O2 -Wall -Wextra shutdown_semantics.cpp -o shutdown_semantics
@@ -34,10 +41,15 @@ Run it under sanitizers at least once per platform — the moved-from and close-
 exactly the kind that pass by luck:
 
 ```bash
-c++ -std=c++20 -O1 -g -fsanitize=address,undefined -I../../src \
-    net_check.cpp ../../src/Net/UDPClient.cpp ../../src/Net/NetworkInterfaces.cpp -o net_check_asan
+c++ -std=c++20 -O1 -g -fno-exceptions -fsanitize=address,undefined -I../../src \
+    -I../../dependencies/emeraude-base/src -I<build>/Emeraude/emeraude-base/include \
+    net_check.cpp ../../src/Net/UDPClient.cpp ../../src/Net/NetworkInterfaces.cpp \
+    <build>/<Debug|Release>/libEmeraudeBase.a -o net_check_asan
 ./net_check_asan
 ```
+
+The close race (§ 5) is a two-thread case: `-fsanitize=thread` instead of `address,undefined` runs it under
+ThreadSanitizer (2026-11-14, after `m_closing` became a `std::stop_source`: 48 pass, 0 report under both).
 
 ## Reading the result
 

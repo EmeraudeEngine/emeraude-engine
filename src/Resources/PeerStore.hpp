@@ -24,18 +24,15 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-
 #pragma once
 
 /* STL inclusions. */
-#include <atomic>
-#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
-#include <mutex>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <vector>
 
@@ -46,7 +43,7 @@
 #include "ConditionVariable.hpp"
 #include "Mutex.hpp"
 #include "Network/HTTPSClient.hpp"
-#include "Network/URI.hpp"
+#include "ThreadSafety.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -57,6 +54,16 @@ namespace EmEn
 namespace EmEn::Base
 {
 	class ThreadPool;
+}
+
+namespace EmEn::Base::Network
+{
+	class URI;
+}
+
+namespace asio::ssl
+{
+	class context;
 }
 
 namespace EmEn::Resources
@@ -163,7 +170,7 @@ namespace EmEn::Resources
 			Json::Value status () const noexcept;
 
 			/**
-			 * @brief Asks a fetch in flight to stop (at the next read).
+			 * @brief Asks a fetch in flight to stop (at the next read), through the job's std::stop_source.
 			 */
 			void cancel () noexcept;
 
@@ -204,8 +211,28 @@ namespace EmEn::Resources
 			 * @brief Copies one file and verifies it (worker).
 			 * @param root The local `data-stores/`.
 			 * @param file The remote file.
+			 * @param stopToken The token of the job: the download, the wait for the peer's digest and the local hash
+			 * all end on its stop.
 			 */
-			void fetchFile (const std::filesystem::path & root, const RemoteFile & file) noexcept;
+			void fetchFile (const std::filesystem::path & root, const RemoteFile & file, const std::stop_token & stopToken) noexcept;
+
+			/**
+			 * @brief Asks the peer for the SHA-256 of one of its files, again while it answers that it is busy (503).
+			 * @param relativePath The path of the file, relative to the peer's data stores.
+			 * @param stopToken The token of the job: the wait ends on its stop.
+			 * @return std::optional< std::string > The lowercase hexadecimal digest; nothing when the peer gave none, the
+			 * patience ran out or a stop was requested.
+			 */
+			[[nodiscard]]
+			std::optional< std::string > peerDigest (const std::string & relativePath, const std::stop_token & stopToken) const noexcept;
+
+			/**
+			 * @brief Returns the token of the current stop source.
+			 * @note Taken under the state lock: fetch() replaces the source for each job.
+			 * @return std::stop_token
+			 */
+			[[nodiscard]]
+			std::stop_token stopToken () const noexcept;
 
 			/**
 			 * @brief Runs a fetch (worker).
@@ -246,6 +273,8 @@ namespace EmEn::Resources
 			mutable Base::Mutex m_stateAccess;
 			Base::ConditionVariable m_jobDone;
 			State m_state EMEN_GUARDED_BY(m_stateAccess);
-			std::atomic< bool > m_cancel{false};
+			/* The cancellation of the current job and of the requests in flight: a NEW source for each fetch(), stopped by
+			 * cancel() and by the destructor. Replaced under the lock, so a token is taken under it too (stopToken()). */
+			std::stop_source m_stopSource EMEN_GUARDED_BY(m_stateAccess);
 	};
 }

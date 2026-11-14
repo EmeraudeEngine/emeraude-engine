@@ -24,21 +24,29 @@
  * --- THIS IS AUTOMATICALLY GENERATED, DO NOT CHANGE ---
  */
 
-
 #include "PeerStore.hpp"
 
 /* STL inclusions. */
 #include <chrono>
+#include <compare>
+#include <system_error>
 #include <thread>
 #include <utility>
 
+/* Third-party inclusions. */
+#include "asio/ssl.hpp"
+#include "Network/asio_throw_exception.hpp"
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
+#include "Network/HTTPRequest.hpp"
 #include "Network/PercentEncoding.hpp"
+#include "Network/TLSConnection.hpp"
+#include "Network/URI.hpp"
 #include "SharingServer.hpp"
-#include "String.hpp"
 #include "ThreadPool.hpp"
 #include "Tracer.hpp"
 #include "Types.hpp"
@@ -98,9 +106,9 @@ namespace EmEn::Resources
 
 	PeerStore::~PeerStore ()
 	{
-		m_cancel = true;
-
 		Base::MutexLock lock{m_stateAccess};
+
+		m_stopSource.request_stop();
 
 		m_jobDone.wait(lock, [this] () EMEN_REQUIRES(m_stateAccess) {
 			return !m_state.running;
@@ -117,7 +125,7 @@ namespace EmEn::Resources
 	PeerStore::get (const std::string & target, Network::DownloadReport & report) const noexcept
 	{
 		Network::HTTPRequestOptions options;
-		options.cancel = &m_cancel;
+		options.stopToken = this->stopToken();
 
 		if ( !m_bearerToken.empty() )
 		{
@@ -171,9 +179,11 @@ namespace EmEn::Resources
 			m_state = State{};
 			m_state.request = relativePath;
 			m_state.running = true;
-		}
 
-		m_cancel = false;
+			/* A stop source is stopped once and for all: each job gets its own, so that a cancel() ends this job and
+			 * not the next one. */
+			m_stopSource = std::stop_source{};
+		}
 
 		const auto enqueued = m_threadPool->enqueue([this, relativePath] () {
 			this->runFetch(relativePath);
@@ -235,7 +245,17 @@ namespace EmEn::Resources
 	void
 	PeerStore::cancel () noexcept
 	{
-		m_cancel = true;
+		const Base::MutexLock lock{m_stateAccess};
+
+		m_stopSource.request_stop();
+	}
+
+	std::stop_token
+	PeerStore::stopToken () const noexcept
+	{
+		const Base::MutexLock lock{m_stateAccess};
+
+		return m_stopSource.get_token();
 	}
 
 	void
@@ -324,6 +344,9 @@ namespace EmEn::Resources
 	void
 	PeerStore::runFetch (const std::string & relativePath) noexcept
 	{
+		/* The token of THIS job's source (fetch() made it): cancel() and the destructor stop it. */
+		const auto stopToken = this->stopToken();
+
 		const auto root = this->destinationRoot();
 
 		if ( !root )
@@ -352,14 +375,14 @@ namespace EmEn::Resources
 
 		for ( const auto & file : *files )
 		{
-			if ( m_cancel )
+			if ( stopToken.stop_requested() )
 			{
 				this->reportError("Fetch cancelled.");
 
 				return;
 			}
 
-			this->fetchFile(*root, file);
+			this->fetchFile(*root, file, stopToken);
 		}
 
 		const Base::MutexLock lock{m_stateAccess};
@@ -367,8 +390,40 @@ namespace EmEn::Resources
 		TraceSuccess{ClassId} << "Fetch of '" << relativePath << "' done: " << m_state.filesFetched << " fetched, " << m_state.filesKept << " kept, " << m_state.filesFailed << " failed.";
 	}
 
+	std::optional< std::string >
+	PeerStore::peerDigest (const std::string & relativePath, const std::stop_token & stopToken) const noexcept
+	{
+		const auto patienceEnd = std::chrono::steady_clock::now() + DigestPatience;
+
+		while ( !stopToken.stop_requested() && std::chrono::steady_clock::now() < patienceEnd )
+		{
+			Network::DownloadReport report;
+			const auto result = this->get("/sha256/" + Network::PercentEncoding::encode(relativePath, Network::PercentEncoding::Component::Path), report);
+
+			/* The peer is busy with other digests: asked again, within the patience. */
+			if ( result && report.statusCode == 503 )
+			{
+				std::this_thread::sleep_for(std::chrono::seconds{1});
+
+				continue;
+			}
+
+			if ( result && report.statusCode == 200 )
+			{
+				if ( const auto answer = FastJSON::getRootFromString(result->body, 4, true); answer && answer->isObject() )
+				{
+					return FastJSON::getValue< std::string >(*answer, "sha256");
+				}
+			}
+
+			break;
+		}
+
+		return std::nullopt;
+	}
+
 	void
-	PeerStore::fetchFile (const std::filesystem::path & root, const RemoteFile & file) noexcept
+	PeerStore::fetchFile (const std::filesystem::path & root, const RemoteFile & file, const std::stop_token & stopToken) noexcept
 	{
 		const auto countFailure = [this] () {
 			const Base::MutexLock lock{m_stateAccess};
@@ -420,7 +475,7 @@ namespace EmEn::Resources
 		partial += ".part";
 
 		Network::HTTPRequestOptions options;
-		options.cancel = &m_cancel;
+		options.stopToken = stopToken;
 
 		if ( !m_bearerToken.empty() )
 		{
@@ -445,35 +500,10 @@ namespace EmEn::Resources
 		}
 
 		/* The digest the peer computes, compared with the received bytes: a truncated or altered copy is deleted. */
-		std::optional< std::string > remoteDigest;
-		const auto patienceEnd = std::chrono::steady_clock::now() + DigestPatience;
+		const auto remoteDigest = this->peerDigest(file.path, stopToken);
+		const auto localDigest = SharingServer::fileSHA256(partial, stopToken);
 
-		while ( !m_cancel && std::chrono::steady_clock::now() < patienceEnd )
-		{
-			Network::DownloadReport digestReport;
-			const auto result = this->get("/sha256/" + Network::PercentEncoding::encode(file.path, Network::PercentEncoding::Component::Path), digestReport);
-
-			if ( result && digestReport.statusCode == 503 )
-			{
-				std::this_thread::sleep_for(std::chrono::seconds{1});
-
-				continue;
-			}
-
-			if ( result && digestReport.statusCode == 200 )
-			{
-				if ( const auto answer = FastJSON::getRootFromString(result->body, 4, true); answer && answer->isObject() )
-				{
-					remoteDigest = FastJSON::getValue< std::string >(*answer, "sha256");
-				}
-			}
-
-			break;
-		}
-
-		const auto localDigest = SharingServer::fileSHA256(partial, &m_cancel);
-
-		if ( m_cancel )
+		if ( stopToken.stop_requested() )
 		{
 			this->reportError("'" + file.path + "': cancelled during its verification, the copy is deleted.");
 			std::filesystem::remove(partial, errorCode);

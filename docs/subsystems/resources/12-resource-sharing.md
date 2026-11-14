@@ -64,6 +64,16 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
   is kept; otherwise written to `<file>.part`, its SHA-256 compared with the peer's `/sha256/`, then renamed. A
   mismatch, a cancel or an error deletes the side file. Cancel (`cancelPeerFetch()`, shutdown) stops at the next
   transport read or during the verification hash.
+- **The cancellation is a `std::stop_source`** (2026-11-14, Ave Robustus II; it was an `std::atomic< bool >`
+  member whose address went to the foundation's HTTP client). `PeerStore` holds ONE source per job — `fetch()`
+  replaces it under the state lock, because a stop source is stopped once and for all — and `cancel()` and the
+  destructor request its stop. Its token goes to the HTTP exchanges (`HTTPRequestOptions::stopToken`), to the wait
+  for the peer's digest and to `SharingServer::fileSHA256(path, stopToken)` (checked before each 1 MiB block).
+  ⚠️ **Latency**: a stop is seen between two transport reads. During the download that is immediate (0.04 s
+  measured); while the client waits for the peer's `/sha256/` answer it is the time that answer takes — 3.5 s for
+  1.6 GB between two Release instances, and up to the 30 s request budget when the peer is slow (29.8 s measured
+  with a Debug peer). The engine's shutdown waits that long (item `peer-fetch-digest-request-times-out-on-large-files`
+  and base item `http-client-stop-does-not-wake-a-parked-read`).
 
 ## Console / MCP (`Core.ResourcesManagerService.*`)
 
@@ -88,6 +98,14 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
   `Hash.lengthFieldPastFourGigabits`, base `docs/caution-points.md` § Hash).
 - Refusals: no token / wrong token 401, POST 405, `../../etc/passwd`, `%2e%2e/…`, `..%2f`, `%2fetc`, `%5c` all 404.
 - Shutdown with a fetch in flight: 6.0 s, the same as without one (6.6 s).
+- **The stop-token conversion, before / after** (2026-11-14, two Release instances on one machine, RTX 3070 Ti, the
+  client's data lacking `Musics/Kyrandia2` and `USD/WorldLobby.usdz`; identical on both binaries): the directory
+  32 / 32 files with the original's SHA-256; the 1 610 429 961-byte file in 7.9 s, SHA-256 equal; a cancel during
+  its verification effective after 3.46 s, the side file deleted; a shutdown during its verification, exit 0 after
+  3.24 s; no `.part` left anywhere. With two DEBUG instances a cancel during the download itself was effective after
+  0.04 s (`Cancelled`), and ⚠️ the whole file FAILED: the peer's hash took longer than the client's 30 s request
+  budget, "the peer gave no SHA-256, the copy is deleted" after 146 s — on both binaries' logic, a limit of the
+  protocol, not of the conversion (item `peer-fetch-digest-request-times-out-on-large-files`).
 
 ## Testing a pair on one machine
 
