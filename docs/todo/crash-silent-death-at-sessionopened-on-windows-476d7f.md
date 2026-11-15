@@ -2,7 +2,7 @@
 id: crash-silent-death-at-sessionopened-on-windows-476d7f
 title: "Crash reports: Silent death at SessionOpened on windows"
 status: open
-priority: unranked
+priority: high
 scope: src/Core.cpp, src/Vulkan
 opened: 2026-10-21
 tags: [crash, crash-report-auto]
@@ -91,6 +91,12 @@ Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (th
   11), written AFTER the engine's last line: those deaths happen after the engine handed control back — maybe not an
   engine death at all.
 - 12 of 55 carry the code-page warning (1252, not UTF-8) and the Vulkan loader opened right after.
+
+- **2026-11-15, one of these reports explained by its sequel**: on one machine the silent death is the FIRST run of
+  a new version — it performed the version guard's settings reset, rewrote the file (which kept a stored window size
+  of 0x0 from an old engine) and died before any window line; its second run, 24 s later, is a report of
+  `crash-window-created-with-an-invalid-size-22658a`. One case, read in the downstream application's crash-report
+  mirror; it does not say why the first run died silently instead of failing loudly as the second did.
 
 ## What remains
 

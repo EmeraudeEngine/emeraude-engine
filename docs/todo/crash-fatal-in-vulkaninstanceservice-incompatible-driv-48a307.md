@@ -2,7 +2,7 @@
 id: crash-fatal-in-vulkaninstanceservice-incompatible-driv-48a307
 title: "Crash reports: Fatal in VulkanInstanceService — Incompatible driver !"
 status: open
-priority: unranked
+priority: high
 scope: src/Vulkan/Instance.cpp
 opened: 2026-10-21
 tags: [crash, crash-report-auto]

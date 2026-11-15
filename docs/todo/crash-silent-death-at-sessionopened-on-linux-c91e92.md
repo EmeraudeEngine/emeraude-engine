@@ -2,7 +2,7 @@
 id: crash-silent-death-at-sessionopened-on-linux-c91e92
 title: "Crash reports: Silent death at SessionOpened on linux"
 status: open
-priority: unranked
+priority: high
 scope: src/Core.cpp, src/Vulkan
 opened: 2026-10-21
 tags: [crash, crash-report-auto]

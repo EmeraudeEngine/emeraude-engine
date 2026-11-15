@@ -2,7 +2,7 @@
 id: crash-exit-code-98-after-stopping-80d5c2
 title: "Crash reports: Exit code 98 after Stopping"
 status: open
-priority: unranked
+priority: high
 scope: src/Core.cpp, src/Vulkan/Device.cpp
 opened: 2026-10-21
 tags: [crash, crash-report-auto]

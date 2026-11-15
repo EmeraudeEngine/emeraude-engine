@@ -126,6 +126,10 @@ submits its next pass the moment the wait returns.
   launch tried before was wrong); 0 `VUID-`, exit 0. The other targets read as before: an 8-bit target, the HDR probe
   (exposure 2.75921 EV on layer 0, as before the fix), a cascade of the sun, the spot's map, the six faces of the
   cube (566 073, 631 244, 844 734, 0, 631 244 and 542 859 pixels at the far plane), every refusal.
+- **Peers (2026-11-15, engine `db48a911`, the same three reads in each launch, validation layer loaded):** Windows
+  (RTX 3500 Ada, where face 2 had read empty once) 12 launches of 12 right — 845 099, 631 244 and 542 859 pixels at the
+  far plane on faces 2, 4 and 5; macOS (Apple M6) 6 of 6 — 845 117, 631 244, 542 859. 0 `VUID-`, exit 0. Faces 4
+  and 5 equal Linux to the pixel; face 2 (the palm, which sways) differs by a few hundred.
 - ⚠️ **A read which changes after the scene changed says nothing about the content**: switching the two OTHER lights
   off made the faces read right, and was taken for a cure of the map — it had only moved the race. To check an
   instrument, read an image nobody is drawing.

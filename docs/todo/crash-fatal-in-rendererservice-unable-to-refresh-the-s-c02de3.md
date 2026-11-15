@@ -2,7 +2,7 @@
 id: crash-fatal-in-rendererservice-unable-to-refresh-the-s-c02de3
 title: "Crash reports: Fatal in RendererService — Unable to refresh the swap-chain!"
 status: open
-priority: unranked
+priority: high
 scope: src/Graphics/Renderer.cpp
 opened: 2026-10-21
 tags: [crash, crash-report-auto]

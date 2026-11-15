@@ -2,7 +2,7 @@
 id: crash-fatal-in-vulkanswapchain-unable-to-create-the-de-b57f2b
 title: "Crash reports: Fatal in VulkanSwapChain — Unable to create the depth buffer #<n> !"
 status: open
-priority: unranked
+priority: high
 scope: src/Vulkan/SwapChain.cpp
 opened: 2026-10-21
 tags: [crash, crash-report-auto]

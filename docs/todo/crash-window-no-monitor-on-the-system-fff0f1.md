@@ -2,7 +2,7 @@
 id: crash-window-no-monitor-on-the-system-fff0f1
 title: "Window — \"There is no monitor on the system\" is a Fatal"
 status: open
-priority: unranked
+priority: high
 scope: Window
 opened: 2026-11-10
 tags: [crash, crash-report-auto]

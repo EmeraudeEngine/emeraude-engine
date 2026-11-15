@@ -176,6 +176,11 @@ directory holding it wins, as for a local load. Every refusal is a 404 (a traver
   The 17 files of the last row are on disk, without any `.part`; a fetch which ran to its end (the directory, the
   whole 1.6 GB file in 7.7 s, SHA-256 equal) reports `"cancelled": false`; the client's shutdown during a fetch
   takes 0.54 to 0.59 s, exit 0.
+  **Peers (2026-11-15, engine `db48a911`, Release, validation layer loaded, 0 `VUID-`):** macOS (Apple M6) and Windows
+  (RTX 3500 Ada) — a cancel during the verification gives `"cancelled": true`, `"errors": []`, `"filesFailed": 0` and
+  the two lines at information level (effective after 0.07 s and 0.23 s); a shutdown of the client during the
+  verification exits 0 after 0.09 s and 0.79 s; the whole file 8.04 s and 11.81 s, SHA-256 equal,
+  `"cancelled": false`; **0 `[Error]` line on the client** on both (they had the two cancellation reports before).
 
 ## Testing a pair on one machine
 

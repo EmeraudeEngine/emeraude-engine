@@ -2,7 +2,7 @@
 id: crash-fatal-in-resourcesmanagerservice-container-does-ba06b7
 title: "Crash reports: Fatal in ResourcesManagerService — Container does not exist !"
 status: open
-priority: unranked
+priority: high
 scope: src/Resources/Manager.cpp
 opened: 2026-10-21
 tags: [crash, crash-report-auto]

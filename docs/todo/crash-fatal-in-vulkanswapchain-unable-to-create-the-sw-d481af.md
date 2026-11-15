@@ -2,7 +2,7 @@
 id: crash-fatal-in-vulkanswapchain-unable-to-create-the-sw-d481af
 title: "Crash reports: Fatal in VulkanSwapChain — Unable to create the swap-chain : VK_ERROR_INITIALIZATION_FAILED !"
 status: open
-priority: unranked
+priority: high
 scope: src/Vulkan/SwapChain.cpp
 opened: 2026-10-21
 tags: [crash, crash-report-auto]

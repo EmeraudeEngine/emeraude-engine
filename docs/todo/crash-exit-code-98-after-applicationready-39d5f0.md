@@ -2,7 +2,7 @@
 id: crash-exit-code-98-after-applicationready-39d5f0
 title: "Crash reports: Exit code 98 after ApplicationReady"
 status: open
-priority: unranked
+priority: high
 scope: src/Core.cpp, src/Overlay
 opened: 2026-10-21
 tags: [crash, crash-report-auto]

@@ -39,6 +39,11 @@ refuses) and `Renderer::captureFramebuffer()` (deleted).
   overwrite. `arm()` calls it with its own "not before" (`m_lastStem + 1`, under its lock) and the three suffixes of
   a capture; the console's `dumpRenderTarget` calls it with the prefix `rt-dump-` and the suffixes of its layer
   (`docs/render-targets.md`). Measured (Linux, Release): 4 `screenshot()` in 1.09 s, 4 distinct paths, 4 files.
+  **Verified on the three OS (2026-11-15):** macOS (4 in 1.07 s) and Windows (4 in 0.45 s) answer four distinct
+  paths, the four files exist and differ. The "second screenshot replaced the first" both peers had reported in
+  October 2026 (the former item `screenshot-same-second-overwrite`) does not reproduce: a script which REBUILDS the
+  name from the clock reads one file twice — the stem runs ahead of the clock in a burst. Read the path the command
+  answers. The dumps: 10 distinct files of 10 on macOS (1.58 s) and on Windows (1.78 s).
 - ⚠️⚠️ **A timed-out capture is CANCELLED** (fixed 2026-09-24): `waitForCompletion()` stops asking
   for frames, lets the copies already RECORDED drain through their fences (a recorded, not yet
   submitted copy is in flight too: its command buffer references the staging buffer) and goes back
