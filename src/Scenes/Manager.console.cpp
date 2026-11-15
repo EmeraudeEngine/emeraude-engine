@@ -123,7 +123,6 @@
 #include "StaticVector.hpp"
 #include "String.hpp"
 #include "VertexFactory/CapUVMapping.hpp"
-#include "Vulkan/Device.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/TextureInterface.hpp"
 #include "Vulkan/TransferManager.hpp"
@@ -589,11 +588,12 @@ namespace EmEn::Scenes
 
 			auto & renderer = scene.AVConsoleManager().graphicsRenderer();
 
-			/* Debug tool: this runs on the console thread while the render thread may be
-			 * drawing INTO this very target — a raw download crashed the process. Full
-			 * device sync first; brutal, but correct for a diagnostic command. */
-			renderer.device()->waitIdle("dumpRenderTarget console command");
-
+			/* NOTE: This runs on the console thread while the render thread draws INTO this very target. Nothing is
+			 * waited for here: the transfer manager submits the copy on the queue which renders the target, and that
+			 * queue's order places it between two passes (Vulkan::TransferManager::setReadBackQueue()). A
+			 * Device::waitIdle() stood here until 2026-11-15 — "brutal, but correct" — and was not: the render thread
+			 * submitted its next pass before the copy, on another queue, and two faces of a shadow cube were read
+			 * empty. */
 			/* NOTE: The layer is in the name: two faces dumped within the same second would otherwise overwrite each
 			 * other. One layer per call: layer 0 (the +X face of a cubemap) tells a black/dead probe from a live one, the
 			 * others show what each face baked. */

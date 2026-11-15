@@ -64,6 +64,7 @@ namespace EmEn::Vulkan
 	class CommandPool;
 	class Buffer;
 	class Image;
+	class Queue;
 }
 
 namespace EmEn::Vulkan
@@ -148,6 +149,20 @@ namespace EmEn::Vulkan
 			{
 				return m_device;
 			}
+
+			/**
+			 * @brief Sets the queue the read-backs are submitted on: the one which RENDERS the images downloadImage()
+			 * reads.
+			 * @note The submissions of ONE queue are ordered: on it, the barriers of a read-back place its copy after
+			 * the last pass which wrote the image, and the next pass after the copy. On any other queue of the family
+			 * nothing orders them, whatever the barriers and whatever was waited for before: a shadow cube was read with
+			 * two of its six views not drawn yet, the render thread submitting its pass meanwhile (2026-11-15).
+			 * @note The owner of the images (the renderer) names the queue once it has it; the termination withdraws it.
+			 * Without it downloadImage() refuses: it never falls back on "a" queue.
+			 * @note Thread-safe.
+			 * @param queue The queue, nullptr to withdraw it. It belongs to the device this manager holds.
+			 */
+			void setReadBackQueue (const Queue * queue) noexcept;
 
 			/**
 			 * @brief Transfer data to a buffer inside the GPU memory.
@@ -499,6 +514,8 @@ namespace EmEn::Vulkan
 			std::vector< ImageTransferOperation > m_imageTransferOperations EMEN_GUARDED_BY(m_transferOperationsAccess);
 			std::unique_ptr< CommandBuffer > m_imageLayoutTransitionCommandBuffer EMEN_GUARDED_BY(m_transferOperationsAccess);
 			std::unique_ptr< Sync::Fence > m_imageLayoutTransitionFence EMEN_GUARDED_BY(m_transferOperationsAccess);
+			/** The queue which renders the images read back (setReadBackQueue()); it belongs to m_device. */
+			const Queue * m_readBackQueue EMEN_GUARDED_BY(m_transferOperationsAccess){nullptr};
 			std::chrono::steady_clock::time_point m_lastStagingRelease;
 			size_t m_releasedStagingCount{0};
 			size_t m_releasedStagingBytes{0};

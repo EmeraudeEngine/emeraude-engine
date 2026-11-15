@@ -97,3 +97,35 @@ may wait for an upload still running, was not measured.
 - `src/Vulkan/PendingSubmissions.hpp` (`points()`), `Buffer.hpp` / `Image.hpp` (`pendingWrites()`).
 - `src/Vulkan/BufferTransferOperation.cpp`, `ImageTransferOperation.cpp`, `TransferManager.cpp` (the writers).
 - `src/Graphics/Renderer.cpp`, `src/Vulkan/AccelerationStructureBuilder.cpp` (the readers).
+
+### The read-back of a render target goes on the queue which renders it (2026-11-15)
+
+The same law, read the other way round: a READ of an image another queue writes is ordered by nothing either.
+`TransferManager::downloadImage()` — the console's `dumpRenderTarget`, the render targets' `capture()` — submitted its
+copy on `getPrimaryQueue()`, a queue of the family taken in rotation, while the renderer draws on its fixed one. The
+two barriers of the copy (the layout the caller names, to `TRANSFER_SRC_OPTIMAL` and back) synchronised with no pass,
+and the `Device::waitIdle()` the console command called first ("brutal, but correct") did not help: the render thread
+submits its next pass the moment the wait returns.
+
+- **What it looked like.** In 3 launches of 24 (Linux, RTX 3070 Ti, Release; both kinds of launches in Debug too),
+  faces 4 and 5 of a point light's shadow cube — one multiview pass for six views — were read ENTIRELY at the far
+  plane at every read, faces 0 to 3 right: the copy landed between the two groups of views the driver draws. A
+  shadow map with two faces missing, to all appearances. The Windows peer read face 2 empty once.
+- **How it was told from a real hole** (it took three wrong readings; item
+  `render-target-read-back-races-the-render-pass`, closed): with the light switched off its map is suspended, nobody
+  writes the image, and the same command reads the six faces right; switched on again, two faces read empty again.
+  A RenderDoc capture of a frame of such a launch replays six right faces, with right matrices and a right vertex
+  output for the six views. Screenshots do not differ: the frame samples the map after its semaphore.
+- **The fix (owner decision: the same queue).** The renderer names its queue to its transfer manager
+  (`TransferManager::setReadBackQueue()`, right after it acquires `m_graphicsQueue`); the copy is submitted on it, and
+  the queue's own order places it after the last pass which wrote the image and the next pass after the copy — "a
+  barrier on the same queue". Without a read-back queue `downloadImage()` refuses, with an error: it never falls back
+  on "a" queue. `dumpRenderTarget` no longer calls `Device::waitIdle()`.
+- **Measured after** (2026-11-15, the three lights on, `dumpRenderTarget(BulbShadowMap, 5)` in each launch, validation
+  layer loaded): 32 launches of 32 right in Release, 12 of 12 in Debug, 8 of 8 under RenderDoc on X11 (where the one
+  launch tried before was wrong); 0 `VUID-`, exit 0. The other targets read as before: an 8-bit target, the HDR probe
+  (exposure 2.75921 EV on layer 0, as before the fix), a cascade of the sun, the spot's map, the six faces of the
+  cube (566 073, 631 244, 844 734, 0, 631 244 and 542 859 pixels at the far plane), every refusal.
+- ⚠️ **A read which changes after the scene changed says nothing about the content**: switching the two OTHER lights
+  off made the faces read right, and was taken for a cure of the map — it had only moved the race. To check an
+  instrument, read an image nobody is drawing.

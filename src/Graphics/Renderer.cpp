@@ -785,6 +785,10 @@ namespace EmEn::Graphics
 			return false;
 		}
 
+		/* NOTE: A render target is read back on the queue which renders it: this one orders the copy against the
+		 * passes, no other does (Vulkan::TransferManager::setReadBackQueue()). */
+		m_transferManager.setReadBackQueue(m_graphicsQueue);
+
 		/*
 		 * NOTE: Initialize all sub-services:
 		 *  - The shader manager (for shader code generation to binary in the GPU)

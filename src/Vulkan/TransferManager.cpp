@@ -301,6 +301,9 @@ namespace EmEn::Vulkan
 
 			m_bufferTransferOperations.clear();
 			m_imageTransferOperations.clear();
+
+			/* The queue belongs to the device released below. */
+			m_readBackQueue = nullptr;
 		}
 
 		m_graphicsCommandPool.reset();
@@ -309,6 +312,14 @@ namespace EmEn::Vulkan
 		m_device.reset();
 
 		return true;
+	}
+
+	void
+	TransferManager::setReadBackQueue (const Queue * queue) noexcept
+	{
+		const Base::MutexLock lock{m_transferOperationsAccess};
+
+		m_readBackQueue = queue;
 	}
 
 	bool
@@ -577,6 +588,14 @@ namespace EmEn::Vulkan
 	std::unique_ptr< Buffer >
 	TransferManager::copyImageLayerToHostBuffer (const Image & sourceImage, const ImageLayerRead & read, size_t requiredBytes) noexcept
 	{
+		/* ⚠️ The copy is submitted on the queue which RENDERS the image, and on no other (setReadBackQueue()). */
+		if ( m_readBackQueue == nullptr )
+		{
+			TraceError{ClassId} << "No read-back queue: the owner of the images names the queue which renders them (setReadBackQueue()) !";
+
+			return nullptr;
+		}
+
 		const auto currentLayout = read.currentLayout;
 		const auto aspectMask = read.aspectMask;
 		const auto barrierAspects = transitionAspects(sourceImage.createInfo().format, aspectMask);
@@ -727,10 +746,14 @@ namespace EmEn::Vulkan
 			return nullptr;
 		}
 
-		/* Submit and wait. */
-		const auto * queue = m_device->getPrimaryQueue(QueuePriority::High);
-
-		if ( !queue->submit(*commandBuffer, SynchInfo{}.withFence(downloadFence->handle())) )
+		/* Submit and wait.
+		 * ⚠️ On the queue which renders the image, never on "a" queue of the family (Device::getPrimaryQueue() hands
+		 * them out in rotation): the submissions of one queue are ordered, so the two barriers above place the copy
+		 * after the last pass which wrote the image and the next pass after the copy. On another queue nothing
+		 * ordered them — neither the barriers nor a Device::waitIdle() before the call, the render thread being free
+		 * to submit meanwhile: faces 4 and 5 of a shadow cube were read empty, the copy landing between the two
+		 * groups of views of its multiview pass (2026-11-15). */
+		if ( !m_readBackQueue->submit(*commandBuffer, SynchInfo{}.withFence(downloadFence->handle())) )
 		{
 			TraceError{ClassId} << "Unable to submit image download command buffer !";
 

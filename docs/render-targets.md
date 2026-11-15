@@ -42,6 +42,11 @@ this wrong produces a VUID cascade in which only the first message names the rea
 
 ### Reading a target back — one array layer, as bytes or as floats (2026-11-14)
 
+⚠️ **The copy is submitted on the queue which RENDERS the targets** (`TransferManager::setReadBackQueue()`, named by
+the renderer; 2026-11-15): that queue's order places it between two passes. Without it `downloadImage()` refuses. It
+used to go on another queue of the family, where nothing ordered it against the pass being drawn — vulkan doc
+`25-uploads-ordered-before-their-readers.md` § The read-back of a render target.
+
 `TransferManager::downloadImage(image, arrayLayer, layout, aspect, pixmap)` copies ONE array layer of mip 0: a cubemap
 face (0 = +X, 1 = -X, 2 = +Y, 3 = -Y, 4 = +Z, 5 = -Z), a shadow cascade, 0 for a plain image. The layer is never
 clamped: one the image does not have is refused (the caller would get another layer's pixels without knowing it). The
@@ -137,15 +142,16 @@ image's real format.
   **Rule:** before suspecting the transfer, read the target SEVERAL times over a few seconds, and look at whatever
   shows it in the scene. The blue is not the clear colour either (render-to-texture clears with the renderer's,
   black).
-- ⚠️ **…and a layer read EMPTY from a target redrawn every frame is first of all a racing read** (2026-11-15,
-  item `render-target-read-back-races-the-render-pass`). The dump copies the image from the console thread, on
-  another queue than the one which renders it: nothing orders the copy against the pass. In some launches (3 of 24
-  on Linux, Release) faces 4 and 5 of a point light's shadow cube read entirely at the far plane at EVERY read, the
-  four others right — the copy lands between the two groups of views the driver draws. It read like a hole in the
-  shadow map for a few hours. The proof that it is not: switch the light off (its map is suspended, nobody draws the
-  image) and read again — the six faces are there; a RenderDoc capture of the same launch replays six right faces.
-  **Rule:** to read a target that is redrawn every frame, suspend it first; and never conclude on the CONTENT from a
-  read which changed after the scene changed.
+- ⚠️ **…and a layer read EMPTY from a target redrawn every frame was a racing read** (2026-11-15, FIXED the same
+  day; the former item `render-target-read-back-races-the-render-pass`). The dump copied the image from the console
+  thread on another queue than the one which renders it: nothing ordered the copy against the pass. In some launches
+  (3 of 24 on Linux, Release) faces 4 and 5 of a point light's shadow cube read entirely at the far plane at EVERY
+  read, the four others right — the copy landed between the two groups of views the driver draws. It read like a
+  hole in the shadow map for a few hours. The proof that it was not: switch the light off (its map is suspended,
+  nobody draws the image) and read again — the six faces are there; a RenderDoc capture of the same launch replays
+  six right faces. The copy now goes on the rendering queue: 32 launches of 32 right in Release, 12 of 12 in Debug,
+  8 of 8 under RenderDoc. **Rule:** when a read-back is suspected, read an image nobody is drawing (suspend the
+  target); and never conclude on the CONTENT from a read which changed after the scene changed.
 - ⚠️ **Two dumps of the same layer within one second: the second is refused** ("the file … already exists", an
   `[Error]` of `FileIO::write()`): the file name holds the second (`rt-dump-<seconds>-layer<N>`). Space the dumps
   of a series by more than a second (item `dump-render-target-same-second-refused`).
