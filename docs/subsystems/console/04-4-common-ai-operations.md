@@ -18,7 +18,12 @@ python3 tools/remote-console.py "Core.SettingsService.save()"
 ### Window control
 ```bash
 python3 tools/remote-console.py "Core.WindowService.resize(1920, 1080)"
+# Minimise, then restore (2026-11-15). getState() says "iconified" as the window system reports it: never on Wayland.
+python3 tools/remote-console.py "Core.WindowService.iconify()"
+python3 tools/remote-console.py "Core.WindowService.getBackOnDesktop()"
 ```
+⚠️ The Core-level keys need the Shift modifier: the fullscreen toggle is `Core.InputManagerService.keyPress(300, 1)`
+(Shift+F11), `keyPress(300, 0)` does nothing.
 
 ### Music playback
 ```bash

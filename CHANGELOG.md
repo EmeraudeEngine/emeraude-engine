@@ -1,6 +1,8 @@
 # Development History Log
 
 ## Unreleased
+ - **Window: the fullscreen switch no longer stores the size of a minimised or empty window.** `Window::switchToFullscreenMode()` has the refusal `onTerminate()` already had (a warning, the size stored before is kept, the switch goes on): it was the one writer of the stored window size left without it.
+ - **Console: `Core.WindowService.iconify()` and `getBackOnDesktop()`**, and `getState()` gains `"iconified"` (as the window system reports it: never on Wayland).
  - **A render target's dump has a unique file stem.** `Graphics::FrameCapture::firstFreeStem()` (new, public, static) is the naming rule of the captures directory — the first free second — and `dumpRenderTarget` uses it as the screenshots do: two dumps of one layer within a second no longer share a name (the second was refused, "already exists").
  - **A render target is read back on the queue which renders it.** `Vulkan::TransferManager::setReadBackQueue()` (new; the renderer names its queue): `downloadImage()` submits its copy there, where the queue's order places it between two passes, and refuses without it. The copy went on another queue of the family, ordered against nothing: `dumpRenderTarget` could read a target while its pass was running — two faces of a shadow cube read empty in some launches. The command no longer calls `Device::waitIdle()`.
  - **Resource sharing: a cancellation is not an error (status change).** `peerFetchStatus()` gains `"cancelled"` (a stop — `cancelPeerFetch()`, the shutdown — kept the job from doing all its work); a cancellation is traced as information, adds nothing to `errors`, and the file it cut is no longer counted in `filesFailed`.

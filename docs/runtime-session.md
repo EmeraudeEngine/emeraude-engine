@@ -91,6 +91,8 @@ Core
 |----------|-------------|
 | `Core.WindowService.resize(w, h)` | Redimensionner la fenêtre |
 | `Core.WindowService.getState()` | État courant (JSON) |
+| `Core.WindowService.iconify()` | Minimise the window (`getState()` then says `"iconified"`, except on Wayland) |
+| `Core.WindowService.getBackOnDesktop()` | Restore a minimised window |
 
 ### Ressources
 

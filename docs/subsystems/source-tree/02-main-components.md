@@ -120,6 +120,12 @@ never touches the other.
   `forget(path)` withdraws an engine entry a product does not want, `SettingsKeyRestoration::blank()`
   starts without the base. A consumer that passes only the flag (a downstream application) therefore gets the engine
   base restored **without any code change**.
+- ⚠️ **A kept entry is NOT cleaned by the reset**: it is carried as it is, whatever an old version wrote, and across
+  any number of versions. Its READER validates it. Read in production crash reports (2026-11-15): a window size of
+  0x0 written by engine 0.9.8 — before a minimised window's size was refused at exit — crossed the version guard on 9
+  machines of 10 (`[KEPT] Core/Video/Window/Width`, `[KEPT] …/Height`, then "Trying to create a window with invalid
+  size (0x0)") and failed their first launch of a newer version, weeks later. The window service replaces an invalid
+  stored size by the default one since 2026-11-10; nothing on the save side could have helped those machines.
 - **Two granularities.** `keep("A/B/Key")` = one variable **or one array** (an array is restored
   whole: the target array is cleared first). `keepStore("A/B")` = the whole sub-tree below the path
   (`Settings::importJSON()`). The report prints a store as `A/B/*`.

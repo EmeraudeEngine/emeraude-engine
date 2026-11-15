@@ -911,10 +911,16 @@ namespace EmEn
 		auto & settings = m_primaryServices.settings();
 
 		/* Save the current window size. NOTE: In screen coordinates (getSize()), as the key is read back: the
-		 * framebuffer size is in PIXELS, and on a 2× display every fullscreen round trip doubled the window. */
+		 * framebuffer size is in PIXELS, and on a 2× display every fullscreen round trip doubled the window.
+		 * ⚠️ Never a minimised or an empty window's (0 × 0 on Windows, a client area without height at the system's
+		 * minimum size): the same refusal as onTerminate(). The size stored before is kept, and the switch goes on.
+		 * This was the one writer of these keys left without it (2026-11-15; a stored 0x0 failed the next startup). */
+		if ( const auto currentSize = this->getSize(); this->isIconified() || currentSize[0] == 0 || currentSize[1] == 0 )
 		{
-			const auto currentSize = this->getSize();
-
+			Tracer::warning(ClassId, "The window is minimised or empty: its size is not saved before the switch to fullscreen.");
+		}
+		else
+		{
 			settings.set< uint32_t >(WindowWidthKey, currentSize[0]);
 			settings.set< uint32_t >(WindowHeightKey, currentSize[1]);
 		}

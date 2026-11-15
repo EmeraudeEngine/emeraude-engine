@@ -76,11 +76,37 @@ Archives:
 - **2026-11-11**: `Window::wasStoredSizeReplaced()` tells an application that the stored size was replaced, so it can
   give the window its own first-launch geometry (the owner's downstream application maximizes it) instead of 1280x720.
 
+- **2026-11-15, the writer is found: an OLD engine, and the version guard carried its 0x0 over.** Read in the
+  downstream application's crash-report mirror by that application's own session (counts and versions only):
+  - in 9 of the 10 machines the crashing run is the one which performs the settings reset of the version guard —
+    "Reset reason: engine version 0.9.8 older than 1.0.0 / 1.0.1 / 1.1.1" — and its journal lists
+    `[KEPT] Core/Video/Window/Width` and `[KEPT] …/Height` right before "invalid size (0x0)". The file had last been
+    written by engine 0.9.8 (tagged 2026-09-23): a build from before the save-side refusal (2026-10-01), on a machine
+    which then skipped several versions. The window size is one of the keys EVERY reset keeps
+    (`SettingsKeyRestoration::EngineKeys`), and nothing validated what was kept;
+  - so the three machines reported on the newest version were never written a 0x0 by it: two crashed at its first
+    run, the third at its second, 24 s after a first run which did the reset, rewrote the file — still 0x0 — and
+    died silently before any window line (that first run is a report of the signature
+    `crash-silent-death-at-sessionopened-on-windows-476d7f`);
+  - the tenth machine (engine 1.0.1, 3 reports within two minutes) had a file already stamped 1.0.1 holding 0x0, no
+    reset: where that one came from the mirror does not say. It failed at each launch — on that engine a failed
+    creation did not put the defaults back; since 1.1.1 it does (one report per machine there, and the settings
+    file archived after the crash holds 1280x720);
+  - no archive holds a window position or a "minimised" marker: the old files have only the width, the height and
+    the frameless flag. How 0.9.8 came to write 0x0 is therefore inferred, not read: a window minimised at exit
+    (on Windows its size callback says 0x0) before the refusal existed; 144x0 is a window at the system's minimum
+    size, whose client area has no height (120 px wide at 100 %, 144 at 120 %).
+- **What it means for the fix**: the read side (2026-11-10) is the right place — whatever an old file holds and
+  whatever a reset keeps, the stored size is checked where it is used. The save side could not have helped these
+  machines.
+
 ## What remains
 
-- Confirm on the reports of the first release that ships the fix: this signature should disappear; then move the
-  read-side rule into the window documentation and delete the item.
-- Optional: find who writes a 0x0 size.
+- Confirm on the reports of the first release that ships the read-side fix: this signature should disappear; then
+  move the rule into the window documentation and delete the item.
+- Done 2026-11-15 (owner decision: the same refusal): `Window::switchToFullscreenMode()` no longer stores the size of
+  a minimised or empty window — it was the one writer left without it; and the settings documentation says that a
+  key kept across a reset is not cleaned by it (source-tree doc 02).
 
 ## References
 

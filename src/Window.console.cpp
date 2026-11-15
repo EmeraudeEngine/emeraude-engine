@@ -27,10 +27,19 @@
 #include "Window.hpp"
 
 /* STL inclusions. */
+#include <array>
 #include <cmath>
+#include <cstdint>
+#include <string>
 #include <utility>
 
+/* Third-party inclusions. */
+#include "json/json.h"
+
 /* Local inclusions. */
+#include "Console/CommandResult.hpp"
+#include "Console/Parameter.hpp"
+#include "Console/Types.hpp"
 #include "FastJSON.hpp"
 
 namespace EmEn
@@ -66,7 +75,30 @@ namespace EmEn
 				return Console::CommandResult::success("Window resize to " + std::to_string(width) + "x" + std::to_string(height) + " requested (getState() gives the size applied).");
 			}, Console::CommandHint::Idempotent);
 
-		this->bindCommand("getState", "Returns the window state as JSON (size, position, framebuffer, scale).", [this] () {
+		this->bindCommand("iconify", "Minimises the window; getState() then says \"iconified\": true (where the window system reports it: not on Wayland). Refused in window-less mode.", [this] () {
+			if ( m_windowLess )
+			{
+				return Console::CommandResult::error("There is no window to minimise in window-less mode.");
+			}
+
+			this->iconify();
+
+			/* NOTE: The REQUEST: the window system applies it asynchronously. getState() reads the state applied. */
+			return Console::CommandResult::success("Window minimise requested (getState() gives the state applied).");
+		}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("getBackOnDesktop", "Restores a minimised window on the desktop; does nothing to a window which is not minimised. Refused in window-less mode.", [this] () {
+			if ( m_windowLess )
+			{
+				return Console::CommandResult::error("There is no window to restore in window-less mode.");
+			}
+
+			this->getBackOnDesktop();
+
+			return Console::CommandResult::success("Window restore requested (getState() gives the state applied).");
+		}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("getState", "Returns the window state as JSON (size, position, framebuffer, scale, whether it is minimised).", [this] () {
 			const auto & state = this->state();
 
 			/* NOTE: A JSON document, not a stream: a stream wrote a non-finite scale as "nan" and followed the global
@@ -80,6 +112,8 @@ namespace EmEn
 			json["framebufferHeight"] = state.framebufferHeight;
 			json["contentXScale"] = static_cast< double >(std::isfinite(state.contentXScale) ? state.contentXScale : 0.0F);
 			json["contentYScale"] = static_cast< double >(std::isfinite(state.contentYScale) ? state.contentYScale : 0.0F);
+			/* NOTE: As the window system reports it (GLFW_ICONIFIED): always false on Wayland and in window-less mode. */
+			json["iconified"] = this->isIconified();
 
 			return Console::CommandResult::json(Base::FastJSON::stringify(json));
 		}, Console::CommandHint::ReadOnly);
