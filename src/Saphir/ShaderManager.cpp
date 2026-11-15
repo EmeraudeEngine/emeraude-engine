@@ -27,6 +27,7 @@
 #include "ShaderManager.hpp"
 
 /* Project configuration. */
+#include "emeraude_config.hpp"
 #include "emeraude_platform.hpp"
 
 /* STL inclusions. */
@@ -34,24 +35,34 @@
 #include <charconv>
 #include <cstring>
 #include <filesystem>
-#include <ranges>
 #include <string>
+#include <system_error>
+#include <utility>
 
 /* Third-party inclusions. */
+#include <glslang/Include/ResourceLimits.h>
+#include <glslang/MachineIndependent/Versions.h>
 #include <glslang/Public/ShaderLang.h>
 #include <glslang/SPIRV/GlslangToSpv.h>
+#include <glslang/SPIRV/Logger.h>
 
 /* Local inclusions. */
 #include "AbstractShader.hpp"
+#include "Any.hpp"
 #include "Arguments.hpp"
+#include "BlobTrait.hpp"
+#include "FaultInjection.hpp"
 #include "FileSystem.hpp"
 #include "IO/IO.hpp"
-#include "Program.hpp"
-#include "SourceCodeParser.hpp"
-#include "TokenFormatter.hpp"
 #include "PrimaryServices.hpp"
+#include "Program.hpp"
+#include "Saphir/Types.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
+#include "SourceCodeParser.hpp"
+#include "String.hpp"
+#include "TokenFormatter.hpp"
+#include "Tracer.hpp"
 #include "Vulkan/ShaderModule.hpp"
 
 namespace EmEn::Saphir
@@ -972,9 +983,19 @@ namespace EmEn::Saphir
 		shaderIdentifier += shaderName;
 		shaderIdentifier += ')';
 
+		/* NOTE: Test builds only (EMERAUDE_FAULT_INJECTION): the compiler receives this shader's source with an error
+		 * directive, so the real failure path runs (the log, the notification, the application's hook). */
+		std::string injectedSourceCode;
+
+		if ( FaultInjection::shaderCompilationFailureInjected(shaderName) )
+		{
+			injectedSourceCode = sourceCode;
+			injectedSourceCode += "\n#error Injected by the fault injection (--inject-shader-compilation-failure).\n";
+		}
+
 		/* NOTE: Convert shader shaderType to GLSLang shaderType. */
 		const auto shaderType = toGLSLangShaderType(type);
-		const auto * sourceCodeCString = sourceCode.c_str();
+		const auto * sourceCodeCString = injectedSourceCode.empty() ? sourceCode.c_str() : injectedSourceCode.c_str();
 
 		glslang::TShader glslShader{shaderType};
 		glslShader.setStrings(&sourceCodeCString, 1);

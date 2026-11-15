@@ -53,6 +53,33 @@ takes it back microseconds later, and it stole the lock from the woken writer fr
 writer is announced (it was already undefined behaviour): code running inside the frame reads the
 scene through `Core::m_frameScene`, never through the manager again.
 
+**Changing application state between two logic cycles** (`Manager::betweenLogicCycles()`, owner decision 2026-11-15):
+the application's logic hook (`Core::onCoreProcessLogics()`) runs on the logic thread inside the cycle lock
+(`m_logicCycleAccess`, held by `withLogicCycle()` for one whole cycle) and OUTSIDE the scene's lock, so nothing ordered
+it against another thread changing what it reads: a downstream testbed swapped its active game object (a shared
+pointer) and switched its player's input flags from the main thread while the hook read them — five ThreadSanitizer
+reports — and could destroy that object while the hook was still running on it (`disableActiveScene()` waits for the
+scene's accesses, never for the hook). `betweenLogicCycles(change)` takes the cycle lock: the change lands between two
+cycles, and once it returned the hook no longer runs on what the change removed. The rules:
+- any thread but the logic thread; the caller waits for the cycle in flight (one cycle at most; nothing while the logic
+  thread is paused or stopped); shared accesses are allowed inside;
+- ⚠️ never from inside an access of the active scene, shared or exclusive — a rendering frame holds the shared one for
+  its whole duration: `enableScene()` / `disableActiveScene()` / `deleteScene()` announce their write lock WITHOUT the
+  cycle lock, so the cycle in flight may be waiting for that announced writer, which waits for the frame's shared
+  access, which would wait for the cycle. Three threads, no way out;
+- not re-entrant, and an exclusive access (`withExclusiveActiveScene()`) asked from inside the change is the same
+  contract fault as one asked from inside the cycle: traced, aborted (`m_logicCycleOwner` names the holder of the lock,
+  the cycle or the change);
+- keep `enableScene()` / `disableActiveScene()` OUTSIDE the change: their notification handlers would run under the
+  cycle lock.
+What it does NOT order: the rendering thread, which never takes the cycle lock — a state the renderer reads keeps its
+own protocol (a render state slot, an atomic; item `tsan-logic-render-shared-state-races`).
+Proof (the testbed's `default`, Linux, Debug + ThreadSanitizer with `detect_deadlocks=1`, llvmpipe, the active object
+unloaded / reloaded / destroyed / rebuilt through the console, 2026-11-15): before, the five races in one run, the logic
+thread holding the cycle lock in each; after, 0 report naming the swap in 3 runs, 0 lock-order inversion, a clean
+shutdown each time. Release with the validation layer (RTX 3070 Ti): 25 input switches in a row from the main thread
+while the scene runs, 0 hang, 0 VUID, exit 0.
+
 **Jun 2026 audit (from the Scene Manager outward):** no remaining multi-scene-hazardous global
 statics; the cached-shared-resource-destruction class was fully swept (all `TextureResource` types
 + `Overlay::Surface` now release the cache-owned sampler instead of destroying it). Dormant scenes

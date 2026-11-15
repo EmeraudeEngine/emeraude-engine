@@ -36,6 +36,11 @@ release), and the measure before the fixes.
   At exit: `--inject-pipeline-cache-save-crash` (2026-11-15) — the process aborts inside `Renderer::savePipelineCache()`,
   between its save marker and the read of the driver's data, as a driver which crashes in `vkGetPipelineCacheData()`
   does; the NEXT launch is what is tested (vulkan doc 18 § A SAVE marker, and a refusal).
+  While rendering: `--inject-shader-compilation-failure=NAME` (2026-11-15) — `Saphir::ShaderManager::compile()` hands
+  the compiler the named shader's source with an `#error` directive appended, so the real failure path runs (the
+  annotated source in the log, the notification, `Core::onCoreShaderCompilationFailed()` handed over from the main
+  loop); NAME is the shader's name as the log prints it between the parentheses, and the run needs an empty
+  `--cache-directory` (a shader served by the binary cache is never compiled).
   The runner's `--eat-video-memory` is the real test (it fills the GPU).
   `docs/subsystems/vulkan/24-swap-chain-given-up-for-lack-of-video-memory.md`.
 

@@ -1755,6 +1755,59 @@ namespace EmEn
 	}
 
 	void
+	Core::recordShaderCompilationFailure (const std::string & shaderIdentifier, const std::string & sourceCode) noexcept
+	{
+		auto refused = false;
+
+		{
+			const Base::MutexLock lock{m_pendingShaderFailuresAccess};
+
+			if ( m_pendingShaderFailures.size() >= MaxPendingShaderFailures )
+			{
+				refused = true;
+			}
+			else
+			{
+				m_pendingShaderFailures.emplace_back(shaderIdentifier, sourceCode);
+			}
+		}
+
+		if ( refused )
+		{
+			/* NOTE: Traced outside the lock. The annotated source is already in the log (Saphir::ShaderManager). */
+			TraceWarning{ClassId} << MaxPendingShaderFailures << " shader compilation failures already wait for the main loop: the one of '" << shaderIdentifier << "' is not handed to the application.";
+
+			return;
+		}
+
+		/* The main loop may be waiting for a system event (without a limit while paused). */
+		Input::Manager::wakeUpEventsLoop();
+	}
+
+	void
+	Core::dispatchShaderCompilationFailures () noexcept
+	{
+		std::vector< std::pair< std::string, std::string > > failures;
+
+		{
+			const Base::MutexLock lock{m_pendingShaderFailuresAccess};
+
+			if ( m_pendingShaderFailures.empty() )
+			{
+				return;
+			}
+
+			failures.swap(m_pendingShaderFailures);
+		}
+
+		/* NOTE: Outside the lock: the hook is the application's code. */
+		for ( const auto & [shaderIdentifier, sourceCode] : failures )
+		{
+			this->onCoreShaderCompilationFailed(shaderIdentifier, sourceCode);
+		}
+	}
+
+	void
 	Core::executeMainLoopCycle () noexcept
 	{
 		/* Let the console execute pending remote commands. */
@@ -1766,6 +1819,9 @@ namespace EmEn
 		/* Same contract for the API client: the observers run HERE, on the main thread, whatever
 		 * worker completed the exchange. */
 		m_primaryServices.apiClient().dispatchCompleted();
+
+		/* And for the shader compilation failures: the application's hook runs HERE, whatever thread compiled. */
+		this->dispatchShaderCompilationFailures();
 
 		/* NOTE: External cycle-scheduling contract (scheduleMainLoopCycle()): the cycle
 		 * about to run satisfies a due request. CAS — if a fresher request landed
@@ -3440,7 +3496,9 @@ namespace EmEn
 					{
 						const auto & [identifier, sourceCode] = *payload;
 
-						this->onCoreShaderCompilationFailed(identifier, sourceCode);
+						/* NOTE: This notification runs on the thread that compiled the shader (the rendering thread inside its
+						 * frame, a build worker): the application's hook runs on the main thread, from the main loop. */
+						this->recordShaderCompilationFailure(identifier, sourceCode);
 					}
 				}
 					break;

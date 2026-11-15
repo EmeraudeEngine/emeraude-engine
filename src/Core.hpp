@@ -130,6 +130,7 @@
 #include <queue>
 #include <stop_token>
 #include <string>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -161,6 +162,7 @@
 #include "ScopedRegistration.hpp"
 #include "SettingsKeyRestoration.hpp"
 #include "SystemNotification.hpp"
+#include "ThreadSafety.hpp"
 #include "User.hpp"
 #include "Version.hpp"
 #include "Vulkan/Instance.hpp"
@@ -259,6 +261,12 @@ namespace EmEn
 			 * by another process on the same GPU) from a graphics device that stopped answering (owner decision 2026-11-10).
 			 */
 			static constexpr int OutOfVideoMemoryExitCode{95};
+
+			/**
+			 * @brief The shader compilation failures that may wait for the main loop at once
+			 * (onCoreShaderCompilationFailed()): beyond it a failure is traced and not handed to the application.
+			 */
+			static constexpr size_t MaxPendingShaderFailures{16};
 
 			/** @brief The force-quit dialog of stop() opens at MaxStopVetoCount vetoes AND this long after the first one.
 			 * @details Owner decision 2026-10-22: three clicks on the close button within a few seconds, while the
@@ -1716,9 +1724,25 @@ namespace EmEn
 			void checkSystemStopDeadline () noexcept;
 
 			/**
+			 * @brief Records a shader compilation failure for onCoreShaderCompilationFailed() and wakes the main loop
+			 * [Thread-safe].
+			 * @note Called on the thread that compiled the shader (Saphir::ShaderManager's notification).
+			 * @param shaderIdentifier The failed shader.
+			 * @param sourceCode Its annotated source code.
+			 */
+			void recordShaderCompilationFailure (const std::string & shaderIdentifier, const std::string & sourceCode) noexcept;
+
+			/**
+			 * @brief Calls onCoreShaderCompilationFailed() for every failure recorded since the last main-loop cycle.
+			 * @note Main thread (executeMainLoopCycle()). The hook runs outside the record's lock.
+			 */
+			void dispatchShaderCompilationFailures () noexcept;
+
+			/**
 			 * @brief Executes the body of one main-loop cycle.
 			 * @details Single definition shared by the running and paused loops: polls the
-			 * console controller, consumes a pending scheduleMainLoopCycle() request when due,
+			 * console controller, hands the recorded shader compilation failures to the application,
+			 * consumes a pending scheduleMainLoopCycle() request when due,
 			 * then calls the onCoreMainLoopCycle() application hook.
 			 * @see scheduleMainLoopCycle()
 			 * @see onCoreMainLoopCycle()
@@ -1920,6 +1944,10 @@ namespace EmEn
 			 * @brief Called when a shader fails to compile.
 			 * @details Default implementation notifies the user and queues the source
 			 * code for display. Override to customize error handling.
+			 * @note MAIN THREAD, from the main loop (since 2026-11-15): the failure is recorded on the thread that compiled
+			 * the shader (the rendering thread inside its frame, a build worker) and handed over at the main loop's next
+			 * cycle. At most MaxPendingShaderFailures failures wait at once (the others are traced, their source is in the
+			 * log); a failure recorded after the main loop's last cycle is not handed over.
 			 * @param shaderIdentifier Name/path of the failed shader.
 			 * @param sourceCode The shader source that failed to compile.
 			 */
@@ -2028,6 +2056,8 @@ namespace EmEn
 			 * publication for rendering (since 2026-11-03): what it changes is rendered from the same render state slot
 			 * as the scene's logic of this cycle. It runs outside the scene's lock.
 			 * Update game state, AI, and non-physics logic here.
+			 * @note What this hook reads and another thread changes (an active game object swapped or removed, an input
+			 * switch) is changed inside Scenes::Manager::betweenLogicCycles(): nothing else orders the two.
 			 * @warning Thread safety: Do not access rendering resources directly.
 			 * @param engineCycle The current frame number since engine start.
 			 */
@@ -2231,6 +2261,12 @@ namespace EmEn
 			/* External main-loop cycle scheduling. @see scheduleMainLoopCycle() */
 			static constexpr auto MainLoopCycleNotScheduled{std::numeric_limits< int64_t >::max()}; ///< Sentinel for m_scheduledCycleDueTimeMS when no external cycle request is pending.
 			std::atomic< int64_t > m_scheduledCycleDueTimeMS{MainLoopCycleNotScheduled}; ///< Monotonic deadline (ms, Base::Time::elapsedMilliseconds() clock) of the next main-loop cycle requested via scheduleMainLoopCycle(). Written from any thread, consumed by the main loop.
+			/** @brief Guards 'm_pendingShaderFailures'. Never held while the application's hook runs. */
+			Base::Mutex m_pendingShaderFailuresAccess;
+			/** @brief The shader compilation failures recorded since the last main-loop cycle (identifier, annotated
+			 * source), at most MaxPendingShaderFailures: written by the thread that compiled the shader, taken by the main
+			 * loop (dispatchShaderCompilationFailures()). */
+			std::vector< std::pair< std::string, std::string > > m_pendingShaderFailures EMEN_GUARDED_BY(m_pendingShaderFailuresAccess);
 			/* On-demand rendering (used only in RenderingMode::OnDemand). @see setRenderingMode(), requestRedraw() */
 			Base::Mutex m_redrawMutex; ///< Guards the redraw condition variable / pending-frame budget against lost wakeups.
 			std::condition_variable_any m_redrawCondition; ///< Wakes the sleeping rendering thread when a redraw is requested (_any: its wait also takes the loops' stop token).

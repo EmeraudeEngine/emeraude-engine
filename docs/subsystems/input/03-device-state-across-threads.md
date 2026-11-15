@@ -32,6 +32,18 @@ between `changeKeyState()` on one thread and `isAnyKeyPressed()` on the other, r
 - The injected keys stay OR-ed into the hardware state at each copy (a console `keyDown` survives the per-frame read).
 - `JoystickState` lost its `EMEN_API` (it is only the private static's element type; atomics make it non-copyable).
 
+### What is NOT atomic: a listener's switch, a controller's device slot (owner decision 2026-11-15)
+
+`KeyboardListenerInterface::enableKeyboardListening()` / `isListeningKeyboard()`, the pointer listener's pair, and a
+controller's device slot (`GamepadController::attachDeviceID()` / `JoystickController::attachDeviceID()`, read by
+`usable()` at every poll) are plain members: the input manager reads the listeners' switches on the main thread, where
+they are written. An application whose LOGIC thread reads them too — the testbed's player polls `isListeningKeyboard()`,
+`isListeningPointer()` and its gamepad every logic cycle — changes them inside
+`Scenes::Manager::betweenLogicCycles()` (scenes doc 08): the write then lands between two cycles. ThreadSanitizer
+reported the three of them (and the testbed's own flags) written by the main thread at an act change while the logic
+thread read them; the owner chose that one ordering over per-member atomics (a group of switches changes together, and
+the listener interfaces stay copyable). 0 report after, 3 runs.
+
 ### Reading it from the console (2026-10-16)
 
 `Core.InputManagerService.gamepadState(slot)` and `joystickState(slot)` (read-only, also MCP tools) report a connected

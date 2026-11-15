@@ -439,6 +439,8 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Executes a function on the active scene with thread-safe exclusive access.
+			 * @warning Never on the thread that holds the cycle lock — inside the logic cycle (withLogicCycle()) or inside
+			 * a change between two cycles (betweenLogicCycles()): a contract fault, traced and aborted.
 			 * @tparam function_t The type of function. Signature: void (const std::shared_ptr< Scene > &)
 			 * @param processActiveScene A function to process the active scene.
 			 * @param abortOnNullScene Do not trigger the function if there is no active scene.
@@ -447,7 +449,8 @@ namespace EmEn::Scenes
 			void
 			withExclusiveActiveScene (function_t && processActiveScene, bool abortOnNullScene) const noexcept requires (std::is_invocable_v< function_t, const std::shared_ptr< Scene > & >)
 			{
-				/* Inside the logic cycle on its own thread, the cycle lock below would never come: a contract fault. */
+				/* On the thread that holds the cycle lock (inside the logic cycle, or inside a betweenLogicCycles() change), the
+				 * cycle lock below would never come: a contract fault. */
 				if ( m_logicCycleOwner.load(std::memory_order_acquire) == std::this_thread::get_id() )
 				{
 					refuseExclusiveAccessInsideLogicCycle();
@@ -491,6 +494,45 @@ namespace EmEn::Scenes
 				m_logicCycleOwner.store(std::this_thread::get_id(), std::memory_order_release);
 
 				std::forward< function_t >(cycle)();
+
+				m_logicCycleOwner.store(std::thread::id{}, std::memory_order_release);
+			}
+
+			/**
+			 * @brief Runs a change between two logic cycles: for the whole call the logic thread is outside its cycle (the
+			 * active scene's logic, the application's Core::onCoreProcessLogics() and the publication), and its next cycle
+			 * starts after the change.
+			 * @details For the state the application's logic hook reads every cycle and another thread changes (an active
+			 * game object swapped or removed, an input switch): changed here, the hook sees it before or after, never
+			 * during, and once the call returned the hook no longer runs on what the change removed — it can be destroyed.
+			 * @note Any thread but the logic thread. The caller waits for the cycle in flight to end (one cycle at most);
+			 * with the logic thread paused or stopped, it does not wait. Shared accesses (withSharedActiveScene()) are
+			 * allowed inside.
+			 * @warning Never from inside a shared or an exclusive access of the active scene (a rendering frame holds the
+			 * shared one): the cycle in flight may be waiting for an announced writer, which waits for that access.
+			 * @warning Not re-entrant, and never from inside the logic cycle: the cycle lock is not recursive. Asked on the
+			 * thread that holds it — as an exclusive access (withExclusiveActiveScene()) asked from inside the change is —
+			 * it is a contract fault, traced and aborted.
+			 * @tparam function_t The type of function. Signature: void ()
+			 * @param change The change.
+			 */
+			template< typename function_t >
+			void
+			betweenLogicCycles (function_t && change) const noexcept requires (std::is_invocable_v< function_t >)
+			{
+				/* On the thread that holds the cycle lock (the logic cycle, or another change), the lock would never come. */
+				if ( m_logicCycleOwner.load(std::memory_order_acquire) == std::this_thread::get_id() )
+				{
+					refuseChangeInsideLogicCycle();
+				}
+
+				const Base::MutexLock lock{m_logicCycleAccess};
+
+				/* The owner, as in withLogicCycle(): an exclusive access asked from inside the change is refused instead of
+				 * waiting for itself. */
+				m_logicCycleOwner.store(std::this_thread::get_id(), std::memory_order_release);
+
+				std::forward< function_t >(change)();
 
 				m_logicCycleOwner.store(std::thread::id{}, std::memory_order_release);
 			}
@@ -576,11 +618,18 @@ namespace EmEn::Scenes
 			void withdrawExclusiveAccess () const noexcept;
 
 			/**
-			 * @brief Traces and aborts: an exclusive access asked from inside the logic cycle, on its own thread
-			 * (withLogicCycle()).
+			 * @brief Traces and aborts: an exclusive access asked on the thread that holds the cycle lock — from inside the
+			 * logic cycle (withLogicCycle()) or from inside a change between two cycles (betweenLogicCycles()).
 			 */
 			[[noreturn]]
 			static void refuseExclusiveAccessInsideLogicCycle () noexcept;
+
+			/**
+			 * @brief Traces and aborts: a change between two cycles (betweenLogicCycles()) asked on the thread that holds
+			 * the cycle lock — from inside the logic cycle, or from inside another change.
+			 */
+			[[noreturn]]
+			static void refuseChangeInsideLogicCycle () noexcept;
 
 			/**
 			 * @brief Blocks a READER while an exclusive access is announced. Lock-free when none is.
@@ -634,11 +683,12 @@ namespace EmEn::Scenes
 			mutable Base::Mutex m_sceneListAccess;
 			/** @brief Handle a shared thread-safe access to the member 'm_activeScene', when manipulating the content of a scene. 'Readers' can share the access, while 'Writers' can have an exclusive lock.  */
 			mutable Base::SharedMutex m_activeSceneSharedAccess;
-			/** @brief Held by the logic thread for one whole cycle (withLogicCycle()), by an exclusive access before its
-			 * announcement and its write lock (withExclusiveActiveScene()). Lock order: this, then m_activeSceneSharedAccess. */
+			/** @brief Held by the logic thread for one whole cycle (withLogicCycle()), by a change between two cycles
+			 * (betweenLogicCycles()), by an exclusive access before its announcement and its write lock
+			 * (withExclusiveActiveScene()). Lock order: this, then m_activeSceneSharedAccess. */
 			mutable Base::Mutex m_logicCycleAccess;
-			/** @brief The thread inside withLogicCycle(), none outside (C++20 value-initialises it to std::thread::id{}): the
-			 * self-deadlock check. */
+			/** @brief The thread inside withLogicCycle() or betweenLogicCycles(), none outside (C++20 value-initialises it to
+			 * std::thread::id{}): the self-deadlock check. */
 			mutable std::atomic< std::thread::id > m_logicCycleOwner;
 			/** @brief The writer-preference gate of 'm_activeSceneSharedAccess': the exclusive accesses announced and not
 			 * finished, and what the readers wait on (see withSharedActiveScene()). */

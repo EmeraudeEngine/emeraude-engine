@@ -367,7 +367,15 @@ namespace EmEn::Scenes
 	void
 	Manager::refuseExclusiveAccessInsideLogicCycle () noexcept
 	{
-		Tracer::fatal(ClassId, "withExclusiveActiveScene(), contract violation: an exclusive access from inside the logic cycle on its own thread (Core::onCoreProcessLogics() must use shared accesses only) would wait for itself ! Aborting.");
+		Tracer::fatal(ClassId, "withExclusiveActiveScene(), contract violation: an exclusive access asked on the thread that holds the logic cycle lock (from inside the logic cycle, where Core::onCoreProcessLogics() must use shared accesses only, or from inside a betweenLogicCycles() change) would wait for itself ! Aborting.");
+
+		std::abort();
+	}
+
+	void
+	Manager::refuseChangeInsideLogicCycle () noexcept
+	{
+		Tracer::fatal(ClassId, "betweenLogicCycles(), contract violation: a change asked on the thread that holds the logic cycle lock (from inside the logic cycle or from inside another change) would wait for itself ! Aborting.");
 
 		std::abort();
 	}

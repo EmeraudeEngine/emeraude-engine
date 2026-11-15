@@ -80,6 +80,13 @@ namespace EmEn::FaultInjection
 	 * create more images than requested; this proves the refusal beyond the engine's capacity. */
 	constexpr auto SwapChainImageCountArgument{"--inject-swap-chain-image-count"};
 
+	/** @brief The command-line argument naming the shader whose compilation from source fails as a GLSL error does:
+	 * `--inject-shader-compilation-failure=NAME` (Saphir::ShaderManager::compile() hands the compiler the source with an
+	 * `#error` directive appended, so the real failure path runs: the log, the notification, the application's hook).
+	 * NAME is the shader's name, as the log prints it between the parentheses. A shader served by the binary cache is
+	 * never compiled: run it on an empty cache directory. */
+	constexpr auto ShaderCompilationFailureArgument{"--inject-shader-compilation-failure"};
+
 	/** @brief The delay of the runtime injections after the main loop started, in seconds:
 	 * `--inject-runtime-failure-delay=N` (default DefaultRuntimeFailureDelay; time to load a scene before an emergency
 	 * save is tested). */
@@ -155,6 +162,16 @@ namespace EmEn::FaultInjection
 	 */
 	[[nodiscard]]
 	EMEN_API uint32_t swapChainImageCountInjected () noexcept;
+
+	/**
+	 * @brief Returns whether the compilation of this shader is made to fail. Always false in a build without
+	 * EMERAUDE_FAULT_INJECTION.
+	 * @note Read-only after configure(): any thread.
+	 * @param shaderName The shader's name.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	EMEN_API bool shaderCompilationFailureInjected (std::string_view shaderName) noexcept;
 
 	/**
 	 * @brief Returns the delay of the runtime injections after the main loop started.

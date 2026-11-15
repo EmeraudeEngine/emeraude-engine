@@ -1,14 +1,14 @@
 ---
 id: tsan-logic-render-shared-state-races
-title: TSan — the logic and rendering threads share plain scene state under the SHARED scene access (four races)
+title: TSan — the logic and rendering threads share plain scene state under the SHARED scene access (five races)
 status: open
 priority: high
-scope: Scenes/Scene, Graphics/PostProcessStack, Graphics/Renderable, Scenes/LightSet
+scope: Scenes/Scene, Graphics/PostProcessStack, Graphics/Renderable, Scenes/LightSet, Graphics/RenderableInstance
 opened: 2026-11-13
 tags: [tsan, concurrency, defect, measured]
 ---
 
-# TSan — the logic and rendering threads share plain scene state under the SHARED scene access (four races)
+# TSan — the logic and rendering threads share plain scene state under the SHARED scene access (five races)
 
 ## Why
 
@@ -28,8 +28,12 @@ only.
 | 3 | **a pool worker** `Renderable::Abstract::setReadyForInstantiation()` (`SkyBoxResource::onDependenciesLoaded()`) | `Renderable::Abstract::isReadyForInstantiation()` from `RenderableInstance::Abstract::isReadyToRender()` (`Scene::populateRenderLists()`) | the `FlagTrait` word |
 | 4 | `LightSet::enable()` `LightSet.hpp:222` from `Scene::applyBackgroundLightingNow()` (`Scene::processLogics()`) | `LightSet::isEnabled()` `LightSet.hpp:233` from `Saphir::Generator::SceneRendering::isLightingRequested()` (shader generation in `getReadyForRender()`) | `m_enabled` |
 
+| 5 | **rendering thread** `RenderableInstance::Abstract::createSkinningResources()` `Abstract.cpp:365`, `:411`, `:434` from `prepareSkinningResources()` ← `getReadyForShadowCasting()` (`Scene::castShadows()`) | **logic thread** `hasSkinningResources()` `Abstract.hpp:878` and `updateSkinningMatrices()` `Abstract.cpp:459` from `Component::Visual::processLogics()` `Visual.cpp:63-65` (`Scene::processLogics()`) | a skinned instance's skinning buffer pointer and its descriptor-set vector |
+
 Full report: the 2026-11-13 session's `tsan-default-report-radv.txt` (scratchpad, not kept); reproduce with the recipe
-below.
+below. Member 5 was added on 2026-11-15 (a skinned scene, `animation-debug`, llvmpipe, four reports in each of two
+runs): the renderer creates the skinning buffer and its descriptor sets on its first shadow pass while the logic thread
+tests and writes them — beyond a stale read, the logic thread can write the joint matrices through a half-built object.
 
 ## What remains
 
@@ -54,7 +58,11 @@ below.
   (`TSAN_OPTIONS=… suppressions=tsan_suppressions.txt`, `race:libLLVM*`, `race:libgallium*`).
 - That llvmpipe run reported three more races outside this item's family: the renderer's sampler cache and the
   local-data release pass (both fixed the same day, `docs/caution-points.md`), and downstream projet-alpha's
-  `act-activation-races-the-logic-thread` (open).
+  `act-activation-races-the-logic-thread` (closed 2026-11-15: `Scenes::Manager::betweenLogicCycles()`, scenes doc 08).
+- **CEF does not start under TSan** (2026-11-15: `free(): invalid size`, SIGABRT at the first browser subprocess): every
+  TSan run takes `--disable-cef`, and what only a web screen triggers is out of its reach.
+- **A skinned scene does not survive llvmpipe** (`animation-debug`: the driver's rasterizer thread dies within a second,
+  TSan or not — item `skinned-scene-crashes-the-software-vulkan-device`): on llvmpipe, keep to static scenes.
 - TSan exits with code 66 when it reported anything (`halt_on_error=0` keeps the run going): the engine's own exit code
   is in the journal ("User exit code").
 - The recipe: `cmake -S . -B .claude-build-tsan -DCMAKE_BUILD_TYPE=Debug -DEMERAUDE_ENABLE_TSAN=On -G Ninja`, then

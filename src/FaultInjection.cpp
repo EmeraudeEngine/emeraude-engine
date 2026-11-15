@@ -122,6 +122,16 @@ namespace EmEn::FaultInjection
 			return count;
 		}
 
+		/** @brief The shader whose compilation fails, empty for none (same discipline). */
+		[[nodiscard]]
+		std::string &
+		injectedShader () noexcept
+		{
+			static std::string name;
+
+			return name;
+		}
+
 		/** @brief The delay of the runtime injections (same discipline). */
 		[[nodiscard]]
 		std::chrono::seconds &
@@ -194,6 +204,13 @@ namespace EmEn::FaultInjection
 			}
 		}
 
+		if ( const auto value = arguments.get(ShaderCompilationFailureArgument); value.has_value() && !value->empty() )
+		{
+			injectedShader() = value.value();
+
+			TraceWarning{"FaultInjection"} << "FAULT INJECTION: the compilation of the shader '" << injectedShader() << "' will fail on purpose (" << ShaderCompilationFailureArgument << ").";
+		}
+
 		if ( const auto value = arguments.get(RuntimeFailureDelayArgument); value.has_value() && !value->empty() )
 		{
 			int seconds = 0;
@@ -258,6 +275,12 @@ namespace EmEn::FaultInjection
 		return swapChainImageCount();
 	}
 
+	bool
+	shaderCompilationFailureInjected (std::string_view shaderName) noexcept
+	{
+		return !injectedShader().empty() && shaderName == injectedShader();
+	}
+
 	std::chrono::seconds
 	runtimeFailureDelay () noexcept
 	{
@@ -310,6 +333,12 @@ namespace EmEn::FaultInjection
 	swapChainImageCountInjected () noexcept
 	{
 		return 0;
+	}
+
+	bool
+	shaderCompilationFailureInjected (std::string_view /*shaderName*/) noexcept
+	{
+		return false;
 	}
 
 	std::chrono::seconds
