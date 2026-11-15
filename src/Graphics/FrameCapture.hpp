@@ -34,7 +34,9 @@
 #include <filesystem>
 #include <functional>
 #include <memory>
+#include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -143,6 +145,29 @@ namespace EmEn::Graphics
 			FrameCapture (FrameCapture && copy) noexcept = delete;
 			FrameCapture & operator= (const FrameCapture & copy) noexcept = delete;
 			FrameCapture & operator= (FrameCapture && copy) noexcept = delete;
+
+			/** @brief The most seconds firstFreeStem() looks ahead of the clock for a free stem. */
+			static constexpr int64_t StemSearchSpan{3600};
+
+			/**
+			 * @brief Returns the first FREE stem of a capture's files: the current second ("<unix seconds>"), moved
+			 * forward while a file "<prefix><stem><suffix>" exists in the directory for one of the suffixes.
+			 * @note The one naming rule of everything written to the captures directory (a screenshot, a temporal
+			 * capture, a render target's dump): two captures in one second shared a name, and the second failed to
+			 * write its file. A stem may therefore run a few seconds ahead of the clock in a burst: read the path a
+			 * command answers, never rebuild it.
+			 * @note Bounded: StemSearchSpan seconds ahead at most. Past it the last candidate is returned as it is,
+			 * and the write refuses to overwrite (PixelFactory::FileIO::write()): an explicit failure, never a lost file.
+			 * @note Thread-safe by itself (it reads the directory); two callers at once may get the same stem — the
+			 * caller which needs more keeps its own "not before" (FrameCapture does, under its lock).
+			 * @param directory A reference to the captures directory.
+			 * @param prefix What precedes the stem in the file names; empty for a screenshot.
+			 * @param suffixes What follows the stem in each file the capture writes (".png", "-layer3.pfm", ...).
+			 * @param notBefore The smallest stem accepted, for a caller which already used the earlier ones. Default 0.
+			 * @return int64_t
+			 */
+			[[nodiscard]]
+			static int64_t firstFreeStem (const std::filesystem::path & directory, std::string_view prefix, std::span< const std::string_view > suffixes, int64_t notBefore = 0) noexcept;
 
 			/**
 			 * @brief Arms a capture of the next @a frameCount presented frames. Thread-safe.

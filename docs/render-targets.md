@@ -152,9 +152,13 @@ image's real format.
   six right faces. The copy now goes on the rendering queue: 32 launches of 32 right in Release, 12 of 12 in Debug,
   8 of 8 under RenderDoc. **Rule:** when a read-back is suspected, read an image nobody is drawing (suspend the
   target); and never conclude on the CONTENT from a read which changed after the scene changed.
-- ⚠️ **Two dumps of the same layer within one second: the second is refused** ("the file … already exists", an
-  `[Error]` of `FileIO::write()`): the file name holds the second (`rt-dump-<seconds>-layer<N>`). Space the dumps
-  of a series by more than a second (item `dump-render-target-same-second-refused`).
+- **The files of a dump have a UNIQUE stem** (2026-11-15): `rt-dump-<unix seconds>-layer<N>`, the second moved to
+  the next free one when a dump of that layer already used it — the screenshots' rule, through the same function
+  (`Graphics::FrameCapture::firstFreeStem()`). Two dumps of one layer within a second used to share a name, and the
+  second was refused ("the file … already exists": 4 of 10 dumps about 0.7 s apart). Measured after (Linux, Release,
+  0 `VUID-`, 0 `[Error]`): 10 dumps of an 8-bit target in 0.47 s give 10 distinct paths and 10 files; 4 HDR dumps
+  in 0.62 s, 8 files; 5 depth dumps in 0.45 s, 10 files. ⚠️ In a burst the stem runs ahead of the clock: read the
+  paths the command answers, never rebuild them.
 
 ## Architecture
 

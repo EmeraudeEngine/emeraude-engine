@@ -30,7 +30,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <fstream>
-#include <initializer_list>
 #include <iomanip>
 #include <ratio>
 #include <span>
@@ -80,28 +79,39 @@ namespace EmEn::Graphics
 			output << ']';
 		}
 
-		/**
-		 * @brief Returns whether a capture stem already names a file in the directory.
-		 * @param directory The captures directory.
-		 * @param stem The stem.
-		 * @return bool
-		 */
-		[[nodiscard]]
-		bool
-		stemTaken (const std::filesystem::path & directory, int64_t stem) noexcept
+		/** @brief What follows the stem in the files of a screenshot, of a temporal capture and of its JSON. */
+		constexpr std::array< std::string_view, 3 > CaptureSuffixes{".png", "-0.png", ".json"};
+	}
+
+	int64_t
+	FrameCapture::firstFreeStem (const std::filesystem::path & directory, std::string_view prefix, std::span< const std::string_view > suffixes, int64_t notBefore) noexcept
+	{
+		const auto now = std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count();
+		const auto first = std::max< int64_t >(now, notBefore);
+
+		const auto taken = [&directory, prefix, suffixes] (int64_t stem) noexcept {
+			const auto number = std::to_string(stem);
+
+			return std::ranges::any_of(suffixes, [&directory, prefix, &number] (std::string_view suffix) noexcept {
+				std::string name;
+				name.reserve(prefix.size() + number.size() + suffix.size());
+				name.append(prefix).append(number).append(suffix);
+
+				std::error_code error;
+
+				return std::filesystem::exists(directory / IO::u8path(name), error);
+			});
+		};
+
+		auto stem = first;
+
+		/* NOTE: Bounded (StemSearchSpan): past it the candidate is returned taken, and the write refuses to overwrite. */
+		while ( stem - first < StemSearchSpan && taken(stem) )
 		{
-			std::error_code error;
-
-			for ( const auto * suffix : {".png", "-0.png", ".json"} )
-			{
-				if ( std::filesystem::exists(directory / IO::u8path(std::to_string(stem) + suffix), error) )
-				{
-					return true;
-				}
-			}
-
-			return false;
+			++stem;
 		}
+
+		return stem;
 	}
 
 	FrameCapture::FrameCapture () noexcept = default;
@@ -181,19 +191,10 @@ namespace EmEn::Graphics
 		m_directory = directory;
 
 		/* ⚠️ A UNIQUE stem, still "<unix seconds>": two captures in one second shared a name, and the second
-		 * failed to write its file ("does it already exist?"). A second already used — by this process or by a
-		 * file on disk — moves the stem to the next free one. */
-		{
-			auto stem = std::max< int64_t >(std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count(), m_lastStem + 1);
-
-			while ( stemTaken(directory, stem) )
-			{
-				++stem;
-			}
-
-			m_stem = stem;
-			m_lastStem = stem;
-		}
+		 * failed to write its file ("does it already exist?"). A second already used — by this process (m_lastStem)
+		 * or by a file on disk — moves the stem to the next free one (firstFreeStem(), shared with the dumps). */
+		m_stem = FrameCapture::firstFreeStem(directory, {}, CaptureSuffixes, m_lastStem + 1);
+		m_lastStem = m_stem;
 
 		m_width = width;
 		m_height = height;

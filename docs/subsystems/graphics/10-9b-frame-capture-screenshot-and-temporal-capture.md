@@ -33,6 +33,12 @@ refuses) and `Renderer::captureFramebuffer()` (deleted).
   screenshots in the same second used to share a name and the second failed ("Unable to write …
   (does it already exist?)"), reproduced by two `screenshot()` 0.3 s apart. A stem may therefore run
   a few seconds ahead of the clock in a burst: read the path the command answers, never rebuild it.
+  The rule is ONE function since 2026-11-15, `FrameCapture::firstFreeStem(directory, prefix, suffixes, notBefore)`
+  (public, static): the first second from now on for which no file `<prefix><stem><suffix>` exists, searched
+  `StemSearchSpan` (3600) seconds ahead at most — past it the last candidate is returned and the write refuses to
+  overwrite. `arm()` calls it with its own "not before" (`m_lastStem + 1`, under its lock) and the three suffixes of
+  a capture; the console's `dumpRenderTarget` calls it with the prefix `rt-dump-` and the suffixes of its layer
+  (`docs/render-targets.md`). Measured (Linux, Release): 4 `screenshot()` in 1.09 s, 4 distinct paths, 4 files.
 - ⚠️⚠️ **A timed-out capture is CANCELLED** (fixed 2026-09-24): `waitForCompletion()` stops asking
   for frames, lets the copies already RECORDED drain through their fences (a recorded, not yet
   submitted copy is in flight too: its command buffer references the staging buffer) and goes back

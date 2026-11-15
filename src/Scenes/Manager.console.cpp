@@ -44,6 +44,7 @@
 #include <span>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -67,6 +68,7 @@
 #include "FastJSON.hpp"
 #include "FileSystem.hpp"
 #include "Graphics/CelestialBody.hpp"
+#include "Graphics/FrameCapture.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Geometry/Types.hpp"
@@ -594,15 +596,20 @@ namespace EmEn::Scenes
 			 * Device::waitIdle() stood here until 2026-11-15 — "brutal, but correct" — and was not: the render thread
 			 * submitted its next pass before the copy, on another queue, and two faces of a shadow cube were read
 			 * empty. */
-			/* NOTE: The layer is in the name: two faces dumped within the same second would otherwise overwrite each
-			 * other. One layer per call: layer 0 (the +X face of a cubemap) tells a black/dead probe from a live one, the
-			 * others show what each face baked. */
-			std::stringstream basename;
-			basename << "rt-dump-" << std::chrono::duration_cast< std::chrono::seconds >(std::chrono::system_clock::now().time_since_epoch()).count() << "-layer" << request.arrayLayer;
+			/* NOTE: The layer is in the name: two faces dumped within the same second would otherwise share it. One layer
+			 * per call: layer 0 (the +X face of a cubemap) tells a black/dead probe from a live one, the others show what
+			 * each face baked.
+			 * ⚠️ The stem is UNIQUE, as a screenshot's (Graphics::FrameCapture::firstFreeStem()): a second already used
+			 * by a dump of this layer moves to the next free one. Two dumps of one layer within a second used to share
+			 * a name, and the second was refused ("the file ... already exists"): 4 of 10 in a series (2026-11-15). */
+			const auto captures = renderer.primaryServices().fileSystem().userDataDirectory("captures");
+			const auto layerName = "-layer" + std::to_string(request.arrayLayer);
+			const std::array< std::string, 3 > fileEnds{layerName + ".png", layerName + ".hdr", layerName + ".pfm"};
+			const std::array< std::string_view, 3 > suffixes{fileEnds[0], fileEnds[1], fileEnds[2]};
 
 			const LayerDump dump{
 				.targetId = renderTarget.id(),
-				.basePath = Base::IO::toU8String(renderer.primaryServices().fileSystem().userDataDirectory("captures") / Base::IO::u8path(basename.str())),
+				.basePath = Base::IO::toU8String(captures / Base::IO::u8path("rt-dump-" + std::to_string(Graphics::FrameCapture::firstFreeStem(captures, "rt-dump-", suffixes)) + layerName)),
 				.arrayLayer = request.arrayLayer
 			};
 
