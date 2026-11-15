@@ -114,8 +114,7 @@ machines, counts only.
   the last line), no journal has its closing line, and no exit code, termination reason or "killed by" exists in a
   report (an exit code in 2 of 122 only: both 1, with "Core level terminated" as last line — orderly failures,
   misfiled here).
-- **The last line** (the journal is written by a thread: the last lines queued are lost, so the true last step is
-  later than this): the downstream application's session token 30, an ANSWERED request of the API client 21, a
+- **The last line**: the downstream application's session token 30, an ANSWERED request of the API client 21, a
   shader loaded from the binary cache 15, the recorder service disabled 11, "WindowService service up!" 5, a
   downstream line about its web view 5, "PlatformManagerService service up!" 4, "N physical device(s) found" 4.
   No report ends on a request left unanswered (0 of 122). 10 runs died while handling an EARLIER crash report (its
@@ -124,16 +123,29 @@ machines, counts only.
   another signature 4, nothing recorded 63 (a normal session leaves no trace). Per machine: 1 report on 63
   machines, 2 on 10, 3 on 6, 4 on 4, 5 on 1.
 
-So: no dump, no exit code, and a journal which stops short of the death. Nothing here tells WHICH step dies; the two
-things which would are the dumps the downstream application's next version brings, and a journal whose last line is
-the last line reached.
+So: no dump and no exit code. Nothing here tells WHICH step dies; the dumps the downstream application's next
+version brings are what will.
+
+## Does the journal stop short of the death? Measured: no (2026-11-15, Linux)
+
+The note of 2026-10-21 above ("the tracer writes asynchronously, a crash loses the last queued entries") made a
+synchronous journal during the startup look useful, and the owner had retained it. It was MEASURED before being
+written, and dropped (owner decision, the same day):
+- a test instance killed (SIGKILL) at 13 moments of its startup, from 40 to 400 ms after its launch, 45 kills
+  (Release, RTX 3070 Ti, `default`, the output line-buffered into a file as the reference): the journal lacks 3 lines
+  in 44 kills and 4 in one. The 3 are always the same — the very first lines, traced before the logger exists (it
+  waits for the settings service): never queued, not lost. So the writing thread lost ONE line, once in 45;
+- the last line of the journal is the last line printed (the same source line), up to 14 636 lines into the startup;
+- a synchronous startup would cost about 34 500 writes with a flush each here (the lines a startup traces before
+  "The application successfully started.", 1073 ms median) for a gain which cannot be measured.
+
+⚠️ Not measured on Windows, where these reports come from: its console output is not flushed line by line when
+redirected, so the same reference does not exist there. If the question comes back, measure it there first (a tool
+which pushes lines then dies at once, and counts what the file holds).
 
 ## What remains
 
-- Owner decision: write the journal SYNCHRONOUSLY while the engine starts (the file logger already has that mode, as
-  its fallback when its thread cannot start), and hand it to its thread once the startup is over — the last line of
-  a dead startup would then be the step which died. To weigh: a write and a flush per line during the startup.
-- Read the dumps of the first reports which carry one.
+- Read the dumps of the first reports which carry one (the downstream application's next version).
 - Then find the defect, reproduce it, fix it where it lives.
 
 ## References
