@@ -152,6 +152,14 @@ Four more defences, each answering a real failure mode:
     does not save and exits 0; the fifth the same without the warning; with one byte of the refusal's driver
     version changed, the sixth erases it, merges and saves again; after another death, a launch with
     `--clear-renderer-cache` erases the marker and saves, and the next one is back to normal.
+  - **Three OS** (peers' round 7, 2026-11-15, engine 4c8ee19f, a normal build, the marker file created BY HAND before a
+    launch, six launches each): macOS (Apple M6, MoltenVK 1.4.2; 995 555 bytes) and Windows (RTX 3500 Ada, driver
+    32.0.15.9658, MSVC 19.44; 1 399 328 bytes) — a first launch saves, a second restores, merges and saves; with the
+    marker, the launch warns, restores, writes the 40-byte refusal (`53 4E 4D 45`, then the version, the vendor, the
+    device, the driver, the pointer width and the cache UUID) and does not save, the stored cache untouched to the
+    nanosecond; the next launch the same without the warning; `--clear-renderer-cache` erases the refusal and saves;
+    the launch after is back to normal. Release and Debug 0 warning, the 40-byte `static_assert` holds on arm64 Apple
+    clang and MSVC x64, 0 VUID, 0 `[Error]`, exit 0 everywhere.
 - **Write-then-rename.** A `SIGKILL` — the documented fallback when `Core.shutdown()` is not used
   — must not leave a truncated blob for the next launch.
 - **Zero-initialised destination** before `vkGetPipelineCacheData`: drivers leave the padding

@@ -1,14 +1,14 @@
 ---
 id: tsan-logic-render-shared-state-races
-title: TSan — the logic and rendering threads share plain scene state under the SHARED scene access (five races)
+title: TSan — the logic and rendering threads share plain scene state under the SHARED scene access (six races)
 status: open
 priority: high
-scope: Scenes/Scene, Graphics/PostProcessStack, Graphics/Renderable, Scenes/LightSet, Graphics/RenderableInstance
+scope: Scenes/Scene, Graphics/PostProcessStack, Graphics/Renderable, Scenes/LightSet, Graphics/RenderableInstance, Graphics/Renderer
 opened: 2026-11-13
 tags: [tsan, concurrency, defect, measured]
 ---
 
-# TSan — the logic and rendering threads share plain scene state under the SHARED scene access (five races)
+# TSan — the logic and rendering threads share plain scene state under the SHARED scene access (six races)
 
 ## Why
 
@@ -29,11 +29,14 @@ only.
 | 4 | `LightSet::enable()` `LightSet.hpp:222` from `Scene::applyBackgroundLightingNow()` (`Scene::processLogics()`) | `LightSet::isEnabled()` `LightSet.hpp:233` from `Saphir::Generator::SceneRendering::isLightingRequested()` (shader generation in `getReadyForRender()`) | `m_enabled` |
 
 | 5 | **rendering thread** `RenderableInstance::Abstract::createSkinningResources()` `Abstract.cpp:365`, `:411`, `:434` from `prepareSkinningResources()` ← `getReadyForShadowCasting()` (`Scene::castShadows()`) | **logic thread** `hasSkinningResources()` `Abstract.hpp:878` and `updateSkinningMatrices()` `Abstract.cpp:459` from `Component::Visual::processLogics()` `Visual.cpp:63-65` (`Scene::processLogics()`) | a skinned instance's skinning buffer pointer and its descriptor-set vector |
+| 6 | **rendering thread** `Renderer::renderFrameWithInternal()` `Renderer.cpp:2772` (the frame's acceleration structure is stored) | **logic thread** `Renderer::isRayTracingReady()` `Renderer.cpp:4338` from `RTGI::providesIndirectDiffuse()` ← `PostProcessStack::hasEnabledIndirectDiffuseProvider()` ← `Scene::updateIBLDiffuseOwnership()` (`Scene::processLogics()`) | `Renderer::m_currentTLAS`, a shared pointer: a torn read is a crash, not only a stale answer |
 
 Full report: the 2026-11-13 session's `tsan-default-report-radv.txt` (scratchpad, not kept); reproduce with the recipe
 below. Member 5 was added on 2026-11-15 (a skinned scene, `animation-debug`, llvmpipe, four reports in each of two
 runs): the renderer creates the skinning buffer and its descriptor sets on its first shadow pass while the logic thread
 tests and writes them — beyond a stale read, the logic thread can write the joint matrices through a half-built object.
+Member 6 was reported once on 2026-11-15 (`default`, llvmpipe, one run of seven that day): the logic thread asks the
+renderer whether ray tracing is ready through the indirect-diffuse provider test of member 2.
 
 ## What remains
 

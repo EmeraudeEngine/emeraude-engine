@@ -643,6 +643,13 @@ This is NOT the download manager: `Core.NetManagerService.*` fetches files into 
 deduplicates by URL and retries. `Core.NetAPIClientService.*` does none of those, on purpose — see
 [`../src/Net/AGENTS.md`](../src/Net/AGENTS.md) § Web API client.
 
+### A shader program that failed (`Core.RendererService.retryFailedPrograms()`, 2026-11-15)
+
+A program whose generation failed is reported once and refused from then on, without a new attempt (graphics doc 04
+§ *A failed program is remembered*). `retryFailedPrograms()` forgets them — each one is generated again at its next
+request — and answers how many it forgot ("No shader program is remembered as failed." otherwise). A renderable
+instance already marked broken does not ask again.
+
 ### GPU memory: who holds it (`Core.RendererService.*`, 2026-10-04)
 
 `getGPUMemory(20)` answers each heap's budget and usage and the allocations grouped by heap, kind and usage flags;

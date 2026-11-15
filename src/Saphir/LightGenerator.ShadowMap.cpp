@@ -26,10 +26,21 @@
 
 #include "LightGenerator.hpp"
 
+/* STL inclusions. */
+#include <string>
+
 /* Local inclusions. */
+#include "AbstractVertexStage.hpp"
 #include "Code.hpp"
+#include "Declaration/StageOutput.hpp"
+#include "FragmentShader.hpp"
 #include "Generator/Abstract.hpp"
-#include "Tracer.hpp"
+#include "Graphics/Types.hpp"
+#include "Math/Base.hpp"
+#include "PixelFactory/Types.hpp"
+#include "Saphir/Declaration/Function.hpp"
+#include "Saphir/Keys.hpp"
+#include "Vulkan/AbstractObject.hpp"
 
 namespace EmEn::Saphir
 {

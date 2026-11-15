@@ -27,19 +27,25 @@
 #pragma once
 
 /* STL inclusions. */
-#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "NameableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "FlagTrait.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Graphics/Types.hpp"
+#include "Saphir/Declaration/PushConstantBlock.hpp"
 #include "Saphir/Generator/ProgramKey.hpp"
-#include "Saphir/Program.hpp"
 #include "StaticVector.hpp"
 
 namespace EmEn
@@ -54,14 +60,20 @@ namespace EmEn
 		class Renderer;
 	}
 
+	namespace Saphir
+	{
+		class AbstractShader;
+		class Program;
+		class SetIndexes;
+	}
+
 	namespace Vulkan
 	{
 		class DescriptorSetLayout;
 		class Framebuffer;
+		class GraphicsPipeline;
 		class LayoutManager;
 	}
-
-	class Settings;
 }
 
 namespace EmEn::Saphir::Generator
@@ -522,6 +534,19 @@ namespace EmEn::Saphir::Generator
 			}
 
 			/**
+			 * @brief Returns whether the last generateShaderProgram() refused the program as a failure the renderer
+			 * remembers: this call generated, compiled and traced nothing, the failure was reported when it happened.
+			 * @note A caller asked at every frame stays quiet on it.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isKnownFailure () const noexcept
+			{
+				return m_knownFailure;
+			}
+
+			/**
 			 * @brief Returns the next available location for shaders.
 			 * @param increment The increment value for the next location. Default 1.
 			 * @return uint32_t
@@ -600,6 +625,9 @@ namespace EmEn::Saphir::Generator
 			 * current material as a safety net against key collisions; on a mismatch the mismatch is
 			 * logged and the program is regenerated instead of reused. On success this sets
 			 * shaderProgram() and, on an actual (re)generation, registers it in the cache.
+			 * A failure is remembered by the renderer under the same key (Renderer::rememberFailedProgram()):
+			 * the next request for that program is refused at once — nothing is generated, compiled or
+			 * traced again, and isKnownFailure() answers true — until Renderer::retryFailedPrograms().
 			 * @param renderer A reference to the graphics renderer.
 			 * @param GLSLVersion The GLSL version in use. Default "460".
 			 * @param GLSLProfile The GLSL profile in use. Default "core".
@@ -861,6 +889,17 @@ namespace EmEn::Saphir::Generator
 			[[nodiscard]]
 			bool createGraphicsPipeline (Graphics::Renderer & renderer) noexcept;
 
+			/**
+			 * @brief Builds the program generateShaderProgram() found neither in the cache nor among the known failures:
+			 * the shaders' source code, the vertex buffer format, the data layout and the graphics pipeline.
+			 * @param renderer A reference to the graphics renderer.
+			 * @param GLSLVersion The GLSL version in use.
+			 * @param GLSLProfile The GLSL profile in use.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool buildShaderProgram (Graphics::Renderer & renderer, const std::string & GLSLVersion, const std::string & GLSLProfile) noexcept;
+
 			std::shared_ptr< const Graphics::RenderTarget::Abstract > m_renderTarget;
 			std::shared_ptr< const Graphics::RenderableInstance::Abstract > m_renderableInstance;
 			uint32_t m_layerIndex{0};
@@ -872,5 +911,7 @@ namespace EmEn::Saphir::Generator
 			uint32_t m_debugMaterialPropertiesLane{0};
 			/** @brief Latched from the device at the start of generateShaderProgram() (VK_EXT_mesh_shader enabled). */
 			bool m_meshShadingAvailable{false};
+			/** @brief Whether generateShaderProgram() refused the program as a failure the renderer remembers. */
+			bool m_knownFailure{false};
 	};
 }

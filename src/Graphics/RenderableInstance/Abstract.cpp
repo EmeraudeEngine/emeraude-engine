@@ -1230,7 +1230,11 @@ namespace EmEn::Graphics::RenderableInstance
 
 			if ( !generator.generateShaderProgram(renderer) )
 			{
-				TraceWarning{TracerTag} << "Unable to generate MDI shader program for renderable '" << m_renderable->name() << "' layer " << layerIndex;
+				/* NOTE: One warning per failing program, not per instance that shares it. */
+				if ( !generator.isKnownFailure() )
+				{
+					TraceWarning{TracerTag} << "Unable to generate MDI shader program for renderable '" << m_renderable->name() << "' layer " << layerIndex;
+				}
 
 				return false;
 			}
@@ -1253,6 +1257,13 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::setBroken (const std::string & errorMessage, const std::source_location & location) noexcept
 	{
+		/* NOTE: Traced when the instance BECOMES broken. The scene's per-frame checks call this again for an instance
+		 * already broken, for each render target: one error line per instance, per target and per frame. */
+		if ( this->isBroken() )
+		{
+			return;
+		}
+
 		this->enableFlag(BrokenState);
 
 		Tracer::error(TracerTag, errorMessage, location);

@@ -1480,7 +1480,12 @@ namespace EmEn::Scenes
 		}
 
 		/* If the object cannot be loaded, mark it as broken! */
-		renderableInstance->setBroken("Unable to get ready for shadow casting !");
+		{
+			std::stringstream ss;
+			ss << "Unable to get ready the renderable instance (Renderable:" << renderableInstance->renderable()->name() << "') for shadow casting with render-target '" << renderTarget->id() << "'";
+
+			renderableInstance->setBroken(ss.str());
+		}
 
 		return true; // Continue
 	}

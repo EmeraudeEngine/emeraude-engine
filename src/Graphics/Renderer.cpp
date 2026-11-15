@@ -1149,6 +1149,8 @@ namespace EmEn::Graphics
 
 			/* NOTE: Clear the program cache to release shared pointers before Vulkan resources are destroyed. */
 			m_programs.clear();
+			m_failedPrograms.clear();
+			m_failedProgramCount.store(0, std::memory_order_release);
 		}
 
 		/* NOTE: Release default resources before Vulkan resources are destroyed.
@@ -1762,6 +1764,38 @@ namespace EmEn::Graphics
 		}
 
 		return inserted;
+	}
+
+	bool
+	Renderer::hasProgramFailed (const Saphir::Generator::ProgramKey & programKey) noexcept
+	{
+		/* NOTE: A retry asked from another thread (the console) is served here, by the thread that owns the memory. */
+		if ( m_failedProgramsRetryRequested.exchange(false, std::memory_order_acq_rel) )
+		{
+			m_failedPrograms.clear();
+			m_failedProgramCount.store(0, std::memory_order_release);
+		}
+
+		return m_failedPrograms.contains(programKey);
+	}
+
+	void
+	Renderer::rememberFailedProgram (const Saphir::Generator::ProgramKey & programKey) noexcept
+	{
+		if ( m_failedPrograms.insert(programKey).second )
+		{
+			m_failedProgramCount.store(m_failedPrograms.size(), std::memory_order_release);
+		}
+	}
+
+	size_t
+	Renderer::retryFailedPrograms () noexcept
+	{
+		const auto count = m_failedProgramCount.load(std::memory_order_acquire);
+
+		m_failedProgramsRetryRequested.store(true, std::memory_order_release);
+
+		return count;
 	}
 
 	void
@@ -2563,7 +2597,15 @@ namespace EmEn::Graphics
 			if ( !m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects) )
 			{
 				/* TODO: What we need to really do here, when it occurs? */
-				Tracer::warning(ClassId, "Post-processor unable to execute the direct effects!");
+				/* NOTE: Traced once per failing episode: this pass is asked at every frame. */
+				if ( !std::exchange(m_directPostProcessFailureTraced, true) )
+				{
+					Tracer::warning(ClassId, "Post-processor unable to execute the direct effects!");
+				}
+			}
+			else
+			{
+				m_directPostProcessFailureTraced = false;
 			}
 		}
 
@@ -2851,7 +2893,15 @@ namespace EmEn::Graphics
 		if ( !m_postProcessor.executeDirectPostProcessEffects(*commandBuffer, lensEffectsSnapshot != nullptr ? *lensEffectsSnapshot : EmptyLensEffects) )
 		{
 			/* TODO: What we need to really do here, when it occurs? */
-			Tracer::warning(ClassId, "Post-processor unable to execute the direct effects!");
+			/* NOTE: Traced once per failing episode: this pass is asked at every frame. */
+			if ( !std::exchange(m_directPostProcessFailureTraced, true) )
+			{
+				Tracer::warning(ClassId, "Post-processor unable to execute the direct effects!");
+			}
+		}
+		else
+		{
+			m_directPostProcessFailureTraced = false;
 		}
 
 		/* The selection outline, over the tone-mapped image: display colours, neither exposed nor blurred by the TAA. */

@@ -113,6 +113,55 @@ The `Renderer` maintains global caches for performance optimization:
 | Pipelines | `m_graphicsPipelines` | `GraphicsPipeline::getKey(renderPass)` — a `Base::ExactKey`, compared byte for byte | Vulkan GraphicsPipeline cache |
 | Samplers | `m_samplers` | `samplerKey()` — a `Base::ExactKey` of the **content** of the `VkSamplerCreateInfo` (every field, the floats by their bits) | Texture sampler cache |
 
+### A failed program is remembered (2026-11-15, owner decisions)
+
+The program cache holds the SUCCESSES. A program whose generation failed left nothing behind, so the next request
+generated the GLSL again, compiled it again, wrote the whole annotated source to the log again and notified
+`ShaderCompilationFailed` again — at every frame for a caller asked at every frame (the final post-processing pass,
+`PostProcessor::executeDirectPostProcessEffects()`), once per instance for a program several instances share.
+
+- `Generator::Abstract::generateShaderProgram()`, after the cache miss, asks `Renderer::hasProgramFailed(key)`: a
+  program known to fail is refused at once — nothing generated, compiled or traced — and
+  `Generator::Abstract::isKnownFailure()` answers true. A failure of any step (the shaders' code, the vertex format, the
+  data layout, the compilation, the pipeline) is recorded by `Renderer::rememberFailedProgram(key)` with ONE error line
+  naming the program. Same exact key as the cache (`ProgramKey`), same thread rule (the generators), same lifetime (the
+  renderer's).
+- One report per failing PROGRAM (its key), not per source: two programs sharing a failing shader report twice.
+- Callers asked again and again stay quiet on a known failure: the post-processor's error, the MDI warning, and the
+  renderer's "unable to execute the direct effects" (once per failing episode, re-armed by a success).
+- `RenderableInstance::Abstract::setBroken(message)` traces when the instance BECOMES broken: the scene's per-frame
+  checks called it again for an instance already broken, for each render target, at every frame. The shadow-casting
+  refusal names the renderable and the render target, as the rendering one does.
+- **`Core.RendererService.retryFailedPrograms()`** (console, MCP `Renderer_retryFailedPrograms`): forgets the failed
+  programs — each one is generated again at its next request — and answers how many. Any thread: the request is a flag
+  the owning thread serves at its next `hasProgramFailed()`. For a cause that passed (video memory full when the
+  pipeline was created) and for development.
+  ⚠️ What no longer asks is not tried again: a renderable instance marked broken stays so (nothing clears
+  `BrokenState`), and one broken flag covers every render target — an instance whose SHADOW program failed is absent
+  from the main view too (item `broken-instance-covers-every-target-and-never-recovers`).
+
+Measured (Linux, RTX 3070 Ti, GCC Release configured with the fault injection, the validation layer loaded, about 18 s
+after the start, `--inject-shader-compilation-failure=NAME` on an empty cache directory):
+
+| | Before | After |
+|---|---|---|
+| The testbed's `default`, `PostProcessingFragmentShader`: erroneous-GLSL blocks | 3100 to 3182 | 1 |
+| — `[Error]` lines | 15 500 to 15 825 | 6 |
+| — journal | 21.3 MB (control without a failure: 6.9 MB) | 6.6 MB |
+| — calls of `Core::onCoreShaderCompilationFailed()` | one per frame: a web interface opened from it cannot be closed | 1: it opens once and stays closed |
+| `light-and-shadow-debug`, `ShadowCastingVertexShader`: erroneous-GLSL blocks | 5 (five programs) | 5 |
+| — `[Error]` lines | 19 598 (16 776 "Unable to get ready for shadow casting !") | 30 |
+| — journal | 15.3 MB | 6.8 MB |
+
+`retryFailedPrograms()` twice in the `default` run: "1 failed shader program(s) forgotten", exactly one more block and
+one more hook call each time. 0 VUID, exit 0 in every run. MCP conformance: 2037 checks, 0 failed. ThreadSanitizer
+(`default`, llvmpipe, the command called five times while the scene renders and acts are loaded and unloaded): no
+report on the memory or its request flag, no lock-order inversion.
+⚠️ Removing `Saphir/Program.hpp` from `Saphir/Generator/Abstract.hpp` (include-what-you-use: a forward declaration is
+enough there) broke the two files that used the shader stages through it without including them
+(`Saphir/LightGenerator.ShadowMap.cpp`, `Graphics/Material/Helpers.cpp`); a platform file that does the same is found
+by its own compiler only.
+
 The post-process passes keep their own variant caches, keyed the same way: `CombinePass::m_variants` and
 `DenoisePass::m_variants` (a generated fragment shader, its pipeline and per-frame sets per group of effects). They are
 looked up once a frame, so the key is a member rebuilt by `buildLookupKey()` through `Base::ExactKey::reset()`, which

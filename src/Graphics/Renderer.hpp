@@ -41,6 +41,7 @@
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 /* Third-party inclusions. */
@@ -1555,6 +1556,36 @@ namespace EmEn::Graphics
 			bool cacheProgram (const Saphir::Generator::ProgramKey & programKey, const std::shared_ptr< Saphir::Program > & program) noexcept;
 
 			/**
+			 * @brief Returns whether the generation of this program failed before (rememberFailedProgram()): the generator
+			 * then refuses it at once, without generating, compiling or tracing again.
+			 * @note Same thread rule as the program cache (the Saphir generators). A retry asked from another thread
+			 * (retryFailedPrograms()) is served here first: the memory is then empty.
+			 * @param programKey The key identifying the program configuration.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool hasProgramFailed (const Saphir::Generator::ProgramKey & programKey) noexcept;
+
+			/**
+			 * @brief Remembers that the generation of this program failed. The program cache only holds the successes: a
+			 * failing program was generated, compiled and traced again at every request — at every frame for the final
+			 * post-processing pass.
+			 * @note Same thread rule as the program cache. The memory lasts as long as the cache (the renderer's life);
+			 * retryFailedPrograms() empties it.
+			 * @param programKey The key identifying the program configuration.
+			 */
+			void rememberFailedProgram (const Saphir::Generator::ProgramKey & programKey) noexcept;
+
+			/**
+			 * @brief Asks for the failed programs to be forgotten: each one is generated again at its next request
+			 * [Thread-safe].
+			 * @note The memory is emptied by the thread that owns it, at its next hasProgramFailed(). What no longer asks
+			 * is not tried again: a renderable instance marked broken stays so.
+			 * @return size_t The number of failed programs remembered when asked.
+			 */
+			size_t retryFailedPrograms () noexcept;
+
+			/**
 			 * @brief Notifies that a cached program was reused.
 			 * @note This increments the reuse counter for statistics.
 			 */
@@ -2082,6 +2113,9 @@ namespace EmEn::Graphics
 			 * command buffer still references its pipeline. Indexed by currentFrameIndex(). */
 			std::array< std::shared_ptr< const DirectEffectList >, 5 > m_lensEffectsSnapshots{};
 			std::unordered_map< Saphir::Generator::ProgramKey, std::shared_ptr< Saphir::Program > > m_programs;
+			/** @brief The keys of the programs whose generation failed (rememberFailedProgram()): same thread rule as
+			 * 'm_programs', emptied with it and by a served retryFailedPrograms(). */
+			std::unordered_set< Saphir::Generator::ProgramKey > m_failedPrograms;
 			std::unordered_map< Base::ExactKey, std::shared_ptr< Vulkan::GraphicsPipeline > > m_graphicsPipelines;
 			/* NOTE: Keyed by the EXACT CREATE-INFO CONTENT (every field, Base::ExactKey), not by the identifier passed
 			 * to getSampler() — see the ⚠️ block there. The identifier is a debug label only. */
@@ -2199,6 +2233,13 @@ namespace EmEn::Graphics
 			std::atomic_bool m_swapChainGivenUp{false};
 			/* injectFrameSubmitFailure(): set by the main thread, consumed by the rendering thread. */
 			std::atomic_bool m_frameSubmitFailureInjected{false};
+			/** @brief The size of 'm_failedPrograms', readable from any thread (retryFailedPrograms()). */
+			std::atomic< size_t > m_failedProgramCount{0};
+			/** @brief Set by retryFailedPrograms() from any thread, served by hasProgramFailed() on the owning thread. */
+			std::atomic_bool m_failedProgramsRetryRequested{false};
+			/** @brief Whether the failure of the final post-processing pass was traced already (render thread; a success
+			 * re-arms it): the pass is asked at every frame. */
+			bool m_directPostProcessFailureTraced{false};
 			/* A failed recreation of the current episode followed an allocation refused for lack of video memory. */
 			bool m_swapChainFailingForVideoMemory{false};
 			/** @brief Settings: may the ACTIVE CAMERA materialize its depth of field / motion blur?

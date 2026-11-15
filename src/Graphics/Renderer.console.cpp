@@ -38,7 +38,6 @@
 #include <fstream>
 #include <functional>
 #include <iomanip>
-#include <iterator>
 #include <map>
 #include <memory>
 #include <optional>
@@ -1162,6 +1161,17 @@ namespace EmEn::Graphics
 
 				return Console::CommandResult::success("RenderDoc: frame capture triggered (captured on the next present).");
 			});
+
+		this->bindCommand("retryFailedPrograms", "Forgets the shader programs whose generation failed (a failed program is otherwise refused without a new attempt): each one is generated again at its next request. A renderable instance already marked broken does not ask again.", [this] () {
+			const auto count = this->retryFailedPrograms();
+
+			if ( count == 0 )
+			{
+				return Console::CommandResult::success("No shader program is remembered as failed.");
+			}
+
+			return Console::CommandResult::success(std::to_string(count) + " failed shader program(s) forgotten: each one is generated again at its next request.");
+		});
 
 		this->bindCommand("getStatus", "Returns renderer statistics (FPS, frame time, resolution).", [this] () {
 			const auto & stats = this->statistics();

@@ -20,6 +20,8 @@ stages (source dump / SPIR-V binary cache / `VkPipelineCache`) — see
 
 **Program cache** (Level 2) provides the biggest gain - it short-circuits before any shader code generation when an identical configuration exists. See: `Generator::Abstract::generateShaderProgram()`
 
+**A failed program is remembered under the same key** (2026-11-15): the next request is refused at once, without generating, compiling or tracing again (`Renderer::hasProgramFailed()` / `rememberFailedProgram()`, `Generator::Abstract::isKnownFailure()`), until `Core.RendererService.retryFailedPrograms()`. A caller asked at every frame stays quiet on a known failure. Graphics doc 04 § *A failed program is remembered*.
+
 ```
 RenderableInstance created
     │

@@ -21,6 +21,10 @@ since by `m_samplersAccess`). The same paragraph of the class documentation cove
 which proves nothing: a generator run from another thread (an effect created from the console on the main thread, a
 bake, a warm-up on the pool) would race exactly as the samplers did.
 
+`m_failedPrograms` (2026-11-15: the keys of the programs whose generation failed, `hasProgramFailed()` /
+`rememberFailedProgram()`) is reached at the same place as `m_programs` and follows the same rule: whatever guard the
+cache gets, it gets too. Its retry request is the one cross-thread entry, and it is an atomic flag.
+
 ## What remains
 
 - List every caller of a generator (`generateShaderProgram()` and what reaches it) with its thread; a TSan run that

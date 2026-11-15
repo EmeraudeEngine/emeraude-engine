@@ -1886,7 +1886,11 @@ namespace EmEn::Graphics
 
 		if ( !generator.generateShaderProgram(m_renderer) )
 		{
-			TraceError{ClassId} << "Unable to generate the post-processing shader program !";
+			/* NOTE: Asked at every frame: a failure the renderer remembers was reported when it happened. */
+			if ( !generator.isKnownFailure() )
+			{
+				TraceError{ClassId} << "Unable to generate the post-processing shader program !";
+			}
 
 			return false;
 		}

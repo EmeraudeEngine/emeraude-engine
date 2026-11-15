@@ -93,7 +93,8 @@ Archives:
   (`docs/subsystems/vulkan/18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md` § A SAVE marker, and a
   refusal). That machine will crash ONCE more at exit with the first version which ships it, then stop. Proven on
   Linux by fault injection (nine launches). "Save earlier" was rejected (a death at exit would move into the
-  session); a list of drivers was not needed.
+  session); a list of drivers was not needed. Verified on macOS and Windows the same day (peers' round 7, a marker
+  created by hand, six launches each: vulkan doc 18).
 
 ## What remains
 

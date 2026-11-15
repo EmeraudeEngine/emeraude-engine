@@ -30,14 +30,18 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <string>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "FastJSON.hpp"
 #include "Graphics/Geometry/Interface.hpp"
 #include "Interface.hpp"
+#include "Saphir/AbstractVertexStage.hpp"
 #include "Saphir/Code.hpp"
+#include "Saphir/Declaration/StageOutput.hpp"
 #include "Saphir/Generator/Abstract.hpp"
 #include "Saphir/Keys.hpp"
-#include "FastJSON.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Graphics::Material
