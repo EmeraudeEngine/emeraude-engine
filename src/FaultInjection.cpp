@@ -72,6 +72,16 @@ namespace EmEn::FaultInjection
 			return injected;
 		}
 
+		/** @brief Whether the save of the pipeline cache dies as a driver crash would (same discipline). */
+		[[nodiscard]]
+		bool &
+		pipelineCacheSaveCrash () noexcept
+		{
+			static bool injected{false};
+
+			return injected;
+		}
+
 		/** @brief Whether Core stops as on a lost device (same discipline). */
 		[[nodiscard]]
 		bool &
@@ -138,6 +148,13 @@ namespace EmEn::FaultInjection
 			swapChainOutOfVideoMemory() = true;
 
 			TraceWarning{"FaultInjection"} << "FAULT INJECTION: every swap-chain recreation will fail for lack of video memory (" << SwapChainOutOfVideoMemoryArgument << ").";
+		}
+
+		if ( arguments.isSwitchPresent(PipelineCacheSaveCrashArgument) )
+		{
+			pipelineCacheSaveCrash() = true;
+
+			TraceWarning{"FaultInjection"} << "FAULT INJECTION: the process will die while the pipeline cache is saved (" << PipelineCacheSaveCrashArgument << ").";
 		}
 
 		if ( arguments.isSwitchPresent(DeviceLossArgument) )
@@ -212,6 +229,12 @@ namespace EmEn::FaultInjection
 	}
 
 	bool
+	pipelineCacheSaveCrashInjected () noexcept
+	{
+		return pipelineCacheSaveCrash();
+	}
+
+	bool
 	deviceLossInjected () noexcept
 	{
 		return deviceLoss();
@@ -255,6 +278,12 @@ namespace EmEn::FaultInjection
 
 	bool
 	swapChainOutOfVideoMemoryInjected () noexcept
+	{
+		return false;
+	}
+
+	bool
+	pipelineCacheSaveCrashInjected () noexcept
 	{
 		return false;
 	}

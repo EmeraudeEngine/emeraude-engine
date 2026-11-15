@@ -1,6 +1,7 @@
 # Development History Log
 
 ## Unreleased
+ - **Pipeline cache: a driver which crashes while giving its data is asked once.** The save at exit leaves a marker (`pipeline.cache.saving`) around `vkMergePipelineCaches` / `vkGetPipelineCacheData`; a launch which finds it writes a refusal naming the device and its driver (`pipeline.cache.nosave`), and the cache is no longer saved with them until the driver changes or `--clear-renderer-cache` is passed. The cache stored before is still restored. One crash per machine and driver instead of one at every exit (an Intel driver in production). Test builds: `--inject-pipeline-cache-save-crash`.
  - **Window: the fullscreen switch no longer stores the size of a minimised or empty window.** `Window::switchToFullscreenMode()` has the refusal `onTerminate()` already had (a warning, the size stored before is kept, the switch goes on): it was the one writer of the stored window size left without it.
  - **Console: `Core.WindowService.iconify()` and `getBackOnDesktop()`**, and `getState()` gains `"iconified"` (as the window system reports it: never on Wayland).
  - **A render target's dump has a unique file stem.** `Graphics::FrameCapture::firstFreeStem()` (new, public, static) is the naming rule of the captures directory — the first free second — and `dumpRenderTarget` uses it as the screenshots do: two dumps of one layer within a second no longer share a name (the second was refused, "already exists").

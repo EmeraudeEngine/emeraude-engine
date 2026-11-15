@@ -35,11 +35,12 @@
 #include <cmath>
 #include <compare>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
 #include <initializer_list>
-#include <limits>
 #include <iterator>
+#include <limits>
 #include <numbers>
 #include <ranges>
 #include <span>
@@ -4361,6 +4362,99 @@ namespace EmEn::Graphics
 		constexpr uint32_t PipelineCacheFormatVersion{1};
 		constexpr auto PipelineCacheFileName{"pipeline.cache"};
 		constexpr auto PipelineCacheLoadMarkerName{"pipeline.cache.loading"};
+		/* The SAVE has its marker too, and what it leaves behind: the device and driver the cache is no longer saved
+		 * with (loadPipelineCache(), savePipelineCache()). */
+		constexpr auto PipelineCacheSaveMarkerName{"pipeline.cache.saving"};
+		constexpr auto PipelineCacheSaveRefusalName{"pipeline.cache.nosave"};
+		constexpr uint32_t PipelineCacheSaveRefusalMagic{0x454D4E53U}; /* "EMNS" */
+
+		/** @brief The device and the driver whose pipeline cache is no longer saved: the content of the refusal file. */
+		struct PipelineCacheSaveRefusal
+		{
+			uint32_t magic;
+			uint32_t formatVersion;
+			uint32_t vendorID;
+			uint32_t deviceID;
+			uint32_t driverVersion;
+			uint32_t pointerABI;
+			std::array< uint8_t, VK_UUID_SIZE > cacheUUID;
+
+			[[nodiscard]]
+			bool operator== (const PipelineCacheSaveRefusal &) const noexcept = default;
+		};
+
+		/**
+		 * @brief Returns the refusal which names a device and its driver.
+		 * @param properties A reference to the physical device properties.
+		 * @return PipelineCacheSaveRefusal
+		 */
+		[[nodiscard]]
+		PipelineCacheSaveRefusal
+		saveRefusalOf (const VkPhysicalDeviceProperties & properties) noexcept
+		{
+			PipelineCacheSaveRefusal refusal{};
+			refusal.magic = PipelineCacheSaveRefusalMagic;
+			refusal.formatVersion = PipelineCacheFormatVersion;
+			refusal.vendorID = properties.vendorID;
+			refusal.deviceID = properties.deviceID;
+			refusal.driverVersion = properties.driverVersion;
+			refusal.pointerABI = static_cast< uint32_t >(sizeof(void *));
+			std::memcpy(refusal.cacheUUID.data(), static_cast< const void * >(properties.pipelineCacheUUID), VK_UUID_SIZE);
+
+			return refusal;
+		}
+
+		/**
+		 * @brief Writes the refusal file for a device and its driver.
+		 * @param filepath A reference to the path of the refusal file.
+		 * @param properties A reference to the physical device properties.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		writeSaveRefusal (const std::filesystem::path & filepath, const VkPhysicalDeviceProperties & properties) noexcept
+		{
+			const auto refusal = saveRefusalOf(properties);
+
+			std::vector< uint8_t > content(sizeof(refusal));
+			std::memcpy(content.data(), &refusal, sizeof(refusal));
+
+			return IO::filePutContents(filepath, content);
+		}
+
+		/**
+		 * @brief Tells whether the pipeline cache is no longer saved with this device and this driver.
+		 * @note A refusal which names another device or driver — the driver was updated — or which cannot be read is
+		 * erased: the save is tried again.
+		 * @param filepath A reference to the path of the refusal file.
+		 * @param properties A reference to the physical device properties.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isSaveRefused (const std::filesystem::path & filepath, const VkPhysicalDeviceProperties & properties) noexcept
+		{
+			if ( !IO::exists(filepath) )
+			{
+				return false;
+			}
+
+			PipelineCacheSaveRefusal stored{};
+
+			if ( std::vector< uint8_t > content; IO::fileGetContents(filepath, content) && content.size() == sizeof(stored) )
+			{
+				std::memcpy(&stored, content.data(), sizeof(stored));
+
+				if ( stored == saveRefusalOf(properties) )
+				{
+					return true;
+				}
+			}
+
+			IO::eraseFile(filepath);
+
+			return false;
+		}
 
 		/* FNV-1a, 64-bit: an integrity check against truncation and bit rot, not a security
 		 * measure — a hostile blob is out of scope for a local user-writable cache. */
@@ -4405,24 +4499,48 @@ namespace EmEn::Graphics
 		auto markerPath = directory;
 		markerPath.append(PipelineCacheLoadMarkerName);
 
+		auto saveMarkerPath = directory;
+		saveMarkerPath.append(PipelineCacheSaveMarkerName);
+
+		auto saveRefusalPath = directory;
+		saveRefusalPath.append(PipelineCacheSaveRefusalName);
+
 		/* Same switch as the shader caches: one command clears every shader-related cache. */
 		if ( m_primaryServices.arguments().isSwitchPresent("--clear-renderer-cache") )
 		{
 			/* NOTE: Clearing a cache that was never written is a no-op, not a failure: erasing
-			 * unconditionally made IO log an error for each absent file. */
-			if ( IO::exists(filepath) )
+			 * unconditionally made IO log an error for each absent file. The save marker and the refusal go too:
+			 * the save is tried again. */
+			for ( const auto & path : {filepath, markerPath, saveMarkerPath, saveRefusalPath} )
 			{
-				IO::eraseFile(filepath);
-			}
-
-			if ( IO::exists(markerPath) )
-			{
-				IO::eraseFile(markerPath);
+				if ( IO::exists(path) )
+				{
+					IO::eraseFile(path);
+				}
 			}
 
 			static_cast< void >(m_device->createPipelineCache());
 
 			return;
+		}
+
+		/* ⚠️ A SAVE marker left behind means the previous run died while the driver was GIVING its cache data
+		 * (vkMergePipelineCaches / vkGetPipelineCacheData, at exit). One driver does, at every exit (production,
+		 * 2026-11: an access violation inside the driver, 4 reports from one machine) — the engine cannot catch that,
+		 * so it stops asking: the cache is no longer saved with this device and this driver, until one of them
+		 * changes. The cache stored before stays good (it is written aside, then renamed) and is still restored.
+		 * NOTE: Any death of the process inside the save leaves the marker, a kill included: the price is a cache
+		 * which stops growing on that machine. `--clear-renderer-cache` lifts the refusal. */
+		if ( IO::exists(saveMarkerPath) )
+		{
+			TraceWarning{ClassId} << "The previous run crashed while saving the pipeline cache ! It is no longer saved with this driver.";
+
+			if ( !writeSaveRefusal(saveRefusalPath, m_device->physicalDevice()->propertiesVK10()) )
+			{
+				TraceWarning{ClassId} << "Unable to write '" << saveRefusalPath << "' ! The save will be tried again.";
+			}
+
+			IO::eraseFile(saveMarkerPath);
 		}
 
 		/* ⚠️ A marker left behind means the PREVIOUS run died while the driver was parsing this
@@ -4540,14 +4658,49 @@ namespace EmEn::Graphics
 			return;
 		}
 
+		const auto directory = m_primaryServices.fileSystem().cacheDirectory("pipeline-cache");
+		const auto & properties = m_device->physicalDevice()->propertiesVK10();
+
+		/* ⚠️ A driver which crashed while giving its cache data is not asked again (loadPipelineCache() wrote the
+		 * refusal on finding the save marker). A refusal naming another device or driver is erased there. */
+		{
+			auto saveRefusalPath = directory;
+			saveRefusalPath.append(PipelineCacheSaveRefusalName);
+
+			if ( isSaveRefused(saveRefusalPath, properties) )
+			{
+				TraceInfo{ClassId} << "The pipeline cache is not saved: this driver crashed while giving it (a driver update, or --clear-renderer-cache, lifts this).";
+
+				return;
+			}
+		}
+
+		/* The marker spans the driver's calls and nothing else: the merge of the two caches and the read. */
+		auto saveMarkerPath = directory;
+		saveMarkerPath.append(PipelineCacheSaveMarkerName);
+
+		if ( !IO::filePutContents(saveMarkerPath, std::string{"1"}) )
+		{
+			TraceWarning{ClassId} << "Unable to write '" << saveMarkerPath << "' ! A driver crash during this save would not be remembered.";
+		}
+
+		if ( FaultInjection::pipelineCacheSaveCrashInjected() )
+		{
+			/* NOTE: Test builds only (EMERAUDE_FAULT_INJECTION): the process dies here as it does inside a driver. */
+			std::abort();
+		}
+
 		std::vector< uint8_t > blob;
 
-		if ( !m_device->getPipelineCacheData(blob) || blob.empty() )
+		const auto read = m_device->getPipelineCacheData(blob);
+
+		/* NOTE: The driver returned (a refusal is no crash): the marker goes either way. */
+		IO::eraseFile(saveMarkerPath);
+
+		if ( !read || blob.empty() )
 		{
 			return;
 		}
-
-		const auto & properties = m_device->physicalDevice()->propertiesVK10();
 
 		PipelineCacheFileHeader header{};
 		header.magic = PipelineCacheMagic;
@@ -4563,8 +4716,6 @@ namespace EmEn::Graphics
 		std::vector< uint8_t > fileContent(sizeof(header) + blob.size());
 		std::memcpy(fileContent.data(), &header, sizeof(header));
 		std::memcpy(fileContent.data() + sizeof(header), blob.data(), blob.size());
-
-		const auto directory = m_primaryServices.fileSystem().cacheDirectory("pipeline-cache");
 
 		auto filepath = directory;
 		filepath.append(PipelineCacheFileName);

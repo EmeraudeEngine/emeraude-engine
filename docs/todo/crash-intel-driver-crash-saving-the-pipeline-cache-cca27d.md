@@ -85,13 +85,21 @@ Archives:
 - Found on 2026-11-10 once the crash-report tool named the causes of driver crashes without symbols (they were
   counted as silent deaths).
 
+- **2026-11-15, mitigated (owner decision: a save marker)**. The minidump's stack holds the destination buffer
+  already sized — the size query had returned, the DATA call is the one which dies (frames guessed by stack
+  scanning: likely, not certain) — and every journal stops right after the merge of the restored and the live
+  caches. The save now leaves a marker around the driver's calls; the launch which finds it writes a refusal naming
+  the device and its driver, and the cache is no longer saved with them until the driver changes
+  (`docs/subsystems/vulkan/18-vkpipelinecache-the-driver-cache-the-engine-now-owns.md` § A SAVE marker, and a
+  refusal). That machine will crash ONCE more at exit with the first version which ships it, then stop. Proven on
+  Linux by fault injection (nine launches). "Save earlier" was rejected (a death at exit would move into the
+  session); a list of drivers was not needed.
+
 ## What remains
 
-- Decide the mitigation: the engine cannot catch an access violation in the driver. Candidates: skip the save on
-  this driver family / version (a known-bad list), or save the cache earlier (after the startup's pipelines, not at
-  exit) so a crash there loses less. Check whether the same driver crashes on the size query (first call) or on the
-  data call.
-- Confirm on later reports.
+- On the reports of the first release which ships it: at most one report of this signature per machine and driver
+  version, then none; the journal of the launch after it holds "The previous run crashed while saving the pipeline
+  cache". Then delete the item.
 
 ## References
 

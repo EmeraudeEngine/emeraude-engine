@@ -57,6 +57,11 @@ namespace EmEn::FaultInjection
 	 * swap-chain once, runtimeFailureDelay() after the main loop started. */
 	constexpr auto SwapChainOutOfVideoMemoryArgument{"--inject-swap-chain-out-of-video-memory"};
 
+	/** @brief The command-line switch making the process die while the pipeline cache is saved, as a driver which
+	 * crashes inside vkGetPipelineCacheData() does: `--inject-pipeline-cache-save-crash`
+	 * (Graphics::Renderer::savePipelineCache(), between its marker and the read of the driver's data). */
+	constexpr auto PipelineCacheSaveCrashArgument{"--inject-pipeline-cache-save-crash"};
+
 	/** @brief The command-line switch making Core stop as on a lost graphics device (Core::stopOnDeviceLoss()),
 	 * runtimeFailureDelay() after the main loop started: `--inject-device-loss`. */
 	constexpr auto DeviceLossArgument{"--inject-device-loss"};
@@ -109,6 +114,15 @@ namespace EmEn::FaultInjection
 	 */
 	[[nodiscard]]
 	EMEN_API bool swapChainOutOfVideoMemoryInjected () noexcept;
+
+	/**
+	 * @brief Returns whether the save of the pipeline cache dies as a driver crash would (the renderer aborts between
+	 * its save marker and the read). Always false in a build without EMERAUDE_FAULT_INJECTION.
+	 * @note Read-only after configure(): any thread.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	EMEN_API bool pipelineCacheSaveCrashInjected () noexcept;
 
 	/**
 	 * @brief Returns whether Core stops as on a lost graphics device. Always false in a build without

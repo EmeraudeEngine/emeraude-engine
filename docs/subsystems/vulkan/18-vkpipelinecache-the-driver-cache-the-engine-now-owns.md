@@ -121,12 +121,37 @@ version, blob size, FNV-1a content hash, `vendorID`, `deviceID`, `driverVersion`
 some drivers never bump their UUID on a breaking update, and a 32-bit and a 64-bit driver can
 share one.
 
-Three more defences, each answering a real failure mode:
+Four more defences, each answering a real failure mode:
 
 - **A load marker.** One documented corruption originated *inside* `vkGetPipelineCacheData`, so
   the hash written at save time validated garbage. A `pipeline.cache.loading` file is dropped
   before `vkCreatePipelineCache` and removed after; finding it at startup means the previous run
   died in the driver's parser, and the blob is discarded.
+- **A SAVE marker, and a refusal** (2026-11-15, owner decision). The other side of the same call: one driver
+  crashes while GIVING its data — an access violation inside the driver during the save at exit, right after
+  "The restored and live pipeline caches merged", at EVERY exit of that machine (production: 4 reports from one
+  machine, an Intel UHD Graphics 630 on an old driver; the session itself had worked). The engine cannot catch that,
+  so it stops asking. `savePipelineCache()` drops `pipeline.cache.saving` before the merge and the read
+  (`Device::getPipelineCacheData()`) and removes it once the driver returned. `loadPipelineCache()` finding it at the
+  next launch says "The previous run crashed while saving the pipeline cache ! It is no longer saved with this
+  driver." and writes `pipeline.cache.nosave`: 40 bytes naming the device and the driver (vendor, device, driver
+  version, pointer width, cache UUID — the identity the cache file's own header carries). While that file names the
+  device in use, the save is skipped with one line of information; when it names another one — the driver was
+  updated — or cannot be read, it is erased and the save is tried again. `--clear-renderer-cache` erases it too.
+  - The cache stored BEFORE stays good (written aside, then renamed) and is still restored: that machine keeps what
+    it had, its cache only stops growing.
+  - ⚠️ ANY death of the process inside the save leaves the marker, a kill included: the window is the merge and the
+    read, a few milliseconds here, and the price of a false alarm is a cache which stops growing until the driver
+    changes or the cache is cleared.
+  - One crash per machine and driver instead of one per exit; no list of drivers to keep. "Save the cache earlier"
+    was rejected: it would move a harmless death at exit into the session.
+  - **Measured** (2026-11-15, Linux, RTX 3070 Ti, a clang build with fault injection, `default`, a scratch
+    `--cache-directory`; `--inject-pipeline-cache-save-crash` aborts between the marker and the read): a first
+    launch saves 1 438 758 bytes; a second restores, merges and saves; the third DIES in the save (SIGABRT) — the
+    marker is there, the stored cache untouched; the fourth warns, writes the 40-byte refusal, restores the cache,
+    does not save and exits 0; the fifth the same without the warning; with one byte of the refusal's driver
+    version changed, the sixth erases it, merges and saves again; after another death, a launch with
+    `--clear-renderer-cache` erases the marker and saves, and the next one is back to normal.
 - **Write-then-rename.** A `SIGKILL` — the documented fallback when `Core.shutdown()` is not used
   — must not leave a truncated blob for the next launch.
 - **Zero-initialised destination** before `vkGetPipelineCacheData`: drivers leave the padding
