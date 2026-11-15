@@ -85,9 +85,15 @@ namespace EmEn::Scenes
 
 			switch ( notificationCode )
 			{
-				/* NOTE: This signal is used for late object creation. */
+				/* NOTE: This signal is used for late object creation.
+				 * DEFERRED during a component dispatch — a component's processLogics() consuming the end of its
+				 * resource's load, or a setter called by another thread meanwhile: the properties are derived once,
+				 * by processLogics(), right after the components ran (the rule of onContainerMove()). */
 				case Component::Abstract::ComponentContentModified :
-					this->updateEntityProperties();
+					if ( !this->deferContentRefreshDuringDispatch() )
+					{
+						this->updateEntityProperties();
+					}
 					break;
 
 				/* NOTE: Per-tick signal from animated skinned visuals — shape only, no
@@ -336,6 +342,21 @@ namespace EmEn::Scenes
 		this->updateVisualDebug();
 
 		this->onContentModified();
+	}
+
+	bool
+	AbstractEntity::deferContentRefreshDuringDispatch () noexcept
+	{
+		const Base::MutexLock lock{m_componentsMutex};
+
+		if ( !m_dispatchingComponentLogics )
+		{
+			return false;
+		}
+
+		m_contentRefreshDeferred = true;
+
+		return true;
 	}
 
 	void
@@ -775,6 +796,7 @@ namespace EmEn::Scenes
 		}
 
 		bool moveDeferred = false;
+		bool contentRefreshDeferred = false;
 		bool waitersToWake = false;
 		Base::Math::CartesianFrame< float > deferredMoveCoordinates;
 
@@ -795,6 +817,7 @@ namespace EmEn::Scenes
 
 			moveDeferred = std::exchange(m_containerMoveDeferred, false);
 			deferredMoveCoordinates = m_deferredMoveCoordinates;
+			contentRefreshDeferred = std::exchange(m_contentRefreshDeferred, false);
 		}
 
 		/* NOTE: Notified after the guard's scope (CP.31/32), and only when a thread waits (every entity ends a dispatch
@@ -820,9 +843,19 @@ namespace EmEn::Scenes
 			this->onContainerMove(deferredMoveCoordinates);
 		}
 
+		/* Deferred content refresh (ComponentContentModified, raised during the dispatch): the whole derivation, once per
+		 * cycle whatever the number of components that asked. It rebuilds the collision shape too: the cheaper refresh
+		 * below is then already done. */
+		/* cppcheck-suppress knownConditionTrueFalse ; m_contentRefreshDeferred is set by deferContentRefreshDuringDispatch() during the dispatch. */
+		if ( contentRefreshDeferred )
+		{
+			m_collisionBoundariesDirty = false;
+
+			this->updateEntityProperties();
+		}
 		/* Deferred collision shape refresh (ComponentBoundariesModified, raised during the dispatch): consumed here, once
 		 * per cycle. */
-		if ( m_collisionBoundariesDirty )
+		else if ( m_collisionBoundariesDirty )
 		{
 			m_collisionBoundariesDirty = false;
 

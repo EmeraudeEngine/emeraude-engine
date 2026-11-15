@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <cstddef>
@@ -493,6 +494,33 @@ namespace EmEn::Scenes::Component
 				return false;
 			}
 
+			/**
+			 * @brief Records that a resource this component draws finished loading.
+			 * @note ANY thread. This is what an onNotification() handler does for Resources::ResourceTrait::LoadFinished,
+			 * and ALL it does: the resource notifies on the thread that completed its last dependency (a pool worker),
+			 * where neither the component's state nor its entity's may be written. The logic thread consumes it
+			 * (consumeResourceLoaded()).
+			 */
+			void
+			recordResourceLoaded () noexcept
+			{
+				m_resourceLoadedPending.store(true, std::memory_order_release);
+			}
+
+			/**
+			 * @brief Returns, once, whether a resource finished loading since the last call.
+			 * @note LOGIC thread, from the component's processLogics(): the place where it refreshes what it derives from
+			 * the resource and notifies its entity (ComponentContentModified). A plain load at every cycle, the exchange
+			 * only when something was recorded.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			consumeResourceLoaded () noexcept
+			{
+				return m_resourceLoadedPending.load(std::memory_order_acquire) && m_resourceLoadedPending.exchange(false, std::memory_order_acq_rel);
+			}
+
 		private:
 
 			/** @brief Whether a number is finite. */
@@ -553,6 +581,8 @@ namespace EmEn::Scenes::Component
 
 			const AbstractEntity & m_parentEntity;
 			Physics::BodyPhysicalProperties m_bodyPhysicalProperties;
+			/** @brief recordResourceLoaded() (any thread) / consumeResourceLoaded() (the logic thread). */
+			std::atomic< bool > m_resourceLoadedPending{false};
 			bool m_contributesToEntityExtents{true}; ///< Whether AbstractEntity::updateEntityProperties() feeds this component's extent to the entity's RENDER and COLLISION extents. @see setContributesToEntityExtents()
 	};
 }

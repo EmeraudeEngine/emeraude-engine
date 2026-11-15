@@ -72,6 +72,7 @@ consumer.build(sceneData, scene, parentNode);    // Node mode
 |--------|---------|--------|
 | `LoaderOptions::skipSkinning` | `false` | Skip phases 4-5, ignore bone weights (load as static mesh) |
 | `LoaderOptions::excludedNodeNames` | empty | Skip named nodes and their subtrees entirely |
+| `LoaderOptions::environmentReflectionIntensity` | `0.0F` (off) | Environment (image-based) specular of every material produced, applied by the material's creation function (glTF and FBX); see its documentation for why it is opt-in |
 | `LoaderOptions::cutoutMaterialNames` | empty | Load the named materials as a binary CUTOUT (alphaMode MASK, their alphaCutoff) whatever the file says: a coverage mask exported BLEND (2026-10-04, Sponza's `LeafSpring`) |
 
 **On the consumer** (affects scene building):
@@ -177,6 +178,30 @@ GLTFLoader is stack-allocated and destroyed when `onBuilding()` returns. Async l
     return res.load(image);
 });
 ```
+
+### onMeshLoaded hands out resources still being created (2026-11-15, owner decision)
+
+`Resources::Container::getOrCreateResource()` returns the new resource AT ONCE and runs its creation function as a pool
+task. `LoaderOptions::onMeshLoaded` is then called on the loading thread with the descriptor's materials, geometry and
+renderable — while their creation functions may still be running, or not started. A setter called from the hook races
+the creation function (ThreadSanitizer: the material's flag word, one report per load of a rigged model), and a
+material REFUSES most setters once created: whether the hook's change lands depends on which thread is ahead.
+
+- **The hook reads identities, it configures nothing**: keep a handle, swap a renderable in the DESCRIPTOR, override a
+  geometry pointer. Its documentation says so.
+- **What a material needs at its creation is a declarative option**, applied by the creation function itself — the
+  only writer of a material being created: `environmentReflectionIntensity`, `forceDoubleSided`,
+  `cutoutMaterialNames`, `nonEmissiveMaterialNames`. A new need is a new option.
+- `environmentReflectionIntensity` was honoured by the glTF loader only: an FBX model got no environment reflection,
+  and a caller worked around it from the hook. The FBX loader applies it since 2026-11-15 — ⚠️ a model viewer or a
+  console load that passes `1.0F` now gives an FBX asset its image-based specular too (it was silently ignored).
+
+Proof (Linux, 2026-11-15): ThreadSanitizer, the testbed's active scene switched to the rigged `animation-debug`
+(whose actor set its reflection from the hook) — one report on the material's flag word in each of 6 runs before, 0 in
+3 runs once the actor passes `environmentReflectionIntensity` instead, and with the two fixes of scenes doc 12 those
+runs report nothing at all. Release with the validation layer: 22 instances / 61 198 triangles as before, 0 VUID, no
+"Unable to create or change the reflection component" line; the armour has the same aspect as before (LOOKED AT — the
+poses differ between two launches, so it is not a pixel measure).
 
 ### PBR Material Features
 

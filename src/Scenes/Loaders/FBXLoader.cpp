@@ -54,9 +54,7 @@
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Geometry/Types.hpp"
 #include "Graphics/ImageResource.hpp"
-#include "Graphics/Material/Interface.hpp"
 #include "Graphics/Material/StandardResource.hpp"
-#include "Graphics/RasterizationOptions.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/MultiLayerMeshResource.hpp"
@@ -84,7 +82,6 @@
 /* Forward declarations. */
 namespace EmEn::Graphics::Geometry
 {
-	class Interface;
 }
 
 namespace EmEn::Scenes::Loaders
@@ -332,7 +329,8 @@ namespace EmEn::Scenes::Loaders
 				ambientOcclusionTexture = std::move(aoTex), aoChannel,
 				emissiveTexture = std::move(emissiveTex), emissiveColor = description.emissiveColor, emissiveStrength = description.emissiveStrength, hasEmissiveColor = description.hasEmissiveColor,
 				opacityTexture = std::move(opacityTex), opacityValue = description.opacityValue, opacityChannel,
-				specularIsDielectricF0 = description.specularIsDielectricF0, specularFactor = description.specularFactor, specularColor = description.specularColor
+				specularIsDielectricF0 = description.specularIsDielectricF0, specularFactor = description.specularFactor, specularColor = description.specularColor,
+				environmentReflectionIntensity = m_options.environmentReflectionIntensity
 			] (auto & materialResource) {
 				/* A base-colour texture and a base-colour factor MULTIPLY — that is what both
 				 * glTF (baseColorFactor) and FBX (base_color) specify. Setting the component to
@@ -413,6 +411,14 @@ namespace EmEn::Scenes::Loaders
 				{
 					materialResource.setSpecularFactor(specularFactor);
 					materialResource.setSpecularColor(specularColor);
+				}
+
+				/* The caller's option (LoaderOptions::environmentReflectionIntensity, 0 = off), as the glTF loader applies
+				 * it. HERE and nowhere else: this function is the only writer of a material being created, and a created
+				 * material takes no reflection component — a caller that set it from onMeshLoaded raced this task. */
+				if ( environmentReflectionIntensity > 0.0F && !materialResource.setReflectionComponentFromEnvironmentCubemap(environmentReflectionIntensity) )
+				{
+					return false;
 				}
 
 				return materialResource.setManualLoadSuccess(true);

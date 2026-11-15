@@ -6519,6 +6519,17 @@ After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and
   2026-11-13: projet-alpha builds its act on a worker while the main thread waits in `Window::waitEvents()`, THE
   wait of the main loop (projet-alpha `docs/caution-points.md` § Core Application).
 
+### A LoadFinished handler runs on the loading thread: it records, the logic thread acts (2026-11-15)
+
+> `Resources::ResourceTrait` emits `LoadFinished` on the pool worker that completed the last dependency, and the
+> observers run there. A scene component's handler does ONE thing: `Component::Abstract::recordResourceLoaded()`. Its
+> `processLogics()` consumes it (`consumeResourceLoaded()`), refreshes what it derives and notifies its entity, which
+> derives its properties once after its component dispatch. A constructor computes first and subscribes LAST; nothing
+> of a renderable (bounding volumes, scale, flags) is read before `isReadyForInstantiation()`. Scenes doc 12 § *A
+> resource's load reaches a scene object on the logic thread* — ThreadSanitizer reported 3 to 7 races per run before.
+> ⚠️ The same applies to an application callback a loader calls: `LoaderOptions::onMeshLoaded` receives resources whose
+> creation functions still run on pool tasks (scenes doc 19): it reads identities, a declarative option configures.
+
 ### TSan on a machine whose display GPU runs the NVIDIA driver (2026-11-13)
 
 > A ThreadSanitizer build of projet-alpha died at device creation on the NVIDIA driver 595.99.02 (`ThreadSanitizer:

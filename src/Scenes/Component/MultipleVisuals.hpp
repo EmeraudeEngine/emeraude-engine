@@ -30,8 +30,11 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
+#include <cstring>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -39,8 +42,19 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "CoreTypes.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/RenderableInstance/Multiple.hpp"
-#include "Graphics/Renderer.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Scenes
+{
+	class AbstractEntity;
+}
 
 namespace EmEn::Scenes::Component
 {
@@ -74,8 +88,6 @@ namespace EmEn::Scenes::Component
 				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Multiple >(this->engineContext().graphicsRenderer, renderable, coordinates, Graphics::RenderableInstance::lightingFlags(lighting))},
 				m_localCoordinates{std::move(coordinates)}
 			{
-				this->observe(renderable.get());
-
 				/* ⚠️ The entity's frame is composed HERE, and not only in move(). move() is
 				 * dispatched by onLocationDataUpdate(), which fires when an entity MOVES — never
 				 * for one created at its final position and given its components afterwards, which
@@ -83,7 +95,22 @@ namespace EmEn::Scenes::Component
 				 * and every cell of a forest draws its content piled at the world origin. */
 				this->applyParentWorldFrame();
 
+				/* Computed FIRST, subscribed LAST: the renderable notifies its load on a pool worker, and a
+				 * notification must never reach an object whose constructor has not returned (ThreadSanitizer: both
+				 * threads were writing the union below). A renderable already published never sends LoadFinished to
+				 * this new observer: the union is final here. */
+				const auto publishedBefore = renderable != nullptr && renderable->isReadyForInstantiation();
+
 				this->updateRenderBounds();
+
+				this->observe(renderable.get());
+
+				/* Check-then-act: published between the two lines above, its notification may have reached nobody. The
+				 * logic thread refreshes (processLogics()); recording twice is harmless. */
+				if ( !publishedBefore && renderable != nullptr && renderable->isReadyForInstantiation() )
+				{
+					this->recordResourceLoaded();
+				}
 			}
 
 			/**
@@ -141,7 +168,9 @@ namespace EmEn::Scenes::Component
 			const Base::Math::Space3D::AACuboid< float > &
 			localBoundingBox () const noexcept override
 			{
-				return m_renderableInstance->renderable()->boundingBox();
+				const auto * renderable = this->publishedRenderable();
+
+				return renderable != nullptr ? renderable->boundingBox() : NullBoundingBox;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::boundingSphere() const */
@@ -149,7 +178,9 @@ namespace EmEn::Scenes::Component
 			const Base::Math::Space3D::Sphere< float > &
 			localBoundingSphere () const noexcept override
 			{
-				return m_renderableInstance->renderable()->boundingSphere();
+				const auto * renderable = this->publishedRenderable();
+
+				return renderable != nullptr ? renderable->boundingSphere() : NullBoundingSphere;
 			}
 
 			/**
@@ -211,8 +242,27 @@ namespace EmEn::Scenes::Component
 			 * @note Computed on the LOCAL frames: AbstractEntity::getWorldRenderBoundingBox()
 			 * transforms it by the entity's world frame. Building it from the composed frames
 			 * would have that transform applied twice.
+			 * @note The constructor's thread, then the LOGIC thread only (processLogics(), setLocalCoordinates()): never
+			 * the loading thread, which only records its completion (onNotification()). Empty while the renderable is
+			 * not published (publishedRenderable()).
 			 */
 			void updateRenderBounds () noexcept;
+
+			/**
+			 * @brief Returns the renderable once it is PUBLISHED (ready for instantiation), a null pointer before.
+			 * @note Its bounding volumes are written by the loading thread until then (the geometry caches them at the
+			 * end of its own load): reading them earlier is a data race. The publication is an atomic stored last
+			 * (Renderable::Abstract::isReadyForInstantiation()).
+			 * @return const Graphics::Renderable::Abstract *
+			 */
+			[[nodiscard]]
+			const Graphics::Renderable::Abstract *
+			publishedRenderable () const noexcept
+			{
+				const auto * renderable = m_renderableInstance->renderable();
+
+				return renderable != nullptr && renderable->isReadyForInstantiation() ? renderable : nullptr;
+			}
 
 			/**
 			 * @brief Records the entity's world frame and rebuilds the instance data from it.

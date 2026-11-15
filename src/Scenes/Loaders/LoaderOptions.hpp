@@ -71,9 +71,15 @@ namespace EmEn::Scenes::Loaders
 		std::unordered_set< std::string > nonEmissiveMaterialNames;
 		/**
 		 * @brief Optional per-mesh hook invoked right after a mesh's renderable, geometry
-		 * and materials have been registered. Lets the caller patch the descriptor in place
-		 * (e.g. enable IBL reflection on PBR materials, override geometry, swap a renderable).
+		 * and materials have been registered. Lets the caller patch the DESCRIPTOR in place
+		 * (override geometry, swap a renderable, keep a handle).
 		 * Called once per loaded mesh, in load order, before nodes are wired.
+		 * @warning ⚠️ The materials, the geometry and the renderable of the descriptor are STILL BEING CREATED: the
+		 * loaders create them through Resources::Container::getOrCreateResource(), which returns the resource at once
+		 * and runs its creation function as a pool task. Read their identity here, never configure them — a setter
+		 * called from this hook races the creation function, and a material refuses most of them once created. What a
+		 * material needs at its creation is a declarative option of this structure (environmentReflectionIntensity,
+		 * forceDoubleSided, cutoutMaterialNames, nonEmissiveMaterialNames), applied by the creation function itself.
 		 */
 		std::function< void (MeshDescriptor &) > onMeshLoaded;
 		/**
@@ -183,6 +189,10 @@ namespace EmEn::Scenes::Loaders
 		 *    metal keeps a high reflectivity whatever its roughness). A rough metal asset with the
 		 *    option off therefore gets NEITHER image-based specular NOR screen-space/ray-traced
 		 *    reflections — that trade-off is the price of the missing occlusion, not a bug.
+		 *
+		 * @note Applied by the material's CREATION FUNCTION (a pool task), before the material is created: a material
+		 * takes no reflection component afterwards, and nothing else may write a material being created (never a
+		 * setter called from onMeshLoaded). Honoured by the glTF loader and, since 2026-11-15, by the FBX loader.
 		 */
 		float environmentReflectionIntensity{0.0F};
 	};

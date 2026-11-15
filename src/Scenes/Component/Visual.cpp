@@ -26,10 +26,20 @@
 
 #include "Visual.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <vector>
+
 /* Local inclusions. */
+#include "Animation/AnimationClip.hpp"
+#include "Animation/Skin.hpp"
 #include "Animations/AnimationClipResource.hpp"
+#include "BlobTrait.hpp"
 #include "Constants.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
+#include "Physics/Physics.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Scenes/AbstractEntity.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 
@@ -47,6 +57,15 @@ namespace EmEn::Scenes::Component
 		if ( m_renderableInstance->isBroken() )
 		{
 			return;
+		}
+
+		/* The renderable finished loading (recorded by onNotification(), on the loading thread): its scale and its
+		 * bounds are final, and the entity derives its own extents from them. */
+		if ( this->consumeResourceLoaded() )
+		{
+			this->refreshScaledBounds();
+
+			this->notify(ComponentContentModified);
 		}
 
 		if ( m_renderableInstance->isAnimated() )
@@ -161,7 +180,7 @@ namespace EmEn::Scenes::Component
 	float
 	Visual::meshScale () const noexcept
 	{
-		const auto & renderable = m_renderableInstance->renderable();
+		const auto * renderable = this->publishedRenderable();
 
 		if ( renderable == nullptr || renderable->isSprite() )
 		{
@@ -175,7 +194,7 @@ namespace EmEn::Scenes::Component
 	Visual::refreshScaledBounds () noexcept
 	{
 		const auto scale = this->meshScale();
-		const auto & renderable = m_renderableInstance->renderable();
+		const auto * renderable = this->publishedRenderable();
 
 		if ( scale == 1.0F || renderable == nullptr || !renderable->boundingBox().isValid() )
 		{
@@ -204,10 +223,10 @@ namespace EmEn::Scenes::Component
 		{
 			if ( notificationCode == Resources::ResourceTrait::LoadFinished )
 			{
-				/* The mesh's uniform scale is only known once its definition is loaded. */
-				this->refreshScaledBounds();
-
-				this->notify(ComponentContentModified);
+				/* ⚠️ This runs on the thread that finished the load (a pool worker): nothing of the component nor of
+				 * its entity is written here. The mesh's uniform scale and its bounds are refreshed, and the entity
+				 * notified, by the logic thread (processLogics()). */
+				this->recordResourceLoaded();
 			}
 
 			return true;

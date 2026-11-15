@@ -26,8 +26,18 @@
 
 #include "MultipleVisuals.hpp"
 
+/* STL inclusions. */
+#include <array>
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
+#include "Physics/Physics.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Scenes/AbstractEntity.hpp"
 #include "Scenes/Scene.hpp"
+#include "Tracer.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -136,6 +146,16 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
+		/* The renderable finished loading (recorded by onNotification(), on the loading thread). Its own box was empty
+		 * until then, so the union computed at construction was empty too: without this refresh the component keeps an
+		 * invalid visual extent and gets culled as a point. */
+		if ( this->consumeResourceLoaded() )
+		{
+			this->updateRenderBounds();
+
+			this->notify(ComponentContentModified);
+		}
+
 		if ( m_renderableInstance->isAnimated() )
 		{
 			m_renderableInstance->updateFrameIndex(scene.lifetimeMS() - this->parentEntity().birthTime());
@@ -157,7 +177,8 @@ namespace EmEn::Scenes::Component
 	{
 		m_renderBoundingBox.reset();
 
-		const auto renderable = m_renderableInterface.lock();
+		/* NOTE: Nothing of a renderable is read before its publication: the loading thread is still writing it. */
+		const auto * renderable = this->publishedRenderable();
 
 		if ( renderable == nullptr )
 		{
@@ -220,12 +241,10 @@ namespace EmEn::Scenes::Component
 		{
 			if ( notificationCode == Resources::ResourceTrait::LoadFinished )
 			{
-				/* ⚠️ The renderable's own box is empty until now, so the union computed at
-				 * construction was empty too. Without this refresh the component keeps an
-				 * invalid visual extent and gets culled as a point. */
-				this->updateRenderBounds();
-
-				this->notify(ComponentContentModified);
+				/* ⚠️ This runs on the thread that finished the load (a pool worker): nothing of the component nor of
+				 * its entity is written here. The logic thread refreshes the union and notifies the entity
+				 * (processLogics()). */
+				this->recordResourceLoaded();
 			}
 
 			return true;

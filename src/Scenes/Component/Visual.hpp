@@ -30,6 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <cstdint>
+#include <cstring>
 #include <memory>
 #include <string>
 
@@ -39,7 +41,18 @@
 
 /* Local inclusions for usages. */
 #include "Animations/SkeletalAnimator.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/RenderableInstance/Unique.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Scenes
+{
+	class AbstractEntity;
+}
 
 namespace EmEn::Scenes::Component
 {
@@ -68,10 +81,21 @@ namespace EmEn::Scenes::Component
 				m_renderableInterface{renderable},
 				m_renderableInstance{std::make_shared< Graphics::RenderableInstance::Unique >(renderable, Graphics::RenderableInstance::lightingFlags(lighting))}
 			{
+				/* Computed FIRST, subscribed LAST: the renderable notifies its load on a pool worker, and a
+				 * notification must never reach an object whose constructor has not returned. A renderable already
+				 * published never sends LoadFinished to this new observer: its bounds are final here. */
+				const auto publishedBefore = renderable != nullptr && renderable->isReadyForInstantiation();
+
+				this->refreshScaledBounds();
+
 				this->observe(renderable.get());
 
-				/* A renderable already loaded never sends LoadFinished to this new observer. */
-				this->refreshScaledBounds();
+				/* Check-then-act: published between the two lines above, its notification may have reached nobody. The
+				 * logic thread refreshes (processLogics()); recording twice is harmless. */
+				if ( !publishedBefore && renderable != nullptr && renderable->isReadyForInstantiation() )
+				{
+					this->recordResourceLoaded();
+				}
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::getRenderableInstance() const */
@@ -128,7 +152,9 @@ namespace EmEn::Scenes::Component
 					return m_scaledBoundingBox;
 				}
 
-				return m_renderableInstance->renderable()->boundingBox();
+				const auto * renderable = this->publishedRenderable();
+
+				return renderable != nullptr ? renderable->boundingBox() : NullBoundingBox;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::renderBoundingSphere() const */
@@ -141,7 +167,9 @@ namespace EmEn::Scenes::Component
 					return m_scaledBoundingSphere;
 				}
 
-				return m_renderableInstance->renderable()->boundingSphere();
+				const auto * renderable = this->publishedRenderable();
+
+				return renderable != nullptr ? renderable->boundingSphere() : NullBoundingSphere;
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
@@ -188,7 +216,8 @@ namespace EmEn::Scenes::Component
 			/**
 			 * @brief Scales the renderable's bounds by the MESH's uniform scale (the unit of its definition, drawn by
 			 * RenderableInstance::Abstract::applyLocalTransformation()), so the collision model and the culling
-			 * follow what is drawn. Leaves them invalid for a unit scale, a sprite, or a renderable not loaded yet.
+			 * follow what is drawn. Leaves them invalid for a unit scale, a sprite, or a renderable not published yet
+			 * (publishedRenderable()).
 			 */
 			void refreshScaledBounds () noexcept;
 
@@ -199,6 +228,22 @@ namespace EmEn::Scenes::Component
 			 */
 			[[nodiscard]]
 			float meshScale () const noexcept;
+
+			/**
+			 * @brief Returns the renderable once it is PUBLISHED (ready for instantiation), a null pointer before.
+			 * @note Its bounding volumes, its scale and its flags are written by the loading thread until then (the
+			 * geometry caches its volumes at the end of its own load): reading them earlier is a data race. The
+			 * publication is an atomic stored last (Renderable::Abstract::isReadyForInstantiation()).
+			 * @return const Graphics::Renderable::Abstract *
+			 */
+			[[nodiscard]]
+			const Graphics::Renderable::Abstract *
+			publishedRenderable () const noexcept
+			{
+				const auto * renderable = m_renderableInstance->renderable();
+
+				return renderable != nullptr && renderable->isReadyForInstantiation() ? renderable : nullptr;
+			}
 
 			std::shared_ptr< Graphics::RenderableInstance::Unique > m_renderableInstance;
 			std::unique_ptr< Animations::SkeletalAnimator > m_skeletalAnimator;

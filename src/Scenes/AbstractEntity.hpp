@@ -30,13 +30,14 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <memory>
-#include <mutex>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <type_traits>
+#include <utility>
 
 /* Local inclusions for inheritances. */
 #include "FlagArrayTrait.hpp"
@@ -47,19 +48,32 @@
 
 /* Local inclusions for usages. */
 #include "Component/Abstract.hpp"
+#include "ConditionVariable.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Math/OrientedCuboid.hpp"
 #include "Math/Space3D/AACuboid.hpp"
-#include "StaticVector.hpp"
-#include "ConditionVariable.hpp"
+#include "Math/Vector.hpp"
 #include "Mutex.hpp"
+#include "Physics/BodyPhysicalProperties.hpp"
 #include "Physics/CollisionModelInterface.hpp"
+#include "StaticVector.hpp"
+#include "ThreadSafety.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
+	namespace Base
+	{
+		class Any;
+	}
+
+	namespace Graphics::RenderableInstance
+	{
+		class Abstract;
+	}
+
 	namespace Physics
 	{
 		class MovableTrait;
@@ -73,6 +87,7 @@ namespace EmEn
 	namespace Scenes
 	{
 		class AbstractEntity;
+		class Scene;
 
 		namespace Component
 		{
@@ -1274,6 +1289,17 @@ namespace EmEn::Scenes
 			void refreshCollisionBoundaries () noexcept;
 
 			/**
+			 * @brief Defers a content refresh (ComponentContentModified) asked while the component dispatch of
+			 * processLogics() runs: processLogics() derives the properties once, right after the components.
+			 * @note Any thread. During the dispatch the asker is a component consuming the end of its resource's load
+			 * (the logic thread), or a setter called by another thread meanwhile; outside a dispatch nothing is deferred
+			 * and the caller derives the properties itself, as it always did.
+			 * @return bool True when the refresh was deferred.
+			 */
+			[[nodiscard]]
+			bool deferContentRefreshDuringDispatch () noexcept;
+
+			/**
 			 * @brief Links a component to the entity (internal).
 			 *
 			 * Called by ComponentBuilder::build(). Adds component to m_components, registers
@@ -1483,6 +1509,7 @@ namespace EmEn::Scenes
 			uint32_t m_componentDispatchWaiters EMEN_GUARDED_BY(m_componentsMutex){0};
 			bool m_dispatchingComponentLogics EMEN_GUARDED_BY(m_componentsMutex){false};	   ///< True while processLogics() runs the components (on a copy of the list, without the lock).
 			bool m_containerMoveDeferred EMEN_GUARDED_BY(m_componentsMutex){false};			///< A move arrived during the component loop: dispatch m_deferredMoveCoordinates after it.
+			bool m_contentRefreshDeferred EMEN_GUARDED_BY(m_componentsMutex){false};		   ///< A content refresh was asked during the component loop: updateEntityProperties() runs after it (deferContentRefreshDuringDispatch()).
 			bool m_filedFrameRecorded{false};				///< recordFiledFrame() ran (logic thread only).
 	};
 

@@ -33,7 +33,13 @@
 #include <iterator>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Math/Vector.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "Scenes/AbstractEntity.hpp"
 #include "Scenes/Scene.hpp"
+#include "Tracer.hpp"
+#include "Variant.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -49,6 +55,13 @@ namespace EmEn::Scenes::Component
 		if ( m_renderableInstance->isBroken() )
 		{
 			return;
+		}
+
+		/* The renderable finished loading (recorded by onNotification(), on the loading thread): the entity derives
+		 * its properties again, on this thread. */
+		if ( this->consumeResourceLoaded() )
+		{
+			this->notify(ComponentContentModified);
 		}
 
 		if ( m_renderableInstance->isAnimated() )
@@ -240,7 +253,9 @@ namespace EmEn::Scenes::Component
 		{
 			if ( notificationCode == Resources::ResourceTrait::LoadFinished )
 			{
-				this->notify(ComponentContentModified);
+				/* ⚠️ This runs on the thread that finished the load (a pool worker): the entity is notified by the
+				 * logic thread (processLogics()). */
+				this->recordResourceLoaded();
 			}
 
 			return true;
