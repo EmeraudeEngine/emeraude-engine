@@ -114,7 +114,7 @@ image's real format.
   (`light-and-shadow-debug`, `--enable-depth-readback`): without the switch the refusal; with it `SunShadowMap`
   layer 1 mean 0.606477 (macOS) / 0.606481 (Windows), 1 433 600 pixels at the far plane on both, `.pfm` 16 777 234
   bytes; `SpotShadowMap` depths 0.987627 to 1 on both; `BulbShadowMap` layer 2 right on macOS (845 117 pixels at
-  the far plane) and ENTIRELY at the far plane on Windows — item `point-light-shadow-face-intermittently-empty`.
+  the far plane) and ENTIRELY at the far plane on Windows — a read racing the cube's pass, see the second ⚠️ below.
   No OS states its depth format in the log; the 32-bit float is inferred from the data (199 257 distinct depths
   in one face): the D16 / D24 decodings have still never run.
 - ⚠️ **A uniform dump is first of all a picture** (2026-11-15; the former item
@@ -137,6 +137,15 @@ image's real format.
   **Rule:** before suspecting the transfer, read the target SEVERAL times over a few seconds, and look at whatever
   shows it in the scene. The blue is not the clear colour either (render-to-texture clears with the renderer's,
   black).
+- ⚠️ **…and a layer read EMPTY from a target redrawn every frame is first of all a racing read** (2026-11-15,
+  item `render-target-read-back-races-the-render-pass`). The dump copies the image from the console thread, on
+  another queue than the one which renders it: nothing orders the copy against the pass. In some launches (3 of 24
+  on Linux, Release) faces 4 and 5 of a point light's shadow cube read entirely at the far plane at EVERY read, the
+  four others right — the copy lands between the two groups of views the driver draws. It read like a hole in the
+  shadow map for a few hours. The proof that it is not: switch the light off (its map is suspended, nobody draws the
+  image) and read again — the six faces are there; a RenderDoc capture of the same launch replays six right faces.
+  **Rule:** to read a target that is redrawn every frame, suspend it first; and never conclude on the CONTENT from a
+  read which changed after the scene changed.
 - ⚠️ **Two dumps of the same layer within one second: the second is refused** ("the file … already exists", an
   `[Error]` of `FileIO::write()`): the file name holds the second (`rt-dump-<seconds>-layer<N>`). Space the dumps
   of a series by more than a second (item `dump-render-target-same-second-refused`).
