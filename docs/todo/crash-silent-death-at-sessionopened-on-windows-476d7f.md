@@ -98,10 +98,43 @@ Checked against the changes between 8.0.2 and 8.0.3 in the four repositories (th
   `crash-window-created-with-an-invalid-size-22658a`. One case, read in the downstream application's crash-report
   mirror; it does not say why the first run died silently instead of failing loudly as the second did.
 
+## The 122 reports, counted (2026-11-15)
+
+Read in the downstream application's crash-report mirror by that application's own session: all 122 reports, 84
+machines, counts only.
+
+- **Not the version guard**: the dying run performed the settings reset in 6 reports of 122 (about 5 %), against 2 to
+  6 % among the reports of every other signature on the same versions. The case above is one case.
+- **No dump, in any of them**: no minidump, no native exception record. What is left under this signature is exactly
+  the deaths nothing caught. The downstream application's next version collects the system's local dumps on Windows;
+  none of these versions could.
+- **They die early**: from the session's start to the last journal line, under 1 s in 44 reports, 1 to 5 s in 34,
+  5 to 30 s in 37, longer in 7 (median 2.9 s). On the newest version: under 1 s in 13 of 19.
+- **A hang ended by the user and a crash look the same**: the report is made by the NEXT launch (median 87 s after
+  the last line), no journal has its closing line, and no exit code, termination reason or "killed by" exists in a
+  report (an exit code in 2 of 122 only: both 1, with "Core level terminated" as last line — orderly failures,
+  misfiled here).
+- **The last line** (the journal is written by a thread: the last lines queued are lost, so the true last step is
+  later than this): the downstream application's session token 30, an ANSWERED request of the API client 21, a
+  shader loaded from the binary cache 15, the recorder service disabled 11, "WindowService service up!" 5, a
+  downstream line about its web view 5, "PlatformManagerService service up!" 4, "N physical device(s) found" 4.
+  No report ends on a request left unanswered (0 of 122). 10 runs died while handling an EARLIER crash report (its
+  question shown 5, its upload 3, "user declined" 2).
+- **Second tries**: for 89 reports the next launch came within five minutes — the same silent death again 22,
+  another signature 4, nothing recorded 63 (a normal session leaves no trace). Per machine: 1 report on 63
+  machines, 2 on 10, 3 on 6, 4 on 4, 5 on 1.
+
+So: no dump, no exit code, and a journal which stops short of the death. Nothing here tells WHICH step dies; the two
+things which would are the dumps the downstream application's next version brings, and a journal whose last line is
+the last line reached.
+
 ## What remains
 
-- Read the journals of the archives counted above (in the downstream application's crash-report mirror).
-- Find the defect, reproduce it, fix it where it lives.
+- Owner decision: write the journal SYNCHRONOUSLY while the engine starts (the file logger already has that mode, as
+  its fallback when its thread cannot start), and hand it to its thread once the startup is over — the last line of
+  a dead startup would then be the step which died. To weigh: a write and a flush per line during the startup.
+- Read the dumps of the first reports which carry one.
+- Then find the defect, reproduce it, fix it where it lives.
 
 ## References
 
