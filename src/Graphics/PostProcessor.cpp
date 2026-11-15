@@ -546,6 +546,133 @@ namespace
 
 			const EmEn::Graphics::GrabPass & m_grabPass;
 	};
+
+	/**
+	 * @brief The G-buffer of the frame as the effect chain reads it: one adapter per attachment of the grab pass, and a
+	 * pointer per attachment that is null when the grab pass does not hold it.
+	 * @note Stack-allocated in executeIndirectPostProcessEffects(); lives for the duration of the chain. The pointers it
+	 * hands out name its OWN adapters: neither copied nor moved.
+	 */
+	class GBufferInputs final
+	{
+		public:
+
+			/**
+			 * @brief Wraps the attachments of a grab pass.
+			 * @param grabPass A reference to the created grab pass of the frame.
+			 */
+			explicit
+			GBufferInputs (const EmEn::Graphics::GrabPass & grabPass) noexcept
+				: m_depthAdapter{grabPass},
+				m_normalsAdapter{grabPass},
+				m_materialPropertiesAdapter{grabPass},
+				m_albedoAdapter{grabPass},
+				m_velocityAdapter{grabPass},
+				m_reactiveAdapter{grabPass},
+				m_hasDepth{grabPass.hasDepth()},
+				m_hasNormals{grabPass.hasNormals()},
+				m_hasMaterialProperties{grabPass.hasMaterialProperties()},
+				m_hasAlbedo{grabPass.hasAlbedo()},
+				m_hasVelocity{grabPass.hasVelocity()},
+				m_hasReactive{grabPass.hasReactive()}
+			{
+
+			}
+
+			/**
+			 * @brief Copy constructor (deleted).
+			 * @param copy A reference to the copied instance.
+			 */
+			GBufferInputs (const GBufferInputs & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor (deleted).
+			 * @param copy A reference to the copied instance.
+			 */
+			GBufferInputs (GBufferInputs && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment (deleted).
+			 * @param copy A reference to the copied instance.
+			 * @return GBufferInputs &
+			 */
+			GBufferInputs & operator= (const GBufferInputs & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment (deleted).
+			 * @param copy A reference to the copied instance.
+			 * @return GBufferInputs &
+			 */
+			GBufferInputs & operator= (GBufferInputs && copy) noexcept = delete;
+
+			/**
+			 * @brief Destructs the inputs.
+			 */
+			~GBufferInputs () = default;
+
+			/** @brief Returns the depth, or null when the grab pass holds none. */
+			[[nodiscard]]
+			const EmEn::Vulkan::TextureInterface *
+			depth () const noexcept
+			{
+				return m_hasDepth ? &m_depthAdapter : nullptr;
+			}
+
+			/** @brief Returns the normals, or null when the grab pass holds none. */
+			[[nodiscard]]
+			const EmEn::Vulkan::TextureInterface *
+			normals () const noexcept
+			{
+				return m_hasNormals ? &m_normalsAdapter : nullptr;
+			}
+
+			/** @brief Returns the material properties, or null when the grab pass holds none. */
+			[[nodiscard]]
+			const EmEn::Vulkan::TextureInterface *
+			materialProperties () const noexcept
+			{
+				return m_hasMaterialProperties ? &m_materialPropertiesAdapter : nullptr;
+			}
+
+			/** @brief Returns the albedo, or null when the grab pass holds none. */
+			[[nodiscard]]
+			const EmEn::Vulkan::TextureInterface *
+			albedo () const noexcept
+			{
+				return m_hasAlbedo ? &m_albedoAdapter : nullptr;
+			}
+
+			/** @brief Returns the velocity, or null when the grab pass holds none. */
+			[[nodiscard]]
+			const EmEn::Vulkan::TextureInterface *
+			velocity () const noexcept
+			{
+				return m_hasVelocity ? &m_velocityAdapter : nullptr;
+			}
+
+			/** @brief Returns the reactive mask, or null when the grab pass holds none. */
+			[[nodiscard]]
+			const EmEn::Vulkan::TextureInterface *
+			reactive () const noexcept
+			{
+				return m_hasReactive ? &m_reactiveAdapter : nullptr;
+			}
+
+		private:
+
+			GrabPassDepthAdapter m_depthAdapter;
+			GrabPassNormalsAdapter m_normalsAdapter;
+			GrabPassMaterialPropertiesAdapter m_materialPropertiesAdapter;
+			GrabPassAlbedoAdapter m_albedoAdapter;
+			GrabPassVelocityAdapter m_velocityAdapter;
+			GrabPassReactiveAdapter m_reactiveAdapter;
+			bool m_hasDepth;
+			bool m_hasNormals;
+			bool m_hasMaterialProperties;
+			bool m_hasAlbedo;
+			bool m_hasVelocity;
+			bool m_hasReactive;
+	};
 }
 
 namespace EmEn::Graphics
@@ -1394,19 +1521,501 @@ namespace EmEn::Graphics
 		}
 	}
 
-	bool
-	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const FrameView & frameView, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium, const Scenes::CloudSet * clouds, ChainPhase phase) const noexcept
+	/**
+	 * @brief ONE execution of the effect chain: the state the effects hand to each other — the chain colour, the overlay
+	 * group waiting for its combine pass, the frame's overflow census — and the steps that record them.
+	 * @note Stack-allocated in executeIndirectPostProcessEffects(); lives for the duration of the chain. It POINTS to what
+	 * that function owns (the command buffer, the frame context, the capabilities): neither copied nor moved, never kept.
+	 */
+	class PostProcessor::ChainRun final
 	{
-		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
+		public:
+
+			/**
+			 * @brief Opens a run of the chain on the grab pass colour.
+			 * @param owner The post-processor executing the chain.
+			 * @param commandBuffer The frame's command buffer, outside any render pass.
+			 * @param context The frame context every effect receives.
+			 * @param capabilities What this frame offers the occupants of a slot.
+			 * @param census The overflow census prepared for this frame, or null (disabled, or an 8-bit chain).
+			 * @param phase Which half of the chain runs.
+			 */
+			ChainRun (const PostProcessor & owner, const Vulkan::CommandBuffer & commandBuffer, const IndirectPostProcessEffect::FrameContext & context, const PostProcessStack::FrameCapabilities & capabilities, OverflowCensus * census, ChainPhase phase) noexcept
+				: m_owner{&owner},
+				m_commandBuffer{&commandBuffer},
+				m_context{&context},
+				m_capabilities{&capabilities},
+				m_census{census},
+				m_profiler{owner.m_renderer.gpuProfiler()},
+				m_currentTexture{owner.m_grabPass.get()},
+				m_phase{phase},
+				m_closesFrame{phase != ChainPhase::PreTranslucency},
+				m_censusArmed{census != nullptr && census->frameArmed()}
+			{
+
+			}
+
+			/**
+			 * @brief Copy constructor (deleted).
+			 * @param copy A reference to the copied instance.
+			 */
+			ChainRun (const ChainRun & copy) noexcept = delete;
+
+			/**
+			 * @brief Move constructor (deleted).
+			 * @param copy A reference to the copied instance.
+			 */
+			ChainRun (ChainRun && copy) noexcept = delete;
+
+			/**
+			 * @brief Copy assignment (deleted).
+			 * @param copy A reference to the copied instance.
+			 * @return ChainRun &
+			 */
+			ChainRun & operator= (const ChainRun & copy) noexcept = delete;
+
+			/**
+			 * @brief Move assignment (deleted).
+			 * @param copy A reference to the copied instance.
+			 * @return ChainRun &
+			 */
+			ChainRun & operator= (ChainRun && copy) noexcept = delete;
+
+			/**
+			 * @brief Destructs the run. Nothing to release: it owns nothing.
+			 */
+			~ChainRun () = default;
+
+			/**
+			 * @brief Returns whether an effect of the stack is recorded by this run: enabled, in this half of the chain,
+			 * holding its GPU resources, with the G-buffer inputs it requires, and allowed by the occupant gate.
+			 * @param effect A pointer to the effect, or null (an empty entry of the stack).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool accepts (const IndirectPostProcessEffect * effect) const noexcept;
+
+			/**
+			 * @brief Records an accepted effect: an overlay joins the group its combine pass applies later, any other effect
+			 * flushes that group and executes on the chain colour.
+			 * @pre accepts() answered true for this effect.
+			 * @param effect A reference to the effect.
+			 */
+			void record (IndirectPostProcessEffect & effect) noexcept;
+
+			/**
+			 * @brief Closes the run: flushes the pending group, records the census batch no tone mapper triggered, then hands
+			 * the chain colour over — back into the scene colour for the pre-translucency half, to the frame's final
+			 * descriptor otherwise.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool close () noexcept;
+
+		private:
+
+			/**
+			 * @brief Returns whether the frame holds every G-buffer input the effect requires.
+			 * @param effect A reference to the effect.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool inputsAvailable (const IndirectPostProcessEffect & effect) const noexcept;
+
+			/**
+			 * @brief Records the pending overlay group, if any: the members' internal passes, the shared denoise, the temporal
+			 * passes, then ONE combine pass onto the chain colour.
+			 */
+			void flushCombineGroup () noexcept;
+
+			/** @brief Step 1 of a flush: the internal passes of every member (the traces only for a shared-denoise member). */
+			void recordGroupInternalPasses () const noexcept;
+
+			/** @brief Step 2 of a flush: the shared separable blur, one H + one V multi-target pass per working resolution. */
+			void recordSharedDenoise () const noexcept;
+
+			/** @brief Step 3 of a flush: the post-denoise passes (temporal resolves, history copies). */
+			void recordGroupTemporalPasses () const noexcept;
+
+			/** @brief Step 4 of a flush: the combine pass applies the whole group onto the chain colour. */
+			void recordCombine () noexcept;
+
+			/**
+			 * @brief Records the frame's overflow census batch on the current chain colour.
+			 * @pre The census is armed.
+			 * @param toneMapped Whether the tone mapper executes right after the batch.
+			 */
+			void recordCensusBatch (bool toneMapped) const noexcept;
+
+			/**
+			 * @brief Takes out of a denoise group the entries sharing the working resolution of its first one.
+			 * @note An entry without a target is dropped (and traced): it must not starve the caller's loop.
+			 * @param denoiseGroup A reference to the remaining entries; the partition and the dropped entries leave it.
+			 * @return std::vector< DenoisePass::GroupEntry >
+			 */
+			[[nodiscard]]
+			static std::vector< DenoisePass::GroupEntry > takeDenoisePartition (std::vector< DenoisePass::GroupEntry > & denoiseGroup) noexcept;
+
+			const PostProcessor * m_owner;
+			const Vulkan::CommandBuffer * m_commandBuffer;
+			const IndirectPostProcessEffect::FrameContext * m_context;
+			const PostProcessStack::FrameCapabilities * m_capabilities;
+			OverflowCensus * m_census;
+			/* GPU profiler contract: the per-pass scopes mirror the REAL command stream. A shared-denoise effect has no
+			 * contiguous per-effect cost — its trace, its share of the group blur and its temporal resolve are interleaved with
+			 * the other group members — so the attribution is per PASS ("RTGIEffect/trace", "SharedDenoise",
+			 * "RTGIEffect/temporal", "Combine"), never per effect total. */
+			Vulkan::GPUProfiler * m_profiler;
+			/* The chain colour: each effect receives the output of the previous one. The GrabPass implements TextureInterface
+			 * for its COLOR resources. */
+			const Vulkan::TextureInterface * m_currentTexture;
+			/* Combine grouping (phase A of the pass-merging plan): contiguous OVERLAY effects accumulate and are applied by ONE
+			 * generated full-res pass. The group flushes before any effect that needs the up-to-date chain color — a
+			 * non-overlay effect, or an overlay whose upstream passes sample the chain color (readsChainColorUpstream) —
+			 * preserving exact sequential semantics. Recording is DEFERRED to the flush so the shared denoise (phase E) can
+			 * batch the whole group: every member's pre-denoise passes (traces) first, then ONE H + ONE V multi-target blur,
+			 * then the post-denoise passes (temporal), then the combine. */
+			std::vector< IndirectPostProcessEffect * > m_combineGroup;
+			const Vulkan::TextureInterface * m_combineGroupInput{nullptr};
+			uint32_t m_combineGroupIndex{0};
+			ChainPhase m_phase;
+			/* The phase that CLOSES the frame owns the final descriptor and the census batch. */
+			bool m_closesFrame;
+			bool m_censusArmed;
+			bool m_censusRecorded{false};
+	};
+
+	bool
+	PostProcessor::ChainRun::inputsAvailable (const IndirectPostProcessEffect & effect) const noexcept
+	{
+		/* Skip depth-requiring effects if no depth is available. */
+		if ( effect.requiresDepth() && m_context->depth == nullptr )
 		{
 			return false;
 		}
 
-		/* The phase that CLOSES the frame: it owns the frame timing and the final descriptor.
-		 * The pre-translucency half is an intermediate step whose output goes back into the
-		 * scene colour, so it must touch neither. */
-		const bool closesFrame = phase != ChainPhase::PreTranslucency;
+		/* Skip HDR-requiring effects if HDR is not enabled. */
+		if ( effect.requiresHDR() && !m_owner->m_cachedRequiresHDR )
+		{
+			return false;
+		}
 
+		/* Skip normals-requiring effects if no normals are available. */
+		if ( effect.requiresNormals() && m_context->normals == nullptr )
+		{
+			return false;
+		}
+
+		/* Skip material-properties-requiring effects if no material properties are available. */
+		if ( effect.requiresMaterialProperties() && m_context->materialProperties == nullptr )
+		{
+			return false;
+		}
+
+		/* Skip albedo-requiring effects if no albedo is available. */
+		if ( effect.requiresAlbedo() && m_context->albedo == nullptr )
+		{
+			return false;
+		}
+
+		/* Skip velocity-requiring effects if no velocity is available. */
+		if ( effect.requiresVelocity() && m_context->velocity == nullptr )
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	PostProcessor::ChainRun::accepts (const IndirectPostProcessEffect * effect) const noexcept
+	{
+		if ( effect == nullptr || !effect->isEnabled() )
+		{
+			return false;
+		}
+
+		/* The phase filter: a cut frame runs the pre-translucency slots first, everything
+		 * else after the TranslucentGB pass. An uncut frame runs them all. */
+		if ( m_phase != ChainPhase::Whole && isPreTranslucencySlot(effect->slot()) != (m_phase == ChainPhase::PreTranslucency) )
+		{
+			return false;
+		}
+
+		/* ⚠️⚠️ An effect that does not hold its GPU resources is NOT recordable, and this gate
+		 * is what turns a lifecycle mistake into a missing effect instead of a segfault: the
+		 * recording code indexes per-frame containers that a failed or absent creation leaves
+		 * EMPTY (RTGI's m_tracePerFrame[frameIndex] — an out-of-bounds read, not a null a test
+		 * would catch). Silent on purpose: the failure is already traced loudly where it
+		 * happens, by PostProcessStack::createAll()/resizeAll(); repeating it here would spam
+		 * one line per effect per frame. */
+		if ( !effect->isCreated() )
+		{
+			return false;
+		}
+
+		if ( !this->inputsAvailable(*effect) )
+		{
+			return false;
+		}
+
+		/* The gates that discriminate between the siblings of a slot — ray tracing, the main directional light,
+		 * the clouds — are ONE function, the one the selection applied at the start of this frame
+		 * (PostProcessStack::canOccupantRun()). Here it reads what the frame actually bound: a traced effect is
+		 * recorded only with the frame's ray-tracing set (FrameContext::rayTracing: the TLAS is built during the
+		 * first frames of a scene, and a scene may hold no ray-traced geometry), which it then binds untested. */
+		return PostProcessStack::canOccupantRun(*effect, *m_capabilities);
+	}
+
+	void
+	PostProcessor::ChainRun::record (IndirectPostProcessEffect & effect) noexcept
+	{
+		/* Every gate is passed: the effect WILL be recorded this frame, so its radiance targets hold this
+		 * frame's values by the time the census batch reads them. */
+		if ( m_censusArmed )
+		{
+			const auto targets = effect.radianceTargets();
+
+			m_census->noteRadianceTargets(std::span< const IndirectPostProcessEffect::RadianceTarget >{targets.data(), targets.size()});
+		}
+
+		/* ⚠️ The ToneMapping occupant must never join the overlay group below: the census batch is recorded
+		 * right before the tone mapper executes, and an overlay is executed later, by the combine pass. Checked
+		 * here, before the overlay branch, so the case it guards is actually reachable. */
+		assert(effect.slot() != EffectSlot::ToneMapping || !effect.producesOverlay());
+
+		if ( m_owner->m_combinePass != nullptr && effect.producesOverlay() )
+		{
+			if ( !m_combineGroup.empty() && effect.readsChainColorUpstream(*m_context) )
+			{
+				this->flushCombineGroup();
+			}
+
+			if ( m_combineGroup.empty() )
+			{
+				m_combineGroupInput = m_currentTexture;
+			}
+
+			m_combineGroup.emplace_back(&effect);
+
+			return;
+		}
+
+		this->flushCombineGroup();
+
+		/* The census batch, before the first display-referred effect: the tone mapper, or the reserved
+		 * PostToneMapping slot if the tone mapper does not run. Every counted image is final here, the
+		 * overlay group above included. */
+		if ( m_censusArmed && m_closesFrame && !m_censusRecorded && static_cast< size_t >(effect.slot()) >= static_cast< size_t >(EffectSlot::ToneMapping) )
+		{
+			this->recordCensusBatch(effect.slot() == EffectSlot::ToneMapping);
+
+			m_censusRecorded = true;
+		}
+
+		const Vulkan::GPUProfiler::ScopedZone profilingZone{m_profiler, *m_commandBuffer, effect.label()};
+
+		m_currentTexture = &effect.execute(*m_commandBuffer, *m_currentTexture, *m_context);
+	}
+
+	void
+	PostProcessor::ChainRun::flushCombineGroup () noexcept
+	{
+		if ( m_combineGroup.empty() )
+		{
+			return;
+		}
+
+		this->recordGroupInternalPasses();
+		this->recordSharedDenoise();
+		this->recordGroupTemporalPasses();
+		this->recordCombine();
+
+		m_combineGroup.clear();
+	}
+
+	void
+	PostProcessor::ChainRun::recordGroupInternalPasses () const noexcept
+	{
+		/* 1. Internal passes. Shared-denoise members record their traces only; the
+		 * others record their full internal chain. Order across members is free: the
+		 * upstream passes read the G-buffer and the FIXED group input color only. */
+		for ( auto * effect : m_combineGroup )
+		{
+			if ( effect->usesSharedDenoise() )
+			{
+				const Vulkan::GPUProfiler::ScopedZone profilingZone{m_profiler, *m_commandBuffer, effect->label(), "trace"};
+
+				effect->recordPreDenoisePasses(*m_commandBuffer, *m_combineGroupInput, *m_context);
+			}
+			else
+			{
+				const Vulkan::GPUProfiler::ScopedZone profilingZone{m_profiler, *m_commandBuffer, effect->label(), "internal"};
+
+				effect->recordOverlayPasses(*m_commandBuffer, *m_combineGroupInput, *m_context);
+			}
+		}
+	}
+
+	std::vector< DenoisePass::GroupEntry >
+	PostProcessor::ChainRun::takeDenoisePartition (std::vector< DenoisePass::GroupEntry > & denoiseGroup) noexcept
+	{
+		std::vector< DenoisePass::GroupEntry > partition;
+		partition.reserve(denoiseGroup.size());
+
+		const auto width = denoiseGroup.front().targetH != nullptr ? denoiseGroup.front().targetH->width() : 0;
+		const auto height = denoiseGroup.front().targetH != nullptr ? denoiseGroup.front().targetH->height() : 0;
+
+		for ( auto it = denoiseGroup.begin(); it != denoiseGroup.end(); )
+		{
+			if ( it->targetH == nullptr )
+			{
+				/* Dropped (and traced) — it must not starve the partition loop. */
+				TraceError{ClassId} << "A denoise contribution ('" << (it->prefix != nullptr ? it->prefix : "?") << "') has no target !";
+
+				it = denoiseGroup.erase(it);
+			}
+			else if ( it->targetH->width() == width && it->targetH->height() == height )
+			{
+				partition.emplace_back(std::move(*it));
+
+				it = denoiseGroup.erase(it);
+			}
+			else
+			{
+				++it;
+			}
+		}
+
+		return partition;
+	}
+
+	void
+	PostProcessor::ChainRun::recordSharedDenoise () const noexcept
+	{
+		/* 2. The shared separable blur (one H + one V multi-target pass per RESOLUTION):
+		 * effects keep their natural working resolution (some are pixel-doubling gated,
+		 * some are unconditionally half-res), so the group is partitioned by extent and
+		 * each partition gets its own H+V pair. */
+		const Vulkan::GPUProfiler::ScopedZone profilingZone{m_profiler, *m_commandBuffer, "SharedDenoise"};
+
+		std::vector< DenoisePass::GroupEntry > denoiseGroup;
+		denoiseGroup.reserve(m_combineGroup.size());
+
+		for ( auto * effect : m_combineGroup )
+		{
+			if ( effect->usesSharedDenoise() )
+			{
+				denoiseGroup.emplace_back(effect->denoiseContribution(*m_context));
+			}
+		}
+
+		while ( !denoiseGroup.empty() )
+		{
+			const auto partition = takeDenoisePartition(denoiseGroup);
+
+			if ( !m_owner->m_denoisePass->record(*m_commandBuffer, partition, *m_context) )
+			{
+				TraceError{ClassId} << "The shared denoise pass failed — the group's blur targets are stale !";
+			}
+		}
+	}
+
+	void
+	PostProcessor::ChainRun::recordGroupTemporalPasses () const noexcept
+	{
+		/* 3. Post-denoise passes (temporal resolves, history copies). */
+		for ( auto * effect : m_combineGroup )
+		{
+			if ( effect->usesSharedDenoise() )
+			{
+				const Vulkan::GPUProfiler::ScopedZone profilingZone{m_profiler, *m_commandBuffer, effect->label(), "temporal"};
+
+				effect->recordPostDenoisePasses(*m_commandBuffer, *m_context);
+			}
+		}
+	}
+
+	void
+	PostProcessor::ChainRun::recordCombine () noexcept
+	{
+		/* 4. The combine pass applies the whole group onto the chain color. */
+		const Vulkan::GPUProfiler::ScopedZone profilingZone{m_profiler, *m_commandBuffer, "Combine"};
+
+		std::vector< CombinePass::GroupEntry > contributions;
+		contributions.reserve(m_combineGroup.size());
+
+		for ( const auto * effect : m_combineGroup )
+		{
+			contributions.emplace_back(effect->combineContribution(*m_context));
+		}
+
+		m_currentTexture = &m_owner->m_combinePass->record(*m_commandBuffer, *m_combineGroupInput, contributions, *m_context, m_combineGroupIndex++);
+	}
+
+	void
+	PostProcessor::ChainRun::recordCensusBatch (bool toneMapped) const noexcept
+	{
+		m_census->recordBatch(*m_commandBuffer, m_owner->m_renderer.currentFrameIndex(), *m_owner->m_grabPass, *m_currentTexture, toneMapped, m_owner->m_renderer.rayTracing().irradianceProbeVolume(), m_profiler);
+	}
+
+	bool
+	PostProcessor::ChainRun::close () noexcept
+	{
+		this->flushCombineGroup();
+
+		/* No tone mapper ran in the closing phase: the census counts the chain output as it is. */
+		if ( m_censusArmed && m_closesFrame && !m_censusRecorded )
+		{
+			this->recordCensusBatch(false);
+		}
+
+		const auto * const grabPass = m_owner->m_grabPass.get();
+		const bool chainProducedOutput = m_currentTexture != grabPass && m_currentTexture != nullptr;
+
+		/* Pre-translucency half: the composited result goes BACK INTO THE SCENE COLOUR, so the
+		 * material grab pass that follows captures a scene lit by its indirect diffuse, and the
+		 * TranslucentGB pass draws over it. Nothing else of this call leaves a trace: the final
+		 * descriptor keeps pointing wherever the previous frame left it until the closing half
+		 * sets it. */
+		if ( m_phase == ChainPhase::PreTranslucency )
+		{
+			if ( chainProducedOutput )
+			{
+				m_owner->recordWriteBack(*m_commandBuffer, *m_currentTexture);
+			}
+
+			return true;
+		}
+
+		/* Update only the current frame's descriptor set to point to the effect chain output
+		 * instead of the raw grab pass, so the single-pass render uses the processed texture.
+		 * Each frame-in-flight has its own descriptor set, avoiding conflicts with pending frames. */
+		const auto frameIndex = m_owner->m_renderer.currentFrameIndex();
+		const auto & descriptorSet = m_owner->m_descriptorSets[frameIndex];
+
+		if ( chainProducedOutput )
+		{
+			return descriptorSet->writeCombinedImageSampler(
+				0,
+				*m_currentTexture->image(),
+				*m_currentTexture->imageView(),
+				*m_currentTexture->sampler()
+			);
+		}
+
+		/* No effects ran, restore descriptor to grab pass. */
+		return descriptorSet->writeCombinedImageSampler(
+			0,
+			*grabPass->image(),
+			*grabPass->imageView(),
+			*grabPass->sampler()
+		);
+	}
+
+	OverflowCensus *
+	PostProcessor::prepareFrameCensus () const noexcept
+	{
 		/* The overflow census (see OverflowCensus): ONE batch per frame, in the closing phase, right before the
 		 * tone mapper (or after the last effect when none runs). Only on the HDR chain: the grab pass of an 8-bit
 		 * chain cannot overflow. Both halves of a cut frame share the rendered-frame serial, so the traces the
@@ -1418,9 +2027,12 @@ namespace EmEn::Graphics
 			census->prepareFrame(m_renderer.renderedFrameSerial());
 		}
 
-		const bool censusArmed = census != nullptr && census->frameArmed();
-		bool censusRecorded = false;
+		return census;
+	}
 
+	PostProcessor::ChainClock
+	PostProcessor::chainFrameClock (bool closesFrame) const noexcept
+	{
 		/* Build push constants for the effect chain. */
 		static const auto startTime = std::chrono::steady_clock::now();
 		const auto now = std::chrono::steady_clock::now();
@@ -1444,77 +2056,85 @@ namespace EmEn::Graphics
 			m_lastChainFrameTime = now;
 		}
 
-		const auto mainRT = m_renderer.mainRenderTarget();
-		const auto & extent = mainRT->extent();
+		return {.elapsedTime = elapsedTime, .deltaTime = deltaTime};
+	}
 
+	PostProcessor::ViewReconstructionBlock
+	PostProcessor::writeViewReconstruction (const FrameView & frameView) const noexcept
+	{
 		/* The view reconstruction of the frame (ViewReconstructionGLSL): the matrices of the READ state, the ones that
 		 * rendered the depth buffer, in this frame's buffer. The two halves of a cut frame write the same values; the
 		 * frame's fence was waited before its slot is reused. */
-		const Vulkan::UniformBufferObject * viewData = nullptr;
-		bool viewProjectionSparse = false;
+		ViewReconstructionBlock block{};
 
-		if ( const auto frameIndex = m_renderer.currentFrameIndex(); frameIndex < m_viewUBOs.size() )
+		const auto frameIndex = m_renderer.currentFrameIndex();
+
+		if ( frameIndex >= m_viewUBOs.size() )
 		{
-			const auto & projection = frameView.projectionMatrix();
-			const auto inverseProjection = projection.inverse();
-			const auto inverseRelativeViewProjection = (projection * frameView.infinityViewMatrix()).inverse();
-			const auto & position = frameView.position();
-
-			ViewReconstructionGLSL::Data data{};
-
-			std::copy_n(projection.data(), data.projection.size(), data.projection.begin());
-			std::copy_n(inverseProjection.data(), data.inverseProjection.size(), data.inverseProjection.begin());
-			std::copy_n(inverseRelativeViewProjection.data(), data.inverseRelativeViewProjection.size(), data.inverseRelativeViewProjection.begin());
-			/* The FAST coefficients (ViewReconstructionGLSL, owner decision 2026-11-02): a marching effect records its
-			 * Sparse variant when the projection has that layout, its Matrix variant otherwise. */
-			viewProjectionSparse = ViewReconstructionGLSL::isSparseProjection(data.projection);
-
-			if ( viewProjectionSparse )
-			{
-				ViewReconstructionGLSL::fillFastCoefficients(data);
-			}
-
-			data.cameraPosition = {position[Base::Math::X], position[Base::Math::Y], position[Base::Math::Z], 0.0F};
-
-			if ( m_viewUBOs[frameIndex]->writeData(Vulkan::MemoryRegion{&data, sizeof(data)}) )
-			{
-				viewData = m_viewUBOs[frameIndex].get();
-			}
+			return block;
 		}
 
-		/* Execute each enabled effect in the chain.
-		 * Each effect receives the output of the previous one.
-		 * NOTE: The GrabPass implements TextureInterface for its COLOR resources.
-		 * For depth, we use a lightweight adapter that exposes the depth resources. */
-		const Vulkan::TextureInterface * currentTexture = m_grabPass.get();
+		const auto & projection = frameView.projectionMatrix();
+		const auto inverseProjection = projection.inverse();
+		const auto inverseRelativeViewProjection = (projection * frameView.infinityViewMatrix()).inverse();
+		const auto & position = frameView.position();
 
-		const GrabPassDepthAdapter depthAdapter{*m_grabPass};
-		const Vulkan::TextureInterface * depthTexture = m_grabPass->hasDepth() ? &depthAdapter : nullptr;
+		ViewReconstructionGLSL::Data data{};
 
-		const GrabPassNormalsAdapter normalsAdapter{*m_grabPass};
-		const Vulkan::TextureInterface * normalsTexture = m_grabPass->hasNormals() ? &normalsAdapter : nullptr;
+		std::copy_n(projection.data(), data.projection.size(), data.projection.begin());
+		std::copy_n(inverseProjection.data(), data.inverseProjection.size(), data.inverseProjection.begin());
+		std::copy_n(inverseRelativeViewProjection.data(), data.inverseRelativeViewProjection.size(), data.inverseRelativeViewProjection.begin());
+		/* The FAST coefficients (ViewReconstructionGLSL, owner decision 2026-11-02): a marching effect records its
+		 * Sparse variant when the projection has that layout, its Matrix variant otherwise. */
+		block.sparse = ViewReconstructionGLSL::isSparseProjection(data.projection);
 
-		const GrabPassMaterialPropertiesAdapter materialPropertiesAdapter{*m_grabPass};
-		const Vulkan::TextureInterface * materialPropertiesTexture = m_grabPass->hasMaterialProperties() ? &materialPropertiesAdapter : nullptr;
+		if ( block.sparse )
+		{
+			ViewReconstructionGLSL::fillFastCoefficients(data);
+		}
 
-		const GrabPassAlbedoAdapter albedoAdapter{*m_grabPass};
-		const Vulkan::TextureInterface * albedoTexture = m_grabPass->hasAlbedo() ? &albedoAdapter : nullptr;
+		data.cameraPosition = {position[Base::Math::X], position[Base::Math::Y], position[Base::Math::Z], 0.0F};
 
-		const GrabPassVelocityAdapter velocityAdapter{*m_grabPass};
-		const Vulkan::TextureInterface * velocityTexture = m_grabPass->hasVelocity() ? &velocityAdapter : nullptr;
+		if ( m_viewUBOs[frameIndex]->writeData(Vulkan::MemoryRegion{&data, sizeof(data)}) )
+		{
+			block.data = m_viewUBOs[frameIndex].get();
+		}
 
-		const GrabPassReactiveAdapter reactiveAdapter{*m_grabPass};
-		const Vulkan::TextureInterface * reactiveTexture = m_grabPass->hasReactive() ? &reactiveAdapter : nullptr;
+		return block;
+	}
+
+	bool
+	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const FrameView & frameView, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium, const Scenes::CloudSet * clouds, ChainPhase phase) const noexcept
+	{
+		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
+		{
+			return false;
+		}
+
+		/* The phase that CLOSES the frame: it owns the frame timing and the final descriptor.
+		 * The pre-translucency half is an intermediate step whose output goes back into the
+		 * scene colour, so it must touch neither. */
+		const bool closesFrame = phase != ChainPhase::PreTranslucency;
+
+		auto * const census = this->prepareFrameCensus();
+		const auto clock = this->chainFrameClock(closesFrame);
+		const auto mainRT = m_renderer.mainRenderTarget();
+		const auto & extent = mainRT->extent();
+		const auto viewBlock = this->writeViewReconstruction(frameView);
+
+		/* The G-buffer of the frame: the GrabPass implements TextureInterface for its COLOR resources, a lightweight
+		 * adapter exposes each other attachment. */
+		const GBufferInputs inputs{*m_grabPass};
 
 		/* Per-frame chain context: G-buffers, scene lighting, the active camera (single
 		 * source of truth for the photographic options) and the frame push constants. */
 		const IndirectPostProcessEffect::FrameContext context{
-			.depth = depthTexture,
-			.normals = normalsTexture,
-			.materialProperties = materialPropertiesTexture,
-			.albedo = albedoTexture,
-			.velocity = velocityTexture,
-			.reactive = reactiveTexture,
+			.depth = inputs.depth(),
+			.normals = inputs.normals(),
+			.materialProperties = inputs.materialProperties(),
+			.albedo = inputs.albedo(),
+			.velocity = inputs.velocity(),
+			.reactive = inputs.reactive(),
 			.lightSet = lightSet,
 			.camera = activeCamera,
 			.skyLuminance = skyLuminance,
@@ -1529,7 +2149,7 @@ namespace EmEn::Graphics
 			.rayTracing = m_renderer.frameRayTracing(),
 			/* The view of THIS frame, as the renderer made it from the scene's latch. */
 			.frameView = &frameView,
-			.view = viewData,
+			.view = viewBlock.data,
 			.projectionJitter = mainRT->viewMatrices().projectionJitter(),
 			.residualExposure = [this, &stack, activeCamera] {
 				const auto toneMapping = stack.cameraToneMapping();
@@ -1550,10 +2170,10 @@ namespace EmEn::Graphics
 			.constants = PushConstants{
 				.frameWidth = static_cast< float >(extent.width),
 				.frameHeight = static_cast< float >(extent.height),
-				.time = elapsedTime,
-				.deltaTime = deltaTime
+				.time = clock.elapsedTime,
+				.deltaTime = clock.deltaTime
 			},
-			.viewProjectionSparse = viewProjectionSparse,
+			.viewProjectionSparse = viewBlock.sparse,
 			.temporalDiscontinuity = m_frameTemporalDiscontinuity
 		};
 
@@ -1565,300 +2185,18 @@ namespace EmEn::Graphics
 			.rayTracing = context.rayTracing != nullptr
 		};
 
-		/* Combine grouping (phase A of the pass-merging plan): contiguous OVERLAY effects
-		 * accumulate and are applied by ONE generated full-res pass. The group flushes
-		 * before any effect that needs the up-to-date chain color — a non-overlay effect,
-		 * or an overlay whose upstream passes sample the chain color
-		 * (readsChainColorUpstream) — preserving exact sequential semantics.
-		 * Recording is DEFERRED to the flush so the shared denoise (phase E) can batch the
-		 * whole group: every member's pre-denoise passes (traces) first, then ONE H + ONE V
-		 * multi-target blur, then the post-denoise passes (temporal), then the combine. */
-		std::vector< IndirectPostProcessEffect * > combineGroup;
-		const Vulkan::TextureInterface * combineGroupInput = nullptr;
-		uint32_t combineGroupIndex = 0;
-
-		/* GPU profiler contract: the per-pass scopes below mirror the REAL command stream.
-		 * A shared-denoise effect has no contiguous per-effect cost — its trace, its share
-		 * of the group blur and its temporal resolve are interleaved with the other group
-		 * members — so the attribution is per PASS ("RTGIEffect/trace", "SharedDenoise",
-		 * "RTGIEffect/temporal", "Combine"), never per effect total. */
-		auto * const profiler = m_renderer.gpuProfiler();
-
-		const auto flushCombineGroup = [&] () {
-			if ( combineGroup.empty() )
-			{
-				return;
-			}
-
-			/* 1. Internal passes. Shared-denoise members record their traces only; the
-			 * others record their full internal chain. Order across members is free: the
-			 * upstream passes read the G-buffer and the FIXED group input color only. */
-			for ( auto * effect : combineGroup )
-			{
-				if ( effect->usesSharedDenoise() )
-				{
-					const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, effect->label(), "trace"};
-
-					effect->recordPreDenoisePasses(commandBuffer, *combineGroupInput, context);
-				}
-				else
-				{
-					const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, effect->label(), "internal"};
-
-					effect->recordOverlayPasses(commandBuffer, *combineGroupInput, context);
-				}
-			}
-
-			/* 2. The shared separable blur (one H + one V multi-target pass per RESOLUTION):
-			 * effects keep their natural working resolution (some are pixel-doubling gated,
-			 * some are unconditionally half-res), so the group is partitioned by extent and
-			 * each partition gets its own H+V pair. */
-			{
-				const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, "SharedDenoise"};
-
-				std::vector< DenoisePass::GroupEntry > denoiseGroup;
-				denoiseGroup.reserve(combineGroup.size());
-
-				for ( auto * effect : combineGroup )
-				{
-					if ( effect->usesSharedDenoise() )
-					{
-						denoiseGroup.emplace_back(effect->denoiseContribution(context));
-					}
-				}
-
-				while ( !denoiseGroup.empty() )
-				{
-					std::vector< DenoisePass::GroupEntry > partition;
-					partition.reserve(denoiseGroup.size());
-
-					const auto width = denoiseGroup.front().targetH != nullptr ? denoiseGroup.front().targetH->width() : 0;
-					const auto height = denoiseGroup.front().targetH != nullptr ? denoiseGroup.front().targetH->height() : 0;
-
-					for ( auto it = denoiseGroup.begin(); it != denoiseGroup.end(); )
-					{
-						if ( it->targetH == nullptr )
-						{
-							/* Dropped (and traced) — it must not starve the partition loop. */
-							TraceError{ClassId} << "A denoise contribution ('" << (it->prefix != nullptr ? it->prefix : "?") << "') has no target !";
-
-							it = denoiseGroup.erase(it);
-						}
-						else if ( it->targetH->width() == width && it->targetH->height() == height )
-						{
-							partition.emplace_back(std::move(*it));
-							it = denoiseGroup.erase(it);
-						}
-						else
-						{
-							++it;
-						}
-					}
-
-					if ( !m_denoisePass->record(commandBuffer, partition, context) )
-					{
-						TraceError{ClassId} << "The shared denoise pass failed — the group's blur targets are stale !";
-					}
-				}
-			}
-
-			/* 3. Post-denoise passes (temporal resolves, history copies). */
-			for ( auto * effect : combineGroup )
-			{
-				if ( effect->usesSharedDenoise() )
-				{
-					const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, effect->label(), "temporal"};
-
-					effect->recordPostDenoisePasses(commandBuffer, context);
-				}
-			}
-
-			/* 4. The combine pass applies the whole group onto the chain color. */
-			{
-				const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, "Combine"};
-
-				std::vector< CombinePass::GroupEntry > contributions;
-				contributions.reserve(combineGroup.size());
-
-				for ( const auto * effect : combineGroup )
-				{
-					contributions.emplace_back(effect->combineContribution(context));
-				}
-
-				currentTexture = &m_combinePass->record(commandBuffer, *combineGroupInput, contributions, context, combineGroupIndex++);
-			}
-
-			combineGroup.clear();
-		};
+		/* Execute each enabled effect in the chain: each one receives the output of the previous one (ChainRun). */
+		ChainRun run{*this, commandBuffer, context, capabilities, census, phase};
 
 		for ( const auto & effect : stack.effects() )
 		{
-			if ( effect == nullptr || !effect->isEnabled() )
+			if ( run.accepts(effect.get()) )
 			{
-				continue;
-			}
-
-			/* The phase filter: a cut frame runs the pre-translucency slots first, everything
-			 * else after the TranslucentGB pass. An uncut frame runs them all. */
-			if ( phase != ChainPhase::Whole && isPreTranslucencySlot(effect->slot()) != (phase == ChainPhase::PreTranslucency) )
-			{
-				continue;
-			}
-
-			/* ⚠️⚠️ An effect that does not hold its GPU resources is NOT recordable, and this gate
-			 * is what turns a lifecycle mistake into a missing effect instead of a segfault: the
-			 * recording code indexes per-frame containers that a failed or absent creation leaves
-			 * EMPTY (RTGI's m_tracePerFrame[frameIndex] — an out-of-bounds read, not a null a test
-			 * would catch). Silent on purpose: the failure is already traced loudly where it
-			 * happens, by PostProcessStack::createAll()/resizeAll(); repeating it here would spam
-			 * one line per effect per frame. */
-			if ( !effect->isCreated() )
-			{
-				continue;
-			}
-
-			/* Skip depth-requiring effects if no depth is available. */
-			if ( effect->requiresDepth() && depthTexture == nullptr )
-			{
-				continue;
-			}
-
-			/* Skip HDR-requiring effects if HDR is not enabled. */
-			if ( effect->requiresHDR() && !m_cachedRequiresHDR )
-			{
-				continue;
-			}
-
-			/* Skip normals-requiring effects if no normals are available. */
-			if ( effect->requiresNormals() && normalsTexture == nullptr )
-			{
-				continue;
-			}
-
-			/* Skip material-properties-requiring effects if no material properties are available. */
-			if ( effect->requiresMaterialProperties() && materialPropertiesTexture == nullptr )
-			{
-				continue;
-			}
-
-			/* Skip albedo-requiring effects if no albedo is available. */
-			if ( effect->requiresAlbedo() && albedoTexture == nullptr )
-			{
-				continue;
-			}
-
-			/* Skip velocity-requiring effects if no velocity is available. */
-			if ( effect->requiresVelocity() && velocityTexture == nullptr )
-			{
-				continue;
-			}
-
-			/* The gates that discriminate between the siblings of a slot — ray tracing, the main directional light,
-			 * the clouds — are ONE function, the one the selection applied at the start of this frame
-			 * (PostProcessStack::canOccupantRun()). Here it reads what the frame actually bound: a traced effect is
-			 * recorded only with the frame's ray-tracing set (FrameContext::rayTracing: the TLAS is built during the
-			 * first frames of a scene, and a scene may hold no ray-traced geometry), which it then binds untested. */
-			if ( !PostProcessStack::canOccupantRun(*effect, capabilities) )
-			{
-				continue;
-			}
-
-			/* Every gate is passed: the effect WILL be recorded this frame, so its radiance targets hold this
-			 * frame's values by the time the census batch reads them. */
-			if ( censusArmed )
-			{
-				const auto targets = effect->radianceTargets();
-
-				census->noteRadianceTargets(std::span< const IndirectPostProcessEffect::RadianceTarget >{targets.data(), targets.size()});
-			}
-
-			/* ⚠️ The ToneMapping occupant must never join the overlay group below: the census batch is recorded
-			 * right before the tone mapper executes, and an overlay is executed later, by the combine pass. Checked
-			 * here, before the overlay branch, so the case it guards is actually reachable. */
-			assert(effect->slot() != EffectSlot::ToneMapping || !effect->producesOverlay());
-
-			if ( m_combinePass != nullptr && effect->producesOverlay() )
-			{
-				if ( !combineGroup.empty() && effect->readsChainColorUpstream(context) )
-				{
-					flushCombineGroup();
-				}
-
-				if ( combineGroup.empty() )
-				{
-					combineGroupInput = currentTexture;
-				}
-
-				combineGroup.emplace_back(effect.get());
-
-				continue;
-			}
-
-			flushCombineGroup();
-
-			/* The census batch, before the first display-referred effect: the tone mapper, or the reserved
-			 * PostToneMapping slot if the tone mapper does not run. Every counted image is final here, the
-			 * overlay group above included. */
-			if ( censusArmed && closesFrame && !censusRecorded && static_cast< size_t >(effect->slot()) >= static_cast< size_t >(EffectSlot::ToneMapping) )
-			{
-				census->recordBatch(commandBuffer, m_renderer.currentFrameIndex(), *m_grabPass, *currentTexture, effect->slot() == EffectSlot::ToneMapping, m_renderer.rayTracing().irradianceProbeVolume(), profiler);
-
-				censusRecorded = true;
-			}
-
-			{
-				const Vulkan::GPUProfiler::ScopedZone profilingZone{profiler, commandBuffer, effect->label()};
-
-				currentTexture = &effect->execute(commandBuffer, *currentTexture, context);
+				run.record(*effect);
 			}
 		}
 
-		flushCombineGroup();
-
-		/* No tone mapper ran in the closing phase: the census counts the chain output as it is. */
-		if ( censusArmed && closesFrame && !censusRecorded )
-		{
-			census->recordBatch(commandBuffer, m_renderer.currentFrameIndex(), *m_grabPass, *currentTexture, false, m_renderer.rayTracing().irradianceProbeVolume(), profiler);
-		}
-
-		/* Pre-translucency half: the composited result goes BACK INTO THE SCENE COLOUR, so the
-		 * material grab pass that follows captures a scene lit by its indirect diffuse, and the
-		 * TranslucentGB pass draws over it. Nothing else of this call leaves a trace: the final
-		 * descriptor keeps pointing wherever the previous frame left it until the closing half
-		 * sets it. */
-		if ( phase == ChainPhase::PreTranslucency )
-		{
-			if ( currentTexture != m_grabPass.get() && currentTexture != nullptr )
-			{
-				this->recordWriteBack(commandBuffer, *currentTexture);
-			}
-
-			return true;
-		}
-
-		/* Update only the current frame's descriptor set to point to the effect chain output
-		 * instead of the raw grab pass, so the single-pass render uses the processed texture.
-		 * Each frame-in-flight has its own descriptor set, avoiding conflicts with pending frames. */
-		const auto frameIndex = m_renderer.currentFrameIndex();
-		const auto & descriptorSet = m_descriptorSets[frameIndex];
-
-		if ( currentTexture != m_grabPass.get() && currentTexture != nullptr )
-		{
-			return descriptorSet->writeCombinedImageSampler(
-				0,
-				*currentTexture->image(),
-				*currentTexture->imageView(),
-				*currentTexture->sampler()
-			);
-		}
-
-		/* No effects ran, restore descriptor to grab pass. */
-		return descriptorSet->writeCombinedImageSampler(
-			0,
-			*m_grabPass->image(),
-			*m_grabPass->imageView(),
-			*m_grabPass->sampler()
-		);
+		return run.close();
 	}
 
 	/* GPU execution — single-pass camera lens effects. */

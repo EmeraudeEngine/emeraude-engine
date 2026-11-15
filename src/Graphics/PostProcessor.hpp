@@ -498,6 +498,57 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::ServiceInterface::onTerminate() */
 			bool onTerminate () noexcept override;
 
+			/**
+			 * @brief ONE execution of the effect chain (defined in PostProcessor.cpp): the chain colour, the overlay group
+			 * waiting for its combine pass and the frame's overflow census, with the steps that record the effects.
+			 */
+			class ChainRun;
+
+			/**
+			 * @brief The chain's clock for one call of executeIndirectPostProcessEffects().
+			 */
+			struct ChainClock
+			{
+				/** @brief Seconds since the first execution of a chain. */
+				float elapsedTime{0.0F};
+				/** @brief Duration of the previous RENDERED frame in seconds, clamped to [1/1000, 1/15]. */
+				float deltaTime{0.0F};
+			};
+
+			/**
+			 * @brief The view reconstruction block the chain reads this frame (Effects/Shared/ViewReconstructionGLSL.hpp).
+			 */
+			struct ViewReconstructionBlock
+			{
+				/** @brief This frame's buffer, or null when it could not be written. */
+				const Vulkan::UniformBufferObject * data{nullptr};
+				/** @brief Whether the frame's projection has the sparse layout. */
+				bool sparse{false};
+			};
+
+			/**
+			 * @brief RENDER THREAD. Prepares the overflow census for the frame being recorded.
+			 * @return OverflowCensus * The census, or null when it is disabled or the chain is not HDR.
+			 */
+			[[nodiscard]]
+			OverflowCensus * prepareFrameCensus () const noexcept;
+
+			/**
+			 * @brief RENDER THREAD. Reads the chain's clock, and closes the frame's duration when this call closes the frame.
+			 * @param closesFrame Whether the calling phase closes the frame (not the pre-translucency half of a cut frame).
+			 * @return ChainClock
+			 */
+			[[nodiscard]]
+			ChainClock chainFrameClock (bool closesFrame) const noexcept;
+
+			/**
+			 * @brief RENDER THREAD. Writes the view reconstruction block of the frame from its view.
+			 * @param frameView The view of the frame.
+			 * @return ViewReconstructionBlock
+			 */
+			[[nodiscard]]
+			ViewReconstructionBlock writeViewReconstruction (const FrameView & frameView) const noexcept;
+
 			PrimaryServices & m_primaryServices;
 			Resources::Manager & m_resourcesManager;
 			Renderer & m_renderer;

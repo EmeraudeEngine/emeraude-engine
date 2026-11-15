@@ -241,6 +241,57 @@ ContactShadows also moved to the SAME pixel-doubling-gated working resolution as
 (it was the only full-res mask chain) — the assumed quality trade of this phase; its
 combine snippet upsamples bilinearly like every other overlay.
 
+## 3d. How the executor is built — one run object per call (2026-11-15, owner decision)
+
+`PostProcessor::executeIndirectPostProcessEffects()` was one function of 466 lines (clang-tidy cognitive complexity
+123 against 25): the chain's state lived in a dozen locals captured by a 105-line lambda. It is now a sequence of named
+stages, and the state of ONE execution of the chain is an object:
+
+| Stage | Where | What it does |
+|---|---|---|
+| The census of the frame | `PostProcessor::prepareFrameCensus()` | arms the overflow census (HDR chain only), first, as before |
+| The chain's clock | `PostProcessor::chainFrameClock(closesFrame)` | elapsed time; the previous rendered frame's duration, closed once per FRAME (not per half of a cut frame) |
+| The view block | `PostProcessor::writeViewReconstruction(frameView)` | writes this frame's `ViewReconstructionGLSL` buffer from the frame's view |
+| The G-buffer | `GBufferInputs` (file-local) | the six grab-pass adapters and one pointer per attachment, null when absent |
+| The context | in the executor | the `FrameContext` every effect receives, then the `FrameCapabilities` of the occupant gate |
+| The run | `PostProcessor::ChainRun` | `accepts(effect)` — enabled, in this half of the chain, created, its G-buffer inputs present, `canOccupantRun()`; `record(effect)` — an overlay joins the group, any other effect flushes it and executes; `close()` — last flush, the census batch no tone mapper triggered, then the write-back (pre-translucency half) or the frame's final descriptor |
+| A flush | `ChainRun::flushCombineGroup()` | four steps, one function each: `recordGroupInternalPasses()`, `recordSharedDenoise()` (one partition per working resolution, `takeDenoisePartition()`), `recordGroupTemporalPasses()`, `recordCombine()` |
+
+`ChainRun` is stack-allocated in the executor and lives for one call, like the adapters: it POINTS to what the executor
+owns (the command buffer, the context, the capabilities) and is neither copied nor kept. It is a private nested class of
+`PostProcessor` defined in `PostProcessor.cpp`: nothing outside can open a run.
+
+**Rules.**
+- A new stage of the chain is a function of `ChainRun` (or of `PostProcessor` when it needs no chain state), never a
+  lambda capturing the executor's locals: the executor stays a list of stages.
+- The order of the stages is the order of the recorded passes: `Core.RendererService.getGPUTimings()` (GPU profiler on)
+  prints the zones in command-stream order, and that list is the reference of any change here.
+- The vectors a flush builds are still heap allocations (item
+  `post-process-chain-run-allocates-vectors-at-every-flush`): the split changed no data structure.
+
+**Proof** (Linux, RTX 3070 Ti, 2026-11-15). Debug, window-less (the headless 1280×720 swap-chain), the validation layer
+loaded, the GPU profiler on (a settings copy), the binary before the split against the binary after, eight scenes:
+`global-illumination` and `reflexion-debug` on both lanes, `light-and-shadow-debug`, `city`, `water-world`, `terrain`.
+- **The recorded passes are the same.** The GPU timing zones (`getGPUTimings()`: names and nesting in command-stream
+  order) are IDENTICAL in the eight scenes (22 to 38 zones each), the three cut-frame scenes included (`city`,
+  `water-world`, `terrain`: `PostFXChain/PreTranslucency`, `TranslucentGBPass`, `PostFXChain`).
+- The same `PostProcess.getStatus` text (the metering lines apart) in the eight; the same render statistics in seven —
+  `water-world` scatters its palms at random and gives another count at every launch (2560, 2552, 2590 instances).
+- Pixels (mean absolute difference / 255), eight captures per launch on the static scenes, the closest and the median
+  pair ACROSS the two binaries against the pairs INSIDE one launch: `global-illumination` screen-space 0.007 / 0.078
+  against 0.006 / 0.081; `light-and-shadow-debug` 0.015 / 0.090 against 0.019 / 0.082; `city` 0.11 / 0.72 against
+  0.05 / 0.79; `global-illumination` ray-traced 0.16 / 0.28, against 0.10 / 0.18 between two launches of the binary
+  after. The moving scenes sit in their spread.
+- ⚠️ **`global-illumination` under CPU load is another picture.** A run taken while a build was running stepped by
+  −2.4 levels between two captures. Reproduced with thirty busy processes: the metered scene average goes from 107 nits
+  (idle) to 112 then 118 nits and the picture darkens by 4 levels in 28 s, where an idle run stays within one level
+  over 31 s. Never measure pixels while a build, a gate or another instance runs. The dependence itself is a defect:
+  item `traced-lighting-level-depends-on-the-machine-load`.
+- 0 VUID, 0 error line, exit 0 in the 20 launches. ThreadSanitizer (llvmpipe, window-less, the act-switch scenario): 0
+  report.
+- clang-tidy on the changed lines: the complexity finding is gone and nothing new came; cppcheck 0;
+  include-what-you-use 0; GCC Release and Debug, clang, the Debug + TSan tree: 0 warning; `-Wdocumentation` clean.
+
 ## 4. Per-effect GPU pass counts (reference, 1080p half-res)
 
 Measured from the `execute()` implementations (render passes + compute dispatches):

@@ -18,7 +18,8 @@ instrument that says **how often, where and by how much**, before anything is ch
   where the bit order IS the numeric order); `> 0x7F800000` NaN, `== 0x7F800000` Inf, `>= 0x477FE000`
   (65 504, the largest finite binary16) **ceiling**, else it feeds `peakFinite`. No `isnan()`/`isinf()`
   and no float compare: a fast-math compiler (Metal) may fold them. Alpha is never read.
-- **ONE batch per frame**, in the closing phase of `PostProcessor::executeIndirectPostProcessEffects()`,
+- **ONE batch per frame**, in the closing phase of `PostProcessor::executeIndirectPostProcessEffects()`
+  (`ChainRun::record()`, or `ChainRun::close()` when no such effect runs),
   right before the first effect whose slot is `>= EffectSlot::ToneMapping` (after the overlay group has
   been flushed), or after the final flush when no such effect runs. Every counted image is final there.
   Only on the HDR chain (`m_cachedRequiresHDR`): an 8-bit grab cannot overflow. The two halves of a cut
