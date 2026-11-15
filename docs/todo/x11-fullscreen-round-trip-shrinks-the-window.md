@@ -22,6 +22,9 @@ exact.
 reads 74 less. The next fullscreen switch stores what `getSize()` says — 900x526 — so each round trip would shrink
 the window again: not tried.
 
+**It is X11 only so far** (the peers, the same day, engine `bac4fb8b`): on Windows (125 % scale) and on macOS (scale 2)
+the window comes back at 900x600 exactly.
+
 **Not established:** what the 74 pixels are (a title bar counted twice — 37 points at a scale of 2 — is the first
 guess); whether the size is wrong on screen or only as read; whether a native X11 session or Wayland does it (on
 Wayland the same key was not tried that day); the height after several round trips.

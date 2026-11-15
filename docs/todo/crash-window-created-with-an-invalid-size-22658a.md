@@ -106,7 +106,8 @@ Archives:
   move the rule into the window documentation and delete the item.
 - Done 2026-11-15 (owner decision: the same refusal): `Window::switchToFullscreenMode()` no longer stores the size of
   a minimised or empty window — it was the one writer left without it; and the settings documentation says that a
-  key kept across a reset is not cleaned by it (source-tree doc 02).
+  key kept across a reset is not cleaned by it (source-tree doc 02). Run on Windows by the peer: a minimised window
+  reads 0x0 at -32000,-32000, Shift+F11 warns and the stored size stays as it was.
 
 ## References
 

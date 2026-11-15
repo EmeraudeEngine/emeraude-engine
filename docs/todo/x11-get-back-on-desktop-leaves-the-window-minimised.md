@@ -22,6 +22,9 @@ round trip in between (Shift+F11 twice) does not clear it either. Two runs, the 
 `getBackOnDesktop()` is what brings an instance back when a second launch hands it over: on such a session the first
 instance would stay in the dock.
 
+**It is X11 only** (the peers, the same day, engine `bac4fb8b`): on Windows (RTX 3500 Ada) and on macOS (Apple M6)
+`getBackOnDesktop()` brings the window back — `"iconified": false`, at the size it had before.
+
 **Not established:** whether the window is really still minimised or only reported so (`GLFW_ICONIFIED` reads the
 window's `WM_STATE` on X11) — nobody looked at the screen; whether a native X11 session behaves the same (this was
 XWayland under Mutter); whether another window manager does. On Windows the same function was fixed on 2026-10-22
