@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Emeraude Lifecycle Map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<!--
+	The engine on one page: every service and thread over one run (chronogram), the dependency graph replayed step by
+	step (architecture), the threads and their synchronization points (metro), two data flows, and each service's
+	internal structure. Engine only: an application appears as its hooks, nothing more.
+
+	MAINTENANCE: this file is documentation like any other docs/ file. The DATA section of the script is the map:
+	ENTITIES (services, sub-services, threads), DEPS, EVENTS (the ordered run), STATIONS / SYNCS (the metro), FLOWS,
+	NOTES. A change to a start or terminate order, a loop, a stop path, a thread, a lock / queue / fence between
+	threads, a dependency, or a service's structure updates that data in the same session. Code references are
+	SYMBOLS (file + function), never line numbers. Written from the code on 2026-11-15 (engine develop + working tree).
+	The update procedure, its checker (every id, reference, file and symbol) and its screenshots: the `lifecycle-map`
+	skill of projet-alpha (.claude/skills/lifecycle-map/).
+-->
+<style>
+	/* Layout: sticky tab bar; a view area beside a detail drawer (stacked under 1100 px). Every view is drawn from the same data. */
+	:root {
+		--bg: #f3f6f4;
+		--surface: #ffffff;
+		--sunk: #e8eeeb;
+		--fg: #142019;
+		--muted: #59675f;
+		--faint: #a9b7b0;
+		--line: #d0dbd5;
+		--accent: #0a7a54;
+		--accent-soft: #d8f0e5;
+		--hook: #9a5b00;
+		--hook-soft: #fcefd5;
+		--fatal: #b42318;
+		--fatal-soft: #fde6e3;
+		--warn: #946200;
+		--warn-soft: #fbf1d3;
+		--info: #3b5e8c;
+		--info-soft: #e1eaf6;
+		--t-main: #0a7a54;
+		--t-logic: #2a5db5;
+		--t-render: #7b3cb3;
+		--t-pool: #b3561a;
+		--t-own: #52615a;
+		--sel: #e0a100;
+		--font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+		--font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+		--font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+	}
+	@media (prefers-color-scheme: dark) {
+		:root:not([data-theme="light"]) {
+			--bg: #0d1311; --surface: #141c19; --sunk: #1b2521; --fg: #e2ebe6; --muted: #98a9a0; --faint: #4a5a53; --line: #2a3832;
+			--accent: #3fd096; --accent-soft: #12352a; --hook: #edb75e; --hook-soft: #3a2b10;
+			--fatal: #ff8b80; --fatal-soft: #3e1a17; --warn: #f0c560; --warn-soft: #372b0f; --info: #92b5e8; --info-soft: #1a2637;
+			--t-main: #3fd096; --t-logic: #7ca8f2; --t-render: #c497f0; --t-pool: #f2a368; --t-own: #a9b9b1; --sel: #ffcc4d;
+			color-scheme: dark;
+		}
+	}
+	:root[data-theme="dark"] {
+		--bg: #0d1311; --surface: #141c19; --sunk: #1b2521; --fg: #e2ebe6; --muted: #98a9a0; --faint: #4a5a53; --line: #2a3832;
+		--accent: #3fd096; --accent-soft: #12352a; --hook: #edb75e; --hook-soft: #3a2b10;
+		--fatal: #ff8b80; --fatal-soft: #3e1a17; --warn: #f0c560; --warn-soft: #372b0f; --info: #92b5e8; --info-soft: #1a2637;
+		--t-main: #3fd096; --t-logic: #7ca8f2; --t-render: #c497f0; --t-pool: #f2a368; --t-own: #a9b9b1; --sel: #ffcc4d;
+		color-scheme: dark;
+	}
+	* { box-sizing: border-box; }
+	html { scroll-padding-top: 64px; }
+	body { margin: 0; background: var(--bg); color: var(--fg); font: 14.5px/1.55 var(--font-body); }
+	body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+	.gutter { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+	.inner { max-width: 1560px; margin: 0 auto; }
+	h1, h2, h3, h4 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+	h1 { font-size: 1.7rem; letter-spacing: -0.01em; }
+	h2 { font-size: 1.2rem; }
+	h3 { font-size: 1rem; }
+	h4 { font-size: 0.9rem; }
+	p { margin: 0; max-width: 78ch; }
+	code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+	a { color: var(--accent); }
+	:focus-visible { outline: 2px solid var(--sel); outline-offset: 2px; }
+	.eyebrow { font: 600 0.7rem/1 var(--font-body); letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
+	.muted { color: var(--muted); }
+
+	header.top { padding-block: 22px 14px; }
+	header.top .inner { display: grid; gap: 8px; }
+	nav.tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-block: 1px solid var(--line); }
+	nav.tabs .inner { display: flex; gap: 2px; overflow-x: auto; }
+	nav.tabs a { flex: none; text-decoration: none; color: var(--muted); font: 500 0.88rem/1 var(--font-body); padding: 14px 12px 12px; border-bottom: 3px solid transparent; }
+	nav.tabs a[aria-current="page"] { color: var(--fg); border-bottom-color: var(--accent); }
+	nav.tabs a:hover { color: var(--fg); }
+
+	.layout { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; padding-block: 20px 60px; align-items: start; }
+	.view { display: grid; gap: 16px; min-width: 0; }
+	.view-head { display: grid; gap: 6px; }
+	.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+	.scroll { overflow-x: auto; }
+	.pad { padding: 14px 16px; }
+	.toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+	.btn { all: unset; cursor: pointer; font: 500 0.82rem/1 var(--font-body); padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); white-space: nowrap; }
+	.btn:hover { border-color: var(--accent); }
+	.btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+	.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.8rem; color: var(--muted); align-items: center; }
+	.sw { display: inline-block; width: 18px; height: 9px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+
+	/* Drawer. */
+	aside.drawer { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 62px); max-height: calc(100vh - 80px); overflow-y: auto; }
+	aside.drawer .pad { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
+	aside.drawer table { table-layout: fixed; }
+	aside.drawer table code { overflow-wrap: anywhere; }
+	aside.drawer td:last-child { width: 92px; }
+	.d-title { display: grid; gap: 4px; }
+	.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+	.chip { all: unset; cursor: pointer; font: 500 0.76rem/1.2 var(--font-mono); padding: 5px 7px; border-radius: 5px; background: var(--sunk); }
+	.chip:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+	.kv { display: grid; grid-template-columns: 6.8em minmax(0, 1fr); gap: 6px 10px; font-size: 0.88rem; margin: 0; }
+	.kv dt { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; padding-top: 3px; }
+	.kv dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+	.inside { display: grid; gap: 8px; }
+	.inside details { border-top: 1px solid var(--line); padding-top: 6px; }
+	.inside summary { cursor: pointer; font-weight: 600; font-size: 0.86rem; }
+	.inside ul { margin: 6px 0 0; padding-left: 1.1em; display: grid; gap: 2px; font-size: 0.84rem; }
+	.badge { display: inline-block; font: 600 0.66rem/1 var(--font-body); letter-spacing: 0.05em; text-transform: uppercase; padding: 4px 6px; border-radius: 4px; white-space: nowrap; }
+	.b-fatal { background: var(--fatal-soft); color: var(--fatal); }
+	.b-warn { background: var(--warn-soft); color: var(--warn); }
+	.b-error { background: var(--info-soft); color: var(--info); }
+	.b-hook { background: var(--hook-soft); color: var(--hook); }
+	.b-race { background: var(--fatal-soft); color: var(--fatal); }
+	.thread { display: inline-flex; align-items: center; gap: 5px; font: 500 0.75rem/1 var(--font-mono); white-space: nowrap; }
+	.thread::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: currentColor; }
+	.th-main { color: var(--t-main); } .th-logic { color: var(--t-logic); } .th-render { color: var(--t-render); } .th-pool { color: var(--t-pool); } .th-own { color: var(--t-own); } .th-any { color: var(--muted); }
+
+	/* SVG views. */
+	svg { display: block; font-family: var(--font-mono); }
+	svg text { fill: var(--fg); font-size: 11px; }
+	svg .t-muted { fill: var(--muted); }
+	svg .clickable { cursor: pointer; }
+	.g-band { fill: var(--sunk); }
+	.g-band-alt { fill: var(--surface); }
+	.g-band-label { font: 600 10.5px var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; fill: var(--muted); }
+	.g-row-label { font-size: 11px; }
+	.g-group { font: 600 10px var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; fill: var(--muted); }
+	.g-grid { stroke: var(--line); stroke-width: 1; }
+	.bar-primary { fill: var(--accent); }
+	.bar-secondary { fill: var(--info); }
+	.bar-sub { fill: var(--info); fill-opacity: 0.55; }
+	.bar-app { fill: var(--hook); }
+	.bar-thread-main { fill: var(--t-main); } .bar-thread-logic { fill: var(--t-logic); } .bar-thread-render { fill: var(--t-render); }
+	.bar-thread-pool { fill: var(--t-pool); } .bar-thread-own { fill: var(--t-own); }
+	.bar-optional { fill-opacity: 0.3; stroke-dasharray: 3 2; stroke-width: 1.2; stroke: var(--t-own); }
+	.mk-hook { fill: var(--hook); }
+	.mk-notify { fill: var(--accent); }
+	.mk-mark { fill: var(--muted); }
+	.cursor { stroke: var(--sel); stroke-width: 2; }
+	.col-hit { fill: transparent; cursor: pointer; }
+	.col-hit:hover { fill: var(--sel); fill-opacity: 0.15; }
+	.row-hit { fill: transparent; cursor: pointer; }
+	.row-hit:hover { fill: var(--accent); fill-opacity: 0.07; }
+	.row-hit.row-sel { fill: var(--sel); fill-opacity: 0.2; }
+
+	.n-box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+	.n-label { font: 600 12px var(--font-body); }
+	.n-sub { font-size: 9.5px; fill: var(--muted); }
+	.node { transition: opacity 0.25s; }
+	.node.unborn { opacity: 0.3; }
+	.node.unborn .n-box { stroke-dasharray: 4 3; }
+	.node.alive .n-box { stroke: var(--accent); }
+	.node.now .n-box { stroke: var(--sel); stroke-width: 3; fill: var(--accent-soft); }
+	.node.dead { opacity: 0.25; }
+	.node.dead .n-box { fill: var(--sunk); }
+	.node.selected .n-box { stroke: var(--sel); stroke-width: 3.5; }
+	.edge { fill: none; stroke: var(--faint); stroke-width: 1.3; }
+	.edge.ps { stroke-opacity: 0.5; stroke-dasharray: 2 3; }
+	.edge.back { stroke: var(--warn); stroke-width: 2; }
+	.edge.hl { stroke: var(--sel); stroke-width: 2.6; stroke-opacity: 1; }
+	.tdot { stroke: var(--surface); stroke-width: 1.5; }
+	.tdot.unborn, .tdot.dead { fill: var(--line); } .tdot.alive { fill: var(--t-own); } .tdot.now { fill: var(--sel); }
+	.ps-box { fill: var(--sunk); stroke: var(--line); }
+
+	.m-line { fill: none; stroke-width: 7; stroke-linecap: round; }
+	.m-main { stroke: var(--t-main); } .m-logic { stroke: var(--t-logic); } .m-render { stroke: var(--t-render); } .m-pool { stroke: var(--t-pool); } .m-own { stroke: var(--t-own); }
+	.m-loop { fill: none; stroke-width: 2; stroke-dasharray: 4 4; }
+	.st { fill: var(--surface); stroke: var(--fg); stroke-width: 2.2; }
+	.st.hl { fill: var(--sel); }
+	.st-label { font-size: 10px; }
+	.sync-path { fill: none; stroke: var(--fg); stroke-width: 1.2; stroke-dasharray: 5 3; opacity: 0.28; }
+	.sync-path.hl { stroke: var(--sel); opacity: 1; stroke-width: 2.8; }
+	.sync-badge { fill: var(--fg); }
+	.sync-badge.hl { fill: var(--sel); }
+	.sync-badge-text { fill: var(--bg); font: 600 9.5px var(--font-body); pointer-events: none; }
+	.m-seg { font: 600 10.5px var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; fill: var(--muted); }
+	.m-seg-line { stroke: var(--line); stroke-dasharray: 2 4; }
+	.m-lane-label { font: 600 11px var(--font-body); }
+
+	/* Lists. */
+	.sync-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+	.sync-item { all: unset; cursor: pointer; display: grid; gap: 4px; align-content: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 0.85rem; }
+	.sync-item:hover, .sync-item[aria-pressed="true"] { border-color: var(--sel); }
+	.sync-item b { font-family: var(--font-display); }
+	.flow { display: grid; }
+	.fs { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 12px; }
+	.fs .rail { display: grid; justify-items: center; grid-template-rows: auto 1fr; }
+	.fs .dot { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: currentColor; }
+	.fs .dot span { color: var(--bg); font: 600 0.75rem var(--font-mono); }
+	.fs .stem { width: 3px; background: var(--line); min-height: 18px; }
+	.fs:last-child .stem { display: none; }
+	.fs .body { padding-bottom: 14px; display: grid; gap: 3px; min-width: 0; font-size: 0.9rem; }
+	.fs .body .h { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+	.fs .hand { font-size: 0.8rem; color: var(--muted); border-left: 2px dashed var(--line); padding-left: 8px; margin-top: 4px; }
+	.flows { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; }
+	.svc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+	.svc { all: unset; cursor: pointer; display: grid; gap: 6px; align-content: start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+	.svc:hover, .svc[aria-pressed="true"] { border-color: var(--sel); }
+	.svc-card { display: grid; gap: 8px; align-content: start; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); min-width: 0; }
+	.svc-card[aria-pressed="true"] { border-color: var(--sel); }
+	.svc-card .head { all: unset; cursor: pointer; display: grid; gap: 4px; }
+	.svc-card .head:hover b { text-decoration: underline; }
+	.svc-card details { border-top: 1px solid var(--line); padding-top: 5px; }
+	.svc-card summary { cursor: pointer; font-weight: 600; font-size: 0.84rem; }
+	.svc-card summary small { font-weight: 400; color: var(--muted); }
+	.svc-card ul { margin: 4px 0 2px; padding-left: 1.1em; display: grid; gap: 2px; font-size: 0.82rem; }
+	.notes { display: grid; gap: 10px; }
+	.note { border-left: 3px solid var(--warn); padding: 10px 14px; display: grid; gap: 4px; background: var(--surface); border-radius: 0 8px 8px 0; }
+	.note.race { border-left-color: var(--fatal); }
+	.stopdoors { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; }
+	.door { padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); display: grid; gap: 4px; align-content: start; font-size: 0.84rem; }
+	.door b { font-family: var(--font-display); font-size: 0.95rem; }
+	table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+	th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+	th { font: 600 0.7rem/1.2 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); background: var(--sunk); }
+	td.n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+	.caption { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: baseline; font-size: 0.9rem; min-height: 2.6em; margin-top: 10px; }
+	input[type="range"] { flex: 1 1 200px; accent-color: var(--accent); }
+
+	@media (max-width: 1100px) {
+		.layout { grid-template-columns: minmax(0, 1fr); }
+		aside.drawer { position: static; max-height: none; }
+	}
+	@media (max-width: 560px) {
+		.flows { grid-template-columns: minmax(0, 1fr); }
+		.kv { grid-template-columns: minmax(0, 1fr); }
+	}
+	@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<header class="top gutter">
+	<div class="inner">
+		<span class="eyebrow">emeraude-engine · docs</span>
+		<h1>Emeraude Lifecycle Map</h1>
+		<p class="muted">One run of the engine, every service and thread in it, who depends on whom, who waits for whom, and
+			what each service holds inside. Pick anything in one view: it stays selected in the others and its details open
+			beside it. Written from the code on 2026-11-15; references are symbols, search them.</p>
+	</div>
+</header>
+<nav class="tabs gutter" aria-label="Views">
+	<div class="inner" id="tabs">
+		<a href="#chronogram">Chronogram</a>
+		<a href="#architecture">Architecture</a>
+		<a href="#metro">Threads &amp; synchronization</a>
+		<a href="#flows">Data flows</a>
+		<a href="#internals">Internals</a>
+		<a href="#notes">Open points</a>
+	</div>
+</nav>
+<div class="gutter">
+	<div class="inner layout">
+		<main class="view" id="view"></main>
+		<aside class="drawer card" id="drawer" aria-live="polite"></aside>
+	</div>
+</div>
+
+<script>
+"use strict";
+/* =====================================================================================================================
+ * DATA — the map. Update it with the code (see the header comment).
+ * ===================================================================================================================== */
+
+/* Phases of the run, in order. */
+const PHASES = [
+	{ id: "base", name: "Base level", where: "Core::Core() → initializeBaseLevel()" },
+	{ id: "core", name: "Core level", where: "run() → initializeCoreLevel()" },
+	{ id: "start", name: "Start", where: "run()" },
+	{ id: "run", name: "Execution", where: "the three loops" },
+	{ id: "stop", name: "Stop", where: "stop() → proceedStop()" },
+	{ id: "exit", name: "Loop exit", where: "end of run()" },
+	{ id: "terminate", name: "terminate()", where: "Core::terminate()" },
+	{ id: "dtor", name: "~Core()", where: "Core::~Core()" }
+];
+
+/*
+ * ENTITIES. k: primary (in PrimaryServices) | coreprimary (Core's primary list) | secondary | sub (renderer sub-service)
+ * | app | thread. th: the thread kind (thread entities). opt: exists only when enabled / on demand.
+ * owns: threads it starts. inside: [[group, [items]]].
+ */
+const ENTITIES = {
+	"arguments": { l: "Arguments", k: "primary", fail: "fatal", s: "The command line, parsed in the PrimaryServices constructor (before initialize()).", code: [["src/Arguments.cpp", "Arguments::onInitialize()"]] },
+	"userinfo": { l: "UserInfo", k: "primary", fail: "fatal", s: "Account, home directory, language.", code: [["src/PlatformSpecific", "UserInfo"]] },
+	"filesystem": { l: "FileSystem", k: "primary", fail: "fatal", s: "Config, cache and data directories; creates captures/.", code: [["src/FileSystem.cpp", "FileSystem::onInitialize()"]] },
+	"settings": { l: "Settings", k: "primary", fail: "fatal when --settings-filepath / --settings-filename names a missing file, otherwise error (defaults used)", s: "Loads settings.json, then Tracer::lateSetup() (log file, tag filter). Written back on terminate when autosave is on.", code: [["src/Settings.cpp", "Settings::onInitialize()"]] },
+	"systeminfo": { l: "SystemInfo", k: "primary", fail: "fatal", s: "OS, CPU, memory, GPU inventory.", code: [["src/PlatformSpecific/SystemInfo.cpp", "SystemInfo"]] },
+	"threadpool": { l: "ThreadPool", k: "thread", th: "pool", s: "Not a service: a shared_ptr created by PrimaryServices with hardware_concurrency() workers (a fixed count in thread-pool debug builds). Every job is owned by its submitter through a TaskGroup / TaskHandle, which stops and waits it.", code: [["src/PrimaryServices.cpp", "PrimaryServices::Impl::initialize()"], ["base:src/ThreadPool.hpp", "ThreadPool"]],
+		inside: [["Job owners", ["Resource containers (TaskGroup m_tasks)", "ResourceTrait resource jobs (reload)", "Resources::Manager local-data release pass (TaskHandle)", "MeshResource LOD job", "Net::Manager transfers (TaskGroup)", "APIClient requests (TaskGroup)", "FrameCapture writer (TaskHandle) + PNG parallelFor", "PeerStore"]], ["Contracts (abort on violation)", ["TaskGroup::waitForAll() on a pool worker", "A task waiting for its own handle or group", "ThreadPool::wait() waits for the WHOLE pool: not a shutdown tool"]]] },
+	"apiclient": { l: "Net::APIClient", k: "primary", fail: "fatal", s: "Web API client, ticket based. Requests run as a TaskGroup on the pool; responses are handed back on the main thread (dispatchCompleted()).", notifies: "RequestStarted, ResponseReceived, RequestsFinished (Core does not observe them)", code: [["src/Net/APIClient.cpp", "APIClient"]] },
+	"netmanager": { l: "Net::Manager", k: "primary", fail: "fatal", s: "HTTPS download service: TLS trust store, URL-keyed disk cache under a budget, peer tokens. Transfers are a TaskGroup on the pool; events are dispatched on the main thread.", notifies: "DownloadingStarted, FileDownloaded, DownloadingFinished, Progress (observed by Core, nothing done)", code: [["src/Net/Manager.cpp", "Manager::onInitialize()"], ["src/Net/Manager.cpp", "Manager::dispatchCompleted()"]],
+		inside: [["Net", ["Manager: downloads, cache index", "APIClient: REST requests", "TCPClient / TCPServer (asio), UDPClient", "SerialPort, WiFiScanner, NetworkInterfaces"]]] },
+	"console": { l: "Console::Controller", k: "coreprimary", fail: "fatal", owns: ["t-remote", "t-mcp"], s: "Typed console commands on every ControllableTrait object. Network commands are queued and executed on the main thread by poll(), once per main-loop cycle.", notifies: "Exit → stop(); HardExit → std::terminate()", code: [["src/Console/Controller.cpp", "Controller::onInitialize()"], ["src/Console/Controller.cpp", "Controller::poll()"]], docs: ["ai-runtime-control.md"],
+		inside: [["Commands", ["Registry of ControllableTrait objects", "Command, CommandSignature, Parameter, Argument, CommandResult", "Expression: the parsed command line", "JSON scene handler (given by Core to Scenes::Manager)"]], ["Transports", ["RemoteListener: TCP (asio), its own network thread, per-client queue cap", "RemoteProtocol", "MCP::Server: HTTP /mcp on a base HTTPServer thread; requests answered from poll()", "MCP::Protocol: every typed command is an MCP tool"]]] },
+	"resources": { l: "Resources::Manager", k: "coreprimary", fail: "fatal", owns: ["t-sharing"], s: "Every typed resource container. Loads are asynchronous on the pool; GPU uploads happen in the resource's onDependenciesLoaded(). A primary service that holds references to two SECONDARY services (Renderer, Audio): its own jobs are stopped first in terminate().", code: [["src/Resources/Manager.cpp", "Manager::onInitialize()"], ["src/Resources/Container.hpp", "Container::getResource()"]], docs: ["resource-management.md", "multi-scene-resource-ownership.md"],
+		inside: [["Geometry", ["VertexGeometries, IndexedVertexGeometries", "RawVertexGeometries, RawIndexedVertexGeometries", "PulledVertexGeometries, VertexGridGeometries"]], ["Images and textures", ["Images, CompressedImages, Cubemaps", "Movies, CubemapMovies, VolumetricImages", "Texture1Ds, Texture2Ds, Texture3Ds, TextureCubemaps", "AnimatedTexture2Ds, AnimatedTextureCubemaps"]], ["Materials", ["StandardMaterials, BeamMaterials, PathMaterials, SkyAtmosphereMaterials"]], ["Renderables", ["SimpleMeshes, Meshes (multi-layer)", "Sprites, SkyBoxes, DynamicSkies", "BasicGrounds, Terrains, BasicSeas"]], ["Sky data", ["StarCatalogues, CloudShapes"]], ["Audio", ["Sounds, Musics, Playlists, Soundfonts"]], ["Animation", ["Skeletons, AnimationClips"]], ["Fonts and scenes", ["Fonts", "SceneDefinitions (JSON scenes)"]], ["Mechanisms", ["Container<T>: per-type store, sync or async load by name", "ResourceTrait: Unloaded → Enqueuing → Loading → Loaded / Failed", "Dependencies: addDependency() → checkDependencies() → onDependenciesLoaded()", "LoadingRequest: file, download or direct data", "DeferredSyncLoad: a sync load run after the container lock is released", "LocalDataLease: holds a CPU copy against the release pass", "Default resource per type: a missing name never gives nullptr", "PeerStore: reads a peer's index, fetches files over HTTP (SHA-256)", "SharingServer: serves the stores read-only to a peer (off by default)"]]] },
+	"user": { l: "User", k: "coreprimary", fail: "error", s: "Account id and name from the settings. No thread.", code: [["src/User.cpp", "User::onInitialize()"]] },
+	"platform": { l: "PlatformManager", k: "secondary", fail: "fatal", s: "GLFW error callback, init hints, glfwInit(). postEmptyEvent() wakes the main loop from any thread.", code: [["src/PlatformManager.cpp", "PlatformManager::onInitialize()"]] },
+	"vulkan": { l: "Vulkan::Instance", k: "secondary", fail: "fatal (exit 97 when the GPU or its driver is the cause)", s: "Instance, layers, extensions, RenderDoc, physical devices. The logical devices (graphics, compute) are created LATER, lazily, at the renderer's first getGraphicsDevice(window); the instance owns them, so they outlive the renderer.", code: [["src/Vulkan/Instance.cpp", "Instance::onInitialize()"], ["src/Vulkan/Instance.cpp", "Instance::getGraphicsDevice()"]], docs: ["subsystems/vulkan/22-startup-refusals-told-to-the-user.md"],
+		inside: [["Start", ["targetVulkanAPIVersion() (application hook, default 1.3)", "Validation layers (debug), instance extensions, RenderDoc", "vkCreateInstance; with layers, a failure retries without layers", "volkLoadInstance, debug messenger (optional)", "Physical devices enumerated and ranked"]], ["Owned", ["Graphics device (forced / preferred / best, then every other compatible one)", "Compute device (physics)"]]] },
+	"window": { l: "Window", k: "secondary", fail: "fatal", s: "GLFW window (or a window-less stand-in), Vulkan surface, display-sleep inhibitor. Pumps the OS events for the main loop.", notifies: "focus / visibility, OSNotifiesFramebufferResized, OSRequestsToRescaleContentBy, OSRequestsToTerminate, OSLostDisplayConnection, OSRequestsToEndSession, OSEndsSession", code: [["src/Window.cpp", "Window::onInitialize()"], ["src/Window.linux.cpp", "Window::waitEvents()"]] },
+	"input": { l: "Input::Manager", k: "secondary", fail: "fatal", s: "Window callbacks, gamepad database, joysticks. Delivers events to listeners on the main thread and copies device states into per-key atomics read by the logic thread.", notifies: "DroppedFiles → openFiles()", code: [["src/Input/Manager.cpp", "Manager::waitSystemEvents()"]], docs: ["subsystems/input/03-device-state-across-threads.md"],
+		inside: [["Devices", ["KeyboardController, PointerController", "JoystickController, GamepadController (ControllerInterface)"]], ["Listeners", ["KeyboardListenerInterface, PointerListenerInterface (newest first, a priority pointer slot)", "Engine listeners: Core, Overlay, scene editor, the scene's NodeController / OrbitController", "A listener returning true stops the propagation"]], ["State copy", ["One relaxed atomic per key, button, axis, hat: no whole-device snapshot"]]] },
+	"renderer": { l: "Graphics::Renderer", k: "secondary", fail: "fatal", owns: ["t-pcache"], s: "Device, pipeline cache, eleven sub-services, swap-chain, one frame scope per frame in flight, RT structures. Renders on the rendering thread; recreates the swap-chain itself when it is degraded.", notifies: "WindowContentRefreshed → onWindowChanged() on the main thread", code: [["src/Graphics/Renderer.cpp", "Renderer::initializeRenderingStack()"], ["src/Graphics/Renderer.cpp", "Renderer::renderFrame()"], ["src/Graphics/Renderer.cpp", "Renderer::onTerminate()"]], docs: ["graphics-system.md", "post-processing-pipeline.md", "pipeline-caching-system.md"],
+		inside: [["Sub-services (start order)", ["ShaderManager: GLSL → SPIR-V (glslang), module cache, disk binary cache", "TransferManager: staging uploads", "LayoutManager: descriptor set and pipeline layouts", "SharedUBOManager: shared material UBOs", "BindlessTextureManager: global bindless texture table", "VertexBufferFormatManager", "TextureCompressor: BC7 / BC5 / BC4", "TextureCache: on-disk .bc7cache by content hash", "PostProcessor: the effect chain executor", "ExternalInput: video in (webcam)", "Recorder: video rushes (VP9 / H.265)"]], ["Frame objects", ["SwapChain (headless when window-less), SceneRenderTarget (HDR / MSAA)", "RendererFrameScope × frames in flight: command pool, buffers, fence, semaphores", "Present semaphores per swap-chain image", "DeferredDestructor: frees GPU objects after the frames in flight", "GrabPass (refraction colour and depth)", "FrameCapture (screenshots)", "GPUProfiler (timestamps)"]], ["Ray tracing (lane Auto / RayTracing, fixed for the session)", ["AccelerationStructureBuilder: BLAS / TLAS", "SkinnedGeometryProcessor: GPU skinning for the BLAS", "IrradianceProbeVolume: DDGI radiance cache", "RT descriptor set"]], ["Others", ["MDI::BatchBuilder: multi-draw-indirect", "IBLBaker, SelectionOutline, DeferredLightResolve, PathDebugOverlay", "Caches: m_programs, m_graphicsPipelines, samplers, BRDF LUT, LTC tables"]], ["Saphir: from a renderable to a pipeline", ["Generator::Abstract → SceneRendering, ShadowCasting, OverlayRendering, PostProcessing, GizmoRendering, TBNSpaceRendering", "1. ProgramCacheKey → findCachedProgram() (a failed key is never retried)", "2. new Program → uniform sets → GLSL (geometry + material + pass) → vertex buffer format → data layouts → SPIR-V modules → graphics pipeline", "3. cacheProgram(); the instance becomes ready for that pass", "LightGenerator (PBR, shadow maps) writes the lighting GLSL", "Built synchronously on the rendering thread, from prepareRender()"]], ["Post-processing", ["PostProcessStack (owned by the Scene): slots, LightingLane, ordered indirect chain, display list", "Indirect effects: own targets and passes, run in sequence", "Direct effects: folded into one shader in the final swap-chain pass", "Phases: Whole, or PreTranslucency (ContactShadows, IndirectDiffuse) / PostTranslucency on a cut frame", "Lighting: SSAO, RTAO, SS / RT ContactShadows, SSGI, RTGI, SSR, RTR, LightGlints", "Atmosphere: AerialPerspective, AtmosphericFog, StarField, VolumetricClouds, VolumetricLight, VolumetricScattering", "Resolve: TAA (indirect); FXAA, FXAASharpen, Sharpen (direct)", "Camera: DepthOfField, MotionBlur, LensFlare, VeilingGlare, ToneMapping", "Style (direct, 18): BlackAndWhite, ColorGrading, FilmGrain, Vignetting, CRT / VHS family…"]]] },
+	"physics": { l: "Physics::Manager", k: "secondary", fail: "warning", s: "Picks a compute device with transfer and layout sub-services and pools (\"physics acceleration\"). The simulation itself is scene-side, in Scene::processLogics() on the logic thread.", code: [["src/Physics/Manager.cpp", "Manager::onInitialize()"], ["src/Scenes/Scene.physics.cpp", "Scene"]], docs: ["physics-system.md", "physics-overhaul.md"],
+		inside: [["Manager", ["Compute device, TransferManager, LayoutManager, pools (no consumer found: see Open points)"]], ["Scene-side simulation", ["SoftStepSolver: soft-step contact solver", "NarrowPhase: contact manifolds", "Physics octree", "MovableTrait; body, surface and environment properties", "Collision models: Point, Sphere, Box, Capsule, TriangleMesh", "CharacterController, Vehicle (wheels), Particle"]]] },
+	"audio": { l: "Audio::Manager", k: "secondary", fail: "warning", owns: ["t-arec", "t-mixer", "t-ainput"], s: "OpenAL device and context, then Recorder, sources, ExternalInput, TrackMixer. No per-cycle call from Core.", code: [["src/Audio/Manager.cpp", "Manager::onInitialize()"], ["src/Audio/TrackMixer.cpp", "TrackMixer"]],
+		inside: [["Sub-services", ["TrackMixer: music, two tracks A / B, cross-fades, playlist (event thread)", "Recorder: loopback capture for rushes (render thread)", "ExternalInput: microphone (capture thread while recording)"]], ["Playback", ["Source pool: given out as SourceRequest; a default source", "Effects (12, e.g. EAXReverb, Echo, Chorus), Filters (LowPass, HighPass, BandPass), EffectSlot", "Scene side: Ambience; Listener and HardwareOutput as AVConsole devices"]]] },
+	"sysnotif": { l: "SystemNotification", k: "secondary", fail: "warning", s: "OS-level notifications. No thread.", code: [["src/SystemNotification.cpp", "SystemNotification::onInitialize()"]] },
+	"overlay": { l: "Overlay::Manager", k: "secondary", fail: "fatal", s: "2D layer drawn by the rendering thread at the end of every frame: UI screens of surfaces, ImGui screens, input routing.", notifies: "RedrawRequested → requestRedraw() (deferred, never under a lock)", code: [["src/Overlay/Manager.cpp", "Manager::onInitialize()"]],
+		inside: [["Overlay", ["UIScreen: a group of Surfaces that also routes input", "Surface → Framebuffer (pixmap + GPU image)", "ImGUIScreen with its own descriptor pool (core screens: physical camera, editor panels)", "Input-exclusive screen, FramebufferProperties", "Overlay programs, shared surface geometry"]]] },
+	"notifier": { l: "Notifier", k: "secondary", fail: "error", owns: ["t-notifier"], s: "On-screen notification list drawn on an overlay screen. push() from any thread; a 500 ms timer expires the messages.", code: [["src/Notifier.cpp", "Notifier::onInitialize()"]] },
+	"scenes": { l: "Scenes::Manager", k: "secondary", fail: "fatal", s: "Holds the scenes and the ACTIVE scene, and the access primitives every thread goes through (logic cycle, shared and exclusive accesses). Nothing to do at init.", notifies: "SceneCreated, SceneLoaded, SceneEnabled / SceneDisabled → requestRedraw(), SceneDestroyed → unloadUnusedResources()", code: [["src/Scenes/Manager.hpp", "Manager::withLogicCycle()"], ["src/Scenes/Manager.cpp", "Manager::activateScene()"]], docs: ["scene-graph-architecture.md", "subsystems/scenes/08-multi-scene-lifecycle.md", "subsystems/scenes/12-frame-synchronization-double-buffering-contract.md"],
+		inside: [["A Scene", ["Node tree (root node, NodeCrawler) and StaticEntity map; both are AbstractEntity holding components", "Rendering octree (+ overflow set) and physics octree; InstanceCluster", "Render lists: Opaque, Translucent, OpaqueLighted, TranslucentLighted, Shadows, TranslucentGB, TranslucentGBLighted; RT opaque lists", "LightSet, BindlessTextureSet, CloudSet, SceneMetaData (TLAS, RT mesh and material data), instance transforms SSBO", "Render-state slots × 3 (triple buffer logic → render)", "PostProcessStack, background, IBL ring, ground / sea level, Ambience", "Shadow maps, render-to-textures, imposter bake; modifiers", "NodeController, OrbitController, Debug::Compass, PhysicsRecorder", "AVConsole: virtual camera, view, microphone, speaker devices"]], ["Components", ["Visual: Visual, MultipleVisuals, ParticlesEmitter, Beam, Path, CloudVolume", "Lights: DirectionalLight, PointLight, SpotLight, LineLight", "View / AV: Camera, Microphone, SoundEmitter", "Physics: Weight, CharacterController, Vehicle", "Modifiers: DirectionalPushModifier, SphericalPushModifier", "Time / sky / animation: CelestialClock, SkyFollowsSun, NodeAnimation"]], ["Around the scenes", ["Editor::Manager: picking, selection, gizmos (translate / rotate / scale)", "Loaders: glTF, FBX, USD / USDZ, WAD → SceneData; DefinitionResource (JSON)", "Viewers: ImageViewer, ModelViewer", "Toolkit (entity builder), EffectsToolkit (FX, camera and style presets)"]]] },
+	"shadermanager": { l: "ShaderManager", k: "sub", p: "renderer", fail: "fatal", s: "GLSL → SPIR-V with glslang; module cache by source hash; on-disk binary cache. Compilation failures are notified on the compiling thread and handed to the application on the main thread.", notifies: "ShaderCompilationSucceed, ShaderCompilationFailed" },
+	"transfer": { l: "TransferManager", k: "sub", p: "renderer", fail: "fatal", s: "Staging uploads from loaders, pool and render; each upload publishes a timeline point to the device's upload frontier. Its lock serializes uploads." },
+	"layout": { l: "LayoutManager", k: "sub", p: "renderer", fail: "fatal", s: "Caches descriptor set and pipeline layouts." },
+	"sharedubo": { l: "SharedUBOManager", k: "sub", p: "renderer", fail: "fatal", s: "Hands out shared uniform buffers (materials)." },
+	"bindless": { l: "BindlessTextureManager", k: "sub", p: "renderer", fail: "fatal (skipped for an overlay-only target)", s: "The global bindless texture table; mirrors the active scene's set every frame." },
+	"vbf": { l: "VertexBufferFormatManager", k: "sub", p: "renderer", fail: "fatal", s: "Caches vertex buffer formats." },
+	"texcomp": { l: "TextureCompressor", k: "sub", p: "renderer", fail: "warning", s: "BC7 / BC5 / BC4 encoding, synchronous on its caller." },
+	"texcache": { l: "TextureCache", k: "sub", p: "renderer", fail: "warning", s: "On-disk compressed texture cache keyed by content hash." },
+	"postproc": { l: "PostProcessor", k: "sub", p: "renderer", fail: "warning", s: "Pure GPU executor of the effect chain: GrabPass, CombinePass, DenoisePass, OverflowCensus, view UBOs." },
+	"extinput": { l: "ExternalInput", k: "sub", p: "renderer", fail: "warning", s: "Video input (webcam)." },
+	"recorder": { l: "Recorder (video)", k: "sub", p: "renderer", fail: "warning", owns: ["t-encoder"], s: "Video rushes of the swap-chain; one encoding thread per rush; a rush is never cut at shutdown.", docs: ["subsystems/graphics/11-10-video-recording.md"] },
+	"userservices": { l: "Application user services", k: "app", fail: "error (the application decides)", s: "The application's own ServiceInterface objects, enabled by enableUserService() (typically from onCoreStarted()). Terminated FIRST, before the secondary services.", code: [["src/Core.cpp", "Core::enableUserService()"]] },
+	"t-main": { l: "Main thread", k: "thread", th: "main", s: "The process thread: event loop, every service start and stop, console and MCP execution, Net / API observers, scene activation, the application's main-loop hook." },
+	"t-logic": { l: "Logic loop", k: "thread", th: "logic", s: "Base::Thread local to run(). 60 Hz on an absolute deadline (origin + N/60 s, gives a debt above 4 cycles up). Scene logic and physics, onCoreProcessLogics(), publication. macOS: time-constraint policy.", code: [["src/Core.cpp", "Core::logicsTask()"]] },
+	"t-render": { l: "Rendering loop", k: "thread", th: "render", s: "Base::Thread local to run(). Continuous (every loop, VSync / limiter) or OnDemand (sleeps without an active scene until a frame is owed). Ends with device waitIdle.", code: [["src/Core.cpp", "Core::renderingTask()"]] },
+	"t-tracer": { l: "TracerLogger", k: "thread", th: "own", opt: true, s: "Writes the log file (--enable-log). Every entry pushed before the stop is written, then the footer \"Log file closed properly\". Joined by Tracer::disableLogger() in ~PrimaryServices.", code: [["src/TracerLogger.hpp", "TracerLogger"]], docs: ["tracer-system.md"] },
+	"t-remote": { l: "Remote console (TCP)", k: "thread", th: "own", opt: true, s: "asio io_context of the RemoteListener, when enabled (setting or --enable-remote-console). A std::stop_callback stops the context.", code: [["src/Console/RemoteListener.cpp", "RemoteListener"]] },
+	"t-mcp": { l: "MCP HTTP server", k: "thread", th: "own", opt: true, s: "HTTP thread of the MCP server, when enabled (setting or --enable-mcp). Requests are queued and executed on the main thread.", code: [["src/Console/MCP/Server.cpp", "Server"]] },
+	"t-sharing": { l: "Sharing server", k: "thread", th: "own", opt: true, s: "HTTP thread of the resource SharingServer, when resource sharing is enabled (off by default).", code: [["src/Resources/Manager.cpp", "Manager::startSharingServer()"]] },
+	"t-pcache": { l: "Pipeline-cache restore", k: "thread", th: "own", opt: true, s: "Restores the stored VkPipelineCache at startup (an uninterruptible driver call; synchronous if the thread is refused). Joined in Renderer::onTerminate() before the cache is saved.", code: [["src/Graphics/Renderer.cpp", "Renderer::loadPipelineCache()"]], docs: ["pipeline-caching-system.md"] },
+	"t-encoder": { l: "Video encoder (per rush)", k: "thread", th: "own", opt: true, s: "VP9 or hardware H.265 session; fed by the rendering thread through a queue; drains it, then finalizes.", code: [["src/Graphics/Recorder.cpp", "Recorder"]] },
+	"t-mixer": { l: "TrackMixer events", k: "thread", th: "own", s: "Next track and cross-fades (16 ms steps).", code: [["src/Audio/TrackMixer.cpp", "TrackMixer::eventLoop()"]] },
+	"t-arec": { l: "Audio loopback render", k: "thread", th: "own", s: "Renders the game audio for rushes (5 ms pace).", code: [["src/Audio/Recorder.cpp", "Recorder"]] },
+	"t-ainput": { l: "Audio capture", k: "thread", th: "own", opt: true, s: "Microphone voice-over, only while recording.", code: [["src/Audio/ExternalInput.cpp", "ExternalInput"]] },
+	"t-notifier": { l: "Notifier timer", k: "thread", th: "own", s: "Base::Time::TimedEvent (500 ms) expiring the on-screen notifications.", code: [["src/Notifier.cpp", "Notifier::onInitialize()"]] }
+};
+
+/* Constructor dependencies (Core.hpp member initializers): who holds a reference to whom. "ps" = PrimaryServices. */
+const DEPS = {
+	"console": ["ps"], "resources": ["ps", "renderer", "audio"], "user": ["ps"], "platform": ["ps"], "vulkan": ["ps"],
+	"window": ["ps", "vulkan"], "input": ["ps", "window"], "renderer": ["ps", "resources", "vulkan", "window"],
+	"physics": ["ps", "vulkan"], "audio": ["ps", "resources"], "overlay": ["ps", "resources"], "notifier": ["overlay"],
+	"sysnotif": ["ps", "window"], "scenes": ["ps", "resources", "input", "notifier"]
+};
+
+/*
+ * EVENTS: the ordered run. [phase, act, entity|null, label, detail?]. act: s start, e end, m step, h application hook,
+ * n Core notification. The chronogram's columns and the architecture replay's steps.
+ */
+const EVENTS = [
+	["base", "s", "t-main", "The application constructs its Core subclass", "The base level runs inside the Core constructor. A failure is RECORDED (StartupMode::Error), never an exit from the constructor: main() checks startupFailed(), so every destructor runs."],
+	["base", "s", "arguments", "Arguments parsed (PrimaryServices constructor)"],
+	["base", "m", null, "Help lexicon and Shift+F1…F12 shortcuts registered"],
+	["base", "s", "userinfo", "UserInfo"],
+	["base", "s", "filesystem", "FileSystem: directories, captures/"],
+	["base", "s", "settings", "Settings: settings.json loaded"],
+	["base", "s", "t-tracer", "Tracer::lateSetup(): log file thread (--enable-log)"],
+	["base", "s", "systeminfo", "SystemInfo"],
+	["base", "s", "threadpool", "ThreadPool: hardware_concurrency() workers"],
+	["base", "s", "apiclient", "Net::APIClient"],
+	["base", "s", "netmanager", "Net::Manager: TLS store, HTTPS client, cache index"],
+	["base", "m", null, "Early exits: --help, --wipe-local-data, --reset-settings; settings version check", "These switches do their work and mark the run as not running (willNotRun()). resetSettingsIfOutdated() backs up and resets a settings file written by an older engine when the application opted in."],
+	["base", "s", "console", "Console::Controller"],
+	["base", "s", "t-mcp", "MCP server thread (when enabled)"],
+	["base", "s", "t-remote", "TCP remote console thread (when enabled)"],
+	["base", "s", "resources", "Resources::Manager: about 45 containers, index, peer store"],
+	["base", "s", "t-sharing", "SharingServer thread (when sharing is enabled)"],
+	["base", "s", "user", "User"],
+	["base", "m", null, "Startup mode decided: Continue, ToolsMode or Error"],
+	["core", "m", null, "run(): Error → exit 1; ToolsMode → executeToolsMode()"],
+	["core", "h", null, "onBeforeCoreSecondaryServicesInitialization(): true ends the run", "The application's last word before any window or GPU exists. Returning true calls terminate() and ends the run."],
+	["core", "s", "platform", "PlatformManager: glfwInit()"],
+	["core", "h", null, "targetVulkanAPIVersion() (default 1.3; --vulkan-api-target can only lower it)"],
+	["core", "s", "vulkan", "Vulkan::Instance: instance, layers, physical devices"],
+	["core", "s", "window", "Window: GLFW window, surface"],
+	["core", "s", "input", "Input::Manager; Core registers as keyboard listener (a ScopedRegistration token)"],
+	["core", "s", "renderer", "Renderer begins: the graphics device is created (lazily, owned by the instance)"],
+	["core", "s", "t-pcache", "Pipeline cache restored on its own thread"],
+	["core", "s", "shadermanager", "ShaderManager"],
+	["core", "s", "transfer", "TransferManager"],
+	["core", "s", "layout", "LayoutManager"],
+	["core", "s", "sharedubo", "SharedUBOManager"],
+	["core", "s", "bindless", "BindlessTextureManager"],
+	["core", "s", "vbf", "VertexBufferFormatManager"],
+	["core", "s", "texcomp", "TextureCompressor"],
+	["core", "s", "texcache", "TextureCache"],
+	["core", "s", "postproc", "PostProcessor"],
+	["core", "s", "extinput", "ExternalInput (video)"],
+	["core", "s", "recorder", "Recorder (video)"],
+	["core", "m", "renderer", "Descriptor pool, swap-chain, frame scopes, RT structures, GrabPass, MDI; default resources", "Fatal: descriptor pool, swap-chain, createRenderingSystem() (one frame scope per frame in flight). Warnings: RT descriptor set, AS builder, skinned processor, probe volume (only with RT support AND lane Auto / RayTracing), GrabPass. Then Core calls createDefaultResources() and observes the renderer and its ShaderManager."],
+	["core", "s", "physics", "Physics::Manager (warning only)"],
+	["core", "s", "audio", "Audio::Manager: OpenAL device and context (warning only)"],
+	["core", "s", "t-arec", "Audio Recorder loopback thread"],
+	["core", "s", "t-mixer", "TrackMixer event thread"],
+	["core", "s", "sysnotif", "SystemNotification (warning only)"],
+	["core", "s", "overlay", "Overlay::Manager: ImGui, overlay programs"],
+	["core", "s", "notifier", "Notifier"],
+	["core", "s", "t-notifier", "Notifier 500 ms timer thread"],
+	["core", "s", "scenes", "Scenes::Manager"],
+	["core", "m", null, "Core level initialized (on failure: exit 97 or 1, terminate() releases what started)", "On a failure, diagnoseStartupRefusal(): for a hardware / driver cause, onStartupRefused() (application hook) or a native dialog with the vendor's driver page, then exit 97. Otherwise EXIT_FAILURE. terminate() releases the secondary services already started, in reverse."],
+	["start", "m", null, "updateNoScenePacing(): the rendering pace without an active scene"],
+	["start", "s", "t-logic", "Logic thread started (m_loopsStop token)"],
+	["start", "s", "t-render", "Rendering thread started (m_loopsStop token)", "If the system refuses a thread: stop(EXIT_FAILURE). The stop source is a Core member, so a stop() that came earlier ends both loops at once."],
+	["start", "h", null, "onCoreStarted(arguments, settings): false → stop(1)"],
+	["start", "s", "userservices", "Application user services enabled"],
+	["start", "n", null, "EnteringMainLoop"],
+	["start", "m", null, "Termination signal catcher installed (SIGTERM / SIGHUP / SIGINT)", "Installed only now, after any library the application initialized (whose own handlers could end the process at once). Restored after the main loop."],
+	["run", "m", null, "Main loop · logic 60 Hz · frames (see Threads & synchronization)"],
+	["run", "h", null, "onCoreMainLoopCycle() each main cycle · onCoreProcessLogics() each logic cycle"],
+	["run", "m", "scenes", "A scene is enabled and becomes active; drawn after its first publication"],
+	["run", "e", "t-pcache", "Pipeline cache restore done (the thread object is joined at renderer terminate)"],
+	["run", "m", "renderer", "Window resized: swap-chain degraded, recreated by the next frame", "Resize / rescale or OUT_OF_DATE degrades the swap-chain; renderFrame() → retryDegradedSwapChain() → recreateRenderingSubSystem() (waitIdle, surface, swap-chain, scene target, post-processor, grab pass) → WindowContentRefreshed → main thread onWindowChanged() → onCoreSurfaceRefreshed(). After 30 failures the swap-chain is given up and the main loop stops the engine (95 or 98)."],
+	["run", "n", null, "SurfaceRefreshed"],
+	["run", "s", "t-encoder", "A rush starts: encoding thread"],
+	["run", "s", "t-ainput", "Voice-over capture starts"],
+	["run", "e", "t-ainput", "Rush stopped: capture ends"],
+	["run", "e", "t-encoder", "Encoder drained and finalized"],
+	["run", "n", null, "ExecutionPaused / ExecutionResumed (focus, visibility, Pause key)"],
+	["stop", "m", null, "Stop request: user, system, device / display / video-memory loss"],
+	["stop", "h", null, "onBeforeCoreStop(): a veto only for a user's stop()"],
+	["stop", "n", null, "ExecutionStopping"],
+	["stop", "m", "recorder", "A running rush is stopped"],
+	["stop", "m", null, "m_loopsStop.request_stop(); main loop flag lowered", "The stop token ends both loops; it also wakes a rendering thread asleep in OnDemand mode."],
+	["stop", "n", null, "ExecutionStopped"],
+	["exit", "m", null, "Previous signal handlers restored"],
+	["exit", "n", null, "ExitingMainLoop"],
+	["exit", "e", "t-render", "Rendering thread joined (it ended with device waitIdle)"],
+	["exit", "e", "t-logic", "Logic thread joined"],
+	["terminate", "m", "resources", "Resources::stopBackgroundWork(): every container's jobs stopped and waited", "The resource manager's OWN jobs stop first, before the services they touch go: release pass disabled; every container's TaskGroup requestStop, then waitForAll; provider resource jobs stopped. The only background-job ordering Core states."],
+	["terminate", "e", "userservices", "Application user services terminated (reverse)"],
+	["terminate", "m", "resources", "unloadUnusedResources()"],
+	["terminate", "e", "scenes", "Scenes::Manager: active scene disabled, every scene erased"],
+	["terminate", "e", "t-notifier", "Notifier timer joined"],
+	["terminate", "e", "notifier", "Notifier"],
+	["terminate", "e", "overlay", "Overlay::Manager"],
+	["terminate", "e", "sysnotif", "SystemNotification"],
+	["terminate", "e", "t-mixer", "TrackMixer thread joined"],
+	["terminate", "e", "t-arec", "Audio Recorder thread joined (the Recorder goes last)"],
+	["terminate", "e", "audio", "Audio::Manager: context and device closed"],
+	["terminate", "e", "physics", "Physics::Manager"],
+	["terminate", "m", "renderer", "Renderer: frame fences waited, device waitIdle, pipeline cache joined and saved", "requestShutdown() waits every frame fence → device waitIdle → capture abandoned → joins m_pipelineCacheRestore → savePipelineCache() → deferred destructor closed → MDI, profiler, samplers, pipelines, programs, default resources, RT objects, descriptor pool, frame scopes, swap-chain, scene target."],
+	["terminate", "e", "recorder", "Recorder (joins the rushes still encoding)"],
+	["terminate", "e", "extinput", "ExternalInput"],
+	["terminate", "e", "postproc", "PostProcessor"],
+	["terminate", "e", "texcache", "TextureCache"],
+	["terminate", "e", "texcomp", "TextureCompressor"],
+	["terminate", "e", "vbf", "VertexBufferFormatManager"],
+	["terminate", "e", "bindless", "BindlessTextureManager"],
+	["terminate", "e", "sharedubo", "SharedUBOManager"],
+	["terminate", "e", "layout", "LayoutManager"],
+	["terminate", "e", "transfer", "TransferManager"],
+	["terminate", "e", "shadermanager", "ShaderManager"],
+	["terminate", "e", "renderer", "Renderer: device released"],
+	["terminate", "e", "input", "Input::Manager: callbacks unlinked"],
+	["terminate", "e", "window", "Window: geometry saved, surface released"],
+	["terminate", "e", "vulkan", "Vulkan::Instance: devices destroyed, vkDestroyInstance"],
+	["terminate", "e", "platform", "PlatformManager: glfwTerminate"],
+	["terminate", "m", null, "Vulkan object census (tracking debug builds); exit code decided"],
+	["dtor", "m", null, "~Core(): safety-net terminate() if a list is not empty"],
+	["dtor", "e", "user", "User"],
+	["dtor", "e", "t-sharing", "SharingServer stopped"],
+	["dtor", "e", "resources", "Resources::Manager: containers terminated"],
+	["dtor", "e", "t-mcp", "MCP server stopped and joined"],
+	["dtor", "e", "t-remote", "TCP listener stopped and joined"],
+	["dtor", "e", "console", "Console::Controller: every object detached"],
+	["dtor", "m", "threadpool", "ThreadPool::wait() (see Open points)"],
+	["dtor", "e", "netmanager", "Net::Manager: transfers stopped, cache index written"],
+	["dtor", "e", "apiclient", "APIClient: requests stopped"],
+	["dtor", "e", "systeminfo", "SystemInfo"],
+	["dtor", "e", "settings", "Settings: written when autosave is on"],
+	["dtor", "e", "filesystem", "FileSystem"],
+	["dtor", "e", "userinfo", "UserInfo"],
+	["dtor", "e", "arguments", "Arguments"],
+	["dtor", "e", "threadpool", "ThreadPool destroyed with PrimaryServices"],
+	["dtor", "e", "t-tracer", "Log file closed: disableLogger() joins the logger"],
+	["dtor", "e", "t-main", "main() returns the exit code"]
+];
+
+/* Chronogram rows, grouped. */
+const ROW_GROUPS = [
+	["PrimaryServices", ["arguments", "userinfo", "filesystem", "settings", "systeminfo", "apiclient", "netmanager"]],
+	["Core primary list", ["console", "resources", "user"]],
+	["Secondary services", ["platform", "vulkan", "window", "input", "renderer", "physics", "audio", "sysnotif", "overlay", "notifier", "scenes"]],
+	["Renderer sub-services", ["shadermanager", "transfer", "layout", "sharedubo", "bindless", "vbf", "texcomp", "texcache", "postproc", "extinput", "recorder"]],
+	["Application", ["userservices"]],
+	["Threads", ["t-main", "t-logic", "t-render", "threadpool", "t-tracer", "t-mcp", "t-remote", "t-sharing", "t-pcache", "t-mixer", "t-arec", "t-notifier", "t-encoder", "t-ainput"]]
+];
+
+/* Metro: lines (y), segments (x), stations, synchronization points. */
+const LINES = [["main", "Main", 70], ["logic", "Logic 60 Hz", 190], ["render", "Rendering", 310], ["pool", "Thread pool", 430], ["own", "Dedicated threads", 540]];
+const SEGMENTS = [["Startup", 40, 320], ["One cycle of each loop", 340, 995], ["Shutdown", 1015, 1310]];
+/* [id, line, x, label, who[], detail] */
+const STATIONS = [
+	["m-ctor", "main", 60, "Base level", ["t-main", "arguments", "settings", "console", "resources", "user"], "Core::Core(): the primary services, the console, the resources, the user."],
+	["m-core", "main", 140, "Core level", ["t-main", "platform", "vulkan", "window", "input", "renderer", "physics", "audio", "sysnotif", "overlay", "notifier", "scenes"], "initializeCoreLevel(): the secondary services."],
+	["m-threads", "main", 220, "Loops start", ["t-main", "t-logic", "t-render"], "Two Base::Thread locals of run(), following m_loopsStop."],
+	["m-started", "main", 295, "onCoreStarted()", ["t-main", "userservices"], "The application builds its world; EnteringMainLoop."],
+	["c-m1", "main", 370, "waitSystemEvents()", ["t-main", "input", "window", "platform"], "Copies the input device states into atomics, then waits on the window (timeout 1 / main-loop frequency, shortened by scheduleMainLoopCycle()). Key and pointer callbacks are delivered to listeners here."],
+	["c-m2", "main", 480, "failure checks · onWindowChanged()", ["t-main", "renderer"], "Renderer usable? A pending window change runs onWindowChanged() (main thread only). Swap-chain given up → stopOnVideoMemoryExhaustion() / stopOnDeviceLoss()."],
+	["c-m3", "main", 590, "signals · stop deadline", ["t-main"], "A caught SIGTERM / SIGHUP / SIGINT → requestSystemStop(); checkSystemStopDeadline()."],
+	["c-m4", "main", 700, "console.poll() · MCP", ["t-main", "console", "scenes"], "Executes the queued TCP commands and MCP requests. A command touching the active scene goes through an exclusive access or betweenLogicCycles()."],
+	["c-m5", "main", 810, "Net / API dispatch · shader failures", ["t-main", "netmanager", "apiclient", "shadermanager"], "Observers of completed transfers and API requests run here, whatever worker finished them; queued shader-compilation failures go to the application hook."],
+	["c-m6", "main", 920, "onCoreMainLoopCycle()", ["t-main", "userservices"], "The application's main-loop hook. Also runs while paused."],
+	["c-l1", "logic", 400, "withLogicCycle", ["t-logic", "scenes"], "Takes the logic-cycle lock for the whole cycle: scene logic, application logic and publication form one unit against exclusive accesses."],
+	["c-l2", "logic", 510, "Scene::processLogics()", ["t-logic", "scenes", "physics", "input"], "Under a SHARED access to the active scene: actors, controllers (reading the input atomics), physics (resolveCollisions), animations."],
+	["c-l3", "logic", 620, "onCoreProcessLogics()", ["t-logic", "userservices"], "The application's logic, BEFORE the publication so its changes reach the same render slot. Shared accesses only."],
+	["c-l4", "logic", 730, "publishStateForRendering()", ["t-logic", "scenes"], "Writes its slot, then exchanges it with the published one (FreshPublication). Only if the scene processed is still active."],
+	["c-l5", "logic", 840, "editor · releaseIdleLocalData()", ["t-logic", "resources", "scenes"], "Editor logic (gizmo scale, hover); schedules the release pass of idle CPU copies, at most once a second."],
+	["c-l6", "logic", 950, "sleep_until(next)", ["t-logic"], "Absolute deadline origin + N/60 s, recomputed from the cycle count; a debt above 4 cycles is given up."],
+	["c-r1", "render", 370, "beginFrame(): fence · acquire", ["t-render", "renderer"], "Outside the scene lock: waits the frame slot's in-flight fence (60 s timeout = device lost), retires the slot (profiler, captures, recorder, staging buffers), checks the memory budget, acquires the next image."],
+	["c-r2", "render", 470, "withSharedActiveScene", ["t-render", "scenes"], "A shared access for the whole frame. A scene that never published is rendered as no scene."],
+	["c-r3", "render", 570, "deferred destructor tick", ["t-render", "renderer"], "Destroys the GPU objects retired framesInFlight ticks ago."],
+	["c-r3b", "render", 670, "prepareRender: lists, programs", ["t-render", "renderer", "shadermanager", "scenes"], "Render lists; an instance whose renderable is ready gets its programs and pipelines generated (Saphir) synchronously, here. A program that cannot be generated is remembered and not built again; it refuses the instance for that render target only (S19)."],
+	["c-r4", "render", 770, "beginRenderFrame() latch", ["t-render", "scenes"], "Latches the freshest published slot once per frame (exchange only when FreshPublication is set)."],
+	["c-r5", "render", 865, "passes · post · overlay", ["t-render", "renderer", "postproc", "overlay"], "Sky atmosphere, shadow maps, render-to-textures, scene pass (opaque, deferred lights, translucent), post-process chain, editor, overlay; capture and rush copy. The final pass falls back to its program without effects when the composed one cannot be generated."],
+	["c-r6", "render", 960, "submit · present", ["t-render", "renderer", "window", "recorder"], "endRenderFrame(); submit waits on shadow / RTT semaphores, image available and the upload frontier; present under the native-surface lock; frame-rate limiter."],
+	["c-p1", "pool", 420, "resource load (TaskGroup)", ["threadpool", "resources"], "Container::loadingTask(): decodes the CPU copy, declares dependencies."],
+	["c-p2", "pool", 540, "onDependenciesLoaded → GPU upload", ["threadpool", "resources", "transfer"], "On the worker that completed the last dependency: createOnHardware() / createTexture() / material create(); a mesh becomes ready for instantiation."],
+	["c-p3", "pool", 660, "publishUploadPoint", ["threadpool", "transfer"], "The upload's timeline point goes to the device's upload frontier: the next submits wait for it on the GPU."],
+	["c-p4", "pool", 800, "release pass (5 s grace)", ["threadpool", "resources"], "Releases idle CPU copies not held by a LocalDataLease."],
+	["c-p5", "pool", 920, "Net transfers · API requests", ["threadpool", "netmanager", "apiclient"], "Completed events are queued for the main thread."],
+	["c-o1", "own", 420, "TCP / MCP network", ["t-remote", "t-mcp", "console"], "Receives commands and queues them for the main thread."],
+	["c-o2", "own", 600, "TrackMixer events", ["t-mixer", "audio"], "Next track, cross-fades; notifies music events."],
+	["c-o3", "own", 780, "video encoder", ["t-encoder", "recorder"], "Encodes the frames the rendering thread queued."],
+	["c-o4", "own", 930, "TracerLogger", ["t-tracer"], "Writes the log entries pushed by every thread."],
+	["s-m1", "main", 1040, "proceedStop()", ["t-main"], "ExecutionStopping, rush stopped, m_loopsStop.request_stop(), loop flag lowered, ExecutionStopped."],
+	["s-m2", "main", 1120, "join render · logic", ["t-main", "t-render", "t-logic"], "ExitingMainLoop; the rendering thread is joined first, then the logic thread."],
+	["s-m3", "main", 1200, "terminate()", ["t-main", "resources", "renderer", "audio", "scenes", "userservices"], "Resources' jobs first; user, then secondary services in reverse; resources unloaded after each."],
+	["s-m4", "main", 1285, "~Core()", ["t-main", "console", "threadpool", "settings"], "Core's primary list, then PrimaryServices (pool wait, services in reverse), then the log file."],
+	["s-l1", "logic", 1060, "stop token → exits", ["t-logic"], "The cycle in flight finishes; the loop sees the token."],
+	["s-r1", "render", 1060, "stop token → waitIdle", ["t-render", "renderer"], "Ends with device waitIdle and the pipeline / program statistics."],
+	["s-p1", "pool", 1200, "jobs stopped by owners", ["threadpool", "resources"], "Each owner's TaskGroup / TaskHandle: requestStop, then waitForAll."],
+	["s-p2", "pool", 1290, "wait() · destroyed", ["threadpool"], "PrimaryServices::Impl::terminate() then ~PrimaryServices."],
+	["s-o1", "own", 1200, "joined by owners", ["t-mixer", "t-arec", "t-notifier", "t-encoder", "t-pcache"], "Each service's onTerminate() stops and joins what it started."],
+	["s-o2", "own", 1290, "TracerLogger last", ["t-tracer", "t-mcp", "t-remote"], "Console threads in ~Core(), the logger in ~PrimaryServices."]
+];
+/* [id, short, name, primitive, stations[], who[], detail, rule, open[]] */
+const SYNCS = [
+	["slots", "S1", "Render-state slots", "lock-free triple buffer: atomic exchange + FreshPublication", ["c-l4", "c-r4"], ["scenes", "t-logic", "t-render"], "The logic thread owns its write slot, the rendering thread its read slot; the published slot sits between them in an atomic. publishStateForRendering() exchanges with FreshPublication; beginRenderFrame() exchanges only when it is set. RenderStateSlotCount = 3.", "Never two slots, never a plain load of the published index. m_slotWriteGenerations must stay 0 (endRenderFrame checks it).", []],
+	["cycle", "S2", "Logic-cycle lock", "Base::Mutex m_logicCycleAccess + owner thread id", ["c-l1", "c-m4"], ["scenes", "t-logic", "t-main"], "Held by the logic thread for one whole cycle. betweenLogicCycles(change) and withExclusiveActiveScene take it from another thread and wait at most one cycle. Lock order: cycle lock, then the active-scene lock.", "An exclusive access or betweenLogicCycles() on the logic thread itself is a contract fault (traced, aborted). betweenLogicCycles() inside a scene access deadlocks three threads.", []],
+	["scene", "S3", "Active-scene access", "Base::SharedMutex + exclusive-access announcement", ["c-l2", "c-r2", "c-m4"], ["scenes", "t-logic", "t-render", "t-main"], "Readers: the rendering thread (a whole frame), the logic thread (twice per cycle). Writers (main): withExclusiveActiveScene (console, pause timers), activateScene / disableActiveScene / deleteScene. The announcement gives writers priority (MSVC's SRWLOCK starved them). deleteScene() also waits the device idle.", "A re-entrant read deadlocks: the overlay reads Core::m_frameScene instead.", ["Six logic ↔ render races under the SHARED access (lifetimes, PostProcessStack list, ReadyForInstantiation flag, LightSet::m_enabled, skinning buffers, the frame's acceleration structure read by isRayTracingReady()): docs/todo/tsan-logic-render-shared-state-races.md"]],
+	["input", "S4", "Input device state", "one relaxed std::atomic per key, button, axis, hat", ["c-m1", "c-l2"], ["input", "t-main", "t-logic"], "The main thread writes during waitSystemEvents(), the logic thread reads. There is no whole-device snapshot: two keys may be seen in different states in the same cycle.", "Listener switches and device slots are plain members: change them inside betweenLogicCycles().", []],
+	["cmdq", "S5", "Console and MCP queues", "mutex + queue, polled by the main thread", ["c-o1", "c-m4"], ["console", "t-remote", "t-mcp", "t-main"], "Network threads queue commands and MCP requests; Controller::poll() executes them on the main thread each cycle; answers go back to the network thread. The console tree is read on the main thread only.", "", []],
+	["netq", "S6", "Completed transfers and requests", "mutex + events vector, dispatched on the main thread", ["c-p5", "c-m5"], ["netmanager", "apiclient", "threadpool", "t-main"], "Pool workers finish transfers / requests and queue events; dispatchCompleted() runs the observers on the main thread.", "", []],
+	["frontier", "S7", "Upload frontier", "Vulkan timeline semaphores (GPU wait only)", ["c-p3", "c-r6"], ["transfer", "renderer", "threadpool", "t-render"], "Every upload publishes a timeline point per queue; each submit (frame, shadows, RTT, sky, AS builds) waits on the frontier on the GPU. The CPU never waits. The TransferManager lock serializes uploads from loaders, pool and render.", "Each write of an object also waits for that object's pending writes.", ["docs/todo/rt-device-lost-game-logic.md: BLAS builds racing uploads (not reproduced since the frontier)"]],
+	["fence", "S8", "Frame-slot fence", "VkFence per frame in flight + semaphores", ["c-r1", "c-r6"], ["renderer", "t-render"], "beginFrame() waits the slot's fence (60 s → device lost), which also retires the slot's captures, recorder frames and staging buffers. Image-available semaphore per slot, present semaphore per swap-chain image; shadow maps and render-to-textures signal semaphores the main submit waits.", "The frame slot and the image are acquired BEFORE taking the scene lock (a past 60 s deadlock).", []],
+	["device", "S9", "Logical-device access", "std::mutex in Device::lockAccess()", ["c-r6", "c-p2"], ["renderer", "transfer", "threadpool", "t-render", "t-main"], "Serializes every queue submit, present and waitIdle, whatever thread issues them (render, upload workers, main's deleteScene).", "", []],
+	["surface", "S10", "Native-surface lock (Wayland)", "recursive_mutex Window::lockNativeSurface()", ["c-r6", "c-m1"], ["window", "t-render", "t-main"], "The rendering thread holds it around present and swap-chain creation; the main thread around the event dispatch. On the main thread nothing but GLFW and event recording runs under it; events are delivered after the release.", "", ["docs/todo/wayland-surface-lost-protocol-error.md (in progress): this lock is the fix"]],
+	["redraw", "S11", "Redraw gate (OnDemand)", "condition_variable_any + m_pendingFrames budget", ["c-m6", "c-r1"], ["t-render", "overlay", "scenes"], "Any thread calls requestRedraw() (budget = frames in flight); the rendering thread waits on the condition with its stop token only in OnDemand mode without an active scene. Renderer::owesFrames() (capture, recording, swap-chain to recreate) also opens it.", "", []],
+	["wake", "S12", "Main-loop wake-ups", "atomic deadline + glfwPostEmptyEvent", ["c-m5", "c-m1"], ["platform", "input", "t-main"], "scheduleMainLoopCycle(delay) stores a deadline (last call wins) that bounds waitSystemEvents(); wakeUpEventsLoop() posts an empty event from any thread (shader failures, immediate requests).", "", []],
+	["handoff", "S13", "Render → main hand-offs", "atomic flag; mutex queue (max 16)", ["c-r3b", "c-m2"], ["renderer", "shadermanager", "t-render", "t-main"], "m_windowChanged: set by WindowContentRefreshed after a swap-chain recreation, consumed by the main thread (exchange). Shader-compilation failures: queued by the compiling thread, handed to the application on the main thread.", "", []],
+	["ddestr", "S14", "Deferred destruction", "mutex retire list, ticked by the rendering thread", ["c-p2", "c-r3"], ["renderer", "threadpool", "t-render"], "Any thread retires a GPU object; the rendering thread destroys it after framesInFlight ticks and once its timeline points are reached.", "", []],
+	["release", "S15", "Release pass", "TaskHandle scheduled from the logic thread", ["c-l5", "c-p4"], ["resources", "t-logic", "threadpool"], "releaseIdleLocalData() submits at most one pass a second; it skips copies held by a LocalDataLease. acquireLocalData() blocks and is refused on the rendering thread; requestLocalData() never waits.", "", []],
+	["encq", "S16", "Encoder queue", "mutex + condition_variable_any", ["c-r6", "c-o3"], ["recorder", "t-render", "t-encoder"], "The rendering thread queues copied frames; the encoder drains the queue, even after a stop request.", "", []],
+	["stop", "S17", "Loop stop and joins", "std::stop_source m_loopsStop; Base::Thread join", ["s-m1", "s-l1", "s-r1", "s-m2"], ["t-main", "t-logic", "t-render"], "proceedStop() requests the stop; the loops end at their next check; run() joins the rendering thread, then the logic thread. The source is a member so a stop before run() ends the loops at once.", "", []],
+	["tasks", "S18", "Owned jobs at shutdown", "TaskGroup requestStop + waitForAll; Base::Thread join", ["s-m3", "s-p1", "s-o1"], ["resources", "threadpool", "t-main"], "Each owner stops and waits ITS jobs and threads when it goes; Resources requests the stop on every container before waiting any. No global cancel flag.", "TaskGroup::waitForAll() on a pool worker, a task waiting its own handle, a thread joining itself: contract faults.", []],
+	["retry", "S19", "Failed-program retry", "std::atomic count, served by the thread that owns the memory", ["c-m4", "c-r3b"], ["console", "renderer", "scenes", "t-main", "t-render"], "retryFailedPrograms() (the console, any thread) bumps a count. On the generators' thread, hasProgramFailed() empties the failed-program memory when the count moved, and a renderable instance refused for a render target compares the count it stored and prepares again.", "The memory itself has no lock: the program cache's rule (the generators' thread only).", ["docs/todo/renderer-program-and-pipeline-caches-thread-audit.md: which threads run a generator"]]
+];
+
+/* Data flows: [thread, title, detail, hand-off to the next station]. */
+const FLOWS = [
+	{ id: "asset", name: "An asset, from request to pixels", lede: "A mesh used by an entity: its material, its textures, their GPU copies and the pipeline that draws them.",
+		steps: [
+			["main", "Request", "Container<T>::getResource(name, async), from any thread (main, logic, or a pool worker inside another load): a cache hit returns the existing shared_ptr; an unknown name returns the type's default resource; otherwise an unloaded resource is created, stored and returned at once. Never nullptr.", "submitLoadingTask() → the container's TaskGroup on the thread pool. External data goes through Net::Manager first (FileDownloaded on the main thread)."],
+			["pool", "Load the CPU copy", "loadingTask(): records the local data source (for a later reload), decodes it (pixmap, shape…), declares dependencies with addDependency() (mesh → material → textures), then setLoadSuccess().", "atomic status + m_dependenciesAccess."],
+			["pool", "Dependencies complete", "On whichever worker completes the LAST dependency: claimDependenciesFinalization(), then onDependenciesLoaded() outside the lock. Loaded → LoadFinished → each parent's dependencyLoaded(), cascading upward on the same thread.", "same worker."],
+			["pool", "GPU upload", "Geometry createOnHardware() (+ BLAS), texture createTexture(), material create() (shared UBO, descriptor sets per frame in flight); a mesh is flagged ready for instantiation. TransferManager reserves a staging buffer and submits without waiting.", "Device::publishUploadPoint(queue, value) → the upload frontier."],
+			["render", "Programs and pipelines", "prepareRender() → getReadyForRender(): an instance whose renderable is not ready is retried every frame; otherwise Saphir generates the program per pass and layer, then the pipeline, through three caches (modules, programs, pipelines) and the driver's VkPipelineCache.", "the instance is ready for the pass."],
+			["render", "Bindless registration", "RT material textures, light projections and the environment cubemap are registered in the scene's BindlessTextureSet; syncTextureSet() mirrors it into the global table every frame.", "descriptor writes for this frame slot."],
+			["render", "Draw", "renderOpaque / renderLightedSelection → RenderableInstance::render(readStateIndex); the submit waits the upload frontier, then present.", "pixels."],
+			["logic", "Release the CPU copy", "releaseIdleLocalData() from the logic thread, at most once a second → a pool pass releases copies idle for 5 s and not leased. A reload is blocking (acquireLocalData, refused on the rendering thread) or not (requestLocalData).", "TaskHandle."],
+			["main", "Unload and destroy", "unloadUnusedResources() erases resources nobody else holds (Shift+F9, SceneDestroyed, shutdown). GPU objects go through the DeferredDestructor, destroyed by the rendering thread after the frames in flight.", "—"]
+		],
+		fail: "A failed load or onDependenciesLoaded() → Failed, LoadFailed, each parent's dependencyFailed(): a texture falls back to its type's default data, the default for others is to propagate (mesh → Failed). A failed renderable stays not ready and is never drawn; a program generation failure marks the instance broken." },
+	{ id: "input", name: "A key press, from the keyboard to the screen", lede: "What happens between a physical key and the frame that shows its effect.",
+		steps: [
+			["main", "GLFW callback", "Inside waitSystemEvents() → Window::waitEvents(): Input::Manager::keyCallback updates modifiers, raises a KeyEvent (on Wayland recorded, then delivered after the dispatch).", "listeners."],
+			["main", "Listeners", "Newest first (overlay pointer listeners in a priority slot): Core (reserved keys), overlay, scene editor, the scene's NodeController / OrbitController, the application. The first that returns true stops the propagation.", "per-key atomics."],
+			["main", "Device state copy", "At the start of each main iteration readDeviceState() copies keyboard and pointer states into one relaxed atomic per key (gamepads and joysticks off by default).", "the logic thread reads the atomics."],
+			["logic", "Logic cycle", "withLogicCycle → Scene::processLogics() (controllers move nodes, physics follows) → onCoreProcessLogics() (the application reads the atomics) → publishStateForRendering().", "triple buffer."],
+			["render", "Frame", "beginFrame() (fence, acquire) → shared scene access → beginRenderFrame() latches the freshest slot → passes → submit → present.", "the screen."]
+		],
+		fail: "Derived from the code, not measured: the event is processed at once; the logic sees it at its next cycle (0-16.7 ms); the rendering thread latches it at its next frame (0-1 frame); then up to framesInFlight frames queued on the GPU plus the present. Measured elsewhere: 41-66 % of frames were overwritten before the triple buffer, 0 % after (scenes doc 12)." }
+];
+
+const STOP_DOORS = [
+	["stop(exitCode)", "the user: window close, Shift+Esc, Core.shutdown()", "onBeforeCoreStop() may veto. After 3 vetoes AND 10 s since the first: a Force Quit / Wait More dialog (exit 99 on Force Quit)."],
+	["requestSystemStop()", "SIGTERM / SIGHUP / SIGINT, session end, macOS Quit", "Asked as a normal stop; a veto lasts 3000 ms, then the stop proceeds with exit 0. The application may cancel it (cancelStopRequest())."],
+	["stopOnDeviceLoss()", "the graphics device is lost, or the swap-chain given up", "Told, never asked: onGraphicsFailure(), onBeforeCoreStop() (answer ignored, last chance to save). Exit 98."],
+	["stopOnDisplayLoss()", "the display server connection died (Wayland)", "Same, exit 96."],
+	["stopOnVideoMemoryExhaustion()", "swap-chain given up after a video-memory refusal", "Same, plus the engine's dialog unless onGraphicsFailure() returns true. Exit 95."]
+];
+const EXITS = [
+	["0 / user", "Normal end: the code given to stop(); a system stop past its deadline"], ["1", "EXIT_FAILURE: base or core level failed, a loop thread refused, onCoreStarted() false, a service failed to terminate"],
+	["95", "Video memory exhausted"], ["96", "Display connection lost"], ["97", "GPU or driver refused the start (told to the user)"], ["98", "Graphics device lost"], ["99", "Force Quit after repeated vetoes"]
+];
+const HOOKS = [
+	["onBeforeCoreSecondaryServicesInitialization()", "main", "before any window or GPU; true ends the run"],
+	["targetVulkanAPIVersion()", "main", "read once before the Vulkan instance"],
+	["onStartupRefused(refusal)", "main", "the GPU / driver refused the start; true = no engine dialog; exit 97"],
+	["onCoreStarted(arguments, settings)", "main", "after the loops started; false → stop(1)"],
+	["onCoreMainLoopCycle()", "main", "every main-loop cycle, also while paused"],
+	["onCoreProcessLogics(cycle)", "logic", "every logic cycle, before the publication; shared accesses only"],
+	["onCorePaused() / onCoreResumed()", "main", "pause() / resume()"],
+	["onBeforeCoreStop()", "main", "false = veto (user stop only)"],
+	["onGraphicsFailure(failure)", "main", "device / display / video-memory loss, before onBeforeCoreStop()"],
+	["onCoreSessionEnding()", "main", "Windows WM_ENDSESSION: the process may be killed right after"],
+	["onCoreKeyPress / onCoreKeyRelease / onCoreCharacterType", "main", "after Core's reserved keys; true = consumed"],
+	["onCoreNotification(observable, code, data)", "any", "what Core does not consume, on the notifying thread"],
+	["onCoreOpenFiles(paths)", "main", "dropped files; erase what you consume"],
+	["onCoreSurfaceRefreshed()", "main", "after a swap-chain recreation and the overlay resize"],
+	["onCoreShaderCompilationFailed(id, source)", "main", "queued by the compiling thread, delivered at the next main cycle"]
+];
+
+const NOTES = [
+	["note", "PrimaryServices still drains the thread pool", "PrimaryServices::Impl::terminate() calls m_threadPool->wait() before releasing the primary services, while docs/subsystems/source-tree/09-shutdown-sequence.md says the shutdown no longer calls ThreadPool::wait(). Every job owner is gone at that point, so it should return at once. Keep it (a last guard) or remove it (it hides an owner that forgot its jobs): an owner decision."],
+	["note", "Resources holds references to two later services", "Resources::Manager (primary, started at the base level) is constructed with references to Graphics::Renderer and Audio::Manager (secondary, started later, terminated earlier), and the Renderer holds one back to Resources. That is why terminate() stops the resource jobs first and unloads resources after every secondary service. The architecture graph draws these back-references in amber."],
+	["note", "Scene controllers move nodes from the main thread (to verify)", "NodeController::onKeyRelease and OrbitController::applyToNode are input listeners, so they run on the main thread; the data-flow reading found they move the node directly there, outside the logic cycle. Not verified against the synchronization rules."],
+	["note", "Physics::Manager's compute context has no consumer found", "It sets up a compute device, transfer and layout sub-services, but the simulation is scene-side on the logic thread. Scaffolding for a GPU physics path, or dead weight: to confirm."],
+	["note", "Network commands wait for the main-loop timeout", "Nothing was found that wakes the main loop when a TCP or MCP command arrives (not certain): a command would wait up to one main-loop period."],
+	["note", "Failed-program retry count and per-target refusals (working tree)", "S19 and the two stations it links describe the working tree of 2026-11-15: the retry as an atomic count the instances compare, an instance refused for one render target instead of broken, the final pass falling back to its program without effects. On develop (13d88cb5) the retry is an atomic flag and a failed program breaks its instance."],
+	["note", "Stale document", "docs/subsystems/graphics/13-12-post-processing-effects/09-available-effects.md lists FogEnvironment, which no longer exists."],
+	["race", "Open race: logic ↔ render under the shared access", "docs/todo/tsan-logic-render-shared-state-races.md (high): lifetimes, the PostProcessStack ordered list, the ReadyForInstantiation flag (a plain flag set by a pool worker, read by the rendering thread), LightSet::m_enabled, skinning buffers and descriptor sets, the frame's acceleration structure pointer (Renderer::m_currentTLAS)."],
+	["race", "Open race: renderer program and pipeline caches", "docs/todo/renderer-program-and-pipeline-caches-thread-audit.md: m_programs, m_graphicsPipelines and m_failedPrograms have no lock."],
+	["race", "Open race: per-light descriptor set at load time", "docs/todo/lighten-marbles-perlight-descriptor-race.md (high): a terrain drawn once before its PerLight set exists."],
+	["race", "Related open items", "docs/todo/skinned-scene-crashes-the-software-vulkan-device.md (linked to the skinning race), docs/todo/wayland-surface-lost-protocol-error.md (in progress, S10), docs/todo/rt-device-lost-game-logic.md (likely covered by the upload frontier)."]
+];
+
+/* Architecture graph layout: the node centre of every service drawn outside the PrimaryServices box (viewBox 1050 × 620),
+ * and the chips inside that box. A new service needs a position here. */
+const POS = {
+	console: [110, 190], user: [250, 190], resources: [450, 190], platform: [680, 190], vulkan: [880, 190],
+	audio: [330, 320], overlay: [520, 320], window: [760, 320], physics: [940, 320],
+	userservices: [150, 440], notifier: [480, 440], renderer: [660, 440], input: [820, 440], sysnotif: [960, 440],
+	scenes: [620, 560], "t-logic": [300, 560], "t-render": [900, 560]
+};
+const PS_CHIPS = ["arguments", "userinfo", "filesystem", "settings", "systeminfo", "threadpool", "apiclient", "netmanager"];
+/* =====================================================================================================================
+ * RENDERING
+ * ===================================================================================================================== */
+const LOCAL = location.protocol === "file:";
+const GH = { engine: "https://github.com/EmeraudeEngine/emeraude-engine/blob/develop/", base: "https://github.com/EmeraudeEngine/emeraude-base/blob/develop/" };
+const SVGNS = "http://www.w3.org/2000/svg";
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" })[c]);
+function codeHref (f) {
+	if ( f.startsWith("base:") ) { return LOCAL ? "../dependencies/emeraude-base/" + f.slice(5) : GH.base + f.slice(5); }
+	return LOCAL ? "../" + f : GH.engine + f;
+}
+const docHref = d => LOCAL ? d : GH.engine + "docs/" + d;
+const TH_NAME = { main: "main", logic: "logic", render: "rendering", pool: "pool", own: "dedicated", any: "any thread" };
+const thread = t => t ? `<span class="thread th-${t}">${TH_NAME[t]}</span>` : "";
+function failBadge (f) {
+	if ( !f ) { return ""; }
+	const cls = f.startsWith("fatal") ? "b-fatal" : f.startsWith("warning") ? "b-warn" : "b-error";
+	return `<span class="badge ${cls}">${esc(f.split(" ")[0])}</span>`;
+}
+const ph = id => PHASES.find(p => p.id === id);
+
+/* Lifetimes derived from EVENTS. */
+const LIFE = {};
+EVENTS.forEach(([, act, who], i) => {
+	if ( !who ) { return; }
+	LIFE[who] = LIFE[who] || { start: null, end: null, marks: [] };
+	if ( act === "s" ) { LIFE[who].start = i; } else if ( act === "e" ) { LIFE[who].end = i; } else { LIFE[who].marks.push(i); }
+});
+const DEPENDENTS = {};
+Object.entries(DEPS).forEach(([k, list]) => list.forEach(d => { (DEPENDENTS[d] = DEPENDENTS[d] || []).push(k); }));
+
+/* Shared state. */
+const state = { view: "chronogram", sel: null, cursor: 0, playing: null };
+function select (sel) { state.sel = sel; renderDrawer(); highlight(); }
+function setCursor (i) { state.cursor = Math.max(0, Math.min(EVENTS.length - 1, i)); updateCursor(); }
+
+/* ---- Drawer ---- */
+const drawer = document.getElementById("drawer");
+function entChip (id) { const e = ENTITIES[id]; return e ? `<button class="chip" data-ent="${id}">${esc(e.l)}</button>` : (id === "ps" ? `<span class="chip">PrimaryServices</span>` : ""); }
+function codeList (code) {
+	return (code || []).map(([f, s]) => `<a href="${esc(codeHref(f))}" target="_blank" rel="noopener"><code>${esc(f.replace(/^base:/, "emeraude-base/"))}</code></a> · <code>${esc(s)}</code>`).join("<br>");
+}
+function docList (docs) { return (docs || []).map(d => `<a href="${esc(docHref(d))}" target="_blank" rel="noopener"><code>docs/${esc(d)}</code></a>`).join("<br>"); }
+function insideHTML (inside) {
+	if ( !inside ) { return ""; }
+	return `<div class="inside"><h4>Inside</h4>${inside.map(([g, items], i) => `<details${i < 2 ? " open" : ""}><summary>${esc(g)}</summary><ul>${items.map(x => `<li>${esc(x)}</li>`).join("")}</ul></details>`).join("")}</div>`;
+}
+function evRef (i) { if ( i === null || i === undefined ) { return "—"; } const e = EVENTS[i]; return `<button class="chip" data-ev="${i}">${esc(ph(e[0]).name)} · ${esc(e[3])}</button>`; }
+function syncChips (list) { return list.map(x => `<button class="chip" data-sync="${x[0]}">${x[1]} ${esc(x[2])}</button>`).join(""); }
+function renderDrawer () {
+	const s = state.sel;
+	if ( !s ) {
+		drawer.innerHTML = `<div class="pad"><span class="eyebrow">Details</span><h3>Pick anything</h3>
+			<p class="muted">A bar, a node, a station, a synchronization point, a column of the chronogram or a service card. It stays selected when you switch views.</p>
+			<h4>Application plug points</h4>
+			<table><tbody>${HOOKS.map(([h, t, w]) => `<tr><td><code>${esc(h)}</code><br><span class="muted">${esc(w)}</span></td><td>${thread(t)}</td></tr>`).join("")}</tbody></table></div>`;
+		return;
+	}
+	if ( s.type === "ent" ) {
+		const e = ENTITIES[s.id], L = LIFE[s.id] || {};
+		const kind = { primary: "Primary service (PrimaryServices)", coreprimary: "Primary service (Core's list)", secondary: "Secondary service", sub: "Renderer sub-service", app: "Application", thread: "Thread" }[e.k];
+		const deps = DEPS[s.id] || [], dependents = DEPENDENTS[s.id] || [], owns = e.owns || [];
+		const syncs = SYNCS.filter(x => x[5].includes(s.id));
+		const kv = [];
+		kv.push(`<dt>Kind</dt><dd>${esc(kind)}${e.th ? " " + thread(e.th) : ""}${e.opt ? ' <span class="muted">(when enabled / on demand)</span>' : ""}</dd>`);
+		if ( e.fail ) { kv.push(`<dt>If it fails</dt><dd>${failBadge(e.fail)} ${esc(e.fail)}</dd>`); }
+		kv.push(`<dt>Born</dt><dd>${evRef(L.start)}</dd><dt>Gone</dt><dd>${evRef(L.end)}</dd>`);
+		if ( deps.length ) { kv.push(`<dt>Holds</dt><dd class="chips">${deps.map(entChip).join("")}</dd>`); }
+		if ( dependents.length ) { kv.push(`<dt>Held by</dt><dd class="chips">${dependents.map(entChip).join("")}</dd>`); }
+		if ( e.p ) { kv.push(`<dt>Part of</dt><dd class="chips">${entChip(e.p)}</dd>`); }
+		if ( owns.length ) { kv.push(`<dt>Threads</dt><dd class="chips">${owns.map(entChip).join("")}</dd>`); }
+		if ( e.notifies ) { kv.push(`<dt>Notifies</dt><dd><code>${esc(e.notifies)}</code></dd>`); }
+		if ( syncs.length ) { kv.push(`<dt>Meets at</dt><dd class="chips">${syncChips(syncs)}</dd>`); }
+		if ( e.code ) { kv.push(`<dt>Code</dt><dd>${codeList(e.code)}</dd>`); }
+		if ( e.docs ) { kv.push(`<dt>Docs</dt><dd>${docList(e.docs)}</dd>`); }
+		drawer.innerHTML = `<div class="pad"><div class="d-title"><span class="eyebrow">${esc(kind)}</span><h3>${esc(e.l)}</h3><p>${esc(e.s)}</p></div><dl class="kv">${kv.join("")}</dl>${insideHTML(e.inside)}</div>`;
+	} else if ( s.type === "ev" ) {
+		const [p, act, who, label, detail] = EVENTS[s.id];
+		const what = { s: "starts", e: "ends", m: "step", h: "application hook", n: "Core notification" }[act];
+		drawer.innerHTML = `<div class="pad"><div class="d-title"><span class="eyebrow">Step ${s.id + 1} / ${EVENTS.length} · ${esc(what)}</span><h3>${esc(label)}</h3>${detail ? `<p>${esc(detail)}</p>` : ""}</div>
+			<dl class="kv"><dt>Phase</dt><dd>${esc(ph(p).name)} <span class="muted">${esc(ph(p).where)}</span></dd>${who ? `<dt>Concerns</dt><dd class="chips">${entChip(who)}</dd>` : ""}</dl>
+			<div class="toolbar"><button class="btn" data-step="-1">◀ Previous step</button><button class="btn" data-step="1">Next step ▶</button></div></div>`;
+	} else if ( s.type === "sync" ) {
+		const x = SYNCS.find(y => y[0] === s.id);
+		drawer.innerHTML = `<div class="pad"><div class="d-title"><span class="eyebrow">Synchronization ${x[1]}</span><h3>${esc(x[2])}</h3><p class="mono muted">${esc(x[3])}</p><p>${esc(x[6])}</p></div>
+			<dl class="kv"><dt>Who meets</dt><dd class="chips">${x[5].map(entChip).join("")}</dd>${x[7] ? `<dt>Rule</dt><dd>${esc(x[7])}</dd>` : ""}${x[8].length ? `<dt>Open</dt><dd>${x[8].map(r => `<span class="badge b-race">race</span> ${esc(r)}`).join("<br>")}</dd>` : ""}</dl></div>`;
+	} else if ( s.type === "st" ) {
+		const st = STATIONS.find(y => y[0] === s.id);
+		const syncs = SYNCS.filter(x => x[4].includes(st[0]));
+		drawer.innerHTML = `<div class="pad"><div class="d-title"><span class="eyebrow">Station · ${thread(st[1])}</span><h3>${esc(st[3])}</h3><p>${esc(st[5])}</p></div>
+			<dl class="kv"><dt>Involves</dt><dd class="chips">${st[4].map(entChip).join("")}</dd>${syncs.length ? `<dt>Meets at</dt><dd class="chips">${syncChips(syncs)}</dd>` : ""}</dl></div>`;
+	}
+}
+drawer.addEventListener("click", e => {
+	const t = e.target.closest("[data-ent],[data-ev],[data-sync],[data-step]");
+	if ( !t ) { return; }
+	if ( t.dataset.ent ) { select({ type: "ent", id: t.dataset.ent }); }
+	else if ( t.dataset.ev ) { const i = +t.dataset.ev; setCursor(i); select({ type: "ev", id: i }); }
+	else if ( t.dataset.sync ) { select({ type: "sync", id: t.dataset.sync }); }
+	else if ( t.dataset.step ) { const i = Math.max(0, Math.min(EVENTS.length - 1, state.sel.id + +t.dataset.step)); setCursor(i); select({ type: "ev", id: i }); }
+});
+
+/* ---- SVG helper ---- */
+function el (name, attrs, parent, text) {
+	const n = document.createElementNS(SVGNS, name);
+	for ( const k in attrs ) { n.setAttribute(k, attrs[k]); }
+	if ( text !== undefined ) { n.textContent = text; }
+	if ( parent ) { parent.appendChild(n); }
+	return n;
+}
+
+/* ---- Chronogram ---- */
+const G = { labelW: 196, colW: 10, rowH: 17, top: 64 };
+let gantt = null;
+function buildChronogram (host) {
+	const rows = [];
+	ROW_GROUPS.forEach(([g, ids]) => { rows.push({ group: g }); ids.forEach(id => rows.push({ id })); });
+	const W = G.labelW + EVENTS.length * G.colW + 16, H = G.top + rows.length * G.rowH + 10;
+	const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "Chronogram of every service and thread over one run" });
+	let x0 = 0;
+	PHASES.forEach((p, pi) => {
+		const n = EVENTS.filter(e => e[0] === p.id).length;
+		const x = G.labelW + x0 * G.colW, w = n * G.colW;
+		el("rect", { x, y: 0, width: w, height: H, class: pi % 2 ? "g-band-alt" : "g-band" }, svg);
+		const label = w >= p.name.length * 7 + 8 ? p.name : p.name.slice(0, Math.max(2, Math.floor((w - 6) / 7))) + "…";
+		el("text", { x: x + 4, y: 14, class: "g-band-label" }, svg, label);
+		x0 += n;
+	});
+	el("text", { x: 8, y: 35, class: "g-group" }, svg, "Hooks · notifications");
+	el("text", { x: 8, y: 53, class: "g-group" }, svg, "Steps");
+	EVENTS.forEach(([, act], i) => {
+		const cx = G.labelW + i * G.colW + G.colW / 2;
+		if ( act === "h" ) { el("path", { d: `M${cx} 25 l5 6 l-5 6 l-5 -6 z`, class: "mk-hook" }, svg); }
+		if ( act === "n" ) { el("circle", { cx, cy: 31, r: 4, class: "mk-notify" }, svg); }
+		if ( act === "m" ) { el("rect", { x: cx - 1.5, y: 44, width: 3, height: 10, class: "mk-mark" }, svg); }
+	});
+	const rowEls = {};
+	rows.forEach((r, ri) => {
+		const y = G.top + ri * G.rowH;
+		if ( r.group ) {
+			el("line", { x1: 0, x2: W, y1: y + 1, y2: y + 1, class: "g-grid" }, svg);
+			el("text", { x: 8, y: y + 13, class: "g-group" }, svg, r.group);
+			return;
+		}
+		const e = ENTITIES[r.id], L = LIFE[r.id] || {};
+		rowEls[r.id] = el("rect", { x: 0, y, width: W, height: G.rowH, class: "row-hit", "data-ent": r.id }, svg);
+		el("text", { x: e.k === "sub" ? 22 : 12, y: y + 12, class: "g-row-label" + (e.opt ? " t-muted" : ""), "pointer-events": "none" }, svg, e.l);
+		if ( L.start !== null && L.start !== undefined ) {
+			const end = (L.end === null || L.end === undefined) ? EVENTS.length - 1 : L.end;
+			const cls = e.k === "thread" ? `bar-thread-${e.th}` : (e.k === "primary" || e.k === "coreprimary") ? "bar-primary" : e.k === "sub" ? "bar-sub" : e.k === "app" ? "bar-app" : "bar-secondary";
+			el("rect", { x: G.labelW + L.start * G.colW + 1, y: y + 4, width: (end - L.start + 1) * G.colW - 2, height: G.rowH - 8, rx: 2, class: cls + (e.opt ? " bar-optional" : ""), "pointer-events": "none" }, svg);
+			(L.marks || []).forEach(m => el("rect", { x: G.labelW + m * G.colW + G.colW / 2 - 1.5, y: y + 2, width: 3, height: G.rowH - 4, class: "mk-mark", "pointer-events": "none" }, svg));
+		}
+	});
+	EVENTS.forEach((ev, i) => {
+		const r = el("rect", { x: G.labelW + i * G.colW, y: 20, width: G.colW, height: 38, class: "col-hit", "data-ev": i }, svg);
+		el("title", {}, r, `${i + 1}. ${ev[3]}`);
+	});
+	const cursor = el("line", { x1: 0, x2: 0, y1: 20, y2: H, class: "cursor", "pointer-events": "none" }, svg);
+	svg.addEventListener("click", e => {
+		const t = e.target;
+		if ( t.dataset.ev !== undefined ) { const i = +t.dataset.ev; setCursor(i); select({ type: "ev", id: i }); }
+		else if ( t.dataset.ent ) { select({ type: "ent", id: t.dataset.ent }); }
+	});
+	host.appendChild(svg);
+	gantt = { svg, rowEls, cursor };
+}
+
+/* ---- Architecture graph ---- */
+const NW = 132, NH = 46;
+let graph = null;
+function buildArchitecture (host) {
+	const svg = el("svg", { viewBox: "0 0 1050 620", width: 1050, height: 620, role: "img", "aria-label": "Service dependency graph, replayed over the run" });
+	const defs = el("defs", {}, svg);
+	const mk = el("marker", { id: "arr", viewBox: "0 0 8 8", refX: 7, refY: 4, markerWidth: 6, markerHeight: 6, orient: "auto-start-reverse" }, defs);
+	el("path", { d: "M0 0 L8 4 L0 8 z", style: "fill:var(--faint)" }, mk);
+	el("rect", { x: 100, y: 18, width: 860, height: 92, rx: 10, class: "ps-box" }, svg);
+	el("text", { x: 114, y: 38, class: "n-label" }, svg, "PrimaryServices");
+	el("text", { x: 230, y: 38, class: "n-sub" }, svg, "constructed first, released last, by ~Core()");
+	const nodes = {};
+	PS_CHIPS.forEach((id, i) => {
+		const x = 114 + i * 105, y = 52;
+		const g = el("g", { class: "node clickable", "data-ent": id }, svg);
+		el("rect", { x, y, width: 98, height: 44, rx: 6, class: "n-box" }, g);
+		el("text", { x: x + 8, y: y + 18, class: "n-label", style: "font-size:11px" }, g, ENTITIES[id].l.replace("Net::", ""));
+		el("text", { x: x + 8, y: y + 33, class: "n-sub" }, g, ENTITIES[id].k === "thread" ? "workers" : "primary");
+		nodes[id] = g;
+	});
+	const edgeLayer = el("g", {}, svg);
+	const edges = [];
+	Object.entries(DEPS).forEach(([from, list]) => list.forEach(to => {
+		const [fx, fy] = POS[from];
+		let d, cls = "edge";
+		if ( to === "ps" ) { d = `M${fx} ${fy - NH / 2} L${fx} 112`; cls += " ps"; }
+		else {
+			const [tx, ty] = POS[to];
+			const y1 = ty > fy ? fy + NH / 2 : fy - NH / 2, y2 = ty > fy ? ty - NH / 2 : ty + NH / 2;
+			if ( ty === fy ) { d = `M${fx + (tx > fx ? NW / 2 : -NW / 2)} ${fy} L${tx + (tx > fx ? -NW / 2 : NW / 2)} ${ty}`; }
+			else { const my = (y1 + y2) / 2; d = `M${fx} ${y1} C${fx} ${my} ${tx} ${my} ${tx} ${y2}`; }
+			if ( from === "resources" ) { cls += " back"; }
+		}
+		edges.push({ from, to, p: el("path", { d, class: cls, "marker-end": "url(#arr)" }, edgeLayer) });
+	}));
+	Object.entries(POS).forEach(([id, [cx, cy]]) => {
+		const e = ENTITIES[id];
+		const isThread = id.startsWith("t-");
+		const w = isThread ? 120 : NW;
+		const g = el("g", { class: "node clickable", "data-ent": id }, svg);
+		el("rect", { x: cx - w / 2, y: cy - NH / 2, width: w, height: NH, rx: isThread ? NH / 2 : 8, class: "n-box" }, g);
+		el("text", { x: cx, y: cy - 3, "text-anchor": "middle", class: "n-label" }, g, e.l.replace("Graphics::", "").replace("Application user services", "App services"));
+		const sub = isThread ? (e.th === "logic" ? "thread · 60 Hz" : "thread") : e.k === "app" ? "application" : e.k === "coreprimary" ? "primary · Core" : "secondary · " + (e.fail || "").split(" ")[0];
+		el("text", { x: cx, y: cy + 13, "text-anchor": "middle", class: "n-sub" }, g, sub);
+		(e.owns || []).forEach((t, k) => {
+			const c = el("circle", { cx: cx + w / 2 - 10 - k * 13, cy: cy - NH / 2, r: 5, class: "tdot", "data-thread": t }, g);
+			el("title", {}, c, ENTITIES[t].l);
+		});
+		nodes[id] = g;
+	});
+	svg.addEventListener("click", e => { const g = e.target.closest("[data-ent]"); if ( g ) { select({ type: "ent", id: g.dataset.ent }); } });
+	host.appendChild(svg);
+	graph = { svg, nodes, edges };
+}
+function lifeState (id, i) {
+	const L = LIFE[id];
+	if ( !L || L.start === null || L.start === undefined ) { return "alive"; }
+	if ( i < L.start ) { return "unborn"; }
+	if ( i === L.start || i === L.end || L.marks.includes(i) ) { return "now"; }
+	if ( L.end !== null && L.end !== undefined && i > L.end ) { return "dead"; }
+	return "alive";
+}
+
+/* ---- Metro ---- */
+let metro = null;
+/* Horizontal scale of the three segments (station x are written in a compact 0-1310 space). */
+function X (x) { if ( x <= 330 ) { return 40 + (x - 40) * 1.35; } if ( x <= 1005 ) { return 470 + (x - 340) * 1.6; } return 1545 + (x - 1015) * 1.3; }
+function splitLabel (s) {
+	if ( s.length <= 20 ) { return [s]; }
+	const parts = s.split(" "); const a = []; let cur = "";
+	parts.forEach(p => { if ( (cur + " " + p).trim().length > 20 && cur ) { a.push(cur); cur = p; } else { cur = (cur + " " + p).trim(); } });
+	if ( cur ) { a.push(cur); }
+	return a.slice(0, 2);
+}
+function buildMetro (host) {
+	const W = 1960, H = 610;
+	const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, width: W, height: H, role: "img", "aria-label": "Threads as metro lines and their synchronization points" });
+	const defs = el("defs", {}, svg);
+	const mk = el("marker", { id: "loopArr", viewBox: "0 0 8 8", refX: 4, refY: 4, markerWidth: 6, markerHeight: 6, orient: "auto" }, defs);
+	el("path", { d: "M0 0 L8 4 L0 8 z", style: "fill:var(--muted)" }, mk);
+	const Y = Object.fromEntries(LINES.map(([id, , y]) => [id, y]));
+	SEGMENTS.forEach(([name, x1, x2]) => {
+		el("text", { x: X(x1), y: 22, class: "m-seg" }, svg, name);
+		el("line", { x1: X(x2) + 12, x2: X(x2) + 12, y1: 30, y2: H - 10, class: "m-seg-line" }, svg);
+	});
+	LINES.forEach(([id, name, y]) => el("text", { x: 4, y: y - 30, class: "m-lane-label", style: `fill:var(--t-${id})` }, svg, name));
+	const tl = Y.main;
+	el("path", { d: `M${X(40)} ${tl} L${X(1310)} ${tl}`, class: "m-line m-main" }, svg);
+	["logic", "render"].forEach(l => el("path", { d: `M${X(220)} ${tl} C${X(240)} ${Y[l]} ${X(260)} ${Y[l]} ${X(320)} ${Y[l]} L${X(1070)} ${Y[l]} C${X(1100)} ${Y[l]} ${X(1110)} ${tl} ${X(1120)} ${tl}`, class: `m-line m-${l}` }, svg));
+	["pool", "own"].forEach(l => {
+		el("path", { d: `M${X(60)} ${Y[l]} L${X(1290)} ${Y[l]}`, class: `m-line m-${l}` }, svg);
+		el("text", { x: X(60), y: Y[l] + 26, class: "st-label t-muted" }, svg, l === "pool" ? "created by PrimaryServices (base level)" : "started by their owners (base and core levels)");
+	});
+	[["main", 360, 985], ["logic", 390, 985], ["render", 360, 985]].forEach(([l, a, b]) => {
+		el("path", { d: `M${X(b)} ${Y[l] + 44} C${X(b) + 22} ${Y[l] + 44} ${X(b) + 22} ${Y[l] + 56} ${X(b)} ${Y[l] + 56} L${X(a)} ${Y[l] + 56}`, class: "m-loop", style: `stroke:var(--t-${l})`, "marker-end": "url(#loopArr)" }, svg);
+	});
+	const pos = {};
+	STATIONS.forEach(s => { pos[s[0]] = [X(s[2]), Y[s[1]]]; });
+	const syncEls = {};
+	SYNCS.forEach((x, k) => {
+		const pts = x[4].map(id => pos[id]);
+		const g = el("g", { class: "clickable", "data-sync": x[0] }, svg);
+		const d = pts.map((p, j) => (j ? "L" : "M") + p[0] + " " + p[1]).join(" ");
+		const path = el("path", { d, class: "sync-path" }, g);
+		const mx = pts.reduce((a, p) => a + p[0], 0) / pts.length, my = pts.reduce((a, p) => a + p[1], 0) / pts.length;
+		const bx = mx + (k % 2 ? 16 : -16), by = my + ((k % 3) - 1) * 8;
+		const badge = el("rect", { x: bx - 13, y: by - 9, width: 26, height: 18, rx: 9, class: "sync-badge" }, g);
+		el("text", { x: bx, y: by + 3.5, "text-anchor": "middle", class: "sync-badge-text" }, g, x[1]);
+		el("title", {}, g, `${x[1]} ${x[2]}`);
+		syncEls[x[0]] = { path, badge };
+	});
+	const stEls = {}, perLine = {};
+	STATIONS.forEach(([id, line, x0, label]) => {
+		const x = X(x0), y = Y[line];
+		const n = perLine[line] = (perLine[line] || 0) + 1;
+		const below = n % 2 === 0;
+		const g = el("g", { class: "clickable", "data-st": id }, svg);
+		const c = el("circle", { cx: x, cy: y, r: 7, class: "st" }, g);
+		el("title", {}, g, label);
+		const words = splitLabel(label);
+		words.forEach((w, k) => el("text", { x, y: below ? y + 24 + k * 12 : y - 14 - (words.length - 1 - k) * 12, "text-anchor": "middle", class: "st-label" }, g, w));
+		stEls[id] = c;
+	});
+	svg.addEventListener("click", e => {
+		const s = e.target.closest("[data-st]"), y = e.target.closest("[data-sync]");
+		if ( s ) { select({ type: "st", id: s.dataset.st }); } else if ( y ) { select({ type: "sync", id: y.dataset.sync }); }
+	});
+	host.appendChild(svg);
+	metro = { svg, stEls, syncEls };
+}
+
+/* ---- Highlight across views ---- */
+function involved () {
+	const s = state.sel, none = { ents: new Set(), stations: new Set(), syncs: new Set() };
+	if ( !s ) { return none; }
+	if ( s.type === "ent" ) {
+		return { ents: new Set([s.id]), stations: new Set(STATIONS.filter(x => x[4].includes(s.id)).map(x => x[0])), syncs: new Set(SYNCS.filter(x => x[5].includes(s.id)).map(x => x[0])) };
+	}
+	if ( s.type === "sync" ) { const x = SYNCS.find(y => y[0] === s.id); return { ents: new Set(x[5]), stations: new Set(x[4]), syncs: new Set([s.id]) }; }
+	if ( s.type === "st" ) { const x = STATIONS.find(y => y[0] === s.id); return { ents: new Set(x[4]), stations: new Set([s.id]), syncs: new Set(SYNCS.filter(y => y[4].includes(s.id)).map(y => y[0])) }; }
+	if ( s.type === "ev" ) { const who = EVENTS[s.id][2]; return { ents: new Set(who ? [who] : []), stations: new Set(), syncs: new Set() }; }
+	return none;
+}
+function highlight () {
+	const inv = involved();
+	if ( gantt ) { Object.entries(gantt.rowEls).forEach(([id, r]) => r.setAttribute("class", inv.ents.has(id) ? "row-hit row-sel" : "row-hit")); }
+	if ( graph ) {
+		Object.entries(graph.nodes).forEach(([id, g]) => g.classList.toggle("selected", inv.ents.has(id)));
+		graph.edges.forEach(({ from, to, p }) => p.classList.toggle("hl", inv.ents.has(from) || inv.ents.has(to)));
+	}
+	if ( metro ) {
+		Object.entries(metro.stEls).forEach(([id, c]) => c.classList.toggle("hl", inv.stations.has(id)));
+		Object.entries(metro.syncEls).forEach(([id, o]) => { o.path.classList.toggle("hl", inv.syncs.has(id)); o.badge.classList.toggle("hl", inv.syncs.has(id)); });
+	}
+	document.querySelectorAll(".sync-item").forEach(b => b.setAttribute("aria-pressed", inv.syncs.has(b.dataset.sync) ? "true" : "false"));
+	document.querySelectorAll(".svc-card").forEach(b => b.setAttribute("aria-pressed", state.sel && state.sel.type === "ent" && state.sel.id === b.dataset.card ? "true" : "false"));
+}
+function updateCursor () {
+	const i = state.cursor;
+	if ( gantt ) { const x = G.labelW + i * G.colW + G.colW / 2; gantt.cursor.setAttribute("x1", x); gantt.cursor.setAttribute("x2", x); }
+	if ( graph ) {
+		Object.entries(graph.nodes).forEach(([id, g]) => {
+			["unborn", "alive", "now", "dead"].forEach(c => g.classList.remove(c));
+			g.classList.add(lifeState(id, i));
+			g.querySelectorAll("[data-thread]").forEach(dot => dot.setAttribute("class", "tdot " + lifeState(dot.dataset.thread, i)));
+		});
+	}
+	const cap = document.getElementById("caption");
+	if ( cap ) {
+		const [p, act, , label] = EVENTS[i];
+		cap.innerHTML = `<span class="mono muted">${i + 1} / ${EVENTS.length}</span><b>${esc(ph(p).name)}</b><span>${esc(label)}</span>${act === "h" ? '<span class="badge b-hook">hook</span>' : ""}${act === "n" ? '<span class="badge b-error">notification</span>' : ""}`;
+	}
+	const range = document.getElementById("range");
+	if ( range ) { range.value = i; }
+}
+
+/* ---- Views ---- */
+const view = document.getElementById("view");
+function legendHTML () {
+	return `<div class="legend">
+		<span><i class="sw" style="background:var(--accent)"></i>primary</span><span><i class="sw" style="background:var(--info)"></i>secondary</span>
+		<span><i class="sw" style="background:var(--info);opacity:.55"></i>renderer sub-service</span><span><i class="sw" style="background:var(--hook)"></i>application</span>
+		<span class="thread th-main">main</span><span class="thread th-logic">logic</span><span class="thread th-render">rendering</span><span class="thread th-pool">pool</span><span class="thread th-own">dedicated</span>
+		<span><i class="sw" style="border:1px dashed var(--t-own)"></i>when enabled / on demand</span>
+		<span>◆ hook · ● notification · ▮ step</span></div>`;
+}
+const VIEWS = {
+	chronogram () {
+		view.innerHTML = `<div class="view-head"><span class="eyebrow">View 1 · Chronogram</span><h2>Who lives during what</h2>
+			<p class="muted">Time runs left to right in steps, not seconds: one column per step of the run. Every bar is a service or a thread, from the step that starts it to the step that releases it. Click a column (top rows) to read the step, a row to read the service.</p></div>
+			${legendHTML()}<div class="card scroll" id="g-host"></div>
+			<div class="view-head"><h3>Five ways to stop, one way through</h3><p class="muted">Every request ends in proceedStop(); only the user's stop can be vetoed for long.</p></div>
+			<div class="stopdoors">${STOP_DOORS.map(([n, w, d]) => `<div class="door"><b>${esc(n)}</b><span class="muted">${esc(w)}</span><span>${esc(d)}</span></div>`).join("")}</div>
+			<div class="card scroll"><table><thead><tr><th>Exit code</th><th>Meaning</th></tr></thead><tbody>${EXITS.map(([c, m]) => `<tr><td class="n">${esc(c)}</td><td>${esc(m)}</td></tr>`).join("")}</tbody></table></div>`;
+		buildChronogram(document.getElementById("g-host"));
+	},
+	architecture () {
+		if ( state.cursor === 0 ) { state.cursor = EVENTS.findIndex(e => e[0] === "run"); }
+		view.innerHTML = `<div class="view-head"><span class="eyebrow">View 2 · Architecture</span><h2>Who holds whom, replayed over the run</h2>
+			<p class="muted">An arrow points to a service another one receives in its constructor; the dotted ones go to PrimaryServices. Amber marks the references Resources holds to two services started after it. Play the run: services light up as they start and fade as they are released; the small dots are the threads each one owns.</p></div>
+			<div class="card pad"><div class="toolbar">
+				<button class="btn" data-ctl="first" aria-label="First step">⏮</button><button class="btn" data-ctl="prev" aria-label="Previous step">◀</button>
+				<button class="btn" data-ctl="play" id="play" aria-pressed="false">▶ Play</button>
+				<button class="btn" data-ctl="next" aria-label="Next step">▶</button><button class="btn" data-ctl="last" aria-label="Last step">⏭</button>
+				<input type="range" id="range" min="0" max="${EVENTS.length - 1}" value="${state.cursor}" aria-label="Step of the run">
+			</div><div class="caption" id="caption"></div></div>
+			<div class="card scroll" id="a-host"></div>`;
+		buildArchitecture(document.getElementById("a-host"));
+		view.querySelector(".toolbar").addEventListener("click", e => {
+			const c = e.target.closest("[data-ctl]"); if ( !c ) { return; }
+			const a = c.dataset.ctl;
+			if ( a === "play" ) { togglePlay(); return; }
+			stopPlay();
+			setCursor(a === "first" ? 0 : a === "last" ? EVENTS.length - 1 : state.cursor + (a === "next" ? 1 : -1));
+		});
+		document.getElementById("range").addEventListener("input", e => { stopPlay(); setCursor(+e.target.value); });
+	},
+	metro () {
+		view.innerHTML = `<div class="view-head"><span class="eyebrow">View 3 · Threads &amp; synchronization</span><h2>${LINES.length} lines, ${SYNCS.length} correspondences</h2>
+			<p class="muted">Each thread is a line, each step a station. The numbered badges are the points where threads meet: a lock, an atomic hand-off, a queue, a fence, a join. Click one to read who waits for whom and what is still open there.</p></div>
+			<div class="card scroll" id="m-host"></div>
+			<div class="sync-list">${SYNCS.map(x => `<button class="sync-item" data-sync="${x[0]}" aria-pressed="false"><b>${x[1]} · ${esc(x[2])}</b><span class="mono muted">${esc(x[3])}</span>${x[8].length ? '<span><span class="badge b-race">open race</span></span>' : ""}</button>`).join("")}</div>`;
+		buildMetro(document.getElementById("m-host"));
+		view.querySelector(".sync-list").addEventListener("click", e => { const b = e.target.closest("[data-sync]"); if ( b ) { select({ type: "sync", id: b.dataset.sync }); } });
+	},
+	flows () {
+		view.innerHTML = `<div class="view-head"><span class="eyebrow">View 4 · Data flows</span><h2>Two journeys through the threads</h2>
+			<p class="muted">Each station names the thread it runs on and, under it, how the data reaches the next one.</p></div>
+			<div class="flows">${FLOWS.map(f => `<div class="card pad"><h3>${esc(f.name)}</h3><p class="muted" style="margin:4px 0 14px">${esc(f.lede)}</p><div class="flow">${f.steps.map(([t, h, d, hand], i) => `
+				<div class="fs"><div class="rail"><div class="dot th-${t}"><span>${i + 1}</span></div><div class="stem"></div></div>
+				<div class="body"><div class="h"><b>${esc(h)}</b>${thread(t)}</div><span>${esc(d)}</span>${hand && hand !== "—" ? `<span class="hand">→ ${esc(hand)}</span>` : ""}</div></div>`).join("")}</div>
+				<p style="margin-top:6px;font-size:.86rem"><b>${f.id === "asset" ? "When it fails." : "Latency."}</b> ${esc(f.fail)}</p></div>`).join("")}</div>`;
+	},
+	internals () {
+		const order = ["scenes", "renderer", "resources", "console", "input", "audio", "physics", "vulkan", "overlay", "threadpool", "netmanager", "window", "notifier", "user"];
+		view.innerHTML = `<div class="view-head"><span class="eyebrow">View 5 · Internals</span><h2>What each service holds</h2>
+			<p class="muted">Each service opened on its structure. Click a service's name to see it, with its lifetime, dependencies and threads, in the details panel and in the other views.</p></div>
+			<div class="svc-grid">${order.map(id => { const e = ENTITIES[id]; return `<div class="svc-card" data-card="${id}" aria-pressed="false"><button class="head" data-ent="${id}"><b>${esc(e.l)}</b><span class="muted" style="font-size:.84rem">${esc(e.s)}</span></button>${(e.inside || []).map(([g, items], i) => `<details${i < 2 ? " open" : ""}><summary>${esc(g)} <small>${items.length}</small></summary><ul>${items.map(x => `<li>${esc(x)}</li>`).join("")}</ul></details>`).join("")}</div>`; }).join("")}</div>`;
+		view.querySelector(".svc-grid").addEventListener("click", e => { const b = e.target.closest("[data-ent]"); if ( b ) { select({ type: "ent", id: b.dataset.ent }); } });
+	},
+	notes () {
+		view.innerHTML = `<div class="view-head"><span class="eyebrow">Open points</span><h2>What drawing this map revealed</h2>
+			<p class="muted">Gaps between the code and its documents, things to confirm, and the races still open in docs/todo/.</p></div>
+			<div class="notes">${NOTES.map(([k, t, d]) => `<div class="note ${k}"><h3>${k === "race" ? '<span class="badge b-race">race</span> ' : ""}${esc(t)}</h3><p>${esc(d)}</p></div>`).join("")}</div>`;
+	}
+};
+function stopPlay () {
+	if ( state.playing ) { clearInterval(state.playing); state.playing = null; }
+	const b = document.getElementById("play"); if ( b ) { b.textContent = "▶ Play"; b.setAttribute("aria-pressed", "false"); }
+}
+function togglePlay () {
+	if ( state.playing ) { stopPlay(); return; }
+	if ( state.cursor >= EVENTS.length - 1 ) { setCursor(0); }
+	const b = document.getElementById("play"); b.textContent = "❚❚ Pause"; b.setAttribute("aria-pressed", "true");
+	state.playing = setInterval(() => { if ( state.cursor >= EVENTS.length - 1 ) { stopPlay(); return; } setCursor(state.cursor + 1); }, 420);
+}
+function show (name) {
+	if ( !VIEWS[name] ) { name = "chronogram"; }
+	stopPlay();
+	gantt = graph = metro = null;
+	state.view = name;
+	VIEWS[name]();
+	document.querySelectorAll("#tabs a").forEach(a => { if ( a.getAttribute("href") === "#" + name ) { a.setAttribute("aria-current", "page"); } else { a.removeAttribute("aria-current"); } });
+	updateCursor();
+	highlight();
+}
+window.addEventListener("hashchange", () => show(location.hash.slice(1)));
+renderDrawer();
+show(location.hash.slice(1) || "chronogram");
+</script>
+</body>
+</html>

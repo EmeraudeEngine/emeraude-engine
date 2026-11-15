@@ -1,6 +1,7 @@
 ## 7. Documentation Index
 
 -   **AI Runtime Control:** [`docs/ai-runtime-control.md`](../ai-runtime-control.md) (**AI operator guide** — resource discovery, scene creation, command reference).
+-   **Lifecycle map:** [`docs/lifecycle-map.html`](../lifecycle-map.html) (**the whole engine on one interactive page**, open it in a browser — five linked views: a CHRONOGRAM of every service, renderer sub-service and thread over one run; the ARCHITECTURE graph of constructor dependencies replayed step by step; the THREADS as metro lines with their 18 synchronization points (locks, triple buffer, queues, fences, joins) and the races still open; two DATA FLOWS (an asset from request to pixels, a key press to the screen); each service's INTERNALS. Engine only: an application appears as its hooks. Its script's DATA section is the map: **update it in the same session** when a start or terminate order, a loop, a stop path, a thread, a cross-thread synchronization, a constructor dependency or a service's structure changes).
 -   **Open work:** [`docs/todo/`](../todo) (one file per idea to do; the rule is in [`docs/todo/README.md`](../todo/README.md) — done means the file is DELETED).
 -   **Philosophy:** [`docs/architecture-philosophy.md`](../architecture-philosophy.md) (Deep dive).
 -   **Tracer:** [`docs/tracer-system.md`](../tracer-system.md) (Logging rules).
