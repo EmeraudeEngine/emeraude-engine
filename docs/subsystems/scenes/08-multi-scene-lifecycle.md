@@ -79,6 +79,10 @@ unloaded / reloaded / destroyed / rebuilt through the console, 2026-11-15): befo
 thread holding the cycle lock in each; after, 0 report naming the swap in 3 runs, 0 lock-order inversion, a clean
 shutdown each time. Release with the validation layer (RTX 3070 Ti): 25 input switches in a row from the main thread
 while the scene runs, 0 hang, 0 VUID, exit 0.
+Peers' round 8 (2026-11-15, engine 13d88cb5 + testbed e5f46b58): macOS (Apple M6, MoltenVK 1.4.2, Apple clang with `-Wdocumentation -Werror`) and Windows (RTX 3500 Ada, MSVC 19.44) build Release and Debug with 0 warning and run the testbed's two scenarios as Linux does: three rounds of unloading (kept, then destroyed) and
+reloading the active object — 7 control switches each way, no "contract violation", the slowest command the rebuild of
+a destroyed act (0.10 s Linux, 0.14 s Windows, 0.75 s macOS) — and 25 input switches through the web interface (26 each
+way, the slowest command 0.03 s / 0.011 s / 0.012 s); 0 VUID, 0 `[Error]`, exit 0.
 
 **Jun 2026 audit (from the Scene Manager outward):** no remaining multi-scene-hazardous global
 statics; the cached-shared-resource-destruction class was fully swept (all `TextureResource` types

@@ -647,8 +647,10 @@ deduplicates by URL and retries. `Core.NetAPIClientService.*` does none of those
 
 A program whose generation failed is reported once and refused from then on, without a new attempt (graphics doc 04
 § *A failed program is remembered*). `retryFailedPrograms()` forgets them — each one is generated again at its next
-request — and answers how many it forgot ("No shader program is remembered as failed." otherwise). A renderable
-instance already marked broken does not ask again.
+request — and answers how many it forgot ("No shader program is remembered as failed." otherwise). An instance
+refused for a render target (its program failed there: it is absent from that target only) is prepared for it again;
+an instance marked broken (a structural failure) stays so. `getRenderStatistics()` shows the effect: the view and
+shadow lists' instance counts.
 
 ### GPU memory: who holds it (`Core.RendererService.*`, 2026-10-04)
 

@@ -1873,29 +1873,68 @@ namespace EmEn::Graphics
 		 * Same camera + same effects = cache hit O(1). */
 		const auto renderTarget = m_renderer.mainRenderTarget();
 
+		const auto * overlayFB = m_renderer.overlayFramebuffer();
+
 		Saphir::Generator::PostProcessing generator{renderTarget, m_quadGeometry};
 
 		/* Pass the current effects list to the generator. */
 		generator.setEffectsList(lensEffects);
 
 		/* Use the post-process framebuffer (single-sample). */
-		if ( const auto * overlayFB = m_renderer.overlayFramebuffer(); overlayFB != nullptr )
+		if ( overlayFB != nullptr )
 		{
 			generator.setPipelineFramebuffer(overlayFB);
 		}
 
-		if ( !generator.generateShaderProgram(m_renderer) )
+		std::shared_ptr< Saphir::Program > program;
+
+		if ( generator.generateShaderProgram(m_renderer) )
+		{
+			program = generator.shaderProgram();
+		}
+		else
 		{
 			/* NOTE: Asked at every frame: a failure the renderer remembers was reported when it happened. */
-			if ( !generator.isKnownFailure() )
+			const auto reported = generator.isKnownFailure();
+
+			if ( !reported )
 			{
 				TraceError{ClassId} << "Unable to generate the post-processing shader program !";
 			}
 
-			return false;
-		}
+			/* The program WITHOUT effects is the one that failed: nothing to fall back to. */
+			if ( lensEffects.empty() )
+			{
+				return false;
+			}
 
-		const auto program = generator.shaderProgram();
+			/* The picture is not lost with its effects: the pass falls back to the program WITHOUT effects (the image
+			 * shown unchanged), which no effect can break. This pass draws the final image: without it, nothing reaches
+			 * the screen. */
+			Saphir::Generator::PostProcessing fallbackGenerator{renderTarget, m_quadGeometry};
+
+			if ( overlayFB != nullptr )
+			{
+				fallbackGenerator.setPipelineFramebuffer(overlayFB);
+			}
+
+			if ( !fallbackGenerator.generateShaderProgram(m_renderer) )
+			{
+				if ( !fallbackGenerator.isKnownFailure() )
+				{
+					TraceError{ClassId} << "Unable to generate the post-processing shader program without effects either: the final image cannot be drawn !";
+				}
+
+				return false;
+			}
+
+			if ( !reported )
+			{
+				TraceWarning{ClassId} << "The final image is drawn WITHOUT its " << lensEffects.size() << " display and lens effect(s): their program could not be generated (Core.RendererService.retryFailedPrograms() tries again).";
+			}
+
+			program = fallbackGenerator.shaderProgram();
+		}
 
 		if ( program == nullptr )
 		{

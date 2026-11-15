@@ -1558,8 +1558,8 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns whether the generation of this program failed before (rememberFailedProgram()): the generator
 			 * then refuses it at once, without generating, compiling or tracing again.
-			 * @note Same thread rule as the program cache (the Saphir generators). A retry asked from another thread
-			 * (retryFailedPrograms()) is served here first: the memory is then empty.
+			 * @note Same thread rule as the program cache (the Saphir generators). A retry asked since the last call
+			 * (retryFailedPrograms(), any thread) is served here first: the memory is then empty.
 			 * @param programKey The key identifying the program configuration.
 			 * @return bool
 			 */
@@ -1579,11 +1579,25 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Asks for the failed programs to be forgotten: each one is generated again at its next request
 			 * [Thread-safe].
-			 * @note The memory is emptied by the thread that owns it, at its next hasProgramFailed(). What no longer asks
-			 * is not tried again: a renderable instance marked broken stays so.
+			 * @note The memory is emptied by the thread that owns it, at its next hasProgramFailed(). A renderable instance
+			 * refused for a render target (RenderableInstance::Abstract::isRefusedForRendering()) compares
+			 * failedProgramsRetryCount() and tries again; one marked broken (a structural failure) stays so.
 			 * @return size_t The number of failed programs remembered when asked.
 			 */
 			size_t retryFailedPrograms () noexcept;
+
+			/**
+			 * @brief Returns how many times retryFailedPrograms() was asked [Thread-safe].
+			 * @note What remembers a failure of its own stores this count with it: a different count later means "try
+			 * again".
+			 * @return uint32_t
+			 */
+			[[nodiscard]]
+			uint32_t
+			failedProgramsRetryCount () const noexcept
+			{
+				return m_failedProgramsRetryCount.load(std::memory_order_acquire);
+			}
 
 			/**
 			 * @brief Notifies that a cached program was reused.
@@ -2235,8 +2249,10 @@ namespace EmEn::Graphics
 			std::atomic_bool m_frameSubmitFailureInjected{false};
 			/** @brief The size of 'm_failedPrograms', readable from any thread (retryFailedPrograms()). */
 			std::atomic< size_t > m_failedProgramCount{0};
-			/** @brief Set by retryFailedPrograms() from any thread, served by hasProgramFailed() on the owning thread. */
-			std::atomic_bool m_failedProgramsRetryRequested{false};
+			/** @brief How many times retryFailedPrograms() was asked, from any thread. */
+			std::atomic< uint32_t > m_failedProgramsRetryCount{0};
+			/** @brief The retry count 'm_failedPrograms' was last emptied for (hasProgramFailed(), the owning thread). */
+			uint32_t m_failedProgramsRetryServed{0};
 			/** @brief Whether the failure of the final post-processing pass was traced already (render thread; a success
 			 * re-arms it): the pass is asked at every frame. */
 			bool m_directPostProcessFailureTraced{false};

@@ -825,6 +825,56 @@ namespace EmEn::Graphics::RenderableInstance
 	}
 
 	bool
+	Abstract::isRefused (const std::vector< RefusedTarget > & refusals, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderer & renderer) noexcept
+	{
+		/* NOTE: The common case, for every instance of every frame: nothing was ever refused. */
+		if ( refusals.empty() )
+		{
+			return false;
+		}
+
+		const auto renderPassHandle = std::bit_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle());
+		const auto retryCount = renderer.failedProgramsRetryCount();
+
+		return std::ranges::any_of(refusals, [&renderTarget, renderPassHandle, retryCount] (const RefusedTarget & refusedTarget) {
+			return refusedTarget.renderTarget == renderTarget.get() && refusedTarget.renderPassHandle == renderPassHandle && refusedTarget.retryCount == retryCount;
+		});
+	}
+
+	void
+	Abstract::refuse (std::vector< RefusedTarget > & refusals, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderer & renderer) noexcept
+	{
+		const RefusedTarget refusal{
+			.renderTarget = renderTarget.get(),
+			.renderPassHandle = std::bit_cast< uint64_t >(renderTarget->framebuffer()->renderPass()->handle()),
+			.retryCount = renderer.failedProgramsRetryCount()
+		};
+
+		if ( const auto refusedIt = std::ranges::find_if(refusals, [&renderTarget] (const RefusedTarget & refusedTarget) {
+			return refusedTarget.renderTarget == renderTarget.get();
+		}); refusedIt != refusals.end() )
+		{
+			*refusedIt = refusal;
+		}
+		else
+		{
+			refusals.push_back(refusal);
+		}
+	}
+
+	bool
+	Abstract::isRefusedForRendering (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderer & renderer) const noexcept
+	{
+		return isRefused(m_refusedTargets, renderTarget, renderer);
+	}
+
+	bool
+	Abstract::isRefusedForShadowCasting (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderer & renderer) const noexcept
+	{
+		return isRefused(m_shadowRefusedTargets, renderTarget, renderer);
+	}
+
+	bool
 	Abstract::isReadyToRender (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept
 	{
 		if ( m_renderable == nullptr || !m_renderable->isReadyForInstantiation() )
@@ -958,6 +1008,16 @@ namespace EmEn::Graphics::RenderableInstance
 
 			if ( !generator.generateShaderProgram(renderer) )
 			{
+				/* NOTE: The instance casts no shadow in this target and is not prepared for it again
+				 * (isRefusedForShadowCasting()); it is NOT broken: its rendering is untouched, nothing is removed. */
+				refuse(m_shadowRefusedTargets, renderTarget, renderer);
+
+				TraceError{TracerTag} <<
+					"Unable to generate the shadow-casting program: the instance casts no shadow in this render target.\n"
+					"  Renderable  : " << m_renderable->name() << "\n"
+					"  RenderTarget: " << renderTarget->id() << " (" << renderTarget->extent().width << "x" << renderTarget->extent().height << ")\n"
+					"  Layer	   : " << layerIndex;
+
 				return false;
 			}
 
@@ -1093,9 +1153,14 @@ namespace EmEn::Graphics::RenderableInstance
 						"  Material	: " << (material != nullptr ? material->name() : "null") << "\n"
 						"  RenderTarget: " << to_string(renderTarget->renderType()) << " (" << renderTarget->extent().width << "x" << renderTarget->extent().height << ")\n"
 						"  RenderPass  : " << to_string(renderPassType) << "\n"
-						"  Layer	   : " << layerIndex;
+						"  Layer	   : " << layerIndex << "\n"
+						"The instance is not drawn in this render target; the others keep it.";
 
-					this->setBroken(errorMessage.str());
+					/* NOTE: Refused for THIS target and not prepared for it again (isRefusedForRendering()); it is NOT
+					 * broken: the other targets keep it, its shadow too, and its component is not removed. */
+					refuse(m_refusedTargets, renderTarget, renderer);
+
+					Tracer::error(TracerTag, errorMessage.str());
 
 					return false;
 				}

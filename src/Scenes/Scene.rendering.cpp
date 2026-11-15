@@ -1474,12 +1474,24 @@ namespace EmEn::Scenes
 			return true; // Continue
 		}
 
+		const auto & renderer = m_AVConsoleManager.graphicsRenderer();
+
+		/* A shadow-casting program of this instance could not be generated for this target: it casts no shadow there and
+		 * is not prepared again (until the target is recreated or Renderer::retryFailedPrograms()). */
+		if ( renderableInstance->isRefusedForShadowCasting(renderTarget, renderer) )
+		{
+			return true; // Continue
+		}
+
 		if ( this->getRenderableInstanceReadyForShadowCasting(renderableInstance, renderTarget) )
 		{
 			return false; // Render
 		}
 
-		/* If the object cannot be loaded, mark it as broken! */
+		/* NOTE: A program that could not be generated refused the instance for this target, and no more: it keeps being
+		 * rendered, its component is not removed. Anything else that keeps it from getting ready (a structural failure:
+		 * no renderable, GPU resources that cannot be created) marks it as broken. */
+		if ( !renderableInstance->isRefusedForShadowCasting(renderTarget, renderer) )
 		{
 			std::stringstream ss;
 			ss << "Unable to get ready the renderable instance (Renderable:" << renderableInstance->renderable()->name() << "') for shadow casting with render-target '" << renderTarget->id() << "'";
@@ -1939,12 +1951,23 @@ namespace EmEn::Scenes
 			return true; // Continue
 		}
 
+		const auto & renderer = m_AVConsoleManager.graphicsRenderer();
+
+		/* A rendering program of this instance could not be generated for this target: it is not drawn there and is not
+		 * prepared again (until the target is recreated or Renderer::retryFailedPrograms()). The other targets keep it. */
+		if ( renderableInstance->isRefusedForRendering(renderTarget, renderer) )
+		{
+			return true; // Continue
+		}
+
 		if ( this->getRenderableInstanceReadyForRendering(renderableInstance, renderTarget) )
 		{
 			return false; // Render
 		}
 
-		/* If the object cannot be loaded, mark it as broken! */
+		/* NOTE: A program that could not be generated refused the instance for this target, and no more (see the shadow
+		 * list). Anything else that keeps it from getting ready marks it as broken: its component is removed. */
+		if ( !renderableInstance->isRefusedForRendering(renderTarget, renderer) )
 		{
 			std::stringstream ss;
 			ss << "Unable to get ready the renderable instance (Renderable:" << renderableInstance->renderable()->name() << "') for rendering with render-target '" << renderTarget->id() << "'";

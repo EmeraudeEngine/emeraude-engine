@@ -1162,7 +1162,7 @@ namespace EmEn::Graphics
 				return Console::CommandResult::success("RenderDoc: frame capture triggered (captured on the next present).");
 			});
 
-		this->bindCommand("retryFailedPrograms", "Forgets the shader programs whose generation failed (a failed program is otherwise refused without a new attempt): each one is generated again at its next request. A renderable instance already marked broken does not ask again.", [this] () {
+		this->bindCommand("retryFailedPrograms", "Forgets the shader programs whose generation failed (a failed program is otherwise refused without a new attempt): each one is generated again at its next request, and an instance refused for a render target is prepared for it again. An instance marked broken (a structural failure) stays so.", [this] () {
 			const auto count = this->retryFailedPrograms();
 
 			if ( count == 0 )

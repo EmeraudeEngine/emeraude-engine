@@ -31,6 +31,7 @@
 #include "emeraude_config.hpp" // IWYU pragma: keep (EMERAUDE_FAULT_INJECTION selects the code below)
 
 /* STL inclusions. */
+#include <atomic> // IWYU pragma: keep (the test build's failure count, EMERAUDE_FAULT_INJECTION)
 #include <charconv> // IWYU pragma: keep (the test build's arguments, EMERAUDE_FAULT_INJECTION)
 #include <string> // IWYU pragma: keep (the test build's injected service name, EMERAUDE_FAULT_INJECTION)
 
@@ -132,6 +133,36 @@ namespace EmEn::FaultInjection
 			return name;
 		}
 
+		/** @brief The text a source must contain for its compilation to fail, empty for any source (same discipline). */
+		[[nodiscard]]
+		std::string &
+		injectedShaderText () noexcept
+		{
+			static std::string text;
+
+			return text;
+		}
+
+		/** @brief How many compilations fail, 0 for every one (same discipline). */
+		[[nodiscard]]
+		uint32_t &
+		injectedShaderFailureLimit () noexcept
+		{
+			static uint32_t limit{0};
+
+			return limit;
+		}
+
+		/** @brief The failures given so far: the compilations run on several threads. */
+		[[nodiscard]]
+		std::atomic< uint32_t > &
+		injectedShaderFailures () noexcept
+		{
+			static std::atomic< uint32_t > count{0};
+
+			return count;
+		}
+
 		/** @brief The delay of the runtime injections (same discipline). */
 		[[nodiscard]]
 		std::chrono::seconds &
@@ -209,6 +240,29 @@ namespace EmEn::FaultInjection
 			injectedShader() = value.value();
 
 			TraceWarning{"FaultInjection"} << "FAULT INJECTION: the compilation of the shader '" << injectedShader() << "' will fail on purpose (" << ShaderCompilationFailureArgument << ").";
+
+			if ( const auto text = arguments.get(ShaderCompilationFailureContainingArgument); text.has_value() && !text->empty() )
+			{
+				injectedShaderText() = text.value();
+
+				TraceWarning{"FaultInjection"} << "FAULT INJECTION: only for a source containing '" << injectedShaderText() << "' (" << ShaderCompilationFailureContainingArgument << ").";
+			}
+
+			if ( const auto count = arguments.get(ShaderCompilationFailureCountArgument); count.has_value() && !count->empty() )
+			{
+				uint32_t limit = 0;
+
+				if ( const auto [pointer, errorCode] = std::from_chars(count->data(), count->data() + count->size(), limit); errorCode == std::errc{} && pointer == count->data() + count->size() )
+				{
+					injectedShaderFailureLimit() = limit;
+
+					TraceWarning{"FaultInjection"} << "FAULT INJECTION: only for its first " << limit << " compilation(s) (" << ShaderCompilationFailureCountArgument << ").";
+				}
+				else
+				{
+					TraceError{"FaultInjection"} << "FAULT INJECTION: '" << count.value() << "' is not a compilation count (" << ShaderCompilationFailureCountArgument << "): every compilation fails.";
+				}
+			}
 		}
 
 		if ( const auto value = arguments.get(RuntimeFailureDelayArgument); value.has_value() && !value->empty() )
@@ -276,9 +330,27 @@ namespace EmEn::FaultInjection
 	}
 
 	bool
-	shaderCompilationFailureInjected (std::string_view shaderName) noexcept
+	shaderCompilationFailureInjected (std::string_view shaderName, std::string_view sourceCode) noexcept
 	{
-		return !injectedShader().empty() && shaderName == injectedShader();
+		if ( injectedShader().empty() || shaderName != injectedShader() )
+		{
+			return false;
+		}
+
+		if ( !injectedShaderText().empty() && sourceCode.find(injectedShaderText()) == std::string_view::npos )
+		{
+			return false;
+		}
+
+		const auto limit = injectedShaderFailureLimit();
+
+		if ( limit == 0 )
+		{
+			return true;
+		}
+
+		/* NOTE: The first 'limit' matching compilations fail, whatever thread runs them. */
+		return injectedShaderFailures().fetch_add(1, std::memory_order_relaxed) < limit;
 	}
 
 	std::chrono::seconds
@@ -336,7 +408,7 @@ namespace EmEn::FaultInjection
 	}
 
 	bool
-	shaderCompilationFailureInjected (std::string_view /*shaderName*/) noexcept
+	shaderCompilationFailureInjected (std::string_view /*shaderName*/, std::string_view /*sourceCode*/) noexcept
 	{
 		return false;
 	}

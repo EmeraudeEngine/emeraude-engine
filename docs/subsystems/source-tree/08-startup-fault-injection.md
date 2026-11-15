@@ -40,7 +40,11 @@ release), and the measure before the fixes.
   the compiler the named shader's source with an `#error` directive appended, so the real failure path runs (the
   annotated source in the log, the notification, `Core::onCoreShaderCompilationFailed()` handed over from the main
   loop); NAME is the shader's name as the log prints it between the parentheses, and the run needs an empty
-  `--cache-directory` (a shader served by the binary cache is never compiled).
+  `--cache-directory` (a shader served by the binary cache is never compiled). Two refinements (2026-11-15):
+  `--inject-shader-compilation-failure-containing=TEXT` fails only the sources containing TEXT (several programs share a
+  shader's name: the final pass WITH its sharpening, `shrpCenter`, and not the one without effects), and
+  `--inject-shader-compilation-failure-count=N` fails the first N matching compilations only — the later ones
+  succeed, so a retry is seen to repair (`Core.RendererService.retryFailedPrograms()`).
   The runner's `--eat-video-memory` is the real test (it fills the GPU).
   `docs/subsystems/vulkan/24-swap-chain-given-up-for-lack-of-video-memory.md`.
 

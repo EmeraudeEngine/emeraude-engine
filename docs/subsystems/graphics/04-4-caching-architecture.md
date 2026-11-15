@@ -136,9 +136,8 @@ generated the GLSL again, compiled it again, wrote the whole annotated source to
   programs — each one is generated again at its next request — and answers how many. Any thread: the request is a flag
   the owning thread serves at its next `hasProgramFailed()`. For a cause that passed (video memory full when the
   pipeline was created) and for development.
-  ⚠️ What no longer asks is not tried again: a renderable instance marked broken stays so (nothing clears
-  `BrokenState`), and one broken flag covers every render target — an instance whose SHADOW program failed is absent
-  from the main view too (item `broken-instance-covers-every-target-and-never-recovers`).
+  It also lifts the refusals the instances keep (next section). An instance marked BROKEN — a structural failure —
+  stays so.
 
 Measured (Linux, RTX 3070 Ti, GCC Release configured with the fault injection, the validation layer loaded, about 18 s
 after the start, `--inject-shader-compilation-failure=NAME` on an empty cache directory):
@@ -161,6 +160,66 @@ report on the memory or its request flag, no lock-order inversion.
 enough there) broke the two files that used the shader stages through it without including them
 (`Saphir/LightGenerator.ShadowMap.cpp`, `Graphics/Material/Helpers.cpp`); a platform file that does the same is found
 by its own compiler only.
+Peers' round 8 (2026-11-15, engine 13d88cb5 + testbed e5f46b58): macOS (Apple M6, MoltenVK 1.4.2, Apple clang with `-Wdocumentation -Werror`) and Windows (RTX 3500 Ada, MSVC 19.44) build Release and Debug with 0 warning — no platform file broke on the lighter generator header — and pass the same protocol: with a tree
+configured for the fault injection, `PostProcessingFragmentShader` failing writes exactly ONE erroneous-GLSL block and
+6 `[Error]` lines in 18 s, `retryFailedPrograms()` answers "1 failed shader program(s) forgotten" and exactly one more
+block follows; MCP conformance 2037 / 0 on both; 0 VUID, exit 0.
+
+### A failed program refuses its instance for ONE render target; the final pass falls back (2026-11-15, owner decisions)
+
+`RenderableInstance::Abstract::BrokenState` means "cannot be loaded in the rendering system and must be removed": the
+scene components (`Visual`, `MultipleVisuals`, `ParticlesEmitter`, `Beam`, `Path`) answer `shouldBeRemoved()` for a
+broken instance and their entity DESTROYS them at its next logic cycle. Until this change a program that could not be
+generated broke the instance — whatever the target: measured, four components destroyed and the floor refused for the
+main view at every frame because their SHADOW-CASTING program failed (the shadow pass runs first in a frame), and
+nothing could bring a destroyed component back.
+
+- **A program failure is now a refusal for that render target and that purpose, nothing more.** The instance keeps two
+  small lists beside `m_readyTargets` — `m_refusedTargets` (rendering) and `m_shadowRefusedTargets` (shadow casting): the
+  target, the render pass it was tried for and the renderer's retry count then. `getReadyForRender()` and
+  `getReadyForShadowCasting()` record the refusal with ONE error naming the renderable, the target and the layer; the
+  scene's per-frame checks skip a refused instance first (`isRefusedForRendering()` / `isRefusedForShadowCasting()`: a
+  test of an empty vector for every healthy instance) and no longer break an instance for it.
+  A failed shadow program: the instance casts no shadow in that target and is drawn everywhere. A failed rendering
+  program: the instance is absent from that target, drawn in the others, and still casts its shadow.
+- **What lifts a refusal**: the target's render pass recreated (a resize: the program's key changes), or
+  `Core.RendererService.retryFailedPrograms()` — `Renderer::failedProgramsRetryCount()` is an atomic count the instance
+  compares, so the retry reaches an instance that had stopped asking.
+- **Broken stays structural**: no renderable, GPU resources that cannot be created (the skinning buffer, the instance
+  VBO), no render pass type. Those still remove the component, as before.
+- **The final pass falls back.** `PostProcessor::executeDirectPostProcessEffects()` draws the image the screen shows;
+  when the program composed from the display and lens effects cannot be generated, it draws with the program WITHOUT
+  effects (the generator's passthrough, which no effect can break) — one error, one warning ("The final image is drawn
+  WITHOUT its N display and lens effect(s)"), then silence. Only when that one fails too is there no picture (the
+  renderer's warning, once per episode).
+
+Measured (Linux, RTX 3070 Ti, GCC Release with the fault injection, the validation layer loaded, an empty cache
+directory; `getRenderStatistics()` read 10 s after the start; a count on the injection makes the first compilations
+fail and the later ones succeed):
+
+| `light-and-shadow-debug` | View list | Shadow lists | Components destroyed |
+|---|---|---|---|
+| Control | 7 instances, 673 958 triangles | 30 instances, 4 033 408 triangles | 0 |
+| `ShadowCastingVertexShader` fails (before this change) | the floor refused at every frame | — | 4 |
+| `ShadowCastingVertexShader` fails | 7 instances, 673 958 triangles | 0 | 0 |
+| — after `retryFailedPrograms()` (the compilations succeed) | 7 instances, 673 958 triangles | 30 instances, 4 033 408 triangles | 0 |
+| `RenderableInstanceAmbientPassFragmentShader` fails once | 6 instances, 673 956 triangles | 30 instances, 4 033 408 triangles | 0 |
+| — after `retryFailedPrograms()` | 7 instances, 673 958 triangles | 30 instances, 4 033 408 triangles | 0 |
+| — failing at every compilation | 1 instance (the unlit one) | 30 instances, 4 033 408 triangles | 0 |
+
+Fifteen shadow programs fail in that scene (five instances, three shadow maps): each is reported once (90 error lines
+in all), then nothing; a retry while they still fail reports each once more.
+
+| `default`, the final pass (`PostProcessingFragmentShader`), a screenshot 12 s after the start | Picture |
+|---|---|
+| Control | mean luma 120.57, 6295 distinct colours |
+| The composed program AND the one without effects fail (no fallback possible: the state before this change) | black: 100 % of the pixels at 0 |
+| Only the composed program fails (`…-containing=shrpCenter`) | mean luma 120.57, mean absolute difference from the control 0.01 / 255, no pixel further than 8: the sharpening alone is missing (5541 colours) |
+| — after `retryFailedPrograms()` (the compilation succeeds) | 6294 distinct colours, mean absolute difference 0.004 / 255 |
+
+0 VUID and exit 0 in every run. The commit gate is green (GCC Release and Debug, clang, clang-tidy, cppcheck,
+include-what-you-use); MCP conformance 2037 checks, 0 failed; ThreadSanitizer (`default`, llvmpipe, the retry asked five
+times while the scene renders): no report on the retry count or the refusals, no lock-order inversion.
 
 The post-process passes keep their own variant caches, keyed the same way: `CombinePass::m_variants` and
 `DenoisePass::m_variants` (a generated fragment shader, its pipeline and per-frame sets per group of effects). They are

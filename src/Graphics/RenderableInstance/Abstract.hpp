@@ -310,6 +310,31 @@ namespace EmEn::Graphics::RenderableInstance
 			bool isReadyToRender (const std::shared_ptr< RenderTarget::Abstract > & renderTarget) const noexcept;
 
 			/**
+			 * @brief Returns whether a rendering program of this instance could not be generated for this render target:
+			 * the instance is not prepared for it again — it stays in the other targets, nothing is removed — until the
+			 * target's render pass is recreated or Renderer::retryFailedPrograms() is asked.
+			 * @note A failed program is not a broken instance (isBroken(): a structural failure, the component is removed).
+			 * @note Render thread (the render lists, as getReadyForRender()).
+			 * @param renderTarget A reference to a render target smart pointer.
+			 * @param renderer A reference to the graphics renderer (its retry count).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isRefusedForRendering (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderer & renderer) const noexcept;
+
+			/**
+			 * @brief Returns whether a shadow-casting program of this instance could not be generated for this render
+			 * target: the instance casts no shadow there, and is not prepared for it again until the target's render pass
+			 * is recreated or Renderer::retryFailedPrograms() is asked. Its rendering is untouched.
+			 * @note Render thread (the shadow lists, as getReadyForShadowCasting()).
+			 * @param renderTarget A reference to a render target smart pointer.
+			 * @param renderer A reference to the graphics renderer (its retry count).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool isRefusedForShadowCasting (const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderer & renderer) const noexcept;
+
+			/**
 			 * @brief Returns whether this renderable instance is unable to get ready for rendering.
 			 * @return bool
 			 */
@@ -1778,8 +1803,42 @@ namespace EmEn::Graphics::RenderableInstance
 				 * (Renderable::Abstract::programCacheGeneration()): a removal since makes the instance prepare again. */
 				uint32_t programCacheGeneration{0};
 			};
+			/** @brief A render target for which a program of this instance could not be generated, the render pass it was
+			 * tried for and the renderer's retry count then (Renderer::failedProgramsRetryCount()): another render pass or
+			 * another count lifts the refusal. The pointer is compared, never dereferenced. */
+			struct RefusedTarget final
+			{
+				const RenderTarget::Abstract * renderTarget{nullptr};
+				uint64_t renderPassHandle{0};
+				uint32_t retryCount{0};
+			};
+
+			/**
+			 * @brief Returns whether a refusal holds for this target, its current render pass and this retry count.
+			 * @param refusals The refusals of one purpose.
+			 * @param renderTarget A reference to a render target smart pointer.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool isRefused (const std::vector< RefusedTarget > & refusals, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Records a refusal for this target (its entry is replaced: one per target).
+			 * @param refusals The refusals of one purpose.
+			 * @param renderTarget A reference to a render target smart pointer.
+			 * @param renderer A reference to the graphics renderer.
+			 */
+			static void refuse (std::vector< RefusedTarget > & refusals, const std::shared_ptr< RenderTarget::Abstract > & renderTarget, const Renderer & renderer) noexcept;
+
 			/** @brief The targets getReadyForRender() succeeded for (isReadyToRender()); render thread only. */
 			std::vector< ReadyTarget > m_readyTargets;
+			/** @brief The targets getReadyForRender() could not generate a program for (isRefusedForRendering()); render
+			 * thread only. */
+			std::vector< RefusedTarget > m_refusedTargets;
+			/** @brief The shadow targets getReadyForShadowCasting() could not generate a program for
+			 * (isRefusedForShadowCasting()); render thread only. */
+			std::vector< RefusedTarget > m_shadowRefusedTargets;
 			/** @brief The shadow targets isReadyToCastShadows() found every shadow program for: its next calls skip the
 			 * per-layer key and cache lookups. Render thread only (the shadow lists are built there). */
 			mutable std::vector< ReadyTarget > m_shadowReadyTargets;

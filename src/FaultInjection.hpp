@@ -87,6 +87,16 @@ namespace EmEn::FaultInjection
 	 * never compiled: run it on an empty cache directory. */
 	constexpr auto ShaderCompilationFailureArgument{"--inject-shader-compilation-failure"};
 
+	/** @brief Narrows the shader compilation failure to the sources containing a text:
+	 * `--inject-shader-compilation-failure-containing=TEXT` (several programs share a shader's name: this picks the
+	 * variant, e.g. the final pass WITH an effect and not the one without). */
+	constexpr auto ShaderCompilationFailureContainingArgument{"--inject-shader-compilation-failure-containing"};
+
+	/** @brief Limits the shader compilation failure to the first N matching compilations:
+	 * `--inject-shader-compilation-failure-count=N` (default: every one). The compilations after them succeed: a retry
+	 * is then seen to repair. */
+	constexpr auto ShaderCompilationFailureCountArgument{"--inject-shader-compilation-failure-count"};
+
 	/** @brief The delay of the runtime injections after the main loop started, in seconds:
 	 * `--inject-runtime-failure-delay=N` (default DefaultRuntimeFailureDelay; time to load a scene before an emergency
 	 * save is tested). */
@@ -164,14 +174,16 @@ namespace EmEn::FaultInjection
 	EMEN_API uint32_t swapChainImageCountInjected () noexcept;
 
 	/**
-	 * @brief Returns whether the compilation of this shader is made to fail. Always false in a build without
+	 * @brief Returns whether this compilation of this shader is made to fail. Always false in a build without
 	 * EMERAUDE_FAULT_INJECTION.
-	 * @note Read-only after configure(): any thread.
+	 * @note Any thread: the name and the text are read-only after configure(), the count of the failures given so far
+	 * is atomic. A call that answers true counts as one failure.
 	 * @param shaderName The shader's name.
+	 * @param sourceCode The shader's source code (the optional text filter).
 	 * @return bool
 	 */
 	[[nodiscard]]
-	EMEN_API bool shaderCompilationFailureInjected (std::string_view shaderName) noexcept;
+	EMEN_API bool shaderCompilationFailureInjected (std::string_view shaderName, std::string_view sourceCode) noexcept;
 
 	/**
 	 * @brief Returns the delay of the runtime injections after the main loop started.

@@ -987,7 +987,7 @@ namespace EmEn::Saphir
 		 * directive, so the real failure path runs (the log, the notification, the application's hook). */
 		std::string injectedSourceCode;
 
-		if ( FaultInjection::shaderCompilationFailureInjected(shaderName) )
+		if ( FaultInjection::shaderCompilationFailureInjected(shaderName, sourceCode) )
 		{
 			injectedSourceCode = sourceCode;
 			injectedSourceCode += "\n#error Injected by the fault injection (--inject-shader-compilation-failure).\n";

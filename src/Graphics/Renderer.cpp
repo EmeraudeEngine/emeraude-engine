@@ -1770,10 +1770,11 @@ namespace EmEn::Graphics
 	Renderer::hasProgramFailed (const Saphir::Generator::ProgramKey & programKey) noexcept
 	{
 		/* NOTE: A retry asked from another thread (the console) is served here, by the thread that owns the memory. */
-		if ( m_failedProgramsRetryRequested.exchange(false, std::memory_order_acq_rel) )
+		if ( const auto asked = m_failedProgramsRetryCount.load(std::memory_order_acquire); asked != m_failedProgramsRetryServed )
 		{
 			m_failedPrograms.clear();
 			m_failedProgramCount.store(0, std::memory_order_release);
+			m_failedProgramsRetryServed = asked;
 		}
 
 		return m_failedPrograms.contains(programKey);
@@ -1793,7 +1794,7 @@ namespace EmEn::Graphics
 	{
 		const auto count = m_failedProgramCount.load(std::memory_order_acquire);
 
-		m_failedProgramsRetryRequested.store(true, std::memory_order_release);
+		m_failedProgramsRetryCount.fetch_add(1, std::memory_order_acq_rel);
 
 		return count;
 	}
