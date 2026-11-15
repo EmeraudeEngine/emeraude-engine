@@ -70,6 +70,7 @@ namespace EmEn
 		class CombinePass;
 		class DenoisePass;
 		class DirectPostProcessEffect;
+		class FrameView;
 		class GrabPass;
 		class OverflowCensus;
 		class PostProcessStack;
@@ -407,6 +408,8 @@ namespace EmEn::Graphics
 			 * After execution, the descriptor set is updated to point to the chain output.
 			 * @param commandBuffer A reference to the active command buffer.
 			 * @param stack The scene's post-process stack.
+			 * @param frameView The view of the frame: the matrices that rasterized its depth buffer (Renderer::frameView()).
+			 * The chain's view reconstruction block is built from it, and every effect receives it (FrameContext::frameView).
 			 * @param lightSet A reference to the scene light set.
 			 * @param activeCamera The scene's active camera (photographic authority).
 			 * @param skyLuminance The scene background's luminance in nits, 0 when there is no
@@ -418,7 +421,7 @@ namespace EmEn::Graphics
 			 * @param phase Which half of the chain runs (ChainPhase). Default: the whole chain.
 			 * @return bool
 			 */
-			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium, const Scenes::CloudSet * clouds, ChainPhase phase = ChainPhase::Whole) const noexcept;
+			bool executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const FrameView & frameView, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium, const Scenes::CloudSet * clouds, ChainPhase phase = ChainPhase::Whole) const noexcept;
 
 			/**
 			 * @brief Writes a chain output back into the internal scene colour image.

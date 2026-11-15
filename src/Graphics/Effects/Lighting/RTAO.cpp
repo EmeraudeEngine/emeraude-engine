@@ -36,7 +36,6 @@
 #include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/IndirectPostProcessEffect.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "Saphir/Types.hpp"
@@ -45,8 +44,8 @@
 #include "StaticVector.hpp"
 
 /* Local inclusions. */
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
@@ -451,18 +450,17 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		/* ---- Pass 1: the occlusion, traced or derived ---- */
 		{
-			/* Use readStateIndex for the SAME view matrix that produced the depth buffer. */
-			const auto readStateIndex = this->renderer().currentReadStateIndex();
-			const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
-			const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
-			const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
+			/* The frame's view: the SAME view matrix that produced the depth buffer. */
+			const auto & frameView = *context.frameView;
+			const auto & viewMat = frameView.viewMatrix();
+			const auto & projMat = frameView.projectionMatrix();
 			/* ⚠️⚠️ CAMERA-RELATIVE: projection × view ROTATION (the infinity view), inverted — the shader
 			 * unprojects an offset from the eye and adds the camera position. The float inverse of the full
 			 * view-projection put the ray origins centimetres to metres off the surface far from the world
 			 * origin (docs/caution-points.md § The float inverse of the full view-projection). */
-			const auto invRelativeViewProj = (projMat * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
+			const auto invRelativeViewProj = (projMat * frameView.infinityViewMatrix()).inverse();
 			const auto * ivp = invRelativeViewProj.data();
-			const auto & cameraPosition = viewMatrices.position(readStateIndex);
+			const auto & cameraPosition = frameView.position();
 
 			/* Inverse view rotation for normal transformation (view → world). */
 			const auto invView = viewMat.inverse();

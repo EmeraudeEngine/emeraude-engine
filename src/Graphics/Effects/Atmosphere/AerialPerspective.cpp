@@ -35,11 +35,10 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
 #include "Graphics/StorageTexture3D.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Saphir/Types.hpp"
@@ -236,9 +235,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 		/* ⚠️ The read state's matrices: the ones that produced the depth buffer, and the ones the volume was built with
 		 * (Renderer::renderSkyAtmosphere()). */
-		const auto readStateIndex = this->renderer().currentReadStateIndex();
-		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
-		const auto invRelativeViewProj = (viewMatrices.projectionMatrix(readStateIndex) * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
+		const auto & frameView = *context.frameView;
+		const auto invRelativeViewProj = (frameView.projectionMatrix() * frameView.infinityViewMatrix()).inverse();
 
 		PushConstants pushConstants{
 			.invRelativeViewProj = {},

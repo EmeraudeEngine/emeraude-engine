@@ -191,6 +191,7 @@
 #include "Graphics/FontResource.hpp"
 #include "Graphics/FrameCapture.hpp"
 #include "Graphics/FrameDiagnostics.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Frustum.hpp"
 #include "Graphics/GIDenoiser.hpp"

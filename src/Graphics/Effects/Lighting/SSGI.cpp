@@ -39,9 +39,8 @@
 #include "BlobTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "PrimaryServices.hpp"
@@ -1025,15 +1024,14 @@ namespace EmEn::Graphics::Effects::Lighting
 		const auto noiseFrameIndex = static_cast< float >(m_denoiser.noiseFrameIndex());
 
 		/* The pre-exposure rescales the denoiser's history (D5); SSGI's trace reads the pre-exposed scene colour. */
-		static_cast< void >(m_denoiser.updateFrameData(frameIndex, GIDenoiser::FrameInputs{.preExposure = context.preExposure}));
+		static_cast< void >(m_denoiser.updateFrameData(frameIndex, *context.frameView, GIDenoiser::FrameInputs{.preExposure = context.preExposure}));
 
 		/* ---- Pass 1: sky visibility (GTAO horizon search) ----
 		 * FIRST: the trace reads its result. */
 		if ( m_skyVisibilityActive )
 		{
-			/* Use readStateIndex for the SAME view matrix that produced the depth buffer. */
-			const auto readStateIndex = this->renderer().currentReadStateIndex();
-			const auto & viewMat = this->renderer().mainRenderTarget()->viewMatrices().viewMatrix(readStateIndex, false, 0);
+			/* The frame's view: the SAME view matrix that produced the depth buffer. */
+			const auto & viewMat = context.frameView->viewMatrix();
 			const auto invView = viewMat.inverse();
 
 			const HorizonPushConstants pc{

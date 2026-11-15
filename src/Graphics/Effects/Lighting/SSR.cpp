@@ -41,9 +41,8 @@
 #include "BlobTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "PrimaryServices.hpp"
@@ -1688,9 +1687,8 @@ namespace EmEn::Graphics::Effects::Lighting
 			}
 
 			/* Compute inverse view matrix for cubemap fallback.
-			 * Use readStateIndex to match the view matrix that produced the depth buffer. */
-			const auto readStateIndex = this->renderer().currentReadStateIndex();
-			const auto & viewMat = this->renderer().mainRenderTarget()->viewMatrices().viewMatrix(readStateIndex, false, 0);
+			 * The frame's view: the matrices that produced the depth buffer. */
+			const auto & viewMat = context.frameView->viewMatrix();
 			const auto invView = viewMat.inverse();
 			const auto * inv = invView.data();
 

@@ -304,7 +304,8 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		m_cloudSet.recordShadowMap(commandBuffer, renderer, m_bindlessTextureSet, *sun, renderer.currentReadStateIndex());
+		/* The state THIS frame latched (beginRenderFrame()): the scene's own, never a copy kept by the renderer. */
+		m_cloudSet.recordShadowMap(commandBuffer, renderer, m_bindlessTextureSet, *sun, m_frameReadStateIndex);
 	}
 
 	float

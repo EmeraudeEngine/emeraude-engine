@@ -77,6 +77,7 @@ namespace EmEn
 
 	namespace Graphics
 	{
+		class FrameView;
 		class IntermediateRenderTarget;
 		struct RayTracingFrame;
 		class Renderer;
@@ -469,6 +470,14 @@ namespace EmEn::Graphics
 				 * ⚠️ An effect whose requiresRayTracing() is true is recorded ONLY when this is set — the executor's
 				 * gate, PostProcessStack::canOccupantRun() — so it dereferences it without a test. */
 				const RayTracingFrame * rayTracing{nullptr};
+				/* The VIEW of this frame (Graphics/FrameView.hpp): the main target's view, infinity view, projections and
+				 * position at the render state the scene latched — the matrices that rasterized the depth above — and that
+				 * state's index, for what the logic thread publishes per state beside the view (a light's block, a cloud).
+				 * NEVER null in the chain: it runs only for the frame of a scene, and the renderer hands its view to
+				 * PostProcessor::executeIndirectPostProcessEffects() by reference — an effect dereferences it without a test.
+				 * ⚠️ THE way an effect reads the camera on the CPU side: never a render target of the renderer with a state
+				 * index of its own (scenes doc 12 § View Matrix State Index — Critical Trap). */
+				const FrameView * frameView{nullptr};
 				/* The frame's VIEW RECONSTRUCTION (Effects/Shared/ViewReconstructionGLSL.hpp): the projection, its inverse
 				 * and the camera-relative inverse view-projection of the read state, in this frame's buffer. THE way an
 				 * effect turns a depth into a position (owner decision 2026-10-25: never a scalar linearisation; the

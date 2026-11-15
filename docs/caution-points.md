@@ -6534,6 +6534,19 @@ After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and
 > object a scene owns across frames; an object that belongs to a family is created, released and asked through that
 > family's owner — never a pointer of its own in the renderer.
 
+### The frame's view: an effect holds neither a state index nor a render target (2026-11-15)
+
+> The renderer kept a COPY of the scene's read-state index (`m_currentReadStateIndex`), written in the MIDDLE of the
+> frame and read back by 16 files. Whatever ran before that line read the previous frame's: the clouds' shadow map was
+> marched on the clouds of a slot the frame had handed back (`Scene::recordCloudShadowMap()`), and the direct path
+> without post-processing archived an older slot. The copy is gone: `Graphics::FrameView` reads the main target's view
+> matrices at the slot the scene latched (`Scene::beginRenderFrame()`), the renderer makes one from the scene wherever
+> a frame needs it (`Renderer::frameView()`), and the chain hands it to the effects in `FrameContext::frameView`
+> (scenes doc 12 § *View Matrix State Index — Critical Trap*).
+> ⚠️ A new effect reads the camera through `context.frameView` — never `mainRenderTarget()->viewMatrices()`, never an
+> index-less overload (it reads the LOGIC state). ⚠️ A state the renderer copies from the scene has a write time, and
+> everything before it reads the old one: do not add one — ask the scene, or pass a value made from it.
+
 ### A LoadFinished handler runs on the loading thread: it records, the logic thread acts (2026-11-15)
 
 > `Resources::ResourceTrait` emits `LoadFinished` on the pool worker that completed the last dependency, and the

@@ -35,9 +35,7 @@
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/IndirectPostProcessEffect.hpp"
 #include "Graphics/RayTracingFrame.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "PrimaryServices.hpp"
@@ -58,6 +56,7 @@
 #include <utility>
 
 /* Local inclusions. */
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Scenes/LightSet.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -1698,20 +1697,19 @@ namespace EmEn::Graphics::Effects::Lighting
 		/* ---- Pass 1: Ray Trace ---- */
 		{
 			/* Compute inverse view-projection for bulletproof NDC → world reconstruction.
-			 * CRITICAL: Use the readStateIndex to get the SAME view matrix that produced
+			 * CRITICAL: use the frame's view to get the SAME view matrix that produced
 			 * the depth buffer. Using logicState would read the next tick's camera position,
 			 * causing world position mismatch → flickering reflections. */
-			const auto readStateIndex = this->renderer().currentReadStateIndex();
-			const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
-			const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
-			const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
+			const auto & frameView = *context.frameView;
+			const auto & viewMat = frameView.viewMatrix();
+			const auto & projMat = frameView.projectionMatrix();
 			/* ⚠️⚠️ CAMERA-RELATIVE: projection × view ROTATION (the infinity view), inverted — the shader
 			 * unprojects an offset from the eye and adds the camera position. The float inverse of the full
 			 * view-projection put the ray origins centimetres to metres off the surface far from the world
 			 * origin (docs/caution-points.md § The float inverse of the full view-projection). */
-			const auto invRelativeViewProj = (projMat * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
+			const auto invRelativeViewProj = (projMat * frameView.infinityViewMatrix()).inverse();
 			const auto * ivp = invRelativeViewProj.data();
-			const auto & cameraPosition = viewMatrices.position(readStateIndex);
+			const auto & cameraPosition = frameView.position();
 
 			/* Inverse view rotation for normal transformation (view → world). */
 			const auto invView = viewMat.inverse();
@@ -1834,7 +1832,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * deterministic but half-res and fed by a G-buffer the TAA jitters — a reflected silhouette
 		 * aliased at half resolution, and TAA cannot reproject a reflection (SettingKeys.hpp § Temporal).
 		 * Returns the raw trace when the chain is off. */
-		static_cast< void >(m_denoiser.updateFrameData(frameIndex, GIDenoiser::FrameInputs{.preExposure = context.preExposure}));
+		static_cast< void >(m_denoiser.updateFrameData(frameIndex, *context.frameView, GIDenoiser::FrameInputs{.preExposure = context.preExposure}));
 		m_temporalOutput = m_denoiser.recordResolve(commandBuffer, m_traceTarget, context, &m_coneTexture);
 
 		/* ---- Pass 1b: pre-convolved reflection pyramid build (glossy cone source) ---- */

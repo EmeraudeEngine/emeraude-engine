@@ -58,6 +58,7 @@
 #include "FastJSON.hpp"
 #include "FaultInjection.hpp"
 #include "FileSystem.hpp"
+#include "FrameView.hpp"
 #include "GrabPass.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/CubemapResource.hpp"
@@ -2302,10 +2303,10 @@ namespace EmEn::Graphics
 		/* Archive the view state consumed by this frame (frame-history contract).
 		 * MUST happen after the frame's command buffer is recorded: during the recording of
 		 * frame N, temporal effects (RTGI reprojection) read the archive holding frame N-1.
-		 * m_currentReadStateIndex was set by the rendering strategy above. */
+		 * The state the scene latched for this frame: the one every pass of it read. */
 		if ( scene != nullptr )
 		{
-			this->mainRenderTarget()->viewMatrices().archiveStateAfterRendering(m_currentReadStateIndex);
+			this->mainRenderTarget()->viewMatrices().archiveStateAfterRendering(scene->frameReadStateIndex());
 		}
 
 		/* Frame capture (screenshot, temporal capture): the swap-chain image is complete, UI included, and still
@@ -2532,11 +2533,7 @@ namespace EmEn::Graphics
 			m_postProcessor.recordBlit(*commandBuffer);
 
 			/* Bind what THIS frame traces — the structure it just built and the scene's buffers — for the post-process
-			 * effects (frameRayTracing(); nothing is bound when the scene has no structure).
-			 * Capture the read state index so post-process effects (RTR) use view matrices
-			 * consistent with the depth buffer rendered this frame. */
-			m_currentReadStateIndex = scenePtr->preparedReadStateIndex();
-
+			 * effects (frameRayTracing(); nothing is bound when the scene has no structure). */
 			m_rayTracing.bindFrame(m_currentFrameIndex, scenePtr->sceneMetaData(), scenePtr->lightSet());
 
 			/* The radiance cache is refreshed HERE: after the TLAS build and the RT set of the
@@ -2549,7 +2546,7 @@ namespace EmEn::Graphics
 			/* Process scene effects (multi-pass). */
 			if ( scenePtr->hasPostProcessStack() )
 			{
-				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr));
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr));
 			}
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -2735,13 +2732,9 @@ namespace EmEn::Graphics
 
 		/* Bind what THIS frame traces — the structure it just built and the scene's buffers — for the post-process
 		 * effects (frameRayTracing(); nothing is bound when the scene has no structure, or without a scene).
-		 * Capture the read state index so post-process effects (RTR) use view matrices
-		 * consistent with the depth buffer rendered this frame.
 		 * ⚠️ BEFORE the pre-translucency half below: RTGI traces there. */
 		if ( scenePtr != nullptr )
 		{
-			m_currentReadStateIndex = scenePtr->preparedReadStateIndex();
-
 			m_rayTracing.bindFrame(m_currentFrameIndex, scenePtr->sceneMetaData(), scenePtr->lightSet());
 
 			/* The radiance cache is refreshed HERE: after the TLAS build and the RT set of the frame,
@@ -2767,7 +2760,7 @@ namespace EmEn::Graphics
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain/PreTranslucency"};
 
 			m_postProcessor.recordBlit(*commandBuffer);
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), ChainPhase::PreTranslucency);
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), ChainPhase::PreTranslucency);
 		}
 
 		/* Grab pass: capture the scene from the internal target for TranslucentGB refraction.
@@ -2827,7 +2820,7 @@ namespace EmEn::Graphics
 
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain"};
 
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), cutFrame ? ChainPhase::PostTranslucency : ChainPhase::Whole);
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), cutFrame ? ChainPhase::PostTranslucency : ChainPhase::Whole);
 		}
 
 		/* RP-final (swap-chain offscreen-composite, UNDEFINED + CLEAR): Draw the PP fullscreen
@@ -3919,24 +3912,24 @@ namespace EmEn::Graphics
 		FrameCapture::FrameMetadata metadata{};
 		metadata.rendererFrame = m_renderedFrameSerial;
 
-		if ( const auto mainTarget = this->mainRenderTarget(); mainTarget != nullptr )
-		{
-			const auto & viewMatrices = mainTarget->viewMatrices();
-			const auto & jitter = viewMatrices.projectionJitter();
-			const auto & position = viewMatrices.position(m_currentReadStateIndex);
-			const auto & view = viewMatrices.viewMatrix(m_currentReadStateIndex, false, 0);
+		const auto & jitter = m_swapChain->viewMatrices().projectionJitter();
 
-			metadata.jitterNDC = {jitter[X], jitter[Y]};
+		metadata.jitterNDC = {jitter[X], jitter[Y]};
+
+		if ( scene != nullptr )
+		{
+			/* The view of the frame: without a scene nothing was viewed, and the metadata keeps its defaults. */
+			const auto frameView = this->frameView(*scene);
+			const auto & position = frameView.position();
+			const auto & view = frameView.viewMatrix();
+
 			metadata.cameraPosition = {position[X], position[Y], position[Z]};
 
 			for ( size_t index = 0; index < 16; ++index )
 			{
 				metadata.viewMatrix[index] = view[index];
 			}
-		}
 
-		if ( scene != nullptr )
-		{
 			if ( const auto camera = scene->activeCamera(); camera != nullptr )
 			{
 				metadata.aperture = camera->aperture();
@@ -4082,6 +4075,12 @@ namespace EmEn::Graphics
 		}
 	}
 
+	FrameView
+	Renderer::frameView (const Scenes::Scene & scene) const noexcept
+	{
+		return FrameView{m_swapChain->viewMatrices(), scene.frameReadStateIndex()};
+	}
+
 	void
 	Renderer::publishFrameDiagnostics (Scenes::Scene * scene) noexcept
 	{
@@ -4090,10 +4089,11 @@ namespace EmEn::Graphics
 
 		/* The layout the chain's view block was built from (PostProcessor: the main target's READ-state projection):
 		 * the marching effects recorded their FAST variants when it is sparse (graphics doc 13-12 § 41). */
-		if ( const auto mainTarget = this->mainRenderTarget(); mainTarget != nullptr )
+		if ( scene != nullptr )
 		{
 			std::array< float, 16 > projection{};
-			const auto & matrix = mainTarget->viewMatrices().projectionMatrix(m_currentReadStateIndex);
+			const auto frameView = this->frameView(*scene);
+			const auto & matrix = frameView.projectionMatrix();
 
 			std::copy_n(matrix.data(), projection.size(), projection.begin());
 
@@ -4187,16 +4187,10 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		/* The volume is centred on the camera: its position is the inverse view's translation, at
-		 * the read state the frame was prepared with — the matrices the traced effects use. */
-		const auto renderTarget = this->mainRenderTarget();
-
-		if ( renderTarget == nullptr )
-		{
-			return;
-		}
-
-		const auto invView = renderTarget->viewMatrices().viewMatrix(m_currentReadStateIndex, false, 0).inverse();
+		/* The volume is centred on the camera: its position is the inverse view's translation, in
+		 * the frame's view — the matrices the traced effects use. */
+		const auto frameView = this->frameView(*scene);
+		const auto invView = frameView.viewMatrix().inverse();
 		const auto * inv = invView.data();
 
 		/* The raster's ambient term, as the traced effects add it at their hits: the EFFECTIVE

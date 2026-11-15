@@ -119,6 +119,7 @@ namespace EmEn
 	{
 		class DummyColorProjectionTexture;
 		class DummyShadowTexture;
+		class FrameView;
 		class IBLTexture;
 		class LTCTexture;
 		class GrabPass;
@@ -1176,20 +1177,6 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the double-buffer read state index for the current frame.
-			 * @note Set from Scene::preparedReadStateIndex() before post-processing.
-			 *	   Use this in post-process effects (e.g. RTR) to read view matrices
-			 *	   consistent with the depth buffer.
-			 * @return uint32_t
-			 */
-			[[nodiscard]]
-			uint32_t
-			currentReadStateIndex () const noexcept
-			{
-				return m_currentReadStateIndex;
-			}
-
-			/**
 			 * @brief Returns the physical sky's atmosphere whose frame (sky-view, aerial perspective volume) THIS frame
 			 * submitted, or nullptr: the chain's AerialPerspective effect samples nothing else.
 			 * @note RENDER THREAD, after renderSkyAtmosphere() (the chain, the scene-effects sync). The slot keeps the
@@ -2083,7 +2070,6 @@ namespace EmEn::Graphics
 			uint32_t m_currentFrameIndex{0};
 			/** @brief The swap-chain image beginFrame() acquired, for renderFrame() (render thread only). */
 			std::optional< uint32_t > m_acquiredImageIndex;
-			uint32_t m_currentReadStateIndex{0};
 			/** @brief Position in the Halton (2,3) projection jitter sequence (TAA), advanced once per rendered frame. */
 			uint32_t m_temporalJitterIndex{0};
 			const uint64_t m_timeout{std::chrono::duration_cast< std::chrono::nanoseconds >(std::chrono::milliseconds(60'000)).count()};
@@ -2190,6 +2176,20 @@ namespace EmEn::Graphics
 			 * @param readStateIndex The render state index the frame latched (Scenes::Scene::frameReadStateIndex()).
 			 */
 			void updateSurfaceGeometries (uint32_t readStateIndex) noexcept;
+
+			/**
+			 * @brief RENDER THREAD. Returns the view of the frame being rendered for a scene: the main render target's view
+			 * matrices at the render state that scene latched for this frame (Scenes::Scene::beginRenderFrame()).
+			 * @note The truth is the scene's latch, and this reads it: whoever needs the frame's view makes one here, at any
+			 * point of the frame, and gets the same one. The renderer keeps NO copy of the state index — it kept one
+			 * (m_currentReadStateIndex), written in the middle of the frame: what ran before that line read the previous
+			 * frame's (the cloud shadow map), and the direct path without post-processing never wrote it.
+			 * @pre A frame is being rendered (renderFrame(), past the acquired image): the swap-chain exists.
+			 * @param scene A reference to the scene the frame renders.
+			 * @return FrameView
+			 */
+			[[nodiscard]]
+			FrameView frameView (const Scenes::Scene & scene) const noexcept;
 
 			/**
 			 * @brief RENDER THREAD. Composes the frame's diagnostics and publishes them to the renderer's board and to

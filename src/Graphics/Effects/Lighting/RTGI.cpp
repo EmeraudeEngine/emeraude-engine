@@ -49,9 +49,8 @@
 #include "Settings.hpp"
 
 /* Local inclusions. */
-#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -982,13 +981,13 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * ⚠️ The REAL far plane of the main view (Core/Graphics/ViewDistance), never the chain's former frozen
 		 * 1000 m copy: until 2026-10-25 geometry between 1 km and the view distance could not hide the sky
 		 * (graphics doc 13-12 § 41). */
-		static_cast< void >(m_denoiser.updateFrameData(frameIndex, GIDenoiser::FrameInputs{
+		static_cast< void >(m_denoiser.updateFrameData(frameIndex, *context.frameView, GIDenoiser::FrameInputs{
 			.traceMaxDistance = m_parameters.maxDistance,
 			.traceBias = m_parameters.bias,
 			.traceSampleCount = static_cast< float >(m_parameters.sampleCount),
 			.bounceStrength = m_parameters.multiBounceEnabled ? m_parameters.multiBounceStrength : 0.0F,
 			.skyLuminance = context.skyLuminance,
-			.skyDistance = this->renderer().mainRenderTarget()->viewMatrices().farPlane(),
+			.skyDistance = context.frameView->farPlane(),
 			/* Ambient-occlusion lane: the CONSUMER's range, handed over by the stack's slot
 			 * pairing (0 = no consumer this frame, the shader publishes the neutral 1.0). */
 			.occlusionMaxDistance = m_occlusionLaneRange,

@@ -40,10 +40,10 @@
 #include "Graphics/Effects/Shared/CSMSamplingGLSL.hpp"
 #include "Graphics/Effects/Shared/MarchDitherGLSL.hpp"
 #include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesCascadedUBO.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "PixelFactory/Color.hpp"
@@ -413,11 +413,10 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
-		/* The camera's forward axis (the cascade selection). readStateIndex matches the view matrix that produced the
+		/* The camera's forward axis (the cascade selection), from the frame's view: the matrix that produced the
 		 * depth buffer. Forward = negated row 2 (row 2 stores -forward). */
-		const auto readStateIndex = this->renderer().currentReadStateIndex();
-		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
-		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
+		const auto & frameView = *context.frameView;
+		const auto & viewMat = frameView.viewMatrix();
 		const auto fX = -viewMat(2, 0);
 		const auto fY = -viewMat(2, 1);
 		const auto fZ = -viewMat(2, 2);

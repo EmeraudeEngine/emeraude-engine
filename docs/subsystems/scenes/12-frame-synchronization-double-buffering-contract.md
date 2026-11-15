@@ -142,17 +142,74 @@ If a post-process effect reconstructs world positions using `m_logicState` (the 
 the logic thread may have already advanced to the next tick. The matrices will disagree with the
 depth buffer → **world position mismatch → flickering**.
 
-**Fix pattern (used in RTR):**
+**The contract — the frame's view (`Graphics::FrameView`, 2026-11-15, owner decision).** An effect does not choose an
+index any more. The truth is the scene's latch: `Scene::beginRenderFrame()` takes the published slot ONCE per frame
+(`Scene::frameReadStateIndex()`). The renderer makes the view of the frame from the scene it renders —
+`Renderer::frameView(scene)`: the main target's view matrices read at that slot — and the chain hands it to every effect
+in `IndirectPostProcessEffect::FrameContext::frameView` (never null in the chain):
+
 ```cpp
-const auto readStateIndex = m_renderer->currentReadStateIndex();
-const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
-const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
+const auto & frameView = *context.frameView;
+const auto & viewMat = frameView.viewMatrix();           /* world to view */
+const auto & rotation = frameView.infinityViewMatrix();  /* the view rotation alone (camera-relative math) */
+const auto & projMat = frameView.projectionMatrix();     /* jittered: the one the depth was rasterized with */
 ```
 
+It also gives `unjitteredProjectionMatrix()`, `position()`, `farPlane()`, the frame-history pair
+`previousViewMatrix()` / `previousProjectionMatrix()`, and `readStateIndex()` — for what the logic publishes per slot
+BESIDE the view (a light's published block: `LightGlints`; a cloud's render state: `VolumetricClouds::gatherClouds()`),
+never to index the view matrices by hand.
+
+**What it replaced.** `Renderer::m_currentReadStateIndex` and `Renderer::currentReadStateIndex()`: a COPY of the
+scene's index, written in the middle of the frame (after `prepareRender()` and the clouds' shadow map, before the chain)
+and read back by 16 files, each pairing it with `renderer().mainRenderTarget()->viewMatrices()`. Right only for what ran
+after the line that wrote it:
+- `Scene::recordCloudShadowMap()` ran BEFORE it: the clouds' shadow map was marched on the clouds published for the
+  PREVIOUS frame's slot — a slot that frame had handed back, which the logic thread may be writing. It reads the
+  scene's own `m_frameReadStateIndex` now.
+- The direct path without post-processing never wrote it: `archiveStateAfterRendering()` archived an older slot. It
+  archives `scene->frameReadStateIndex()`.
+- Without a scene, the frame capture's camera metadata and `FrameDiagnostics::viewProjectionSparse` read the view at
+  that stale index: they keep their defaults now (nothing was viewed).
+
+**Rules.**
+- An effect reads the camera through `context.frameView`: never `Renderer::mainRenderTarget()->viewMatrices()`, never a
+  default (index-less) overload, never an index of its own.
+- The renderer keeps no copy of a frame's state: a function that has the scene makes the frame's view from it
+  (`Renderer::frameView()`), at any point of the frame, and gets the same one.
+- A helper that needs the frame's view outside an effect takes a `const FrameView &` parameter
+  (`GIDenoiser::updateFrameData()`, `PostProcessor::executeIndirectPostProcessEffects()`).
+
+**Proof** (Linux, RTX 3070 Ti, 2026-11-15). Debug, the validation layer loaded, the binary before the change (two
+launches) against the binary after, one capture per launch at a fixed delay, six scenes in which the thirteen effects
+run (mean absolute difference / 255):
+- `global-illumination` (RTGI, RTR, RTAO, the denoiser; static): 0.15 and 0.35 against the two "before" captures, which
+  differ from each other by 0.28; no pixel further than 16.
+- `light-and-shadow-debug` (lens flare, volumetric light and scattering, the traced contact shadows; static): ⚠️ a single
+  capture depends on the PHASE of the temporal cycle — 16 captures of ONE run of the changed binary differ from each
+  other by 0.015 to 0.11 (median 0.087). The captures at the phase of the "before" ones differ from them by 0.013 to
+  0.019, the distance of two same-phase captures of one run (0.015). The two "before" captures had fallen on the same
+  phase (0.001), which made three single captures "after" look different (0.06 to 0.09 from them, and from each other):
+  a static scene's noise floor needs more than two launches, or several captures per launch.
+- `city` (light glints, aerial perspective, the star field): 0.12 to 0.23, against 0.13 between the two "before" and
+  0.17 between two "after".
+- `reflexion-debug` on the ray-traced and on the screen-space lane (SSGI, SSR, the screen-space contact shadows) and
+  `terrain` (the volumetric clouds and their shadow map): their content moves — the before / after distances (1.1 to
+  2.4; 2.3 and 4.2) sit in the spread of two launches of one binary (0.75 and 2.1; 3.4). They say "nothing gross".
+- In the 22 launches: the same `PostProcess.getStatus` text (the metering lines apart) and the same render statistics
+  before and after, 0 VUID, 0 error line, exit 0.
+- ThreadSanitizer (Debug, llvmpipe, window-less, the act-switch scenario on `default`, the traced chain running): 0
+  report. ⚠️ No ThreadSanitizer run covers the clouds' shadow path: the software device crashes on `terrain` right after
+  the scene starts (item `skinned-scene-crashes-the-software-vulkan-device`), with the binary before the change too. The
+  defect of that path is established by the call order — the read came before the write in both frame functions — not
+  by a measurement.
+- GCC Release and Debug, clang, the Debug + TSan tree: 0 warning; `-Wdocumentation` on the 19 touched TUs.
+
 **Code references:**
-- `Renderer.hpp:currentReadStateIndex()` — Getter for the stable read state index
-- `Renderer.cpp:renderFrameWithPostProcessing()` — Captures `scene->preparedReadStateIndex()` before post-processing
-- `Effects/Lighting/RTR.cpp:execute()` — Uses `readStateIndex` for NDC → world reconstruction
+- `Graphics/FrameView.hpp` — the view of ONE frame
+- `Graphics/Renderer.cpp:frameView()` — makes it from the scene's latch
+- `Graphics/IndirectPostProcessEffect.hpp:FrameContext::frameView` — how the chain receives it
+- `Scenes/Scene.rendering.cpp:beginRenderFrame()` — the ONE latch of the frame
 - `ViewMatrices3DUBO.cpp:viewMatrix()` — Two overloads: `m_logicState` vs `m_renderState[idx]`
 
 ### Plain state shared by the logic and rendering threads under the SHARED scene access (2026-11-15, owner decisions)

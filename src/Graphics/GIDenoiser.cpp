@@ -36,11 +36,10 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/IndirectPostProcessEffect.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -1284,26 +1283,24 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	GIDenoiser::updateFrameData (uint32_t frameIndex, const FrameInputs & inputs) noexcept
+	GIDenoiser::updateFrameData (uint32_t frameIndex, const FrameView & frameView, const FrameInputs & inputs) noexcept
 	{
-		/* Use readStateIndex for the SAME view matrix that produced the depth buffer. */
-		const auto readStateIndex = this->renderer().currentReadStateIndex();
-		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
-		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
+		/* The frame's view: the SAME view matrix that produced the depth buffer. */
+		const auto & viewMat = frameView.viewMatrix();
 		/* JITTERED (the default projectionMatrix contract): the depth buffer was rasterized
 		 * with the TAA jitter, so unprojecting with the same matrix is geometrically exact.
 		 * NOTE (measured 2026-08-05): swapping this for unjitteredProjectionMatrix() — to
 		 * cancel the reprojection error against the unjittered previousProjectionMatrix() —
 		 * had NO measurable effect on the temporal peak-to-peak (runs within the ×1.85
 		 * run-to-run envelope). The GI temporal noise is content/RT-driven, not matrix-driven. */
-		const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
+		const auto & projMat = frameView.projectionMatrix();
 		/* ⚠️⚠️ CAMERA-RELATIVE: projection × view ROTATION (the infinity view), inverted — the shader
 		 * unprojects an offset from the eye and adds the camera position. The float inverse of the full
 		 * view-projection put the ray origins centimetres to metres off the surface far from the world
 		 * origin (docs/caution-points.md § The float inverse of the full view-projection). */
-		const auto invRelativeViewProj = (projMat * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
+		const auto invRelativeViewProj = (projMat * frameView.infinityViewMatrix()).inverse();
 		const auto * ivp = invRelativeViewProj.data();
-		const auto & cameraPosition = viewMatrices.position(readStateIndex);
+		const auto & cameraPosition = frameView.position();
 
 		/* Inverse view rotation for normal transformation (view → world). */
 		const auto invView = viewMat.inverse();
@@ -1312,8 +1309,8 @@ namespace EmEn::Graphics
 		/* Previous rendered frame (ViewMatrices frame-history contract). Identity
 		 * until the first frame is archived — irrelevant then, since the history is
 		 * flagged invalid (alpha forced to 1, feedback strength forced to 0). */
-		const auto & prevViewMat = viewMatrices.previousViewMatrix();
-		const auto prevViewProj = viewMatrices.previousProjectionMatrix() * prevViewMat;
+		const auto & prevViewMat = frameView.previousViewMatrix();
+		const auto prevViewProj = frameView.previousProjectionMatrix() * prevViewMat;
 		const auto * pvp = prevViewProj.data();
 
 		const auto prevInvView = prevViewMat.inverse();

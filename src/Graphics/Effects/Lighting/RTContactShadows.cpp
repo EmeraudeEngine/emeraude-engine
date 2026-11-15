@@ -33,8 +33,6 @@
 #include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/IndirectPostProcessEffect.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "Saphir/Types.hpp"
@@ -47,6 +45,7 @@
 #include <string>
 
 /* Local inclusions. */
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -394,18 +393,17 @@ namespace EmEn::Graphics::Effects::Lighting
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* 1. Compute inverse view-projection matrix for world-space reconstruction.
-		 * CRITICAL: Use readStateIndex to match the view matrix that produced the depth buffer.
+		 * CRITICAL: the frame's view, to match the view matrix that produced the depth buffer.
 		 * The default overload reads m_logicState which may have advanced → flickering. */
-		const auto readStateIndex = this->renderer().currentReadStateIndex();
-		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
-		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
-		const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
+		const auto & frameView = *context.frameView;
+		const auto & viewMat = frameView.viewMatrix();
+		const auto & projMat = frameView.projectionMatrix();
 		/* ⚠️⚠️ CAMERA-RELATIVE: projection × view ROTATION (the infinity view), inverted — the shader
 		 * unprojects an offset from the eye and adds the camera position. The float inverse of the full
 		 * view-projection put the ray origins centimetres to metres off the surface far from the world
 		 * origin (docs/caution-points.md § The float inverse of the full view-projection). */
-		const auto invRelativeViewProjMat = (projMat * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
-		const auto & cameraPosition = viewMatrices.position(readStateIndex);
+		const auto invRelativeViewProjMat = (projMat * frameView.infinityViewMatrix()).inverse();
+		const auto & cameraPosition = frameView.position();
 
 		/* 2. Update the per-frame input set (set 1): depth (binding 0), normals (binding 1). */
 		if ( inputDepth != nullptr )

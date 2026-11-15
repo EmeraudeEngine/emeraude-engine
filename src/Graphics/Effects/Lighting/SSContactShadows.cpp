@@ -32,8 +32,6 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/MarchDitherGLSL.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "Saphir/Types.hpp"
@@ -47,6 +45,7 @@
 #include <string>
 
 /* Local inclusions. */
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -399,14 +398,13 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
-		/* ⚠️ readStateIndex, not the default overload: it must be the very matrices that produced
+		/* ⚠️ The frame's view, not the default overload: it must be the very matrices that produced
 		 * the depth buffer being marched. The default reads the LOGIC state, which may already
 		 * have advanced — the reconstruction would then be one frame off and the shadow would
 		 * flicker with camera motion. */
-		const auto readStateIndex = this->renderer().currentReadStateIndex();
-		const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
-		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
-		const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
+		const auto & frameView = *context.frameView;
+		const auto & viewMat = frameView.viewMatrix();
+		const auto & projMat = frameView.projectionMatrix();
 		const auto invProjMat = projMat.inverse();
 
 		if ( inputDepth != nullptr )

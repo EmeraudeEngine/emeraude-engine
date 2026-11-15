@@ -49,10 +49,10 @@
 #include "Graphics/Effects/Shared/CloudVolumeGLSL.hpp"
 #include "Graphics/Effects/Shared/CSMSamplingGLSL.hpp"
 #include "Graphics/Effects/Shared/MarchDitherGLSL.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesCascadedUBO.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
@@ -951,16 +951,15 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		auto & renderer = this->renderer();
 		const auto frameIndex = renderer.currentFrameIndex();
 
-		/* ⚠️ readStateIndex everywhere: the view matrices that produced the depth buffer, and the
-		 * entity frames the logic PUBLISHED for this frame — never the live logic state. */
-		const auto readStateIndex = renderer.currentReadStateIndex();
-		const auto & viewMatrices = renderer.mainRenderTarget()->viewMatrices();
-		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex, false, 0);
-		const auto & projectionMatrix = viewMatrices.projectionMatrix(readStateIndex);
+		/* ⚠️ The frame's view everywhere: the view matrices that produced the depth buffer, and — at its
+		 * state index — the entity frames the logic PUBLISHED for this frame, never the live logic state. */
+		const auto & frameView = *context.frameView;
+		const auto & viewMatrix = frameView.viewMatrix();
+		const auto & projectionMatrix = frameView.projectionMatrix();
 		/* ⚠️⚠️ The INFINITY view: the same rotation, no translation. See the shader's ray setup —
 		 * the full view-projection inverted in float made the rays swim by up to 13 px. */
-		const auto inverseRelativeViewProjection = (projectionMatrix * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
-		const auto & cameraPosition = viewMatrices.position(readStateIndex);
+		const auto inverseRelativeViewProjection = (projectionMatrix * frameView.infinityViewMatrix()).inverse();
+		const auto & cameraPosition = frameView.position();
 
 		FrameBlock block{};
 
@@ -970,7 +969,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		block.cameraForward = {-viewMatrix(2, 0), -viewMatrix(2, 1), -viewMatrix(2, 2), static_cast< float >(m_parameters.stepCount)};
 
 		/* ---- The clouds, from their PUBLISHED state. ---- */
-		const auto census = gatherClouds(*clouds, readStateIndex, context.constants.time, block.clouds);
+		const auto census = gatherClouds(*clouds, frameView.readStateIndex(), context.constants.time, block.clouds);
 		const auto cloudCount = census.drawn;
 
 		if ( census.overflow && !m_tooManyCloudsReported )

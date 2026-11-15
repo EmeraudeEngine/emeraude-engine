@@ -25,9 +25,12 @@ the previous frame causes race conditions (flickering, data corruption).
 ### Rule 2: View Matrix State Index
 
 Post-process effects that read the depth buffer to reconstruct world positions **MUST**
-use `Renderer::currentReadStateIndex()` when calling `viewMatrix(readStateIndex, ...)`.
-The default `viewMatrix(false, 0)` reads `m_logicState` which may have already advanced
-to the next logic tick → **matrix/depth mismatch → flickering**. See `RTR.cpp:execute()`.
+read the camera through the frame's view, `FrameContext::frameView` (`Graphics::FrameView`:
+the main target's matrices at the render state the scene latched for this frame — scenes
+doc 12 § *View Matrix State Index — Critical Trap*). The default `viewMatrix(false, 0)` reads
+`m_logicState` which may have already advanced to the next logic tick → **matrix/depth
+mismatch → flickering**. An effect holds neither a state index nor a render target of its own
+(`Renderer::currentReadStateIndex()` is gone, 2026-11-15).
 
 ### Rule 3: Frame History ≠ State Indices (Temporal Effects)
 
@@ -47,7 +50,7 @@ thread ticks twice between two frames, no slot index is "the previous frame". Te
 
 **Code references:**
 - `Renderer.hpp:m_currentFrameIndex` — Current frame-in-flight index
-- `Renderer.hpp:m_currentReadStateIndex` — read state slot latched by the current frame (triple buffer: see `src/Scenes/AGENTS.md` → Frame Synchronization)
+- `Graphics/FrameView.hpp` — the view of ONE frame; `Renderer::frameView(scene)` makes it from `Scene::frameReadStateIndex()`, the slot `Scene::beginRenderFrame()` latched (triple buffer: see `src/Scenes/AGENTS.md` → Frame Synchronization)
 - `Renderer.hpp:framesInFlight()` — Number of frames-in-flight
 - `Scenes/SceneMetaData.hpp:initializePerFrameBuffers()` — Reference implementation
 - `ViewMatricesInterface.hpp` — frame-history contract (previous view/projection + archive)

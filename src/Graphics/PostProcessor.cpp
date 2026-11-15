@@ -45,6 +45,7 @@
 #include "DenoisePass.hpp"
 #include "Effects/Camera/ToneMapping.hpp"
 #include "Effects/Shared/ViewReconstructionGLSL.hpp"
+#include "FrameView.hpp"
 #include "Geometry/IndexedVertexResource.hpp"
 #include "GrabPass.hpp"
 #include "Graphics/EffectSlot.hpp"
@@ -1394,7 +1395,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium, const Scenes::CloudSet * clouds, ChainPhase phase) const noexcept
+	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const FrameView & frameView, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium, const Scenes::CloudSet * clouds, ChainPhase phase) const noexcept
 	{
 		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
 		{
@@ -1454,12 +1455,10 @@ namespace EmEn::Graphics
 
 		if ( const auto frameIndex = m_renderer.currentFrameIndex(); frameIndex < m_viewUBOs.size() )
 		{
-			const auto readStateIndex = m_renderer.currentReadStateIndex();
-			const auto & viewMatrices = mainRT->viewMatrices();
-			const auto & projection = viewMatrices.projectionMatrix(readStateIndex);
+			const auto & projection = frameView.projectionMatrix();
 			const auto inverseProjection = projection.inverse();
-			const auto inverseRelativeViewProjection = (projection * viewMatrices.viewMatrix(readStateIndex, true, 0)).inverse();
-			const auto & position = viewMatrices.position(readStateIndex);
+			const auto inverseRelativeViewProjection = (projection * frameView.infinityViewMatrix()).inverse();
+			const auto & position = frameView.position();
 
 			ViewReconstructionGLSL::Data data{};
 
@@ -1528,6 +1527,8 @@ namespace EmEn::Graphics
 			.stars = m_renderer.frameStarField(),
 			/* What THIS frame bound to trace, null when it does not. */
 			.rayTracing = m_renderer.frameRayTracing(),
+			/* The view of THIS frame, as the renderer made it from the scene's latch. */
+			.frameView = &frameView,
 			.view = viewData,
 			.projectionJitter = mainRT->viewMatrices().projectionJitter(),
 			.residualExposure = [this, &stack, activeCamera] {

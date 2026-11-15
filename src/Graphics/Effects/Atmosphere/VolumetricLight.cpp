@@ -36,9 +36,8 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "PrimaryServices.hpp"
@@ -393,17 +392,16 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* 1. Project light direction to screen space.
-		 * Use readStateIndex to match the view matrix that produced the depth buffer. */
-		const auto readStateIndex = this->renderer().currentReadStateIndex();
-		const auto & viewMatrices =this->renderer().mainRenderTarget()->viewMatrices();
-		const auto & viewMat = viewMatrices.viewMatrix(readStateIndex, false, 0);
+		 * The frame's view: the matrices that produced the depth buffer. */
+		const auto & frameView = *context.frameView;
+		const auto & viewMat = frameView.viewMatrix();
 		/* UNJITTERED: the light screen position is the origin of every radial sampling
 		 * line. Projected through the jittered matrix it wobbles with the Halton phase,
 		 * and the whole line of taps shifts sub-pixel across an occlusion source that can
 		 * be 1-2 half-res texels wide (a door slit) — the streaks vibrate. The position
 		 * is a GEOMETRIC anchor, not a depth-buffer lookup: it must be phase-stable. */
-		const auto & projMat = viewMatrices.unjitteredProjectionMatrix(readStateIndex);
-		const auto & camPos = viewMatrices.position(readStateIndex);
+		const auto & projMat = frameView.unjitteredProjectionMatrix();
+		const auto & camPos = frameView.position();
 
 		/* Light source direction (opposite of emission direction). */
 		const auto mainLight = lightSet->mainDirectionalLight();

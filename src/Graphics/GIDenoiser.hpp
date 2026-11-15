@@ -47,6 +47,7 @@
 /* Forward declarations. */
 namespace EmEn::Graphics
 {
+	class FrameView;
 	class Renderer;
 }
 
@@ -401,15 +402,16 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Assembles this frame's UBO (matrices from the renderer's view state,
-			 * temporal parameters from Parameters, trace scalars from the owner), writes it
-			 * and advances the animated-noise sequence.
+			 * @brief Assembles this frame's UBO (matrices from the frame's view, temporal
+			 * parameters from Parameters, trace scalars from the owner), writes it and
+			 * advances the animated-noise sequence.
 			 * @param frameIndex The frame-in-flight index.
+			 * @param frameView The view of the frame (FrameContext::frameView): the matrices that produced its depth buffer.
 			 * @param inputs The owner's trace scalars.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool updateFrameData (uint32_t frameIndex, const FrameInputs & inputs) noexcept;
+			bool updateFrameData (uint32_t frameIndex, const FrameView & frameView, const FrameInputs & inputs) noexcept;
 
 			/**
 			 * @brief Returns the combine contribution of the denoiser DEBUG views, drawn

@@ -42,14 +42,13 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/AtmosphereGLSL.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Photometry.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
 #include "Graphics/SkyStarField.hpp"
 #include "Graphics/StarCatalogueResource.hpp"
 #include "Graphics/StorageTexture2D.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "PixelFactory/Color.hpp"
@@ -630,10 +629,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			{
 				/* ⚠️ The UNJITTERED projection (after the temporal resolve, a star sits still) and the view ROTATION: a
 				 * star is at infinity. The read state's matrices, the ones that produced the depth the combine masks by. */
-				const auto readStateIndex = this->renderer().currentReadStateIndex();
-				const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
-				const auto & projection = viewMatrices.unjitteredProjectionMatrix(readStateIndex);
-				const auto viewProjection = projection * viewMatrices.viewMatrix(readStateIndex, true, 0);
+				const auto & frameView = *context.frameView;
+				const auto & projection = frameView.unjitteredProjectionMatrix();
+				const auto viewProjection = projection * frameView.infinityViewMatrix();
 				const auto & frame = starField->equatorialFrame;
 
 				std::copy_n(viewProjection.data(), pushConstants.viewProjection.size(), pushConstants.viewProjection.begin());

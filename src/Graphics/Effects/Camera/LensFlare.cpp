@@ -37,9 +37,8 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -437,12 +436,11 @@ namespace EmEn::Graphics::Effects::Camera
 		 * of the image alone make the ghosts (a lamp at night). ---- */
 		if ( const auto mainLight = context.lightSet != nullptr ? context.lightSet->mainDirectionalLight() : nullptr; mainLight != nullptr && mainLight->isEnabled() )
 		{
-			/* readStateIndex: the view matrices that produced the depth buffer. */
-			const auto readStateIndex = this->renderer().currentReadStateIndex();
-			const auto & viewMatrices = this->renderer().mainRenderTarget()->viewMatrices();
-			const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex, false, 0);
-			const auto & projectionMatrix = viewMatrices.projectionMatrix(readStateIndex);
-			const auto & cameraPosition = viewMatrices.position(readStateIndex);
+			/* The frame's view: the view matrices that produced the depth buffer. */
+			const auto & frameView = *context.frameView;
+			const auto & viewMatrix = frameView.viewMatrix();
+			const auto & projectionMatrix = frameView.projectionMatrix();
+			const auto & cameraPosition = frameView.position();
 
 			/* A far point toward the light (opposite of its propagation). */
 			const auto toLight = (-mainLight->direction()).normalized();

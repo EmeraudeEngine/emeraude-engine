@@ -43,7 +43,8 @@ scene answers `hasAccelerationStructure()` and nothing stores its structure.
 - Nothing stores a pointer to an object a scene owns across frames. What a frame needs from its scene is bound by that
   frame and handed down in the frame context.
 - "Can the session trace" is `Renderer::rayTracing().usable()`, nothing else.
-- Still open, the same shape for the read-state index: item `renderer-read-state-index-stored-across-frames`.
+- The same shape for the read-state index was closed the same day by the same rule: the frame's view,
+  `Graphics::FrameView` (scenes doc 12 § *View Matrix State Index — Critical Trap*).
 
 **Proof** (Linux, 2026-11-15).
 - ThreadSanitizer (Debug, llvmpipe, the active scene switched through the console to a skinned scene): the
@@ -60,6 +61,21 @@ scene answers `hasAccelerationStructure()` and nothing stores its structure.
   destroyed, an act kept): the traced occupants are back after each switch and each scene gives the same statistics at
   every return; 0 VUID, exit 0. The log holds `RayTracingService service up!` and
   `RayTracingService sub-service terminated gracefully!`.
+- Peers' round 11 (2026-11-15, engine 64e89c5c + testbed ce55d130): macOS (Apple M6, MoltenVK 1.4.2 — a device that
+  cannot trace, lane `Auto`: the first run of that case) and Windows (RTX 3500 Ada, MSVC 19.44) build Release and Debug
+  after a reconfigure with 0 warning (Apple clang with `-Wdocumentation -Werror`; no MSVC warning on the reference
+  member nor on `*this` in the member initializer). The same nine switches give the same statistics as Linux at every
+  return on both. macOS: NO `RayTracingService` line in the log, lanes resident "ScreenSpace ONLY", SSGI / SSR / SSAO
+  and the screen-space contact shadows. Windows: one `service up!` and one `terminated gracefully!` per launch, RTGI /
+  RTR / RTAO in the three scenes. 0 VUID, exit 0, no "contract violation". Twenty `animation-debug` ↔
+  `light-and-shadow-debug` switches on each: 20 / 20 reads at 7 / 673 958 with shadows 30 / 4 033 408 — the deviant
+  read of round 10 on Windows (scenes doc 12) is 1 in 37 over the two rounds, still unexplained.
+  ⚠️ `default` is not the same scene on every OS: its sky box is a RANDOM pick
+  (`Resources::Container::getRandomResource()` advances an index through an `unordered_map`, whose order belongs to the
+  standard library). Windows drew a night sky in every journal of rounds 8 to 11, Linux a day sky: no main directional
+  light there, so the traced contact shadows are on their fallback in `default` on Windows — expected for that sky. A
+  cross-OS comparison must not use `default`'s lanes nor its pixels (item
+  `random-resource-pick-follows-an-unordered-map`).
 - The lane set to `ScreenSpace` in a settings copy: the service is not started, the stack reports "ScreenSpace ONLY …
   FOR THIS WHOLE SESSION", the screen-space occupants run; 0 VUID, exit 0.
 - The commit gate: GCC Release, clang, cppcheck and include-what-you-use clean; clang-tidy 8 findings on the changed

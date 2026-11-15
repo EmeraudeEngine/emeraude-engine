@@ -43,9 +43,8 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "Mutex.hpp"
@@ -673,20 +672,18 @@ namespace EmEn::Graphics::Effects::Lighting
 	LightGlints::recordOverlayPasses (const CommandBuffer & commandBuffer, const TextureInterface & /*inputColor*/, const FrameContext & context) noexcept
 	{
 		const auto frameIndex = this->renderer().currentFrameIndex();
-		const auto readStateIndex = this->renderer().currentReadStateIndex();
-		const auto mainTarget = this->renderer().mainRenderTarget();
 
 		PushConstants pushConstants{};
 		const DescriptorSet * descriptorSet = nullptr;
 
 		m_glints.clear();
 
-		if ( context.lightSet != nullptr && context.depth != nullptr && context.view != nullptr && mainTarget != nullptr && frameIndex < m_perFrame.size() )
+		if ( context.lightSet != nullptr && context.depth != nullptr && context.view != nullptr && frameIndex < m_perFrame.size() )
 		{
-			const auto & viewMatrices = mainTarget->viewMatrices();
-			const auto & camera = viewMatrices.position(readStateIndex);
+			const auto & frameView = *context.frameView;
+			const auto & camera = frameView.position();
 
-			this->gatherGlints(*context.lightSet, readStateIndex, {camera[Math::X], camera[Math::Y], camera[Math::Z]});
+			this->gatherGlints(*context.lightSet, frameView.readStateIndex(), {camera[Math::X], camera[Math::Y], camera[Math::Z]});
 
 			if ( !m_glints.empty() )
 			{
@@ -702,8 +699,8 @@ namespace EmEn::Graphics::Effects::Lighting
 				{
 					/* ⚠️ The UNJITTERED projection (after the temporal resolve, a glint sits still) and the view ROTATION:
 					 * the glints are camera-relative. */
-					const auto & projection = viewMatrices.unjitteredProjectionMatrix(readStateIndex);
-					const auto viewProjection = projection * viewMatrices.viewMatrix(readStateIndex, true, 0);
+					const auto & projection = frameView.unjitteredProjectionMatrix();
+					const auto viewProjection = projection * frameView.infinityViewMatrix();
 
 					std::copy_n(viewProjection.data(), pushConstants.viewProjection.size(), pushConstants.viewProjection.begin());
 
