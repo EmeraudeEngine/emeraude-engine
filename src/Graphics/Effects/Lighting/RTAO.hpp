@@ -36,10 +36,27 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Graphics/IndirectPostProcessEffect.hpp"
+#include "Graphics/AbstractRayTracedEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/DescriptorSet.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Graphics
+	{
+		class Renderer;
+	}
+
+	namespace Vulkan
+	{
+		class GraphicsPipeline;
+		class TextureInterface;
+	}
+}
 
 namespace EmEn::Graphics::Effects::Lighting
 {
@@ -50,9 +67,9 @@ namespace EmEn::Graphics::Effects::Lighting
 	 * Unlike SSAO, RTAO correctly handles off-screen occluders and has no
 	 * screen-space artifacts. Falls back to SSAO when ray tracing hardware
 	 * is not available (separate effect in the stack, not automatic fallback).
-	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
+	 * @extends EmEn::Graphics::AbstractRayTracedEffect A member of the ray-traced family: its trace pass follows the family's set convention.
 	 */
-	class EMEN_API RTAO final : public IndirectPostProcessEffect
+	class EMEN_API RTAO final : public AbstractRayTracedEffect
 	{
 		public:
 
@@ -123,7 +140,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 */
 			explicit
 			RTAO (Renderer & renderer) noexcept
-				: IndirectPostProcessEffect{renderer}
+				: AbstractRayTracedEffect{renderer}
 			{
 
 			}
@@ -134,7 +151,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * @param parameters The initial parameters.
 			 */
 			RTAO (Renderer & renderer, const Parameters & parameters) noexcept
-				: IndirectPostProcessEffect{renderer},
+				: AbstractRayTracedEffect{renderer},
 				m_parameters{parameters}
 			{
 
@@ -225,14 +242,6 @@ namespace EmEn::Graphics::Effects::Lighting
 				return true;
 			}
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresRayTracing() */
-			[[nodiscard]]
-			bool
-			requiresRayTracing () const noexcept override
-			{
-				return true;
-			}
-
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresMaterialProperties() */
 			[[nodiscard]]
 			bool
@@ -273,7 +282,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_derivedPipeline;
 			/* Pipeline layouts. */
-			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			/* The producer's lane, BORROWED for one frame: the stack's slot pairing sets it —

@@ -31,8 +31,8 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
-#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
+#include "Graphics/IndirectPostProcessEffect.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
@@ -55,14 +55,12 @@
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/LayoutManager.hpp"
 
 static constexpr auto TracerTag{"RTContactShadowsEffect"};
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
-	class DescriptorSetLayout;
 }
 
 namespace
@@ -286,19 +284,10 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		/* ---- Descriptor set layouts ----
-		 * Set 0 = the Renderer's RT set (TLAS + mesh/material SSBOs), set 1 = depth + normals,
-		 * set 2 = the bindless textures. The shadow ray judges its alpha-tested candidates with the
-		 * shared rule (RTAlphaTestGLSL.hpp), which reads the material SSBO and samples cutout
-		 * textures — the effect used to carry a private set with its own TLAS binding and could
-		 * reach neither. */
-		auto rtLayout = renderer.rtDescriptorSetLayout();
-
-		if ( rtLayout == nullptr )
-		{
-			TraceError{TracerTag} << "RT descriptor set layout not available !";
-
-			return false;
-		}
+		 * The family's set convention (AbstractRayTracedEffect): set 0 = what the frame traces (TLAS + mesh / material
+		 * SSBOs), set 1 = depth + normals, set 2 = the bindless textures. The shadow ray judges its alpha-tested
+		 * candidates with the shared rule (RTAlphaTestGLSL.hpp), which reads the material SSBO and samples cutout
+		 * textures — the effect used to carry a private set with its own TLAS binding and could reach neither. */
 
 		/* Set 1: depth (0), normals (1), per-frame parameters (2). */
 		m_shadowInputLayout = this->getInputLayout(2, 1);
@@ -308,29 +297,9 @@ namespace EmEn::Graphics::Effects::Lighting
 			return false;
 		}
 
-		auto bindlessLayout = renderer.bindlessTextureManager().descriptorSetLayout();
-
-		if ( bindlessLayout == nullptr )
-		{
-			TraceError{TracerTag} << "Bindless texture descriptor set layout not available !";
-
-			return false;
-		}
-
-		/* ---- Pipeline layouts ---- */
-		auto & layoutManager = renderer.layoutManager();
-
-		{
-			/* No push constant range: the per-frame data lives in a UBO (set 1, binding 2)
-			 * because it exceeds the 128-byte minimum guarantee. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(rtLayout);
-			sets.emplace_back(m_shadowInputLayout);
-			sets.emplace_back(bindlessLayout);
-			m_shadowLayout = layoutManager.getPipelineLayout(sets, {});
-		}
-
-		if ( m_shadowLayout == nullptr )
+		/* No push constant range: the per-frame data lives in a UBO (set 1, binding 2) because it exceeds the 128-byte
+		 * minimum guarantee. */
+		if ( !this->createTraceLayout(TracerTag, m_shadowInputLayout, RadianceCache::Unused) )
 		{
 			return false;
 		}
@@ -358,7 +327,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		/* ---- Create pipelines ---- */
-		m_shadowPipeline = this->createFullscreenPipeline(ClassId, "CS_RTShadow", vertexModule, shadowFragment, m_shadowLayout, m_shadowTarget);
+		m_shadowPipeline = this->createFullscreenPipeline(ClassId, "CS_RTShadow", vertexModule, shadowFragment, this->traceLayout(), m_shadowTarget);
 
 		if ( m_shadowPipeline == nullptr )
 		{
@@ -407,7 +376,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_shadowPerFrame.clear();
 
 		m_shadowPipeline.reset();
-		m_shadowLayout.reset();
+		this->destroyTraceLayout();
 		m_shadowInputLayout.reset();
 
 		m_blurVTarget.destroy();
@@ -494,20 +463,9 @@ namespace EmEn::Graphics::Effects::Lighting
 		};
 		vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 
-		/* Set 0: the Renderer's RT set (TLAS + scene SSBOs). */
-		if ( const auto * rtDescSet = this->renderer().rtDescriptorSet(); rtDescSet != nullptr )
-		{
-			commandBuffer.bind(*rtDescSet, *m_shadowLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
-		}
-
-		/* Set 1: depth + normals. */
-		commandBuffer.bind(*m_shadowPerFrame[frameIndex], *m_shadowLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 1);
-
-		/* Set 2: bindless textures (the alpha-test rule samples cutout textures). */
-		if ( const auto * bindlessDescSet = this->renderer().bindlessTextureManager().descriptorSet(); bindlessDescSet != nullptr )
-		{
-			commandBuffer.bind(*bindlessDescSet, *m_shadowLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 2);
-		}
+		/* The sets of the trace pass, on the family's convention: what THIS frame traces (0), this effect's inputs
+		 * (1), the bindless textures (2). */
+		this->bindTraceSets(commandBuffer, *m_shadowPerFrame[frameIndex], context, frameIndex);
 
 		commandBuffer.draw(3, 1);
 

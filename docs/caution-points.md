@@ -2083,7 +2083,7 @@ Traps met on the way:
   illuminance they actually delivered (old intensity × old luminance), so their look is preserved.
 - **Same audit, RTGI**: its trace walked min(SSBO length, 16) = 16 slots whatever the frame's light count, while the
   packer never clears the tail, so a light disabled since (the sun course at dusk shifts the later lights down one
-  slot) was counted twice. It reads `Renderer::rtLightCount()` now (`skyParams.w` of its frame block), as RTR and
+  slot) was counted twice. It reads the frame's light count now (`skyParams.w` of its frame block; `Renderer::rtLightCount()` then, `RayTracingFrame::lightCount` since 2026-11-15), as RTR and
   the probes already did, and KEEPS its deliberate 16-light cap for the GI bounces (the SSBO holds 128: a scene with
   more lights sees only the first 16 in its GI, as before).
 - **RTGI's bounce hits add no flat ambient** (RTR and the probes do): pre-existing, item
@@ -3842,7 +3842,8 @@ slot with the middle one. See `src/Scenes/AGENTS.md` → Frame Synchronization.
 > → invalid TLAS instances → GPU hang.
 >
 > **Fix:** the builder is now a **single Renderer-owned instance** (`Renderer::m_accelerationStructureBuilder`,
-> created at init when RT is enabled, exposed via `Renderer::accelerationStructureBuilder()`).
+> created at init when RT is enabled, exposed via `Renderer::accelerationStructureBuilder()` — since 2026-11-15 it
+> lives in the renderer's ray-tracing sub-service: `Renderer::rayTracing().accelerationStructureBuilder()`).
 > The global static was **removed**: `Geometry::Interface::buildAccelerationStructure` fetches the
 > builder from `serviceProvider().graphicsRenderer()`, and `SceneMetaData` borrows it (non-owning)
 > for TLAS / buffer addresses. The builder is stateless infra (command pool + fence + fps, mutex-
@@ -4764,7 +4765,7 @@ entity; GPU resources die behind the fence, on the render thread. Full contract:
 > **Symptom:** the ray-traced lane runs, exactly as selected — and yet all three screen-space
 > effects report `created`. Measured on Sponza the day the lazy residency landed.
 >
-> **Cause:** `Renderer::isRayTracingReady()` is false for the first frames of **every** scene (the
+> **Cause:** `Renderer::isRayTracingReady()` (since 2026-11-15: `PostProcessStack::FrameCapabilities::rayTracing`) is false for the first frames of **every** scene (the
 > TLAS is built asynchronously) and it **cannot distinguish "not yet" from "never"** — it is a
 > null/created test on the current TLAS plus a non-empty descriptor-set check, nothing more. A
 > fallback that fires on the first stalled frame therefore materialized the whole alternative lane
@@ -4827,7 +4828,7 @@ entity; GPU resources die behind the fence, on the render thread. Full contract:
 > actually gated:
 > - ⚠️⚠️ **The documentation of it — written the same morning, by the same hands — was wrong.** It
 >   claimed the key gated the `SHADER_DEVICE_ADDRESS | ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY`
->   usage flags on every VBO/IBO, `createRTDescriptorSet()` and the descriptor-pool AS entry. All
+>   usage flags on every VBO/IBO, `createRTDescriptorSet()` (the sub-service's `RayTracing::createDescriptorSets()` since 2026-11-15, started on the device AND the lane) and the descriptor-pool AS entry. All
 >   three are gated on `Device::rayTracingEnabled()` — **pure hardware**, since the RT extensions
 >   are requested from `physicalDevice->supportsRayTracing()` without consulting any setting
 >   (`Instance.cpp`). That false claim was then used to argue against changing the key's default.
@@ -6519,6 +6520,20 @@ After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and
   2026-11-13: projet-alpha builds its act on a worker while the main thread waits in `Window::waitEvents()`, THE
   wait of the main loop (projet-alpha `docs/caution-points.md` § Core Application).
 
+### Ray tracing: one sub-service, one frame value, one effect family — nothing of a frame is kept in the renderer (2026-11-15)
+
+> The renderer used to keep a frame's ray-tracing state in members (`m_currentTLAS`, the RT descriptor set, a light
+> count), set in the MIDDLE of a frame and read by anybody — the occupant selection at the START of the next frame
+> read a structure the previous scene had destroyed (`heap-use-after-free`, ThreadSanitizer, one run in three). The
+> owner refused a fix of the pointer: the ray tracing is now one system on the base's moulds (scenes doc 14 § *The
+> session, the frame, the effect family*): `Graphics::RayTracing`, a `ServiceInterface` sub-service of the renderer
+> whose `usable()` is "the session can trace"; `RayTracingFrame`, what ONE frame binds and hands to the chain in its
+> frame context; `AbstractRayTracedEffect`, the family level of the four traced effects; ONE gate,
+> `PostProcessStack::canOccupantRun()`.
+> ⚠️ A new traced effect derives from the family and never tests `context.rayTracing`; nothing stores a pointer to an
+> object a scene owns across frames; an object that belongs to a family is created, released and asked through that
+> family's owner — never a pointer of its own in the renderer.
+
 ### A LoadFinished handler runs on the loading thread: it records, the logic thread acts (2026-11-15)
 
 > `Resources::ResourceTrait` emits `LoadFinished` on the pool worker that completed the last dependency, and the
@@ -7576,6 +7591,10 @@ output, and the effects contribute from the first frame the TLAS is consumable.
 > [!NOTE]
 > The per-effect `if (rtDescSet != nullptr)` binds remain as defense in depth, but the chain
 > gate is the contract: an RT effect's `execute()` can assume a consumable TLAS.
+> **Since 2026-11-15** (scenes doc 14 § *The session, the frame, the effect family*) the contract is carried by the
+> types: `Renderer::isRayTracingReady()` and `rtDescriptorSet()` are gone, the gate is the single
+> `PostProcessStack::canOccupantRun()`, the frame's set travels in `FrameContext::rayTracing` (a reference inside) and
+> the traced family binds it in ONE place (`AbstractRayTracedEffect::bindTraceSets()`), without a test.
 
 **Files:** `Graphics/Renderer.{hpp,cpp}:isRayTracingReady()`,
 `Graphics/PostProcessor.cpp:executeIndirectPostProcessEffects()`
@@ -7590,7 +7609,7 @@ the device smart pointer, and — the giveaway — the wrappers logged
 `"No device to destroy ..."` **after** `*** Core level terminated ***`.
 
 `Renderer::onTerminate()` released the acceleration-structure builder, RT descriptor sets, MDI,
-swap chain... but never `m_skinnedGeometryProcessor` (which owns the RT-skinning compute
+swap chain... but never `m_skinnedGeometryProcessor` (since 2026-11-15 the ray-tracing sub-service owns it and its `onTerminate()` releases all its parts — the trap below is closed by construction) (which owns the RT-skinning compute
 pipeline + layouts). The unique_ptr survived until `~Renderer` — long after `m_device.reset()` —
 so its Vulkan objects had no device to be destroyed against.
 

@@ -40,9 +40,10 @@
 >   ⚠️ Leaving the raster leg on was NOT the safe half of the choice: an enclosed space came out
 >   **4.6× brighter than the traced lane** on Sponza, the galleries lit as if the courtyard had no
 >   roof. Two disjoint terms only add up when BOTH are right.
-> - ⚠️⚠️ **The provider must be gated on its ability to RUN.** `RTGI::providesIndirectDiffuse()`
->   repeats the exact gate `PostProcessor` skips the effect on (hardware, `isRayTracingSettingEnabled()`,
->   `isRayTracingReady()`). Claiming ownership while the TLAS is still building would hand the diffuse
+> - ⚠️⚠️ **The provider must be gated on its ability to RUN.** `RTGI::providesIndirectDiffuse()` used to
+>   repeat the gate `PostProcessor` skips the effect on; since 2026-11-15 the effect only declares that it provides
+>   (`true`) and `PostProcessStack::hasEnabledIndirectDiffuseProvider()` asks THE gate, `canOccupantRun()`, with the
+>   frame's capabilities — one function for the selection, the hand-over and the executor. Claiming ownership while the TLAS is still building would hand the diffuse
 >   to an effect that draws nothing — a black flash over the first frames of every scene.
 > - ⚠️ **Known limitation until the frame is reordered**: the indirect effects run AFTER the
 >   TranslucentGB pass, so a surface seen THROUGH a transmissive material gets no indirect at all

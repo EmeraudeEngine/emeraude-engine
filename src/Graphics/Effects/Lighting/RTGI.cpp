@@ -31,25 +31,24 @@
 #include <string>
 
 /* Third-party inclusions. */
+#include "Graphics/RayTracingFrame.hpp"
 #include "volk.h"
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
-#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/StarMaskGLSL.hpp"
+#include "Graphics/IndirectPostProcessEffect.hpp"
 #include "Math/Vector.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/Types.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
-#include "Vulkan/Device.hpp"
 
 /* Local inclusions. */
-#include "Graphics/IrradianceProbeVolume.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -58,12 +57,10 @@
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/GPUProfiler.hpp"
-#include "Vulkan/LayoutManager.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
-	class DescriptorSetLayout;
 }
 
 namespace
@@ -78,7 +75,7 @@ namespace
 	 * The output is DEMODULATED: no receiver albedo — the whole denoise/temporal chain
 	 * carries irradiance and the combine pass re-applies the albedo at full resolution.
 	 *
-	 * Descriptor set 0 (RT data — bound from Renderer::rtDescriptorSet()):
+	 * Descriptor set 0 (RT data — the frame's ray-tracing set, FrameContext::rayTracing):
 	 *   binding 0: accelerationStructureEXT (TLAS)
 	 *   binding 1: RTMeshMetaData SSBO
 	 *   binding 2: RTMaterialData SSBO
@@ -94,7 +91,7 @@ namespace
 	 * Descriptor set 2 (bindless textures — from BindlessTextureManager):
 	 *   binding 1: sampler2D[] (2D texture array)
 	 *
-	 * Descriptor set 3 (irradiance probe volume — Renderer::irradianceProbeVolume()):
+	 * Descriptor set 3 (irradiance probe volume — RayTracing::irradianceProbeVolume()):
 	 *   bindings 3-5: parameters UBO + the two atlases, see Effects/Shared/IrradianceProbesGLSL.hpp
 	 */
 	constexpr auto RTGITraceFragmentShader = R"GLSL(
@@ -385,7 +382,7 @@ float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 
 )GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL R"GLSL(
 /* Compute direct lighting at hit point (Lambert diffuse over all scene lights).
- * lightCount is the frame's RT light count (skyParams.w of the frame block, Renderer::rtLightCount()), capped at 16.
+ * lightCount is the frame's RT light count (skyParams.w of the frame block, RayTracingFrame::lightCount), capped at 16.
  * Each contribution is gated by a shadow ray: without the occlusion test, every hit
  * point receives the light straight through walls and the indirect pass floods
  * shadowed areas (the raster direct pass is shadow-mapped, the GI must match). */
@@ -556,7 +553,7 @@ void main()
 	/* Offset ray origin along normal to prevent self-intersection. */
 	vec3 rayOrigin = worldPos + worldNormal * adaptiveBias;
 
-	/* The lights written THIS frame (Renderer::rtLightCount(), as RTR and the probes read it), still capped at 16 for
+	/* The lights written THIS frame (RayTracingFrame::lightCount, as RTR and the probes read it), still capped at 16 for
 	 * the GI bounces (the SSBO holds 128: the cap is a deliberate cost bound, one shadow ray per light per bounce).
 	 * ⚠️ Until 2026-09-25 it walked min(SSBO length, 16) slots whatever the count: the packer never clears the tail,
 	 * so a light disabled since (the sun course at dusk shifts the later lights down one slot) left a stale copy
@@ -866,7 +863,6 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		/* ---- Descriptor set layouts ---- */
-		auto & layoutManager = renderer.layoutManager();
 
 		/* Trace input (set 1): depth + normals + GI history samplers, plus the frame UBO
 		 * (the per-frame data outgrew the 128-byte push constant minimum). The receiver
@@ -879,52 +875,11 @@ namespace EmEn::Graphics::Effects::Lighting
 			return false;
 		}
 
-		/* RT descriptor set layout (set 0) — from the Renderer. */
-		auto rtLayout = renderer.rtDescriptorSetLayout();
-
-		if ( rtLayout == nullptr )
-		{
-			TraceError{ClassId} << "RT descriptor set layout not available !";
-
-			return false;
-		}
-
-		/* Bindless texture descriptor set layout (set 2) — from BindlessTextureManager. */
-		auto bindlessLayout = renderer.bindlessTextureManager().descriptorSetLayout();
-
-		if ( bindlessLayout == nullptr )
-		{
-			TraceError{ClassId} << "Bindless texture descriptor set layout not available !";
-
-			return false;
-		}
-
-		/* Irradiance probe volume (set 3): the multi-bounce feedback reads it at every hit. The
-		 * renderer creates it with the acceleration structure builder, so it exists whenever this
-		 * effect can; without it the effect is not created (the stack falls back to SSGI). */
-		const auto * probeVolume = renderer.irradianceProbeVolume();
-
-		if ( probeVolume == nullptr || !probeVolume->usable() )
-		{
-			TraceError{ClassId} << "The irradiance probe volume is not available: the ray-traced GI needs it for its multi-bounce feedback !";
-
-			return false;
-		}
-
-		/* ---- Pipeline layouts ---- */
-		{
-			/* Trace: set 0 = RT data, set 1 = input textures + frame UBO, set 2 = bindless textures,
-			 * set 3 = irradiance probes. No push constants: the per-frame data lives in the UBO. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(rtLayout);
-			sets.emplace_back(traceInputLayout);
-			sets.emplace_back(bindlessLayout);
-			sets.emplace_back(probeVolume->descriptorSetLayout());
-
-			m_traceLayout = layoutManager.getPipelineLayout(sets, {});
-		}
-
-		if ( m_traceLayout == nullptr )
+		/* ---- The trace pipeline layout, on the family's set convention (AbstractRayTracedEffect): set 0 = what the
+		 * frame traces, set 1 = the input textures + the frame UBO, set 2 = the bindless textures, set 3 = the
+		 * irradiance probes — the multi-bounce feedback reads them at every hit, so without the volume the effect is
+		 * not created (the stack falls back to SSGI). No push constants: the per-frame data lives in the UBO. ---- */
+		if ( !this->createTraceLayout(ClassId, traceInputLayout, RadianceCache::Read) )
 		{
 			return false;
 		}
@@ -944,7 +899,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		/* ---- Create pipelines ---- */
-		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTGI_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
+		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTGI_Trace", vertexModule, traceFragment, this->traceLayout(), m_traceTarget);
 
 		if ( m_tracePipeline == nullptr )
 		{
@@ -990,7 +945,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_tracePerFrame.clear();
 
 		m_tracePipeline.reset();
-		m_traceLayout.reset();
+		this->destroyTraceLayout();
 
 		m_denoiser.destroy();
 
@@ -1037,7 +992,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			/* Ambient-occlusion lane: the CONSUMER's range, handed over by the stack's slot
 			 * pairing (0 = no consumer this frame, the shader publishes the neutral 1.0). */
 			.occlusionMaxDistance = m_occlusionLaneRange,
-			.lightCount = this->renderer().rtLightCount(),
+			.lightCount = context.rayTracing->lightCount,
 			.skyStarMask = context.skyStarMask,
 			.preExposure = context.preExposure
 		}));
@@ -1078,30 +1033,9 @@ namespace EmEn::Graphics::Effects::Lighting
 			};
 			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 
-			/* Bind set 0: RT descriptor set (TLAS + SSBOs). */
-			if ( const auto * rtDescSet = this->renderer().rtDescriptorSet(); rtDescSet != nullptr )
-			{
-				commandBuffer.bind(*rtDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
-			}
-
-			/* Bind set 1: Input textures + frame UBO. */
-			commandBuffer.bind(*m_tracePerFrame[frameIndex], *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 1);
-
-			/* Bind set 2: Bindless textures. */
-			if ( const auto * bindlessDescSet = this->renderer().bindlessTextureManager().descriptorSet(); bindlessDescSet != nullptr )
-			{
-				commandBuffer.bind(*bindlessDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 2);
-			}
-
-			/* Bind set 3: the irradiance probe volume of the frame (refreshed by the renderer before
-			 * this chain runs). */
-			if ( const auto * probeVolume = this->renderer().irradianceProbeVolume(); probeVolume != nullptr )
-			{
-				if ( const auto * probeSet = probeVolume->descriptorSet(frameIndex); probeSet != nullptr )
-				{
-					commandBuffer.bind(*probeSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 3);
-				}
-			}
+			/* The sets of the trace pass, on the family's convention: what THIS frame traces (0), this effect's inputs
+			 * (1), the bindless textures (2) and the irradiance probes (3). */
+			this->bindTraceSets(commandBuffer, *m_tracePerFrame[frameIndex], context, frameIndex);
 
 			commandBuffer.draw(3, 1);
 
@@ -1118,13 +1052,11 @@ namespace EmEn::Graphics::Effects::Lighting
 	bool
 	RTGI::providesIndirectDiffuse () const noexcept
 	{
-		const auto & renderer = this->renderer();
-
-		/* ⚠️ The SAME gate the post-process executor skips this effect on (PostProcessor.cpp):
-		 * hardware, user setting, and a TLAS that can actually be consumed this frame. Claiming
-		 * the indirect diffuse while the trace cannot run would leave the frame with NO diffuse
-		 * sky at all — the scene hands its own IBL leg over to an effect that draws nothing. */
-		return renderer.device()->rayTracingEnabled() && renderer.isRayTracingReady();
+		/* NOTE: By nature: its miss branch integrates the sky. Whether it can RUN in a frame is not answered here: the
+		 * stack asks its one gate (PostProcessStack::hasEnabledIndirectDiffuseProvider() → canOccupantRun()), the gate
+		 * the executor records with — claiming the indirect diffuse while the trace cannot run would leave the frame
+		 * with NO diffuse sky at all. */
+		return true;
 	}
 
 	IndirectPostProcessEffect::CombineContribution

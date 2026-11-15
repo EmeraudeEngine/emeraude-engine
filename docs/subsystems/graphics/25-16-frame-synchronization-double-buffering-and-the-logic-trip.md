@@ -19,7 +19,7 @@ the previous frame causes race conditions (flickering, data corruption).
 
 **Pattern:**
 - `SceneMetaData::m_meshMetaDataSSBOs` — vector of SSBOs, one per frame-in-flight
-- `Renderer::updateRTDescriptorSet()` — binds `meshMetaDataSSBO(m_currentFrameIndex)`
+- `RayTracing::bindFrame()` (the renderer's ray-tracing sub-service) — binds `meshMetaDataSSBO(frameIndex)`
 - `Scene::prepareRender()` — calls `rebuild(..., frameIndex)` with current frame index
 
 ### Rule 2: View Matrix State Index

@@ -223,7 +223,7 @@ namespace EmEn::Graphics
 				 * slot pairing, not by the producer — see
 				 * IndirectPostProcessEffect::providesOcclusionLane(). */
 				float occlusionMaxDistance{0.0F};
-				/* The lights written this frame in the RT light SSBO (Renderer::rtLightCount()): the trace walks
+				/* The lights written this frame in the RT light SSBO (RayTracingFrame::lightCount): the trace walks
 				 * exactly these. Walking the SSBO's capacity instead counted a stale copy of a disabled light
 				 * twice (the packer never clears the tail). 0 for the screen-space producers. */
 				uint32_t lightCount{0};

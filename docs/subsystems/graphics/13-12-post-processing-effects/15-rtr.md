@@ -11,7 +11,7 @@
 4. **Composite**: Blends blurred reflection with scene color using confidence (alpha)
 
 **Descriptor sets** (trace pass):
-- Set 0: RT data from `Renderer::rtDescriptorSet()` — TLAS (binding 0), mesh metadata SSBO (binding 1),
+- Set 0: what the frame traces (`FrameContext::rayTracing`, bound by the family's `bindTraceSets()`) — TLAS (binding 0), mesh metadata SSBO (binding 1),
   material data SSBO (binding 2), light array SSBO (binding 3), sub-geometry table SSBO (binding 4)
 - Set 1: Input textures — depth (binding 0), normals (binding 1), environment cubemap (binding 2),
   scene albedo (binding 3 — the effect declares `requiresAlbedo()`)

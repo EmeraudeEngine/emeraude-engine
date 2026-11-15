@@ -21,8 +21,10 @@ different answer.
 
 - **Resident** — filed into a slot. The screen-space lane always is; the ray-traced lane is only
   when the two *session-constant* conditions hold (`device()->rayTracingEnabled()` **and**
-  `Renderer::isRayTracingSettingEnabled()`). ⚠️ `isRayTracingReady()` is deliberately **not**
-  consulted here: it answers a question about *this frame*.
+  `Renderer::isRayTracingSettingEnabled()`) — since 2026-11-15 ONE test, `Renderer::rayTracing().usable()`, the
+  ray-tracing sub-service the renderer starts on exactly those conditions. ⚠️ Whether a FRAME can trace
+  (`PostProcessStack::FrameCapabilities::rayTracing`) is deliberately **not** consulted here: it answers a question
+  about *this frame*.
 - **Selected** — what the owner wants, one index per slot, written from the **main thread**
   (console, an input handler) and read by the render thread. Written *only* through
   `selectOccupant()` / `selectNoOccupant()` / `selectLightingLane()`.
@@ -51,8 +53,8 @@ executor skips on** — they must stay identical, or the fallback and the record
 
 > [!CAUTION]
 > **The fallback and the lazy residency will eat each other without a grace period.**
-> `isRayTracingReady()` is false for the first frames of *every* scene (async TLAS build) and
-> cannot distinguish "not yet" from "never" — it is a null/created test on the current TLAS.
+> A frame's ray-tracing capability (`FrameCapabilities::rayTracing`) is false for the first frames of *every* scene
+> (async TLAS build) and cannot distinguish "not yet" from "never" — it is "the scene holds a created structure".
 > Falling back on the first stalled frame therefore materialized the **entire screen-space lane on
 > every launch** of a ray-traced scene, seconds before the traced one took over: measured on
 > Sponza, all three screen-space effects reported `created` while the traced lane was the one

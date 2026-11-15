@@ -69,6 +69,8 @@
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/PathDebugOverlay.hpp"
 #include "Graphics/PostProcessor.hpp"
+#include "Graphics/RayTracing.hpp"
+#include "Graphics/RayTracingFrame.hpp"
 #include "Graphics/Recorder.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderable/DynamicSkyResource.hpp"
@@ -113,31 +115,23 @@
 #include "Scenes/ParticipatingMedium.hpp"
 #include "Scenes/Scene.hpp"
 #include "Scenes/SceneInstanceTransforms.hpp"
-#include "Scenes/SceneMetaData.hpp"
 #include "Scenes/SkyState.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
-#include "SkinnedGeometryProcessor.hpp"
 #include "TextureResource/TextureCubemap.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/AccelerationStructure.hpp"
-#include "Vulkan/AccelerationStructureBuilder.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorPool.hpp"
-#include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/GPUProfiler.hpp"
 #include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/Instance.hpp"
-#include "Vulkan/MemoryRegion.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/RenderPass.hpp"
 #include "Vulkan/Sampler.hpp"
-#include "Vulkan/ShaderStorageBufferObject.hpp"
 #include "Vulkan/Surface.hpp"
 #include "Vulkan/SwapChain.hpp"
 #include "Vulkan/Sync/Fence.hpp"
@@ -923,67 +917,33 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* Create the RT descriptor set for ray query shaders. */
-		if ( m_device->rayTracingEnabled() && !this->createRTDescriptorSet() )
-		{
-			Tracer::warning(ClassId, "Unable to create RT descriptor set. Ray tracing reflections will be unavailable.");
-		}
-
-		/* Create the single, renderer-owned acceleration structure builder. It is shared by every
-		 * geometry (BLAS, for SHARED geometries that outlive any scene) and every scene (TLAS).
-		 * It must NOT be owned per-scene: deleting a scene would otherwise destroy the builder the
-		 * active scene still needs and leave geometries unable to build their BLAS. */
-		/* Acceleration structures are built when the device can AND the requested lighting lane
-		 * may need them — "Auto" or "RayTracing" (owner decision, 2026-09-10). The settings master
-		 * switch that used to gate this (`Core/Graphics/RayTracing/Enabled`) is gone: it said the
-		 * same thing as the lane key while silently dominating it.
-		 * ⚠️⚠️ THIS DECIDES THE WHOLE SESSION, not the starting frame. A BLAS is built when a
-		 * geometry loads (`Geometry::Interface::onDependenciesLoaded()`, which skips when this
-		 * builder is null) and a geometry cannot gain one afterwards — so with the lane set to
-		 * "ScreenSpace" or "None" there is nothing to trace against, and
-		 * `setLightingMode("RayTracing")` from the console CANNOT bring ray tracing back before a
-		 * relaunch. `PostProcessStack::installLightingFamily()` reads this very pointer to decide
-		 * whether the traced lane is resident at all, so the console reports the truth instead of
-		 * offering a switch that would quietly do nothing. */
+		/* The ray-tracing sub-service (Graphics::RayTracing): the acceleration structure builder, the set layout and
+		 * per-frame sets of the traced passes, the skinned geometry processor and the irradiance probe volume. Started
+		 * HERE, after the descriptor pool and the frame scopes it needs, and last of the sub-services: it is the first
+		 * one terminated.
+		 * It is started when the device can trace AND the requested lighting lane may need it — "Auto" or "RayTracing"
+		 * (owner decision, 2026-09-10). The settings master switch that used to gate this
+		 * (`Core/Graphics/RayTracing/Enabled`) is gone: it said the same thing as the lane key while silently
+		 * dominating it.
+		 * ⚠️⚠️ THIS DECIDES THE WHOLE SESSION, not the starting frame. A BLAS is built when a geometry loads
+		 * (`Geometry::Interface::onDependenciesLoaded()`, which skips when the service gives no builder) and a geometry
+		 * cannot gain one afterwards — so with the lane set to "ScreenSpace" or "None" there is nothing to trace
+		 * against, and `setLightingMode("RayTracing")` from the console CANNOT bring ray tracing back before a
+		 * relaunch. `PostProcessStack::installLightingFamily()` reads this very service's usable() to decide whether
+		 * the traced lane is resident at all, so the console reports the truth instead of offering a switch that
+		 * would quietly do nothing. */
 		const auto requestedLane = m_primaryServices.settings().getOrSetDefault< std::string >(GraphicsPPLightingLaneKey, DefaultGraphicsPPLightingLane);
 		const auto laneMayTrace = requestedLane == GraphicsPPLightingLaneAuto || requestedLane == "RayTracing";
 
 		if ( m_device->rayTracingEnabled() && laneMayTrace )
 		{
-			m_accelerationStructureBuilder = std::make_unique< AccelerationStructureBuilder >(m_device);
-
-			if ( !m_accelerationStructureBuilder->initialize() )
+			if ( m_rayTracing.initialize(m_subServicesEnabled) )
 			{
-				Tracer::warning(ClassId, "Unable to initialize the acceleration structure builder. Ray tracing will be unavailable.");
-
-				m_accelerationStructureBuilder.reset();
+				TraceSuccess{ClassId} << m_rayTracing.name() << " service up!";
 			}
-
-			/* Skinned geometry RT support: compute pass skinning vertices into per-instance
-			 * mirror buffers for the per-frame BLAS refit. Optional: without it, skinned
-			 * meshes are simply absent from the TLAS. */
-			if ( m_accelerationStructureBuilder != nullptr )
+			else
 			{
-				m_skinnedGeometryProcessor = std::make_unique< SkinnedGeometryProcessor >();
-
-				if ( !m_skinnedGeometryProcessor->initialize(*this) )
-				{
-					Tracer::warning(ClassId, "Unable to initialize the skinned geometry processor. Skinned meshes will be absent from ray-traced effects.");
-
-					m_skinnedGeometryProcessor.reset();
-				}
-
-				/* The irradiance probe volume — the radiance cache the traced effects read at their
-				 * hits (Sep 2026). It exists exactly when the traced lane is resident: RTR requires
-				 * it (the reflected world had no indirect light at all before it). */
-				m_irradianceProbeVolume = std::make_unique< IrradianceProbeVolume >();
-
-				if ( !m_irradianceProbeVolume->initialize(*this) )
-				{
-					Tracer::warning(ClassId, "Unable to initialize the irradiance probe volume. The ray-traced reflections will be unavailable.");
-
-					m_irradianceProbeVolume.reset();
-				}
+				TraceWarning{ClassId} << m_rayTracing.name() << " service failed at startup: ray tracing will be unavailable.";
 			}
 		}
 
@@ -1157,21 +1117,13 @@ namespace EmEn::Graphics
 		 * These textures have VMA allocations that must be freed before the device is destroyed. */
 		this->clearDefaultResources();
 
-		/* NOTE: The skinned geometry processor and the irradiance probe volume own compute
-		 * pipelines, layouts and images: they must be released while the device still exists, or
-		 * their Vulkan objects leak at device destroy. */
-		m_irradianceProbeVolume.reset();
-		m_skinnedGeometryProcessor.reset();
-
 		/* Its descriptor sets come from the pool released below. */
 		m_selectionOutline.destroy();
 		m_pathDebugOverlay.destroy();
 		m_deferredLightResolve.destroy();
 
-		m_accelerationStructureBuilder.reset();
-		m_rtDescriptorSets.clear();
-		m_rtDescriptorSetLayout.reset();
-		m_RTStandInSSBO.reset();
+		/* NOTE: The ray-tracing sub-service still holds descriptor sets of this pool: they keep it alive until the
+		 * service is terminated, with the other sub-services below, while the device still exists. */
 		m_descriptorPool = nullptr;
 
 		this->destroyRenderingSystem();
@@ -2039,6 +1991,10 @@ namespace EmEn::Graphics
 	void
 	Renderer::renderFrame (const std::shared_ptr< Scenes::Scene > & scene, const Overlay::Manager & overlayManager, const Scenes::Editor::Manager * editorManager) noexcept
 	{
+		/* What a frame traces is bound BY that frame, FOR that frame (frameRayTracing()): it starts unbound — nothing of
+		 * the previous frame, whatever its scene — and nothing outlives it, on every exit path below. */
+		const RayTracing::FrameGuard rayTracingFrameGuard{m_rayTracing};
+
 		/* NOTE: A lost device: no recreation, no submit (Core stops the engine). */
 		if ( this->isDeviceLost() )
 		{
@@ -2230,9 +2186,20 @@ namespace EmEn::Graphics
 			 * ⚠️ AFTER syncCameraEffects() and BEFORE syncSlotPairings(): it may materialize an
 			 * occupant and change which one is enabled, which is precisely what the pairings
 			 * mirror. */
+			/* What this frame offers the occupants (PostProcessStack::FrameCapabilities), decided ONCE, here: the
+			 * selection and the indirect-diffuse answer below read the same value.
+			 * Ray tracing: the session can trace AND the scene being rendered holds an acceleration structure — its
+			 * previous build; the first frame of a scene has none, which the selection's grace period waits for.
+			 * Never what the previous frame left: its scene may be gone. */
+			const PostProcessStack::FrameCapabilities capabilities{
+				.lightSet = &scene->lightSet(),
+				.clouds = sceneCloudSet(scene.get()),
+				.rayTracing = m_rayTracing.usable() && scene->hasAccelerationStructure()
+			};
+
 			if ( stack != nullptr )
 			{
-				scene->postProcessStack()->syncSlotSelection(*this, &scene->lightSet(), sceneCloudSet(scene.get()));
+				scene->postProcessStack()->syncSlotSelection(*this, capabilities);
 			}
 
 			/* Producer/consumer pairings BETWEEN slots, refreshed every frame on this thread.
@@ -2251,7 +2218,7 @@ namespace EmEn::Graphics
 			/* The answer to the logic thread's question "does an enabled effect provide the indirect diffuse ?"
 			 * (Scene::updateIBLDiffuseOwnership()), published HERE, once this frame's effects and their enabled states
 			 * are final: the chain and the acceleration structure it asks about are this thread's alone. */
-			scene->publishIndirectDiffuseProvider(stack != nullptr && scene->postProcessStack()->hasEnabledIndirectDiffuseProvider());
+			scene->publishIndirectDiffuseProvider(stack != nullptr && scene->postProcessStack()->hasEnabledIndirectDiffuseProvider(capabilities));
 
 			/* The master switch says the user ALLOWS post-processing; this says there is
 			 * something to run. A scene with an empty chain and a bare camera stays on the
@@ -2488,7 +2455,7 @@ namespace EmEn::Graphics
 		{
 			m_bindlessTextureManager.syncTextureSet(m_currentFrameIndex, scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
 
-			scenePtr->recordTLASBuild(commandBuffer->handle(), m_skinnedGeometryProcessor.get());
+			scenePtr->recordTLASBuild(commandBuffer->handle(), m_rayTracing.skinnedGeometryProcessor());
 
 			/* The clouds' shadow map, read by the lit materials of THIS frame. */
 			scenePtr->recordCloudShadowMap(*commandBuffer, *this);
@@ -2564,16 +2531,13 @@ namespace EmEn::Graphics
 
 			m_postProcessor.recordBlit(*commandBuffer);
 
-			/* Set the current TLAS and update RT descriptor set for post-process effects.
+			/* Bind what THIS frame traces — the structure it just built and the scene's buffers — for the post-process
+			 * effects (frameRayTracing(); nothing is bound when the scene has no structure).
 			 * Capture the read state index so post-process effects (RTR) use view matrices
 			 * consistent with the depth buffer rendered this frame. */
-			m_currentTLAS = scenePtr->TLAS();
 			m_currentReadStateIndex = scenePtr->preparedReadStateIndex();
 
-			if ( m_currentTLAS != nullptr )
-			{
-				this->updateRTDescriptorSet(scenePtr->sceneMetaData(), scenePtr->lightSet());
-			}
+			m_rayTracing.bindFrame(m_currentFrameIndex, scenePtr->sceneMetaData(), scenePtr->lightSet());
 
 			/* The radiance cache is refreshed HERE: after the TLAS build and the RT set of the
 			 * frame, before any traced effect reads it. */
@@ -2670,7 +2634,7 @@ namespace EmEn::Graphics
 			{
 				const GPUProfiler::ScopedZone profilingZone{m_GPUProfiler.get(), *commandBuffer, "TLASBuild"};
 
-				scenePtr->recordTLASBuild(commandBuffer->handle(), m_skinnedGeometryProcessor.get());
+				scenePtr->recordTLASBuild(commandBuffer->handle(), m_rayTracing.skinnedGeometryProcessor());
 			}
 
 			/* The clouds' shadow map, read by the lit materials of THIS frame: before the scene pass,
@@ -2769,28 +2733,21 @@ namespace EmEn::Graphics
 			profiler->endScope(*commandBuffer);
 		}
 
-		/* Set the current TLAS and update RT descriptor set for post-process effects.
+		/* Bind what THIS frame traces — the structure it just built and the scene's buffers — for the post-process
+		 * effects (frameRayTracing(); nothing is bound when the scene has no structure, or without a scene).
 		 * Capture the read state index so post-process effects (RTR) use view matrices
 		 * consistent with the depth buffer rendered this frame.
 		 * ⚠️ BEFORE the pre-translucency half below: RTGI traces there. */
 		if ( scenePtr != nullptr )
 		{
-			m_currentTLAS = scenePtr->TLAS();
 			m_currentReadStateIndex = scenePtr->preparedReadStateIndex();
 
-			if ( m_currentTLAS != nullptr )
-			{
-				this->updateRTDescriptorSet(scenePtr->sceneMetaData(), scenePtr->lightSet());
-			}
+			m_rayTracing.bindFrame(m_currentFrameIndex, scenePtr->sceneMetaData(), scenePtr->lightSet());
 
 			/* The radiance cache is refreshed HERE: after the TLAS build and the RT set of the frame,
 			 * before any traced effect reads it. */
 			m_postProcessor.setSkyStarMask(sceneStarMask(scenePtr));
 			this->recordIrradianceProbeUpdate(commandBuffer, scenePtr);
-		}
-		else
-		{
-			m_currentTLAS = nullptr;
 		}
 
 		/* ⚠️ THE FRAME IS CUT IN TWO around the TranslucentGB pass when it contains grab-pass
@@ -4214,15 +4171,18 @@ namespace EmEn::Graphics
 	void
 	Renderer::recordIrradianceProbeUpdate (const std::shared_ptr< CommandBuffer > & commandBuffer, Scenes::Scene * scene) const noexcept
 	{
-		if ( m_irradianceProbeVolume == nullptr || !m_irradianceProbeVolume->usable() || scene == nullptr || !this->isRayTracingReady() )
+		auto * irradianceProbeVolume = m_rayTracing.irradianceProbeVolume();
+
+		if ( irradianceProbeVolume == nullptr || !irradianceProbeVolume->usable() || scene == nullptr )
 		{
 			return;
 		}
 
-		const auto * rtDescriptorSet = this->rtDescriptorSet();
+		/* NOTE: What this frame traces, or nothing to refresh the cache with. */
+		const auto * rayTracing = this->frameRayTracing();
 		const auto * bindlessDescriptorSet = m_bindlessTextureManager.descriptorSet();
 
-		if ( rtDescriptorSet == nullptr || bindlessDescriptorSet == nullptr )
+		if ( rayTracing == nullptr || bindlessDescriptorSet == nullptr )
 		{
 			return;
 		}
@@ -4248,148 +4208,13 @@ namespace EmEn::Graphics
 			.cameraPosition = {inv[12], inv[13], inv[14]},
 			.ambient = ambientColor * ambientIlluminance,
 			.skyLuminance = sceneSkyLuminance(scene),
-			.lightCount = this->rtLightCount(),
+			.lightCount = rayTracing->lightCount,
 			.skyStarMask = sceneStarMask(scene)
 		};
 
 		const GPUProfiler::ScopedZone profilingZone{m_GPUProfiler.get(), *commandBuffer, "IrradianceProbes"};
 
-		m_irradianceProbeVolume->recordUpdate(*commandBuffer, this->currentFrameIndex(), *rtDescriptorSet, *bindlessDescriptorSet, inputs);
-	}
-
-	bool
-	Renderer::createRTDescriptorSet () noexcept
-	{
-		/* Raytracing descriptor layout:
-		 * binding 0 = TLAS,
-		 * binding 1 = mesh metadata SSBO,
-		 * binding 2 = material data SSBO,
-		 * binding 3 = light array SSBO,
-		 * binding 4 = sub-geometry table SSBO.
-		 */
-		m_rtDescriptorSetLayout = std::make_shared< DescriptorSetLayout >(m_device, "RTDescriptorSet");
-
-		/* FRAGMENT for the post-process effects (fullscreen passes), COMPUTE for the irradiance probe
-		 * volume's trace (Sep 2026): a compute pipeline may only bind a set whose bindings declare
-		 * the compute stage — a fragment-only layout would fail the ray-query compute at bind time. */
-		constexpr VkShaderStageFlags rtStages = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
-
-		if ( !m_rtDescriptorSetLayout->declareAccelerationStructureKHR(0, rtStages) ||
-			 !m_rtDescriptorSetLayout->declareStorageBuffer(1, rtStages) ||
-			 !m_rtDescriptorSetLayout->declareStorageBuffer(2, rtStages) ||
-			 !m_rtDescriptorSetLayout->declareStorageBuffer(3, rtStages) ||
-			 !m_rtDescriptorSetLayout->declareStorageBuffer(4, rtStages) )
-		{
-			TraceError{ClassId} << "Unable to declare RT descriptor set layout bindings!";
-
-			m_rtDescriptorSetLayout.reset();
-
-			return false;
-		}
-
-		if ( !m_rtDescriptorSetLayout->createOnHardware() )
-		{
-			TraceError{ClassId} << "Unable to create RT descriptor set layout!";
-
-			m_rtDescriptorSetLayout.reset();
-
-			return false;
-		}
-
-		/* NOTE: The stand-in of a storage binding the scene does not provide (doom-loader: a disabled light set has no RT
-		 * light buffer, and 18 918 VUID-…-08114 "never been updated" followed). Every RT storage block is a runtime-sized
-		 * vec4 array, so four zero vec4 read as an empty array (lights.length() / 4 = 0 lights). */
-		{
-			constexpr std::array< float, 16 > Zeros{};
-
-			m_RTStandInSSBO = std::make_unique< ShaderStorageBufferObject >(m_device, sizeof(Zeros));
-
-			if ( !m_RTStandInSSBO->createOnHardware() || !m_RTStandInSSBO->writeData({Zeros.data(), sizeof(Zeros)}) )
-			{
-				TraceError{ClassId} << "Unable to create the RT stand-in storage buffer !";
-
-				m_RTStandInSSBO.reset();
-				m_rtDescriptorSetLayout.reset();
-
-				return false;
-			}
-		}
-
-		const auto frameCount = this->framesInFlight();
-
-		m_rtDescriptorSets.resize(frameCount);
-
-		for ( uint32_t index = 0; index < frameCount; ++index )
-		{
-			m_rtDescriptorSets[index] = std::make_unique< DescriptorSet >(m_descriptorPool, m_rtDescriptorSetLayout);
-
-			if ( !m_rtDescriptorSets[index]->create() )
-			{
-				TraceError{ClassId} << "Unable to create RT descriptor set for frame " << index << "!";
-
-				m_rtDescriptorSets.clear();
-				m_rtDescriptorSetLayout.reset();
-				m_RTStandInSSBO.reset();
-
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	bool
-	Renderer::isRayTracingReady () const noexcept
-	{
-		return m_currentTLAS != nullptr && m_currentTLAS->isCreated() && !m_rtDescriptorSets.empty();
-	}
-
-	void
-	Renderer::updateRTDescriptorSet (const Scenes::SceneMetaData & sceneMetaData, const Scenes::LightSet & lightSet) noexcept
-	{
-		if ( m_rtDescriptorSets.empty() )
-		{
-			return;
-		}
-
-		const auto * TLAS = sceneMetaData.TLAS();
-
-		if ( TLAS == nullptr )
-		{
-			return;
-		}
-
-		/* Update only the current frame's descriptor set to avoid write-while-pending. */
-		const auto & descriptorSet = m_rtDescriptorSets[m_currentFrameIndex];
-
-		/* Binding 0: TLAS. */
-		static_cast< void >(descriptorSet->writeAccelerationStructure(0, TLAS->handle()));
-
-		/* Bindings 1-4: the scene's storage buffers (per frame where they are: no CPU/GPU race). A buffer the scene does
-		 * not provide gets the stand-in: the programs statically use every binding, so none may stay unwritten. */
-		const auto writeStorage = [this, &descriptorSet] (uint32_t binding, const ShaderStorageBufferObject * buffer) noexcept {
-			const auto * bound = buffer != nullptr ? buffer : m_RTStandInSSBO.get();
-
-			if ( bound == nullptr )
-			{
-				return;
-			}
-
-			const VkDescriptorBufferInfo info{
-				.buffer = bound->handle(),
-				.offset = 0,
-				.range = bound->bytes()
-			};
-
-			static_cast< void >(descriptorSet->writeStorageBuffer(binding, info));
-		};
-
-		writeStorage(1, sceneMetaData.meshMetaDataSSBO(m_currentFrameIndex));
-		writeStorage(2, sceneMetaData.materialDataSSBO(m_currentFrameIndex));
-		writeStorage(3, lightSet.RTLightBuffer(m_currentFrameIndex));
-		writeStorage(4, sceneMetaData.subGeometryDataSSBO(m_currentFrameIndex));
-
-		m_RTLightCount = lightSet.RTLightCount();
+		irradianceProbeVolume->recordUpdate(*commandBuffer, this->currentFrameIndex(), rayTracing->descriptorSet, *bindlessDescriptorSet, inputs);
 	}
 
 	namespace

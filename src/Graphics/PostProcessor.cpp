@@ -50,6 +50,7 @@
 #include "Graphics/EffectSlot.hpp"
 #include "Graphics/Geometry/Types.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Graphics/RayTracing.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "IndirectPostProcessEffect.hpp"
 #include "Math/Matrix.hpp"
@@ -62,9 +63,7 @@
 #include "Saphir/Generator/PostProcessing.hpp"
 #include "Saphir/Program.hpp"
 #include "SceneRenderTarget.hpp"
-#include "Scenes/CloudSet.hpp"
 #include "Scenes/Component/Camera.hpp"
-#include "Scenes/LightSet.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
 #include "StaticVector.hpp"
@@ -75,7 +74,6 @@
 #include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/Device.hpp"
 #include "Vulkan/GPUProfiler.hpp"
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/MemoryRegion.hpp"
@@ -1528,6 +1526,8 @@ namespace EmEn::Graphics
 			/* The renderer's own frame state, not the scene's: the atmosphere THIS frame submitted. */
 			.atmosphere = m_renderer.frameSkyAtmosphere(),
 			.stars = m_renderer.frameStarField(),
+			/* What THIS frame bound to trace, null when it does not. */
+			.rayTracing = m_renderer.frameRayTracing(),
 			.view = viewData,
 			.projectionJitter = mainRT->viewMatrices().projectionJitter(),
 			.residualExposure = [this, &stack, activeCamera] {
@@ -1554,6 +1554,14 @@ namespace EmEn::Graphics
 			},
 			.viewProjectionSparse = viewProjectionSparse,
 			.temporalDiscontinuity = m_frameTemporalDiscontinuity
+		};
+
+		/* What this frame offers the occupants of a slot, as it was recorded (the selection decided on the scene's
+		 * state at the start of the frame). */
+		const PostProcessStack::FrameCapabilities capabilities{
+			.lightSet = lightSet,
+			.clouds = clouds,
+			.rayTracing = context.rayTracing != nullptr
 		};
 
 		/* Combine grouping (phase A of the pass-merging plan): contiguous OVERLAY effects
@@ -1744,23 +1752,12 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			/* Skip ray tracing effects if RT is not available, disabled via settings, or the
-			 * TLAS is not consumable yet (async build during the first frames, scene without
-			 * RT geometry): drawing would use an unbound/never-written TLAS descriptor. */
-			if ( effect->requiresRayTracing() && (!m_renderer.device()->rayTracingEnabled() || !m_renderer.isRayTracingReady()) )
-			{
-				continue;
-			}
-
-			/* Skip light-dependent effects if no main directional light is available. */
-			if ( effect->requiresLightSet() && (lightSet == nullptr || lightSet->mainDirectionalLight() == nullptr) )
-			{
-				continue;
-			}
-
-			/* Skip the cloud pass when the scene holds no cloud. ⚠️ The same condition as
-			 * PostProcessStack::canOccupantRun(): the two must agree. */
-			if ( effect->requiresCloudVolumes() && (clouds == nullptr || clouds->empty()) )
+			/* The gates that discriminate between the siblings of a slot — ray tracing, the main directional light,
+			 * the clouds — are ONE function, the one the selection applied at the start of this frame
+			 * (PostProcessStack::canOccupantRun()). Here it reads what the frame actually bound: a traced effect is
+			 * recorded only with the frame's ray-tracing set (FrameContext::rayTracing: the TLAS is built during the
+			 * first frames of a scene, and a scene may hold no ray-traced geometry), which it then binds untested. */
+			if ( !PostProcessStack::canOccupantRun(*effect, capabilities) )
 			{
 				continue;
 			}
@@ -1803,7 +1800,7 @@ namespace EmEn::Graphics
 			 * overlay group above included. */
 			if ( censusArmed && closesFrame && !censusRecorded && static_cast< size_t >(effect->slot()) >= static_cast< size_t >(EffectSlot::ToneMapping) )
 			{
-				census->recordBatch(commandBuffer, m_renderer.currentFrameIndex(), *m_grabPass, *currentTexture, effect->slot() == EffectSlot::ToneMapping, m_renderer.irradianceProbeVolume(), profiler);
+				census->recordBatch(commandBuffer, m_renderer.currentFrameIndex(), *m_grabPass, *currentTexture, effect->slot() == EffectSlot::ToneMapping, m_renderer.rayTracing().irradianceProbeVolume(), profiler);
 
 				censusRecorded = true;
 			}
@@ -1820,7 +1817,7 @@ namespace EmEn::Graphics
 		/* No tone mapper ran in the closing phase: the census counts the chain output as it is. */
 		if ( censusArmed && closesFrame && !censusRecorded )
 		{
-			census->recordBatch(commandBuffer, m_renderer.currentFrameIndex(), *m_grabPass, *currentTexture, false, m_renderer.irradianceProbeVolume(), profiler);
+			census->recordBatch(commandBuffer, m_renderer.currentFrameIndex(), *m_grabPass, *currentTexture, false, m_renderer.rayTracing().irradianceProbeVolume(), profiler);
 		}
 
 		/* Pre-translucency half: the composited result goes BACK INTO THE SCENE COLOUR, so the

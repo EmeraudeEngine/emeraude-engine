@@ -36,11 +36,28 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Graphics/IndirectPostProcessEffect.hpp"
+#include "Graphics/AbstractRayTracedEffect.hpp"
 
 /* Local inclusions for usages. */
+#include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Graphics
+	{
+		class Renderer;
+	}
+
+	namespace Vulkan
+	{
+		class DescriptorSetLayout;
+		class GraphicsPipeline;
+	}
+}
 
 namespace EmEn::Graphics::Effects::Lighting
 {
@@ -50,9 +67,9 @@ namespace EmEn::Graphics::Effects::Lighting
 	 * the dominant light source. This produces pixel-accurate contact shadows
 	 * that complement shadow maps for fine-scale occlusion detail.
 	 * Requires hardware ray tracing support (automatically skipped when unavailable).
-	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
+	 * @extends EmEn::Graphics::AbstractRayTracedEffect A member of the ray-traced family: its trace pass follows the family's set convention.
 	 */
-	class EMEN_API RTContactShadows final : public IndirectPostProcessEffect
+	class EMEN_API RTContactShadows final : public AbstractRayTracedEffect
 	{
 		public:
 
@@ -117,7 +134,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 */
 			explicit
 			RTContactShadows (Renderer & renderer) noexcept
-				: IndirectPostProcessEffect{renderer}
+				: AbstractRayTracedEffect{renderer}
 			{
 
 			}
@@ -128,7 +145,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * @param parameters The initial parameters.
 			 */
 			RTContactShadows (Renderer & renderer, const Parameters & parameters) noexcept
-				: IndirectPostProcessEffect{renderer},
+				: AbstractRayTracedEffect{renderer},
 				m_parameters{parameters}
 			{
 
@@ -184,14 +201,6 @@ namespace EmEn::Graphics::Effects::Lighting
 				return true;
 			}
 
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresRayTracing() */
-			[[nodiscard]]
-			bool
-			requiresRayTracing () const noexcept override
-			{
-				return true;
-			}
-
 			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresMaterialProperties() */
 			[[nodiscard]]
 			bool
@@ -207,7 +216,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			{
 				return true;
 			}
-
 
 			/**
 			 * @brief Sets the contact shadows parameters.
@@ -241,7 +249,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_shadowPipeline;
 			/* Pipeline layouts. */
-			std::shared_ptr< Vulkan::PipelineLayout > m_shadowLayout;
 			/* Descriptor set layouts. */
 			/** @brief Set 1 of the shadow pass: depth + normals. Set 0 is the Renderer's RT set
 			 * (TLAS + scene SSBOs), set 2 the bindless textures — both owned elsewhere. */

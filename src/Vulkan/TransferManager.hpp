@@ -462,9 +462,9 @@ namespace EmEn::Vulkan
 			/** @brief What copyImageLayerToHostBuffer() reads of an image: one array layer, in a layout, by an aspect. */
 			struct ImageLayerRead
 			{
-				uint32_t arrayLayer;
-				VkImageLayout currentLayout;
-				VkImageAspectFlags aspectMask;
+				uint32_t arrayLayer{0};
+				VkImageLayout currentLayout{VK_IMAGE_LAYOUT_UNDEFINED};
+				VkImageAspectFlags aspectMask{0};
 			};
 
 			/**

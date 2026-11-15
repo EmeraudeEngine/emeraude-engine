@@ -105,8 +105,9 @@ two implementations of one thing). Post-processing was also spread over **six** 
 > (`Geometry::Interface::onDependenciesLoaded()`, which skips when the builder is null) and a
 > geometry cannot gain one afterwards. Consequences, all deliberate:
 > - With `"ScreenSpace"` or `"None"`, nothing can be traced for the whole session.
-> - `installLightingFamily()` therefore asks **`renderer.accelerationStructureBuilder() != nullptr`**,
->   not `device()->rayTracingEnabled()`, to decide residency — one pointer, one truth. The traced
+> - `installLightingFamily()` therefore asks **`renderer.rayTracing().usable()`** (the ray-tracing sub-service,
+>   which owns the builder — `accelerationStructureBuilder() != nullptr` before 2026-11-15),
+>   not `device()->rayTracingEnabled()`, to decide residency — one service, one truth. The traced
 >   lane is simply not filed, so `listEffects()` shows it absent instead of offering a lie.
 > - `setLightingMode("RayTracing")` is **refused**, atomically, with an error naming the key.
 >   ⚠️ It used to switch the whole lighting family OFF and answer "selected": `selectLightingLane()`
@@ -119,8 +120,9 @@ two implementations of one thing). Post-processing was also spread over **six** 
 > owner hit it on the first settings reset — *"la clé est RayTracing alors que je vois le mode en
 > ScreenSpace"*. ⚠️ Its documentation here also **overstated** what it gated: the
 > `SHADER_DEVICE_ADDRESS | ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY` usage flags
-> (`VertexBufferObject.cpp`), `createRTDescriptorSet()` and the descriptor-pool AS entry were, and
-> still are, gated on **`Device::rayTracingEnabled()` alone** — pure hardware detection, since the
+> (`VertexBufferObject.cpp`) and the descriptor-pool AS entry were, and still are, gated on
+> **`Device::rayTracingEnabled()` alone** (so was `createRTDescriptorSet()` until 2026-11-15: the ray-tracing sets now
+> belong to the ray-tracing sub-service and exist only when it is started, on the device AND the lane) — pure hardware detection, since the
 > RT extensions are requested from `physicalDevice->supportsRayTracing()` without consulting any
 > setting (`Instance.cpp`). The key's only unique job was the builder, which is what moved.
 > `Core/Graphics/RayTracing/` survives for ray tracing that is **not** an effect — `TLASDistance`,

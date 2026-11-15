@@ -8,8 +8,9 @@ The engine provides a multi-pass post-processing pipeline via `PostProcessor`. E
 - `requiresHDR()` / `requiresDepth()` / `requiresNormals()` / `requiresVelocity()`
 - The Renderer queries these methods to decide scene target format, MRT attachments, etc.
 - No manual toggle (the old `enableHDR()` has been removed). Requirements are inferred from the active effect chain.
-- `requiresRayTracing()` effects are additionally gated per frame on
-  `Renderer::isRayTracingReady()` (TLAS built AND RT descriptor sets live): during the async
+- `requiresRayTracing()` effects are additionally gated per frame on what the frame bound to trace
+  (`FrameContext::rayTracing`, made by `RayTracing::bindFrame()` once the TLAS is built and the frame's RT set is
+  written — the ONE gate is `PostProcessStack::canOccupantRun()`; scenes doc 14): during the async
   TLAS build of a scene's first frames — or in a scene with no RT geometry — the chain skips
   them and forwards the previous output. An RT effect's `execute()` can therefore assume a
   consumable TLAS; never record a trace pass behind a `if (rtDescSet != nullptr)` bind alone

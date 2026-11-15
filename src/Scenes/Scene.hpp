@@ -2195,15 +2195,17 @@ namespace EmEn::Scenes
 			bool prepareRender (const std::shared_ptr< Graphics::RenderTarget::Abstract > & renderTarget) noexcept;
 
 			/**
-			 * @brief Returns the top-level acceleration structure for ray tracing.
-			 * @note Returns nullptr if RT is disabled or the TLAS hasn't been built yet.
-			 * @return const Vulkan::AccelerationStructure *
+			 * @brief Returns whether the scene holds a created acceleration structure: something a frame can trace.
+			 * @note RENDER THREAD. False without ray tracing, for a scene without ray-traced geometry, and until the
+			 * first build of a scene that has some. The structure itself is never handed out: a frame binds it
+			 * (Graphics::RayTracingBinding::bindFrame(), from sceneMetaData()), nothing stores it.
+			 * @return bool
 			 */
 			[[nodiscard]]
-			const Vulkan::AccelerationStructure *
-			TLAS () const noexcept
+			bool
+			hasAccelerationStructure () const noexcept
 			{
-				return m_sceneMetaData.TLAS();
+				return m_sceneMetaData.hasAccelerationStructure();
 			}
 
 			/**

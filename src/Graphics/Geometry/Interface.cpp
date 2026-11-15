@@ -38,6 +38,7 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/Geometry/SubGeometry.hpp"
+#include "Graphics/RayTracing.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Math/Base.hpp"
 #include "Tracer.hpp"
@@ -131,7 +132,7 @@ namespace EmEn::Graphics::Geometry
 	{
 		/* The acceleration structure builder is owned by the renderer (single instance, shared by
 		 * all geometries and scenes). Skip if RT is unavailable/disabled. */
-		auto * accelerationStructureBuilder = this->serviceProvider().graphicsRenderer().accelerationStructureBuilder();
+		auto * accelerationStructureBuilder = this->serviceProvider().graphicsRenderer().rayTracing().accelerationStructureBuilder();
 
 		if ( accelerationStructureBuilder == nullptr )
 		{

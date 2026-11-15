@@ -33,6 +33,8 @@
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
+#include "Graphics/IndirectPostProcessEffect.hpp"
+#include "Graphics/RayTracingFrame.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -56,7 +58,6 @@
 #include <utility>
 
 /* Local inclusions. */
-#include "Graphics/IrradianceProbeVolume.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Scenes/LightSet.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -77,7 +78,7 @@ namespace
 	 * On hit, samples the bindless albedo texture at the interpolated UV.
 	 * Falls back to scalar albedo when no texture is available.
 	 *
-	 * Descriptor set 0 (RT data — bound from Renderer::rtDescriptorSet()):
+	 * Descriptor set 0 (RT data — the frame's ray-tracing set, FrameContext::rayTracing):
 	 *   binding 0: accelerationStructureEXT (TLAS)
 	 *   binding 1: RTMeshMetaData SSBO
 	 *   binding 2: RTMaterialData SSBO
@@ -1237,52 +1238,11 @@ namespace EmEn::Graphics::Effects::Lighting
 			}
 		}
 
-		/* RT descriptor set layout (set 0) — from the Renderer. */
-		auto rtLayout = renderer.rtDescriptorSetLayout();
-
-		if ( rtLayout == nullptr )
-		{
-			TraceError{ClassId} << "RT descriptor set layout not available !";
-
-			return false;
-		}
-
-		/* Bindless texture descriptor set layout (set 2) — from BindlessTextureManager. */
-		auto bindlessLayout = renderer.bindlessTextureManager().descriptorSetLayout();
-
-		if ( bindlessLayout == nullptr )
-		{
-			TraceError{ClassId} << "Bindless texture descriptor set layout not available !";
-
-			return false;
-		}
-
-		/* Irradiance probe volume (set 3) — the renderer creates it with the acceleration structure
-		 * builder, so it exists whenever this effect can. The reflected world takes its indirect
-		 * diffuse from it: without it the effect is not created (the stack falls back to SSR). */
-		const auto * probeVolume = renderer.irradianceProbeVolume();
-
-		if ( probeVolume == nullptr || !probeVolume->usable() )
-		{
-			TraceError{ClassId} << "The irradiance probe volume is not available: the ray-traced reflections need it for the indirect diffuse at their hits !";
-
-			return false;
-		}
-
-		/* ---- Pipeline layouts ---- */
-		{
-			/* Trace: set 0 = RT data, set 1 = depth + normals, set 2 = bindless textures, set 3 = probes. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(rtLayout);
-			sets.emplace_back(traceInputLayout);
-			sets.emplace_back(bindlessLayout);
-			sets.emplace_back(probeVolume->descriptorSetLayout());
-
-			/* No push constant range: the trace parameters live in the set 1 UBO above. */
-			m_traceLayout = layoutManager.getPipelineLayout(sets, {});
-		}
-
-		if ( m_traceLayout == nullptr )
+		/* ---- The trace pipeline layout, on the family's set convention (AbstractRayTracedEffect): set 0 = what the
+		 * frame traces, set 1 = depth + normals, set 2 = the bindless textures, set 3 = the irradiance probes — the
+		 * reflected world takes its indirect diffuse from them, so without the volume the effect is not created (the
+		 * stack falls back to SSR). No push constant range: the trace parameters live in the set 1 UBO. ---- */
+		if ( !this->createTraceLayout(ClassId, traceInputLayout, RadianceCache::Read) )
 		{
 			return false;
 		}
@@ -1302,7 +1262,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		/* ---- Create pipelines ---- */
-		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTR_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
+		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTR_Trace", vertexModule, traceFragment, this->traceLayout(), m_traceTarget);
 
 		if ( m_tracePipeline == nullptr )
 		{
@@ -1693,7 +1653,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		m_traceFrameUBOs.clear();
 		m_tracePipeline.reset();
-		m_traceLayout.reset();
+		this->destroyTraceLayout();
 
 		m_blurVTarget.destroy();
 		m_blurHTarget.destroy();
@@ -1785,7 +1745,7 @@ namespace EmEn::Graphics::Effects::Lighting
 				.maxDistance = m_parameters.maxDistance,
 				.intensity = m_parameters.intensity,
 				.fadeScreenEdge = m_parameters.fadeScreenEdge,
-				.lightCount = this->renderer().rtLightCount(),
+				.lightCount = context.rayTracing->lightCount,
 				.ambientR = ambientColor[Base::Math::X] * ambientIntensity,
 				.ambientG = ambientColor[Base::Math::Y] * ambientIntensity,
 				.ambientB = ambientColor[Base::Math::Z] * ambientIntensity,
@@ -1844,30 +1804,9 @@ namespace EmEn::Graphics::Effects::Lighting
 
 			vkCmdSetScissor(commandBuffer.handle(), 0, 1, &scissor);
 
-			/* Bind set 0: RT descriptor set (TLAS + SSBOs). */
-			if ( const auto * rtDescSet = this->renderer().rtDescriptorSet(); rtDescSet != nullptr )
-			{
-				commandBuffer.bind(*rtDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
-			}
-
-			/* Bind set 1: Input textures (depth + normals). */
-			commandBuffer.bind(*m_tracePerFrame[frameIndex], *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 1);
-
-			/* Bind set 2: Bindless textures. */
-			if ( const auto * bindlessDescSet = this->renderer().bindlessTextureManager().descriptorSet(); bindlessDescSet != nullptr )
-			{
-				commandBuffer.bind(*bindlessDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 2);
-			}
-
-			/* Bind set 3: the irradiance probe volume of the frame (refreshed by the renderer before
-			 * this chain runs; its parameters carry the enabled flag the shader consults). */
-			if ( const auto * probeVolume = this->renderer().irradianceProbeVolume(); probeVolume != nullptr )
-			{
-				if ( const auto * probeSet = probeVolume->descriptorSet(frameIndex); probeSet != nullptr )
-				{
-					commandBuffer.bind(*probeSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 3);
-				}
-			}
+			/* The sets of the trace pass, on the family's convention: what THIS frame traces (0), this effect's inputs
+			 * (1), the bindless textures (2) and the irradiance probes (3). */
+			this->bindTraceSets(commandBuffer, *m_tracePerFrame[frameIndex], context, frameIndex);
 
 			commandBuffer.draw(3, 1);
 

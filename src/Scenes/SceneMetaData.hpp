@@ -205,6 +205,19 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns whether the scene holds a created acceleration structure: something a frame can trace.
+			 * @note RENDER THREAD (the structure is replaced by each build). False for a scene without ray-traced
+			 * geometry, and until the first build of a scene that has some.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			hasAccelerationStructure () const noexcept
+			{
+				return m_TLAS != nullptr && m_TLAS->isCreated();
+			}
+
+			/**
 			 * @brief Returns the mesh metadata SSBO for the given frame index.
 			 * @param frameIndex The current frame-in-flight index.
 			 * @return const Vulkan::ShaderStorageBufferObject *

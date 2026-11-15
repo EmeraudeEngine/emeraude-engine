@@ -57,6 +57,7 @@
 #include "Effects/Lighting/SSR.hpp"
 #include "Graphics/EffectSlot.hpp"
 #include "Graphics/FrameDiagnostics.hpp"
+#include "Graphics/RayTracing.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "IndirectPostProcessEffect.hpp"
 #include "PrimaryServices.hpp"
@@ -475,19 +476,19 @@ namespace EmEn::Graphics
 		this->addEffect(std::make_shared< Effects::Lighting::SSAO >(renderer));
 		this->addEffect(std::make_shared< Effects::Lighting::SSContactShadows >(renderer));
 
-		/* ⚠️ The SESSION-CONSTANT condition, and only it. Renderer::isRayTracingReady() has no
-		 * business here: it answers a question about THIS FRAME (the TLAS is built
+		/* ⚠️ The SESSION-CONSTANT condition, and only it. Whether a FRAME can trace
+		 * (FrameCapabilities::rayTracing) has no business here: it answers a question about THIS FRAME (the TLAS is built
 		 * asynchronously, and a scene may hold no ray traced geometry), so consulting it at
 		 * install time would refuse a lane that becomes runnable three frames later — and it is
 		 * already consulted, every frame, by canOccupantRun().
-		 * ⚠️⚠️ The question asked is "does an acceleration structure builder EXIST", not "does the
-		 * device support ray tracing". They differ: the Renderer only creates the builder when the
+		 * ⚠️⚠️ The question asked is "is the ray-tracing sub-service USABLE", not "does the
+		 * device support ray tracing". They differ: the Renderer only starts it when the
 		 * requested lane may need it ("Auto" or "RayTracing"), and without it no geometry ever
 		 * built a BLAS — so on a perfectly capable device with the lane set to "ScreenSpace" there
 		 * is nothing to trace against, for the whole session. Filing the traced lane anyway would
-		 * offer a `setLightingMode("RayTracing")` that quietly renders nothing. One pointer, one
-		 * truth. */
-		const auto rayTracingLaneAvailable = renderer.accelerationStructureBuilder() != nullptr;
+		 * offer a `setLightingMode("RayTracing")` that quietly renders nothing. One service, one
+		 * truth (Graphics::RayTracing::usable()). */
+		const auto rayTracingLaneAvailable = renderer.rayTracing().usable();
 
 		if ( rayTracingLaneAvailable )
 		{
@@ -537,9 +538,9 @@ namespace EmEn::Graphics
 			if ( requestedLane == to_cstring(LightingLane::RayTracing) )
 			{
 				TraceWarning{ClassId} <<
-					"'" << GraphicsPPLightingLaneKey << "' asks for the ray-traced lighting lane, but no acceleration structure builder exists: " <<
+					"'" << GraphicsPPLightingLaneKey << "' asks for the ray-traced lighting lane, but the ray-tracing service is not usable: " <<
 					( renderer.device()->rayTracingEnabled()
-						? "the builder was not created at renderer initialization (see Renderer::onInitialize)"
+						? "it failed at renderer initialization (see the RayTracingService lines of the log)"
 						: "this device has no ray tracing support (no VK_KHR_acceleration_structure / VK_KHR_ray_query)" ) <<
 					". The lighting family starts on the SCREEN-SPACE lane. Set the key to 'Auto' to follow what this machine can actually do.";
 			}
@@ -577,7 +578,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessStack::canOccupantRun (const IndirectPostProcessEffect & effect, const Renderer & renderer, const Scenes::LightSet * lightSet, const Scenes::CloudSet * clouds) noexcept
+	PostProcessStack::canOccupantRun (const IndirectPostProcessEffect & effect, const FrameCapabilities & capabilities) noexcept
 	{
 		/* An effect whose creation failed will not start working on its own — and the slot has an
 		 * alternative that might. */
@@ -586,23 +587,22 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		/* ⚠️ THE SAME THREE CONDITIONS the executor skips a ray traced effect on
-		 * (PostProcessor::executeIndirectPostProcessEffects). They must stay identical: a
-		 * fallback that disagrees with the recorder either leaves the slot dark while claiming
-		 * otherwise, or enables two occupants of one concept. */
-		if ( effect.requiresRayTracing() && (!renderer.device()->rayTracingEnabled() || !renderer.isRayTracingReady()) )
+		/* NOTE: The executor records with THIS function (PostProcessor::executeIndirectPostProcessEffects()): a
+		 * fallback cannot disagree with the recorder — a slot left dark while claiming otherwise, or two occupants of
+		 * one concept — because there is one gate. What the effect declares, against what the frame offers. */
+		if ( effect.requiresRayTracing() && !capabilities.rayTracing )
 		{
 			return false;
 		}
 
-		if ( effect.requiresLightSet() && (lightSet == nullptr || lightSet->mainDirectionalLight() == nullptr) )
+		if ( effect.requiresLightSet() && (capabilities.lightSet == nullptr || capabilities.lightSet->mainDirectionalLight() == nullptr) )
 		{
 			return false;
 		}
 
 		/* The cloud pass has nothing to draw without a cloud — and, not running, it is never
 		 * materialized: a scene that never holds a cloud never allocates it. */
-		if ( effect.requiresCloudVolumes() && (clouds == nullptr || clouds->empty()) )
+		if ( effect.requiresCloudVolumes() && (capabilities.clouds == nullptr || capabilities.clouds->empty()) )
 		{
 			return false;
 		}
@@ -645,8 +645,121 @@ namespace EmEn::Graphics
 		return created;
 	}
 
+	std::optional< std::shared_ptr< IndirectPostProcessEffect > >
+	PostProcessStack::resolveEffectiveOccupant (EffectSlot slot, const FrameCapabilities & capabilities) noexcept
+	{
+		const auto index = static_cast< size_t >(slot);
+		const auto & occupants = m_slots[index];
+
+		const auto selected = this->selectedOccupant(slot);
+
+		/* The effective occupant: what the owner asked for when it can run, otherwise the
+		 * first sibling that can — the automatic lane fallback. */
+		std::shared_ptr< IndirectPostProcessEffect > effective;
+
+		if ( selected != nullptr && canOccupantRun(*selected, capabilities) )
+		{
+			effective = selected;
+
+			m_selectionStallFrames[index] = 0;
+		}
+		else if ( selected != nullptr )
+		{
+			/* ⚠️ THE GRACE PERIOD, and it is what keeps the fallback from eating the lazy
+			 * residency alive. The selected occupant being unable to run is the NORMAL state
+			 * for the first frames of a ray-traced scene (the TLAS is built asynchronously),
+			 * so falling back on the first frame materialized the entire screen-space lane on
+			 * every launch — the exact allocation the residency exists to avoid. Below the
+			 * threshold the slot keeps whatever it had, which for a fresh scene is the
+			 * selected occupant sitting enabled-but-skipped: a couple of dark frames, the
+			 * behaviour that predates this whole mechanism. */
+			if ( m_selectionStallFrames[index] < FallbackGraceFrames )
+			{
+				++m_selectionStallFrames[index];
+
+				return std::nullopt;
+			}
+
+			for ( const auto & occupant : occupants )
+			{
+				if ( occupant != nullptr && occupant != selected && canOccupantRun(*occupant, capabilities) )
+				{
+					effective = occupant;
+
+					break;
+				}
+			}
+		}
+		else
+		{
+			m_selectionStallFrames[index] = 0;
+		}
+
+		return effective;
+	}
+
 	void
-	PostProcessStack::syncSlotSelection (Renderer & renderer, const Scenes::LightSet * lightSet, const Scenes::CloudSet * clouds) noexcept
+	PostProcessStack::applyEffectiveOccupant (EffectSlot slot, const std::shared_ptr< IndirectPostProcessEffect > & effective, Renderer & renderer) noexcept
+	{
+		const auto index = static_cast< size_t >(slot);
+		const auto & occupants = m_slots[index];
+
+		/* What the console will report as "running". ⚠️ It is stored on the UNCHANGED path
+		 * too, not only when the selection moves: recorded after the early-out below, a slot
+		 * whose selection was already correct on the very first frame — TAA, and every slot
+		 * of a scene that never switches lane — reached the store never once and reported
+		 * "nothing runs here" for the whole session while running perfectly. Measured on
+		 * Sponza: listEffects() marked TAA as selected and not running. */
+		const auto recordEffective = [this, index, &occupants] (const std::shared_ptr< IndirectPostProcessEffect > & occupant) {
+			m_effectiveOccupant[index].store(
+				occupant == nullptr ? NoOccupant : static_cast< int8_t >(std::distance(occupants.begin(), std::ranges::find(occupants, occupant))),
+				std::memory_order_relaxed
+			);
+		};
+
+		/* Nothing changes: the common case, every frame, once the scene has settled.
+		 * ⚠️⚠️ "Already enabled" is NOT "already running": addEffect() files an occupant ENABLED
+		 * (every effect is enabled at construction) and creates nothing, which createAll() covers
+		 * for a stack built before the scene starts — and nothing covers for an occupant filed
+		 * AFTER it (the scene-driven cloud pass, a runtime addEffect()). Such an occupant used to
+		 * take this early-out forever: selected, enabled, never created, and skipped in silence by
+		 * the executor's isCreated() gate — the cloud pass was listed as running and drew nothing. */
+		if ( effective == this->enabledEffect(slot) && (effective == nullptr || effective->isCreated()) )
+		{
+			recordEffective(effective);
+
+			return;
+		}
+
+		if ( effective == nullptr )
+		{
+			this->disableSlotOccupants(slot);
+
+			recordEffective(nullptr);
+
+			return;
+		}
+
+		/* ⚠️ Materialize BEFORE enabling. Enabled and un-created is the one combination the
+		 * executor cannot record — it gates on both, so the slot would simply go dark, and
+		 * the sibling that could have run stays disabled.
+		 * ⚠️ And nothing is recorded on failure: the report must keep saying what the LAST
+		 * good frame ran, not name an occupant that just failed to allocate. The latch
+		 * materializeOccupant() sets makes the next frame fall back to the sibling. */
+		if ( !materializeOccupant(*effective, renderer) )
+		{
+			return;
+		}
+
+		/* The single site where a chain effect is enabled. enable() disables the siblings on
+		 * its own, so the exclusivity of the concept holds by construction. */
+		effective->enable(true);
+
+		recordEffective(effective);
+	}
+
+	void
+	PostProcessStack::syncSlotSelection (Renderer & renderer, const FrameCapabilities & capabilities) noexcept
 	{
 		/* Read ONCE per frame: every slot of this frame sees the same answer. */
 		const bool sceneEffectsBypassed = m_sceneEffectsBypassed.load(std::memory_order_relaxed);
@@ -693,102 +806,16 @@ namespace EmEn::Graphics
 				continue;
 			}
 
-			const auto selected = this->selectedOccupant(slot);
+			/* The effective occupant: what the owner asked for when it can run, otherwise the first sibling that can — the
+			 * automatic lane fallback — or nothing yet, while the selected one is given its grace period. */
+			const auto effective = this->resolveEffectiveOccupant(slot, capabilities);
 
-			/* The effective occupant: what the owner asked for when it can run, otherwise the
-			 * first sibling that can — the automatic lane fallback. */
-			std::shared_ptr< IndirectPostProcessEffect > effective;
-
-			if ( selected != nullptr && canOccupantRun(*selected, renderer, lightSet, clouds) )
-			{
-				effective = selected;
-
-				m_selectionStallFrames[index] = 0;
-			}
-			else if ( selected != nullptr )
-			{
-				/* ⚠️ THE GRACE PERIOD, and it is what keeps the fallback from eating the lazy
-				 * residency alive. The selected occupant being unable to run is the NORMAL state
-				 * for the first frames of a ray-traced scene (the TLAS is built asynchronously),
-				 * so falling back on the first frame materialized the entire screen-space lane on
-				 * every launch — the exact allocation the residency exists to avoid. Below the
-				 * threshold the slot keeps whatever it had, which for a fresh scene is the
-				 * selected occupant sitting enabled-but-skipped: a couple of dark frames, the
-				 * behaviour that predates this whole mechanism. */
-				if ( m_selectionStallFrames[index] < FallbackGraceFrames )
-				{
-					++m_selectionStallFrames[index];
-
-					continue;
-				}
-
-				for ( const auto & occupant : occupants )
-				{
-					if ( occupant != nullptr && occupant != selected && canOccupantRun(*occupant, renderer, lightSet, clouds) )
-					{
-						effective = occupant;
-
-						break;
-					}
-				}
-			}
-			else
-			{
-				m_selectionStallFrames[index] = 0;
-			}
-
-			/* What the console will report as "running". ⚠️ It is stored on the UNCHANGED path
-			 * too, not only when the selection moves: recorded after the early-out below, a slot
-			 * whose selection was already correct on the very first frame — TAA, and every slot
-			 * of a scene that never switches lane — reached the store never once and reported
-			 * "nothing runs here" for the whole session while running perfectly. Measured on
-			 * Sponza: listEffects() marked TAA as selected and not running. */
-			const auto recordEffective = [this, index, &occupants] (const std::shared_ptr< IndirectPostProcessEffect > & occupant) {
-				m_effectiveOccupant[index].store(
-					occupant == nullptr ? NoOccupant : static_cast< int8_t >(std::distance(occupants.begin(), std::ranges::find(occupants, occupant))),
-					std::memory_order_relaxed
-				);
-			};
-
-			/* Nothing changes: the common case, every frame, once the scene has settled.
-			 * ⚠️⚠️ "Already enabled" is NOT "already running": addEffect() files an occupant ENABLED
-			 * (every effect is enabled at construction) and creates nothing, which createAll() covers
-			 * for a stack built before the scene starts — and nothing covers for an occupant filed
-			 * AFTER it (the scene-driven cloud pass, a runtime addEffect()). Such an occupant used to
-			 * take this early-out forever: selected, enabled, never created, and skipped in silence by
-			 * the executor's isCreated() gate — the cloud pass was listed as running and drew nothing. */
-			if ( effective == this->enabledEffect(slot) && (effective == nullptr || effective->isCreated()) )
-			{
-				recordEffective(effective);
-
-				continue;
-			}
-
-			if ( effective == nullptr )
-			{
-				this->disableSlotOccupants(slot);
-
-				recordEffective(nullptr);
-
-				continue;
-			}
-
-			/* ⚠️ Materialize BEFORE enabling. Enabled and un-created is the one combination the
-			 * executor cannot record — it gates on both, so the slot would simply go dark, and
-			 * the sibling that could have run stays disabled.
-			 * ⚠️ And nothing is recorded on failure: the report must keep saying what the LAST
-			 * good frame ran, not name an occupant that just failed to allocate. The latch
-			 * materializeOccupant() sets makes the next frame fall back to the sibling. */
-			if ( !materializeOccupant(*effective, renderer) )
+			if ( !effective.has_value() )
 			{
 				continue;
 			}
 
-			/* The single site where a chain effect is enabled. enable() disables the siblings on
-			 * its own, so the exclusivity of the concept holds by construction. */
-			effective->enable(true);
-
-			recordEffective(effective);
+			this->applyEffectiveOccupant(slot, *effective, renderer);
 		}
 	}
 
@@ -1022,10 +1049,10 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessStack::hasEnabledIndirectDiffuseProvider () const noexcept
+	PostProcessStack::hasEnabledIndirectDiffuseProvider (const FrameCapabilities & capabilities) const noexcept
 	{
-		return std::ranges::any_of(m_orderedEffects, [] (const auto & effect) {
-			return effect != nullptr && effect->isEnabled() && effect->providesIndirectDiffuse();
+		return std::ranges::any_of(m_orderedEffects, [&capabilities] (const auto & effect) {
+			return effect != nullptr && effect->isEnabled() && effect->providesIndirectDiffuse() && canOccupantRun(*effect, capabilities);
 		});
 	}
 

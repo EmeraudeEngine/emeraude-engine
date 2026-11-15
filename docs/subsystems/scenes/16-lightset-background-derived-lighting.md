@@ -64,7 +64,7 @@ render thread the moment a barrel exploded):
   LensFlare (`mainDirectionalLight()` — enabled, direction and illuminance live; engine item
   `effects-read-the-live-main-light`).
 - **The RT light SSBO is one buffer PER FRAME IN FLIGHT, filled from the PUBLISHED state** (2026-11-11, owner decision;
-  `LightSet::RTLightBuffer(frameIndex)`, bound by `Renderer::updateRTDescriptorSet()` for `currentFrameIndex()` like
+  `LightSet::RTLightBuffer(frameIndex)`, bound by `RayTracing::bindFrame()` for the frame being rendered like
   the three `SceneMetaData` SSBOs beside it). `LightSet::updateVideoMemory()` writes only the recorded frame's buffer,
   from each light's `publishedBlock(readStateIndex)` (point and spot: position, radius, colour, intensity, the spot's
   forward axis and cone cosines — the offsets `DeferredLightResolve::prepare()` decodes) and, for a directional light,

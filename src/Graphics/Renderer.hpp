@@ -69,6 +69,7 @@
 #include "PathDebugOverlay.hpp"
 #include "PixelFactory/Color.hpp"
 #include "PostProcessor.hpp"
+#include "RayTracing.hpp"
 #include "Recorder.hpp"
 #include "RendererFrameScope.hpp"
 #include "Saphir/Generator/ProgramKey.hpp"
@@ -94,10 +95,6 @@ namespace EmEn
 	namespace Vulkan
 	{
 		class DescriptorPool;
-		class DescriptorSet;
-		class DescriptorSetLayout;
-		class AccelerationStructure;
-		class AccelerationStructureBuilder;
 		class CommandBuffer;
 		class Framebuffer;
 		class GraphicsPipeline;
@@ -106,7 +103,6 @@ namespace EmEn
 		class Instance;
 		class Queue;
 		class Sampler;
-		class ShaderStorageBufferObject;
 		class SwapChain;
 
 		namespace Sync
@@ -117,8 +113,6 @@ namespace EmEn
 
 	namespace Scenes
 	{
-		class SceneMetaData;
-		class LightSet;
 	}
 
 	namespace Graphics
@@ -128,10 +122,9 @@ namespace EmEn
 		class IBLTexture;
 		class LTCTexture;
 		class GrabPass;
+		struct RayTracingFrame;
 		class SceneRenderTarget;
-		class SkinnedGeometryProcessor;
 		class SkyAtmosphere;
-	class IrradianceProbeVolume;
 
 		namespace Compute
 		{
@@ -335,9 +328,9 @@ namespace EmEn::Graphics
 			 * @brief Destructs the graphics renderer.
 			 * @note Defined out-of-line in the .cpp (not '= default' here): the class is exported
 			 * (EMEN_API), which forces MSVC to instantiate the destructor at the class definition
-			 * point in every TU. It destroys a std::unique_ptr< AccelerationStructureBuilder > held
-			 * by pointer to a forward-declared (incomplete) type, so the deleter needs the complete
-			 * type — only visible in Renderer.cpp. See docs/windows-export-api.md § "exported pimpl".
+			 * point in every TU. It destroys std::unique_ptr members held by pointer to forward-declared
+			 * (incomplete) types, so their deleters need the complete types — only visible in
+			 * Renderer.cpp. See docs/windows-export-api.md § "exported pimpl".
 			 */
 			~Renderer () override;
 
@@ -560,45 +553,29 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the single ray-tracing acceleration structure builder, or nullptr
-			 * when ray tracing is unavailable/disabled.
-			 * @note Renderer-owned and shared: BLAS are built for SHARED geometries (which outlive
-			 * any scene) and each scene's TLAS goes through the same builder. It must NOT be owned
-			 * per-scene. Geometry::Interface and Scenes::SceneMetaData obtain it from here.
-			 * @return Vulkan::AccelerationStructureBuilder *
+			 * @brief Returns the ray-tracing sub-service: the acceleration structure builder, the ray-tracing set layout
+			 * and the per-frame sets, the skinned geometry processor and the irradiance probe volume.
+			 * @note Its usable() is THE session-constant answer to "can anything be traced": false on a device that does
+			 * not trace, or when the lighting lane asked for no tracing — its accessors then answer null. Geometries
+			 * (BLAS), scenes (TLAS), the traced effects and the post-process stack all ask here.
+			 * @return RayTracing &
 			 */
 			[[nodiscard]]
-			Vulkan::AccelerationStructureBuilder *
-			accelerationStructureBuilder () const noexcept
+			RayTracing &
+			rayTracing () noexcept
 			{
-				return m_accelerationStructureBuilder.get();
+				return m_rayTracing;
 			}
 
 			/**
-			 * @brief Returns the skinned geometry processor (RT skinned-mirror compute for
-			 * per-frame BLAS refit), or nullptr when ray tracing is unavailable/disabled.
-			 * @return const SkinnedGeometryProcessor *
+			 * @brief Returns the ray-tracing sub-service.
+			 * @return const RayTracing &
 			 */
 			[[nodiscard]]
-			const SkinnedGeometryProcessor *
-			skinnedGeometryProcessor () const noexcept
+			const RayTracing &
+			rayTracing () const noexcept
 			{
-				return m_skinnedGeometryProcessor.get();
-			}
-
-			/**
-			 * @brief Returns the irradiance probe volume — the radiance cache the traced effects read
-			 * at their hits — or nullptr when ray tracing is unavailable/disabled.
-			 * @note Renderer-owned, next to the acceleration structure builder: it exists exactly when
-			 * the traced lane is resident. Consumers add its descriptor set layout to their pipeline
-			 * layout and bind `descriptorSet(frameIndex)`; see `Effects/Shared/IrradianceProbesGLSL.hpp`.
-			 * @return const IrradianceProbeVolume *
-			 */
-			[[nodiscard]]
-			const IrradianceProbeVolume *
-			irradianceProbeVolume () const noexcept
-			{
-				return m_irradianceProbeVolume.get();
+				return m_rayTracing;
 			}
 
 			/**
@@ -1291,81 +1268,27 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the current frame's TLAS for ray query effects.
-			 * @note Set per-frame from the active scene. Returns nullptr if RT is unavailable.
-			 * @return const Vulkan::AccelerationStructure *
+			 * @brief Returns what THIS frame traces — the descriptor set it wrote for the acceleration structure it
+			 * built, and its light count — or nullptr: the session cannot trace, the scene being rendered has no
+			 * structure yet (or no ray-traced geometry), or the frame has not reached that step.
+			 * @note RENDER THREAD, from the frame's bind (right after its acceleration structure build is recorded) to
+			 * the end of the frame: the post-processor hands it to the chain
+			 * (IndirectPostProcessEffect::FrameContext::rayTracing). Nothing survives a frame: the next one starts
+			 * unbound, whatever its scene (RayTracing::FrameGuard).
+			 * @return const RayTracingFrame *
 			 */
 			[[nodiscard]]
-			const Vulkan::AccelerationStructure *
-			currentTLAS () const noexcept
+			const RayTracingFrame *
+			frameRayTracing () const noexcept
 			{
-				return m_currentTLAS;
+				return m_rayTracing.frame();
 			}
-
-			/**
-			 * @brief Returns the RT descriptor set for ray query shaders.
-			 * @note Contains TLAS (binding 0), mesh metadata SSBO (binding 1),
-			 *	   material data SSBO (binding 2), and light array SSBO (binding 3).
-			 *	   Updated per-frame by updateRTDescriptorSet().
-			 * @return const Vulkan::DescriptorSet *
-			 */
-			[[nodiscard]]
-			const Vulkan::DescriptorSet *
-			rtDescriptorSet () const noexcept
-			{
-				if ( m_rtDescriptorSets.empty() || m_currentTLAS == nullptr )
-				{
-					return nullptr;
-				}
-
-				return m_rtDescriptorSets[m_currentFrameIndex].get();
-			}
-
-			/**
-			 * @brief Returns whether ray tracing effects can be consumed this frame.
-			 * @note False during the first frames of a scene (the TLAS is built asynchronously)
-			 *	   or when the scene has no RT geometry: RT effects must be skipped, otherwise
-			 *	   they draw with an unbound/never-written TLAS descriptor (undefined behavior).
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool isRayTracingReady () const noexcept;
-
-			/**
-			 * @brief Returns the number of active lights in the RT light SSBO.
-			 * @return uint32_t
-			 */
-			[[nodiscard]]
-			uint32_t
-			rtLightCount () const noexcept
-			{
-				return m_RTLightCount;
-			}
-
-			/**
-			 * @brief Returns the RT descriptor set layout for pipeline creation.
-			 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
-			 */
-			[[nodiscard]]
-			const std::shared_ptr< Vulkan::DescriptorSetLayout > &
-			rtDescriptorSetLayout () const noexcept
-			{
-				return m_rtDescriptorSetLayout;
-			}
-
-			/**
-			 * @brief Updates the RT descriptor set with current scene data.
-			 * @note Called per-frame before RT post-process effects execute.
-			 * @param sceneMetaData The scene's RT metadata (TLAS, mesh/material SSBOs).
-			 * @param lightSet The scene's light set (RT light SSBO).
-			 */
-			void updateRTDescriptorSet (const Scenes::SceneMetaData & sceneMetaData, const Scenes::LightSet & lightSet) noexcept;
 
 			/**
 			 * @brief Records this frame's refresh of the irradiance probe volume (the radiance cache).
-			 * @note Called right after updateRTDescriptorSet() on both frame paths: the trace needs
+			 * @note Called right after the frame's ray-tracing bind on both frame paths: the trace needs
 			 * the frame's TLAS and RT set, and every traced effect of the frame reads the result.
-			 * No-op without a usable volume or a ready TLAS.
+			 * No-op without a usable volume or when the frame does not trace (frameRayTracing()).
 			 * @param commandBuffer The frame's command buffer.
 			 * @param scene The active scene (its camera, light set and sky feed the update).
 			 */
@@ -2018,14 +1941,6 @@ namespace EmEn::Graphics
 			void discardAcquiredImage (RendererFrameScope & currentFrameScope, bool signalFence) const noexcept;
 
 			/**
-			 * @brief Creates the RT descriptor set layout and descriptor set.
-			 * @note Called once during initialization. The set is updated per-frame via updateRTDescriptorSet().
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool createRTDescriptorSet () noexcept;
-
-			/**
 			 * @brief Destroys command pools and buffers.
 			 */
 			void destroyRenderingSystem () noexcept;
@@ -2084,6 +1999,10 @@ namespace EmEn::Graphics
 			/* NOTE: Declared AFTER the compressor: it binds a reference to it. */
 			TextureCache m_textureCache{m_primaryServices, m_textureCompressor};
 			PostProcessor m_postProcessor{m_primaryServices, m_resourcesManager};
+			/** @brief The session's ray tracing (the structure builder, the set layout and per-frame sets, the skinned
+			 * geometry processor, the irradiance probe volume): a sub-service started only when the device traces and
+			 * the lighting lane may need it. */
+			RayTracing m_rayTracing{*this};
 			/** @brief The outline of the scene's highlighted entities (internal-target frames). */
 			SelectionOutline m_selectionOutline{*this};
 			/** @brief The deferred resolve of the unshadowed punctual lights (internal-target frames with a G-buffer). */
@@ -2189,19 +2108,6 @@ namespace EmEn::Graphics
 			std::shared_ptr< IBLTexture > m_brdfLUT;
 			std::unique_ptr< Compute::IBLBaker > m_iblBaker;
 			std::unique_ptr< GrabPass > m_grabPass;
-			const Vulkan::AccelerationStructure * m_currentTLAS{nullptr};
-			/** @brief Single ray-tracing acceleration structure builder, shared by all geometries (BLAS) and scenes (TLAS). Null when RT is off. */
-			std::unique_ptr< Vulkan::AccelerationStructureBuilder > m_accelerationStructureBuilder;
-			std::unique_ptr< SkinnedGeometryProcessor > m_skinnedGeometryProcessor;
-			std::unique_ptr< IrradianceProbeVolume > m_irradianceProbeVolume;
-			/* RT descriptor set for ray query shaders (TLAS + SSBOs). */
-			std::shared_ptr< Vulkan::DescriptorSetLayout > m_rtDescriptorSetLayout;
-			/** @brief A tiny zero-filled SSBO written into an RT storage binding the scene does not provide (a disabled light
-			 * set has no light buffer): every binding the ray-query programs statically use stays valid. Declared before
-			 * the descriptor sets that reference it. */
-			std::unique_ptr< Vulkan::ShaderStorageBufferObject > m_RTStandInSSBO;
-			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_rtDescriptorSets;
-			uint32_t m_RTLightCount{0};
 			/** @brief MDI batch builder for GPU-driven opaque rendering. */
 			std::unique_ptr< MDI::BatchBuilder > m_MDIBatchBuilder;
 			/** @brief Per-pass GPU timing service (timestamp queries). Null when disabled. */

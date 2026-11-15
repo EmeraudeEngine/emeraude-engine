@@ -27,6 +27,7 @@
 #include "IrradianceProbeVolume.hpp"
 
 /* The shared GLSL rules this volume's own passes splice. */
+#include "Graphics/RayTracing.hpp"
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
@@ -925,7 +926,8 @@ namespace EmEn::Graphics
 	bool
 	IrradianceProbeVolume::createPipelines (Renderer & renderer) noexcept
 	{
-		const auto rtLayout = renderer.rtDescriptorSetLayout();
+		/* NOTE: The ray-tracing service creates its set layout BEFORE this volume (RayTracing::onInitialize()). */
+		const auto rtLayout = renderer.rayTracing().setLayout();
 		const auto bindlessLayout = renderer.bindlessTextureManager().descriptorSetLayout();
 
 		if ( rtLayout == nullptr || bindlessLayout == nullptr )

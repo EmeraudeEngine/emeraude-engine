@@ -43,6 +43,7 @@
 #include "BlobTrait.hpp"
 #include "Component/CharacterController.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/RayTracing.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Input/Manager.hpp"
@@ -94,7 +95,7 @@ namespace EmEn::Scenes
 		m_seaLevelRenderable{std::dynamic_pointer_cast< Renderable::Abstract >(seaLevel)},
 		m_seaLevel{seaLevel},
 		m_AVConsoleManager{name, graphicsRenderer, audioManager},
-		m_sceneMetaData{graphicsRenderer.device(), graphicsRenderer.accelerationStructureBuilder(), &graphicsRenderer.deferredDestructor()},
+		m_sceneMetaData{graphicsRenderer.device(), graphicsRenderer.rayTracing().accelerationStructureBuilder(), &graphicsRenderer.deferredDestructor()},
 		m_instanceTransforms{graphicsRenderer.device(), &graphicsRenderer.deferredDestructor()},
 		m_boundary{boundary},
 		m_backgroundPhotometryDirty{m_backgroundResource != nullptr}

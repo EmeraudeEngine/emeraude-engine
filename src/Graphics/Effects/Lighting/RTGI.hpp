@@ -36,7 +36,7 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "Graphics/IndirectPostProcessEffect.hpp"
+#include "Graphics/AbstractRayTracedEffect.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/EffectSlot.hpp"
@@ -54,7 +54,6 @@ namespace EmEn::Graphics
 namespace EmEn::Vulkan
 {
 	class GraphicsPipeline;
-	class PipelineLayout;
 	class TextureInterface;
 }
 
@@ -69,9 +68,9 @@ namespace EmEn::Graphics::Effects::Lighting
 	 * receiver albedo) through the denoise/temporal chain; the receiver albedo is
 	 * re-applied at full resolution in the combine pass so half-res tracing and
 	 * bilateral blur never soften texture detail. RT-only, no screen-space fallback.
-	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
+	 * @extends EmEn::Graphics::AbstractRayTracedEffect A member of the ray-traced family: its trace pass follows the family's set convention.
 	 */
-	class EMEN_API RTGI final : public IndirectPostProcessEffect
+	class EMEN_API RTGI final : public AbstractRayTracedEffect
 	{
 		public:
 
@@ -142,7 +141,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 */
 			explicit
 			RTGI (Renderer & renderer) noexcept
-				: IndirectPostProcessEffect{renderer},
+				: AbstractRayTracedEffect{renderer},
 				m_denoiser{renderer, ClassId}
 			{
 
@@ -154,7 +153,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * @param parameters The initial parameters.
 			 */
 			RTGI (Renderer & renderer, const Parameters & parameters) noexcept
-				: IndirectPostProcessEffect{renderer},
+				: AbstractRayTracedEffect{renderer},
 				m_denoiser{renderer, ClassId},
 				m_parameters{parameters}
 			{
@@ -234,14 +233,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			[[nodiscard]]
 			bool
 			requiresVelocity () const noexcept override
-			{
-				return true;
-			}
-
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresRayTracing() */
-			[[nodiscard]]
-			bool
-			requiresRayTracing () const noexcept override
 			{
 				return true;
 			}
@@ -338,7 +329,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
 			/* Pipeline layouts. */
-			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			/* Texture consumed by this frame's combine snippet: the denoiser output when

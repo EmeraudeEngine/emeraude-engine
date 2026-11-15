@@ -40,7 +40,7 @@
 #include "volk.h"
 
 /* Local inclusions for inheritances. */
-#include "Graphics/IndirectPostProcessEffect.hpp"
+#include "Graphics/AbstractRayTracedEffect.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/EffectSlot.hpp"
@@ -85,9 +85,9 @@ namespace EmEn::Graphics::Effects::Lighting
 	 * hardware-accelerated reflection rays against the TLAS. Fetches material data
 	 * from the RT SSBOs (mesh metadata, material properties, lights).
 	 * Falls back to SSR when ray tracing hardware is not available.
-	 * @extends EmEn::Graphics::IndirectPostProcessEffect This is a multi-pass post-process effect.
+	 * @extends EmEn::Graphics::AbstractRayTracedEffect A member of the ray-traced family: its trace pass follows the family's set convention.
 	 */
-	class EMEN_API RTR final : public IndirectPostProcessEffect
+	class EMEN_API RTR final : public AbstractRayTracedEffect
 	{
 		public:
 
@@ -201,7 +201,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 */
 			explicit
 			RTR (Renderer & renderer) noexcept
-				: IndirectPostProcessEffect{renderer},
+				: AbstractRayTracedEffect{renderer},
 				m_denoiser{renderer, ClassId}
 			{
 
@@ -214,7 +214,7 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * @param environmentCubemap A cubemap sampled when a reflection ray escapes the scene (sky, distant environment). Default none (renderer default cubemap).
 			 */
 			RTR (Renderer & renderer, const Parameters & parameters, const std::shared_ptr< TextureResource::TextureCubemap > & environmentCubemap = nullptr) noexcept
-				: IndirectPostProcessEffect{renderer},
+				: AbstractRayTracedEffect{renderer},
 				m_parameters{parameters},
 				m_environmentCubemap{environmentCubemap},
 				m_denoiser{renderer, ClassId}
@@ -319,14 +319,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			[[nodiscard]]
 			bool
 			requiresHDR () const noexcept override
-			{
-				return true;
-			}
-
-			/** @copydoc EmEn::Graphics::IndirectPostProcessEffect::requiresRayTracing() */
-			[[nodiscard]]
-			bool
-			requiresRayTracing () const noexcept override
 			{
 				return true;
 			}
@@ -483,7 +475,6 @@ namespace EmEn::Graphics::Effects::Lighting
 			/* Pipelines. */
 			std::shared_ptr< Vulkan::GraphicsPipeline > m_tracePipeline;
 			/* Pipeline layouts. */
-			std::shared_ptr< Vulkan::PipelineLayout > m_traceLayout;
 			/* Per-frame descriptor sets. */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_tracePerFrame;
 			/** @brief Per-frame trace parameters (set 1, binding 5). */

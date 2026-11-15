@@ -34,8 +34,8 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
-#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
+#include "Graphics/IndirectPostProcessEffect.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
@@ -52,13 +52,11 @@
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
-#include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
 {
-	class DescriptorSetLayout;
 }
 
 namespace
@@ -69,7 +67,7 @@ namespace
 	 * Each pixel sends N rays in a cosine-weighted hemisphere around the surface normal.
 	 * Output: single-channel occlusion factor (1.0 = fully lit, 0.0 = fully occluded).
 	 *
-	 * Descriptor set 0 (RT data — bound from Renderer::rtDescriptorSet()):
+	 * Descriptor set 0 (RT data — the frame's ray-tracing set, FrameContext::rayTracing):
 	 *   binding 0: accelerationStructureEXT (TLAS)
 	 *
 	 * Descriptor set 1 (input textures — per-frame):
@@ -332,7 +330,6 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		/* ---- Descriptor set layouts ---- */
-		auto & layoutManager = renderer.layoutManager();
 
 		/* Trace input (set 1): depth + normals + the producer's occlusion lane — 3 combined
 		 * image samplers. ⚠️ The lane binding exists in BOTH variants' set and is written every
@@ -346,41 +343,12 @@ namespace EmEn::Graphics::Effects::Lighting
 			return false;
 		}
 
-		/* RT descriptor set layout (set 0) — from the Renderer. */
-		auto rtLayout = renderer.rtDescriptorSetLayout();
-
-		if ( rtLayout == nullptr )
-		{
-			TraceError{ClassId} << "RT descriptor set layout not available !";
-
-			return false;
-		}
-
-		/* Bindless texture descriptor set layout (set 2) — from BindlessTextureManager. The
-		 * alpha-test rule samples the opacity/albedo texture of a cutout candidate. */
-		auto bindlessLayout = renderer.bindlessTextureManager().descriptorSetLayout();
-
-		if ( bindlessLayout == nullptr )
-		{
-			TraceError{ClassId} << "Bindless texture descriptor set layout not available !";
-
-			return false;
-		}
-
-		/* ---- Pipeline layouts ---- */
-		{
-			/* Trace: set 0 = RT data (TLAS + SSBOs), set 1 = depth + normals, set 2 = bindless textures. */
-			StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
-			sets.emplace_back(rtLayout);
-			sets.emplace_back(traceInputLayout);
-			sets.emplace_back(bindlessLayout);
-
-			m_traceLayout = layoutManager.getPipelineLayout(sets, {
+		/* ---- The trace pipeline layout, on the family's set convention (AbstractRayTracedEffect): set 0 = what the
+		 * frame traces, set 1 = depth + normals + the occlusion lane, set 2 = the bindless textures (the alpha-test rule
+		 * samples the opacity / albedo texture of a cutout candidate). ---- */
+		if ( !this->createTraceLayout(ClassId, traceInputLayout, RadianceCache::Unused, {
 				VkPushConstantRange{VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(TracePushConstants)}
-			});
-		}
-
-		if ( m_traceLayout == nullptr )
+			}) )
 		{
 			return false;
 		}
@@ -401,7 +369,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		}
 
 		/* ---- Create pipelines ---- */
-		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTAO_Trace", vertexModule, traceFragment, m_traceLayout, m_traceTarget);
+		m_tracePipeline = this->createFullscreenPipeline(ClassId, "RTAO_Trace", vertexModule, traceFragment, this->traceLayout(), m_traceTarget);
 
 		if ( m_tracePipeline == nullptr )
 		{
@@ -411,7 +379,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		/* Both variants share the pipeline LAYOUT, so they share the push-constant range and
 		 * the three descriptor sets; the derived fragment shader simply declares neither the
 		 * push constants nor the sets it does not read. */
-		m_derivedPipeline = this->createFullscreenPipeline(ClassId, "RTAO_Derived", vertexModule, derivedFragment, m_traceLayout, m_traceTarget);
+		m_derivedPipeline = this->createFullscreenPipeline(ClassId, "RTAO_Derived", vertexModule, derivedFragment, this->traceLayout(), m_traceTarget);
 
 		if ( m_derivedPipeline == nullptr )
 		{
@@ -432,7 +400,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 		m_tracePipeline.reset();
 		m_derivedPipeline.reset();
-		m_traceLayout.reset();
+		this->destroyTraceLayout();
 
 		/* ⚠️ The lane belongs to another effect: drop the borrowed pointer here too, not only in
 		 * the stack's pairing. destroy() runs on a scene teardown, where the producer may go
@@ -542,27 +510,16 @@ namespace EmEn::Graphics::Effects::Lighting
 
 			vkCmdPushConstants(
 				commandBuffer.handle(),
-				m_traceLayout->handle(),
+				this->traceLayout()->handle(),
 				VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
 				0,
 				sizeof(TracePushConstants),
 				&pc
 			);
 
-			/* Bind set 0: RT descriptor set (TLAS). */
-			if ( const auto * rtDescSet = this->renderer().rtDescriptorSet(); rtDescSet != nullptr )
-			{
-				commandBuffer.bind(*rtDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
-			}
-
-			/* Bind set 1: Input textures (depth + normals). */
-			commandBuffer.bind(*m_tracePerFrame[frameIndex], *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 1);
-
-			/* Bind set 2: Bindless textures (the alpha-test rule samples cutout textures). */
-			if ( const auto * bindlessDescSet = this->renderer().bindlessTextureManager().descriptorSet(); bindlessDescSet != nullptr )
-			{
-				commandBuffer.bind(*bindlessDescSet, *m_traceLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 2);
-			}
+			/* The sets of the trace pass, on the family's convention: what THIS frame traces (0), this effect's inputs
+			 * (1), the bindless textures (2). */
+			this->bindTraceSets(commandBuffer, *m_tracePerFrame[frameIndex], context, frameIndex);
 
 			commandBuffer.draw(3, 1);
 

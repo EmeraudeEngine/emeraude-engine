@@ -140,10 +140,10 @@ namespace EmEn::Graphics
 			 * @brief How many consecutive frames a selected occupant must fail to run before its
 			 * slot falls back to the sibling lane.
 			 * @note ⚠️ A grace period, not a debounce, and it exists because the fallback and the
-			 * lazy residency otherwise defeat each other. `Renderer::isRayTracingReady()` is false
+			 * lazy residency otherwise defeat each other. `FrameCapabilities::rayTracing` is false
 			 * for the first frames of EVERY scene — the TLAS is built asynchronously — and it
-			 * cannot say whether it is "not yet" or "never" (it is a null/created test on the
-			 * current TLAS, nothing more). Falling back immediately therefore materialized the
+			 * cannot say whether it is "not yet" or "never" (it is "the scene holds a created
+			 * acceleration structure", nothing more). Falling back immediately therefore materialized the
 			 * WHOLE screen-space lane on every launch of a ray-traced scene, seconds before the
 			 * traced one took over: measured on Sponza, all three screen-space effects came up
 			 * "created" while the traced lane was the one running. Waiting a couple of seconds
@@ -237,7 +237,7 @@ namespace EmEn::Graphics
 			 *
 			 * The screen-space lane is ALWAYS resident. The ray-traced lane is resident only when
 			 * the two SESSION-CONSTANT conditions hold: the device supports ray tracing and the
-			 * user setting allows it. ⚠️ Deliberately NOT `Renderer::isRayTracingReady()`, which
+			 * user setting allows it. ⚠️ Deliberately NOT `FrameCapabilities::rayTracing`, which
 			 * is a per-frame answer (the TLAS is built asynchronously, and a scene may hold no ray
 			 * traced geometry at all): residency is a lifetime decision, readiness is a frame
 			 * decision, and confusing the two would either allocate a lane that can never run or
@@ -427,22 +427,43 @@ namespace EmEn::Graphics
 			std::shared_ptr< IndirectPostProcessEffect > effectiveOccupant (EffectSlot slot) const noexcept;
 
 			/**
-			 * @brief Returns whether an occupant could be recorded in the frame about to start.
+			 * @brief What a frame offers the occupants of a slot: the facts that DISCRIMINATE BETWEEN SIBLINGS, the
+			 * ones canOccupantRun() tests against what an effect declares (requiresRayTracing(), requiresLightSet(),
+			 * requiresCloudVolumes()).
+			 * @note A VALUE, made where the facts are known, never re-derived by the readers:
+			 * - at the START of a frame by the renderer, for the selection (syncSlotSelection()) and the
+			 *   indirect-diffuse answer (hasEnabledIndirectDiffuseProvider()) — rayTracing then says "the session can
+			 *   trace and the scene being rendered holds an acceleration structure" (its previous build: a scene's
+			 *   first frame has none, which is what FallbackGraceFrames waits for);
+			 * - by the executor, from the frame it records — rayTracing then says "this frame bound what it traces"
+			 *   (IndirectPostProcessEffect::FrameContext::rayTracing), and a traced effect binds it untested.
+			 */
+			struct FrameCapabilities final
+			{
+				/** @brief The scene's light set, nullptr when there is none. */
+				const Scenes::LightSet * lightSet{nullptr};
+				/** @brief The scene's clouds, nullptr when it holds none. */
+				const Scenes::CloudSet * clouds{nullptr};
+				/** @brief Whether a ray-traced effect can run. */
+				bool rayTracing{false};
+			};
+
+			/**
+			 * @brief Returns whether an occupant can be recorded with what a frame offers: THE gate, applied by the
+			 * selection at the start of the frame and by the executor when it records.
 			 * @note The gates that DISCRIMINATE BETWEEN SIBLINGS of one slot, and only those: ray
-			 * tracing availability, the light set, and the creation-failure latch. The G-buffer
+			 * tracing availability, the light set, the clouds, and the creation-failure latch. The G-buffer
 			 * gates the executor also applies (depth, normals, albedo, ...) are deliberately absent
 			 * because they cannot discriminate: PostProcessStack aggregates its G-buffer
 			 * requirements over EVERY resident effect, selected or not, so the scene target always
 			 * carries the union of what both lanes need. That single fact is what makes a lane
 			 * switch free — no target recreation, no pipeline reconfiguration.
 			 * @param effect A reference to the effect.
-			 * @param renderer A reference to the graphics renderer.
-			 * @param lightSet A pointer to the scene's light set, nullptr when there is none.
-			 * @param clouds A pointer to the scene's clouds, nullptr when it holds none.
+			 * @param capabilities What the frame offers.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			static bool canOccupantRun (const IndirectPostProcessEffect & effect, const Renderer & renderer, const Scenes::LightSet * lightSet, const Scenes::CloudSet * clouds) noexcept;
+			static bool canOccupantRun (const IndirectPostProcessEffect & effect, const FrameCapabilities & capabilities) noexcept;
 
 			/**
 			 * @brief Applies the pending selection, materializing what it needs.
@@ -459,10 +480,9 @@ namespace EmEn::Graphics
 			 * what is selected AT THAT MOMENT; the whole point here is the occupant nobody selected
 			 * yet.
 			 * @param renderer A reference to the graphics renderer.
-			 * @param lightSet A pointer to the scene's light set, nullptr when there is none.
-			 * @param clouds A pointer to the scene's clouds, nullptr when it holds none.
+			 * @param capabilities What the frame about to be recorded offers the occupants.
 			 */
-			void syncSlotSelection (Renderer & renderer, const Scenes::LightSet * lightSet, const Scenes::CloudSet * clouds) noexcept;
+			void syncSlotSelection (Renderer & renderer, const FrameCapabilities & capabilities) noexcept;
 
 			/**
 			 * @brief Files the SCENE-DRIVEN effects the scene's content calls for.
@@ -662,16 +682,20 @@ namespace EmEn::Graphics
 			bool hasEnabledReflectionProvider () const noexcept;
 
 			/**
-			 * @brief Returns whether an ENABLED indirect-diffuse provider (RTGI) is in the chain.
+			 * @brief Returns whether an ENABLED indirect-diffuse provider (RTGI) that CAN RUN in this frame is in the
+			 * chain.
 			 * @note The scene hands the diffuse IBL leg over to that effect — see
-			 * PostProcessEffect::providesIndirectDiffuse() for the ownership contract.
+			 * PostProcessEffect::providesIndirectDiffuse() for the ownership contract. "Can run" is canOccupantRun(),
+			 * the gate the executor records with: claiming the indirect diffuse for an effect that draws nothing would
+			 * leave the frame with no diffuse sky at all.
 			 * @note RENDER THREAD, as every walk of the ordered chain: this thread rebuilds it and enables its effects.
 			 * The renderer publishes the answer to the scene once per frame
 			 * (Scenes::Scene::publishIndirectDiffuseProvider()); the logic thread reads that, never this.
+			 * @param capabilities What the frame about to be recorded offers the occupants.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool hasEnabledIndirectDiffuseProvider () const noexcept;
+			bool hasEnabledIndirectDiffuseProvider (const FrameCapabilities & capabilities) const noexcept;
 
 			/**
 			 * @brief Returns whether an ENABLED effect sits in a pre-translucency slot.
@@ -840,6 +864,29 @@ namespace EmEn::Graphics
 			 * @param slot The slot.
 			 */
 			void disableSlotOccupants (EffectSlot slot) const noexcept;
+
+			/**
+			 * @brief Resolves the occupant a slot effectively runs in the frame about to be recorded: the selected one
+			 * when it can run, otherwise the first sibling that can (the automatic lane fallback), or none.
+			 * @note ⚠️ RENDER THREAD — syncSlotSelection() only. Counts the frames the selected occupant stalls
+			 * (FallbackGraceFrames).
+			 * @param slot The slot.
+			 * @param capabilities What the frame offers the occupants.
+			 * @return std::optional< std::shared_ptr< IndirectPostProcessEffect > > No value while the selected occupant
+			 * is given its grace period: the slot keeps what it had. A null pointer: nothing can run in the slot.
+			 */
+			[[nodiscard]]
+			std::optional< std::shared_ptr< IndirectPostProcessEffect > > resolveEffectiveOccupant (EffectSlot slot, const FrameCapabilities & capabilities) noexcept;
+
+			/**
+			 * @brief Makes an occupant the one a slot runs: materializes it when needed, enables it (which disables its
+			 * siblings), or switches the slot off, and records what the console reports as running.
+			 * @note ⚠️ RENDER THREAD — syncSlotSelection() only. The single site where a chain effect is enabled.
+			 * @param slot The slot.
+			 * @param effective The occupant resolved for the frame, a null pointer to switch the slot off.
+			 * @param renderer A reference to the graphics renderer.
+			 */
+			void applyEffectiveOccupant (EffectSlot slot, const std::shared_ptr< IndirectPostProcessEffect > & effective, Renderer & renderer) noexcept;
 
 			/**
 			 * @brief Applies the scene-effects bypass to a multi-occupant slot (Custom).
