@@ -6557,6 +6557,11 @@ After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and
 > resource's load reaches a scene object on the logic thread* — ThreadSanitizer reported 3 to 7 races per run before.
 > ⚠️ The same applies to an application callback a loader calls: `LoaderOptions::onMeshLoaded` receives resources whose
 > creation functions still run on pool tasks (scenes doc 19): it reads identities, a declarative option configures.
+> **2026-11-16**: the last two handlers follow it. A light's colour projection registered from the loading thread
+> could stamp a render-state slot with the new generation and the old block: the picture changed from one launch to
+> the next (102 to 108 nits metered over four launches of one scene, 104.0 to 105.2 after) — the light family now has
+> ONE logic cycle, `AbstractLightEmitter::processLogics()` (final) with the hook `onProcessLightLogics()`. A sound
+> emitter's awaited play starts in `processLogics()`; `stop()` and `clear()` cancel it.
 
 ### TSan on a machine whose display GPU runs the NVIDIA driver (2026-11-13)
 

@@ -204,6 +204,17 @@ run (mean absolute difference / 255):
   defect of that path is established by the call order — the read came before the write in both frame functions — not
   by a measurement.
 - GCC Release and Debug, clang, the Debug + TSan tree: 0 warning; `-Wdocumentation` on the 19 touched TUs.
+- Peers' round 12 (2026-11-16, engine 244176b0 + testbed 29a37715 — this change and the chain executor's split,
+  `docs/post-processing-pipeline.md` § 3d): macOS (Apple M6, MoltenVK 1.4.2, Apple clang with `-Wdocumentation -Werror`)
+  and Windows (RTX 3500 Ada, MSVC 19.44) build Release and Debug with 0 warning — nothing on `FrameView` returned by
+  value against a forward declaration, on the nested `ChainRun` defined out of its header, on the designated-initializer
+  return. Window-less on both. `light-and-shadow-debug`, `city` and the scene switches give Linux's statistics on both;
+  `terrain` gives them on Windows and differs by a few units on macOS (one triangle more in the view, four instances
+  fewer in the shadows, stable inside the run — Linux gives the same counts windowed and window-less). The status names
+  the expected effects (the screen-space lane on macOS); 0 VUID, exit 0, no "contract violation". By eye the glints
+  sit on the lamp heads of `city` on both; the starting frame of `light-and-shadow-debug` holds no light source, and
+  the clouds' shadows of `terrain` could not be told from the ground in two captures 10 s apart: those two checks
+  conclude nothing.
 
 **Code references:**
 - `Graphics/FrameView.hpp` — the view of ONE frame
@@ -310,12 +321,58 @@ cycle that FOLLOWS the end of the load — one cycle later at most — and not a
 component built on a renderable not published yet contributes an empty extent until then (it did before too, or a box
 half written).
 
-Audit of the other `LoadFinished` handlers (owner: audit only): `CloudVolume::registerShape()` is written for the
-loading thread (its published state is one atomic, the registration is idempotent and the bindless set is locked);
-`SoundEmitter` and `AbstractLightEmitter` write plain members there — items
-`sound-emitter-starts-its-sound-on-the-loader-thread` and
-`light-emitter-registers-its-colour-projection-on-the-loader-thread` (by code reading: ThreadSanitizer reported neither
-in one run each).
+Audit of the other `LoadFinished` handlers: `CloudVolume::registerShape()` is written for the loading thread (its
+published state is one atomic, the registration is idempotent and the bindless set is locked). `SoundEmitter` and
+`AbstractLightEmitter` wrote plain members there: both follow the contract since 2026-11-16 (next section).
+
+#### The two emitters (2026-11-16, owner decisions)
+
+**The lights — the family's logic cycle.** `AbstractLightEmitter::processLogics()` is the cycle of EVERY light,
+`final`: it consumes the record of a colour projection texture that finished loading and registers it in the bindless
+set (a light that is off registers it too, and only when nothing is registered yet), then — for an enabled light — runs
+the animations and the type's own step, the virtual `onProcessLightLogics()` (empty by default; `PointLight` advances
+the frame of an animated projection there). The four types used to repeat that cycle; a new light type implements the
+hook, never `processLogics()`. `setColorProjectionTexture()` observes, THEN tests `isLoaded()` again and records the
+load that ended in between.
+
+What the handler did on the loading thread: `registerColorProjectionInBindless()` wrote the projection's bindless index,
+its kind and its frame index, then `requestVideoMemoryUpdate()` incremented `m_logicGeneration` — while the logic thread
+compared that generation and wrote the light's block for a render-state slot (`publishStateForRendering()`). A slot
+published in that window is stamped with the NEW generation and holds the OLD block: it is never published again, and
+the frames that latch it draw the light without its projection (the mechanism by reading; the measurement below).
+
+**The sound emitter — a play that awaits its sound.** `SoundEmitter::onNotification()` records the END of the load,
+success or failure alike (one flag); `processLogics()` reads the outcome from the resource (`ResourceTrait::status()`,
+atomic) in `resolveAwaitedSound()`: loaded, it starts the awaited play; failed, it drops the attached sound.
+`play()` and `replay()` on a sound still loading call `awaitAttachedSound()` — `m_playAwaitsLoad` (logic thread only),
+`observe()`, then the status tested again for a load that ended in between. ⚠️ `stop()` and `clear()` CANCEL an awaited
+play (owner decision): the sound stays attached, `replay()` awaits it again. It used to start when its load ended,
+after the stop. The handler used to call `playAttachedSound()` on the loading thread: it took a source from the pool
+and wrote `m_source`, which `processLogics()` and `move()` read, test and reset on the logic thread.
+
+Proof (Linux, RTX 3070 Ti, 2026-11-16; Debug, window-less, the validation layer loaded, the binary before against
+the binary after).
+- `global-illumination` with a colour projection on its point light (`--demo-options 0,1`: the cubemap is requested
+  and given to the light in the same call, so it is still loading) — **the picture of the binary BEFORE changes from one
+  launch to the next**: metered scene average 102.4, 104.8, 106.9 and 107.7 nits over four launches, the closest
+  captures of two launches 1.3 to 3.1 / 255 apart. The binary AFTER: 104.0, 104.4, 104.8 and 105.2 nits, the closest
+  captures 0.15 to 0.53 apart; one launch of the binary before falls on the same picture (0.04). The projection is
+  registered in the eight launches (`Color projection texture registered in bindless manager at index 16`).
+- `light-and-shadow-debug` with projections on its three lights (`--demo-options 1`), whose textures are loaded when
+  the lights ask: the closest captures of the two binaries 0.016 apart, the median 0.091 — against 0.002 and 0.091
+  between two launches of the binary before; the same status, statistics and GPU timing zones (the three shadow maps
+  come in a per-launch ORDER: compare them sorted).
+- `game-logic` (an emitter plays the looping sound it requested in the same call): the same three emitters play before
+  and after (`fall`, the fire's loop, the drone's engine), each with a source, the 154 others silent
+  (`SoundEmitter.getState` on the 157 emitters, identical); the same GPU timing zones and status.
+- 0 VUID, 0 error line, exit 0 in the 14 launches. The commit gate entirely green: clang-tidy 0, cppcheck 0,
+  include-what-you-use 0 after one pass, GCC Release and Debug, clang, the Debug + TSan tree 0 warning.
+- ⚠️ No ThreadSanitizer evidence: the software device crashes on the three scenes that take this path (item
+  `skinned-scene-crashes-the-software-vulkan-device`; `light-and-shadow-debug` too), and the hardware driver does not
+  survive the sanitizer (`docs/caution-points.md` § TSan on a machine whose display GPU runs the NVIDIA driver). The
+  cancellation of an awaited play by `stop()` is verified by reading only: no console command plays a sound on an
+  emitter, so the window between `play()` and the end of the load cannot be driven from outside (item
+  `console-commands-to-play-a-sound-and-set-a-light-projection`).
 
 Proof (Linux, 2026-11-15). ThreadSanitizer, Debug, llvmpipe, the recipe of `docs/caution-points.md`:
 

@@ -31,13 +31,34 @@
 
 /* STL inclusions. */
 #include <array>
+#include <cstdint>
+#include <cstring>
+#include <memory>
+#include <sstream>
+#include <string>
 
 /* Local inclusions for usages. */
 #include "Graphics/Photometry.hpp"
+#include "Math/Vector.hpp"
 #include "SettingKeys.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
 /* Local inclusions for inheritances. */
 #include "AbstractLightEmitter.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Graphics::RenderTarget
+	{
+		class Abstract;
+	}
+
+	namespace Scenes
+	{
+		class AbstractEntity;
+	}
+}
 
 namespace EmEn::Scenes::Component
 {
@@ -121,9 +142,6 @@ namespace EmEn::Scenes::Component
 			{
 				return strcmp(ClassId, classID) == 0;
 			}
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
-			void processLogics (const Scene & scene) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void move (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
@@ -262,6 +280,10 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::onProcessLightLogics()
+			 * @note The point light's own step: the frame index of an ANIMATED colour projection (a cube array). */
+			void onProcessLightLogics (const Scene & scene) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::AbstractLightEmitter::createShadowDescriptorSet() */
 			bool createShadowDescriptorSet (Scene & scene) noexcept override;

@@ -392,9 +392,28 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
 
-			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
+			/**
+			 * @copydoc EmEn::Base::ObserverTrait::onNotification()
+			 * @note ⚠️ A sound resource notifies on the thread that ended its load (a pool worker): this handler only
+			 * records the event (Abstract::recordResourceLoaded()); processLogics() acts on the logic thread.
+			 */
 			[[nodiscard]]
 			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;
+
+			/**
+			 * @brief Makes the play await the attached sound's load: subscribes to it, and records a load that ended while
+			 * subscribing (check-then-act).
+			 * @note LOGIC thread.
+			 * @pre A sound is attached.
+			 */
+			void awaitAttachedSound () noexcept;
+
+			/**
+			 * @brief Resolves a recorded end of load: starts the awaited play when the attached sound is loaded, drops the
+			 * sound when its load failed, does nothing when no play awaits (stop() and clear() cancel it).
+			 * @note LOGIC thread, from processLogics().
+			 */
+			void resolveAwaitedSound () noexcept;
 
 			/**
 			 * @brief Updates a source's position, direction (and velocity, if enabled) with the entity.
@@ -444,5 +463,8 @@ namespace EmEn::Scenes::Component
 			std::shared_ptr< Audio::SoundResource > m_attachedSound;
 			float m_gain{1.0F};
 			float m_pitch{1.0F};
+			/** @brief A play() awaits the attached sound's load (LOGIC thread only): set by play() / replay() on a sound
+			 * still loading, cleared when it starts, when the load failed, by stop() and by clear(). */
+			bool m_playAwaitsLoad{false};
 	};
 }

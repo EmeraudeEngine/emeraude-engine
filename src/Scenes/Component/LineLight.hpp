@@ -32,16 +32,27 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <cstring>
+#include <memory>
 #include <span>
+#include <string>
 #include <vector>
 
 /* Local inclusions for inheritances. */
 #include "AbstractLightEmitter.hpp"
 
 /* Local inclusions for usages. */
+#include "Math/CartesianFrame.hpp"
 #include "Math/Vector.hpp"
 #include "Saphir/LightGenerator.hpp"
+#include "SettingKeys.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Scenes
+{
+	class AbstractEntity;
+}
 
 namespace EmEn::Scenes::Component
 {
@@ -103,9 +114,6 @@ namespace EmEn::Scenes::Component
 			{
 				return strcmp(ClassId, classID) == 0;
 			}
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
-			void processLogics (const Scene & scene) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void move (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept override;

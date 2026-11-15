@@ -47,6 +47,7 @@
 #include "ObservableTrait.hpp"
 #include "Physics/MovableTrait.hpp"
 #include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
 #include "Scenes/AbstractEntity.hpp"
 #include "Tracer.hpp"
 #include "Variant.hpp"
@@ -78,6 +79,14 @@ namespace EmEn::Scenes::Component
 	void
 	SoundEmitter::processLogics (const Scene & /*scene*/) noexcept
 	{
+		/* The load of an attached sound ended (recorded by onNotification() on the loading thread, or by
+		 * awaitAttachedSound() for a load that ended while it subscribed): the play that awaited it starts HERE, on the
+		 * logic thread, or the sound is dropped when its load failed. */
+		if ( this->consumeResourceLoaded() )
+		{
+			this->resolveAwaitedSound();
+		}
+
 		/* A one-shot voice whose sound ended goes back to the pool. */
 		for ( auto & voice : m_oneShotVoices )
 		{
@@ -107,12 +116,12 @@ namespace EmEn::Scenes::Component
 		{
 			switch ( notificationCode )
 			{
+				/* ⚠️ This runs on the thread that ended the load (a pool worker): nothing of the emitter is written here
+				 * — the source, the gain, the attached sound belong to the logic thread. Both outcomes record the same
+				 * thing, "the load ended"; processLogics() reads which way from the resource (resolveAwaitedSound()). */
 				case Resources::ResourceTrait::LoadFinished :
-					this->playAttachedSound();
-					break;
-
 				case Resources::ResourceTrait::LoadFailed :
-					this->releaseAttachedSound();
+					this->recordResourceLoaded();
 					break;
 
 				default:
@@ -202,12 +211,62 @@ namespace EmEn::Scenes::Component
 		/* NOTE: Delay the sound play if not loaded. */
 		if ( m_attachedSound->isLoaded() )
 		{
+			m_playAwaitsLoad = false;
+
 			this->playAttachedSound();
 		}
 		else
 		{
-			this->observe(m_attachedSound.get());
+			this->awaitAttachedSound();
 		}
+	}
+
+	void
+	SoundEmitter::awaitAttachedSound () noexcept
+	{
+		m_playAwaitsLoad = true;
+
+		this->observe(m_attachedSound.get());
+
+		/* ⚠️ Check-then-act: the load may have ended between the caller's isLoaded() and observe(), and a notification
+		 * sent in that window reached nobody. Recorded like the notification would have: processLogics() resolves it. */
+		if ( const auto status = m_attachedSound->status(); status == Resources::Status::Loaded || status == Resources::Status::Failed )
+		{
+			this->recordResourceLoaded();
+		}
+	}
+
+	void
+	SoundEmitter::resolveAwaitedSound () noexcept
+	{
+		/* NOTE: stop() and clear() cancel an awaited play: the record that arrives afterwards starts nothing. */
+		if ( !m_playAwaitsLoad )
+		{
+			return;
+		}
+
+		if ( m_attachedSound == nullptr )
+		{
+			m_playAwaitsLoad = false;
+
+			return;
+		}
+
+		if ( m_attachedSound->isLoaded() )
+		{
+			m_playAwaitsLoad = false;
+
+			this->playAttachedSound();
+		}
+		else if ( m_attachedSound->status() == Resources::Status::Failed )
+		{
+			m_playAwaitsLoad = false;
+
+			this->releaseAttachedSound();
+		}
+
+		/* NOTE: Still loading: the record came from a sound this emitter no longer awaits (another one was attached
+		 * since); the awaited one records in its turn. */
 	}
 
 	void
@@ -353,12 +412,24 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
+		/* A sound still loading is awaited (again, after a stop()): it starts once its load ended. */
+		if ( !m_attachedSound->isLoaded() )
+		{
+			this->awaitAttachedSound();
+
+			return;
+		}
+
 		this->playAttachedSound();
 	}
 
 	void
 	SoundEmitter::stop () noexcept
 	{
+		/* A play that still awaits its sound is cancelled too (owner decision 2026-11-16): the sound stays attached,
+		 * replay() awaits it again. It used to start when its load ended, after the stop. */
+		m_playAwaitsLoad = false;
+
 		this->releaseOneShotVoices();
 
 		if ( m_source != nullptr )

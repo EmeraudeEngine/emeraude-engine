@@ -32,15 +32,13 @@
 /* Project configuration. */
 #include "emeraude_config.hpp"
 
-/* STL inclusions. */
-#include <cstddef>
-
 /* Local inclusions. */
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/SharedUniformBuffer.hpp"
 #include "Resources/ResourceTrait.hpp"
 #include "Scenes/BindlessTextureSet.hpp"
+#include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/TextureInterface.hpp"
 
@@ -546,10 +544,45 @@ namespace EmEn::Scenes::Component
 			else if ( resource != nullptr )
 			{
 				this->observe(resource);
+
+				/* ⚠️ Check-then-act: the texture may have finished loading between isLoaded() and observe(), and a
+				 * LoadFinished sent in that window reached nobody. Recorded like the notification would have: the
+				 * registration happens ONCE, in processLogics(). */
+				if ( resource->isLoaded() )
+				{
+					this->recordResourceLoaded();
+				}
 			}
 		}
 
 		++m_logicGeneration;
+	}
+
+	void
+	AbstractLightEmitter::processLogics (const Scene & scene) noexcept
+	{
+		/* The colour projection texture finished loading (recorded by onNotification() on the loading thread, or by
+		 * setColorProjectionTexture() for a load that ended while it subscribed): it is registered here, on the logic
+		 * thread, and before the test below — a light that is off holds its projection ready too.
+		 * ⚠️ Only when it is not registered yet: the texture may have been replaced by a loaded one since the record. */
+		if ( this->consumeResourceLoaded() && m_colorProjectionBindlessIndex == NoColorProjectionTexture )
+		{
+			auto * resource = dynamic_cast< Resources::ResourceTrait * >(m_colorProjectionTexture.get());
+
+			if ( resource != nullptr && resource->isLoaded() )
+			{
+				this->registerColorProjectionInBindless();
+			}
+		}
+
+		if ( !this->isEnabled() )
+		{
+			return;
+		}
+
+		this->updateAnimations(scene.cycle());
+
+		this->onProcessLightLogics(scene);
 	}
 
 	void
@@ -633,7 +666,10 @@ namespace EmEn::Scenes::Component
 	{
 		if ( notificationCode == Resources::ResourceTrait::LoadFinished )
 		{
-			this->registerColorProjectionInBindless();
+			/* ⚠️ This runs on the thread that finished the load (a pool worker): nothing of the light is written here.
+			 * The registration writes the projection's bindless index, its kind and its frame index, which the logic
+			 * thread reads: it is done by processLogics(). */
+			this->recordResourceLoaded();
 
 			return false;
 		}

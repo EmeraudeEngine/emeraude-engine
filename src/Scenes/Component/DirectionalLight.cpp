@@ -33,6 +33,7 @@
 #include <iterator>
 
 /* Local inclusions. */
+#include "Animations/AnimationInterface.hpp"
 #include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
@@ -83,17 +84,6 @@ namespace EmEn::Scenes::Component
 			default:
 				return false;
 		}
-	}
-
-	void
-	DirectionalLight::processLogics (const Scene & scene) noexcept
-	{
-		if ( !this->isEnabled() )
-		{
-			return;
-		}
-
-		this->updateAnimations(scene.cycle());
 	}
 
 	Vector< 3, float >

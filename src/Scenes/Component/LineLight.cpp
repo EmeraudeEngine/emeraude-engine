@@ -30,13 +30,27 @@
 #include <cmath>
 #include <limits>
 #include <numbers>
+#include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/Types.hpp"
 #include "Math/CurveTessellation.hpp"
-#include "Math/Space3D/Collisions/PointSphere.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/LightGenerator.hpp"
+#include "Scenes/Component/AbstractLightEmitter.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
+#include "Variant.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Scenes
+{
+	class AbstractEntity;
+}
 
 namespace EmEn::Scenes::Component
 {
@@ -124,17 +138,6 @@ namespace EmEn::Scenes::Component
 			default:
 				return false;
 		}
-	}
-
-	void
-	LineLight::processLogics (const Scene & scene) noexcept
-	{
-		if ( !this->isEnabled() )
-		{
-			return;
-		}
-
-		this->updateAnimations(scene.cycle());
 	}
 
 	void

@@ -207,9 +207,6 @@ namespace EmEn::Scenes::Component
 				return strcmp(ClassId, classID) == 0;
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
-			void processLogics (const Scene & scene) noexcept override;
-
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void move (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept override;
 

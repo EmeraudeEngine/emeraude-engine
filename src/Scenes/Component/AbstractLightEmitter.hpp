@@ -314,6 +314,16 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::publishStateForRendering(uint32_t) */
 			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
 
+			/**
+			 * @brief The logic cycle of EVERY light, final: a colour projection texture that finished loading is registered
+			 * (a light that is off registers it too), then an ENABLED light runs its animations and its own step
+			 * (onProcessLightLogics()).
+			 * @note LOGIC thread. What the light family has in common lives here: a light type does not override it, it
+			 * implements onProcessLightLogics() when it has a step of its own.
+			 * @param scene A reference to the scene.
+			 */
+			void processLogics (const Scene & scene) noexcept final;
+
 			/** @brief The factor of an emission step that is a temporal discontinuity (owner decision 2026-11-02). */
 			static constexpr float TemporalDiscontinuityRatio{2.0F};
 
@@ -811,6 +821,18 @@ namespace EmEn::Scenes::Component
 				/* FIXME: function name shadowing here !
 				 * Maybe there is a simpler inheritance to do. */
 				return Abstract::getWorldCoordinates();
+			}
+
+			/**
+			 * @brief The step of the logic cycle that belongs to ONE light type; nothing by default.
+			 * @note LOGIC thread, called by processLogics() for an enabled light, after its animations.
+			 * @param scene A reference to the scene.
+			 */
+			virtual
+			void
+			onProcessLightLogics ([[maybe_unused]] const Scene & scene) noexcept
+			{
+
 			}
 
 			/** @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::updateDeviceFromCoordinates() */

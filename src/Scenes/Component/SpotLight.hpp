@@ -31,19 +31,35 @@
 
 /* STL inclusions. */
 #include <array>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
 #include <memory>
+#include <sstream>
+#include <string>
 
 /* Local inclusions for usages. */
 #include "Graphics/Photometry.hpp"
+#include "Math/Base.hpp"
+#include "Math/Vector.hpp"
 #include "SettingKeys.hpp"
+#include "Vulkan/DescriptorSet.hpp"
 
 /* Local inclusions for inheritances. */
 #include "AbstractLightEmitter.hpp"
 
 /* Forward declarations. */
-namespace EmEn::Vulkan
+namespace EmEn
 {
-	class DescriptorSet;
+	namespace Graphics::RenderTarget
+	{
+		class Abstract;
+	}
+
+	namespace Scenes
+	{
+		class AbstractEntity;
+	}
 }
 
 namespace EmEn::Scenes::Component
@@ -128,9 +144,6 @@ namespace EmEn::Scenes::Component
 			{
 				return strcmp(ClassId, classID) == 0;
 			}
-
-			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
-			void processLogics (const Scene & scene) noexcept override;
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::move() */
 			void move (const Base::Math::CartesianFrame< float > & worldCoordinates) noexcept override;

@@ -27,18 +27,34 @@
 #include "PointLight.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <bit>
+#include <cmath>
 
 /* Local inclusions. */
+#include "Animations/AnimationInterface.hpp"
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/SharedUniformBuffer.hpp"
+#include "Graphics/Types.hpp"
+#include "Math/CartesianFrame.hpp"
 #include "Math/Space3D/Collisions/PointSphere.hpp"
 #include "Math/Space3D/Collisions/SamePrimitive.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Resources/ResourceTrait.hpp"
+#include "Saphir/Declaration/UniformBlock.hpp"
 #include "Saphir/LightGenerator.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
+#include "Scenes/AVConsole/Types.hpp"
+#include "Scenes/Component/AbstractLightEmitter.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
+#include "Variant.hpp"
 #include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/TextureInterface.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -75,15 +91,8 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	PointLight::processLogics (const Scene & scene) noexcept
+	PointLight::onProcessLightLogics (const Scene & scene) noexcept
 	{
-		if ( !this->isEnabled() )
-		{
-			return;
-		}
-
-		this->updateAnimations(scene.cycle());
-
 		/* Update the animated color projection frame index. */
 		if ( m_colorProjectionIsCubeArray && this->hasColorProjectionTexture() )
 		{
