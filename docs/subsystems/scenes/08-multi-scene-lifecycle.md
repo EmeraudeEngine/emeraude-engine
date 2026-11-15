@@ -73,7 +73,8 @@ cycles, and once it returned the hook no longer runs on what the change removed.
 - keep `enableScene()` / `disableActiveScene()` OUTSIDE the change: their notification handlers would run under the
   cycle lock.
 What it does NOT order: the rendering thread, which never takes the cycle lock — a state the renderer reads keeps its
-own protocol (a render state slot, an atomic; item `tsan-logic-render-shared-state-races`).
+own protocol (a render state slot, an atomic, a publication flag, an answer the other thread publishes: doc 12
+§ *Plain state shared by the logic and rendering threads*).
 Proof (the testbed's `default`, Linux, Debug + ThreadSanitizer with `detect_deadlocks=1`, llvmpipe, the active object
 unloaded / reloaded / destroyed / rebuilt through the console, 2026-11-15): before, the five races in one run, the logic
 thread holding the cycle lock in each; after, 0 report naming the swap in 3 runs, 0 lock-order inversion, a clean

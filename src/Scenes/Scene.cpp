@@ -414,9 +414,7 @@ namespace EmEn::Scenes
 		 * frame behind every ~24 cycles). The microsecond step is not exact either (16666 for
 		 * 16666.67: 40 µs lost per second), hence the cycle count (Constants.hpp,
 		 * logicCyclesToMicroseconds()). Still monotonic, still cheap. */
-		++m_lifetimeCycles;
-		m_lifetimeUS = logicCyclesToMicroseconds(m_lifetimeCycles);
-		m_lifetimeMS = static_cast< uint32_t >(m_lifetimeUS / 1000ULL);
+		m_lifetimeCycles.fetch_add(1, std::memory_order_relaxed);
 
 		/* Deferred background photometry: requests come from ANY thread (console, input
 		 * callbacks, resource loading), the application mutates the scene (entities, lights,
@@ -1027,7 +1025,7 @@ namespace EmEn::Scenes
 		{
 			Tracer::warning(ClassId, "There is no camera in the scene ! Creating a default camera ...");
 
-			const auto camera = m_rootNode->createChild("DefaultCameraNode", {}, m_lifetimeMS)
+			const auto camera = m_rootNode->createChild("DefaultCameraNode", {}, this->lifetimeMS())
 				->componentBuilder< Component::Camera >("DefaultCamera").asPrimary().build(true);
 
 			if ( camera == nullptr )
@@ -1042,7 +1040,7 @@ namespace EmEn::Scenes
 		{
 			Tracer::warning(ClassId, "There is no microphone in the scene ! Creating a default microphone ...");
 
-			const auto microphone = m_rootNode->createChild("DefaultMicrophoneNode", {}, m_lifetimeMS)
+			const auto microphone = m_rootNode->createChild("DefaultMicrophoneNode", {}, this->lifetimeMS())
 				->componentBuilder< Component::Microphone >("DefaultMicrophone").asPrimary().build();
 
 			if ( microphone == nullptr )

@@ -570,7 +570,7 @@ namespace EmEn::Scenes
 		 * view-projection half of the same header, which stays in prepareRender() behind its
 		 * primary-view guard. The upload is cumulative, so the one there still carries both. */
 		{
-			const auto windTime = static_cast< float >(m_lifetimeUS) * 0.000001F;
+			const auto windTime = static_cast< float >(this->lifetimeUS()) * 0.000001F;
 			const auto windGust = m_windGustiness * std::sin(windTime * 0.23F);
 
 			m_instanceTransforms.setWindState(m_windDirection, m_windStrength, windTime, m_previousWindTime, windGust);

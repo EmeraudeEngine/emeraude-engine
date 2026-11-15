@@ -219,7 +219,7 @@ namespace EmEn::Scenes
 			void
 			enable () noexcept
 			{
-				m_enabled = true;
+				m_enabled.store(true, std::memory_order_relaxed);
 			}
 
 			/**
@@ -230,7 +230,7 @@ namespace EmEn::Scenes
 			bool
 			isEnabled () const noexcept
 			{
-				return m_enabled;
+				return m_enabled.load(std::memory_order_relaxed);
 			}
 
 			/**
@@ -841,8 +841,11 @@ namespace EmEn::Scenes
 			float m_lightPercentToAmbient{DefaultLightPercentToAmbient};
 			/** @brief temporalDiscontinuityEvents(): bumped from any thread (additions, removals, the ambient). */
 			std::atomic_uint64_t m_temporalDiscontinuityEvents{0};
+			/** @brief enable() / isEnabled(): set by the logic thread (the background's lighting) or the main thread (the
+			 * console), read by the rendering thread at every frame and in the shader generation: atomic, relaxed (a
+			 * switch on its own). */
+			std::atomic< bool > m_enabled{false};
 			bool m_initialized{false};
-			bool m_enabled{false};
 			bool m_createAmbientFromLights{false};
 			bool m_useLightDistance{false};
 	};

@@ -450,13 +450,17 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 		}
 
+		/* The publication, LAST: the logic thread stages its poses from here on (hasSkinningResources()). */
+		m_skinningResourcesPublished.store(true, std::memory_order_release);
+
 		return true;
 	}
 
 	bool
 	Abstract::updateSkinningMatrices (const std::vector< Matrix< 4, float > > & matrices) noexcept
 	{
-		if ( m_skinningSSBO == nullptr || matrices.empty() )
+		/* NOTE: The logic thread. The published flag, never the buffer pointer the rendering thread is writing. */
+		if ( !this->hasSkinningResources() || matrices.empty() )
 		{
 			return false;
 		}

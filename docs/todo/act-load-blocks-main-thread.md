@@ -37,12 +37,13 @@ connection*), and it still leaves the compositor's `xdg_wm_base.ping` unanswered
 ## What remains
 
 - [x] TSan on `default` (2026-11-13, Debug + TSan, `--disable-cef`, the RADV device forced: the NVIDIA driver dies under
-  TSan at device creation, item `tsan-logic-render-shared-state-races` § Traps): 132 reports, 127 in uninstrumented
-  third-party code (glycin, glib), 5 in the engine between the LOGIC and RENDERING threads only (filed as that item);
+  TSan at device creation, `docs/caution-points.md` § *TSan on a machine whose display GPU runs the NVIDIA driver*): 132 reports, 127 in uninstrumented
+  third-party code (glycin, glib), 5 in the engine between the LOGIC and RENDERING threads only (fixed 2026-11-15:
+  scenes doc 12 § *Plain state shared by the logic and rendering threads*);
   the build thread is party to none (it only allocated the objects). Clean start and `Core.shutdown()`.
 - [x] TSan on `terrain` (2026-11-13, RADV forced, 10.5 GB, 415 s to the start, the owner closed it with the window's
   close button): 145 reports, the build thread an ACCESS party in none (the allocator of the racing objects in 10),
-  the rest the glycin / glib noise and the logic ↔ rendering family of `tsan-logic-render-shared-state-races` (the
+  the rest the glycin / glib noise and the logic ↔ rendering family fixed on 2026-11-15 (scenes doc 12; the
   ready flag also from `MultiLayerMeshResource`). ⚠️ The Debug teardown after that close printed VMA assertions
   ("Some allocations were not freed before destruction of this memory block", "Unfreed dedicated allocations",
   then a null allocator and TSan's DEADLYSIGNAL) with `CloudShape… is still used 3 times` just before: to check on

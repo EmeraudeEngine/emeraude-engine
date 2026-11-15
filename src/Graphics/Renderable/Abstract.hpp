@@ -76,9 +76,9 @@ namespace EmEn::Graphics::Renderable
 	enum EMEN_API RenderableFlagBits : uint32_t
 	{
 		None = 0U,
-		/** @brief This flag is set when the geometry is fully usable by the GPU,
-		 * thus ready to make mesh, sprite, things, ... as instances. */
-		IsReadyForInstantiation = 1U << 0,
+		/* NOTE: The bit 0 was "ready for instantiation". That state is set by a loading thread and read by the logic and
+		 * rendering threads: it is an atomic of its own (Abstract::isReadyForInstantiation()), not a bit of this plain
+		 * word, whose other bits are written before the renderable is published. */
 		/** @brief This flag tells that the renderable has a skeletal animation available. */
 		HasSkeletalAnimation = 1U << 1,
 		/** @brief This flag tells the system this renderable uses a single quad which should always face the camera. */
@@ -169,7 +169,8 @@ namespace EmEn::Graphics::Renderable
 			bool
 			isReadyForInstantiation () const noexcept
 			{
-				return this->isFlagEnabled(IsReadyForInstantiation);
+				/* NOTE: Any thread. Acquire: whoever reads true sees everything the loading thread built before it. */
+				return m_readyForInstantiation.load(std::memory_order_acquire);
 			}
 
 			/**
@@ -439,14 +440,9 @@ namespace EmEn::Graphics::Renderable
 			void
 			setReadyForInstantiation (bool state) noexcept
 			{
-				if ( state )
-				{
-					this->enableFlag(IsReadyForInstantiation);
-				}
-				else
-				{
-					this->disableFlag(IsReadyForInstantiation);
-				}
+				/* NOTE: The publication: called LAST, once everything an instance needs is built. Release, see
+				 * isReadyForInstantiation(). */
+				m_readyForInstantiation.store(state, std::memory_order_release);
 			}
 
 		private:
@@ -465,5 +461,8 @@ namespace EmEn::Graphics::Renderable
 			mutable std::atomic< uint32_t > m_programCacheGeneration{0};
 			float m_uniformScale = 1.0F;
 			uint32_t m_vegetationFoliageLayer{NoFoliageLayer};
+			/** @brief Whether the geometry is fully usable by the GPU, thus ready to make instances: written by the
+			 * thread that finishes the load (a pool worker), read by the logic and the rendering threads. */
+			std::atomic< bool > m_readyForInstantiation{false};
 	};
 }

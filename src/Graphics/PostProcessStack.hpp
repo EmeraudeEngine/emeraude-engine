@@ -663,8 +663,11 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Returns whether an ENABLED indirect-diffuse provider (RTGI) is in the chain.
-			 * @note Read by the scene to hand the diffuse IBL leg over to that effect — see
+			 * @note The scene hands the diffuse IBL leg over to that effect — see
 			 * PostProcessEffect::providesIndirectDiffuse() for the ownership contract.
+			 * @note RENDER THREAD, as every walk of the ordered chain: this thread rebuilds it and enables its effects.
+			 * The renderer publishes the answer to the scene once per frame
+			 * (Scenes::Scene::publishIndirectDiffuseProvider()); the logic thread reads that, never this.
 			 * @return bool
 			 */
 			[[nodiscard]]

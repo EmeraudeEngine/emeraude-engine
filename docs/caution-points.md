@@ -6527,8 +6527,37 @@ After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and
 > a settings COPY (`Core/Video/VulkanDevice/ForceGPU`, `--settings-filepath`): the AMD iGPU (RADV) on a hybrid laptop,
 > `llvmpipe` anywhere. The run then starts in ~140 s and `Core.shutdown()` works; TSan's exit code is 66 whenever it
 > reported something, the engine's own code is the journal's "User exit code". The reports of uninstrumented libraries
-> (glycin, glib: ~127 on `default`) are noise to filter; the engine's own are an item
-> (`tsan-logic-render-shared-state-races`).
+> (glycin, glib: ~127 on `default`) are noise to filter. The engine's own — five reports in that run, six members in
+> all with the llvmpipe runs of 2026-11-15: plain state shared by the logic and rendering threads under the SHARED scene
+> access — were fixed on 2026-11-15: scenes doc 12 § *Plain state shared by the logic and rendering threads* (the
+> protocol of each, and how to choose one for a new datum).
+> ⚠️ A skinned scene and the release of a large scene both kill llvmpipe (item
+> `skinned-scene-crashes-the-software-vulkan-device`): TSan writes its reports before the device dies, so a run that
+> ends on `SEGV … libvulkan_lvp.so` is still readable — count the reports, do not trust its exit.
+>
+> **The recipe** (2026-11-15): `cmake -S . -B .claude-build-tsan -DCMAKE_BUILD_TYPE=Debug -DEMERAUDE_ENABLE_TSAN=On -G
+> Ninja` (8 min on 8 cores), then `TSAN_OPTIONS="halt_on_error=0 detect_deadlocks=1 second_deadlock_stack=1
+> log_path=<scratch>/tsan-report suppressions=tsan_suppressions.txt" ./projet-alpha --load-demo default --disable-cef
+> --disable-settings-autosave --enable-log=<scratch>/journal.log --enable-remote-console=7780 --set-vk-layers=
+> --settings-filepath=<copy>`.
+> - **Which Mesa device**: `llvmpipe` works on any machine — `default` starts in 6 s with the window reduced to
+>   960 × 540 in the same settings copy, and the suppression file the build copies beside the binary covers the driver
+>   (`race:libLLVM*`, `race:libgallium*`); software rendering under TSan is slow, the main thread still answers. NOT
+>   the Intel iGPU of a machine whose compositor runs on the NVIDIA GPU: the compositor refuses its buffers at the first
+>   present and the instance loses its display (item `igpu-presentation-under-nvidia-wayland`).
+> - **CEF does not start under TSan** (`free(): invalid size`, SIGABRT at the first browser subprocess): every run
+>   takes `--disable-cef`, and what only a web screen triggers is out of its reach.
+> - **What is not ours**: the reports whose stacks sit in uninstrumented libraries (glycin, glib, gio, pango, fontconfig,
+>   pulse), and on llvmpipe ONE report per run inside OpenAL Soft: its playback thread (`ALSoftP1`) reads a buffer its
+>   own allocator created on the main thread under `Audio::Manager::onInitialize()` — the allocation is the report's
+>   "previous write". Suppressed since 2026-11-15 (owner decision; a tool configuration, not a silenced finding):
+>   `race:^al::allocator<` in `resources/tsan_suppressions.txt`. ⚠️ OpenAL Soft is a static library INSIDE libEmeraude:
+>   a module pattern (`libopenal*`) matches nothing, and a thread or `libpipewire*` pattern would also hide the engine's
+>   own `TrackMixer` event callback, which runs on an OpenAL thread. Anchor on the third-party FUNCTION (`^` = the start
+>   of the name; a pattern without it is a substring). With it the console scenario on `default` ends with 0 report and
+>   exit code 0 (2 runs).
+> - A large scene is slow to start (`terrain`: four minutes on llvmpipe, seven on RADV); a scenario that changes the
+>   active scene through the console finds what a single load does not.
 
 ### Fixed: a buffer-less commit of the window surface from the main thread raced the driver's present — Wayland explicit sync (2026-11-13)
 
@@ -9264,7 +9293,7 @@ Measured on Linux (GCC 14, NVIDIA 3070 Ti):
 - **The bundled Vulkan loader was opened with `RTLD_DEEPBIND`**, which the ASan / TSan runtimes refuse: a sanitized build
   loads it without (`Vulkan/Loader.cpp`, `__SANITIZE_THREAD__` / `__SANITIZE_ADDRESS__`).
 - **Uninstrumented code reads as races**: OpenAL Soft (a prebuilt static library inside libEmeraude: `Voice::mix`,
-  `Voice::prepare`), glib / gio, Mesa / LLVM (libgomp too until OpenMP left the base, 2026-10-29). They are in
+  `Voice::prepare`, and since 2026-11-15 its allocator, `^al::allocator<`), glib / gio, Mesa / LLVM (libgomp too until OpenMP left the base, 2026-10-29). They are in
   `resources/tsan_suppressions.txt`; never suppress a frame of the cascade.
 - `ALSOFT_DRIVERS=null` keeps OpenAL silent; `--window-less` needs no display.
 - **macOS (M6, Apple clang)**: MoltenVK runs under TSan without crashing, so no software device is needed. But the stress

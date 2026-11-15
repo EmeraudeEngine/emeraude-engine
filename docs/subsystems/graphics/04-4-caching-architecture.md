@@ -220,6 +220,17 @@ in all), then nothing; a retry while they still fail reports each once more.
 0 VUID and exit 0 in every run. The commit gate is green (GCC Release and Debug, clang, clang-tidy, cppcheck,
 include-what-you-use); MCP conformance 2037 checks, 0 failed; ThreadSanitizer (`default`, llvmpipe, the retry asked five
 times while the scene renders): no report on the retry count or the refusals, no lock-order inversion.
+Peers' round 9 (2026-11-15, engine 31d39b6a + testbed b4414eb): macOS (Apple M6, MoltenVK 1.4.2, Apple clang with
+`-Wdocumentation -Werror`, 391 TUs) and Windows (RTX 3500 Ada, MSVC 19.44, 389 TUs) build Release, Debug and the
+fault-injection tree with 0 warning and reproduce the two tables: the control lists identical to Linux on both (view 7
+instances / 673 958 triangles, shadows 30 / 4 033 408); the shadow program failing — 15 blocks, no shadow, the view
+unchanged, 0 component destroyed, and with a count of 15 the retry brings the 30 shadow instances back; the ambient
+program failing once — 6 instances in the view, 7 again after the retry; the final pass — one block, one warning, the
+picture kept (Windows: mean luma 2.72 against 2.72 for its control, a night scene there; macOS 128.48), and black with
+"unable to execute the direct effects" exactly once when the program without effects fails too. MCP conformance
+2037 / 0, 0 VUID and exit 0 in every launch. One difference, not a defect: which instance the single ambient failure
+refuses follows the order the programs are generated in — the 2-triangle instance on Linux and Windows (673 956
+triangles left), the large LOD-0 mesh on macOS (6292 left).
 
 The post-process passes keep their own variant caches, keyed the same way: `CombinePass::m_variants` and
 `DenoisePass::m_variants` (a generated fragment shader, its pipeline and per-frame sets per group of effects). They are

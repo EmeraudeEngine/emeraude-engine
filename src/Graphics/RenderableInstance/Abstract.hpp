@@ -900,7 +900,9 @@ namespace EmEn::Graphics::RenderableInstance
 			bool
 			hasSkinningResources () const noexcept
 			{
-				return !m_skinningDescriptorSets.empty();
+				/* NOTE: Any thread. The rendering thread creates the buffer and its descriptor sets, THEN publishes them
+				 * (createSkinningResources()); the logic thread asks at every cycle and tested the half-built vector. */
+				return m_skinningResourcesPublished.load(std::memory_order_acquire);
 			}
 
 			/**
@@ -1865,6 +1867,9 @@ namespace EmEn::Graphics::RenderableInstance
 			std::shared_ptr< Vulkan::DescriptorPool > m_skinningDescriptorPool;
 			/** @brief One descriptor set per SSBO section (frame in flight). */
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_skinningDescriptorSets;
+			/** @brief Set once m_skinningSSBO, its pool and its descriptor sets are all built (createSkinningResources(),
+			 * the rendering thread); never cleared before the destructor. What another thread tests (hasSkinningResources()). */
+			std::atomic< bool > m_skinningResourcesPublished{false};
 			/** @brief Protects m_skinningStaging between the logic thread (staging) and the render thread (upload). */
 			mutable Base::Mutex m_skinningStagingMutex;
 			/* Ray-tracing skinned geometry resources (per-instance).

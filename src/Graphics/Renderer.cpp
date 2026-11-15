@@ -2248,6 +2248,11 @@ namespace EmEn::Graphics
 				scene->postProcessStack()->syncSlotPairings(sceneCloudSet(scene.get()));
 			}
 
+			/* The answer to the logic thread's question "does an enabled effect provide the indirect diffuse ?"
+			 * (Scene::updateIBLDiffuseOwnership()), published HERE, once this frame's effects and their enabled states
+			 * are final: the chain and the acceleration structure it asks about are this thread's alone. */
+			scene->publishIndirectDiffuseProvider(stack != nullptr && scene->postProcessStack()->hasEnabledIndirectDiffuseProvider());
+
 			/* The master switch says the user ALLOWS post-processing; this says there is
 			 * something to run. A scene with an empty chain and a bare camera stays on the
 			 * direct path and pays nothing — which is why the switch can default to ON and

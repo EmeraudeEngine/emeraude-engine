@@ -212,7 +212,7 @@ namespace EmEn::Scenes
 	std::shared_ptr< StaticEntity >
 	Scene::createStaticEntity (const std::string & name, const CartesianFrame< float > & coordinates) noexcept
 	{
-		auto staticEntity = std::make_shared< StaticEntity >(*this, name, m_lifetimeMS, coordinates);
+		auto staticEntity = std::make_shared< StaticEntity >(*this, name, this->lifetimeMS(), coordinates);
 
 		/* ⚠️⚠️ `emplace` on an EXISTING key is a no-op that DISCARDS its argument, and this used to
 		 * return the orphan anyway: the caller then built its components onto an entity that is not

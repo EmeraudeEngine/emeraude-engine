@@ -65,7 +65,7 @@ refused the first buffer both times (gnome-shell's journal: `WL: error in client
   the process at once (exit 143): at startup the termination catcher is not installed yet while `--load-demo` builds.
   It is step (4) of `wayland-surface-lost-protocol-error`, unchanged.
 - ⚠️ So on this workstation a ThreadSanitizer run cannot use the Intel device as its Mesa device: `llvmpipe` only
-  (`tsan-logic-render-shared-state-races` § Traps).
+  (`docs/caution-points.md` § *TSan on a machine whose display GPU runs the NVIDIA driver*).
 
 ## References
 

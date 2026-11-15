@@ -21,8 +21,8 @@ listeners registered by `Scene::enable()`, so their callbacks run on the MAIN th
 
 Neither file takes `betweenLogicCycles()` nor an exclusive scene access, and the input manager knows nothing of scenes.
 Meanwhile the logic thread reads and writes the same node (`Scene::processLogics()`, physics, publication) under a
-SHARED access: nothing orders the two. If confirmed, it is the same family as
-`tsan-logic-render-shared-state-races` (main ↔ logic instead of logic ↔ render).
+SHARED access: nothing orders the two. If confirmed, it is the same family as the logic ↔ rendering races fixed on
+2026-11-15 (scenes doc 12 § *Plain state shared by the logic and rendering threads*) — main ↔ logic here.
 
 ## What remains
 

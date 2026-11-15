@@ -28,6 +28,7 @@
 
 /* STL inclusions. */
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstdint>
 #include <memory>
@@ -42,7 +43,6 @@
 #include "Graphics/CelestialBody.hpp"
 #include "Graphics/Compute/IBLBaker.hpp"
 #include "Graphics/IBLTexture.hpp"
-#include "Graphics/PostProcessStack.hpp"
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderable/DynamicSkyResource.hpp"
 #include "Graphics/Renderer.hpp"
@@ -319,10 +319,11 @@ namespace EmEn::Scenes
 	void
 	Scene::updateIBLDiffuseOwnership () noexcept
 	{
-		/* ⚠️ Benign read race on the effects' enabled flags (the logic thread toggles them, the
-		 * render thread reads them) — the same class as the reflection cost ladder and as the
-		 * executor's own isEnabled() skip. The worst case is one frame of the previous weight. */
-		const auto owned = m_postProcessStack != nullptr && m_postProcessStack->hasEnabledIndirectDiffuseProvider();
+		/* NOTE: The rendering thread's answer for its last frame, never the chain itself: that thread rebuilds the
+		 * ordered effect list, enables and disables its effects and stores the frame's acceleration structure, so
+		 * walking the chain from here raced all three (ThreadSanitizer). The worst case is one frame of the previous
+		 * weight. */
+		const auto owned = m_indirectDiffuseProvided.load(std::memory_order_relaxed);
 		const auto wanted = owned ? 0.0F : 1.0F;
 
 		if ( Base::Utility::isZero(wanted - m_IBLDiffuseWeight) )

@@ -154,3 +154,54 @@ const auto & projMat = viewMatrices.projectionMatrix(readStateIndex);
 - `Renderer.cpp:renderFrameWithPostProcessing()` — Captures `scene->preparedReadStateIndex()` before post-processing
 - `Effects/Lighting/RTR.cpp:execute()` — Uses `readStateIndex` for NDC → world reconstruction
 - `ViewMatrices3DUBO.cpp:viewMatrix()` — Two overloads: `m_logicState` vs `m_renderState[idx]`
+
+### Plain state shared by the logic and rendering threads under the SHARED scene access (2026-11-15, owner decisions)
+
+The render state slots above carry what the logic thread PUBLISHES for a frame. Beside them, both threads hold the
+active scene's access SHARED — the rendering thread for a whole frame, the logic thread for its cycle — so nothing
+orders a plain write on one side against a read on the other. ThreadSanitizer found six such members (2026-11-13 and
+2026-11-15); each one has ONE protocol now:
+
+| State | Written by | Read by | Protocol |
+|---|---|---|---|
+| The scene's lifetime | the logic thread (`Scene::processLogics()`) | the rendering thread (the wind time in `Scene::updateVideoMemory()`, the animated textures of the bindless set) | ONE atomic count of logic cycles, `Scene::m_lifetimeCycles`; `lifetimeUS()` and `lifetimeMS()` are derived from it when read. They were two more plain words written one after the other: a reader could also see the microseconds of one cycle with the milliseconds of the previous one |
+| "Does an enabled effect provide the indirect diffuse?" (the diffuse IBL leg is handed over to RTGI) | the rendering thread: it rebuilds the ordered effect chain, enables and disables its effects, stores the frame's acceleration structure | the logic thread (`Scene::updateIBLDiffuseOwnership()`) | the rendering thread PUBLISHES its answer once per frame — `Scene::publishIndirectDiffuseProvider()`, called by `Renderer::renderFrame()` once the frame's effects are final; the logic thread reads `m_indirectDiffuseProvided`, never the chain (`PostProcessStack::hasEnabledIndirectDiffuseProvider()` is a rendering-thread function). One frame late at most |
+| A renderable is ready for instantiation | the thread that finishes the load (a pool worker) | the logic and rendering threads | `Renderable::Abstract::m_readyForInstantiation`, an atomic of its own, stored LAST (release) and loaded with acquire. It was bit 0 of the renderable's plain flag word, whose other bits are written before the renderable is published |
+| The light set is enabled | the logic thread (the background's lighting), the main thread (the console) | the rendering thread (every frame, the shader generation) | `LightSet::m_enabled`, atomic, relaxed: a switch on its own |
+| A skinned instance's buffer and descriptor sets exist | the rendering thread (`RenderableInstance::Abstract::createSkinningResources()`, on the instance's first pass) | the logic thread, every cycle (`hasSkinningResources()`, `updateSkinningMatrices()`) | `m_skinningResourcesPublished`, stored LAST (release) once the buffer, its pool and every descriptor set are built, never cleared before the destructor. The logic thread tests it — never the vector being filled nor the buffer pointer, through which it could write the joint matrices into a half-built object |
+
+Choosing the protocol of a new datum that both threads touch:
+
+1. **Several values that must agree for one frame** → a render state slot (this document).
+2. **One word that stands alone** → an atomic; relaxed when nothing else is read on the strength of it.
+3. **"This object is built"** → a publication flag stored LAST with release, loaded with acquire; the other thread
+   tests the flag, never the object's own members.
+4. **A question whose answer lives in structures ONE thread owns** → that thread publishes the answer; the other reads
+   the answer, one cycle late at most. Never walk the other thread's containers "because the worst case is one frame".
+5. A comment that calls a race benign is a defect (Ave Robustus II): the indirect-diffuse question carried one.
+
+What this does NOT cover: a load completion handled on a pool worker (`ResourceTrait::LoadFinished` → the scene
+components' handlers → `AbstractEntity::updateEntityProperties()`), item
+`load-finished-runs-scene-handlers-on-a-pool-thread`.
+
+Proof (Linux, 2026-11-15). ThreadSanitizer — Debug, llvmpipe forced in a settings copy, the testbed driven through
+the console (its active scene unloaded, reloaded, destroyed, rebuilt; the recipe: `docs/caution-points.md` § *TSan on a
+machine whose display GPU runs the NVIDIA driver*):
+
+| Scenario | Before | After |
+|---|---|---|
+| `default` | the lifetime, the effect chain, the ready flag and the light set reported in the 2026-11-13 run (RADV); the acceleration-structure read once in seven runs on llvmpipe | 0 engine report in 3 runs (and in the `default` part of the 3 runs below); one report per run inside OpenAL Soft, not ours — suppressed since (`resources/tsan_suppressions.txt`): 0 report and exit code 0 in 2 more runs |
+| a switch to the skinned `animation-debug` | 4 reports on the skinning resources in each of 2 runs | 0 in each of 3 runs |
+| `terrain` | — | 0 on the six in 1 run |
+
+What those runs still report is other work, each in its item: a load completion handled on a pool worker and a
+geometry's bounding volumes read while it loads (`load-finished-runs-scene-handlers-on-a-pool-thread`: 3 to 7 reports
+per run on `terrain` and `animation-debug`), a material configured from the loaders' hook while its creation runs
+(`mesh-loaded-hook-configures-materials-still-being-created`: 1 per `animation-debug` run). The software device dies on
+the skinned scene and at the release of `terrain` (`skinned-scene-crashes-the-software-vulkan-device`): the reports are
+written before, the exits of those runs are not clean.
+Release, RTX 3070 Ti, the validation layer loaded, the binary before the change against the binary after: `default`
+captured 12 s after the start — mean absolute difference 0.002 / 255, no pixel further than 16 (two launches of the SAME
+binary 40 s apart differ by 0.33: the sky moves); `animation-debug` — the skinned characters animate (two captures 2 s
+apart, looked at; 22 instances and 61 198 triangles in the view with both binaries); 0 VUID, 0 error line, exit 0 in the
+five launches. A downstream consumer built against the change: 0 failing TU.

@@ -30,22 +30,32 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <functional>
+#include <iterator>
 #include <map>
 #include <memory>
-#include <mutex>
+#include <ranges>
+#include <ratio>
 #include <set>
+#include <span>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
-#include <span>
 #include <utility>
 #include <vector>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions for inheritances. */
 #include "NameableTrait.hpp"
@@ -53,49 +63,74 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Mutex.hpp"
-#include "Constants.hpp"
-#include "ScopedRegistration.hpp"
-#include "Audio/Ambience.hpp"
-#include "Audio/SoundResource.hpp"
 #include "Audio/Source.hpp"
+#include "BaseUtility.hpp"
+#include "BindlessTextureSet.hpp"
+#include "CloudSet.hpp"
 #include "Component/Visual.hpp"
+#include "Constants.hpp"
+#include "Debug/Compass.hpp"
+#include "DirectionalShadowOptions.hpp"
 #include "Graphics/Compute/IBLBaker.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/PostProcessStack.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/RenderTarget/ImposterBake.hpp"
 #include "Graphics/RenderTarget/ShadowMap.hpp"
 #include "Graphics/RenderTarget/Texture.hpp"
-#include "Graphics/Renderable/AbstractBackground.hpp"
-#include "Graphics/Geometry/Types.hpp"
-#include "Graphics/Renderable/Types.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
+#include "Graphics/Types.hpp"
 #include "Graphics/ViewMatrices2DUBO.hpp"
 #include "Graphics/ViewMatrices3DUBO.hpp"
-#include "DirectionalShadowOptions.hpp"
+#include "Graphics/ViewMatricesCascadedUBO.hpp"
 #include "GroundLevelInterface.hpp"
-#include "Randomizer.hpp"
-#include "BindlessTextureSet.hpp"
-#include "Debug/Compass.hpp"
 #include "LightSet.hpp"
-#include "CloudSet.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Vector.hpp"
+#include "Mutex.hpp"
 #include "Node.hpp"
 #include "NodeController.hpp"
-#include "OrbitController.hpp"
 #include "OctreeSector.hpp"
+#include "OrbitController.hpp"
 #include "ParticipatingMedium.hpp"
-#include "PhysicsRecorder.hpp"
+#include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "Physics/SoftStepSolver.hpp"
+#include "PhysicsRecorder.hpp"
+#include "Randomizer.hpp"
 #include "RenderBatch.hpp"
 #include "SceneInstanceTransforms.hpp"
 #include "SceneMetaData.hpp"
+#include "Scenes/AbstractEntity.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
+#include "ScopedRegistration.hpp"
 #include "SeaLevelInterface.hpp"
+#include "SettingKeys.hpp"
 #include "SkyState.hpp"
 #include "StaticEntity.hpp"
+#include "StaticVector.hpp"
+#include "ThreadSafety.hpp"
+#include "Tracer.hpp"
 
 /* Forward Declarations */
 namespace EmEn
 {
+	class Settings;
+	struct EngineContext;
+
+	namespace Audio
+	{
+		class Ambience;
+		class Manager;
+		class SoundResource;
+	}
+
+	namespace Base
+	{
+		class Any;
+	}
+
 	namespace Input
 	{
 		class Manager;
@@ -106,17 +141,43 @@ namespace EmEn
 		class BindlessTextureManager;
 		class IBLTexture;
 		class Renderer;
+		class SkinnedGeometryProcessor;
+	}
+
+	namespace Graphics::Renderable
+	{
+		class AbstractBackground;
+	}
+
+	namespace Graphics::RenderableInstance
+	{
+		class Abstract;
+	}
+
+	namespace Physics
+	{
+		class CollisionModelInterface;
+	}
+
+	namespace Resources
+	{
+		class Manager;
 	}
 
 	namespace Vulkan
 	{
 		class CommandBuffer;
+		class DescriptorSet;
+		class TextureInterface;
 	}
 
 	namespace Scenes::Component
 	{
+		class AbstractLightEmitter;
 		class AbstractModifier;
 		class Camera;
+		class CharacterController;
+		class Vehicle;
 	}
 }
 
@@ -591,7 +652,9 @@ namespace EmEn::Scenes
 			uint64_t
 			lifetimeUS () const noexcept
 			{
-				return m_lifetimeUS;
+				/* NOTE: Derived from the one atomic clock: the logic thread counts, the rendering thread reads too (wind,
+				 * animated textures). Two plain words written by one thread and read by the other were a data race. */
+				return logicCyclesToMicroseconds(m_lifetimeCycles.load(std::memory_order_relaxed));
 			}
 
 			/**
@@ -609,7 +672,7 @@ namespace EmEn::Scenes
 			uint32_t
 			lifetimeMS () const noexcept
 			{
-				return m_lifetimeMS;
+				return static_cast< uint32_t >(this->lifetimeUS() / 1000ULL);
 			}
 
 			/**
@@ -855,6 +918,20 @@ namespace EmEn::Scenes
 			 * @return Graphics::PostProcessStack &
 			 */
 			Graphics::PostProcessStack & requirePostProcessStack () noexcept;
+
+			/**
+			 * @brief Publishes whether an enabled effect of the post-process chain provides the indirect diffuse (RTGI)
+			 * in the frame being prepared.
+			 * @note RENDER THREAD, once per frame, after the frame's effects and their enabled states are final
+			 * (Graphics::Renderer). The logic thread reads it at its next cycle (updateIBLDiffuseOwnership()): it never
+			 * walks the chain — the rendering thread rebuilds it — nor asks the renderer for its acceleration structure.
+			 * @param provided Whether an enabled effect provides the indirect diffuse.
+			 */
+			void
+			publishIndirectDiffuseProvider (bool provided) noexcept
+			{
+				m_indirectDiffuseProvided.store(provided, std::memory_order_relaxed);
+			}
 
 			/**
 			 * @brief Returns the per-scene post-process stack (const).
@@ -2908,7 +2985,6 @@ namespace EmEn::Scenes
 			/** @brief The sun's motion, in degrees, after which a dynamic sky's published IBL re-signals the once-probes. */
 			static constexpr float ProbeResignalAngle{2.0F};
 
-
 			/**
 			 * @brief Hands the ambient pass' DIFFUSE IBL leg over to an indirect-diffuse
 			 * provider, or takes it back.
@@ -2917,7 +2993,9 @@ namespace EmEn::Scenes
 			 * the sky TWICE on every diffuse surface. Polled every logic tick rather than
 			 * pushed on a signal, because ownership follows the effects' ENABLED state, which
 			 * a demo or the console flips at any moment with no notification; the idle cost is
-			 * one virtual call per effect and a float compare.
+			 * an atomic load and a float compare.
+			 * @note LOGIC THREAD. It reads the answer the rendering thread published for its last frame
+			 * (publishIndirectDiffuseProvider()): one frame late at most, and never the chain itself.
 			 */
 			void updateIBLDiffuseOwnership () noexcept;
 
@@ -3409,10 +3487,10 @@ namespace EmEn::Scenes
 			Base::Randomizer< int > m_integerRandomizer;
 			/** @brief Half-size of cubic scene boundary in meters. */
 			float m_boundary{0};
-			/** @brief Logic cycles processed: the clock m_lifetimeUS and m_lifetimeMS are derived from. */
-			uint64_t m_lifetimeCycles{0};
-			/** @brief Scene runtime in microseconds, derived from m_lifetimeCycles. */
-			uint64_t m_lifetimeUS{0};
+			/** @brief Logic cycles processed: THE clock, lifetimeUS() and lifetimeMS() are derived from it when read.
+			 * Counted by the logic thread (processLogics()), read by any thread: atomic, relaxed (a clock, no ordering
+			 * with another datum). */
+			std::atomic< uint64_t > m_lifetimeCycles{0};
 			Base::Math::Vector< 3, float > m_windDirection{1.0F, 0.0F, 0.0F};
 			float m_windStrength{0.0F};
 			float m_windGustiness{0.35F};
@@ -3420,8 +3498,6 @@ namespace EmEn::Scenes
 			 * it to build the previous vertex position; feeding it the current time reports zero
 			 * velocity for a moving vertex and the foliage smears under TAA. */
 			float m_previousWindTime{0.0F};
-			/** @brief Scene runtime in milliseconds, derived from m_lifetimeCycles. */
-			uint32_t m_lifetimeMS{0};
 			/** @brief Number of logic cycles executed. */
 			size_t m_cycle{0};
 
@@ -3501,6 +3577,9 @@ namespace EmEn::Scenes
 			 * ⚠️ NOT a bool: it is a continuous knob, and a scene may later want a partial
 			 * hand-over. See updateIBLDiffuseOwnership(). */
 			float m_IBLDiffuseWeight{1.0F};
+			/** @brief Whether an enabled effect provides the indirect diffuse, as the rendering thread saw it for its last
+			 * frame (publishIndirectDiffuseProvider()); read by the logic thread (updateIBLDiffuseOwnership()). */
+			std::atomic< bool > m_indirectDiffuseProvided{false};
 			/** @brief True after first enable() call succeeds. */
 			bool m_initialized{false};
 	};

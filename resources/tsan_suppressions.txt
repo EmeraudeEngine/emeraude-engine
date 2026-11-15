@@ -11,3 +11,7 @@ race:libgallium*
 # OpenAL Soft is a prebuilt static library inside libEmeraude: its mixer synchronization is invisible to TSan.
 race:Voice::mix
 race:Voice::prepare
+# Its playback thread (ALSoftP1) reads a buffer its own allocator created on the main thread: the allocation is the
+# report's "previous write". Anchored on the allocator's frame - never the module (it is libEmeraude) nor the thread
+# (TrackMixer's event callback runs on an OpenAL thread and must stay visible).
+race:^al::allocator<
