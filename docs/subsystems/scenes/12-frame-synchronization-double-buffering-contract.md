@@ -199,10 +199,12 @@ run (mean absolute difference / 255):
 - In the 22 launches: the same `PostProcess.getStatus` text (the metering lines apart) and the same render statistics
   before and after, 0 VUID, 0 error line, exit 0.
 - ThreadSanitizer (Debug, llvmpipe, window-less, the act-switch scenario on `default`, the traced chain running): 0
-  report. ⚠️ No ThreadSanitizer run covers the clouds' shadow path: the software device crashes on `terrain` right after
-  the scene starts (item `skinned-scene-crashes-the-software-vulkan-device`), with the binary before the change too. The
+  report. The clouds' shadow path: `terrain` under ThreadSanitizer on 2026-11-16 (engine 82c7efe0; the software device
+  with the two traced effects that kill it disabled, `docs/caution-points.md` § *The software device gives a ray-query
+  hit the identity of another instance*) — the cloud shadow map created and drawn, 40 s, a console shutdown: 0 report,
+  exit 0. ⚠️ The binary BEFORE the change was never run there (the device died on `terrain` until that recipe): the
   defect of that path is established by the call order — the read came before the write in both frame functions — not
-  by a measurement.
+  by a before / after.
 - GCC Release and Debug, clang, the Debug + TSan tree: 0 warning; `-Wdocumentation` on the 19 touched TUs.
 - Peers' round 12 (2026-11-16, engine 244176b0 + testbed 29a37715 — this change and the chain executor's split,
   `docs/post-processing-pipeline.md` § 3d): macOS (Apple M6, MoltenVK 1.4.2, Apple clang with `-Wdocumentation -Werror`)
@@ -265,9 +267,10 @@ machine whose display GPU runs the NVIDIA driver*):
 What those runs still reported was other work: a load completion handled on a pool worker and a geometry's bounding
 volumes read while it loads (3 to 7 reports per run on `terrain` and `animation-debug`: the next section), a material
 configured from the loaders' hook while its creation runs (1 per `animation-debug` run: scenes doc 19 § *onMeshLoaded
-hands out resources still being created*). The software device dies on
-the skinned scene and at the release of `terrain` (`skinned-scene-crashes-the-software-vulkan-device`): the reports are
-written before, the exits of those runs are not clean.
+hands out resources still being created*). The software device died on
+the skinned scene and at the release of `terrain` in those runs — a driver limit, avoided since by two settings keys
+(`docs/caution-points.md` § *The software device gives a ray-query hit the identity of another instance*): the reports
+are written before, the exits of those runs are not clean.
 Release, RTX 3070 Ti, the validation layer loaded, the binary before the change against the binary after: `default`
 captured 12 s after the start — mean absolute difference 0.002 / 255, no pixel further than 16 (two launches of the SAME
 binary 40 s apart differ by 0.33: the sky moves); `animation-debug` — the skinned characters animate (two captures 2 s
@@ -367,12 +370,16 @@ the binary after).
   (`SoundEmitter.getState` on the 157 emitters, identical); the same GPU timing zones and status.
 - 0 VUID, 0 error line, exit 0 in the 14 launches. The commit gate entirely green: clang-tidy 0, cppcheck 0,
   include-what-you-use 0 after one pass, GCC Release and Debug, clang, the Debug + TSan tree 0 warning.
-- ⚠️ No ThreadSanitizer evidence: the software device crashes on the three scenes that take this path (item
-  `skinned-scene-crashes-the-software-vulkan-device`; `light-and-shadow-debug` too), and the hardware driver does not
-  survive the sanitizer (`docs/caution-points.md` § TSan on a machine whose display GPU runs the NVIDIA driver). The
-  cancellation of an awaited play by `stop()` is verified by reading only: no console command plays a sound on an
-  emitter, so the window between `play()` and the end of the load cannot be driven from outside (item
-  `console-commands-to-play-a-sound-and-set-a-light-projection`).
+- ThreadSanitizer (2026-11-16, engine 82c7efe0: Debug, window-less, the software device with the two traced effects
+  that kill it disabled — `docs/caution-points.md` § *The software device gives a ray-query hit the identity of another
+  instance* —, a console shutdown): `global-illumination` with the projection — registered in that run —, 0 report,
+  exit 0; `animation-debug`, 0 report; `light-and-shadow-debug` with projections, 1 report, and `game-logic`, 4: none
+  on a light or a sound emitter — they are the three members of item `tsan-logic-render-instance-state-races` (an
+  instance's animation time, its flag word, the view's logic state read by the acceleration-structure rebuild).
+  ⚠️ The binary BEFORE the change was not run under the sanitizer: this is the absence of a report after, not a
+  before / after. The cancellation of an awaited play by `stop()` is verified by reading only: no console command
+  plays a sound on an emitter, so the window between `play()` and the end of the load cannot be driven from outside
+  (item `console-commands-to-play-a-sound-and-set-a-light-projection`).
 - Peers' round 13 (2026-11-16, engine 5dfe292a + testbed 3411e7c7), window-less, the validation layer loaded, every
   launch exit 0, 0 VUID, 0 error line: macOS (Apple M6, MoltenVK 1.4.2, Apple clang with `-Wdocumentation -Werror`,
   Release and Debug 0 warning) meters `global-illumination` with the projection at 14.4, 14.4 and 14.7 nits over

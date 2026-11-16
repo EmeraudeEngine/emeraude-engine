@@ -25,6 +25,17 @@ one run each, member 4 found by the proof runs of the ray-tracing refactor):
 | 3 | `game-logic` | `ViewMatrices2DUBO::updateViewCoordinates()` ← `Vulkan::SwapChain::updateDeviceFromCoordinates()` ← `Component::Camera::processLogics()` | `Scenes::SceneMetaData::rebuild()` ← `Scene::prepareRender()` ← `Renderer::renderFrameWithInternal()` | the view matrices' LOGIC state, read by the renderer (the render-state slot exists for that: scenes doc 12 § View Matrix State Index) |
 | 4 | a switch to `animation-debug` (one run of four) | `LightSet::setAmbientLightColor()` ← `Scene::applyBackgroundLightingNow()` ← `Scene::processLogics()` | `Effects::Lighting::RTR::recordPreDenoisePasses()` (the ambient term of its frame block) ← `PostProcessor::executeIndirectPostProcessEffects()` | the light set's ambient colour (and whatever else the background's deferred lighting writes there) |
 
+**Reproduced on 2026-11-16** (engine 82c7efe0, one run each, the software device with the two traced effects that
+kill it disabled — `docs/caution-points.md` § *The software device gives a ray-query hit the identity of another
+instance*): member 1 once on `light-and-shadow-debug` with projections; members 2 and 3 twice each on `game-logic`
+(member 2 read through `isShadowCastingDisabled()` ← `Scene::populateShadowCastingRenderList()` too; member 3 read at
+the sprite billboard of `SceneMetaData::rebuild()`, which receives `viewMatrices().position()` — the LOGIC state — from
+`Scene::prepareRender()`). Member 2's bit is `ArePositionsSynchronized`, bit 0 of the instance's flag word: cleared
+by the logic thread in `Multiple::updateLocalData()`, set by the rendering thread when it uploads. Other readers of
+the view's logic state on the rendering side, not reported in these runs (the projection changes on a resize only):
+`Renderer.cpp` (the reactive mask's `projectionMatrix() * viewMatrix(false, 0)`), the editor gizmos
+(`Rotate` / `Scale` / `Translate::renderSubElement()`), `Debug::Compass::render()`.
+
 ## What remains
 
 - Read both sides of each member and choose its protocol with the rule of scenes doc 12 (owner): (1) one word that
@@ -33,8 +44,9 @@ one run each, member 4 found by the proof runs of the ray-tracing refactor):
   slot, never the logic state.
 - **Sweep the testbed's scenes under TSan**: `default`, `animation-debug` and `terrain` are clean of this family;
   `light-and-shadow-debug` and `game-logic` were run once each for another purpose and each found members. The other
-  scenes were never run. One run per scene on llvmpipe (static scenes start in seconds; a skinned one dies after its
-  reports are written).
+  scenes were never run. One run per scene on llvmpipe, with the two settings keys that keep the software device
+  alive on a ray-traced scene (`docs/caution-points.md`, the section above): every scene tried runs and shuts down
+  under the sanitizer since 2026-11-16.
 - Proof: the two scenes, 0 report on these members.
 
 ## ⚠️ Traps

@@ -6602,9 +6602,10 @@ After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and
 > all with the llvmpipe runs of 2026-11-15: plain state shared by the logic and rendering threads under the SHARED scene
 > access — were fixed on 2026-11-15: scenes doc 12 § *Plain state shared by the logic and rendering threads* (the
 > protocol of each, and how to choose one for a new datum).
-> ⚠️ A skinned scene and the release of a large scene both kill llvmpipe (item
-> `skinned-scene-crashes-the-software-vulkan-device`): TSan writes its reports before the device dies, so a run that
-> ends on `SEGV … libvulkan_lvp.so` is still readable — count the reports, do not trust its exit.
+> ⚠️ A ray-traced scene kills llvmpipe within seconds unless the two traced effects that fetch the hit triangle are
+> disabled in the settings copy (the next section: a driver limit, and the two keys). A run that still ends on
+> `SEGV … libvulkan_lvp.so` is readable — TSan writes its reports before the device dies — count the reports, do not
+> trust its exit.
 >
 > **The recipe** (2026-11-15): `cmake -S . -B .claude-build-tsan -DCMAKE_BUILD_TYPE=Debug -DEMERAUDE_ENABLE_TSAN=On -G
 > Ninja` (8 min on 8 cores), then `TSAN_OPTIONS="halt_on_error=0 detect_deadlocks=1 second_deadlock_stack=1
@@ -6629,6 +6630,56 @@ After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and
 >   exit code 0 (2 runs).
 > - A large scene is slow to start (`terrain`: four minutes on llvmpipe, seven on RADV); a scenario that changes the
 >   active scene through the console finds what a single load does not.
+
+### The software device (llvmpipe, Mesa 25.0.7) gives a ray-query hit the identity of another instance — a driver limit (2026-11-16)
+
+> **Symptom.** A ray-traced scene on the Mesa software device (`llvmpipe (LLVM 19.1.7, 256 bits)`, Mesa 25.0.7,
+> `libvulkan_lvp.so`) dies by SIGSEGV within seconds, in a `llvmpipe-N` rasterizer thread, inside the driver's generated
+> shader code (a `vpgatherqd`, no symbol), 0 VUID before it. After the start line: `animation-debug` 0.8 s,
+> `global-illumination` 1.0 s, `light-and-shadow-debug` 2.3 s, `game-logic` 8 s, `terrain` 15 s; `default` survives.
+> Release, Debug, ThreadSanitizer and AddressSanitizer builds alike. It was first read as a skinning defect: the first
+> four launches were skinned scenes.
+>
+> **What dies.** Only the two traced effects that FETCH THE HIT TRIANGLE — the indirect diffuse (`RTGI`) and the
+> reflections (`RTR`). They turn a hit's (instance custom index, primitive index) into a row of the mesh table and three
+> indices of that row's index buffer (`getMeshAccessor()`). The traced ambient occlusion, the contact shadows and the
+> irradiance probes — which never read an index buffer through a hit — survive.
+>
+> **Measured** (`global-illumination`, the indirect diffuse alone, Debug under gdb). A temporary shader trap — a
+> triangle whose three indices fall outside its row's index buffer faults at an address that encodes the hit — named,
+> in four launches: custom index 2 with primitive 55, 13 with 72, 2 with 71, and 2 with 71 at a world height of
+> 0.00 m. The rows named are 12-triangle boxes; the floor is the only 128-triangle mesh and the only surface at
+> height 0: **the hit is on the floor and carries the identity of a wall.** The instance id the driver returns equals
+> the custom index (one instance node gives both); the primitive index and the hit distance are the floor's.
+> The same with the skinned instances kept out of the acceleration structure (so not the per-frame refit); with the
+> floor kept out — every mesh left has 12 triangles — no fault in 300 s.
+>
+> **Why it is not ours.** The mesh table, printed at each change, is one table from the first frame to the fault
+> (44 rows, `instanceCustomIndex` = the row). On the hardware device the same trap ran 300 s without firing, and the
+> GPU-assisted validation reports no out-of-bounds access from the traced effects. An AddressSanitizer build on
+> llvmpipe reports nothing of the engine before the fault (256-bit and 128-bit vectors).
+> ⚠️ NOT located inside the driver. Its ray-query lowering (Mesa 25.0.7, `lvp_nir_lower_ray_queries.c`,
+> `lvp_nir_ray_tracing.c`) copies the candidate's instance address when a hit is committed — right as written. The
+> suspicion, unproven: the 64-bit instance address under the lane masks of the vectorized code (the 32-bit fields are
+> right). One observation is left unexplained: glibc's `malloc(): invalid next size`, once, in a Debug run with 128-bit
+> vectors (`LP_NATIVE_VECTOR_WIDTH=128`) during the scene's load — not seen again under AddressSanitizer. valgrind does
+> not reach the first traced frame in 45 minutes.
+> ⚠️ `LP_NATIVE_VECTOR_WIDTH` changes the device's NAME ("…, 128 bits"): a `ForceGPU` written for 256 bits then
+> matches nothing and the run silently takes the hardware device — read the device line of the log.
+>
+> **On a hardware device** the same wrong identity would be a wrong normal or texture coordinate for one sample, never
+> a fault; none was observed.
+>
+> **The recipe for a sanitizer run on the software device** (owner decision, 2026-11-16: a driver limit — no bounds
+> check per hit in the shaders). In the settings COPY: `Core/Graphics/PostProcessing/IndirectDiffuse/Enabled = false`
+> and `Core/Graphics/PostProcessing/Reflections/Enabled = false`. The ray-traced lane stays selected — the acceleration
+> structures, the skinned refit, the traced ambient occlusion and contact shadows, the probes all run — and the five
+> scenes above run and shut down cleanly (Release, 20 to 75 s each, exit 0). Under ThreadSanitizer (Debug, a console
+> shutdown, engine 82c7efe0): `global-illumination`, `animation-debug` and `terrain` — its release included — 0 report
+> and exit 0; `light-and-shadow-debug` and `game-logic` reach a clean engine exit and report the members of item
+> `tsan-logic-render-instance-state-races`, which is what the sanitizer is for.
+> What only those two effects execute stays out of a sanitizer's reach on a machine whose hardware driver does not
+> survive the sanitizer.
 
 ### Fixed: a buffer-less commit of the window surface from the main thread raced the driver's present — Wayland explicit sync (2026-11-13)
 
