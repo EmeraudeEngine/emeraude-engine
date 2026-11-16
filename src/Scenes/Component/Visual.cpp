@@ -137,6 +137,16 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	Visual::publishStateForRendering (uint32_t writeStateIndex) noexcept
+	{
+		/* The animation time of the tick (processLogics()), for the frames that latch this state. */
+		if ( m_renderableInstance->isAnimated() )
+		{
+			m_renderableInstance->publishAnimationTime(writeStateIndex);
+		}
+	}
+
+	void
 	Visual::updateAnimatedBoundingBox () noexcept
 	{
 		const auto & jointsBox = m_skeletalAnimator->jointsBoundingBox();

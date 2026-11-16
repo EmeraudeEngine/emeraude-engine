@@ -31,9 +31,30 @@
 
 /* STL inclusions. */
 #include <array>
+#include <cstddef>
+#include <memory>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
+
+/* Local inclusions for usages. */
+#include "Math/Matrix.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class FrameView;
+}
+
+namespace EmEn::Graphics::Geometry
+{
+	class Interface;
+}
+
+namespace EmEn::Vulkan
+{
+	class CommandBuffer;
+}
 
 namespace EmEn::Scenes::Editor::Gizmo
 {
@@ -66,7 +87,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 			AxisID hitTest (const Base::Math::Space3D::Segment< float > & ray) const noexcept override;
 
 			/** @copydoc EmEn::Scenes::Editor::Gizmo::Abstract::render() */
-			void render (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices) const noexcept override;
+			void render (const Vulkan::CommandBuffer & commandBuffer, const Graphics::FrameView & frameView) const noexcept override;
 
 		private:
 
@@ -92,7 +113,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 			static constexpr float HighlightScale{1.15F};
 			static constexpr float HighlightBrightness{1.6F};
 
-			void renderSubElement (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices, size_t subElementIndex, const Base::Math::Matrix< 4, float > & axisRotation, bool isHighlighted) const noexcept;
+			void renderSubElement (const Vulkan::CommandBuffer & commandBuffer, const Graphics::FrameView & frameView, size_t subElementIndex, const Base::Math::Matrix< 4, float > & axisRotation, bool isHighlighted) const noexcept;
 
 			std::array< std::shared_ptr< Graphics::Geometry::Interface >, SubElementCount > m_subGeometries{};
 	};

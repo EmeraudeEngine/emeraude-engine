@@ -125,6 +125,32 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the ambient chromaticity of the frame (unit luminance): what its shaders read in the view
+			 * block.
+			 * @note How a frame reads the scene's ambient — never the light set's own values, which the logic thread
+			 * writes while the frame is recorded.
+			 * @return Base::Math::Vector< 3, float >
+			 */
+			[[nodiscard]]
+			Base::Math::Vector< 3, float >
+			ambientChromaticity () const noexcept
+			{
+				return m_viewMatrices.ambientChromaticity(m_readStateIndex);
+			}
+
+			/**
+			 * @brief Returns the ambient illuminance of the frame, in lux: the EFFECTIVE one the shading uses, zero when
+			 * the sky drives the ambient.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			ambientIlluminance () const noexcept
+			{
+				return m_viewMatrices.ambientIlluminance(m_readStateIndex);
+			}
+
+			/**
 			 * @brief Returns the far plane distance of the view.
 			 * @return float
 			 */

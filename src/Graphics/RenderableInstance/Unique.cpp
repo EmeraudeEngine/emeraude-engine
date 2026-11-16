@@ -27,12 +27,19 @@
 #include "Unique.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <cstring>
 #include <array>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
+#include "Graphics/Renderable/Abstract.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 
@@ -56,7 +63,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 			std::array< float, Matrix4Alignment + 3 > buffer{};
 			std::memcpy(buffer.data(), viewProjectionMatrix.data(), MatrixBytes);
-			buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndexFor(pushContext.layerIndex));
+			buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndexFor(passContext, pushContext));
 
 			vkCmdPushConstants(passContext.commandBuffer->handle(), pushContext.pipelineLayout->handle(), pushContext.stageFlags, 0, MatrixBytes + (3 * sizeof(float)), buffer.data());
 
@@ -143,7 +150,7 @@ namespace EmEn::Graphics::RenderableInstance
 
 			buffer[Matrix4Alignment] = projectionJitter.x();
 			buffer[Matrix4Alignment + 1] = projectionJitter.y();
-			buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndexFor(pushContext.layerIndex));
+			buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndexFor(passContext, pushContext));
 
 			vkCmdPushConstants(passContext.commandBuffer->handle(), pushContext.pipelineLayout->handle(), pushContext.stageFlags, 0, MatrixBytes + (3 * sizeof(float)), buffer.data());
 
@@ -164,7 +171,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto handle = passContext.commandBuffer->handle();
 		const auto layout = pushContext.pipelineLayout->handle();
 		const auto flags = pushContext.stageFlags;
-		const auto frameIndex = static_cast< float >(this->frameIndexFor(pushContext.layerIndex));
+		const auto frameIndex = static_cast< float >(this->frameIndexFor(passContext, pushContext));
 
 		/* For cubemap rendering, View/Projection matrices are in UBO indexed by gl_ViewIndex.
 		 * We only push the Model matrix (and optionally normal matrix for lighting). */

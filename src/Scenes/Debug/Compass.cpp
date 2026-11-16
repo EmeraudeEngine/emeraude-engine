@@ -28,25 +28,26 @@
 
 /* STL inclusions. */
 #include <cstring>
+#include <string>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "Graphics/FrameView.hpp"
+#include "Graphics/Geometry/GenerationParameters.hpp"
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
 #include "Graphics/Geometry/Types.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "PixelFactory/Color.hpp"
-#include "Resources/Manager.hpp"
 #include "Saphir/Generator/GizmoRendering.hpp"
 #include "Saphir/Program.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
-#include "Vulkan/Framebuffer.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 
 namespace EmEn::Scenes::Debug
@@ -165,7 +166,7 @@ namespace EmEn::Scenes::Debug
 	}
 
 	void
-	Compass::render (const Vulkan::CommandBuffer & commandBuffer, const ViewMatricesInterface & viewMatrices) const noexcept
+	Compass::render (const Vulkan::CommandBuffer & commandBuffer, const FrameView & frameView) const noexcept
 	{
 		if ( !m_created || m_program == nullptr )
 		{
@@ -182,12 +183,12 @@ namespace EmEn::Scenes::Debug
 		commandBuffer.bind(*pipeline);
 
 		const auto & pipelineLayout = m_program->pipelineLayout();
-		const auto & projectionMatrix = viewMatrices.projectionMatrix();
+		const auto & projectionMatrix = frameView.unjitteredProjectionMatrix();
 
 		/* NOTE: INFINITY view (translation dropped): the compass states directions, not places.
 		 * With the regular view matrix the spheres would drift out of frame as soon as the camera
 		 * leaves the origin, which is precisely when their reading matters. */
-		const auto & viewMatrix = viewMatrices.viewMatrix(true, 0);
+		const auto & viewMatrix = frameView.infinityViewMatrix();
 		const auto viewProjectionMatrix = projectionMatrix * viewMatrix;
 
 		constexpr uint32_t Matrix4Floats{16};

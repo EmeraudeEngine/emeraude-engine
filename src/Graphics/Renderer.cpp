@@ -2546,7 +2546,7 @@ namespace EmEn::Graphics
 			/* Process scene effects (multi-pass). */
 			if ( scenePtr->hasPostProcessStack() )
 			{
-				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr));
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr));
 			}
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -2600,9 +2600,9 @@ namespace EmEn::Graphics
 		}
 
 		/* Render the editor gizmos over the scene. */
-		if ( editorManager != nullptr )
+		if ( editorManager != nullptr && scenePtr != nullptr )
 		{
-			editorManager->render(*commandBuffer);
+			editorManager->render(*commandBuffer, scenePtr->frameReadStateIndex());
 		}
 
 		m_device->setCheckpoint(commandBuffer->handle(), "frame:overlay");
@@ -2760,7 +2760,7 @@ namespace EmEn::Graphics
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain/PreTranslucency"};
 
 			m_postProcessor.recordBlit(*commandBuffer);
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), ChainPhase::PreTranslucency);
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), ChainPhase::PreTranslucency);
 		}
 
 		/* Grab pass: capture the scene from the internal target for TranslucentGB refraction.
@@ -2820,7 +2820,7 @@ namespace EmEn::Graphics
 
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain"};
 
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), scenePtr->effectiveAmbientIlluminance(), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), cutFrame ? ChainPhase::PostTranslucency : ChainPhase::Whole);
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), cutFrame ? ChainPhase::PostTranslucency : ChainPhase::Whole);
 		}
 
 		/* RP-final (swap-chain offscreen-composite, UNDEFINED + CLEAR): Draw the PP fullscreen
@@ -2893,9 +2893,9 @@ namespace EmEn::Graphics
 		}
 
 		/* Render the editor gizmos over the post-processed scene. */
-		if ( editorManager != nullptr )
+		if ( editorManager != nullptr && scenePtr != nullptr )
 		{
-			editorManager->render(*commandBuffer);
+			editorManager->render(*commandBuffer, scenePtr->frameReadStateIndex());
 		}
 
 		m_device->setCheckpoint(commandBuffer->handle(), "frame:overlay");
@@ -3609,8 +3609,8 @@ namespace EmEn::Graphics
 
 		/* NOTE: The current, unjittered view-projection: the old shape's pixels are where it projects NOW (the history
 		 * is reprojected by the velocity of what is behind it). */
-		const auto & viewMatrices = m_sceneTarget->viewMatrices();
-		const auto viewProjection = viewMatrices.projectionMatrix() * viewMatrices.viewMatrix(false, 0);
+		const FrameView view{m_sceneTarget->viewMatrices(), scene.frameReadStateIndex()};
+		const auto viewProjection = view.unjitteredProjectionMatrix() * view.viewMatrix();
 
 		/* NOTE: A one-pixel guard band: the TAA reads the reactive mask over its 3x3 reconstruction footprint already. */
 		constexpr auto GuardPixels{2.0F};
@@ -4194,9 +4194,11 @@ namespace EmEn::Graphics
 		const auto * inv = invView.data();
 
 		/* The raster's ambient term, as the traced effects add it at their hits: the EFFECTIVE
-		 * illuminance (zero when the sky drives the ambient), never LightSet::ambientLightIntensity(). */
-		const auto & ambientColor = scene->lightSet().ambientEmissionChromaticity();
-		const auto ambientIlluminance = scene->effectiveAmbientIlluminance();
+		 * illuminance (zero when the sky drives the ambient), never LightSet::ambientLightIntensity().
+		 * Both from the frame's view — the view block the raster of this frame reads —, never from the light set or
+		 * the scene, which the logic thread writes while the frame is recorded. */
+		const auto ambientColor = frameView.ambientChromaticity();
+		const auto ambientIlluminance = frameView.ambientIlluminance();
 
 		const IrradianceProbeVolume::FrameInputs inputs{
 			.cameraPosition = {inv[12], inv[13], inv[14]},

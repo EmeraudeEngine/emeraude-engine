@@ -182,6 +182,11 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics() */
 			void processLogics (const Scene & scene) noexcept override;
 
+			/** @copydoc EmEn::Scenes::Component::Abstract::publishStateForRendering(uint32_t)
+			 * @note Publishes the animation time of an animated instance: the frames draw the flipbook frame of the
+			 * render state they latched. */
+			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
+
 			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() */
 			[[nodiscard]]
 			bool

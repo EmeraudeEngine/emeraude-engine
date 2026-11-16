@@ -1022,7 +1022,7 @@ namespace EmEn::Scenes
 		if ( renderTarget->bakeSubject() == nullptr )
 		{
 			auto * mutableBindlessSet = bindlessManager.usable() ? &m_bindlessTextureSet : nullptr;
-			m_sceneMetaData.rebuild(m_RTOpaqueList, m_RTOpaqueLightedList, mutableBindlessSet, frameIndex, m_frameReadStateIndex, renderTarget->viewMatrices().position());
+			m_sceneMetaData.rebuild(m_RTOpaqueList, m_RTOpaqueLightedList, mutableBindlessSet, frameIndex, m_frameReadStateIndex, renderTarget->viewMatrices().position(m_frameReadStateIndex));
 		}
 
 		return true;

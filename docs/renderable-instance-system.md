@@ -53,11 +53,16 @@ Each RenderableInstance has flags that control its rendering behavior:
 | `DisableDepthWrite` | Does not write to the depth buffer |
 | `DisableStencilTest` | Does not read the stencil buffer |
 | `DisableStencilWrite` | Does not write to the stencil buffer |
-| `ApplyTransformationMatrix` | Applies an additional transformation *(Unique only, push constants)* |
 | `DisableLightDistanceCheck` | Ignores distance for lighting calculation |
 | `DisplayTBNSpaceEnabled` | Debug: displays tangent space vectors |
 
 **Convention**: All flags are `false` by default.
+
+⚠️ **The flag word holds CONFIGURATION only** (2026-11-16). What changes while the scene runs is not a flag: "broken"
+is an atomic (`isBroken()`), "an extra transformation matrix applies" is an atomic stored by
+`setTransformationMatrix()` / `publishTransformationMatrix()`, "the instanced positions are uploaded" is a member of
+`Multiple` under its local-data mutex. The logic thread wrote those bits while the rendering thread read the word
+(scenes doc 12 § *Plain state shared by the logic and rendering threads*).
 
 ## Layer System
 
@@ -288,20 +293,24 @@ castShadows(readStateIndex, renderTarget, layerIndex, worldCoordinates, commandB
 
 ## Texture Animation
 
-For animated materials (sprite sheets, texture arrays), the system uses `m_frameIndex`:
+For animated materials (sprite sheets, texture arrays) the instance keeps an animation TIME, never a resolved frame
+index: each layer's flipbook has its own frame count, so the index is resolved per layer, at draw.
 
-- **`layerIndex`**: Selects which material layer of the object
-- **`m_frameIndex`**: Selects which frame in an animated texture (2D texture array)
+- **The logic thread stores the time of its tick**: `updateFrameIndex(sceneTimeMS)`, from a component's
+  `processLogics()` (`Visual`, `MultipleVisuals`, `ParticlesEmitter`).
+- **The component publishes it with its state**: `publishAnimationTime(writeStateIndex)`, from its
+  `publishStateForRendering()` — one time per render state slot.
+- **A draw reads the time of the render state its frame latched**:
+  `frameIndexFor(passContext, pushContext)` (the pass's slot, the draw's layer) → `material->frameIndexAt(time)`; zero for a static layer,
+  which is also its only valid index.
 
-The method `updateFrameIndex(sceneTimeMS)` updates the index based on scene time.
+Every pass of a frame — the shadow maps, the colour passes — therefore draws the SAME flipbook frame, and no draw reads
+a value the logic thread is writing (scenes doc 12 § *Plain state shared by the logic and rendering threads*; the time
+was one plain member written by one thread and read by the other until 2026-11-16).
 
 ```cpp
-// If material is animated, frameIndex is used instead of layerIndex
-if (material->isAnimated()) {
-    commandBuffer.draw(*geometry, m_frameIndex, this->instanceCount());
-} else {
-    commandBuffer.draw(*geometry, layerIndex, this->instanceCount());
-}
+// The frame index of the layer being drawn, at the animation time of the frame's render state.
+commandBuffer.draw(*geometry, this->frameIndexFor(passContext, pushContext), drawnInstances);
 ```
 
 ## Lifecycle and Notifications
@@ -351,7 +360,7 @@ the render thread.
 
 ```cpp
 // Unique uses push constants for model matrix
-// Supports ApplyTransformationMatrix for additional transform
+// Supports an additional transformation matrix (setTransformationMatrix() / publishTransformationMatrix())
 // Lighter weight for single objects
 ```
 

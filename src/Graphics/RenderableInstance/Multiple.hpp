@@ -30,20 +30,40 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <memory>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
-#include "Graphics/Renderable/Abstract.hpp"
 
 /* Local inclusions for usages. */
 #include "Math/CartesianFrame.hpp"
 #include "Math/Matrix.hpp"
 #include "Mutex.hpp"
+#include "ThreadSafety.hpp"
 #include "Vulkan/VertexBufferObject.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Renderer;
+}
+
+namespace EmEn::Graphics::Renderable
+{
+	class Abstract;
+}
+
+namespace EmEn::Vulkan
+{
+	class Device;
+}
 
 namespace EmEn::Graphics::RenderableInstance
 {
@@ -191,13 +211,10 @@ namespace EmEn::Graphics::RenderableInstance
 			void
 			resetModelMatrices () noexcept
 			{
-				{
-					const Base::MutexLock lock{m_localDataAccess};
+				const Base::MutexLock lock{m_localDataAccess};
 
-					this->resetLocalData();
-				}
-
-				this->disableFlag(ArePositionsSynchronized);
+				/* NOTE: resetLocalData() marks the GPU data out of date, under this lock. */
+				this->resetLocalData();
 			}
 
 		private:
@@ -319,6 +336,10 @@ namespace EmEn::Graphics::RenderableInstance
 			mutable Base::Mutex m_localDataAccess;
 			/* NOTE: Shared by the logic thread (updateLocalData()) and the render thread (updateVideoMemory()). */
 			std::vector< float > m_localData EMEN_GUARDED_BY(m_localDataAccess);
+			/** @brief Whether the GPU buffer holds the local data: cleared by whoever changes the local data, set by the
+			 * upload, both under the mutex. It was bit 0 of the instance's flag word, written by the logic thread at
+			 * every update while the rendering thread read the word's configuration bits. */
+			bool m_positionsSynchronized EMEN_GUARDED_BY(m_localDataAccess){false};
 			const uint32_t m_instanceCount{0};
 			std::atomic< uint32_t > m_activeInstanceCount{0};
 	};

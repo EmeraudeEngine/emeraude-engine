@@ -58,7 +58,6 @@
 /* Local inclusions. */
 #include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Scenes/LightSet.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
@@ -1723,8 +1722,10 @@ namespace EmEn::Graphics::Effects::Lighting
 			 * hit point ON TOP of the IBL below — the reflected world was brighter than the world
 			 * it reflected, which breaks the "the reflection matches the raster" contract.
 			 * Falls back to the previous neutral 0.15 when no light set is available — carried by the INTENSITY now,
-			 * the colour being a unit-luminance chromaticity (LightSet::ambientEmissionChromaticity()). */
-			const auto ambientColor = lightSet != nullptr ? lightSet->ambientEmissionChromaticity() : Base::Math::Vector< 3, float >{1.0F, 1.0F, 1.0F};
+			 * the colour being a unit-luminance chromaticity (LightSet::ambientEmissionChromaticity()).
+			 * ⚠️ Both come from the FRAME's view (the view block the raster of this frame reads), not from the light
+			 * set: the logic thread writes that one while this pass is recorded. */
+			const auto ambientColor = lightSet != nullptr ? frameView.ambientChromaticity() : Base::Math::Vector< 3, float >{1.0F, 1.0F, 1.0F};
 			const auto ambientIntensity = lightSet != nullptr ? context.ambientIlluminance : 0.15F;
 
 			const TraceFrameUBOData traceData{

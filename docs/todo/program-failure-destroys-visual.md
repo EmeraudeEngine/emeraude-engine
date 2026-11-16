@@ -42,7 +42,7 @@ destructive, irreversible scene edit.
 
 - Reproducing needs a shader that fails for one target only. Before the `isAdvancedRendering()` fix,
   KeyPad4 on any lit scene was exactly that. Since that fix, it needs a deliberately broken variant.
-- `BrokenState` is also set for genuine construction failures (no renderable, skinning resources).
+- The broken state (`setBroken()` / `isBroken()`) is also set for genuine construction failures (no renderable, skinning resources).
   Those may legitimately stay fatal — separate them from a per-target program failure before changing
   anything.
 

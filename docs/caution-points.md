@@ -6678,7 +6678,13 @@ After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and
 > shutdown, engine 82c7efe0): `global-illumination`, `animation-debug` and `terrain` — its release included — 0 report
 > and exit 0; `light-and-shadow-debug` and `game-logic` reach a clean engine exit and report the members of item
 > `tsan-logic-render-instance-state-races`, which is what the sanitizer is for.
-> What only those two effects execute stays out of a sanitizer's reach on a machine whose hardware driver does not
+> ⚠️ A scene whose acceleration structure holds ALPHA-TESTED or BLENDED instances needs a THIRD key,
+> `Core/Graphics/PostProcessing/AmbientOcclusion/Enabled = false`: a candidate hit has its triangle fetched for the
+> alpha test (`rtCandidateIsSolid()`), by the traced ambient occlusion too. Measured on `sponza` (Release): dead 8.3 s
+> after the start line with the two keys, alive 40 s and a clean shutdown with the three (the contact shadows still
+> traced). The sweep of the testbed's 40 scenes under ThreadSanitizer with the two keys (2026-11-16): 39 run and reach
+> a clean engine exit, `sponza` dies.
+> What only those effects execute stays out of a sanitizer's reach on a machine whose hardware driver does not
 > survive the sanitizer.
 
 ### Fixed: a buffer-less commit of the window surface from the main thread raced the driver's present — Wayland explicit sync (2026-11-13)

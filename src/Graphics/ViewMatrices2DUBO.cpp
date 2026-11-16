@@ -36,7 +36,9 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <cstddef>
 #include <cstring>
+#include <iterator>
 #include <numbers>
 #include <span>
 #include <sstream>
@@ -167,6 +169,34 @@ namespace EmEn::Graphics
 		}
 
 		return m_renderState[readStateIndex].position;
+	}
+
+	Vector< 3, float >
+	ViewMatrices2DUBO::ambientChromaticity (uint32_t readStateIndex) const noexcept
+	{
+		if ( readStateIndex >= m_renderState.size() ) [[unlikely]]
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			return {};
+		}
+
+		const auto & data = std::next(m_renderState.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex))->bufferData;
+
+		return {data[AmbientLightColorOffset], data[AmbientLightColorOffset + 1], data[AmbientLightColorOffset + 2]};
+	}
+
+	float
+	ViewMatrices2DUBO::ambientIlluminance (uint32_t readStateIndex) const noexcept
+	{
+		if ( readStateIndex >= m_renderState.size() ) [[unlikely]]
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			return 0.0F;
+		}
+
+		return std::next(m_renderState.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex))->bufferData[AmbientLightIntensityOffset];
 	}
 
 	const Frustum &

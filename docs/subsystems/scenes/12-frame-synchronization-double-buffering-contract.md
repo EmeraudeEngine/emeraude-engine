@@ -239,6 +239,12 @@ orders a plain write on one side against a read on the other. ThreadSanitizer fo
 | A renderable is ready for instantiation | the thread that finishes the load (a pool worker) | the logic and rendering threads | `Renderable::Abstract::m_readyForInstantiation`, an atomic of its own, stored LAST (release) and loaded with acquire. It was bit 0 of the renderable's plain flag word, whose other bits are written before the renderable is published |
 | The light set is enabled | the logic thread (the background's lighting), the main thread (the console) | the rendering thread (every frame, the shader generation) | `LightSet::m_enabled`, atomic, relaxed: a switch on its own |
 | A skinned instance's buffer and descriptor sets exist | the rendering thread (`RenderableInstance::Abstract::createSkinningResources()`, on the instance's first pass) | the logic thread, every cycle (`hasSkinningResources()`, `updateSkinningMatrices()`) | `m_skinningResourcesPublished`, stored LAST (release) once the buffer, its pool and every descriptor set are built, never cleared before the destructor. The logic thread tests it — never the vector being filled nor the buffer pointer, through which it could write the joint matrices into a half-built object |
+| An instance's animation time (its flipbook frame derives from it, per layer) | the logic thread (`Visual`, `MultipleVisuals`, `ParticlesEmitter::processLogics()` → `updateFrameIndex()`) | the rendering thread, at every draw of the instance (`frameIndexFor()`: the shadow maps, the colour passes) | a RENDER STATE SLOT (2026-11-16): the component's `publishStateForRendering()` calls `RenderableInstance::Abstract::publishAnimationTime(slot)`, the draws read `frameIndexFor(passContext, pushContext)` (the pass's slot, the draw's layer) — every pass of a frame draws the same flipbook frame. The logic value itself is the logic thread's alone |
+| "The instanced positions are uploaded" | whoever changes the local data of a `RenderableInstance::Multiple` (the logic thread), and the upload | the upload | `Multiple::m_positionsSynchronized`, a member GUARDED by `m_localDataAccess` (the thread-safety analysis checks it). It was bit 0 of the instance's flag word, cleared at every logic update while the rendering thread read the word's configuration bits (2026-11-16) |
+| An instance is broken | the thread that meets the failure (the rendering thread for a program, the logic thread for instance data) | both | `RenderableInstance::Abstract::m_broken`, atomic, relaxed: a switch on its own (`setBroken(message)` traces once, on the exchange). It was bit 1 of the flag word |
+| An instance carries an extra transformation matrix | the logic thread (`publishTransformationMatrix()`, at every publication) or the scene's construction (`setTransformationMatrix()`) | the rendering thread (`applyLocalTransformation()`) | `m_transformationMatrixApplies`, atomic, stored LAST with release after the slot, loaded with acquire; never cleared. It was bit 11 of the flag word. ⚠️ The flag word of an instance now holds CONFIGURATION only: a bit that changes while the scene runs does not belong there |
+| The view (its position, its matrices) as the rendering side reads it outside the chain | the logic thread (`Camera` → `updateViewCoordinates()`) | the rendering thread: the sprite billboards of the acceleration-structure rebuild, the temporal-history mask, the editor's gizmos, the debug compass | the FRAME'S VIEW, like the chain's effects: `position(m_frameReadStateIndex)` for the rebuild, a `Graphics::FrameView` for the four others (`Editor::Manager::render(commandBuffer, readStateIndex)`, `Gizmo::Abstract::render(commandBuffer, frameView)`, `Debug::Compass::render(commandBuffer, frameView)`). They read the view's LOGIC state (2026-11-16) |
+| The scene's ambient (chromaticity, effective illuminance) as a traced effect adds it at its hits | the logic thread (`LightSet::setAmbientLight*()`, `Scene::applyBackgroundLightingNow()`) | the rendering thread (`RTR`'s frame block, the irradiance probe volume's inputs, `FrameContext::ambientIlluminance`) | the FRAME'S VIEW again: `Scene::refreshAmbientLightProperties()` already gives the ambient to the view matrices, and their published slot is what the raster of the frame reads — `FrameView::ambientChromaticity()` / `ambientIlluminance()` (`ViewMatricesInterface::ambient*(readStateIndex)`). The traced value is the raster's by construction; nothing on the rendering side reads the light set's ambient nor `Scene::m_IBLAmbientEnabled` any more (2026-11-16, owner decision over a slot of the light set's own) |
 
 Choosing the protocol of a new datum that both threads touch:
 
@@ -250,9 +256,9 @@ Choosing the protocol of a new datum that both threads touch:
    the answer, one cycle late at most. Never walk the other thread's containers "because the worst case is one frame".
 5. A comment that calls a race benign is a defect (Ave Robustus II): the indirect-diffuse question carried one.
 
-What this does NOT cover: the pool worker that finishes a resource's load — the next section — and the members other
-scenes still report (item `tsan-logic-render-instance-state-races`: an instance's frame index and flag word, the 2D
-view matrices read in their logic state).
+What this does NOT cover: the pool worker that finishes a resource's load — the next section. The four members
+other scenes reported after the first six (an instance's animation time and flag word, the view's logic state read on
+the rendering side, the ambient) are the last six rows of the table, and their proof closes this section.
 
 Proof (Linux, 2026-11-15). ThreadSanitizer — Debug, llvmpipe forced in a settings copy, the testbed driven through
 the console (its active scene unloaded, reloaded, destroyed, rebuilt; the recipe: `docs/caution-points.md` § *TSan on a
@@ -286,6 +292,43 @@ VUID, exit 0; and the skinned characters animated in two captures 2 s apart. ⚠
 32 / 4 033 412 for `light-and-shadow-debug`, 4 s after the switch from `animation-debug`, once in 17 reads (16 more,
 three launch orders and the exact sequence twice: 30 / 4 033 408); not reproduced, not explained — two more instances
 of two triangles each in the shadow lists of one frame.
+
+**The last six rows (2026-11-16, owner decisions) — proof.** Linux, engine 968dfc4a + the change.
+
+ThreadSanitizer (Debug, window-less, the software device with the two traced effects that kill it disabled —
+`docs/caution-points.md` § *The software device gives a ray-query hit the identity of another instance* —, a console
+shutdown):
+
+| Scenario | Before | After |
+|---|---|---|
+| `light-and-shadow-debug` with projections | 1 report: the instance's animation time | 0, exit 0 |
+| `game-logic` | 4 reports: the instance's flag word (2), the view's logic position in the acceleration-structure rebuild (2) | 0, exit 0 |
+| `global-illumination` with a projection | 0 | 0 |
+| the act-switch scenario on `default`, 2 runs (the ambient was reported once in four runs on 2026-11-15) | — | 0 and 0 |
+
+Hardware device (RTX 3070 Ti, Release, window-less, the validation layer loaded; the binary before against the binary
+after: 16 launches in two series, 6 more alternated on `reflexion-debug`, every one exit 0, 0 VUID, 0 error line). The
+render statistics, the GPU timing zones and the post-process status are the same in every launch of
+`global-illumination` (19 / 266 | 30 / 15340), `light-and-shadow-debug` with projections (7 / 673958 | 30 / 4033408),
+`reflexion-debug` (9 / 70529 | 15 / 153407) and `animation-debug` (22 / 61198 | 21 / 61186, metered 1822.2 nits by
+both). `global-illumination` meters 109.9 and 108.6 nits before, 108.6 and 109.0 after; the closest captures of the two
+binaries are 0.08 / 255 apart, against 0.60 between two launches of the binary before. `light-and-shadow-debug`: 0.004
+against 0.005. `reflexion-debug` moves: five launches each, 1307 to 1349 nits before, 1318 to 1370 after, the same
+1317.6 reached by both — no step. `game-logic` moves too (its counts change from launch to launch): the same three
+emitters play among 157. The final code, after the analysers' form corrections: one launch of `global-illumination`
+(109.0 nits) and one of `light-and-shadow-debug`, inside both series.
+
+**The sweep (the same day, the final code): the testbed's 40 scenes under ThreadSanitizer**, one run each, 20 s, a
+console shutdown. Every scene starts and reaches a clean engine exit; 33 report nothing. What the 7 others report is
+NOT in the table above:
+- `node-relation`, `collision-debug`, `beams`, `paths`, `city`, `citadel` — the CULLING reads an entity's logic state:
+  what remains of item `tsan-logic-render-instance-state-races`.
+- `sky-lab`, `city` — a sky material's atmosphere read while its creation function sets it on a pool worker: item
+  `sky-material-atmosphere-read-while-its-creation-sets-it`.
+- `city`, the testbed's own code — an image's average colour read while the image loads (the testbed's item
+  `city-reads-an-image-average-colour-while-it-loads`).
+- `sponza` — the software device dies, no engine report before it: its alpha-tested foliage needs a third settings
+  key (caution-points, the same section).
 
 ### A resource's load reaches a scene object on the logic thread (2026-11-15, owner decisions)
 

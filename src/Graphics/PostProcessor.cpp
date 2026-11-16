@@ -2104,7 +2104,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const FrameView & frameView, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, float ambientIlluminance, const Scenes::ParticipatingMedium * medium, const Scenes::CloudSet * clouds, ChainPhase phase) const noexcept
+	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const FrameView & frameView, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, const Scenes::ParticipatingMedium * medium, const Scenes::CloudSet * clouds, ChainPhase phase) const noexcept
 	{
 		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
 		{
@@ -2139,7 +2139,7 @@ namespace EmEn::Graphics
 			.camera = activeCamera,
 			.skyLuminance = skyLuminance,
 			.skyStarMask = m_skyStarMask,
-			.ambientIlluminance = ambientIlluminance,
+			.ambientIlluminance = frameView.ambientIlluminance(),
 			.medium = medium,
 			.clouds = clouds,
 			/* The renderer's own frame state, not the scene's: the atmosphere THIS frame submitted. */

@@ -167,7 +167,8 @@ block follows; MCP conformance 2037 / 0 on both; 0 VUID, exit 0.
 
 ### A failed program refuses its instance for ONE render target; the final pass falls back (2026-11-15, owner decisions)
 
-`RenderableInstance::Abstract::BrokenState` means "cannot be loaded in the rendering system and must be removed": the
+A BROKEN instance (`RenderableInstance::Abstract::isBroken()`; an atomic of its own since 2026-11-16, bit `BrokenState` of the
+flag word before) means "cannot be loaded in the rendering system and must be removed": the
 scene components (`Visual`, `MultipleVisuals`, `ParticlesEmitter`, `Beam`, `Path`) answer `shouldBeRemoved()` for a
 broken instance and their entity DESTROYS them at its next logic cycle. Until this change a program that could not be
 generated broke the instance — whatever the target: measured, four components destroyed and the floor refused for the

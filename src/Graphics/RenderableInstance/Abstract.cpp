@@ -283,7 +283,7 @@ namespace EmEn::Graphics::RenderableInstance
 	void
 	Abstract::applyLocalTransformation (Matrix< 4, float > & modelMatrix, uint32_t readStateIndex) const noexcept
 	{
-		if ( this->isFlagEnabled(ApplyTransformationMatrix) )
+		if ( m_transformationMatrixApplies.load(std::memory_order_acquire) )
 		{
 			modelMatrix *= this->transformationMatrix(readStateIndex);
 		}
@@ -1328,12 +1328,10 @@ namespace EmEn::Graphics::RenderableInstance
 	{
 		/* NOTE: Traced when the instance BECOMES broken. The scene's per-frame checks call this again for an instance
 		 * already broken, for each render target: one error line per instance, per target and per frame. */
-		if ( this->isBroken() )
+		if ( m_broken.exchange(true, std::memory_order_relaxed) )
 		{
 			return;
 		}
-
-		this->enableFlag(BrokenState);
 
 		Tracer::error(TracerTag, errorMessage, location);
 	}
@@ -1821,7 +1819,7 @@ namespace EmEn::Graphics::RenderableInstance
 		 * constant and needs its LAYER index here. */
 		else if ( geometry.primaryTextureCoordinates3DEnabled() )
 		{
-			commandBuffer.drawWithFirstInstance(geometry, firstInstance, this->frameIndexFor(pushContext.layerIndex), drawnInstances);
+			commandBuffer.drawWithFirstInstance(geometry, firstInstance, this->frameIndexFor(passContext, pushContext), drawnInstances);
 		}
 		else if ( m_renderable->layerCount() == 1 )
 		{
@@ -1867,7 +1865,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 		else if ( geometry != nullptr && geometry->primaryTextureCoordinates3DEnabled() )
 		{
-			commandBuffer.draw(*geometry, this->frameIndexFor(pushContext.layerIndex), drawnInstances);
+			commandBuffer.draw(*geometry, this->frameIndexFor(passContext, pushContext), drawnInstances);
 		}
 		else if ( pushContext.useInstanceTransforms )
 		{

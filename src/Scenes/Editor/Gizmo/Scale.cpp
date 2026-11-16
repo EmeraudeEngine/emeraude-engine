@@ -26,22 +26,39 @@
 
 #include "Scale.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <cmath>
+#include <cstdint>
+#include <cstring>
+#include <limits>
+#include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions. */
-#include "Graphics/Geometry/Types.hpp"
-#include "Graphics/Geometry/IndexedVertexResource.hpp"
+#include "Graphics/FrameView.hpp"
+#include "Graphics/Geometry/GenerationParameters.hpp"
+#include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Base.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Space3D/AACuboid.hpp"
 #include "Math/Space3D/Intersections/SegmentCuboid.hpp"
-#include "Resources/Manager.hpp"
+#include "Math/Space3D/Point.hpp"
+#include "Math/Space3D/Segment.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
 #include "Saphir/Generator/GizmoRendering.hpp"
 #include "Saphir/Program.hpp"
+#include "Scenes/Editor/Gizmo/Abstract.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
-#include "Vulkan/Framebuffer.hpp"
-#include "Vulkan/GraphicsPipeline.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 
 namespace EmEn::Scenes::Editor::Gizmo
@@ -215,7 +232,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 	}
 
 	void
-	Scale::renderSubElement (const Vulkan::CommandBuffer & commandBuffer, const ViewMatricesInterface & viewMatrices, size_t subElementIndex, const Matrix< 4, float > & axisRotation, bool isHighlighted) const noexcept
+	Scale::renderSubElement (const Vulkan::CommandBuffer & commandBuffer, const FrameView & frameView, size_t subElementIndex, const Matrix< 4, float > & axisRotation, bool isHighlighted) const noexcept
 	{
 		const auto & geometry = m_subGeometries[subElementIndex];
 
@@ -234,8 +251,8 @@ namespace EmEn::Scenes::Editor::Gizmo
 
 		const auto modelMatrix = Matrix< 4, float >::translation(m_worldFrame.position()) * rotationMatrix * Matrix< 4, float >::scaling(finalScale) * axisRotation;
 
-		const auto & projMatrix = viewMatrices.projectionMatrix();
-		const auto & viewMatrix = viewMatrices.viewMatrix(false, 0);
+		const auto & projMatrix = frameView.unjitteredProjectionMatrix();
+		const auto & viewMatrix = frameView.viewMatrix();
 		const auto mvp = projMatrix * viewMatrix * modelMatrix;
 
 		constexpr uint32_t Matrix4Floats{16};
@@ -260,7 +277,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 	}
 
 	void
-	Scale::render (const Vulkan::CommandBuffer & commandBuffer, const ViewMatricesInterface & viewMatrices) const noexcept
+	Scale::render (const Vulkan::CommandBuffer & commandBuffer, const FrameView & frameView) const noexcept
 	{
 		if ( !m_created || m_program == nullptr )
 		{
@@ -281,12 +298,12 @@ namespace EmEn::Scenes::Editor::Gizmo
 		const bool hlY = (m_highlightedAxis == AxisID::Y) || hlAll;
 		const bool hlZ = (m_highlightedAxis == AxisID::Z) || hlAll;
 
-		this->renderSubElement(commandBuffer, viewMatrices, ShaftX, Matrix< 4, float >::identity(), hlX);
-		this->renderSubElement(commandBuffer, viewMatrices, CubeX, Matrix< 4, float >::identity(), hlX);
-		this->renderSubElement(commandBuffer, viewMatrices, ShaftY, Matrix< 4, float >::identity(), hlY);
-		this->renderSubElement(commandBuffer, viewMatrices, CubeY, Matrix< 4, float >::identity(), hlY);
-		this->renderSubElement(commandBuffer, viewMatrices, ShaftZ, Matrix< 4, float >::identity(), hlZ);
-		this->renderSubElement(commandBuffer, viewMatrices, CubeZ, Matrix< 4, float >::identity(), hlZ);
-		this->renderSubElement(commandBuffer, viewMatrices, CenterCube, Matrix< 4, float >::identity(), hlAll);
+		this->renderSubElement(commandBuffer, frameView, ShaftX, Matrix< 4, float >::identity(), hlX);
+		this->renderSubElement(commandBuffer, frameView, CubeX, Matrix< 4, float >::identity(), hlX);
+		this->renderSubElement(commandBuffer, frameView, ShaftY, Matrix< 4, float >::identity(), hlY);
+		this->renderSubElement(commandBuffer, frameView, CubeY, Matrix< 4, float >::identity(), hlY);
+		this->renderSubElement(commandBuffer, frameView, ShaftZ, Matrix< 4, float >::identity(), hlZ);
+		this->renderSubElement(commandBuffer, frameView, CubeZ, Matrix< 4, float >::identity(), hlZ);
+		this->renderSubElement(commandBuffer, frameView, CenterCube, Matrix< 4, float >::identity(), hlAll);
 	}
 }

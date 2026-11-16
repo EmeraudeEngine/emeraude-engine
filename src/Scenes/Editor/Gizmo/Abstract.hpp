@@ -48,7 +48,7 @@ namespace EmEn
 	namespace Graphics
 	{
 		class Renderer;
-		class ViewMatricesInterface;
+		class FrameView;
 
 		namespace Geometry
 		{
@@ -132,9 +132,11 @@ namespace EmEn::Scenes::Editor::Gizmo
 			/**
 			 * @brief Records the gizmo draw commands into the command buffer.
 			 * @param commandBuffer The active command buffer.
-			 * @param viewMatrices The current view matrices for MVP computation.
+			 * @note RENDER THREAD. The matrices are the frame's (Graphics::FrameView), never the view's logic state: the
+			 * logic thread writes that one while the frame is recorded.
+			 * @param frameView The view of the frame being recorded.
 			 */
-			virtual void render (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices) const noexcept = 0;
+			virtual void render (const Vulkan::CommandBuffer & commandBuffer, const Graphics::FrameView & frameView) const noexcept = 0;
 
 			/**
 			 * @brief Updates the gizmo scale factor to maintain constant screen size.

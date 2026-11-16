@@ -46,7 +46,7 @@ namespace EmEn
 	namespace Graphics
 	{
 		class Renderer;
-		class ViewMatricesInterface;
+		class FrameView;
 
 		namespace Geometry
 		{
@@ -139,9 +139,10 @@ namespace EmEn::Scenes::Debug
 			 * the render pass that owns the overlay framebuffer. Recording it in the scene pass
 			 * would put the spheres back under the exposure multiply this class exists to escape.
 			 * @param commandBuffer A reference to the command buffer.
-			 * @param viewMatrices A reference to the view matrices of the camera being rendered.
+			 * @note RENDER THREAD. The matrices are the frame's (Graphics::FrameView), never the view's logic state.
+			 * @param frameView The view of the frame being recorded, made from the camera being rendered.
 			 */
-			void render (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices) const noexcept;
+			void render (const Vulkan::CommandBuffer & commandBuffer, const Graphics::FrameView & frameView) const noexcept;
 
 			/**
 			 * @brief Returns whether the GPU resources are created.

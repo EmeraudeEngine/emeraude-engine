@@ -202,6 +202,12 @@ namespace EmEn::Scenes::Component
 	ParticlesEmitter::publishStateForRendering (uint32_t writeStateIndex) noexcept
 	{
 		*std::next(m_renderWorldBounds.begin(), static_cast< std::ptrdiff_t >(writeStateIndex % RenderStateSlotCount)) = m_worldBounds;
+
+		/* The animation time of the tick (processLogics()), for the frames that latch this state. */
+		if ( m_renderableInstance->isAnimated() )
+		{
+			m_renderableInstance->publishAnimationTime(writeStateIndex);
+		}
 	}
 
 	bool

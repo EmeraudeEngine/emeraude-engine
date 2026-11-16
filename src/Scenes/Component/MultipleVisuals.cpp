@@ -166,6 +166,16 @@ namespace EmEn::Scenes::Component
 		m_renderableInstance->updateVideoMemory();
 	}
 
+	void
+	MultipleVisuals::publishStateForRendering (uint32_t writeStateIndex) noexcept
+	{
+		/* The animation time of the tick (processLogics()), for the frames that latch this state. */
+		if ( m_renderableInstance->isAnimated() )
+		{
+			m_renderableInstance->publishAnimationTime(writeStateIndex);
+		}
+	}
+
 	bool
 	MultipleVisuals::playAnimation (uint8_t /*animationID*/, const Variant & /*value*/, size_t /*cycle*/) noexcept
 	{

@@ -39,7 +39,6 @@
 #include "BlobTrait.hpp"
 #include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/RenderableInstance/Abstract.hpp"
-#include "Graphics/RenderableInstance/RenderContext.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -225,7 +224,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 
 		/* Mark GPU data out of date. */
-		this->disableFlag(ArePositionsSynchronized);
+		m_positionsSynchronized = false;
 
 		return true;
 	}
@@ -309,7 +308,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 
 		/* Mark GPU data out of date. */
-		this->disableFlag(ArePositionsSynchronized);
+		m_positionsSynchronized = false;
 
 		return true;
 	}
@@ -368,7 +367,7 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 		}
 
-		this->disableFlag(ArePositionsSynchronized);
+		m_positionsSynchronized = false;
 	}
 
 	bool
@@ -397,7 +396,7 @@ namespace EmEn::Graphics::RenderableInstance
 			return false;
 		}
 
-		this->enableFlag(ArePositionsSynchronized);
+		m_positionsSynchronized = true;
 
 		return true;
 	}
@@ -418,7 +417,7 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 		}
 
-		if ( this->isFlagEnabled(ArePositionsSynchronized) )
+		if ( m_positionsSynchronized )
 		{
 			return true;
 		}
@@ -432,7 +431,7 @@ namespace EmEn::Graphics::RenderableInstance
 		}
 
 		/* Mark GPU data synchronized with local data. */
-		this->enableFlag(ArePositionsSynchronized);
+		m_positionsSynchronized = true;
 
 		return true;
 	}
@@ -478,7 +477,7 @@ namespace EmEn::Graphics::RenderableInstance
 		 * jitter would make the selection outline tremble by half a pixel every frame. */
 		buffer[Matrix4Alignment] = 0.0F;
 		buffer[Matrix4Alignment + 1] = 0.0F;
-		buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndexFor(pushContext.layerIndex));
+		buffer[Matrix4Alignment + 2] = static_cast< float >(this->frameIndexFor(passContext, pushContext));
 
 		vkCmdPushConstants(
 			passContext.commandBuffer->handle(),
@@ -504,7 +503,7 @@ namespace EmEn::Graphics::RenderableInstance
 		const auto handle = passContext.commandBuffer->handle();
 		const auto layout = pushContext.pipelineLayout->handle();
 		const auto flags = pushContext.stageFlags;
-		const auto frameIndex = static_cast< float >(this->frameIndexFor(pushContext.layerIndex));
+		const auto frameIndex = static_cast< float >(this->frameIndexFor(passContext, pushContext));
 
 		/* Classic 2D rendering (Model is in VBO). */
 		const auto & viewMatrix = passContext.viewMatrices->viewMatrix(passContext.readStateIndex, this->isUsingInfinityView(), 0);

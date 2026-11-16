@@ -34,7 +34,6 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <mutex>
 #include <vector>
 
 /* Local inclusions for inheritances. */
@@ -42,13 +41,15 @@
 #include "Input/PointerListenerInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Mutex.hpp"
-#include "ScopedRegistration.hpp"
 #include "Gizmo/Abstract.hpp"
 #include "Gizmo/Rotate.hpp"
 #include "Gizmo/Scale.hpp"
 #include "Gizmo/Translate.hpp"
 #include "Math/Space3D/Segment.hpp"
+#include "Math/Vector.hpp"
+#include "Mutex.hpp"
+#include "ScopedRegistration.hpp"
+#include "ThreadSafety.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -65,12 +66,10 @@ namespace EmEn
 
 	namespace Graphics
 	{
-		class Renderer;
 		class ViewMatricesInterface;
 
 		namespace RenderTarget
 		{
-			class Abstract;
 		}
 	}
 
@@ -188,9 +187,12 @@ namespace EmEn::Scenes::Editor
 
 			/**
 			 * @brief Records the gizmo draw commands into the command buffer.
+			 * @note RENDER THREAD. The gizmo is drawn with the view of the frame — the editor's view matrices read at
+			 * the render state the scene latched —, never with their logic state.
 			 * @param commandBuffer The active command buffer.
+			 * @param readStateIndex The render state the scene latched for this frame (Scenes::Scene::frameReadStateIndex()).
 			 */
-			void render (const Vulkan::CommandBuffer & commandBuffer) const noexcept;
+			void render (const Vulkan::CommandBuffer & commandBuffer, uint32_t readStateIndex) const noexcept;
 
 			/**
 			 * @brief Replaces the editor PANEL, drawn while the editor is active (Core's "SceneEditorScreen").

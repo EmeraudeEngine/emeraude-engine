@@ -439,7 +439,9 @@ namespace EmEn::Graphics
 				 * raster reads the irradiance cubemap and pushes a ZERO scalar, while the LightSet
 				 * keeps the manifest value (17 000 lx for a daylight sky). An effect that shades its
 				 * own hit points (RTR) must add what the raster adds, or the reflected world
-				 * carries an ambient the world it reflects never received. */
+				 * carries an ambient the world it reflects never received.
+				 * Filled from the frame's view (FrameView::ambientIlluminance()): the value the raster of this frame reads in
+				 * the view block, never the scene's or the light set's live value (the logic thread writes those). */
 				float ambientIlluminance{0.0F};
 				/* The scene's participating medium — the ONE atmosphere every volumetric consumer
 				 * integrates. A POINTER, not a value: this header forward-declares its Scenes

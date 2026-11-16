@@ -32,7 +32,9 @@
 /* STL inclusions. */
 #include <array>
 #include <atomic>
+#include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <limits>
 #include <memory>
 #include <source_location>
@@ -137,13 +139,11 @@ namespace EmEn::Graphics::RenderableInstance
 	enum EMEN_API RenderableInstanceFlagBits : uint32_t // NOLINT(performance-enum-size): designed for growth — uint32_t reserves bit headroom for future flag additions.
 	{
 		None = 0U,
-		/**
-		 * @brief This flag is set when all positions (GPU instancing) are up to date.
-		 * @note Used by Multiple to avoid redundant VBO uploads when local data hasn't changed.
-		 */
-		ArePositionsSynchronized = 1U << 0,
-		/** @brief This flag is set when the renderable instance can't be loaded in the rendering system and must be removed. */
-		BrokenState = 1U << 1,
+		/* NOTE: This word holds CONFIGURATION only (2026-11-16). Three bits were STATE that one thread writes while
+		 * the other reads the word, and left it, each to its owner's protocol: bit 0 "the instanced positions are
+		 * uploaded" is a member of Multiple under its local-data mutex; bit 1 "broken" and bit 11 "an extra
+		 * transformation matrix applies" are atomics of Abstract (isBroken(), publishTransformationMatrix()).
+		 * Bits 0, 1 and 11 are unused. A new bit that changes while the scene runs does NOT belong here either. */
 		/** @brief This flag is set when the renderable instance needs to generate a shader with lighting code. */
 		EnableLighting = 1U << 2,
 		/** @brief This flag disables shadow casting (the instance won't be rendered in shadow maps). */
@@ -176,8 +176,6 @@ namespace EmEn::Graphics::RenderableInstance
 		DisableStencilWrite = 1U << 9,
 		/** @brief [DEBUG] This flag tells the renderer to display tangent space vectors on the render instance. */
 		DisplayTBNSpaceEnabled = 1U << 10,
-		/** @brief This flag tells the renderable instance to need an extra transformation matrix to be applied. */
-		ApplyTransformationMatrix = 1U << 11,
 		/** @brief This flag tells disabling the light distance check. */
 		DisableLightDistanceCheck = 1U << 12,
 		/**
@@ -336,13 +334,15 @@ namespace EmEn::Graphics::RenderableInstance
 
 			/**
 			 * @brief Returns whether this renderable instance is unable to get ready for rendering.
+			 * @note Any thread: set by the thread that meets the failure (the rendering thread for a program, the logic
+			 * thread for instance data), read by both. An atomic of its own, a switch that stands alone.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isBroken () const noexcept
 			{
-				return this->isFlagEnabled(BrokenState);
+				return m_broken.load(std::memory_order_relaxed);
 			}
 
 			/**
@@ -1081,7 +1081,7 @@ namespace EmEn::Graphics::RenderableInstance
 			void
 			setBroken () noexcept
 			{
-				this->enableFlag(BrokenState);
+				m_broken.store(true, std::memory_order_relaxed);
 			}
 
 			/**
@@ -1106,7 +1106,7 @@ namespace EmEn::Graphics::RenderableInstance
 			{
 				m_transformationMatrices.fill(transformationMatrix);
 
-				this->enableFlag(ApplyTransformationMatrix);
+				m_transformationMatrixApplies.store(true, std::memory_order_release);
 			}
 
 			/**
@@ -1129,7 +1129,9 @@ namespace EmEn::Graphics::RenderableInstance
 
 				m_transformationMatrices[writeStateIndex] = transformationMatrix;
 
-				this->enableFlag(ApplyTransformationMatrix);
+				/* NOTE: Stored AFTER the slot (release): a frame that sees it (acquire, applyLocalTransformation()) reads
+				 * a slot the logic thread is not writing — its own latched one. */
+				m_transformationMatrixApplies.store(true, std::memory_order_release);
 			}
 
 			/**
@@ -1411,11 +1413,13 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Stores the animation time; the frame index itself is resolved PER LAYER at draw.
+			 * @brief Stores the animation time of the logic tick; the frame index itself is resolved PER LAYER at draw.
 			 * @note ⚠️ The instance keeps the TIME, not a resolved index. Each layer's flipbook has
 			 * its own frame count — a Doom map mixes 2, 3 and 4-frame animations in one mesh — so a
 			 * single shared index would sample out of range on the shorter ones. Resolution happens
 			 * in frameIndexFor(), called once per layer while the push constants are written.
+			 * @note LOGIC thread only (a component's processLogics()). A frame never reads this value: it reads the
+			 * time published into the render state it latched (publishAnimationTime()).
 			 * @param sceneTimeMS The current scene time.
 			 */
 			void
@@ -1425,22 +1429,45 @@ namespace EmEn::Graphics::RenderableInstance
 			}
 
 			/**
-			 * @brief Returns the frame index of a given layer at the stored animation time.
-			 * @param layerIndex The material layer index.
+			 * @brief Publishes the animation time of one logic tick into a render state slot, for the render thread.
+			 * @note ⚠️ LOGIC thread only, from a component's publishStateForRendering(): the slot is the one the logic
+			 * writes, never the one a frame reads (Scene::publishStateForRendering(), the render state triple buffer).
+			 * Every pass of a frame — the shadow maps, the colour passes — then draws the SAME flipbook frame.
+			 * @param writeStateIndex The render state slot to write.
+			 */
+			void
+			publishAnimationTime (uint32_t writeStateIndex) noexcept
+			{
+				if ( writeStateIndex >= m_publishedAnimationTimesMS.size() ) [[unlikely]]
+				{
+					return;
+				}
+
+				*std::next(m_publishedAnimationTimesMS.begin(), static_cast< std::ptrdiff_t >(writeStateIndex)) = m_animationTimeMS;
+			}
+
+			/**
+			 * @brief Returns the frame index of the layer a draw is about to render, at the animation time of the
+			 * render state its frame latched.
+			 * @note RENDER thread, while the push constants or the draw of a pass are written.
+			 * @param passContext The pass being recorded: its render state slot (RenderPassContext::readStateIndex).
+			 * @param pushContext The draw being recorded: its material layer (PushConstantContext::layerIndex).
 			 * @return uint32_t Zero for a static layer, which is also its only valid index.
 			 */
 			[[nodiscard]]
 			uint32_t
-			frameIndexFor (uint32_t layerIndex) const noexcept
+			frameIndexFor (const RenderPassContext & passContext, const PushConstantContext & pushContext) const noexcept
 			{
-				const auto * material = this->renderable()->material(layerIndex);
+				const auto * material = this->renderable()->material(pushContext.layerIndex);
 
 				if ( material == nullptr || !material->isAnimated() )
 				{
 					return 0;
 				}
 
-				return material->frameIndexAt(m_animationTimeMS);
+				const auto slot = static_cast< std::ptrdiff_t >(passContext.readStateIndex % m_publishedAnimationTimesMS.size());
+
+				return material->frameIndexAt(*std::next(m_publishedAnimationTimesMS.cbegin(), slot));
 			}
 
 			/**
@@ -1571,18 +1598,6 @@ namespace EmEn::Graphics::RenderableInstance
 		{
 			return VK_NULL_HANDLE;
 		}
-
-			/**
-			 * @brief Returns the animation time, in milliseconds, the frame indices derive from.
-			 * @note NOT a frame index — that is per layer, see frameIndexFor().
-			 * @return uint32_t
-			 */
-			[[nodiscard]]
-			uint32_t
-			animationTimeMS () const noexcept
-			{
-				return m_animationTimeMS;
-			}
 
 		private:
 
@@ -1844,7 +1859,10 @@ namespace EmEn::Graphics::RenderableInstance
 			/** @brief The shadow targets isReadyToCastShadows() found every shadow program for: its next calls skip the
 			 * per-layer key and cache lookups. Render thread only (the shadow lists are built there). */
 			mutable std::vector< ReadyTarget > m_shadowReadyTargets;
-			uint32_t m_animationTimeMS{0}; /**< Animation time in ms; the per-layer frame index is derived from it. */
+			uint32_t m_animationTimeMS{0}; /**< Animation time in ms of the logic tick (LOGIC thread only); the per-layer frame index is derived from its published copy. */
+			std::array< uint32_t, RenderStateSlotCount > m_publishedAnimationTimesMS{}; /**< The animation time published per render state slot: what a frame reads. */
+			std::atomic< bool > m_broken{false}; /**< The instance cannot get ready for rendering and must be removed (any thread). */
+			std::atomic< bool > m_transformationMatrixApplies{false}; /**< A transformation matrix was set or published: stored last (release), loaded with acquire. Never cleared. */
 			/** @brief Instance transforms SSBO slot staged for the current render pass (non-instanced path). */
 			uint32_t m_instanceTransformsSlot{0};
 			/** @brief Distance from the viewer beyond which the instance casts no shadow, 0 for no limit. */

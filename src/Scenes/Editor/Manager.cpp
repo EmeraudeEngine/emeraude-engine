@@ -32,7 +32,11 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <map>
 #include <ranges>
+#include <string>
+#include <utility>
 
 /* Third-party inclusions. */
 #ifdef IMGUI_ENABLED
@@ -40,26 +44,35 @@
 #endif
 
 /* Local inclusions. */
-#include "Graphics/RenderTarget/Abstract.hpp"
+#include "BlobTrait.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Input/Manager.hpp"
 #include "Input/Types.hpp"
+#include "Math/Base.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Quaternion.hpp"
 #include "Math/Space3D/Collisions/PointCuboid.hpp"
 #include "Math/Space3D/Collisions/PointSphere.hpp"
 #include "Math/Space3D/Intersections/SegmentCuboid.hpp"
 #include "Math/Space3D/Intersections/SegmentSphere.hpp"
+#include "Math/Space3D/Point.hpp"
 #include "Math/Space3D/Sphere.hpp"
 #include "Notifier.hpp"
-#include "Physics/BoxCollisionModel.hpp"
 #include "Physics/CollisionModelInterface.hpp"
-#include "Physics/SphereCollisionModel.hpp"
 #include "Resources/Manager.hpp"
+#include "Scenes/AbstractEntity.hpp"
+#include "Scenes/Editor/Gizmo/Abstract.hpp"
+#include "Scenes/Editor/Gizmo/Rotate.hpp"
+#include "Scenes/Editor/Gizmo/Scale.hpp"
+#include "Scenes/Editor/Gizmo/Translate.hpp"
 #include "Scenes/Node.hpp"
 #include "Scenes/Scene.hpp"
 #include "Scenes/StaticEntity.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
 
 namespace EmEn::Scenes::Editor
 {
@@ -415,12 +428,14 @@ namespace EmEn::Scenes::Editor
 	}
 
 	void
-	Manager::render (const Vulkan::CommandBuffer & commandBuffer) const noexcept
+	Manager::render (const Vulkan::CommandBuffer & commandBuffer, uint32_t readStateIndex) const noexcept
 	{
 		if ( !m_active || !m_gizmoShown || m_viewMatrices == nullptr )
 		{
 			return;
 		}
+
+		const Graphics::FrameView frameView{*m_viewMatrices, readStateIndex};
 
 		/* NOTE: Render the active gizmo based on current mode. */
 		switch ( m_gizmoMode )
@@ -428,21 +443,21 @@ namespace EmEn::Scenes::Editor
 			case GizmoMode::Translate :
 				if ( m_translateGizmo.isCreated() )
 				{
-					m_translateGizmo.render(commandBuffer, *m_viewMatrices);
+					m_translateGizmo.render(commandBuffer, frameView);
 				}
 				break;
 
 			case GizmoMode::Rotate :
 				if ( m_rotateGizmo.isCreated() )
 				{
-					m_rotateGizmo.render(commandBuffer, *m_viewMatrices);
+					m_rotateGizmo.render(commandBuffer, frameView);
 				}
 				break;
 
 			case GizmoMode::Scale :
 				if ( m_scaleGizmo.isCreated() )
 				{
-					m_scaleGizmo.render(commandBuffer, *m_viewMatrices);
+					m_scaleGizmo.render(commandBuffer, frameView);
 				}
 				break;
 		}

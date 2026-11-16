@@ -251,6 +251,27 @@ namespace EmEn::Graphics
 			virtual const Base::Math::Vector< 3, float > & position (uint32_t readStateIndex) const noexcept = 0;
 
 			/**
+			 * @brief Returns the ambient chromaticity of a render state: what updateAmbientLightProperties() gave the
+			 * view before that state was published, i.e. what the shaders of the frame read in the view block.
+			 * @note RENDER thread. This is how a frame reads the scene's ambient: the light set's own values belong to
+			 * the logic thread, which writes them while the frame is recorded.
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @return Base::Math::Vector< 3, float > A unit-luminance chromaticity.
+			 */
+			[[nodiscard]]
+			virtual Base::Math::Vector< 3, float > ambientChromaticity (uint32_t readStateIndex) const noexcept = 0;
+
+			/**
+			 * @brief Returns the ambient illuminance of a render state, in lux: the EFFECTIVE one the shading uses
+			 * (zero when the sky drives the ambient, Scenes::Scene::effectiveAmbientIlluminance()).
+			 * @note RENDER thread, like ambientChromaticity().
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float ambientIlluminance (uint32_t readStateIndex) const noexcept = 0;
+
+			/**
 			 * @brief Returns the const access to the frustum for object clipping.
 			 * @param viewIndex The index of the frustum for the cubemap view.
 			 * @return Frustum

@@ -26,17 +26,49 @@
 
 #include "Scene.hpp"
 
+/* STL inclusions. */
+#include <array>
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <memory>
+#include <string>
+
 /* Local inclusions. */
+#include "Constants.hpp"
+#include "Graphics/FrameView.hpp"
+#include "Graphics/Geometry/GenerationParameters.hpp"
 #include "Graphics/Geometry/ResourceGenerator.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Material/StandardResource.hpp"
-#include "Graphics/RenderTarget/Abstract.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
+#include "Graphics/Types.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Base.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Vector.hpp"
+#include "Mutex.hpp"
 #include "PixelFactory/Color.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
+#include "Scenes/AbstractEntity.hpp"
+#include "Scenes/Component/Visual.hpp"
+#include "Scenes/Debug/Compass.hpp"
+#include "Scenes/StaticEntity.hpp"
 #include "Tracer.hpp"
-#include "Vulkan/CommandBuffer.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class ViewMatricesInterface;
+}
+
+namespace EmEn::Vulkan
+{
+	class CommandBuffer;
+}
 
 namespace EmEn::Scenes
 {
@@ -163,7 +195,7 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		m_compass.render(commandBuffer, *viewMatrices);
+		m_compass.render(commandBuffer, Graphics::FrameView{*viewMatrices, m_frameReadStateIndex});
 	}
 
 	bool

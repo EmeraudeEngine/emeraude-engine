@@ -142,6 +142,14 @@ namespace EmEn::Graphics
 			[[nodiscard]]
 			const Base::Math::Vector< 3, float > & position (uint32_t readStateIndex) const noexcept override;
 
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::ambientChromaticity(uint32_t) const */
+			[[nodiscard]]
+			Base::Math::Vector< 3, float > ambientChromaticity (uint32_t readStateIndex) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::ambientIlluminance(uint32_t) const */
+			[[nodiscard]]
+			float ambientIlluminance (uint32_t readStateIndex) const noexcept override;
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::frustum(size_t) const */
 			[[nodiscard]]
 			const Frustum & frustum (size_t index) const noexcept override;

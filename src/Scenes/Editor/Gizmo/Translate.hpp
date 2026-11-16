@@ -31,9 +31,30 @@
 
 /* STL inclusions. */
 #include <array>
+#include <cstddef>
+#include <memory>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
+
+/* Local inclusions for usages. */
+#include "Math/Matrix.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class FrameView;
+}
+
+namespace EmEn::Graphics::Geometry
+{
+	class Interface;
+}
+
+namespace EmEn::Vulkan
+{
+	class CommandBuffer;
+}
 
 namespace EmEn::Scenes::Editor::Gizmo
 {
@@ -70,7 +91,7 @@ namespace EmEn::Scenes::Editor::Gizmo
 			AxisID hitTest (const Base::Math::Space3D::Segment< float > & ray) const noexcept override;
 
 			/** @copydoc EmEn::Scenes::Editor::Gizmo::Abstract::render() */
-			void render (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices) const noexcept override;
+			void render (const Vulkan::CommandBuffer & commandBuffer, const Graphics::FrameView & frameView) const noexcept override;
 
 		private:
 
@@ -103,12 +124,12 @@ namespace EmEn::Scenes::Editor::Gizmo
 			/**
 			 * @brief Renders a single sub-element with its own model matrix and highlight state.
 			 * @param commandBuffer The command buffer.
-			 * @param viewMatrices The view matrices.
+			 * @param frameView The view of the frame being recorded.
 			 * @param subElementIndex The sub-element index.
 			 * @param axisRotation The rotation matrix to orient the arrow along its axis.
 			 * @param isHighlighted Whether this sub-element is currently hovered.
 			 */
-			void renderSubElement (const Vulkan::CommandBuffer & commandBuffer, const Graphics::ViewMatricesInterface & viewMatrices, size_t subElementIndex, const Base::Math::Matrix< 4, float > & axisRotation, bool isHighlighted) const noexcept;
+			void renderSubElement (const Vulkan::CommandBuffer & commandBuffer, const Graphics::FrameView & frameView, size_t subElementIndex, const Base::Math::Matrix< 4, float > & axisRotation, bool isHighlighted) const noexcept;
 
 			/** @brief Geometry for each sub-element (3 arrows + 1 sphere). */
 			std::array< std::shared_ptr< Graphics::Geometry::Interface >, SubElementCount > m_subGeometries{};
