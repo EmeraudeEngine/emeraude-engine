@@ -153,10 +153,6 @@ namespace EmEn::Graphics::RenderTarget
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::setViewDistance() */
 			void setViewDistance (float meters) noexcept override;
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewDistance() */
-			[[nodiscard]]
-			float viewDistance () const noexcept override;
-
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
 			void updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override;
 

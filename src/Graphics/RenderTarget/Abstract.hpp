@@ -506,12 +506,9 @@ namespace EmEn::Graphics::RenderTarget
 			 */
 			virtual void setViewDistance (float meters) noexcept = 0;
 
-			/**
-			 * @brief Returns the render target maximum viewable distance in meters.
-			 * @return float
-			 */
-			[[nodiscard]]
-			virtual float viewDistance () const noexcept = 0;
+			/* NOTE: No viewDistance() here (removed 2026-11-16, owner decision): the view distance of a frame is the far
+			 * plane of the render state it latched — viewMatrices().farPlane(readStateIndex) —, one source for every
+			 * render target; the accessor without a state answered the view's logic state to the rendering thread. */
 
 			/**
 			 * @brief Changes the projection type.

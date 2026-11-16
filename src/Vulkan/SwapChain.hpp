@@ -172,14 +172,6 @@ namespace EmEn::Vulkan
 				this->updateViewProperties();
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewDistance() */
-			[[nodiscard]]
-			float
-			viewDistance () const noexcept override
-			{
-				return m_viewMatrices.farPlane();
-			}
-
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() noexcept */
 			void updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override;
 

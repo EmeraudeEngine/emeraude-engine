@@ -35,7 +35,6 @@
 #include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/Types.hpp"
-#include "Graphics/ViewMatricesInterface.hpp"
 #include "PixelFactory/Pixmap.hpp"
 #include "PixelFactory/Processor.hpp"
 #include "Scenes/AVConsole/Types.hpp"
@@ -147,17 +146,6 @@ namespace EmEn::Graphics
 		{
 			m_viewMatrices.updatePerspectiveViewProperties(width, height, m_viewMatrices.fieldOfView(), meters);
 		}
-	}
-
-	float
-	SceneRenderTarget::viewDistance () const noexcept
-	{
-		if ( m_sourceViewMatrices != nullptr )
-		{
-			return m_sourceViewMatrices->farPlane();
-		}
-
-		return m_viewMatrices.farPlane();
 	}
 
 	void

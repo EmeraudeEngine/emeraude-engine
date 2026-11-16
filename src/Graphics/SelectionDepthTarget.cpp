@@ -26,13 +26,20 @@
 
 #include "SelectionDepthTarget.hpp"
 
+/* STL inclusions. */
+#include <string>
+
 /* Local inclusions. */
+#include "BlobTrait.hpp"
+#include "Graphics/FramebufferPrecisions.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/Types.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/Framebuffer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/RenderPass.hpp"
+#include "Vulkan/RenderSubPass.hpp"
 
 namespace EmEn::Graphics
 {
@@ -57,12 +64,6 @@ namespace EmEn::Graphics
 		const auto & extent = this->extent();
 
 		m_viewMatrices.updatePerspectiveViewProperties(static_cast< float >(extent.width), static_cast< float >(extent.height), m_viewMatrices.fieldOfView(), meters);
-	}
-
-	float
-	SelectionDepthTarget::viewDistance () const noexcept
-	{
-		return this->viewMatrices().farPlane();
 	}
 
 	void

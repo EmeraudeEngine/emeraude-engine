@@ -222,6 +222,32 @@ namespace EmEn::Graphics
 		return std::next(m_renderState.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex))->bufferData[AmbientLightIntensityOffset];
 	}
 
+	float
+	ViewMatrices3DUBO::nearPlane (uint32_t readStateIndex) const noexcept
+	{
+		if ( readStateIndex >= m_renderState.size() ) [[unlikely]]
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			return 0.0F;
+		}
+
+		return std::next(m_renderState.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex))->bufferData[NearPlaneOffset];
+	}
+
+	float
+	ViewMatrices3DUBO::farPlane (uint32_t readStateIndex) const noexcept
+	{
+		if ( readStateIndex >= m_renderState.size() ) [[unlikely]]
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			return 0.0F;
+		}
+
+		return std::next(m_renderState.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex))->bufferData[FarPlaneOffset];
+	}
+
 	const Frustum &
 	ViewMatrices3DUBO::frustum (size_t index) const noexcept
 	{

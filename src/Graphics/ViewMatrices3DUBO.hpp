@@ -186,6 +186,14 @@ namespace EmEn::Graphics
 				return m_logicState.bufferData[FarPlaneOffset];
 			}
 
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::nearPlane(uint32_t) const */
+			[[nodiscard]]
+			float nearPlane (uint32_t readStateIndex) const noexcept override;
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::farPlane(uint32_t) const */
+			[[nodiscard]]
+			float farPlane (uint32_t readStateIndex) const noexcept override;
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::descriptorSet() */
 			[[nodiscard]]
 			const Vulkan::DescriptorSet *

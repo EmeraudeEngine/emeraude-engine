@@ -1538,7 +1538,8 @@ namespace EmEn::Scenes
 		 * and a CSM target short-circuits both tests below), but the no-argument overloads are the
 		 * LIVE logic state and have no business being read from the render thread. */
 		const auto & cameraPosition = renderTarget->viewMatrices().position(readStateIndex);
-		const auto viewDistance = renderTarget->viewDistance();
+		/* NOTE: The far plane of the FRAME's render state: the logic thread rewrites the live one (a cascaded shadow map: at every cycle). */
+		const auto viewDistance = renderTarget->viewMatrices().farPlane(readStateIndex);
 		const auto isCascaded = renderTarget->isCascadedShadowMap();
 
 		/* ⚠️⚠️ The CASTER VOLUME, never the frustum: the cast pass clamps depth, so a caster between the light
@@ -2035,7 +2036,8 @@ namespace EmEn::Scenes
 		 * of the render thread and false across the thread boundary. */
 		const auto & cameraPosition = renderTarget->viewMatrices().position(readStateIndex);
 		const auto & frustum = renderTarget->viewMatrices().frustum(readStateIndex, 0);
-		const auto viewDistance = renderTarget->viewDistance();
+		/* NOTE: The far plane of the FRAME's render state: the logic thread rewrites the live one (a cascaded shadow map: at every cycle). */
+		const auto viewDistance = renderTarget->viewMatrices().farPlane(readStateIndex);
 
 		/* NOTE: Only the primary view target advances the per-instance model matrix history
 		 * (motion vectors) — once per rendered frame, render-to-textures excluded. */

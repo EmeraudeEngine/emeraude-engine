@@ -62,6 +62,7 @@ namespace EmEn
 
 	namespace Graphics
 	{
+		class FrameView;
 		class GrabPass;
 		class Renderer;
 		class SelectionDepthTarget;
@@ -156,10 +157,10 @@ namespace EmEn::Graphics
 			 * @param width The composite width, in pixels.
 			 * @param height The composite height, in pixels.
 			 * @param grabPass A pointer to the post-process grab pass (the scene depth), nullptr for none.
-			 * @param mainViewMatrices A reference to the main camera's view matrices (the clip planes).
+			 * @param frameView The view of the frame being recorded (its clip planes).
 			 * @param sRGBTarget Whether the composite target encodes sRGB on write (the colour is then written linear).
 			 */
-			void recordComposite (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Framebuffer & framebuffer, uint32_t width, uint32_t height, const GrabPass * grabPass, const ViewMatricesInterface & mainViewMatrices, bool sRGBTarget) noexcept;
+			void recordComposite (const Vulkan::CommandBuffer & commandBuffer, const Vulkan::Framebuffer & framebuffer, uint32_t width, uint32_t height, const GrabPass * grabPass, const FrameView & frameView, bool sRGBTarget) noexcept;
 
 			/**
 			 * @brief Releases every GPU resource (while the device still exists).

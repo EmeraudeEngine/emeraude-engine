@@ -317,6 +317,25 @@ namespace EmEn::Graphics
 			virtual float farPlane () const noexcept = 0;
 
 			/**
+			 * @brief Returns the near plane distance of a render state.
+			 * @note RENDER thread: the plane a frame was rasterized with. The accessor without an index answers the
+			 * logic state, which the logic thread writes (a cascaded shadow map: at every cycle).
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float nearPlane (uint32_t readStateIndex) const noexcept = 0;
+
+			/**
+			 * @brief Returns the far plane distance of a render state: the view distance of a frame.
+			 * @note RENDER thread, like nearPlane(uint32_t).
+			 * @param readStateIndex The render state-valid index to read data.
+			 * @return float
+			 */
+			[[nodiscard]]
+			virtual float farPlane (uint32_t readStateIndex) const noexcept = 0;
+
+			/**
 			 * @brief Returns the view descriptor set.
 			 * @return const Vulkan::DescriptorSet *
 			 */

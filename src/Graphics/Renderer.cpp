@@ -2583,7 +2583,7 @@ namespace EmEn::Graphics
 		{
 			const auto & extent = m_swapChain->extent();
 
-			m_selectionOutline.recordComposite(*commandBuffer, *m_swapChain->postProcessFramebuffer(), extent.width, extent.height, grabbed ? m_grabPass.get() : nullptr, m_swapChain->viewMatrices(), this->swapChainColorFormat() == VK_FORMAT_B8G8R8A8_SRGB);
+			m_selectionOutline.recordComposite(*commandBuffer, *m_swapChain->postProcessFramebuffer(), extent.width, extent.height, grabbed ? m_grabPass.get() : nullptr, this->frameView(*scenePtr), this->swapChainColorFormat() == VK_FORMAT_B8G8R8A8_SRGB);
 		}
 
 		if ( scenePtr != nullptr && !scenePtr->instanceTransforms().debugPaths().empty() )
@@ -2868,7 +2868,7 @@ namespace EmEn::Graphics
 				const auto & compositeExtent = m_swapChain->extent();
 				const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "SelectionOutline"};
 
-				m_selectionOutline.recordComposite(*commandBuffer, *m_swapChain->offscreenCompositeFramebuffer(), compositeExtent.width, compositeExtent.height, m_postProcessor.grabPass(), mainTarget->viewMatrices(), this->swapChainColorFormat() == VK_FORMAT_B8G8R8A8_SRGB);
+				m_selectionOutline.recordComposite(*commandBuffer, *m_swapChain->offscreenCompositeFramebuffer(), compositeExtent.width, compositeExtent.height, m_postProcessor.grabPass(), this->frameView(*scenePtr), this->swapChainColorFormat() == VK_FORMAT_B8G8R8A8_SRGB);
 			}
 		}
 

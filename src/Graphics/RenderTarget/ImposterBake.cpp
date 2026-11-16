@@ -157,12 +157,6 @@ namespace EmEn::Graphics::RenderTarget
 		m_viewMatrices.updateOrthographicViewProperties(size, size, BakeNearPlane, meters);
 	}
 
-	float
-	ImposterBake::viewDistance () const noexcept
-	{
-		return m_viewMatrices.farPlane();
-	}
-
 	void
 	ImposterBake::updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept
 	{

@@ -33,18 +33,28 @@
 #include <cstdint>
 #include <memory>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "Graphics/RenderTarget/Abstract.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/ViewMatrices2DUBO.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Scenes/AVConsole/Types.hpp"
 
 namespace EmEn::Vulkan
 {
 	class Image;
 	class ImageView;
 	class Framebuffer;
-	class RenderPass;
+}
+
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class ViewMatricesInterface;
 }
 
 namespace EmEn::Graphics
@@ -112,10 +122,6 @@ namespace EmEn::Graphics
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::setViewDistance() */
 			void setViewDistance (float meters) noexcept override;
-
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewDistance() */
-			[[nodiscard]]
-			float viewDistance () const noexcept override;
 
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
 			void updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override;

@@ -31,17 +31,27 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <functional>
+#include <initializer_list>
+#include <string>
+#include <type_traits>
+#include <utility>
 
 /* Local inclusions. */
+#include "Graphics/FrameView.hpp"
 #include "Graphics/GrabPass.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/SelectionDepthTarget.hpp"
+#include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Matrix.hpp"
+#include "Math/Vector.hpp"
+#include "Saphir/ShaderManager.hpp"
 #include "Saphir/Types.hpp"
 #include "Scenes/Scene.hpp"
-#include "Settings.hpp"
 #include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
 #include "Vulkan/Framebuffer.hpp"
@@ -49,8 +59,18 @@
 #include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/RenderPass.hpp"
-#include "Vulkan/Sampler.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	class Settings;
+}
+
+namespace EmEn::Vulkan
+{
+	class ShaderModule;
+}
 
 namespace EmEn::Graphics
 {
@@ -440,7 +460,7 @@ void main()
 
 		if ( m_depthTarget == nullptr )
 		{
-			auto target = std::make_shared< SelectionDepthTarget >(width, height, mainViewMatrices.farPlane());
+			auto target = std::make_shared< SelectionDepthTarget >(width, height, mainViewMatrices.farPlane(scene.frameReadStateIndex()));
 
 			if ( !target->createRenderTarget(m_renderer) )
 			{
@@ -591,7 +611,7 @@ void main()
 	}
 
 	void
-	SelectionOutline::recordComposite (const CommandBuffer & commandBuffer, const Framebuffer & framebuffer, uint32_t width, uint32_t height, const GrabPass * grabPass, const ViewMatricesInterface & mainViewMatrices, bool sRGBTarget) noexcept
+	SelectionOutline::recordComposite (const CommandBuffer & commandBuffer, const Framebuffer & framebuffer, uint32_t width, uint32_t height, const GrabPass * grabPass, const FrameView & frameView, bool sRGBTarget) noexcept
 	{
 		if ( m_depthTarget == nullptr || width == 0 || height == 0 )
 		{
@@ -664,8 +684,8 @@ void main()
 			.texelX = 1.0F / static_cast< float >(width),
 			.texelY = 1.0F / static_cast< float >(height),
 			.width = m_width,
-			.nearPlane = mainViewMatrices.nearPlane(),
-			.farPlane = mainViewMatrices.farPlane(),
+			.nearPlane = frameView.nearPlane(),
+			.farPlane = frameView.farPlane(),
 			.sceneDepthEnabled = hasSceneDepth ? 1.0F : 0.0F,
 			.padding0 = 0.0F,
 			.padding1 = 0.0F

@@ -243,7 +243,7 @@ orders a plain write on one side against a read on the other. ThreadSanitizer fo
 | "The instanced positions are uploaded" | whoever changes the local data of a `RenderableInstance::Multiple` (the logic thread), and the upload | the upload | `Multiple::m_positionsSynchronized`, a member GUARDED by `m_localDataAccess` (the thread-safety analysis checks it). It was bit 0 of the instance's flag word, cleared at every logic update while the rendering thread read the word's configuration bits (2026-11-16) |
 | An instance is broken | the thread that meets the failure (the rendering thread for a program, the logic thread for instance data) | both | `RenderableInstance::Abstract::m_broken`, atomic, relaxed: a switch on its own (`setBroken(message)` traces once, on the exchange). It was bit 1 of the flag word |
 | An instance carries an extra transformation matrix | the logic thread (`publishTransformationMatrix()`, at every publication) or the scene's construction (`setTransformationMatrix()`) | the rendering thread (`applyLocalTransformation()`) | `m_transformationMatrixApplies`, atomic, stored LAST with release after the slot, loaded with acquire; never cleared. It was bit 11 of the flag word. ⚠️ The flag word of an instance now holds CONFIGURATION only: a bit that changes while the scene runs does not belong there |
-| The view (its position, its matrices) as the rendering side reads it outside the chain | the logic thread (`Camera` → `updateViewCoordinates()`) | the rendering thread: the sprite billboards of the acceleration-structure rebuild, the temporal-history mask, the editor's gizmos, the debug compass | the FRAME'S VIEW, like the chain's effects: `position(m_frameReadStateIndex)` for the rebuild, a `Graphics::FrameView` for the four others (`Editor::Manager::render(commandBuffer, readStateIndex)`, `Gizmo::Abstract::render(commandBuffer, frameView)`, `Debug::Compass::render(commandBuffer, frameView)`). They read the view's LOGIC state (2026-11-16) |
+| The view (its position, its matrices, its near and far planes) as the rendering side reads it outside the chain | the logic thread (`Camera` → `updateViewCoordinates()`; `DirectionalLight::updateCascades()` rewrites a cascaded shadow map's planes at every cycle) | the rendering thread: the sprite billboards of the acceleration-structure rebuild, the temporal-history mask, the editor's gizmos, the debug compass; the view distance of the two render list builders, the selection outline's planes, `RTGI`'s sky distance | the FRAME'S VIEW, like the chain's effects: `position(m_frameReadStateIndex)` for the rebuild, a `Graphics::FrameView` for the others (`Editor::Manager::render(commandBuffer, readStateIndex)`, `Gizmo::Abstract::render(commandBuffer, frameView)`, `Debug::Compass::render(commandBuffer, frameView)`, `SelectionOutline::recordComposite(…, frameView, …)`). The planes: `ViewMatricesInterface::nearPlane()` / `farPlane(readStateIndex)`, `FrameView::nearPlane()` / `farPlane()` — the frame's view itself answered the far plane from the logic state. ⚠️ `RenderTarget::Abstract::viewDistance()` and its six implementations are REMOVED (owner decision): the view distance of a frame is `viewMatrices().farPlane(readStateIndex)`, one source for every target. They read the view's LOGIC state (2026-11-16) |
 | The scene's ambient (chromaticity, effective illuminance) as a traced effect adds it at its hits | the logic thread (`LightSet::setAmbientLight*()`, `Scene::applyBackgroundLightingNow()`) | the rendering thread (`RTR`'s frame block, the irradiance probe volume's inputs, `FrameContext::ambientIlluminance`) | the FRAME'S VIEW again: `Scene::refreshAmbientLightProperties()` already gives the ambient to the view matrices, and their published slot is what the raster of the frame reads — `FrameView::ambientChromaticity()` / `ambientIlluminance()` (`ViewMatricesInterface::ambient*(readStateIndex)`). The traced value is the raster's by construction; nothing on the rendering side reads the light set's ambient nor `Scene::m_IBLAmbientEnabled` any more (2026-11-16, owner decision over a slot of the light set's own) |
 | What a frame CULLS an entity on (its world extent) | the logic thread: the entity's coordinates (physics, a vehicle, an animation), its render box (`updateEntityProperties()`), its collision model (`refreshCollisionBoundaries()` at every pose of a skinned visual) | the rendering thread: `Scene::populateRenderLists()` and `populateShadowCastingRenderList()` — they called `isVisibleTo()`, which read all three live | a RENDER STATE SLOT (2026-11-16, owner decision): `AbstractEntity::publishRenderExtent(slot)`, from `publishStateForRendering()` right after the coordinates of the slot, writes the world box of what the components draw (else the collision model's, else nothing: the published position decides); the two list builders test their volume against `publishedRenderExtent(readStateIndex)` (`isSeenBy()` in `Scene.rendering.cpp`). An entity that neither moved nor rebuilt its render box copies the extent of its previous publication. `LocatableInterface::isVisibleTo()` stays, for the LOGIC thread |
 
@@ -260,10 +260,9 @@ Choosing the protocol of a new datum that both threads touch:
 What this does NOT cover: the pool worker that finishes a resource's load — the next section. The members other
 scenes reported after the first six (an instance's animation time and flag word, the view's logic state read on the
 rendering side, the ambient, the extent a frame culls an entity on) are the last seven rows of the table, and their
-proof closes this section. ⚠️ Still open (item `tsan-logic-render-instance-state-races`): the view's near and far
-planes are read in their LOGIC state on the rendering side — `RenderTarget::Abstract::viewDistance()` in the two list
-builders, `FrameView::farPlane()`, the selection outline — and a cascaded shadow map's far plane is rewritten at every
-logic cycle.
+proof closes this section. What is left of item `tsan-logic-render-instance-state-races` is a rule, not a report: a
+configuration written on a LIVE object from another thread (the console's tangent-space toggle on an instance, an
+entity's own flag word).
 
 Proof (Linux, 2026-11-15). ThreadSanitizer — Debug, llvmpipe forced in a settings copy, the testbed driven through
 the console (its active scene unloaded, reloaded, destroyed, rebuilt; the recipe: `docs/caution-points.md` § *TSan on a
@@ -338,7 +337,7 @@ NOT in the table above:
 **The extent a frame culls on (2026-11-16, owner decision) — proof.** Linux, engine 93486951 + the change.
 ThreadSanitizer, the same recipe, one run of each scene the sweep had found: `node-relation` 6 reports → 0,
 `collision-debug` 7 → 0, `beams` 1 → 0, `paths` 1 → 0, `citadel` 3 → 0, exit 0; `city` 10 → 2, neither on the culling
-(the testbed's image read while it loads, and the far plane above). Hardware device (RTX 3070 Ti, Release, the
+(the testbed's image read while it loads, and the view's far plane — the proof after this one). Hardware device (RTX 3070 Ti, Release, the
 validation layer loaded, the binary before against the binary after, 0 VUID): the SAME render statistics — what the
 culling keeps — on `terrain` (60611 instances / 31958641 triangles in the view, 8776 / 16147070 in the shadow lists),
 `sponza` (290 / 10494160 | 454 / 12833689), `light-and-shadow-debug`, `global-illumination` and `animation-debug`.
@@ -351,6 +350,20 @@ of the previous publication's extent when nothing changed. The rendering thread 
 and per target; that gain was not measured. ⚠️ The publication itself — 4.7 ms per logic cycle on `terrain` before
 this change, every static entity published again at every cycle — is the larger cost (item
 `scene-publication-republishes-every-entity-at-every-cycle`).
+
+**The view's planes (2026-11-16, owner decisions) — proof, and the second sweep.** Linux, engine f10bc200 + the
+change. ThreadSanitizer, the same recipe: `city` no longer reports the cascaded shadow map's far plane (1 report left,
+the testbed's image). Hardware device (RTX 3070 Ti, Release, the validation layer loaded, 0 VUID): the same render
+statistics as before on `terrain`, `sponza`, `light-and-shadow-debug` and `global-illumination` — the view distance
+the two list builders cull with is the same value, read from the frame's render state.
+
+The sweep again, the final code, 39 scenes (`sponza` left out: the software device dies there): every scene reaches a
+clean engine exit, 36 report nothing, and NO report is left between the logic and the rendering threads. The three
+others are loading threads: `city` (the testbed's image), `sky-lab` (the sky material's atmosphere, item
+`sky-material-atmosphere-read-while-its-creation-sets-it`) and, once, `sprite` — a renderable's flag word written by its
+loader while a component built on it reads `isSprite()` (item `renderable-flags-read-while-its-loader-writes-them`).
+⚠️ The sky report of `city` and the one of `sprite` each appeared in one sweep of two: a loading race shows when the
+threads meet, a clean run proves nothing about it.
 
 ### A resource's load reaches a scene object on the logic thread (2026-11-15, owner decisions)
 

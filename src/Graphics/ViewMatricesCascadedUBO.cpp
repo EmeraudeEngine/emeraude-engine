@@ -157,6 +157,32 @@ namespace EmEn::Graphics
 		return std::next(m_renderState.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex))->bufferData[AmbientLightIntensityOffset];
 	}
 
+	float
+	ViewMatricesCascadedUBO::nearPlane (uint32_t readStateIndex) const noexcept
+	{
+		if ( readStateIndex >= m_renderState.size() ) [[unlikely]]
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			return 0.0F;
+		}
+
+		return std::next(m_renderState.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex))->bufferData[NearPlaneOffset];
+	}
+
+	float
+	ViewMatricesCascadedUBO::farPlane (uint32_t readStateIndex) const noexcept
+	{
+		if ( readStateIndex >= m_renderState.size() ) [[unlikely]]
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			return 0.0F;
+		}
+
+		return std::next(m_renderState.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex))->bufferData[FarPlaneOffset];
+	}
+
 	/**
 	 * @brief Returns the main frustum for a specific cascade.
 	 * @return const Frustum &
@@ -440,7 +466,8 @@ namespace EmEn::Graphics
 	void
 	ViewMatricesCascadedUBO::updateFromMainCameraFrustum (const Vector< 3, float > & lightDirection, const std::array< Vector< 3, float >, 8 > & cameraFrustumCorners, float nearPlane, float farPlane) noexcept
 	{
-		/* Store the camera's near/far planes for viewDistance() and frustum culling.
+		/* Store the camera's near/far planes: the far one is this target's view distance (read by a frame through
+		 * farPlane(readStateIndex), once published), both serve the frustum culling.
 		 * CSM derives its coverage from the camera frustum. */
 		m_logicState.bufferData[NearPlaneOffset] = nearPlane;
 		m_logicState.bufferData[FarPlaneOffset] = farPlane;

@@ -339,14 +339,6 @@ namespace EmEn::Graphics::RenderTarget
 				}
 			}
 
-			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::viewDistance() */
-			[[nodiscard]]
-			float
-			viewDistance () const noexcept override
-			{
-				return m_viewMatrices.farPlane();
-			}
-
 			/** @copydoc EmEn::Graphics::RenderTarget::Abstract::updateViewRangesProperties() */
 			void
 			updateViewRangesProperties (float fovOrNear, float distanceOrFar) noexcept override

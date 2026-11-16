@@ -151,14 +151,25 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the far plane distance of the view.
+			 * @brief Returns the near plane distance of the frame.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			nearPlane () const noexcept
+			{
+				return m_viewMatrices.nearPlane(m_readStateIndex);
+			}
+
+			/**
+			 * @brief Returns the far plane distance of the frame.
 			 * @return float
 			 */
 			[[nodiscard]]
 			float
 			farPlane () const noexcept
 			{
-				return m_viewMatrices.farPlane();
+				return m_viewMatrices.farPlane(m_readStateIndex);
 			}
 
 			/**

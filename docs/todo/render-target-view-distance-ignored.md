@@ -23,8 +23,9 @@ Every subclass constructor takes one too and only forwards it to the base: `Text
 `Core/Graphics/ViewDistance` only for this. Every `Scene::createRenderTo*()` passes a view distance that has no effect.
 
 The distance a target really uses comes later, from the camera: `updateVideoDeviceProperties()` /
-`setViewDistance()` / `updateViewRangesProperties()` put it into the view matrices, and `viewDistance()` reads it back
-from them.
+`setViewDistance()` / `updateViewRangesProperties()` put it into the view matrices, and a frame reads it back from
+them — `viewMatrices().farPlane(readStateIndex)`, the far plane of its render state; the `viewDistance()` accessor of
+the render targets was removed on 2026-11-16 (it answered the view's logic state to the rendering thread).
 
 ## What remains
 
