@@ -30,8 +30,11 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
+#include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -49,6 +52,7 @@
 /* Local inclusions for usages. */
 #include "Component/Abstract.hpp"
 #include "ConditionVariable.hpp"
+#include "Constants.hpp"
 #include "Graphics/Material/StandardResource.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Math/CartesianFrame.hpp"
@@ -1067,6 +1071,9 @@ namespace EmEn::Scenes
 			{
 				this->onPublishStateForRendering(writeStateIndex);
 
+				/* What the rendering thread culls this entity on, from the coordinates just published. */
+				this->publishRenderExtent(writeStateIndex);
+
 				/* ⚠️ Components publish too. This dispatch is NOT optional: a light emitter rebuilds
 				 * its uniform block (light-space matrix included) on the logic thread on every
 				 * move(), and without this the render thread read it live while the shadow map was
@@ -1092,6 +1099,43 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			virtual const Base::Math::CartesianFrame< float > & getWorldCoordinatesStateForRendering (uint32_t readStateIndex) const noexcept = 0;
+
+			/**
+			 * @brief What a published render extent is made from.
+			 */
+			enum class RenderExtentKind : uint8_t
+			{
+				/** @brief Nothing measurable: the entity is culled on the position of its published coordinates. */
+				Point,
+				/** @brief The world box of what its components draw (the render bounding box at the published coordinates). */
+				RenderBox,
+				/** @brief No render box: the world box of its collision model at the published coordinates. */
+				CollisionBox
+			};
+
+			/**
+			 * @brief The world extent an entity publishes for one render state: what the rendering thread culls it on.
+			 */
+			struct PublishedRenderExtent final
+			{
+				Base::Math::Space3D::AACuboid< float > box; /**< Invalid when the kind is Point. */
+				RenderExtentKind kind{RenderExtentKind::Point};
+			};
+
+			/**
+			 * @brief Returns the world extent of the entity for rendering, as published into a render state slot.
+			 * @note RENDER thread: the culling of a frame (Scene::populateRenderLists(),
+			 * Scene::populateShadowCastingRenderList()) reads THIS, never getWorldRenderBoundingBox(), the collision model
+			 * nor the logic coordinates — the logic thread moves the entity and refreshes those while the frame is built.
+			 * @param readStateIndex The slot the frame latched (Scene::beginRenderFrame()).
+			 * @return const PublishedRenderExtent &
+			 */
+			[[nodiscard]]
+			const PublishedRenderExtent &
+			publishedRenderExtent (uint32_t readStateIndex) const noexcept
+			{
+				return *std::next(m_publishedRenderExtents.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex % m_publishedRenderExtents.size()));
+			}
 
 		protected:
 
@@ -1282,11 +1326,22 @@ namespace EmEn::Scenes
 			 * body parts the animation moved outside of it.
 			 *
 			 * @note Overridden shape parameters are respected (no-op), like everywhere else.
-			 * @note [THREAD-SAFETY] Runs on the logic thread while the render thread may read
-			 * the collision model live in isVisibleTo() — same benign one-frame race as the
-			 * live getWorldCoordinates() read already in that path.
+			 * @note [THREAD-SAFETY] LOGIC thread. The rendering thread does not read the collision model: its culling
+			 * reads the extent published per render state (publishedRenderExtent()), so the new shape reaches a frame
+			 * with the state that carries it.
 			 */
 			void refreshCollisionBoundaries () noexcept;
+
+			/**
+			 * @brief Publishes the world extent the rendering thread culls this entity on, into a render state slot.
+			 * @note LOGIC thread, from publishStateForRendering(), AFTER the coordinates of the slot: the box of what
+			 * the components draw at those coordinates, else the collision model's, else nothing (the position decides).
+			 * @note An entity that neither moved nor rebuilt its render box since its last publication copies the extent
+			 * of that publication instead of computing it again: a terrain holds thousands of static entities, and the
+			 * computation costs about 100 ns each (measured, 2026-11-16).
+			 * @param writeStateIndex The render state slot to write.
+			 */
+			void publishRenderExtent (uint32_t writeStateIndex) noexcept;
 
 			/**
 			 * @brief Defers a content refresh (ComponentContentModified) asked while the component dispatch of
@@ -1492,6 +1547,10 @@ namespace EmEn::Scenes
 			std::shared_ptr< Component::CharacterController > m_characterController EMEN_GUARDED_BY(m_componentsMutex); ///< The kinematic character controller component, if any (under m_componentsMutex).
 			std::shared_ptr< Component::Vehicle > m_vehicle EMEN_GUARDED_BY(m_componentsMutex); ///< The vehicle component, if any (under m_componentsMutex).
 			Base::Math::Space3D::AACuboid< float > m_renderBoundingBox; ///< Local VISUAL extent, merged from renderable components. Drives the rendering octree, never collision.
+			std::array< PublishedRenderExtent, RenderStateSlotCount > m_publishedRenderExtents{}; ///< The world extent published per render state slot (publishRenderExtent()): what a frame culls the entity on.
+			uint32_t m_renderBoxGeneration{0}; ///< Incremented each time m_renderBoundingBox is rebuilt (LOGIC thread).
+			uint32_t m_extentRenderBoxGeneration{0}; ///< m_renderBoxGeneration when the last published extent was computed (LOGIC thread).
+			uint32_t m_lastExtentSlot{RenderStateSlotCount}; ///< The slot of the last published extent, RenderStateSlotCount before the first one (LOGIC thread).
 			const uint32_t m_birthTime{0};				  ///< Scene timestamp at creation (milliseconds).
 			const uint64_t m_creationNumber{0};			 ///< Creation order in the scene (creationNumber()).
 			size_t m_lastUpdatedMoveCycle{0};			   ///< Last engine cycle when entity moved (for hasMoved()).

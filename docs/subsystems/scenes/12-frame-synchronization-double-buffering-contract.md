@@ -245,6 +245,7 @@ orders a plain write on one side against a read on the other. ThreadSanitizer fo
 | An instance carries an extra transformation matrix | the logic thread (`publishTransformationMatrix()`, at every publication) or the scene's construction (`setTransformationMatrix()`) | the rendering thread (`applyLocalTransformation()`) | `m_transformationMatrixApplies`, atomic, stored LAST with release after the slot, loaded with acquire; never cleared. It was bit 11 of the flag word. ⚠️ The flag word of an instance now holds CONFIGURATION only: a bit that changes while the scene runs does not belong there |
 | The view (its position, its matrices) as the rendering side reads it outside the chain | the logic thread (`Camera` → `updateViewCoordinates()`) | the rendering thread: the sprite billboards of the acceleration-structure rebuild, the temporal-history mask, the editor's gizmos, the debug compass | the FRAME'S VIEW, like the chain's effects: `position(m_frameReadStateIndex)` for the rebuild, a `Graphics::FrameView` for the four others (`Editor::Manager::render(commandBuffer, readStateIndex)`, `Gizmo::Abstract::render(commandBuffer, frameView)`, `Debug::Compass::render(commandBuffer, frameView)`). They read the view's LOGIC state (2026-11-16) |
 | The scene's ambient (chromaticity, effective illuminance) as a traced effect adds it at its hits | the logic thread (`LightSet::setAmbientLight*()`, `Scene::applyBackgroundLightingNow()`) | the rendering thread (`RTR`'s frame block, the irradiance probe volume's inputs, `FrameContext::ambientIlluminance`) | the FRAME'S VIEW again: `Scene::refreshAmbientLightProperties()` already gives the ambient to the view matrices, and their published slot is what the raster of the frame reads — `FrameView::ambientChromaticity()` / `ambientIlluminance()` (`ViewMatricesInterface::ambient*(readStateIndex)`). The traced value is the raster's by construction; nothing on the rendering side reads the light set's ambient nor `Scene::m_IBLAmbientEnabled` any more (2026-11-16, owner decision over a slot of the light set's own) |
+| What a frame CULLS an entity on (its world extent) | the logic thread: the entity's coordinates (physics, a vehicle, an animation), its render box (`updateEntityProperties()`), its collision model (`refreshCollisionBoundaries()` at every pose of a skinned visual) | the rendering thread: `Scene::populateRenderLists()` and `populateShadowCastingRenderList()` — they called `isVisibleTo()`, which read all three live | a RENDER STATE SLOT (2026-11-16, owner decision): `AbstractEntity::publishRenderExtent(slot)`, from `publishStateForRendering()` right after the coordinates of the slot, writes the world box of what the components draw (else the collision model's, else nothing: the published position decides); the two list builders test their volume against `publishedRenderExtent(readStateIndex)` (`isSeenBy()` in `Scene.rendering.cpp`). An entity that neither moved nor rebuilt its render box copies the extent of its previous publication. `LocatableInterface::isVisibleTo()` stays, for the LOGIC thread |
 
 Choosing the protocol of a new datum that both threads touch:
 
@@ -256,9 +257,13 @@ Choosing the protocol of a new datum that both threads touch:
    the answer, one cycle late at most. Never walk the other thread's containers "because the worst case is one frame".
 5. A comment that calls a race benign is a defect (Ave Robustus II): the indirect-diffuse question carried one.
 
-What this does NOT cover: the pool worker that finishes a resource's load — the next section. The four members
-other scenes reported after the first six (an instance's animation time and flag word, the view's logic state read on
-the rendering side, the ambient) are the last six rows of the table, and their proof closes this section.
+What this does NOT cover: the pool worker that finishes a resource's load — the next section. The members other
+scenes reported after the first six (an instance's animation time and flag word, the view's logic state read on the
+rendering side, the ambient, the extent a frame culls an entity on) are the last seven rows of the table, and their
+proof closes this section. ⚠️ Still open (item `tsan-logic-render-instance-state-races`): the view's near and far
+planes are read in their LOGIC state on the rendering side — `RenderTarget::Abstract::viewDistance()` in the two list
+builders, `FrameView::farPlane()`, the selection outline — and a cascaded shadow map's far plane is rewritten at every
+logic cycle.
 
 Proof (Linux, 2026-11-15). ThreadSanitizer — Debug, llvmpipe forced in a settings copy, the testbed driven through
 the console (its active scene unloaded, reloaded, destroyed, rebuilt; the recipe: `docs/caution-points.md` § *TSan on a
@@ -329,6 +334,23 @@ NOT in the table above:
   `city-reads-an-image-average-colour-while-it-loads`).
 - `sponza` — the software device dies, no engine report before it: its alpha-tested foliage needs a third settings
   key (caution-points, the same section).
+
+**The extent a frame culls on (2026-11-16, owner decision) — proof.** Linux, engine 93486951 + the change.
+ThreadSanitizer, the same recipe, one run of each scene the sweep had found: `node-relation` 6 reports → 0,
+`collision-debug` 7 → 0, `beams` 1 → 0, `paths` 1 → 0, `citadel` 3 → 0, exit 0; `city` 10 → 2, neither on the culling
+(the testbed's image read while it loads, and the far plane above). Hardware device (RTX 3070 Ti, Release, the
+validation layer loaded, the binary before against the binary after, 0 VUID): the SAME render statistics — what the
+culling keeps — on `terrain` (60611 instances / 31958641 triangles in the view, 8776 / 16147070 in the shadow lists),
+`sponza` (290 / 10494160 | 454 / 12833689), `light-and-shadow-debug`, `global-illumination` and `animation-debug`.
+
+The cost, measured with a temporary timer around the entities' publication (Release, i9-14900K, four launches of each
+binary, the mean of 600 logic cycles): `terrain`, 13072 static entities — 4.5 to 5.1 ms per logic cycle before, 5.1 to
+5.5 ms after; `city`, 721 static entities and its nodes — 62 to 79 µs before, 70 to 102 µs after. ⚠️ Computing the
+extent of EVERY entity at EVERY publication cost 5.9 to 6.6 ms on `terrain` (about 100 ns per entity): hence the copy
+of the previous publication's extent when nothing changed. The rendering thread no longer computes a box per entity
+and per target; that gain was not measured. ⚠️ The publication itself — 4.7 ms per logic cycle on `terrain` before
+this change, every static entity published again at every cycle — is the larger cost (item
+`scene-publication-republishes-every-entity-at-every-cycle`).
 
 ### A resource's load reaches a scene object on the logic thread (2026-11-15, owner decisions)
 

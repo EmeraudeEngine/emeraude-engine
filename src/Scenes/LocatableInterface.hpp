@@ -276,7 +276,10 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief Returns whether this metaobject is inside the frustum.
-			 * @param frustum A reference to a render-target frustum.
+			 * @note LOGIC thread: the test reads the object's logic state (its coordinates, its extents). The rendering
+			 * thread never calls it — a frame culls an entity on what it PUBLISHED for the frame's render state
+			 * (Scenes::AbstractEntity::publishedRenderExtent()).
+			 * @param frustum A reference to a frustum.
 			 * @return bool
 			 */
 			[[nodiscard]]

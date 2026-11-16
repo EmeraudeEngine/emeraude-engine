@@ -163,6 +163,8 @@ namespace EmEn::Scenes
 		}
 
 		m_renderBoundingBox.reset();
+		/* The render box is rebuilt: the extent published from it is computed again (publishRenderExtent()). */
+		++m_renderBoxGeneration;
 
 		/* NOTE: Reset flags. The collision state is derived at the end, unless the author decided it. */
 		this->setRenderingAbilityState(false);
@@ -357,6 +359,79 @@ namespace EmEn::Scenes
 		m_contentRefreshDeferred = true;
 
 		return true;
+	}
+
+	void
+	AbstractEntity::publishRenderExtent (uint32_t writeStateIndex) noexcept
+	{
+		if ( writeStateIndex >= m_publishedRenderExtents.size() ) [[unlikely]]
+		{
+			return;
+		}
+
+		auto & extent = *std::next(m_publishedRenderExtents.begin(), static_cast< std::ptrdiff_t >(writeStateIndex));
+		const auto previousSlot = m_lastExtentSlot;
+
+		m_lastExtentSlot = writeStateIndex;
+
+		/* An entity that draws nothing is not culled at all: the rendering thread leaves it before any visibility test. */
+		if ( !this->isRenderable() )
+		{
+			extent.box.reset();
+			extent.kind = RenderExtentKind::Point;
+
+			return;
+		}
+
+		/* NOTE: The coordinates this very publication wrote into the slot (onPublishStateForRendering()): the
+		 * extent and the coordinates of a render state always agree. */
+		const auto & worldCoordinates = this->getWorldCoordinatesStateForRendering(writeStateIndex);
+
+		/* ⚠️ THE VISUAL EXTENT DECIDES VISIBILITY — the union of what the components draw, never the origin alone:
+		 * an entity culled on its centroid vanishes while it still fills part of the screen (instanced vegetation). */
+		if ( m_renderBoundingBox.isValid() )
+		{
+			/* The same render box at the same coordinates as the previous publication: the same extent. That slot is
+			 * the logic thread's until it writes it again, and it is not this one (a slot written twice in a row
+			 * would compare the coordinates with themselves). */
+			if ( previousSlot < m_publishedRenderExtents.size() && previousSlot != writeStateIndex && m_extentRenderBoxGeneration == m_renderBoxGeneration )
+			{
+				const auto & previousExtent = *std::next(m_publishedRenderExtents.cbegin(), static_cast< std::ptrdiff_t >(previousSlot));
+				const auto & previousCoordinates = this->getWorldCoordinatesStateForRendering(previousSlot);
+
+				if ( previousExtent.kind == RenderExtentKind::RenderBox &&
+					worldCoordinates.position() == previousCoordinates.position() &&
+					worldCoordinates.downwardVector() == previousCoordinates.downwardVector() &&
+					worldCoordinates.backwardVector() == previousCoordinates.backwardVector() &&
+					worldCoordinates.scalingFactor() == previousCoordinates.scalingFactor() )
+				{
+					extent = previousExtent;
+
+					return;
+				}
+			}
+
+			extent.box = Base::Math::OrientedCuboid< float >{m_renderBoundingBox, worldCoordinates}.getAxisAlignedBox();
+			extent.kind = RenderExtentKind::RenderBox;
+
+			m_extentRenderBoxGeneration = m_renderBoxGeneration;
+
+			return;
+		}
+
+		/* A drawn entity without a measurable render box: its collision model's box, computed at every publication
+		 * (the model's shape may change without notice; the case is rare). */
+		if ( m_collisionModel != nullptr )
+		{
+			extent.box = m_collisionModel->getAABB(worldCoordinates);
+			extent.kind = RenderExtentKind::CollisionBox;
+
+			return;
+		}
+
+		/* Draws nothing measurable and has no collision model: the position is all there is to test. */
+		extent.box.reset();
+		extent.kind = RenderExtentKind::Point;
 	}
 
 	void

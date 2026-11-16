@@ -172,6 +172,31 @@ namespace EmEn::Scenes
 		}
 
 		/**
+		 * @brief Returns whether a volume (a view frustum, a shadow caster volume) sees an entity, for a frame.
+		 * @note RENDER thread. The test reads what the entity PUBLISHED for the frame's render state — its world extent
+		 * (AbstractEntity::publishedRenderExtent()), else the position of its published coordinates —, never its logic
+		 * state: the logic thread moves the entity while the frame's lists are built (scenes doc 12).
+		 * @param volume The frustum to test.
+		 * @param entity The entity.
+		 * @param publishedCoordinates The entity's world coordinates in the frame's render state.
+		 * @param readStateIndex The render state the frame latched.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isSeenBy (const Frustum & volume, const AbstractEntity & entity, const CartesianFrame< float > & publishedCoordinates, uint32_t readStateIndex) noexcept
+		{
+			const auto & extent = entity.publishedRenderExtent(readStateIndex);
+
+			if ( extent.kind == AbstractEntity::RenderExtentKind::Point )
+			{
+				return volume.isSeeing(publishedCoordinates.position());
+			}
+
+			return volume.isSeeing(extent.box);
+		}
+
+		/**
 		 * @brief The RECEIVERS of one shadow cascade: the slice of the main camera frustum whose fragments sample it.
 		 * @note A cascade is fitted with a bounding SPHERE (stable edges, ViewMatricesCascadedUBO), so its light
 		 * volume overlaps the others massively: tested against it, a tree 50 m from the camera belonged to all four
@@ -1579,15 +1604,16 @@ namespace EmEn::Scenes
 		}
 
 		/* NOTE: An entity without a measurable render box is kept (conservative), as the volume test does. */
-		const auto missesCascadeReceivers = [&receiverSlice] (const AbstractEntity & entity) noexcept {
+		const auto missesCascadeReceivers = [&receiverSlice, readStateIndex] (const AbstractEntity & entity) noexcept {
 			if ( !receiverSlice.has_value() )
 			{
 				return false;
 			}
 
-			const auto renderBox = entity.getWorldRenderBoundingBox();
+			/* NOTE: The extent the entity PUBLISHED for this frame's render state, never its logic state. */
+			const auto & extent = entity.publishedRenderExtent(readStateIndex);
 
-			return renderBox.isValid() && !receiverSlice->isReachedBy(renderBox);
+			return extent.kind == AbstractEntity::RenderExtentKind::RenderBox && !receiverSlice->isReachedBy(extent.box);
 		};
 
 		const auto beyondShadowCastingDistance = [&viewerPosition] (const RenderableInstance::Abstract & instance, const Vector< 3, float > & position) noexcept {
@@ -1635,7 +1661,7 @@ namespace EmEn::Scenes
 			const auto & worldCoordinates = entity.getWorldCoordinatesStateForRendering(readStateIndex);
 			const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-			if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !entity.isVisibleTo(casterVolume) ) )
+			if ( ( !isCascaded && distance > viewDistance ) || ( !renderTarget->isCubemap() && !isSeenBy(casterVolume, entity, worldCoordinates, readStateIndex) ) )
 			{
 				return;
 			}
@@ -2191,7 +2217,7 @@ namespace EmEn::Scenes
 			const auto & worldCoordinates = entity.getWorldCoordinatesStateForRendering(readStateIndex);
 			const auto distance = Vector< 3, float >::distance(cameraPosition, worldCoordinates.position());
 
-			if ( distance > viewDistance || ( !renderTarget->isCubemap() && !entity.isVisibleTo(frustum) ) )
+			if ( distance > viewDistance || ( !renderTarget->isCubemap() && !isSeenBy(frustum, entity, worldCoordinates, readStateIndex) ) )
 			{
 				return;
 			}

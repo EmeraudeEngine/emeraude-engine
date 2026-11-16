@@ -434,7 +434,9 @@ namespace EmEn::Scenes
 
 			/**
 			 * @copydoc EmEn::Scenes::LocatableInterface::isVisibleTo(const Graphics::Frustum &) const
-			 * @note Uses the collision model AABB to determine visibility.
+			 * @note The render bounding box decides, else the collision model's box, else the position — the same
+			 * order as the extent a frame culls on (AbstractEntity::publishRenderExtent()), read here from the LOGIC
+			 * state.
 			 */
 			[[nodiscard]]
 			bool isVisibleTo (const Graphics::Frustum & frustum) const noexcept override;
