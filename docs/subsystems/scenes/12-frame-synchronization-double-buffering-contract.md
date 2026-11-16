@@ -365,6 +365,23 @@ loader while a component built on it reads `isSprite()` (item `renderable-flags-
 ⚠️ The sky report of `city` and the one of `sprite` each appeared in one sweep of two: a loading race shows when the
 threads meet, a clean run proves nothing about it.
 
+**Peers' round 14** (2026-11-16, engine 1d35ce56 + base e1249de + testbed 7b2e3d09: the seven rows above, the
+skinning fix of the base, the interfaces that changed). macOS (Apple M6, MoltenVK 1.4.2, Apple clang with
+`-Wdocumentation -Werror` and `-Wthread-safety`) and Windows (RTX 3500 Ada, MSVC 19.44) build Release and Debug with 0
+warning — no platform file called a removed name nor relied on an include that left —, pass the base suite with its
+new test, and run six scenes window-less with the validation layer loaded: exit 0, 0 VUID, 0 error line in the 21
+launches. The same render statistics as Linux on `animation-debug` (22 / 61198 | 21 / 61186) and
+`light-and-shadow-debug` with projections (7 / 673958 | 30 / 4033408); `terrain` culled the same twice in a row on
+each (Windows 60611 / 31958641 | 8776 / 16147070 as Linux; macOS its own round 12 values). `global-illumination` with
+a projection: macOS, screen-space lane, 14.4 to 14.6 nits over three launches (14.4 to 14.7 in round 13); Windows,
+ray-traced, 97.7 to 102.4 nits over six (98.5 to 100.4 over the six of round 13). That wider spread is the machine's
+launch-to-launch noise, not the change: twelve alternated launches there give 97.7 to 101.2 nits (median 100.4) with
+an OLDER binary and 100.0 to 102.8 (median 101.4) with this one, the low extreme reached by each in turn — ⚠️ the
+older binary was the only one the peer still held, engine 31d39b6a of five rounds earlier, a Release tree built with
+the fault-injection option (no injection switch passed). Linux, the same configuration, six alternated launches of
+each binary: 105.2 to 106.9 nits before, 104.8 to 106.5 after. ⚠️ Not verified by the peers: entities MOVING while they are culled — `node-relation`'s default framing shows
+none of its moving objects (both peers); that part rests on Linux's ThreadSanitizer runs and statistics.
+
 ### A resource's load reaches a scene object on the logic thread (2026-11-15, owner decisions)
 
 `Resources::ResourceTrait` emits `LoadFinished` on the thread that completed the resource's last dependency — a pool

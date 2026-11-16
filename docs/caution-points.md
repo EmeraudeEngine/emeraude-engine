@@ -4647,6 +4647,10 @@ buffer interleaves {current, previous}): `bones[-2]`, 128 bytes before the bound
 - **Proof** (Linux, RTX 3070 Ti, Release, window-less, `global-illumination` with its skinned character, 10 s,
   GPU-assisted validation): 40 messages before (20 per VUID — the layer stops repeating a message), **0 after**,
   exit 0. Base test `VertexFactoryShape.anUnusedInfluenceSlotIsWrittenAsMatrixZero` (it read `-1` before).
+- **Peers' round 14 (2026-11-16, engine 1d35ce56 + base e1249de):** macOS (Apple M6, MoltenVK) and Windows (RTX 3500
+  Ada, MSVC 19.44) pass the base test and draw `animation-debug` with every character in an animated pose that
+  differs between two captures — no bind pose, no vertex pulled to the origin —, the same statistics as Linux
+  (22 / 61198 | 21 / 61186), 0 VUID.
 
 ### Fixed: the NodeCrawler stale-local trap — it compiled with ZERO warnings (Aug 2026)
 

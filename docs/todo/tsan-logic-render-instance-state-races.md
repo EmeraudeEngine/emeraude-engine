@@ -20,6 +20,7 @@ seven rows of its table): an instance's animation time, its flag word's three st
 rendering side — its position, its matrices, its near and far planes, `RenderTarget::Abstract::viewDistance()` removed
 —, the scene's ambient as the traced effects add it, and the extent a frame culls an entity on. The sweep of the
 testbed's scenes under ThreadSanitizer, twice: NO report is left between the logic and the rendering threads.
+The peers passed them on 2026-11-16 (round 14, macOS and Windows: scenes doc 12).
 
 **What is left was never reported — found by reading**:
 
@@ -36,7 +37,6 @@ testbed's scenes under ThreadSanitizer, twice: NO report is left between the log
   mechanism for every bit, a locked operation per write), or a configuration change goes through the logic cycle and
   is published like a state, or the bits that change while the scene runs leave the word as the three state bits did.
 - Apply it to the instance's word and to the entity's, then send the console command in a ThreadSanitizer run.
-- **The peers' round** on the fixed members (macOS, Windows), after the push.
 
 ## ⚠️ Traps
 
