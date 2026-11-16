@@ -157,6 +157,12 @@ The `SkeletalAnimator` is agnostic about who controls time:
 
 Both modes produce the same output: `skinningMatrices[]` ready for GPU upload.
 
+⚠️ **Every influence a skinning shader reads is >= 0** (2026-11-16). The vertex stage and the ray-tracing mirror pass
+read the four matrices of a vertex whatever their weight: an unused slot names matrix 0 with a zero weight in the
+vertex buffer (base `Shape::writeInfluenceToVertexBuffer()`), never the `-1` of the CPU side — that one read
+`bones[-2]`, before the matrices (`docs/caution-points.md` § an unused bone influence read the skinning matrices out
+of bounds).
+
 **Playback modes**: `PlaybackWrap::Once`, `Loop`, `PingPong`
 
 ### ⚠️ TWO clip evaluators — a clip's target is NOT always a joint

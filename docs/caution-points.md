@@ -4621,6 +4621,33 @@ entity refreshes the collision model SHAPE only (`refreshCollisionBoundaries()` 
 >    loop which holds the render target list mutex — walking the lists there froze the render
 >    thread (black screen). Atomic flag consumed by `Scene::beginRenderFrame()`.
 
+### Fixed: an unused bone influence read the skinning matrices out of bounds (Nov 2026)
+
+A vertex carries four influence slots; a slot it does not use is `-1` on the CPU side (base `ShapeVertex`), with a
+zero weight. The base wrote that `-1` as it was into the vertex buffer, and both skinning shaders — the generated
+vertex stage (`Saphir::AbstractVertexStage`) and the compute pass that mirrors the pose for ray tracing
+(`Graphics::SkinnedGeometryProcessor`) — read the FOUR matrices whatever their weight, at `influence × 2` (the
+buffer interleaves {current, previous}): `bones[-2]`, 128 bytes before the bound range.
+
+- **The picture was right, which is why it lived**: the matrix read is multiplied by a zero weight. But the read
+  itself is outside the range the descriptor binds — for the first per-frame section of the buffer, before the
+  buffer: bytes of another allocation. Undefined without `robustBufferAccess`, and not only in theory: a pattern
+  that reads as an infinity or a NaN there gives `0 × Inf = NaN`, a NaN skin matrix and a vertex that vanishes.
+- **Only the GPU-assisted validation sees it** — the standard layer reports 0 VUID on the same run:
+  `VUID-vkCmdDrawIndexed-storageBuffers-06936` and `VUID-vkCmdDispatch-storageBuffers-06936`, "(set = 1, binding = 0,
+  index 0) access out of bounds. The descriptor buffer size is 26496 bytes, 8832 bytes were bound, and the highest
+  out of bounds access was at [4294967231] bytes" (-65: the last byte of `bones[-2]`). Recipe: the usual
+  `--set-vk-layers=VK_LAYER_KHRONOS_validation` plus the environment
+  `VK_LAYER_ENABLES=VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT`.
+- **Fix (owner decision, 2026-11-16): the vertex buffer names matrix 0 in an unused slot** — base
+  `Shape::writeInfluenceToVertexBuffer()`, the one place every loader goes through. The shaders keep their code and
+  state the precondition (every influence >= 0); no guard per vertex. The `-1` stays the CPU convention.
+  ⚠️ A new producer of skinned vertex data that does not go through `Shape::create(Indexed)VertexBuffer()` owes the
+  same contract: an index >= 0 in every slot, a zero weight on the unused ones.
+- **Proof** (Linux, RTX 3070 Ti, Release, window-less, `global-illumination` with its skinned character, 10 s,
+  GPU-assisted validation): 40 messages before (20 per VUID — the layer stops repeating a message), **0 after**,
+  exit 0. Base test `VertexFactoryShape.anUnusedInfluenceSlotIsWrittenAsMatrixZero` (it read `-1` before).
+
 ### Fixed: the NodeCrawler stale-local trap — it compiled with ZERO warnings (Aug 2026)
 
 `Scenes::NodeCrawler< node_t >` lost its returning accessor: the API is now

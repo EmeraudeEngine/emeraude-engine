@@ -26,16 +26,25 @@
 
 #include "SkinnedGeometryProcessor.hpp"
 
+/* STL inclusions. */
+#include <string>
+
 /* Local inclusions. */
 #include "Graphics/Renderer.hpp"
 #include "Saphir/Generator/SkinningLayoutHelper.hpp"
 #include "Saphir/ShaderManager.hpp"
+#include "Saphir/Types.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/ComputePipeline.hpp"
-#include "Vulkan/DescriptorSetLayout.hpp"
-#include "Vulkan/LayoutManager.hpp"
 #include "Vulkan/PipelineLayout.hpp"
 #include "Vulkan/ShaderModule.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Vulkan
+{
+	class DescriptorSetLayout;
+}
 
 namespace
 {
@@ -89,7 +98,9 @@ void main ()
 		dst.v[base + i] = src.v[base + i];
 	}
 
-	/* Interleaved {current, previous}: even slots are the current pose. */
+	/* Interleaved {current, previous}: even slots are the current pose.
+	 * Every influence is >= 0 by contract: the four matrices are read whatever their weight, and the vertex
+	 * buffer names matrix 0 in an unused slot, with a zero weight (base Shape::writeInfluenceToVertexBuffer()). */
 	const ivec4 boneIdx = ivec4(
 		int(src.v[base + pc.influenceOffset + 0u]),
 		int(src.v[base + pc.influenceOffset + 1u]),

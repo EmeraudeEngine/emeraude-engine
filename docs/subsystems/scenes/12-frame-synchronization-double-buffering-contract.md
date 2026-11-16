@@ -373,6 +373,16 @@ the binary after).
   cancellation of an awaited play by `stop()` is verified by reading only: no console command plays a sound on an
   emitter, so the window between `play()` and the end of the load cannot be driven from outside (item
   `console-commands-to-play-a-sound-and-set-a-light-projection`).
+- Peers' round 13 (2026-11-16, engine 5dfe292a + testbed 3411e7c7), window-less, the validation layer loaded, every
+  launch exit 0, 0 VUID, 0 error line: macOS (Apple M6, MoltenVK 1.4.2, Apple clang with `-Wdocumentation -Werror`,
+  Release and Debug 0 warning) meters `global-illumination` with the projection at 14.4, 14.4 and 14.7 nits over
+  three launches on its screen-space lane, the three captures 0.11 to 0.88 / 255 apart; Windows (RTX 3500 Ada, MSVC
+  19.44, Release and Debug 0 warning) kept the binary before for three launches of each on the ray-traced lane: BEFORE
+  99.3, 100.0 and 98.5 nits, AFTER 99.3, 100.4 and 99.6 nits. ⚠️ On that machine the binary before was already tight:
+  the 102 to 108 nits of Linux did not show — the window is a matter of timing between the loading thread and the
+  logic thread, it opens or not with the machine. Both: the projected cubemap on the walls, the same statistics as
+  Linux (19 / 266 | 30 / 15340); `game-logic`, the three emitters play, `stop` → not playing with the sound still
+  attached, `replay` → playing; `light-and-shadow-debug` with projections 7 / 673958 | 30 / 4033408.
 
 Proof (Linux, 2026-11-15). ThreadSanitizer, Debug, llvmpipe, the recipe of `docs/caution-points.md`:
 

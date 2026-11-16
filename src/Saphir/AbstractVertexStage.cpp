@@ -2615,7 +2615,11 @@ namespace EmEn::Saphir
 			const bool needsSkinMatrix3 = hasNormal || hasTangent || hasBinormal;
 
 			/* NOTE: The skinning SSBO interleaves {current, previous} bone matrices
-			 * (stride 2) — see RenderableInstance::Abstract::updateSkinningMatrices(). */
+			 * (stride 2) — see RenderableInstance::Abstract::updateSkinningMatrices().
+			 * @pre Every influence is >= 0: the four matrices are read whatever their weight, so a negative index
+			 * reads before the matrices (VUID-vkCmdDrawIndexed-storageBuffers-06936). The vertex buffer names
+			 * matrix 0 in an unused slot, with a zero weight (base Shape::writeInfluenceToVertexBuffer()): no
+			 * guard per vertex here. */
 			std::string skinCode =
 				"\t" "/* Skeletal skinning. */" "\n"
 				"\t" "ivec4 boneIdx = ivec4(" + std::string{Keys::Attribute::BoneInfluence} + ") * 2;" "\n"
