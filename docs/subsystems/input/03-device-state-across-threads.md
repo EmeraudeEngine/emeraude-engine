@@ -72,6 +72,19 @@ Proof (Linux, engine 3186ee4e + the change):
   on X, then Y, then Z; the transform-space and mode keys move nothing), none dropped; 91 injected keys and a drag
   under ThreadSanitizer: 0 report; the node destroyed, the controller lets it go. ⚠️ Its gamepad page was NOT
   exercised (no gamepad can be injected): its 18 bindings were compared one by one with the code they replace.
+- A control on ordinary scenes (the controllers are updated at every cycle, with or without a node): the render
+  statistics of `animation-debug`, `default` and `geometry-loader` are the same with the binary before and after
+  (22 instances / 61198 triangles in the view, 21 / 61186 in the shadows for the first), 0 VUID.
+
+**Peers' round 17** (2026-11-17, engine 5b23b534), each with its own binary of before (engine 8332013e) and the new
+one, the same scenario:
+- Windows (RTX 3500 Ada, driver 596.58, MSVC 19.44 `/W4 /WX`): Release and Debug 0 error / 0 warning; the five
+  positions identical digit for digit before and after, and equal to Linux to nine digits; exit 0, 0 VUID.
+- macOS (Apple M6, MoltenVK 1.4.2, `-Wdocumentation -Werror`, `-Wthread-safety` silent): Release and Debug 0 error /
+  0 warning; the five positions identical digit for digit before and after, equal to Linux to at least seven
+  significant digits (the drag's X differs in the eighth); exit 0, 0 VUID.
+- Both: `animation-debug` at 22 / 61198 | 21 / 61186, no step dropped, no contract fault. `Core.openFiles` answers
+  in 5.4 s (Windows) and 5.8 s (macOS) with BOTH binaries: not this change.
 
 ### Reading it from the console (2026-10-16)
 
