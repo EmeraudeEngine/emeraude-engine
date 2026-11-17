@@ -40,5 +40,9 @@ way on 2026-09-27 (owner decision: every call names `entity` + `component`), and
 
 ## ⚠️ Traps
 
+- Since 2026-11-17 `listNodes`, `targetNode`, `listStaticEntities` and `targetStaticEntity` read the targeted scene
+  under its exclusive access when it is the RUNNING one (`inTargetedScene` in `Manager.console.cpp`, scenes doc 07):
+  deleting the family removes that helper with it.
+
 - `Act.*` commands (projet-alpha) do NOT depend on the target despite the docs asking for
   `targetActiveScene()` first — check each command before removing the step from a script.

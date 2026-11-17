@@ -409,8 +409,8 @@ layer loaded, 0 VUID, exit 0):
 - ⚠️ the same recomputation started from the MAIN thread by a console command that takes no access
   (`attachMicrophone(Fox, …)`) still loses the entity: 153 and 161 list builds before, 150 and 161 after. The logic
   thread's publication reads the half-written flag and publishes it. The slot protects a frame from the logic thread's
-  own work, not from a third thread that changes the entity in the middle of a cycle (item
-  `scene-console-commands-write-the-scene-outside-the-exclusive-access`).
+  own work, not from a third thread that changes the entity in the middle of a cycle — fixed on 2026-11-17 by putting
+  that thread's commands under the exclusive access (the last proof of this section: 0 list build).
 
 Outside any pause the two tests decide the same: counted at every entity test of the three list builders, the live
 flag and the frame's state agree on 3 000 000 tests of `game-logic` in 25 s (0 disagreement; none either on `particles`
@@ -451,6 +451,45 @@ twice in a row. The tangent-space toggle on `geometry-loader`: Windows draws the
 them (1 instance toggled, 1 skipped for its geometry without tangent space); macOS refuses the display — its device
 has no geometry stage — and disables on the two instances; twenty commands in a row answer in about 0.01 s each on
 both: the exclusive access costs the console nothing visible.
+
+**The scene service's console commands under the exclusive access (2026-11-17, owner decisions) — proof.** Linux,
+engine 79dbf752 + the change (the rule and its three helpers: scenes doc 07 § console adapters). These commands ran on
+the MAIN thread with a mere snapshot of the active scene and read or wrote it while the logic and rendering threads
+ran — the third thread of the warning above.
+
+ThreadSanitizer (the same recipe, `animation-debug`, one console scenario of 88 commands: a node created, moved
+twelve times, turned and destroyed, the animated node `Fox` moved twelve times and read, a microphone attached to it,
+two textured shapes, the compass on and off, the highlight style, a ground, a glTF file, the target family, a physics
+recording, the statistics twelve times):
+
+| | Before | After |
+|---|---|---|
+| reports | 9, exit code 66 | 0, exit 0 |
+| `toggleCompass` | 3: `Debug::Compass::destroy()` against the frame's `Compass::render()` | — |
+| `setHighlightStyle` | 3: `SelectionOutline::setColor()` / `setWidth()` against the frame's `recordComposite()` | — |
+| `setGround` | 2: `Scene::registerSceneVisualComponents()` against the shadow list builder | — |
+| `getNodePhysics` | 1: `Scene::cycle()` read while `Scene::processLogics()` writes it | — |
+
+The window widened again (the 400 ms pause between the two writes of the renderable flag, `animation-debug`, Release,
+RTX 3070 Ti): `attachMicrophone(Fox, …)` left the entity out of 150 to 161 raster list builds per command before; of
+NONE after — the frames and the logic wait for the command, they no longer run inside it.
+
+What the operator sees (Release, RTX 3070 Ti, window-less, the validation layer loaded, the binary before against the
+binary after, one scenario of 76 commands on `animation-debug` and one of 20 on `sky-lab`; exit 0, 0 VUID): the SAME
+replies once numbers and addresses are masked — errors included (an unknown node, a file that does not exist, a
+node without a character controller) — but the two refusals below and the entity list that follows from them, and the
+same latency: 0.021 s per command before, 0.022 s after (the client's own start), the slowest 0.05 s. Under the exclusive access a command waits for the frame and the logic cycle in
+flight; at this frame rate that is not measurable (under ThreadSanitizer on the software device, where a frame takes
+0.3 s, each command takes 0.3 to 0.4 s).
+
+Left as they were, on purpose (the code says why at each): the four physics-recording commands, `writeImposterAtlases`
+and the five commands of the physical sky — what they touch guards itself; `getActiveSceneName`, `targetActiveScene`.
+Three refusals added at this trust boundary: `addTexturedShape` refuses a position or a size that is not finite (a NaN
+passed its `size <= 0` test); `addMesh` and `setBackground` refuse a name their container does not know (owner
+decision, the one of 2026-09-27 for `createScene`'s skybox: `getResource()` serves the default resource for an unknown
+name, so `addMesh(NoSuchMesh, …)` answered "placed" and `setBackground(NoSuchSky)` "Background set").
+⚠️ Seen in these runs, in BOTH binaries, not explained: `sky-lab` ends the same scenario at one of two brightness
+levels (mean 155 / 255 in four launches, 118 in two; the sky's reported state is identical).
 
 ### A resource's load reaches a scene object on the logic thread (2026-11-15, owner decisions)
 

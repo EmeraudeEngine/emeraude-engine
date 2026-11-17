@@ -132,12 +132,28 @@ refused and why): `docs/ai-runtime-control.md` § "Driving an entity's component
   { … })`, which resolves the entity in the ACTIVE scene, checks the type, and runs under
   `withExclusiveActiveScene()`. `sceneManager()` serves a command that addresses no component
   (`Camera.getActive()`).
-- ⚠️ **The same rule for a command of the scene SERVICE that changes the running scene** (`Scenes/Manager.console.cpp`):
-  its body runs inside `withExclusiveActiveScene()`, never on a mere `activeSceneSnapshot()` — the snapshot keeps the
-  scene alive, it orders nothing against the logic cycle and the rendering frame. `enableTBN` does since 2026-11-16
-  (scenes doc 12, the configuration rows); most of the others still do not: item
-  `scene-console-commands-write-the-scene-outside-the-exclusive-access` (what to check before wrapping one: how long
-  the access is held, re-entrance, notifications under the lock).
+- ⚠️ **The same rule for a command of the scene SERVICE** (`Scenes/Manager.console.cpp`, applied to the whole file on
+  2026-11-17, owner decisions): whatever reads or writes the RUNNING scene does it inside `withExclusiveActiveScene()`,
+  never on a mere `activeSceneSnapshot()` — the snapshot keeps the scene alive, it orders nothing against the logic
+  cycle and the rendering frame. Three helpers at the top of `onRegisterToConsole()` carry it:
+  - `inActiveScene(body)` — the whole body under the access: the node commands (create, destroy, move, look at, attach
+    a camera or a microphone, the character and the vehicle), the compass, and the READS of what the logic or the
+    rendering thread writes (`getNode`, `getNodePhysics`, `getGroundLevel`, `getRenderStatistics`,
+    `getStateSyncStatistics`, `getWorldSoundCount`);
+  - `inSameActiveScene(preparedFor, body)` — a command that PREPARES something first (a material, a geometry, a mesh,
+    a ground, a glTF file read from disk) does it with NO access held, then writes the scene under the access, if the
+    scene it prepared for is still the active one: `setGround`, `addMesh`, `addTexturedShape`, `setBackground`,
+    `loadGLTF` (the file is loaded outside, its entities are built inside);
+  - `inTargetedScene(body)` — the legacy target family reads its targeted scene under the access when that scene is
+    the running one (item `console-explicit-addressing` decides whether the family stays).
+  `setHighlightStyle` changes the renderer's outline style under the access too (the frame reads it), with or without
+  an active scene.
+  **Where a snapshot IS enough, and the code says why**: an object that guards itself — the physics recorder (its own
+  mutex against the logic thread's `sample()`), the imposter bake target and its atlas list, the physical sky's
+  material and atmosphere (`m_propertiesAccess`, `m_groundAlbedoAccess`) — and what never changes (the scene's name).
+  ⚠️ Inside the access: never a scene-manager access again (`activeSceneSnapshot()` under the write lock waits for
+  itself), nothing long, no file. A NEW command of this service starts from one of the three helpers — or says why
+  its object guards itself.
 - **Addressing** (owner decision 2026-09-27): `entity` is an ADDRESS — the shortest suffix of the node
   path that is unique in the scene (`Head`, else `ACTOR_…06/Head`), or a static entity's name.
   `resolveEntity()` REFUSES an ambiguous address with its candidates (every projet-alpha actor carries a

@@ -46,6 +46,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -122,7 +123,6 @@
 #include "Scenes/Scene.hpp"
 #include "Scenes/SceneDataConsumer.hpp"
 #include "Scenes/StaticEntity.hpp"
-#include "StaticVector.hpp"
 #include "String.hpp"
 #include "VertexFactory/CapUVMapping.hpp"
 #include "Vulkan/Image.hpp"
@@ -147,6 +147,121 @@ namespace EmEn::Scenes
 	{
 		/** @brief The largest exposure, in stops, dumpRenderTarget() accepts on either side: 2^64 is still a finite float. */
 		constexpr auto MaxDumpExposureEV{64.0F};
+
+		/**
+		 * @brief Writes the state of a kinematic character's controller as a member of a JSON object (getNodePhysics).
+		 * @param info The stream of the object.
+		 * @param controller The character's controller.
+		 */
+		void
+		writeCharacterState (std::stringstream & info, const auto & controller) noexcept
+		{
+			info << R"(,"character":{"grounded":)" << (controller.isGrounded() ? "true" : "false");
+			info << R"(,"flying":)" << (controller.isFlying() ? "true" : "false");
+			info << R"(,"velocity":)";
+			writeJSONVector(info, controller.velocity());
+			info << R"(,"groundNormal":)";
+			writeJSONVector(info, controller.groundNormal());
+			info << R"(,"supportKey":)" << controller.supportKey() << '}';
+		}
+
+		/**
+		 * @brief Writes the drive train and the wheels of a vehicle as a member of a JSON object (getNodePhysics).
+		 * @param info The stream of the object.
+		 * @param controller The vehicle's controller.
+		 */
+		void
+		writeVehicleState (std::stringstream & info, const auto & controller) noexcept
+		{
+			info << R"(,"vehicle":{"engineRPM":)" << jsonNumber(controller.engineRPM()) << R"(,"gear":)" << controller.gear() << R"(,"clutch":)" << jsonNumber(controller.clutch()) << R"(,"wheels":[)";
+
+			const char * separator = "";
+
+			for ( const auto & wheel : controller.wheels() )
+			{
+				info << separator << R"({"contact":)" << (wheel.contact ? "true" : "false");
+				info << R"(,"suspensionLength":)" << jsonNumber(wheel.suspensionLength) << R"(,"angularVelocity":)" << jsonNumber(wheel.angularVelocity);
+				info << R"(,"steerAngle":)" << jsonNumber(wheel.steerAngle) << R"(,"slipRatio":)" << jsonNumber(wheel.slipRatio) << R"(,"slipAngle":)" << jsonNumber(wheel.slipAngle);
+				info << R"(,"suspensionImpulse":)" << jsonNumber(wheel.suspensionImpulse) << R"(,"longitudinalImpulse":)" << jsonNumber(wheel.longitudinalImpulse) << R"(,"lateralImpulse":)" << jsonNumber(wheel.lateralImpulse);
+				info << R"(,"driveTorque":)" << jsonNumber(wheel.driveTorque) << R"(,"brakeTorque":)" << jsonNumber(wheel.brakeTorque);
+				info << R"(,"longitudinalSpeed":)" << jsonNumber(wheel.longitudinalSpeed) << R"(,"load":)" << jsonNumber(wheel.load) << R"(,"tractionFactor":)" << jsonNumber(wheel.tractionFactor) << R"(,"brakeFactor":)" << jsonNumber(wheel.brakeFactor) << '}';
+				separator = ",";
+			}
+
+			info << "]}";
+		}
+
+		/**
+		 * @brief Returns the physics state of a node as a JSON object (getNodePhysics).
+		 * @note Called under the scene's exclusive access: the logic thread moves the node otherwise.
+		 * @param node The node.
+		 * @param sceneCycle The physics cycle this state belongs to.
+		 * @return std::string
+		 */
+		[[nodiscard]]
+		std::string
+		nodePhysicsJSON (const Node & node, size_t sceneCycle) noexcept
+		{
+			/* ⚠️ WORLD position, not local: a node parented under another reports a local position
+			 * that says nothing about where it rests in the world, which is what a physics
+			 * measurement is about. */
+			const auto worldCoordinates = node.getWorldCoordinates();
+			const auto worldPosition = worldCoordinates.position();
+			const auto & localPosition = node.localCoordinates().position();
+			const auto & velocity = node.linearVelocity();
+
+			const auto * groundedSource = "None";
+
+			switch ( node.groundedSource() )
+			{
+				case Physics::GroundedSource::Ground : groundedSource = "Ground"; break;
+				case Physics::GroundedSource::Boundary : groundedSource = "Boundary"; break;
+				case Physics::GroundedSource::Entity : groundedSource = "Entity"; break;
+				case Physics::GroundedSource::None : break;
+			}
+
+			std::stringstream info;
+			info << "{";
+			info << "\"name\":" << Json::valueToQuotedString(node.name().c_str(), node.name().size()) << ",";
+			info << "\"worldPosition\":";
+			writeJSONVector(info, worldPosition);
+			info << ",\"localPosition\":";
+			writeJSONVector(info, localPosition);
+			info << ",\"worldUpward\":";
+			writeJSONVector(info, worldCoordinates.upwardVector());
+			info << ",\"worldBackward\":";
+			writeJSONVector(info, worldCoordinates.backwardVector());
+			info << ",\"linearVelocity\":";
+			writeJSONVector(info, velocity);
+			info << ",\"angularVelocity\":";
+			writeJSONVector(info, node.angularVelocity());
+			/* The point the physics turns the body about: the explicit centre of mass, else its shape's centroid. */
+			info << ",\"worldCenterOfMass\":";
+			writeJSONVector(info, node.getWorldCenterOfMass());
+			info << ",";
+			info << "\"movable\":" << (node.isMovable() ? "true" : "false") << ",";
+			info << "\"simulationPaused\":" << (node.isSimulationPaused() ? "true" : "false") << ",";
+			info << "\"grounded\":" << (node.isGrounded() ? "true" : "false") << ",";
+			info << R"("groundedSource":")" << groundedSource << "\",";
+			/* The physics cycle this state belongs to: a client polling at its own rate samples by cycle,
+			 * never by wall-clock time (the physics ticks at a fixed WorldPhysicsUpdateFrequency). */
+			info << "\"sceneCycle\":" << sceneCycle;
+
+			/* A kinematic character (P4): its controller's state (its node velocity is not what it does). */
+			if ( const auto character = node.characterController(); character != nullptr )
+			{
+				writeCharacterState(info, character->controller());
+			}
+
+			/* A wheeled vehicle: its drive train and its wheels (decisions 15). */
+			if ( const auto vehicle = node.vehicle(); vehicle != nullptr )
+			{
+				writeVehicleState(info, vehicle->controller());
+			}
+			info << "}";
+
+			return info.str();
+		}
 
 		/** @brief The share of the pixels the automatic exposure of a dump keeps at or below 1. */
 		constexpr auto AutomaticExposureShare{0.99};
@@ -647,6 +762,58 @@ namespace EmEn::Scenes
 			adapter->registerToObject(*this);
 		}
 
+		/* THE access of this service's commands: whatever reads or writes the RUNNING scene does it under the scene's
+		 * exclusive access — between two rendering frames and two logic cycles —, never on a mere snapshot of the scene
+		 * (activeSceneSnapshot() keeps the scene alive and orders nothing against the logic and rendering threads).
+		 * The body takes the scene and answers.
+		 * ⚠️ Inside: never the scene manager's accesses again (a shared access asked under this one waits for itself),
+		 * and nothing long — a resource is prepared BEFORE, a file is written AFTER. */
+		const auto inActiveScene = [this] (const auto & body, Console::CommandResult noActiveScene = Console::CommandResult::error("No active scene !")) {
+			auto result = std::move(noActiveScene);
+
+			this->withExclusiveActiveScene([&result, &body] (const std::shared_ptr< Scene > & scene) {
+				result = body(scene);
+			}, true);
+
+			return result;
+		};
+
+		/* A command that PREPARES something for the running scene (a resource to load or to generate): it prepares with
+		 * no access held, then writes the scene here — if the scene it prepared for is still the active one. */
+		const auto inSameActiveScene = [inActiveScene] (const std::shared_ptr< Scene > & preparedFor, const auto & body) {
+			return inActiveScene([&preparedFor, &body] (const std::shared_ptr< Scene > & activeScene) {
+				if ( activeScene != preparedFor )
+				{
+					return Console::CommandResult::error("The active scene changed while the command prepared its content: nothing was added !");
+				}
+
+				return body(activeScene);
+			});
+		};
+
+		/* The legacy TARGET family (targetScene() then listNodes()…, item console-explicit-addressing): the targeted scene
+		 * may be the RUNNING one — then it is read under its exclusive access like everything else; a scene that is not
+		 * active is processed by no thread (and only this thread, the main one, enables a scene). */
+		const auto inTargetedScene = [this] (const auto & body) {
+			const auto scene = m_consoleMemory.scene();
+
+			if ( scene == nullptr )
+			{
+				return Console::CommandResult::error("You must target a scene before !");
+			}
+
+			std::optional< Console::CommandResult > result;
+
+			this->withExclusiveActiveScene([&result, &scene, &body] (const std::shared_ptr< Scene > & activeScene) {
+				if ( activeScene == scene )
+				{
+					result = body(scene);
+				}
+			}, true);
+
+			return result.has_value() ? std::move(*result) : body(scene);
+		};
+
 		this->bindCommand("listEntities", "Lists the entities of the ACTIVE scene as JSON: every node (whole hierarchy, with its parent) and static entity, with its ADDRESS (what the component commands take as `entity`: the name when unique, else the shortest unique path suffix Parent/Child) and its components (name and type).", [this] () {
 			auto result = Console::CommandResult::error("No active scene !");
 
@@ -845,11 +1012,15 @@ namespace EmEn::Scenes
 				{"hiddenOpacity", "The opacity where the entity is hidden behind other geometry, 0-1 (0 = visible parts only, 1 = x-ray)."}
 			},
 			[this] (float red, float green, float blue, float width, float hiddenOpacity) {
-				auto & outline = m_resourceManager.graphicsRenderer().selectionOutline();
+				/* The style belongs to the renderer and the rendering frame reads it: changed between two frames — the
+				 * exclusive access holds them off —, with or without an active scene. */
+				this->withExclusiveActiveScene([this, red, green, blue, width, hiddenOpacity] (const std::shared_ptr< Scene > & /*activeScene*/) {
+					auto & outline = m_resourceManager.graphicsRenderer().selectionOutline();
 
-				outline.setColor(Base::PixelFactory::Color< float >{red, green, blue, 1.0F});
-				outline.setWidth(width);
-				outline.setHiddenOpacity(hiddenOpacity);
+					outline.setColor(Base::PixelFactory::Color< float >{red, green, blue, 1.0F});
+					outline.setWidth(width);
+					outline.setHiddenOpacity(hiddenOpacity);
+				}, false);
 
 				return Console::CommandResult::success("Highlight style set.");
 			}, Console::CommandHint::Idempotent);
@@ -1005,7 +1176,7 @@ namespace EmEn::Scenes
 				{"y", "World Y, in metres (UP is +Y)."},
 				{"z", "World Z, in metres."}
 			},
-			[this] (const std::string & name, std::optional< float > x, std::optional< float > y, std::optional< float > z) {
+			[inActiveScene] (const std::string & name, std::optional< float > x, std::optional< float > y, std::optional< float > z) {
 				const auto coordinateCount = static_cast< int >(x.has_value()) + static_cast< int >(y.has_value()) + static_cast< int >(z.has_value());
 
 				if ( coordinateCount != 0 && coordinateCount != 3 )
@@ -1013,54 +1184,44 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error("createNode(): give all three coordinates (x, y, z) or none.");
 				}
 
-				const auto activeScene = this->activeSceneSnapshot();
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					auto node = activeScene->root()->createChild(name, {}, activeScene->lifetimeMS());
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+					if ( node == nullptr )
+					{
+						return Console::CommandResult::error("Failed to create node '" + name + "' !");
+					}
 
-				auto node = activeScene->root()->createChild(name, {}, activeScene->lifetimeMS());
+					std::stringstream message;
 
-				if ( node == nullptr )
-				{
-					return Console::CommandResult::error("Failed to create node '" + name + "' !");
-				}
+					if ( coordinateCount == 3 )
+					{
+						node->setPosition({*x, *y, *z}, Base::Math::TransformSpace::World);
 
-				std::stringstream message;
+						message << "Node '" << name << "' created at (" << *x << ", " << *y << ", " << *z << ").";
+					}
+					else
+					{
+						message << "Node '" << name << "' created at origin.";
+					}
 
-				if ( coordinateCount == 3 )
-				{
-					node->setPosition({*x, *y, *z}, Base::Math::TransformSpace::World);
-
-					message << "Node '" << name << "' created at (" << *x << ", " << *y << ", " << *z << ").";
-				}
-				else
-				{
-					message << "Node '" << name << "' created at origin.";
-				}
-
-				return Console::CommandResult::success(message.str());
+					return Console::CommandResult::success(message.str());
+				});
 			});
 
 		this->bindCommand("destroyNode", "Destroys a root-level node of the active scene.",
 			{
 				{"name", "The node name."}
 			},
-			[this] (const std::string & name) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (const std::string & name) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					if ( !activeScene->root()->destroyChild(name) )
+					{
+						return Console::CommandResult::error("Node '" + name + "' not found !");
+					}
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
-
-				if ( !activeScene->root()->destroyChild(name) )
-				{
-					return Console::CommandResult::error("Node '" + name + "' not found !");
-				}
-
-				return Console::CommandResult::success("Node '" + name + "' destroyed.");
+					return Console::CommandResult::success("Node '" + name + "' destroyed.");
+				});
 			}, Console::CommandHint::Destructive);
 
 		this->bindCommand("attachCamera", "Attaches a primary camera to a node of the active scene and sets it as the active camera.",
@@ -1068,32 +1229,27 @@ namespace EmEn::Scenes
 				{"nodeName", "The node that will carry the camera."},
 				{"cameraName", "The name of the new camera component."}
 			},
-			[this] (const std::string & nodeName, const std::string & cameraName) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (const std::string & nodeName, const std::string & cameraName) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					auto node = activeScene->root()->findChild(nodeName);
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+					if ( node == nullptr )
+					{
+						return Console::CommandResult::error("Node '" + nodeName + "' not found !");
+					}
 
-				auto node = activeScene->root()->findChild(nodeName);
+					const auto camera = node->componentBuilder< Component::Camera >(cameraName).asPrimary().build(true);
 
-				if ( node == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + nodeName + "' not found !");
-				}
+					if ( camera == nullptr )
+					{
+						return Console::CommandResult::error("Failed to attach camera '" + cameraName + "' !");
+					}
 
-				const auto camera = node->componentBuilder< Component::Camera >(cameraName).asPrimary().build(true);
+					/* Set as the active camera for the scene. */
+					activeScene->setActiveCamera(camera);
 
-				if ( camera == nullptr )
-				{
-					return Console::CommandResult::error("Failed to attach camera '" + cameraName + "' !");
-				}
-
-				/* Set as the active camera for the scene. */
-				activeScene->setActiveCamera(camera);
-
-				return Console::CommandResult::success("Camera '" + cameraName + "' attached to node '" + nodeName + "' and set as active.");
+					return Console::CommandResult::success("Camera '" + cameraName + "' attached to node '" + nodeName + "' and set as active.");
+				});
 			});
 
 		this->bindCommand("attachMicrophone", "Attaches a primary microphone to a node of the active scene (the default microphone node is removed).",
@@ -1101,47 +1257,44 @@ namespace EmEn::Scenes
 				{"nodeName", "The node that will carry the microphone."},
 				{"microphoneName", "The name of the new microphone component."}
 			},
-			[this] (const std::string & nodeName, const std::string & micName) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (const std::string & nodeName, const std::string & micName) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					auto node = activeScene->root()->findChild(nodeName);
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+					if ( node == nullptr )
+					{
+						return Console::CommandResult::error("Node '" + nodeName + "' not found !");
+					}
 
-				auto node = activeScene->root()->findChild(nodeName);
+					/* Remove default microphone node if it exists. */
+					activeScene->root()->destroyChild("DefaultMicrophoneNode");
 
-				if ( node == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + nodeName + "' not found !");
-				}
+					const auto microphone = node->componentBuilder< Component::Microphone >(micName).asPrimary().build();
 
-				/* Remove default microphone node if it exists. */
-				activeScene->root()->destroyChild("DefaultMicrophoneNode");
+					if ( microphone == nullptr )
+					{
+						return Console::CommandResult::error("Failed to attach microphone '" + micName + "' !");
+					}
 
-				const auto microphone = node->componentBuilder< Component::Microphone >(micName).asPrimary().build();
-
-				if ( microphone == nullptr )
-				{
-					return Console::CommandResult::error("Failed to attach microphone '" + micName + "' !");
-				}
-
-				return Console::CommandResult::success("Microphone '" + micName + "' attached to node '" + nodeName + "'.");
+					return Console::CommandResult::success("Microphone '" + micName + "' attached to node '" + nodeName + "'.");
+				});
 			});
 
 		this->bindCommand("setGround", "Sets a flat ground spanning the active scene boundary.",
 			{
 				{"materialName", "A material resource name, or 'default'.", "default"}
 			},
-			[this] (const std::string & matName) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[this, inSameActiveScene] (const std::string & matName) {
+				/* The scene this command prepares for: re-checked under the exclusive access, where the scene is written. */
+				const auto preparedFor = this->activeSceneSnapshot();
 
-				if ( activeScene == nullptr )
+				if ( preparedFor == nullptr )
 				{
 					return Console::CommandResult::error("No active scene !");
 				}
 
-				const auto boundary = activeScene->boundary();
+				/* NOTE: A scene's boundary never changes. */
+				const auto boundary = preparedFor->boundary();
 
 				std::shared_ptr< Graphics::Material::Interface > materialResource;
 
@@ -1166,9 +1319,11 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error("Ground geometry failed to load !");
 				}
 
-				activeScene->setGroundLevel(ground);
+				return inSameActiveScene(preparedFor, [&] (const std::shared_ptr< Scene > & activeScene) {
+					activeScene->setGroundLevel(ground);
 
-				return Console::CommandResult::success("Ground set with material '" + matName + "'.");
+					return Console::CommandResult::success("Ground set with material '" + matName + "'.");
+				});
 			});
 
 		this->bindCommand("getGroundLevel", "Returns the ground height of the active scene at a world X/Z as JSON: 'position' from the bilinear height field (getLevelAt()), 'surface' the exact height of the rendered triangle there (what the physics collides; null outside the ground), and the ground normal.",
@@ -1176,82 +1331,77 @@ namespace EmEn::Scenes
 				{"x", "The world X coordinate."},
 				{"z", "The world Z coordinate."}
 			},
-			[this] (float positionX, float positionZ) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (float positionX, float positionZ) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					const auto groundLevel = activeScene->groundLevel();
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+					if ( groundLevel == nullptr )
+					{
+						return Console::CommandResult::error("The active scene has no ground !");
+					}
 
-				const auto groundLevel = activeScene->groundLevel();
+					if ( !std::isfinite(positionX) || !std::isfinite(positionZ) )
+					{
+						return Console::CommandResult::error("The coordinates must be finite !");
+					}
 
-				if ( groundLevel == nullptr )
-				{
-					return Console::CommandResult::error("The active scene has no ground !");
-				}
+					const Math::Vector< 3, float > position{positionX, 0.0F, positionZ};
+					const auto level = groundLevel->getLevelAt(position);
 
-				if ( !std::isfinite(positionX) || !std::isfinite(positionZ) )
-				{
-					return Console::CommandResult::error("The coordinates must be finite !");
-				}
+					/* The exact surface: the rendered triangle over the point. */
+					class SurfaceProbe final : public GroundTriangleVisitor
+					{
+						public:
 
-				const Math::Vector< 3, float > position{positionX, 0.0F, positionZ};
-				const auto level = groundLevel->getLevelAt(position);
+							explicit SurfaceProbe (const Math::Vector< 3, float > & point) noexcept : m_x{point.x()}, m_z{point.z()} { }
 
-				/* The exact surface: the rendered triangle over the point. */
-				class SurfaceProbe final : public GroundTriangleVisitor
-				{
-					public:
-
-						SurfaceProbe (float x, float z) noexcept : m_x{x}, m_z{z} { }
-
-						void
-						onTriangle (const Math::Space3D::Triangle< float > & triangle, uint32_t /*featureId*/) noexcept override
-						{
-							if ( !m_found )
+							void
+							onTriangle (const Math::Space3D::Triangle< float > & triangle, uint32_t /*featureId*/) noexcept override
 							{
-								m_found = surfaceHeightOver(triangle, m_x, m_z, m_height);
+								if ( !m_found )
+								{
+									m_found = surfaceHeightOver(triangle, m_x, m_z, m_height);
+								}
 							}
-						}
 
-						[[nodiscard]]
-						bool found () const noexcept { return m_found; }
+							[[nodiscard]]
+							bool found () const noexcept { return m_found; }
 
-						[[nodiscard]]
-						float height () const noexcept { return m_height; }
+							[[nodiscard]]
+							float height () const noexcept { return m_height; }
 
-					private:
+						private:
 
-						float m_x;
-						float m_z;
-						float m_height{0.0F};
-						bool m_found{false};
-				};
+							float m_x;
+							float m_z;
+							float m_height{0.0F};
+							bool m_found{false};
+					};
 
-				SurfaceProbe probe{positionX, positionZ};
-				constexpr float ProbeReach{0.01F};
-				static_cast< void >(groundLevel->visitTriangles(Math::Space3D::AACuboid< float >{Math::Vector< 3, float >{positionX + ProbeReach, 0.0F, positionZ + ProbeReach}, Math::Vector< 3, float >{positionX - ProbeReach, 0.0F, positionZ - ProbeReach}}, probe));
+					SurfaceProbe probe{position};
+					constexpr float ProbeReach{0.01F};
+					static_cast< void >(groundLevel->visitTriangles(Math::Space3D::AACuboid< float >{Math::Vector< 3, float >{positionX + ProbeReach, 0.0F, positionZ + ProbeReach}, Math::Vector< 3, float >{positionX - ProbeReach, 0.0F, positionZ - ProbeReach}}, probe));
 
-				std::stringstream info;
-				info << R"({"position":)";
-				writeJSONVector(info, Math::Vector< 3, float >{positionX, level, positionZ});
-				info << R"(,"surface":)";
+					std::stringstream info;
+					info << R"({"position":)";
+					writeJSONVector(info, Math::Vector< 3, float >{positionX, level, positionZ});
+					info << R"(,"surface":)";
 
-				if ( probe.found() && std::isfinite(probe.height()) )
-				{
-					info << std::setprecision(9) << probe.height();
-				}
-				else
-				{
-					info << "null";
-				}
+					if ( probe.found() && std::isfinite(probe.height()) )
+					{
+						info << std::setprecision(9) << probe.height();
+					}
+					else
+					{
+						info << "null";
+					}
 
-				info << R"(,"normal":)";
-				writeJSONVector(info, groundLevel->getNormalAt(position));
-				info << '}';
+					info << R"(,"normal":)";
+					writeJSONVector(info, groundLevel->getNormalAt(position));
+					info << '}';
 
-				return Console::CommandResult::json(info.str());
+					return Console::CommandResult::json(info.str());
+				});
 			});
 
 		this->bindCommand("loadGLTF", "Loads a glTF file into the active scene, synchronously (AI/bench harness, small assets only).",
@@ -1260,10 +1410,11 @@ namespace EmEn::Scenes
 				{"ignored", "IGNORED — the former swapZ (the deleted per-asset axis flip); kept so existing scripts that pass it still work."},
 				{"createLights", "Whether the file's KHR_lights_punctual lights are created in the scene.", false}
 			},
-			[this] (const std::string & filePath, const std::optional< Console::Argument > & /*ignored*/, bool createLights) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[this, inSameActiveScene] (const std::string & filePath, const std::optional< Console::Argument > & /*ignored*/, bool createLights) {
+				/* The scene this command prepares for: re-checked under the exclusive access, where the scene is written. */
+				const auto preparedFor = this->activeSceneSnapshot();
 
-				if ( activeScene == nullptr )
+				if ( preparedFor == nullptr )
 				{
 					return Console::CommandResult::error("No active scene !");
 				}
@@ -1296,15 +1447,19 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error("Failed to load glTF file '" + filePath + "' !");
 				}
 
-				SceneDataConsumer consumer;
-				consumer.setCreateLights(createLights);
+				/* The file is loaded above with no access held; only the construction of its entities holds the exclusive
+				 * access (the frames and the logic wait for it: small assets, as said). */
+				return inSameActiveScene(preparedFor, [&] (const std::shared_ptr< Scene > & activeScene) {
+					SceneDataConsumer consumer;
+					consumer.setCreateLights(createLights);
 
-				if ( !consumer.build(sceneData, *activeScene) )
-				{
-					return Console::CommandResult::error("Failed to build the scene from '" + filePath + "' !");
-				}
+					if ( !consumer.build(sceneData, *activeScene) )
+					{
+						return Console::CommandResult::error("Failed to build the scene from '" + filePath + "' !");
+					}
 
-				return Console::CommandResult::success("glTF file '" + filePath + "' loaded into scene '" + activeScene->name() + "'.");
+					return Console::CommandResult::success("glTF file '" + filePath + "' loaded into scene '" + activeScene->name() + "'.");
+				});
 			});
 
 		this->bindCommand("addMesh", "Places a mesh resource in the active scene as a lit static entity.",
@@ -1316,15 +1471,16 @@ namespace EmEn::Scenes
 				{"z", "World Z, in metres."},
 				{"scale", "Uniform scale factor (greater than 0).", 1.0F}
 			},
-			[this] (const std::string & meshName, const std::string & entityName, float x, float y, float z, float scale) {
+			[this, inSameActiveScene] (const std::string & meshName, const std::string & entityName, float x, float y, float z, float scale) {
 				if ( scale <= 0.0F )
 				{
 					return Console::CommandResult::error("addMesh(): scale must be greater than 0.");
 				}
 
-				const auto activeScene = this->activeSceneSnapshot();
+				/* The scene this command prepares for: re-checked under the exclusive access, where the scene is written. */
+				const auto preparedFor = this->activeSceneSnapshot();
 
-				if ( activeScene == nullptr )
+				if ( preparedFor == nullptr )
 				{
 					return Console::CommandResult::error("No active scene !");
 				}
@@ -1336,6 +1492,14 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error("MeshResource container not available !");
 				}
 
+				/* ⚠️ Checked BEFORE the fetch (owner decision 2026-09-27 for createScene's skybox, applied here on
+				 * 2026-11-17): getResource() silently answers the default resource for an unknown name, so a typo
+				 * placed the wrong mesh and reported success. */
+				if ( !meshContainer->isResourceExists(meshName) )
+				{
+					return Console::CommandResult::error("Unknown mesh '" + meshName + "' (listResources(MeshResource) lists them). Nothing was added.");
+				}
+
 				auto mesh = meshContainer->getResource(meshName);
 
 				if ( mesh == nullptr )
@@ -1343,29 +1507,31 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error("Mesh '" + meshName + "' not found !");
 				}
 
-				/* The requested scale is the AUTHOR's: it goes on the entity frame. It used to be written into the
-				 * SHARED resource's uniform scale (every instance of the mesh, and its definition's own unit lost)
-				 * and into the instance matrix; since the instance draws the mesh's unit (2026-09-28,
-				 * RenderableInstance::Abstract::applyLocalTransformation()), that doubled it. */
-				const Base::Math::Vector< 3, float > position{x, y, z};
-				auto entity = activeScene->createStaticEntity(entityName, Base::Math::CartesianFrame< float >{position, scale});
+				return inSameActiveScene(preparedFor, [&] (const std::shared_ptr< Scene > & activeScene) {
+					/* The requested scale is the AUTHOR's: it goes on the entity frame. It used to be written into the
+					 * SHARED resource's uniform scale (every instance of the mesh, and its definition's own unit lost)
+					 * and into the instance matrix; since the instance draws the mesh's unit (2026-09-28,
+					 * RenderableInstance::Abstract::applyLocalTransformation()), that doubled it. */
+					const Base::Math::Vector< 3, float > position{x, y, z};
+					auto entity = activeScene->createStaticEntity(entityName, Base::Math::CartesianFrame< float >{position, scale});
 
-				if ( entity == nullptr )
-				{
-					return Console::CommandResult::error("Failed to create entity '" + entityName + "' !");
-				}
+					if ( entity == nullptr )
+					{
+						return Console::CommandResult::error("Failed to create entity '" + entityName + "' !");
+					}
 
-				const auto visual = entity->componentBuilder< Component::Visual >(entityName + "Visual").build(mesh, Graphics::RenderableInstance::Lighting::Lit);
+					const auto visual = entity->componentBuilder< Component::Visual >(entityName + "Visual").build(mesh, Graphics::RenderableInstance::Lighting::Lit);
 
-				if ( visual == nullptr )
-				{
-					return Console::CommandResult::error("Failed to create visual component !");
-				}
+					if ( visual == nullptr )
+					{
+						return Console::CommandResult::error("Failed to create visual component !");
+					}
 
-				std::stringstream message;
-				message << "Mesh '" << meshName << "' placed at (" << x << ", " << y << ", " << z << ") as '" << entityName << "' (scale: " << scale << ").";
+					std::stringstream message;
+					message << "Mesh '" << meshName << "' placed at (" << x << ", " << y << ", " << z << ") as '" << entityName << "' (scale: " << scale << ").";
 
-				return Console::CommandResult::success(message.str());
+					return Console::CommandResult::success(message.str());
+				});
 			});
 
 		this->bindCommand("setBackground", "Sets the active scene background skybox, optionally deriving the scene lighting from its sky manifest.",
@@ -1373,10 +1539,11 @@ namespace EmEn::Scenes
 				{"skyboxName", "The skybox resource name (listResources(SkyBoxResource))."},
 				{"applyLighting", "Whether the sky manifest drives the scene lighting (ambient illuminance, stars).", false}
 			},
-			[this] (const std::string & name, bool applyLighting) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[this, inSameActiveScene] (const std::string & name, bool applyLighting) {
+				/* The scene this command prepares for: re-checked under the exclusive access, where the scene is written. */
+				const auto preparedFor = this->activeSceneSnapshot();
 
-				if ( activeScene == nullptr )
+				if ( preparedFor == nullptr )
 				{
 					return Console::CommandResult::error("No active scene !");
 				}
@@ -1388,6 +1555,13 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error("SkyBox resource container not available !");
 				}
 
+				/* ⚠️ Checked BEFORE the fetch, as createScene does (owner decision 2026-09-27): an unknown name was served
+				 * the default skybox and answered a success. */
+				if ( !skyBoxContainer->isResourceExists(name) )
+				{
+					return Console::CommandResult::error("Unknown skybox '" + name + "' (listResources(SkyBoxResource) lists them). The background was not changed.");
+				}
+
 				auto skyBox = skyBoxContainer->getResource(name);
 
 				if ( skyBox == nullptr )
@@ -1395,28 +1569,34 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error("SkyBox resource '" + name + "' not found !");
 				}
 
-				activeScene->setBackground(skyBox);
+				return inSameActiveScene(preparedFor, [&] (const std::shared_ptr< Scene > & activeScene) {
+					activeScene->setBackground(skyBox);
 
-				/* Optional: derive the scene lighting from the sky manifest. */
-				if ( applyLighting )
-				{
-					if ( activeScene->applyBackgroundLighting() )
+					/* Optional: derive the scene lighting from the sky manifest. */
+					if ( applyLighting )
 					{
-						std::stringstream message;
-						message << "Background set to '" << name << "' with sky-driven lighting (ambient: " <<
-							(skyBox->isLoaded() ? std::to_string(skyBox->ambientIlluminance()) : std::string{"deferred"}) << " lx, stars: " <<
-							(skyBox->isLoaded() ? std::to_string(skyBox->stars().size()) : std::string{"deferred"}) << ").";
+						if ( activeScene->applyBackgroundLighting() )
+						{
+							std::stringstream message;
+							message << "Background set to '" << name << "' with sky-driven lighting (ambient: " <<
+								(skyBox->isLoaded() ? std::to_string(skyBox->ambientIlluminance()) : std::string{"deferred"}) << " lx, stars: " <<
+								(skyBox->isLoaded() ? std::to_string(skyBox->stars().size()) : std::string{"deferred"}) << ").";
 
-						return Console::CommandResult::success(message.str());
+							return Console::CommandResult::success(message.str());
+						}
+
+						return Console::CommandResult::warning("Background set, but the lighting derivation failed.");
 					}
 
-					return Console::CommandResult::warning("Background set, but the lighting derivation failed.");
-				}
-
-				return Console::CommandResult::success("Background set to '" + name + "'.");
+					return Console::CommandResult::success("Background set to '" + name + "'.");
+				});
 			});
 
 		/* The PHYSICAL SKY (Renderable::DynamicSkyResource) of the active scene: its look, at runtime. */
+		/* NOTE: These commands keep a snapshot of the scene, on purpose: what they read and change guards itself — the
+		 * sky material's settings under its own lock (SkyAtmosphereResource::m_propertiesAccess), the atmosphere's ground
+		 * albedo under another (SkyAtmosphere::m_groundAlbedoAccess, applied by the rendering thread). The scene's
+		 * background pointer is written by this thread only (setBackground(), under the exclusive access). */
 		const auto dynamicSkyMaterial = [this] () -> std::shared_ptr< Graphics::Material::SkyAtmosphereResource > {
 			const auto activeScene = this->activeSceneSnapshot();
 
@@ -1581,15 +1761,10 @@ namespace EmEn::Scenes
 			return Console::CommandResult::info("The active scene is '" + activeScene->name() + "'");
 		}, Console::CommandHint::ReadOnly);
 
-		this->bindCommand("getWorldSoundCount", "Returns how many world sounds (Scene::playSoundAt(): sounds the scene owns, outliving the entity that caused them) still play in the active scene.", [this] () {
-			const auto activeScene = this->activeSceneSnapshot();
-
-			if ( activeScene == nullptr )
-			{
-				return Console::CommandResult::warning("No active scene !");
-			}
-
-			return Console::CommandResult::info("World sounds playing: " + std::to_string(activeScene->activeWorldSoundCount()) + " / " + std::to_string(Scene::MaxWorldSounds) + ".");
+		this->bindCommand("getWorldSoundCount", "Returns how many world sounds (Scene::playSoundAt(): sounds the scene owns, outliving the entity that caused them) still play in the active scene.", [inActiveScene] () {
+			return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+				return Console::CommandResult::info("World sounds playing: " + std::to_string(activeScene->activeWorldSoundCount()) + " / " + std::to_string(Scene::MaxWorldSounds) + ".");
+			}, Console::CommandResult::warning("No active scene !"));
 		}, Console::CommandHint::ReadOnly);
 
 		/* NOTE: The compass is a Core-level debug display, bound to F9 on the keyboard. The console
@@ -1597,20 +1772,15 @@ namespace EmEn::Scenes
 		 * does reach Core since 2026-09-13, but a command states what it does and answers). Every
 		 * debug display an AI session must drive has to be reachable from here, not only from a key
 		 * binding. */
-		this->bindCommand("toggleCompass", "Toggles the world orientation compass (same as the F9 key). Bright spheres: R=X+, G=Y+, B=Z+; complementary: Cyan=X-, Magenta=Y-, Yellow=Z-.", [this] () {
-			const auto activeScene = this->activeSceneSnapshot();
+		this->bindCommand("toggleCompass", "Toggles the world orientation compass (same as the F9 key). Bright spheres: R=X+, G=Y+, B=Z+; complementary: Cyan=X-, Magenta=Y-, Yellow=Z-.", [this, inActiveScene] () {
+			return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+				if ( activeScene->toggleCompassDisplay(m_resourceManager) )
+				{
+					return Console::CommandResult::success("World compass displayed.");
+				}
 
-			if ( activeScene == nullptr )
-			{
-				return Console::CommandResult::error("No active scene !");
-			}
-
-			if ( activeScene->toggleCompassDisplay(m_resourceManager) )
-			{
-				return Console::CommandResult::success("World compass displayed.");
-			}
-
-			return Console::CommandResult::success("World compass hidden.");
+				return Console::CommandResult::success("World compass hidden.");
+			});
 		});
 
 		this->bindCommand("targetActiveScene", "Targets the active scene for subsequent node/entity commands (listNodes, targetNode, ...).", [this] () {
@@ -1643,169 +1813,148 @@ namespace EmEn::Scenes
 				return Console::CommandResult::success("Now targeting scene '" + scene->name() + "'.");
 			}, Console::CommandHint::Idempotent);
 
-		this->bindCommand("listNodes", "Lists root-level nodes of the currently targeted scene. Requires targetScene() or targetActiveScene() first.", [this] () {
-			const auto scene = m_consoleMemory.scene();
+		this->bindCommand("listNodes", "Lists root-level nodes of the currently targeted scene. Requires targetScene() or targetActiveScene() first.", [inTargetedScene] () {
+			return inTargetedScene([] (const std::shared_ptr< Scene > & scene) {
+				std::stringstream list;
+				list << "Nodes : " "\n";
 
-			if ( scene == nullptr )
-			{
-				return Console::CommandResult::error("You must target a scene before !");
-			}
+				for ( const auto & key: scene->root()->children() | std::views::keys )
+				{
+					list << " - '" <<  key << "'" "\n";
+				}
 
-			std::stringstream list;
-			list << "Nodes : " "\n";
-
-			for ( const auto & key: scene->root()->children() | std::views::keys )
-			{
-				list << " - '" <<  key << "'" "\n";
-			}
-
-			return Console::CommandResult::info(list.str());
+				return Console::CommandResult::info(list.str());
+			});
 		}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("targetNode", "Targets a root-level node of the currently targeted scene (for moveNodeTo()).",
 			{
 				{"nodeName", "The node name (listNodes() lists them)."}
 			},
-			[this] (const std::string & name) {
-				const auto scene = m_consoleMemory.scene();
+			[this, inTargetedScene] (const std::string & name) {
+				return inTargetedScene([this, &name] (const std::shared_ptr< Scene > & scene) {
+					const auto sceneNode = scene->root()->findChild(name);
 
-				if ( scene == nullptr )
-				{
-					return Console::CommandResult::error("You must target a scene before !");
-				}
+					if ( sceneNode == nullptr )
+					{
+						return Console::CommandResult::error("The node '" + name + "' doesn't exists !");
+					}
 
-				const auto sceneNode = scene->root()->findChild(name);
+					m_consoleMemory.target(sceneNode);
 
-				if ( sceneNode == nullptr )
-				{
-					return Console::CommandResult::error("The node '" + name + "' doesn't exists !");
-				}
-
-				m_consoleMemory.target(sceneNode);
-
-				return Console::CommandResult::success("Now targeting node '" + sceneNode->name() + "' from scene '" + scene->name() + "'.");
+					return Console::CommandResult::success("Now targeting node '" + sceneNode->name() + "' from scene '" + scene->name() + "'.");
+				});
 			}, Console::CommandHint::Idempotent);
 
-		this->bindCommand("listStaticEntities", "Lists static entities of the currently targeted scene.", [this] () {
-			const auto scene = m_consoleMemory.scene();
+		this->bindCommand("listStaticEntities", "Lists static entities of the currently targeted scene.", [inTargetedScene] () {
+			return inTargetedScene([] (const std::shared_ptr< Scene > & scene) {
+				std::stringstream list;
+				list << "Static entities : " "\n";
 
-			if ( scene == nullptr )
-			{
-				return Console::CommandResult::error("You must target a scene before !");
-			}
+				scene->forEachStaticEntities([&list] (const auto & entity) {
+					list << " - '" <<  entity.name() << "'" "\n";
+				});
 
-			std::stringstream list;
-			list << "Static entities : " "\n";
-
-			scene->forEachStaticEntities([&list] (const auto & entity) {
-				list << " - '" <<  entity.name() << "'" "\n";
+				return Console::CommandResult::info(list.str());
 			});
-
-			return Console::CommandResult::info(list.str());
 		}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("targetStaticEntity", "Targets a static entity of the currently targeted scene.",
 			{
 				{"name", "The static entity name (listStaticEntities() lists them)."}
 			},
-			[this] (const std::string & name) {
-				const auto scene = m_consoleMemory.scene();
+			[this, inTargetedScene] (const std::string & name) {
+				return inTargetedScene([this, &name] (const std::shared_ptr< Scene > & scene) {
+					const auto staticEntity = scene->findStaticEntity(name);
 
-				if ( scene == nullptr )
-				{
-					return Console::CommandResult::error("You must target a scene before !");
-				}
-
-				const auto staticEntity = scene->findStaticEntity(name);
-
-				if ( staticEntity == nullptr )
-				{
-					return Console::CommandResult::error("The static entity '" + name + "' doesn't exists !");
-				}
-
-				m_consoleMemory.target(staticEntity);
-
-				return Console::CommandResult::success("Now targeting static entity '" + staticEntity->name() + "' from scene '" + scene->name() + "'.");
-			}, Console::CommandHint::Idempotent);
-
-		this->bindCommand("getRenderStatistics", "Returns what the last frame's render lists submit, per geometry LOD: batches, instances, triangles (view, then shadows).", [this] () {
-			const auto activeScene = this->activeSceneSnapshot();
-
-			if ( activeScene == nullptr )
-			{
-				return Console::CommandResult::error("No active scene !");
-			}
-
-			const auto print = [] (std::stringstream & output, const char * title, const Scene::RenderListStatistics & statistics) {
-				uint64_t batches = 0;
-				uint64_t instances = 0;
-				uint64_t triangles = 0;
-
-				output << title;
-
-				if ( statistics.targets > 0 )
-				{
-					output << " (" << statistics.targets << " pass(es), one per cascade on a cascaded map)";
-				}
-
-				output << "\n";
-
-				for ( size_t level = 0; level < statistics.batches.size(); ++level )
-				{
-					/* The view ladder always prints; a level past it only when something was drawn with it. */
-					if ( level >= Graphics::Renderable::MaxLODLevels && statistics.batches[level] == 0 )
+					if ( staticEntity == nullptr )
 					{
-						continue;
+						return Console::CommandResult::error("The static entity '" + name + "' doesn't exists !");
 					}
 
-					output << "  LOD " << level << ": " << statistics.batches[level] << " batches, " << statistics.instances[level] << " instances, " << statistics.triangles[level] << " triangles\n";
+					m_consoleMemory.target(staticEntity);
 
-					batches += statistics.batches[level];
-					instances += statistics.instances[level];
-					triangles += statistics.triangles[level];
-				}
+					return Console::CommandResult::success("Now targeting static entity '" + staticEntity->name() + "' from scene '" + scene->name() + "'.");
+				});
+			}, Console::CommandHint::Idempotent);
 
-				output << "  total: " << batches << " batches, " << instances << " instances, " << triangles << " triangles\n";
-			};
+		this->bindCommand("getRenderStatistics", "Returns what the last frame's render lists submit, per geometry LOD: batches, instances, triangles (view, then shadows).", [inActiveScene] () {
+			return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+				const auto print = [] (std::stringstream & output, const char * title, const Scene::RenderListStatistics & statistics) {
+					uint64_t batches = 0;
+					uint64_t instances = 0;
+					uint64_t triangles = 0;
 
-			std::stringstream info;
+					output << title;
 
-			print(info, "View lists (last frame)", activeScene->viewRenderStatistics());
-			print(info, "Shadow lists (last frame)", activeScene->shadowRenderStatistics());
+					if ( statistics.targets > 0 )
+					{
+						output << " (" << statistics.targets << " pass(es), one per cascade on a cascaded map)";
+					}
 
-			return Console::CommandResult::info(info.str());
+					output << "\n";
+
+					for ( size_t level = 0; level < statistics.batches.size(); ++level )
+					{
+						/* NOTE: The three arrays have the same size (Scene::RenderListStatistics). */
+						const auto offset = static_cast< std::ptrdiff_t >(level);
+						const auto levelBatches = *std::next(statistics.batches.cbegin(), offset);
+						const auto levelInstances = *std::next(statistics.instances.cbegin(), offset);
+						const auto levelTriangles = *std::next(statistics.triangles.cbegin(), offset);
+
+						/* The view ladder always prints; a level past it only when something was drawn with it. */
+						if ( level >= Graphics::Renderable::MaxLODLevels && levelBatches == 0 )
+						{
+							continue;
+						}
+
+						output << "  LOD " << level << ": " << levelBatches << " batches, " << levelInstances << " instances, " << levelTriangles << " triangles\n";
+
+						batches += levelBatches;
+						instances += levelInstances;
+						triangles += levelTriangles;
+					}
+
+					output << "  total: " << batches << " batches, " << instances << " instances, " << triangles << " triangles\n";
+				};
+
+				std::stringstream info;
+
+				print(info, "View lists (last frame)", activeScene->viewRenderStatistics());
+				print(info, "Shadow lists (last frame)", activeScene->shadowRenderStatistics());
+
+				return Console::CommandResult::info(info.str());
+			});
 		}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("getStateSyncStatistics", "Returns how often a rendered frame read a logic state the logic thread was rewriting (must be 0).",
 			{
 				{"reset", "Whether the measurement window is reset after reading.", false}
 			},
-			[this] (bool reset) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (bool reset) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					const auto statistics = activeScene->stateSyncStatistics(reset);
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+					std::stringstream info;
+					info << "Logic-to-render state synchronisation" << (reset ? " (window reset)" : "") << "\n";
+					info << "  Frames measured: " << statistics.frames << "\n";
 
-				const auto statistics = activeScene->stateSyncStatistics(reset);
+					if ( statistics.frames > 0 )
+					{
+						const auto frames = static_cast< double >(statistics.frames);
 
-				std::stringstream info;
-				info << "Logic-to-render state synchronisation" << (reset ? " (window reset)" : "") << "\n";
-				info << "  Frames measured: " << statistics.frames << "\n";
+						info << "  Frames whose latched state was overwritten: " << statistics.overwrittenFrames << " (" << (100.0 * static_cast< double >(statistics.overwrittenFrames) / frames) << " %)\n";
+						info << "  Logic publications inside a frame: mean " << (static_cast< double >(statistics.publicationsDuringFrames) / frames) << ", max " << statistics.maxPublicationsDuringFrame << "\n";
+						info << "  Latch-to-end: mean " << (statistics.latchToEndMSSum / frames) << " ms, max " << statistics.latchToEndMSMax << " ms\n";
+					}
 
-				if ( statistics.frames > 0 )
-				{
-					const auto frames = static_cast< double >(statistics.frames);
-
-					info << "  Frames whose latched state was overwritten: " << statistics.overwrittenFrames << " (" << (100.0 * static_cast< double >(statistics.overwrittenFrames) / frames) << " %)\n";
-					info << "  Logic publications inside a frame: mean " << (static_cast< double >(statistics.publicationsDuringFrames) / frames) << ", max " << statistics.maxPublicationsDuringFrame << "\n";
-					info << "  Latch-to-end: mean " << (statistics.latchToEndMSSum / frames) << " ms, max " << statistics.latchToEndMSMax << " ms\n";
-				}
-
-				return Console::CommandResult::info(info.str());
+					return Console::CommandResult::info(info.str());
+				});
 			});
 
+		/* NOTE: A snapshot of the scene is enough here, on purpose: everything this command reads has its own lock (the
+		 * scene's bake target, the target's list of baked atlases, its pending jobs), and the files are written with no
+		 * access held — the frames do not wait for the disk. */
 		this->bindCommand("writeImposterAtlases", "Writes the albedo (premultiplied, mip 0) of every imposter atlas the active scene baked to the captures directory.", [this] () {
 			const auto activeScene = this->activeSceneSnapshot();
 
@@ -1853,35 +2002,30 @@ namespace EmEn::Scenes
 			{
 				{"name", "The node name."}
 			},
-			[this] (const std::string & name) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (const std::string & name) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					auto node = activeScene->root()->findChild(name);
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+					if ( node == nullptr )
+					{
+						return Console::CommandResult::error("Node '" + name + "' not found !");
+					}
 
-				auto node = activeScene->root()->findChild(name);
+					const auto & coords = node->localCoordinates();
+					const auto & pos = coords.position();
 
-				if ( node == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + name + "' not found !");
-				}
+					std::stringstream info;
+					info << "{";
+					info << "\"name\":" << Json::valueToQuotedString(node->name().c_str(), node->name().size()) << ",";
+					info << R"("address":")" << node.get() << "\",";
+					info << "\"position\":";
+					writeJSONVector(info, pos);
+					info << ",";
+					info << "\"childCount\":" << node->children().size();
+					info << "}";
 
-				const auto & coords = node->localCoordinates();
-				const auto & pos = coords.position();
-
-				std::stringstream info;
-				info << "{";
-				info << "\"name\":" << Json::valueToQuotedString(node->name().c_str(), node->name().size()) << ",";
-				info << R"("address":")" << node.get() << "\",";
-				info << "\"position\":";
-				writeJSONVector(info, pos);
-				info << ",";
-				info << "\"childCount\":" << node->children().size();
-				info << "}";
-
-				return Console::CommandResult::json(info.str());
+					return Console::CommandResult::json(info.str());
+				});
 			}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("addTexturedShape", "Spawns a generated shape textured with a data-store image — the tool for inspecting UV mapping. Lit: in a scene with no light it renders BLACK.",
@@ -1894,15 +2038,22 @@ namespace EmEn::Scenes
 				{"z", "World Z, in metres."},
 				{"size", "The shape's characteristic size (radius or edge), in metres (greater than 0).", 1.0F}
 			},
-			[this] (const std::string & shapeName, const std::string & imageName, const std::string & entityName, float x, float y, float z, float size) {
+			[this, inSameActiveScene] (const std::string & shapeName, const std::string & imageName, const std::string & entityName, float x, float y, float z, float size) {
+				/* NOTE: A console argument is a trust boundary, and a NaN passes every comparison (NaN <= 0 is false). */
+				if ( !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || !std::isfinite(size) )
+				{
+					return Console::CommandResult::error("addTexturedShape(): the position and the size must be finite numbers.");
+				}
+
 				if ( size <= 0.0F )
 				{
 					return Console::CommandResult::error("addTexturedShape(): size must be greater than 0.");
 				}
 
-				const auto activeScene = this->activeSceneSnapshot();
+				/* The scene this command prepares for: re-checked under the exclusive access, where the scene is written. */
+				const auto preparedFor = this->activeSceneSnapshot();
 
-				if ( activeScene == nullptr )
+				if ( preparedFor == nullptr )
 				{
 					return Console::CommandResult::error("No active scene !");
 				}
@@ -1967,127 +2118,42 @@ namespace EmEn::Scenes
 					return Console::CommandResult::error("Failed to build the mesh !");
 				}
 
-				const Base::Math::Vector< 3, float > position{x, y, z};
-				auto entity = activeScene->createStaticEntity(entityName, position);
+				/* The material, the geometry and the mesh exist: only the entity and its visual are created under the access. */
+				return inSameActiveScene(preparedFor, [&] (const std::shared_ptr< Scene > & activeScene) {
+					const Base::Math::Vector< 3, float > position{x, y, z};
+					auto entity = activeScene->createStaticEntity(entityName, position);
 
-				if ( entity == nullptr )
-				{
-					return Console::CommandResult::error("Failed to create entity '" + entityName + "' !");
-				}
+					if ( entity == nullptr )
+					{
+						return Console::CommandResult::error("Failed to create entity '" + entityName + "' !");
+					}
 
-				/* Lit, like addMesh: a UV check must be readable in the scene it lives in. ⚠️ In a scene
-				 * with no light the shape renders BLACK — that is a missing light, not a broken UV. */
-				if ( entity->componentBuilder< Component::Visual >(entityName + "Visual").build(mesh, Graphics::RenderableInstance::Lighting::Lit) == nullptr )
-				{
-					return Console::CommandResult::error("Failed to attach the visual !");
-				}
+					/* Lit, like addMesh: a UV check must be readable in the scene it lives in. ⚠️ In a scene
+					 * with no light the shape renders BLACK — that is a missing light, not a broken UV. */
+					if ( entity->componentBuilder< Component::Visual >(entityName + "Visual").build(mesh, Graphics::RenderableInstance::Lighting::Lit) == nullptr )
+					{
+						return Console::CommandResult::error("Failed to attach the visual !");
+					}
 
-				return Console::CommandResult::success("'" + shapeName + "' textured with '" + imageName + "' added as '" + entityName + "'.");
+					return Console::CommandResult::success("'" + shapeName + "' textured with '" + imageName + "' added as '" + entityName + "'.");
+				});
 			});
 
 		this->bindCommand("getNodePhysics", "Returns the physics state of a root-level node of the active scene as JSON: world/local position, world orientation (upward and backward vectors), linear and angular velocity, the world centre of mass (the point the physics turns it about), movable, simulation paused (asleep), grounded and WHICH surface it rests on (Ground/Boundary/Entity), and the scene's physics cycle the state belongs to.",
 			{
 				{"name", "The node name."}
 			},
-			[this] (const std::string & name) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (const std::string & name) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					const auto node = activeScene->root()->findChild(name);
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
-
-				const auto node = activeScene->root()->findChild(name);
-
-				if ( node == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + name + "' not found !");
-				}
-
-				/* ⚠️ WORLD position, not local: a node parented under another reports a local position
-				 * that says nothing about where it rests in the world, which is what a physics
-				 * measurement is about. */
-				const auto worldCoordinates = node->getWorldCoordinates();
-				const auto worldPosition = worldCoordinates.position();
-				const auto & localPosition = node->localCoordinates().position();
-				const auto & velocity = node->linearVelocity();
-
-				const auto * groundedSource = "None";
-
-				switch ( node->groundedSource() )
-				{
-					case Physics::GroundedSource::Ground : groundedSource = "Ground"; break;
-					case Physics::GroundedSource::Boundary : groundedSource = "Boundary"; break;
-					case Physics::GroundedSource::Entity : groundedSource = "Entity"; break;
-					case Physics::GroundedSource::None : break;
-				}
-
-				std::stringstream info;
-				info << "{";
-				info << "\"name\":" << Json::valueToQuotedString(node->name().c_str(), node->name().size()) << ",";
-				info << "\"worldPosition\":";
-				writeJSONVector(info, worldPosition);
-				info << ",\"localPosition\":";
-				writeJSONVector(info, localPosition);
-				info << ",\"worldUpward\":";
-				writeJSONVector(info, worldCoordinates.upwardVector());
-				info << ",\"worldBackward\":";
-				writeJSONVector(info, worldCoordinates.backwardVector());
-				info << ",\"linearVelocity\":";
-				writeJSONVector(info, velocity);
-				info << ",\"angularVelocity\":";
-				writeJSONVector(info, node->angularVelocity());
-				/* The point the physics turns the body about: the explicit centre of mass, else its shape's centroid. */
-				info << ",\"worldCenterOfMass\":";
-				writeJSONVector(info, node->getWorldCenterOfMass());
-				info << ",";
-				info << "\"movable\":" << (node->isMovable() ? "true" : "false") << ",";
-				info << "\"simulationPaused\":" << (node->isSimulationPaused() ? "true" : "false") << ",";
-				info << "\"grounded\":" << (node->isGrounded() ? "true" : "false") << ",";
-				info << R"("groundedSource":")" << groundedSource << "\",";
-				/* The physics cycle this state belongs to: a client polling at its own rate samples by cycle,
-				 * never by wall-clock time (the physics ticks at a fixed WorldPhysicsUpdateFrequency). */
-				info << "\"sceneCycle\":" << activeScene->cycle();
-
-				/* A kinematic character (P4): its controller's state (its node velocity is not what it does). */
-				if ( const auto character = node->characterController(); character != nullptr )
-				{
-					const auto & controller = character->controller();
-
-					info << R"(,"character":{"grounded":)" << (controller.isGrounded() ? "true" : "false");
-					info << R"(,"flying":)" << (controller.isFlying() ? "true" : "false");
-					info << R"(,"velocity":)";
-					writeJSONVector(info, controller.velocity());
-					info << R"(,"groundNormal":)";
-					writeJSONVector(info, controller.groundNormal());
-					info << R"(,"supportKey":)" << controller.supportKey() << '}';
-				}
-
-				/* A wheeled vehicle: its drive train and its wheels (decisions 15). */
-				if ( const auto vehicle = node->vehicle(); vehicle != nullptr )
-				{
-					const auto & controller = vehicle->controller();
-
-					info << R"(,"vehicle":{"engineRPM":)" << jsonNumber(controller.engineRPM()) << R"(,"gear":)" << controller.gear() << R"(,"clutch":)" << jsonNumber(controller.clutch()) << R"(,"wheels":[)";
-
-					for ( size_t index = 0; index < controller.wheels().size(); ++index )
+					if ( node == nullptr )
 					{
-						const auto & wheel = controller.wheels()[index];
-
-						info << (index > 0 ? "," : "") << R"({"contact":)" << (wheel.contact ? "true" : "false");
-						info << R"(,"suspensionLength":)" << jsonNumber(wheel.suspensionLength) << R"(,"angularVelocity":)" << jsonNumber(wheel.angularVelocity);
-						info << R"(,"steerAngle":)" << jsonNumber(wheel.steerAngle) << R"(,"slipRatio":)" << jsonNumber(wheel.slipRatio) << R"(,"slipAngle":)" << jsonNumber(wheel.slipAngle);
-						info << R"(,"suspensionImpulse":)" << jsonNumber(wheel.suspensionImpulse) << R"(,"longitudinalImpulse":)" << jsonNumber(wheel.longitudinalImpulse) << R"(,"lateralImpulse":)" << jsonNumber(wheel.lateralImpulse);
-						info << R"(,"driveTorque":)" << jsonNumber(wheel.driveTorque) << R"(,"brakeTorque":)" << jsonNumber(wheel.brakeTorque);
-						info << R"(,"longitudinalSpeed":)" << jsonNumber(wheel.longitudinalSpeed) << R"(,"load":)" << jsonNumber(wheel.load) << R"(,"tractionFactor":)" << jsonNumber(wheel.tractionFactor) << R"(,"brakeFactor":)" << jsonNumber(wheel.brakeFactor) << '}';
+						return Console::CommandResult::error("Node '" + name + "' not found !");
 					}
 
-					info << "]}";
-				}
-
-				info << "}";
-
-				return Console::CommandResult::json(info.str());
+					return Console::CommandResult::json(nodePhysicsJSON(*node, activeScene->cycle()));
+				});
 			}, Console::CommandHint::ReadOnly);
 
 		this->bindCommand("setCharacterVelocity", "Sets the velocity a root-level node's kinematic character controller wants to move at (world, m/s; its vertical part is ignored, except when the character flies).",
@@ -2097,34 +2163,29 @@ namespace EmEn::Scenes
 				{"y", "The world Y velocity (ignored: the controller handles gravity and jumps)."},
 				{"z", "The world Z velocity (m/s)."}
 			},
-			[this] (const std::string & name, float velocityX, float velocityY, float velocityZ) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (const std::string & name, float velocityX, float velocityY, float velocityZ) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					const auto node = activeScene->root()->findChild(name);
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+					if ( node == nullptr )
+					{
+						return Console::CommandResult::error("Node '" + name + "' not found !");
+					}
 
-				const auto node = activeScene->root()->findChild(name);
+					const auto character = node->characterController();
 
-				if ( node == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + name + "' not found !");
-				}
+					if ( character == nullptr )
+					{
+						return Console::CommandResult::error("Node '" + name + "' has no character controller !");
+					}
 
-				const auto character = node->characterController();
+					if ( !character->controller().setWantedVelocity({velocityX, velocityY, velocityZ}) )
+					{
+						return Console::CommandResult::error("The velocity must be finite !");
+					}
 
-				if ( character == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + name + "' has no character controller !");
-				}
-
-				if ( !character->controller().setWantedVelocity({velocityX, velocityY, velocityZ}) )
-				{
-					return Console::CommandResult::error("The velocity must be finite !");
-				}
-
-				return Console::CommandResult::success("Character '" + name + "' wants to move.");
+					return Console::CommandResult::success("Character '" + name + "' wants to move.");
+				});
 			});
 
 		this->bindCommand("setVehicleInput", "Sets the driver's inputs of a root-level node's wheeled vehicle (its input script, if any, overrides them every cycle).",
@@ -2135,34 +2196,29 @@ namespace EmEn::Scenes
 				{"brake", "The brake, 0 to 1; clamped."},
 				{"handBrake", "The hand brake, 0 to 1; clamped."}
 			},
-			[this] (const std::string & name, float forward, float right, float brake, float handBrake) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (const std::string & name, float forward, float right, float brake, float handBrake) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					const auto node = activeScene->root()->findChild(name);
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+					if ( node == nullptr )
+					{
+						return Console::CommandResult::error("Node '" + name + "' not found !");
+					}
 
-				const auto node = activeScene->root()->findChild(name);
+					const auto vehicle = node->vehicle();
 
-				if ( node == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + name + "' not found !");
-				}
+					if ( vehicle == nullptr )
+					{
+						return Console::CommandResult::error("Node '" + name + "' has no vehicle !");
+					}
 
-				const auto vehicle = node->vehicle();
+					if ( !vehicle->controller().setInput(forward, right, brake, handBrake) )
+					{
+						return Console::CommandResult::error("The inputs must be finite !");
+					}
 
-				if ( vehicle == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + name + "' has no vehicle !");
-				}
-
-				if ( !vehicle->controller().setInput(forward, right, brake, handBrake) )
-				{
-					return Console::CommandResult::error("The inputs must be finite !");
-				}
-
-				return Console::CommandResult::success("Vehicle '" + name + "' driven.");
+					return Console::CommandResult::success("Vehicle '" + name + "' driven.");
+				});
 			});
 
 		this->bindCommand("characterJump", "Makes a root-level node's kinematic character controller jump (only when it stands on the ground).",
@@ -2170,36 +2226,33 @@ namespace EmEn::Scenes
 				{"name", "The node name."},
 				{"speed", "The launch speed (m/s), > 0."}
 			},
-			[this] (const std::string & name, float speed) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (const std::string & name, float speed) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					const auto node = activeScene->root()->findChild(name);
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+					if ( node == nullptr )
+					{
+						return Console::CommandResult::error("Node '" + name + "' not found !");
+					}
 
-				const auto node = activeScene->root()->findChild(name);
+					const auto character = node->characterController();
 
-				if ( node == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + name + "' not found !");
-				}
+					if ( character == nullptr )
+					{
+						return Console::CommandResult::error("Node '" + name + "' has no character controller !");
+					}
 
-				const auto character = node->characterController();
+					if ( !character->controller().jump(speed) )
+					{
+						return Console::CommandResult::error("The speed must be finite and > 0 !");
+					}
 
-				if ( character == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + name + "' has no character controller !");
-				}
-
-				if ( !character->controller().jump(speed) )
-				{
-					return Console::CommandResult::error("The speed must be finite and > 0 !");
-				}
-
-				return Console::CommandResult::success("Character '" + name + "' jumps.");
+					return Console::CommandResult::success("Character '" + name + "' jumps.");
+				});
 			});
 
+		/* NOTE: The four recording commands keep a snapshot of the scene, on purpose: the recorder is its own protocol
+		 * (PhysicsRecorder: one mutex between this thread and the logic thread's sample(), which resolves the nodes). */
 		this->bindCommand("recordNodePhysics", "Records the physics state of root-level nodes of the active scene on EVERY logic cycle of a range, on the logic thread (after the collisions): the same cycles for every run, no sampling gap. Then getPhysicsRecordingStatus() until Complete, and savePhysicsRecording().",
 			{
 				{"nodeNames", "The root node names, comma-separated, as ONE quoted argument (\"A,B,C\"), 1 to 64."},
@@ -2306,27 +2359,22 @@ namespace EmEn::Scenes
 				{"y", "World Y, in metres (UP is +Y)."},
 				{"z", "World Z, in metres."}
 			},
-			[this] (const std::string & name, float x, float y, float z) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (const std::string & name, float x, float y, float z) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					auto node = activeScene->root()->findChild(name);
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+					if ( node == nullptr )
+					{
+						return Console::CommandResult::error("Node '" + name + "' not found !");
+					}
 
-				auto node = activeScene->root()->findChild(name);
+					node->setPosition({x, y, z}, Math::TransformSpace::World);
 
-				if ( node == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + name + "' not found !");
-				}
+					std::stringstream message;
+					message << "Node '" << name << "' moved to (" << x << ", " << y << ", " << z << ").";
 
-				node->setPosition({x, y, z}, Math::TransformSpace::World);
-
-				std::stringstream message;
-				message << "Node '" << name << "' moved to (" << x << ", " << y << ", " << z << ").";
-
-				return Console::CommandResult::success(message.str());
+					return Console::CommandResult::success(message.str());
+				});
 			}, Console::CommandHint::Idempotent);
 
 		this->bindCommand("enableTBN", "Enables or disables the TBN space debug rendering on the active scene's renderables.",
@@ -2396,27 +2444,22 @@ namespace EmEn::Scenes
 				{"y", "Target world Y, in metres (UP is +Y)."},
 				{"z", "Target world Z, in metres."}
 			},
-			[this] (const std::string & name, float x, float y, float z) {
-				const auto activeScene = this->activeSceneSnapshot();
+			[inActiveScene] (const std::string & name, float x, float y, float z) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					auto node = activeScene->root()->findChild(name);
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+					if ( node == nullptr )
+					{
+						return Console::CommandResult::error("Node '" + name + "' not found !");
+					}
 
-				auto node = activeScene->root()->findChild(name);
+					node->lookAt({x, y, z}, false);
 
-				if ( node == nullptr )
-				{
-					return Console::CommandResult::error("Node '" + name + "' not found !");
-				}
+					std::stringstream message;
+					message << "Node '" << name << "' looking at (" << x << ", " << y << ", " << z << ").";
 
-				node->lookAt({x, y, z}, false);
-
-				std::stringstream message;
-				message << "Node '" << name << "' looking at (" << x << ", " << y << ", " << z << ").";
-
-				return Console::CommandResult::success(message.str());
+					return Console::CommandResult::success(message.str());
+				});
 			}, Console::CommandHint::Idempotent);
 
 		this->bindCommand("dumpRenderTarget", "Dumps one layer of the image of the first render-to-texture target, else shadow map, of the active scene whose id contains a fragment, as a PNG in the captures directory. A floating-point (HDR) target gives two files: an exposed 8-bit sRGB PNG, and a Radiance .hdr holding the linear values. A shadow map (launch with --enable-depth-readback) gives a grey PNG of its depths and a .pfm holding them as floats.",

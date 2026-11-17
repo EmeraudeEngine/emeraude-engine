@@ -450,6 +450,14 @@ Use `listResources(MeshResource)` to discover available meshes.
 3. **Camera Y=0 won't see the ground** -- same level as ground plane
 4. **Lighting is automatic** -- `createScene` adds a neutral photometric ambient (5000 lx)
 5. **Always verify with screenshot** -- take a screenshot and read the PNG to confirm visual output
+6. **A scene command lands between two frames and two logic cycles** (2026-11-17) -- every `SceneManagerService`
+   command that reads or writes the running scene runs under the scene's exclusive access: it waits for the frame and
+   the cycle in flight (not measurable at a normal frame rate; 0.3 s per command under a sanitizer on the software
+   device). A command that prepares a resource first (`addMesh`, `addTexturedShape`, `setGround`, `setBackground`,
+   `loadGLTF`) answers "The active scene changed while the command prepared its content: nothing was added !" if the
+   scene was switched meanwhile. `addTexturedShape` refuses a position or a size that is not finite; `addMesh` and
+   `setBackground` refuse an unknown resource name ("Unknown mesh …", "Unknown skybox …") instead of serving the
+   default one and answering a success.
 
 ### Opening files (the dropped-files pipeline)
 
