@@ -265,10 +265,10 @@ scenes reported after the first six (an instance's animation time and flag word,
 rendering side, the ambient, the extent a frame culls an entity on) are the seven rows that follow the first six.
 The last three rows (2026-11-16) were never reported: found by READING — a configuration written on a LIVE object from
 another thread (the console's tangent-space toggle, the renderer's switches), and an entity's renderable flag. Their
-proof closes this section;
-item `tsan-logic-render-instance-state-races`, which carried all of them, stays open until the peers have run that
-last lot. What the main thread still does to a running scene through the scene service's other console commands is
-item `scene-console-commands-write-the-scene-outside-the-exclusive-access`.
+proof and the peers' round 15 close this section, and the item that carried all of them
+(`tsan-logic-render-instance-state-races`, closed on 2026-11-17). What the main thread still does to a running scene
+through the scene service's other console commands is item
+`scene-console-commands-write-the-scene-outside-the-exclusive-access`.
 
 Proof (Linux, 2026-11-15). ThreadSanitizer — Debug, llvmpipe forced in a settings copy, the testbed driven through
 the console (its active scene unloaded, reloaded, destroyed, rebuilt; the recipe: `docs/caution-points.md` § *TSan on a
@@ -429,11 +429,28 @@ The tangent-space display, `geometry-loader`, the command sent to both binaries:
 changed by the display with each (looked at: the vectors cover the model), back to the image of before once disabled.
 The final code (the renderer's three other switches made atomic): the same statistics again on `default`,
 `light-and-shadow-debug`, `animation-debug` and `liminal` (6 / 160 | 126 / 4457264, a scene that forces the grab pass
-on), and the console scenario under ThreadSanitizer once more: 0 report, exit 0.
-⚠️ `water-world` cannot serve such a comparison to the unit: its palms are planted at random (2534 to 2596 instances
-from launch to launch with either binary), and about one launch in 25 starts in another state — 3600 instances and
-twice the shadow casters, with the binary of BEFORE too (1 launch of 30; 2 of 44 after): item
-`instanced-tile-sometimes-escapes-the-culling-after-a-launch`.
+on), and the console scenario under ThreadSanitizer once more: 0 report, exit 0. `city` — the scene whose far proxies
+(`Toolkit::generateHLODProxy()`) and detailed buildings are now configured in the builder's setup — gives the same
+statistics with both binaries, two launches each: 1625 instances / 2760675 triangles in the view.
+⚠️ `water-world` cannot serve such a comparison: its palms are planted at random (2520 to 2596 instances from launch
+to launch with either binary), and in some launches 1050 MORE are in the lists (3596 to 3642, twice the shadow
+batches) — with the binary of BEFORE too. NOT a defect (traced on 2026-11-17: the same view, every tile publishing a
+valid render box in both cases): the culling is per entity, and the 270 m tile beside the observer, 190 m away, passes
+the frustum test or not with that run's draw of palms; a tile whose box touches the view submits all its instances.
+It looked like a regression of this change for two launches: a statistics A/B needs a scene that does not draw at
+random (the testbed's water-world document carries the numbers).
+
+**Peers' round 15** (2026-11-17, engine 59ddb472 + testbed f6a7f23e: the three rows above). macOS (Apple M6, MoltenVK
+1.4.2, Apple clang with `-Wdocumentation -Werror`, `-Wswitch` and `-Wthread-safety` silent) and Windows (RTX 3500 Ada,
+MSVC 19.44, no C4062 / C4715 on the switch without default) build Release and Debug with 0 warning — no platform file
+touches the four renderer members — and run six scenes window-less with the validation layer loaded: exit 0, 0 VUID,
+0 error line in the twelve launches. The same statistics as Linux on `animation-debug` (22 / 61198 | 21 / 61186),
+`light-and-shadow-debug` with projections (7 / 673958 | 30 / 4033408), `liminal` (6 / 160 | 126 / 4457264) and `city`
+(1625 / 2760675 in the view, twice on each; night on both: no shadow caster); `terrain` culled as in their round 14,
+twice in a row. The tangent-space toggle on `geometry-loader`: Windows draws the vectors over the model and removes
+them (1 instance toggled, 1 skipped for its geometry without tangent space); macOS refuses the display — its device
+has no geometry stage — and disables on the two instances; twenty commands in a row answer in about 0.01 s each on
+both: the exclusive access costs the console nothing visible.
 
 ### A resource's load reaches a scene object on the logic thread (2026-11-15, owner decisions)
 
