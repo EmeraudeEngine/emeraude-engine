@@ -1,44 +1,39 @@
 ---
 id: renderable-flags-read-while-its-loader-writes-them
-title: A renderable's flag word is constructor-only - done on Linux, awaits the peers; the geometries' and materials' words are not audited
-status: in-progress
+title: The resource flag word is written during their load by the geometries and the materials - audit who reads it before the load ends
+status: open
 priority: high
-scope: Graphics/Renderable (Abstract, SpriteResource), Scenes/Toolkit; to audit: Graphics/Geometry, Graphics/Material
+scope: Graphics/Geometry, Graphics/Material (their enableFlag() calls), Resources/ResourceTrait (the word)
 opened: 2026-11-16
-tags: [tsan, concurrency, defect, measured]
+tags: [tsan, concurrency, audit]
 ---
 
-# A renderable's flag word is constructor-only - done on Linux, awaits the peers
+# The resource flag word is written during their load by the geometries and the materials
 
 ## Why
 
-ThreadSanitizer on `sprite`: the sprite's loader wrote a bit (`IsUprightSprite`, read in its manifest) into the flag
-word while a `MultipleVisuals` built on that sprite read `isSprite()` from the same word. `isSprite()` itself never
-answered wrong - `IsSprite` is given to the constructor -: the defect was the write of another bit.
-
-Done on 2026-11-17 (owner decision: the word is frozen at construction): a renderable's bits say what its type is and
-are never written after the constructor; what a load or a creation function declares (the upright billboard, the
-vegetation wind) is a member written before the publication and read on a ready renderable. Scenes doc 12, the row
-"What a renderable IS and what its load declares".
+The renderable's side is done (2026-11-17, three OS: scenes doc 12, the row "What a renderable IS and what its load
+declares"): its bits are constructor-only. The word itself belongs to `Resources::ResourceTrait`, and the other
+families still write it while they load - the geometries (`EnableTangentSpace`, `EnableNormal`,
+`EnablePrimaryTextureCoordinates`, `EnableVertexColor`), the materials (`TextureEnabled`,
+`UsePrimaryTextureCoordinates`, `UnlitEnabled`, `BlendingEnabled`, `IsCreated`…). ⚠️ No race is MEASURED there: this
+is the audit the renderable's defect asks for, kept `high` because the mechanism is the one ThreadSanitizer reported.
 
 ## What remains
 
-- **The peers' round** (macOS, Windows): Release and Debug with 0 warning; `sprite` and `tree-generator`: the same
-  statistics as Linux, the flames upright, the leaves moving; exit 0, 0 VUID.
-- **Audit the same word in the other resource families** (not done, no race measured): the word belongs to
-  `Resources::ResourceTrait`, and the geometries (`EnableTangentSpace`, `EnableNormal`…) and the materials
-  (`TextureEnabled`, `UnlitEnabled`, `IsCreated`…) write it during their load. Find who reads those bits before the
-  load ends; the rule to apply is the renderable's.
-- Record the verdicts in scenes doc 12 and the ledger, then delete this file (or keep it for the audit alone).
+- List who reads those bits and on which thread; find a reader that runs before the load ends (a component or an
+  instance built on a resource still loading, a shader generation).
+- Measure under ThreadSanitizer the scenes that build on resources still loading (several runs each: a loading race
+  shows when the threads meet).
+- Apply the renderable's rule where a reader exists: the bits that say what the type is go to the constructor, what
+  a load declares becomes a member written before the publication.
 
 ## ⚠️ Traps
 
-- The race shows when the two threads meet: 4 runs of 6 before. One clean run proves nothing.
-- `sprite` draws its 100 000 sprites at random places: two launches never give the same image - compare the
-  statistics and LOOK, never a pixel A/B.
-- `enableVegetationWind()` called AFTER `getOrCreateResource()` returned writes a renderable a scene may already draw
-  (what `Toolkit` did): declare inside the creation function.
+- `sprite` draws its 100 000 sprites at random places: never a pixel A/B between two launches.
+- `Resources::Container` sets `DirectLoading` (bit 31) right after it creates a resource, before anyone else holds
+  it: not a race.
 
 ## References
 
-- Scenes doc 12; `src/Graphics/Renderable/Abstract.hpp` (`RenderableFlagBits`).
+- Scenes doc 12; `src/Graphics/Renderable/Abstract.hpp` (`RenderableFlagBits`, the rule in its comment).

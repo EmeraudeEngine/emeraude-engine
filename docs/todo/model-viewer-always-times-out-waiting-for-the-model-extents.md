@@ -23,10 +23,14 @@ the numbers are scenes doc 12 § *A resource's load reaches a scene object on th
 
 ## What remains
 
-- **The peers' round** (macOS, Windows): Release and Debug with 0 warning; `Core.openFiles` on `Box`,
-  `MetalRoughSpheresNoTextures`, `Fox` and `Sponza`: the reply time, no fallback warning in the journal, the viewer
-  camera's position against the Linux values of scenes doc 12; exit 0, 0 VUID.
-- Record the verdicts in scenes doc 12 and the ledger, then delete this file.
+- **A cold texture cache** (the peers' round 18, scenes doc 12): the viewer waits for the meshes to be READY, which
+  includes their materials, whose textures are compressed on the CPU at the first opening. `Sponza`: 2.49 s on
+  Linux, 3.5 s on macOS, 5.3 s and the fallback on Windows; slower machines than these three are the real users'.
+  Owner decision (2026-11-17): a renderable publishes its EXTENT as soon as its geometry is loaded, before its
+  materials, and the components derive their bounds from it - for every scene, not the viewer alone. The protocol
+  (who writes, who reads, which flag) goes to the owner before any code.
+- Proof to give: `Sponza` with an empty `--cache-directory` framed with a reply far under the texture work, on the
+  three OS; ThreadSanitizer on scenes that build on resources still loading.
 
 ## ⚠️ Traps
 
