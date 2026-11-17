@@ -484,10 +484,12 @@ flight; at this frame rate that is not measurable (under ThreadSanitizer on the 
 
 Left as they were, on purpose (the code says why at each): the four physics-recording commands, `writeImposterAtlases`
 and the five commands of the physical sky — what they touch guards itself; `getActiveSceneName`, `targetActiveScene`.
-Three refusals added at this trust boundary: `addTexturedShape` refuses a position or a size that is not finite (a NaN
-passed its `size <= 0` test); `addMesh` and `setBackground` refuse a name their container does not know (owner
-decision, the one of 2026-09-27 for `createScene`'s skybox: `getResource()` serves the default resource for an unknown
-name, so `addMesh(NoSuchMesh, …)` answered "placed" and `setBackground(NoSuchSky)` "Background set").
+Two refusals added at this trust boundary: `addMesh` and `setBackground` refuse a name their container does not know
+(owner decision, the one of 2026-09-27 for `createScene`'s skybox: `getResource()` serves the default resource for an
+unknown name, so `addMesh(NoSuchMesh, …)` answered "placed" and `setBackground(NoSuchSky)` "Background set").
+`addTexturedShape` also guards its own input against a number that is not finite — ⚠️ a guard no operator reaches:
+the console's argument parser refuses `nan`, `inf` and an overflowing `1e39` before any command runs (measured:
+"Argument 'x' expects a float, got 'nan'."). It was first recorded here as a fixed defect; it never was one.
 ⚠️ Seen in these runs, in BOTH binaries, not explained: `sky-lab` ends the same scenario at one of two brightness
 levels (mean 155 / 255 in four launches, 118 in two; the sky's reported state is identical).
 

@@ -455,9 +455,10 @@ Use `listResources(MeshResource)` to discover available meshes.
    the cycle in flight (not measurable at a normal frame rate; 0.3 s per command under a sanitizer on the software
    device). A command that prepares a resource first (`addMesh`, `addTexturedShape`, `setGround`, `setBackground`,
    `loadGLTF`) answers "The active scene changed while the command prepared its content: nothing was added !" if the
-   scene was switched meanwhile. `addTexturedShape` refuses a position or a size that is not finite; `addMesh` and
-   `setBackground` refuse an unknown resource name ("Unknown mesh …", "Unknown skybox …") instead of serving the
-   default one and answering a success.
+   scene was switched meanwhile. `addMesh` and `setBackground` refuse an unknown resource name ("Unknown mesh …",
+   "Unknown skybox …") instead of serving the default one and answering a success. A number that is not finite never
+   reaches a command: the argument parser refuses `nan`, `inf` and an overflow ("Argument 'x' expects a float, got
+   'nan'.").
 
 ### Opening files (the dropped-files pipeline)
 

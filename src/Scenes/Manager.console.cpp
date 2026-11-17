@@ -2039,7 +2039,9 @@ namespace EmEn::Scenes
 				{"size", "The shape's characteristic size (radius or edge), in metres (greater than 0).", 1.0F}
 			},
 			[this, inSameActiveScene] (const std::string & shapeName, const std::string & imageName, const std::string & entityName, float x, float y, float z, float size) {
-				/* NOTE: A console argument is a trust boundary, and a NaN passes every comparison (NaN <= 0 is false). */
+				/* NOTE: The command's own guard on its input (a NaN passes "size <= 0"). The console's argument parser
+				 * refuses a number that is not finite before any command runs ("Argument 'x' expects a float, got 'nan'."):
+				 * an operator never gets this reply. */
 				if ( !std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || !std::isfinite(size) )
 				{
 					return Console::CommandResult::error("addTexturedShape(): the position and the size must be finite numbers.");
