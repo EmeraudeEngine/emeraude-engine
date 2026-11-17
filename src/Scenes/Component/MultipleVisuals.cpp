@@ -139,6 +139,16 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	MultipleVisuals::onResourceLoaded () noexcept
+	{
+		/* The renderable's own box was empty until its load ended, so the union computed at construction was empty
+		 * too: without this refresh the component keeps an invalid visual extent and gets culled as a point. */
+		this->updateRenderBounds();
+
+		this->notify(ComponentContentModified);
+	}
+
+	void
 	MultipleVisuals::processLogics (const Scene & scene) noexcept
 	{
 		if ( m_renderableInstance->isBroken() )
@@ -146,15 +156,8 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		/* The renderable finished loading (recorded by onNotification(), on the loading thread). Its own box was empty
-		 * until then, so the union computed at construction was empty too: without this refresh the component keeps an
-		 * invalid visual extent and gets culled as a point. */
-		if ( this->consumeResourceLoaded() )
-		{
-			this->updateRenderBounds();
-
-			this->notify(ComponentContentModified);
-		}
+		/* The renderable finished loading (recorded by onNotification(), on the loading thread): onResourceLoaded(). */
+		this->settleLoadedResource();
 
 		if ( m_renderableInstance->isAnimated() )
 		{

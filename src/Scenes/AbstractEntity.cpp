@@ -130,6 +130,32 @@ namespace EmEn::Scenes
 		return identifiedObservable;
 	}
 
+	bool
+	AbstractEntity::settleLoadedContent () noexcept
+	{
+		/* NOTE: On a copy of the list, WITHOUT the lock, as processLogics() does: a component notifies its entity
+		 * (ComponentContentModified), which derives its properties at once — no dispatch is running. */
+		Base::StaticVector< std::shared_ptr< Component::Abstract >, MaxComponentCount > components;
+
+		{
+			const Base::MutexLock lock{m_componentsMutex};
+
+			components = m_components;
+		}
+
+		bool settled = false;
+
+		for ( const auto & component : components )
+		{
+			if ( component->settleLoadedResource() )
+			{
+				settled = true;
+			}
+		}
+
+		return settled;
+	}
+
 	uint64_t
 	AbstractEntity::allocateCreationNumber (const Scene & scene) noexcept
 	{

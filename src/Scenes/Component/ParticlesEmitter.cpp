@@ -50,6 +50,13 @@ namespace EmEn::Scenes::Component
 	using namespace Graphics;
 
 	void
+	ParticlesEmitter::onResourceLoaded () noexcept
+	{
+		/* The entity derives its properties again, on the thread that owns it. */
+		this->notify(ComponentContentModified);
+	}
+
+	void
 	ParticlesEmitter::processLogics (const Scene & scene) noexcept
 	{
 		if ( m_renderableInstance->isBroken() )
@@ -57,12 +64,8 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		/* The renderable finished loading (recorded by onNotification(), on the loading thread): the entity derives
-		 * its properties again, on this thread. */
-		if ( this->consumeResourceLoaded() )
-		{
-			this->notify(ComponentContentModified);
-		}
+		/* The renderable finished loading (recorded by onNotification(), on the loading thread): onResourceLoaded(). */
+		this->settleLoadedResource();
 
 		if ( m_renderableInstance->isAnimated() )
 		{

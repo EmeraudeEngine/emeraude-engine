@@ -77,15 +77,19 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	SoundEmitter::onResourceLoaded () noexcept
+	{
+		/* The play that awaited the sound starts HERE, on the thread that owns the emitter, or the sound is dropped
+		 * when its load failed. */
+		this->resolveAwaitedSound();
+	}
+
+	void
 	SoundEmitter::processLogics (const Scene & /*scene*/) noexcept
 	{
 		/* The load of an attached sound ended (recorded by onNotification() on the loading thread, or by
-		 * awaitAttachedSound() for a load that ended while it subscribed): the play that awaited it starts HERE, on the
-		 * logic thread, or the sound is dropped when its load failed. */
-		if ( this->consumeResourceLoaded() )
-		{
-			this->resolveAwaitedSound();
-		}
+		 * awaitAttachedSound() for a load that ended while it subscribed): onResourceLoaded(). */
+		this->settleLoadedResource();
 
 		/* A one-shot voice whose sound ended goes back to the pool. */
 		for ( auto & voice : m_oneShotVoices )

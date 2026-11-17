@@ -1,54 +1,40 @@
 ---
 id: model-viewer-always-times-out-waiting-for-the-model-extents
-title: The model viewer waits five seconds on the main thread for extents that never come, then frames on the fallback
-status: open
+title: The model viewer makes its scene act on the loaded resources before framing - done on Linux, awaits the peers
+status: in-progress
 priority: high
-scope: Scenes/Viewers/ModelViewer (and ImageViewer to check), Scenes/Component load completion
+scope: Scenes/Viewers/ModelViewer, Scenes/Scene and AbstractEntity (settleLoadedContent), Scenes/Component (settleLoadedResource)
 opened: 2026-11-17
 tags: [defect, viewers, main-thread]
 ---
 
-# The model viewer waits five seconds on the main thread for extents that never come, then frames on the fallback
+# The model viewer makes its scene act on the loaded resources before framing - done on Linux, awaits the peers
 
 ## Why
 
-Opening a model (`Core.openFiles`, a dropped file) blocks the MAIN thread for the whole `ExtentsWaitBudgetMS`
-(5000 ms, `ModelViewer.hpp`) and then frames the camera on the fallback (target at the origin, radius 2) instead of
-the model's box. Measured 2026-11-17 with `Models/Box/glTF/Box.gltf`, Release, window-less:
+Since 2026-11-15 a scene component only records the end of its resource's load, and the logic thread acts on it at its
+next cycle - of the ACTIVE scene. The model viewer waited for its entities' boxes while BUILDING its scene, which has
+no cycle: `Core.openFiles` held the main thread for its whole 5 s budget at every opening, then framed on the fallback
+(the camera's distance, near plane and dolly limits all derived from a radius of 2 m, whatever the model).
 
-| Machine | Reply time of `Core.openFiles` |
-|---|---|
-| Linux (RTX 3070 Ti), engine 5b23b534 | 5.07 s, twice in the same run |
-| Linux, engine f10bc200 (2026-11-16) | 5.05 s and 5.09 s |
-| Windows, engines 8332013e and 5b23b534 | 5.38 s |
-| macOS, engines 8332013e and 5b23b534 | 5.8 s |
-
-The journal of the Linux run: the model's three resources are loaded 0.34 s after the command; nothing happens from
-+1.9 s to +5.045 s, where `ModelViewer` writes "The imported content published no extents in time, using the fallback
-framing." Every other console command answers in 0.02 s.
-
-The wait loop (`ModelViewer.cpp`, "The loaders enqueue mesh resources on the thread pool…") polls
-`getWorldRenderBoundingBox()` of the static entities and of the model's nodes every 10 ms, sleeping on the main
-thread.
+Done on 2026-11-17 (owner decisions: the builder of a scene not enabled yet plays the logic thread's role; the budget
+and its fallback stay): `Scene::settleLoadedContent()`, called by the viewer once the meshes are ready. The rule and
+the numbers are scenes doc 12 § *A resource's load reaches a scene object on the logic thread*, point 2.
 
 ## What remains
 
-- **Find why the box never becomes valid.** ⚠️ Not verified - the lead: since `aacd2dcd8` (2026-11-15) a component
-  only RECORDS its resource's load and refreshes its bounding volumes in its `processLogics()`, on the logic thread
-  (lifecycle map S21); the viewer's scene is still being built on the main thread, so no logic cycle runs on it and
-  the extents the loop waits for cannot be published while it waits. Check whether the timeout predates that commit.
-- **Choose the fix with the owner**: the framing needs the model's extents, and a main thread that sleeps until a
-  budget expires is neither a wait nor a contract. Whatever is chosen, the main thread must not be held.
-- Check `ImageViewer` for the same shape.
-- Proof to give: the reply time of `Core.openFiles`, the warning gone, the camera framed on the model's box (a model
-  that is NOT at the origin nor of radius 2: the Box hides the defect, its box is close to the fallback).
+- **The peers' round** (macOS, Windows): Release and Debug with 0 warning; `Core.openFiles` on `Box`,
+  `MetalRoughSpheresNoTextures`, `Fox` and `Sponza`: the reply time, no fallback warning in the journal, the viewer
+  camera's position against the Linux values of scenes doc 12; exit 0, 0 VUID.
+- Record the verdicts in scenes doc 12 and the ledger, then delete this file.
 
 ## ⚠️ Traps
 
-- The peers' rounds on the orbit controller (input doc 03) compared camera positions that all start from this
-  fallback framing: they prove the controller, not the framing.
+- The camera positions of input doc 03 (the orbit controller's proof and the peers' round 17) all start from the
+  FALLBACK framing of that day: they prove the controller, and they are no longer the positions of a `Box` opened now.
+- `TextureTransformTest` still falls back: another cause, item `modelviewer-extents-fallback-framing`.
 - The warning goes to the journal, not to the standard output: count it there.
 
 ## References
 
-- `src/Scenes/Viewers/ModelViewer.cpp` (the wait loop, `ExtentsWaitBudgetMS`), lifecycle map S21, scenes doc 12.
+- `src/Scenes/Viewers/ModelViewer.cpp` (the wait), `Scene::settleLoadedContent()`, scenes doc 12, lifecycle map S21.

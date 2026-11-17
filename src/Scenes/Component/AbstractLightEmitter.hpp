@@ -880,6 +880,9 @@ namespace EmEn::Scenes::Component
 
 		private:
 
+			/** @copydoc EmEn::Scenes::Component::Abstract::onResourceLoaded() */
+			void onResourceLoaded () noexcept override;
+
 			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
 			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;

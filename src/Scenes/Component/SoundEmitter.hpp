@@ -392,10 +392,13 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
 
+			/** @copydoc EmEn::Scenes::Component::Abstract::onResourceLoaded() */
+			void onResourceLoaded () noexcept override;
+
 			/**
 			 * @copydoc EmEn::Base::ObserverTrait::onNotification()
 			 * @note ⚠️ A sound resource notifies on the thread that ended its load (a pool worker): this handler only
-			 * records the event (Abstract::recordResourceLoaded()); processLogics() acts on the logic thread.
+			 * records the event (Abstract::recordResourceLoaded()); onResourceLoaded() acts on the thread that owns the emitter.
 			 */
 			[[nodiscard]]
 			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;

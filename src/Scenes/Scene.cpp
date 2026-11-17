@@ -410,6 +410,40 @@ namespace EmEn::Scenes
 		this->suspendAllEntities();
 	}
 
+	size_t
+	Scene::settleLoadedContent () noexcept
+	{
+		size_t settledCount = 0;
+
+		{
+			const Base::MutexLock lock{m_staticEntitiesAccess};
+
+			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
+			{
+				if ( staticEntity->settleLoadedContent() )
+				{
+					settledCount++;
+				}
+			}
+		}
+
+		{
+			const Base::MutexLock lock{m_sceneNodesAccess};
+
+			NodeCrawler< Node > crawler{m_rootNode};
+
+			while ( crawler.fetchNextNode() )
+			{
+				if ( crawler.currentNode()->settleLoadedContent() )
+				{
+					settledCount++;
+				}
+			}
+		}
+
+		return settledCount;
+	}
+
 	void
 	Scene::processLogics (size_t engineCycle, bool enablePhysicalSimulation) noexcept
 	{

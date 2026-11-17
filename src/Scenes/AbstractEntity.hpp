@@ -802,6 +802,16 @@ namespace EmEn::Scenes
 			bool processLogics (const Scene & scene, size_t engineCycle) noexcept;
 
 			/**
+			 * @brief Makes every component act on the end of a load it recorded (Component::Abstract::settleLoadedResource()):
+			 * the entity's extents and properties are then derived from the loaded resources.
+			 * @note What processLogics() does at the next cycle of a running scene, for a scene that has no cycle yet.
+			 * @pre The thread that BUILDS the scene, the scene not enabled yet (Scene::settleLoadedContent()). On a running
+			 * scene this is the logic thread's work: do not call it from another thread.
+			 * @return bool True when a component had a load to act on.
+			 */
+			bool settleLoadedContent () noexcept;
+
+			/**
 			 * @brief Returns whether the entity has moved since the last cycle [PHYSICS].
 			 *
 			 * Used by Scene to determine if entity needs spatial partitioning (octree) updates.

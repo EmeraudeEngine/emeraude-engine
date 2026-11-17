@@ -6582,8 +6582,10 @@ After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and
 
 > `Resources::ResourceTrait` emits `LoadFinished` on the pool worker that completed the last dependency, and the
 > observers run there. A scene component's handler does ONE thing: `Component::Abstract::recordResourceLoaded()`. Its
-> `processLogics()` consumes it (`consumeResourceLoaded()`), refreshes what it derives and notifies its entity, which
-> derives its properties once after its component dispatch. A constructor computes first and subscribes LAST; nothing
+> `processLogics()` acts on it (`settleLoadedResource()` → its `onResourceLoaded()`), refreshes what it derives and
+> notifies its entity, which derives its properties once after its component dispatch. ⚠️ A scene NOT enabled yet has
+> no cycle: its builder calls `Scene::settleLoadedContent()` before reading an extent (the model viewer waited 5 s for
+> nothing at every opening, 2026-11-17). A constructor computes first and subscribes LAST; nothing
 > of a renderable (bounding volumes, scale, flags) is read before `isReadyForInstantiation()`. Scenes doc 12 § *A
 > resource's load reaches a scene object on the logic thread* — ThreadSanitizer reported 3 to 7 races per run before.
 > ⚠️ The same applies to an application callback a loader calls: `LoaderOptions::onMeshLoaded` receives resources whose

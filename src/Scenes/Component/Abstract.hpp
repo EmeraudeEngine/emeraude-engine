@@ -396,6 +396,26 @@ namespace EmEn::Scenes::Component
 			virtual void processLogics (const Scene & scene) noexcept = 0;
 
 			/**
+			 * @brief Acts, once, on the end of a load recorded by recordResourceLoaded(): onResourceLoaded().
+			 * @note The thread that OWNS the component: the logic thread for a running scene (every component calls it
+			 * from its processLogics()), the thread that builds the scene while it is not enabled yet
+			 * (Scene::settleLoadedContent()). Never a loading thread.
+			 * @return bool True when a load was recorded and acted on.
+			 */
+			bool
+			settleLoadedResource () noexcept
+			{
+				if ( !this->consumeResourceLoaded() )
+				{
+					return false;
+				}
+
+				this->onResourceLoaded();
+
+				return true;
+			}
+
+			/**
 			 * @brief This method is called from the entity holding this component.
 			 * @note This can be called by the Abstract::processLogics() method.
 			 * @param worldCoordinates A reference to the world coordinates.
@@ -498,8 +518,8 @@ namespace EmEn::Scenes::Component
 			 * @brief Records that a resource this component draws finished loading.
 			 * @note ANY thread. This is what an onNotification() handler does for Resources::ResourceTrait::LoadFinished,
 			 * and ALL it does: the resource notifies on the thread that completed its last dependency (a pool worker),
-			 * where neither the component's state nor its entity's may be written. The logic thread consumes it
-			 * (consumeResourceLoaded()).
+			 * where neither the component's state nor its entity's may be written. The thread that owns the component
+			 * acts on it (settleLoadedResource()).
 			 */
 			void
 			recordResourceLoaded () noexcept
@@ -508,10 +528,21 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief What the component does when a resource it draws finished loading: it refreshes what it derives
+			 * from the resource and notifies its entity (ComponentContentModified).
+			 * @note Called by settleLoadedResource(), on the thread that owns the component. Nothing by default.
+			 */
+			virtual
+			void
+			onResourceLoaded () noexcept
+			{
+
+			}
+
+			/**
 			 * @brief Returns, once, whether a resource finished loading since the last call.
-			 * @note LOGIC thread, from the component's processLogics(): the place where it refreshes what it derives from
-			 * the resource and notifies its entity (ComponentContentModified). A plain load at every cycle, the exchange
-			 * only when something was recorded.
+			 * @note The thread that owns the component, through settleLoadedResource(). A plain load at every cycle, the
+			 * exchange only when something was recorded.
 			 * @return bool
 			 */
 			[[nodiscard]]

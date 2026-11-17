@@ -559,21 +559,30 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
+	AbstractLightEmitter::onResourceLoaded () noexcept
+	{
+		/* The colour projection texture is registered here, on the thread that owns the light.
+		 * ⚠️ Only when it is not registered yet: the texture may have been replaced by a loaded one since the record. */
+		if ( m_colorProjectionBindlessIndex != NoColorProjectionTexture )
+		{
+			return;
+		}
+
+		auto * resource = dynamic_cast< Resources::ResourceTrait * >(m_colorProjectionTexture.get());
+
+		if ( resource != nullptr && resource->isLoaded() )
+		{
+			this->registerColorProjectionInBindless();
+		}
+	}
+
+	void
 	AbstractLightEmitter::processLogics (const Scene & scene) noexcept
 	{
 		/* The colour projection texture finished loading (recorded by onNotification() on the loading thread, or by
-		 * setColorProjectionTexture() for a load that ended while it subscribed): it is registered here, on the logic
-		 * thread, and before the test below — a light that is off holds its projection ready too.
-		 * ⚠️ Only when it is not registered yet: the texture may have been replaced by a loaded one since the record. */
-		if ( this->consumeResourceLoaded() && m_colorProjectionBindlessIndex == NoColorProjectionTexture )
-		{
-			auto * resource = dynamic_cast< Resources::ResourceTrait * >(m_colorProjectionTexture.get());
-
-			if ( resource != nullptr && resource->isLoaded() )
-			{
-				this->registerColorProjectionInBindless();
-			}
-		}
+		 * setColorProjectionTexture() for a load that ended while it subscribed): onResourceLoaded(), before the test
+		 * below — a light that is off holds its projection ready too. */
+		this->settleLoadedResource();
 
 		if ( !this->isEnabled() )
 		{

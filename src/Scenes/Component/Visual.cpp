@@ -52,6 +52,15 @@ namespace EmEn::Scenes::Component
 	using namespace Graphics;
 
 	void
+	Visual::onResourceLoaded () noexcept
+	{
+		/* The renderable's scale and bounds are final, and the entity derives its own extents from them. */
+		this->refreshScaledBounds();
+
+		this->notify(ComponentContentModified);
+	}
+
+	void
 	Visual::processLogics (const Scene & scene) noexcept
 	{
 		if ( m_renderableInstance->isBroken() )
@@ -59,14 +68,8 @@ namespace EmEn::Scenes::Component
 			return;
 		}
 
-		/* The renderable finished loading (recorded by onNotification(), on the loading thread): its scale and its
-		 * bounds are final, and the entity derives its own extents from them. */
-		if ( this->consumeResourceLoaded() )
-		{
-			this->refreshScaledBounds();
-
-			this->notify(ComponentContentModified);
-		}
+		/* The renderable finished loading (recorded by onNotification(), on the loading thread): onResourceLoaded(). */
+		this->settleLoadedResource();
 
 		if ( m_renderableInstance->isAnimated() )
 		{

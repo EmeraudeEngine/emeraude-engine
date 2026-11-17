@@ -76,6 +76,10 @@ Proof (Linux, engine 3186ee4e + the change):
   statistics of `animation-debug`, `default` and `geometry-loader` are the same with the binary before and after
   (22 instances / 61198 triangles in the view, 21 / 61186 in the shadows for the first), 0 VUID.
 
+⚠️ These positions start from the model viewer's FALLBACK framing of that day (it never got its model's extents, a
+defect repaired right after: scenes doc 12): they prove the controller, not the framing, and a `Box` opened now is
+framed closer.
+
 **Peers' round 17** (2026-11-17, engine 5b23b534), each with its own binary of before (engine 8332013e) and the new
 one, the same scenario:
 - Windows (RTX 3500 Ada, driver 596.58, MSVC 19.44 `/W4 /WX`): Release and Debug 0 error / 0 warning; the five

@@ -520,9 +520,28 @@ The contract:
 
 1. **The handler records, nothing else.** `Component::Abstract::recordResourceLoaded()` stores an atomic flag; that is
    all an `onNotification(LoadFinished)` does on the loading thread.
-2. **The logic thread consumes.** The component's `processLogics()` asks `consumeResourceLoaded()` (a plain load at
-   every cycle, an exchange only when something was recorded), refreshes what it derives from the resource and notifies
-   `ComponentContentModified`.
+2. **The thread that owns the component acts.** `Component::Abstract::settleLoadedResource()` (a plain load at every
+   cycle, an exchange only when something was recorded) calls the component's `onResourceLoaded()`, which refreshes
+   what it derives from the resource and notifies `ComponentContentModified`. On a running scene that thread is the
+   logic thread: every component calls it from its `processLogics()`.
+   ⚠️ **A scene that is not enabled yet has no logic cycle**: nothing acts on the record, and its entities keep no
+   extents however long one waits. Such a scene belongs to the thread that builds it, which plays the logic thread's
+   role: `Scene::settleLoadedContent()` (every entity, `AbstractEntity::settleLoadedContent()`), called once the
+   resources are loaded and before reading anything derived from them. The model viewer frames its subject that way.
+   Measured 2026-11-17 (Linux, Release, window-less): reading the boxes without it, `Core.openFiles` held the main
+   thread for the whole 5 s budget at EVERY opening since 2026-11-15 and framed on the fallback (camera at
+   [6.94, 3.04, 6.95] whatever the model); with it:
+
+   | Model | `Core.openFiles` before / after | Camera after |
+   |---|---|---|
+   | `Box` | 5.06 s / 0.04 s | [1.736, 0.760, 1.737] |
+   | `MetalRoughSpheresNoTextures` (millimetric) | 5.15 s / 0.35 s | [0.0146, 0.0081, 0.0101] |
+   | `Fox` (skinned, node mode) | 5.10 s / 0.06 s | [268.6, 156.9, 258.1] |
+   | `Sponza` | 5.18 s / 0.20 s | [51.19, 27.83, 51.41] |
+
+   0 fallback warning, 0 VUID, exit 0 on each; ThreadSanitizer on the viewer scenario (a file opened, two drags, the
+   wheel): 0 report. ⚠️ `TextureTransformTest` still falls back, for another reason: its meshes are flat and a box
+   without volume is not valid (item `modelviewer-extents-fallback-framing`).
 3. **The entity derives once, after its components.** A `ComponentContentModified` raised while
    `AbstractEntity::processLogics()` dispatches its components is deferred
    (`deferContentRefreshDuringDispatch()`, the rule `onContainerMove()` already followed): `updateEntityProperties()`

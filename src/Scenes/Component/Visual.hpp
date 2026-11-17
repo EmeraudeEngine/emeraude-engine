@@ -206,6 +206,9 @@ namespace EmEn::Scenes::Component
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
 
+			/** @copydoc EmEn::Scenes::Component::Abstract::onResourceLoaded() */
+			void onResourceLoaded () noexcept override;
+
 			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
 			bool onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;

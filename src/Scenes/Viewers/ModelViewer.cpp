@@ -26,12 +26,13 @@
 
 /* STL inclusions. */
 #include <algorithm>
-#include <limits>
 #include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <limits>
+#include <map>
 #include <ranges>
 #include <string>
 #include <thread>
@@ -39,23 +40,38 @@
 /* Local inclusions. */
 #include "Animations/AnimationClipResource.hpp"
 #include "Animations/SkeletalAnimator.hpp"
+#include "BlobTrait.hpp"
 #include "Graphics/Geometry/IndexedVertexResource.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/Renderable/MeshResource.hpp"
 #include "Graphics/Renderable/SkeletalDataTrait.hpp"
 #include "Graphics/Renderable/SkyBoxResource.hpp"
+#include "Graphics/RenderableInstance/Abstract.hpp"
+#include "Graphics/TextureResource/TextureCubemap.hpp"
 #include "IO/IO.hpp"
+#include "Logging/Severity.hpp"
+#include "Math/Base.hpp"
 #include "Math/Space3D/AACuboid.hpp"
+#include "Math/Vector.hpp"
+#include "PixelFactory/Color.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
+#include "Scenes/AbstractEntity.hpp"
+#include "Scenes/Component/Abstract.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Component/NodeAnimation.hpp"
 #include "Scenes/Component/Visual.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Scenes/Loaders/Interface.hpp"
 #include "Scenes/Loaders/LoaderOptions.hpp"
 #include "Scenes/Loaders/SceneData.hpp"
 #include "Scenes/Manager.hpp"
+#include "Scenes/Node.hpp"
+#include "Scenes/OrbitController.hpp"
 #include "Scenes/Scene.hpp"
 #include "Scenes/SceneDataConsumer.hpp"
+#include "Scenes/StaticEntity.hpp"
 #include "Scenes/Toolkit.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
@@ -108,6 +124,51 @@ namespace EmEn::Scenes::Viewers
 			};
 
 			walk(scene.root());
+		}
+
+		/**
+		 * @brief Returns the union of the render boxes the imported content has: the static entities, and the nodes under
+		 * the model's root (a model built in node mode).
+		 * @pre The thread that builds the scene, after Scene::settleLoadedContent(): an entity whose components have not
+		 * acted on their loaded resources yet has no box.
+		 * @param scene A reference to the viewer scene.
+		 * @return Space3D::AACuboid< float > Invalid when nothing has an extent.
+		 */
+		[[nodiscard]]
+		Space3D::AACuboid< float >
+		contentBox (const Scene & scene) noexcept
+		{
+			Space3D::AACuboid< float > box;
+
+			scene.forEachStaticEntities([&box] (const StaticEntity & staticEntity) {
+				if ( const auto entityBox = staticEntity.getWorldRenderBoundingBox(); entityBox.isValid() )
+				{
+					box.merge(entityBox);
+				}
+
+				return true;
+			});
+
+			/* A model built in NODE mode (it animates plain nodes) publishes its extents on the nodes under
+			 * its root, not on static entities: without this walk it would be framed on the fallback box. */
+			if ( const auto modelRoot = scene.root()->findChild(ModelViewer::ModelRootNodeName); modelRoot != nullptr )
+			{
+				const std::function< void (const std::shared_ptr< Node > &) > mergeSubtree = [&box, &mergeSubtree] (const std::shared_ptr< Node > & node) {
+					if ( const auto nodeBox = node->getWorldRenderBoundingBox(); nodeBox.isValid() )
+					{
+						box.merge(nodeBox);
+					}
+
+					for ( const auto & child : node->children() | std::views::values )
+					{
+						mergeSubtree(child);
+					}
+				};
+
+				mergeSubtree(modelRoot);
+			}
+
+			return box;
 		}
 	}
 
@@ -289,52 +350,32 @@ namespace EmEn::Scenes::Viewers
 		toolkit.setCursor(-600.0F, 400.0F, -600.0F);
 		toolkit.generateDirectionalLight< StaticEntity >("FillLight", {0.9F, 0.95F, 1.0F, 1.0F}, 15000.0F);
 
-		/* NOTE: The loaders enqueue mesh resources on the thread pool, the entity extents
-		 * publish only once the resources are loaded. The wait is bounded : on a timeout,
-		 * the camera starts on the fallback framing and the dolly recovers the view. */
+		/* NOTE: The loaders enqueue mesh resources on the thread pool, and an entity derives its extents from a
+		 * resource only when the thread that owns it acts on the end of the load — the logic thread for a running
+		 * scene. THIS scene is not enabled yet: it belongs to this thread, which waits for the meshes and then makes
+		 * the entities act on what their components recorded (Scene::settleLoadedContent()). The wait is bounded : on
+		 * a timeout, the camera starts on the fallback framing and the dolly recovers the view.
+		 * ⚠️ Reading the boxes without settling waited the whole budget for nothing, at every opening (2026-11-17). */
 		Space3D::AACuboid< float > modelBox;
 
 		for ( uint32_t waitedMS = 0; waitedMS < ExtentsWaitBudgetMS; waitedMS += 10U )
 		{
-			modelBox.reset();
-
-			scene->forEachStaticEntities([&modelBox] (const StaticEntity & staticEntity) {
-				const auto entityBox = staticEntity.getWorldRenderBoundingBox();
-
-				if ( entityBox.isValid() )
-				{
-					modelBox.merge(entityBox);
-				}
-
-				return true;
-			});
-
-			/* A model built in NODE mode (it animates plain nodes) publishes its extents on the nodes under
-			 * its root, not on static entities: without this walk it would be framed on the fallback box. */
-			if ( const auto modelRoot = scene->root()->findChild(ModelRootNodeName); modelRoot != nullptr )
-			{
-				const std::function< void (const std::shared_ptr< Node > &) > mergeSubtree = [&modelBox, &mergeSubtree] (const std::shared_ptr< Node > & node) {
-					if ( const auto nodeBox = node->getWorldRenderBoundingBox(); nodeBox.isValid() )
-					{
-						modelBox.merge(nodeBox);
-					}
-
-					for ( const auto & child : node->children() | std::views::values )
-					{
-						mergeSubtree(child);
-					}
-				};
-
-				mergeSubtree(modelRoot);
-			}
-
 			const auto allMeshesReady = std::ranges::all_of(sceneData.meshes, [] (const auto & meshDescriptor) {
 				return meshDescriptor.renderable == nullptr || meshDescriptor.renderable->isReadyForInstantiation();
 			});
 
-			if ( modelBox.isValid() && allMeshesReady )
+			if ( allMeshesReady )
 			{
-				break;
+				/* A renderable is ready slightly BEFORE its observers hear the end of its load: a pass that finds
+				 * nothing recorded yet is tried again at the next turn. */
+				scene->settleLoadedContent();
+
+				modelBox = contentBox(*scene);
+
+				if ( modelBox.isValid() )
+				{
+					break;
+				}
 			}
 
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -356,7 +397,15 @@ namespace EmEn::Scenes::Viewers
 		}
 		else
 		{
-			TraceWarning{ClassId} << "The imported content published no extents in time, using the fallback framing.";
+			/* NOTE: The warning says WHICH of the two conditions failed: meshes still loading after the budget, or a
+			 * content whose entities have no render box although every mesh is ready. */
+			const auto pendingMeshes = std::ranges::count_if(sceneData.meshes, [] (const auto & meshDescriptor) {
+				return meshDescriptor.renderable != nullptr && !meshDescriptor.renderable->isReadyForInstantiation();
+			});
+
+			TraceWarning{ClassId} <<
+				"The imported content published no extents in time, using the fallback framing "
+				"(" << pendingMeshes << " of " << sceneData.meshes.size() << " mesh(es) not ready after " << ExtentsWaitBudgetMS << " ms).";
 		}
 
 		/* NOTE: The camera node stays a direct child of the scene root, the
@@ -490,7 +539,6 @@ namespace EmEn::Scenes::Viewers
 
 		scene.setEnvironmentCubemap(cubemap);
 	}
-
 
 	void
 	ModelViewer::applyAnimation (Scene & scene, const std::vector< std::string > & clipNames, size_t animationIndex) noexcept

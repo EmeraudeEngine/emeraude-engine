@@ -499,6 +499,22 @@ namespace EmEn::Scenes
 			void processLogics (size_t engineCycle, bool enablePhysicalSimulation) noexcept;
 
 			/**
+			 * @brief Makes every entity act on the loads its components recorded, for a scene that has no logic cycle yet.
+			 *
+			 * A resource that finishes loading only RECORDS it in the components that draw it (a loading thread writes
+			 * nothing of a scene); the logic thread acts on the record at its next cycle — of the ACTIVE scene. A scene
+			 * still being built has no cycle: whoever builds it and needs the entities' extents before enabling it (a
+			 * viewer framing its subject) calls this once the resources are loaded.
+			 *
+			 * @note A scene that is not enabled yet belongs to the thread that builds it: it plays the logic thread's
+			 * role here (the rule of AbstractNodeController::controlNode()).
+			 * @pre The thread that builds the scene, the scene NOT enabled. On a running scene the logic thread does this
+			 * by itself at every cycle.
+			 * @return size_t The number of entities that had a load to act on.
+			 */
+			size_t settleLoadedContent () noexcept;
+
+			/**
 			 * @brief Publishes the current simulation state for the render thread.
 			 *
 			 * Implements the logic → render triple buffer (see RenderStateSlotCount):

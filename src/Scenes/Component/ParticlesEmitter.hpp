@@ -30,12 +30,18 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <cstring>
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -45,10 +51,26 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "BaseUtility.hpp"
+#include "CoreTypes.hpp"
+#include "Graphics/Renderable/Abstract.hpp"
 #include "Graphics/RenderableInstance/Multiple.hpp"
-#include "Graphics/Renderer.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Matrix.hpp"
 #include "Math/Space3D/AACuboid.hpp"
+#include "Physics/BodyPhysicalProperties.hpp"
 #include "Physics/Particle.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Physics
+{
+	class EnvironmentPhysicalProperties;
+}
+
+namespace EmEn::Scenes
+{
+	class AbstractEntity;
+}
 
 namespace EmEn::Scenes::Component
 {
@@ -510,6 +532,9 @@ namespace EmEn::Scenes::Component
 
 			/** @copydoc EmEn::Animations::AnimatableInterface::playAnimation() */
 			bool playAnimation (uint8_t animationID, const Base::Variant & value, size_t cycle) noexcept override;
+
+			/** @copydoc EmEn::Scenes::Component::Abstract::onResourceLoaded() */
+			void onResourceLoaded () noexcept override;
 
 			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
 			[[nodiscard]]
