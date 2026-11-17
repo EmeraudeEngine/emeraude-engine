@@ -1,46 +1,44 @@
 ---
 id: scene-controllers-move-nodes-outside-the-logic-cycle
-title: NodeController and OrbitController move the controlled node from the main thread, outside the logic cycle (suspected race)
-status: open
+title: The scene's node controllers record on the main thread and the logic thread applies - done on Linux, awaits the peers
+status: in-progress
 priority: high
-scope: Scenes/NodeController, Scenes/OrbitController, Input
+scope: Scenes/AbstractNodeController, Scenes/NodeController, Scenes/OrbitController, Scenes/Scene
 opened: 2026-11-15
-tags: [concurrency, suspected, verification]
+tags: [concurrency, input, defect]
 ---
 
-# NodeController and OrbitController move the controlled node from the main thread, outside the logic cycle (suspected race)
+# The scene's node controllers record on the main thread and the logic thread applies - done on Linux, awaits the peers
 
 ## Why
 
-Found while drawing `docs/lifecycle-map.html` (data flow "a key press to the screen"). Both controllers are input
-listeners registered by `Scene::enable()`, so their callbacks run on the MAIN thread, inside
-`Input::Manager::waitSystemEvents()`. They move the node right there:
+`NodeController` and `OrbitController` are input listeners: their callbacks run on the MAIN thread, inside the input
+manager's event pump, and they moved the controlled node right there while the logic thread processed and published
+it. Confirmed for `OrbitController` (the engine's model and image viewers): 31 ThreadSanitizer reports on one drag -
+the camera's view rewritten under the logic thread's publication. `NodeController` has no caller that gives it a node;
+its keypad path had the same shape.
 
-- `src/Scenes/NodeController.cpp:88` `NodeController::onKeyRelease()` calls `m_controlledNode->moveX/moveY/moveZ()`;
-- `src/Scenes/OrbitController.cpp` `onPointerMove()` / `onButtonPress()` / `onMouseWheel()` → `applyToNode()` (:185).
-
-Neither file takes `betweenLogicCycles()` nor an exclusive scene access, and the input manager knows nothing of scenes.
-Meanwhile the logic thread reads and writes the same node (`Scene::processLogics()`, physics, publication) under a
-SHARED access: nothing orders the two. If confirmed, it is the same family as the logic ↔ rendering races fixed on
-2026-11-15 (scenes doc 12 § *Plain state shared by the logic and rendering threads*) — main ↔ logic here.
+Done on 2026-11-17 (owner decisions: the input records, the logic applies; the same contract for both; one family):
+`Scenes::AbstractNodeController` carries the contract, the two controllers are its finalities, the scene updates and
+releases them through the base. The contract is scenes doc 02 § Controllers; the proof is input doc 03 § *What a
+listener DOES*; the lifecycle map has the synchronization point S22.
 
 ## What remains
 
-1. Confirm the thread of each callback and whether the node's transform is guarded elsewhere (a lock inside `Node`,
-   a deferred command queue) — read `Node::moveX()` and what `processLogics()` touches.
-2. If it races: reproduce under TSan (drive a scene with the orbit / node controller while the logic runs), then
-   decide the contract with the owner — defer the change to the logic thread (a command applied in the next cycle),
-   wrap it in `betweenLogicCycles()`, or keep the controllers' state as atomics read by the logic.
-3. Record the outcome in `docs/subsystems/input/03-device-state-across-threads.md` and the lifecycle map (NOTES, and
-   a synchronization point if one is added).
+- **The peers' round** (macOS, Windows): Release and Debug with 0 warning (a new source file,
+  `src/Scenes/AbstractNodeController.cpp`: RECONFIGURE; a class deriving a base and a listener interface, exported
+  with `EMEN_API`; designated initializers in a `constexpr std::array` of a local struct; the thread-safety
+  annotations on two mutexes per controller); the model viewer opened through `Core.openFiles`, a drag and wheel
+  notches injected: the camera node's position at each stage as on Linux (input doc 03), exit 0, 0 VUID.
+- Record the verdicts in input doc 03 and the ledger, then delete this file.
 
 ## ⚠️ Traps
 
-- `betweenLogicCycles()` must not be called inside a scene access (three-thread deadlock, `Scenes/Manager.hpp`).
-- Listener switches and device slots already have a rule (change them inside `betweenLogicCycles()`); this item is
-  about what the listeners DO, not their registration.
+- `NodeController`'s gamepad page cannot be exercised by injection (no console command injects a gamepad button): its
+  bindings were compared with the code they replace, nothing more.
+- `controlNode()` places the node at once: it belongs to the thread that builds the scene, or to the logic thread -
+  called on a running scene from another thread, it is the race this item removed.
 
 ## References
 
-- `docs/lifecycle-map.html` → Open points; Data flows → "A key press".
-- `docs/subsystems/scenes/12-frame-synchronization-double-buffering-contract.md`.
+- `src/Scenes/AbstractNodeController.hpp` (the contract), scenes doc 02 § Controllers, input doc 03.

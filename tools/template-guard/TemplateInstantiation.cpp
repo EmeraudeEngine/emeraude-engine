@@ -459,6 +459,7 @@
 #include "Scenes/AVConsole/Manager.hpp"
 #include "Scenes/AVConsole/Types.hpp"
 #include "Scenes/AbstractEntity.hpp"
+#include "Scenes/AbstractNodeController.hpp"
 #include "Scenes/BindlessTextureSet.hpp"
 #include "Scenes/CloudSet.hpp"
 #include "Scenes/Component/Abstract.hpp"

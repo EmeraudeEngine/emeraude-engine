@@ -27,14 +27,14 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
-#include <cstdint>
-#include <cstdlib>
 #include <limits>
 #include <numbers>
 
 /* Local inclusions. */
 #include "Input/Types.hpp"
 #include "Math/Base.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Mutex.hpp"
 #include "Node.hpp"
 
 namespace EmEn::Scenes
@@ -42,56 +42,122 @@ namespace EmEn::Scenes
 	using namespace Base;
 	using namespace Base::Math;
 
+	float
+	OrbitController::Orbit::distance () const noexcept
+	{
+		const auto unclamped = referenceDistance * std::pow(DollyStepFactor, static_cast< float >(dollyStepIndex));
+
+		return std::clamp(unclamped, minimumDistance, maximumDistance);
+	}
+
+	float
+	OrbitController::clampedElevation (float elevation) noexcept
+	{
+		constexpr auto ElevationLimit = (std::numbers::pi_v< float > * 0.5F) - PoleGap;
+
+		return std::clamp(elevation, -ElevationLimit, ElevationLimit);
+	}
+
 	void
 	OrbitController::setTarget (const Vector< 3, float > & target) noexcept
 	{
-		m_target = target;
+		const MutexLock lock{m_stateAccess};
 
-		this->applyToNode();
+		m_orbit.target = target;
+		m_orbitChanged = true;
+	}
+
+	Vector< 3, float >
+	OrbitController::target () const noexcept
+	{
+		const MutexLock lock{m_stateAccess};
+
+		return m_orbit.target;
 	}
 
 	void
 	OrbitController::setDistance (float distance) noexcept
 	{
-		m_referenceDistance = std::clamp(distance, m_minimumDistance, m_maximumDistance);
-		m_dollyStepIndex = 0;
-		m_pendingDollySteps = 0.0F;
+		const MutexLock lock{m_stateAccess};
 
-		this->applyToNode();
+		m_orbit.referenceDistance = std::clamp(distance, m_orbit.minimumDistance, m_orbit.maximumDistance);
+		m_orbit.dollyStepIndex = 0;
+		m_pendingDollySteps = 0.0F;
+		m_orbitChanged = true;
 	}
 
 	float
 	OrbitController::distance () const noexcept
 	{
-		const auto distance = m_referenceDistance * std::pow(DollyStepFactor, static_cast< float >(m_dollyStepIndex));
+		const MutexLock lock{m_stateAccess};
 
-		return std::clamp(distance, m_minimumDistance, m_maximumDistance);
+		return m_orbit.distance();
 	}
 
 	void
 	OrbitController::setDistanceLimits (float minimum, float maximum) noexcept
 	{
-		m_minimumDistance = std::max(minimum, std::numeric_limits< float >::epsilon());
-		m_maximumDistance = std::max(maximum, m_minimumDistance);
+		const MutexLock lock{m_stateAccess};
 
-		this->applyToNode();
+		m_orbit.minimumDistance = std::max(minimum, std::numeric_limits< float >::epsilon());
+		m_orbit.maximumDistance = std::max(maximum, m_orbit.minimumDistance);
+		m_orbitChanged = true;
 	}
 
 	void
 	OrbitController::setOrientation (float azimuth, float elevation) noexcept
 	{
-		constexpr auto ElevationLimit = (std::numbers::pi_v< float > * 0.5F) - PoleGap;
+		const MutexLock lock{m_stateAccess};
 
-		m_azimuth = getClampedRadian(azimuth);
-		m_elevation = std::clamp(elevation, -ElevationLimit, ElevationLimit);
+		m_orbit.azimuth = getClampedRadian(azimuth);
+		m_orbit.elevation = clampedElevation(elevation);
+		m_orbitChanged = true;
+	}
 
-		this->applyToNode();
+	float
+	OrbitController::azimuth () const noexcept
+	{
+		const MutexLock lock{m_stateAccess};
+
+		return m_orbit.azimuth;
+	}
+
+	float
+	OrbitController::elevation () const noexcept
+	{
+		const MutexLock lock{m_stateAccess};
+
+		return m_orbit.elevation;
+	}
+
+	void
+	OrbitController::onNodeControlled () noexcept
+	{
+		/* NOTE: The new node is placed from the canonical state, whatever was applied to the previous one. */
+		const MutexLock lock{m_stateAccess};
+
+		m_orbitChanged = true;
+	}
+
+	void
+	OrbitController::onNodeReleased () noexcept
+	{
+		const MutexLock lock{m_stateAccess};
+
+		m_dragActive = false;
 	}
 
 	bool
 	OrbitController::onPointerMove (float positionX, float positionY) noexcept
 	{
-		if ( !m_dragActive || m_controlledNode == nullptr )
+		if ( !this->hasNode() )
+		{
+			return false;
+		}
+
+		const MutexLock lock{m_stateAccess};
+
+		if ( !m_dragActive )
 		{
 			return false;
 		}
@@ -104,7 +170,9 @@ namespace EmEn::Scenes
 
 		/* NOTE: "Grab the object" convention. Dragging right turns the scene
 		 * with the cursor, dragging down raises the point of view. */
-		this->setOrientation(m_azimuth - (deltaX * RotationStep), m_elevation + (deltaY * RotationStep));
+		m_orbit.azimuth = getClampedRadian(m_orbit.azimuth - (deltaX * RotationStep));
+		m_orbit.elevation = clampedElevation(m_orbit.elevation + (deltaY * RotationStep));
+		m_orbitChanged = true;
 
 		return true;
 	}
@@ -112,10 +180,12 @@ namespace EmEn::Scenes
 	bool
 	OrbitController::onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t /*modifiers*/) noexcept
 	{
-		if ( m_controlledNode == nullptr || buttonNumber != Input::Button1Left )
+		if ( buttonNumber != Input::Button1Left || !this->hasNode() )
 		{
 			return false;
 		}
+
+		const MutexLock lock{m_stateAccess};
 
 		m_dragActive = true;
 		m_lastPointerX = positionX;
@@ -127,7 +197,14 @@ namespace EmEn::Scenes
 	bool
 	OrbitController::onButtonRelease (float /*positionX*/, float /*positionY*/, int32_t buttonNumber, int32_t /*modifiers*/) noexcept
 	{
-		if ( !m_dragActive || buttonNumber != Input::Button1Left )
+		if ( buttonNumber != Input::Button1Left )
+		{
+			return false;
+		}
+
+		const MutexLock lock{m_stateAccess};
+
+		if ( !m_dragActive )
 		{
 			return false;
 		}
@@ -140,10 +217,12 @@ namespace EmEn::Scenes
 	bool
 	OrbitController::onMouseWheel (float /*positionX*/, float /*positionY*/, float /*xOffset*/, float yOffset, int32_t /*modifiers*/) noexcept
 	{
-		if ( m_controlledNode == nullptr )
+		if ( !this->hasNode() )
 		{
 			return false;
 		}
+
+		const MutexLock lock{m_stateAccess};
 
 		/* NOTE: Whole wheel notches move the dolly, fractional motion
 		 * (touchpads) is kept until a whole step is reached. */
@@ -165,41 +244,51 @@ namespace EmEn::Scenes
 
 		for ( int32_t stepCount = std::abs(steps); stepCount > 0; stepCount-- )
 		{
-			const auto candidateIndex = m_dollyStepIndex + direction;
-			const auto candidateDistance = m_referenceDistance * std::pow(DollyStepFactor, static_cast< float >(candidateIndex));
+			const auto candidateIndex = m_orbit.dollyStepIndex + direction;
+			const auto candidateDistance = m_orbit.referenceDistance * std::pow(DollyStepFactor, static_cast< float >(candidateIndex));
 
-			if ( candidateDistance < m_minimumDistance || candidateDistance > m_maximumDistance )
+			if ( candidateDistance < m_orbit.minimumDistance || candidateDistance > m_orbit.maximumDistance )
 			{
 				break;
 			}
 
-			m_dollyStepIndex = candidateIndex;
+			m_orbit.dollyStepIndex = candidateIndex;
 		}
 
-		this->applyToNode();
+		m_orbitChanged = true;
 
 		return true;
 	}
 
 	void
-	OrbitController::applyToNode () noexcept
+	OrbitController::onUpdate (Node & node) noexcept
 	{
-		if ( m_controlledNode == nullptr )
+		/* The canonical state, taken under the lock when it changed; the node is written without it. */
+		Orbit orbit;
+
 		{
-			return;
+			const MutexLock lock{m_stateAccess};
+
+			if ( !m_orbitChanged )
+			{
+				return;
+			}
+
+			orbit = m_orbit;
+			m_orbitChanged = false;
 		}
 
-		const auto distance = this->distance();
-		const auto planeRadius = distance * std::cos(m_elevation);
+		const auto distance = orbit.distance();
+		const auto planeRadius = distance * std::cos(orbit.elevation);
 
 		/* NOTE: Y-up world. A positive elevation places the point of view above the target. */
 		const Vector< 3, float > position{
-			m_target[X] + (planeRadius * std::sin(m_azimuth)),
-			m_target[Y] + (distance * std::sin(m_elevation)),
-			m_target[Z] + (planeRadius * std::cos(m_azimuth))};
+			orbit.target[X] + (planeRadius * std::sin(orbit.azimuth)),
+			orbit.target[Y] + (distance * std::sin(orbit.elevation)),
+			orbit.target[Z] + (planeRadius * std::cos(orbit.azimuth))};
 
 		/* NOTE: Parent space equals world space for a direct child of the scene root. */
-		m_controlledNode->setPosition(position, TransformSpace::Parent);
-		m_controlledNode->lookAt(m_target, false);
+		node.setPosition(position, TransformSpace::Parent);
+		node.lookAt(orbit.target, false);
 	}
 }

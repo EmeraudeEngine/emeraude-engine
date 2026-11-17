@@ -148,7 +148,7 @@ Scene scene(
 - Enables lock-free rendering
 
 **disable()**: Called when scene becomes inactive
-- Releases NodeController
+- Releases the node controllers' nodes (the family `AbstractNodeController`: `NodeController`, `OrbitController`)
 - Disconnects input listeners
 - Suspends Ambience (releases audio sources back to pool)
 - Suspends all entities (StaticEntities + Nodes) via `suspend()`

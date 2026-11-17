@@ -3198,7 +3198,7 @@ the interface drawn on top of it**.
 > menu entry changed **0.0000 %** of the pixels.
 >
 > It needs a scene whose `OrbitController` has a node to drive. `OrbitController::onButtonPress()`
-> returns `false` when `m_controlledNode == nullptr` and `true` otherwise — so a **demo** scene, whose
+> returns `false` when it controls no node (`hasNode()`) and `true` otherwise — so a **demo** scene, whose
 > controller drives nothing, declines and the menu works, while the **model viewer**, which gives it
 > the subject to orbit, consumes the click. That asymmetry is what hid the defect for so long: it
 > only appeared after opening a viewer, which until 2026-09-18 meant dragging a file onto the window

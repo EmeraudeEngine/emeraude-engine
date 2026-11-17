@@ -60,6 +60,7 @@
 #include "NodeCrawler.hpp"
 #include "Physics/CollisionModelInterface.hpp"
 #include "Scenes/AbstractEntity.hpp"
+#include "Scenes/AbstractNodeController.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
 #include "Scenes/BindlessTextureSet.hpp"
 #include "Scenes/CloudSet.hpp"
@@ -72,7 +73,6 @@
 #include "Scenes/Component/ParticlesEmitter.hpp" // IWYU pragma: keep (shared_ptr< Component::ParticlesEmitter > converts to its base: the complete type)
 #include "Scenes/LightSet.hpp"
 #include "Scenes/Node.hpp"
-#include "Scenes/NodeController.hpp"
 #include "Scenes/OctreeSector.hpp"
 #include "Scenes/SkyState.hpp"
 #include "Scenes/StaticEntity.hpp"
@@ -577,10 +577,10 @@ namespace EmEn::Scenes
 
 				const auto & node = *nodePayload;
 
-				/* NOTE: If a node controller was set up with this node, we stop it. */
-				if ( m_nodeController.node() == node )
+				/* NOTE: A node controller set up with this node lets it go. */
+				for ( auto * controller : m_nodeControllers )
 				{
-					m_nodeController.releaseNode();
+					controller->releaseNode(node);
 				}
 
 				/* Same contract as removeStaticEntity(): membership is decided by

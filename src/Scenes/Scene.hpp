@@ -189,6 +189,11 @@ namespace EmEn::Scenes::Component
 
 namespace EmEn::Scenes
 {
+	class AbstractNodeController;
+}
+
+namespace EmEn::Scenes
+{
 	/**
 	 * @brief Configuration options for scene octree initialization.
 	 *
@@ -475,7 +480,8 @@ namespace EmEn::Scenes
 			 *
 			 * Performs the complete scene simulation step:
 			 * 1. Updates scene lifetime counters (microseconds and milliseconds)
-			 * 2. Updates NodeController (debug camera controls)
+			 * 2. Updates the node controllers: they apply what the input devices recorded since the last cycle — this
+			 *    thread is the only writer of a controlled node (AbstractNodeController)
 			 * 3. Processes StaticEntity logic (components, animations)
 			 * 4. Processes Node tree logic via NodeCrawler traversal
 			 * 5. Updates entity positions in octrees
@@ -3359,6 +3365,9 @@ namespace EmEn::Scenes
 			NodeController m_nodeController;
 			/** @brief Pointer-driven camera orbit controller. Inert without a controlled node. */
 			OrbitController m_orbitController;
+			/** @brief The scene's node controllers, as their family (AbstractNodeController): what the scene does to one
+			 * — update it at every logic cycle, release its node — it does to all. */
+			std::array< AbstractNodeController *, 2 > m_nodeControllers{&m_nodeController, &m_orbitController};
 			/** @brief The controllers' registrations with the input manager while the scene is enabled (enable() /
 			 * disable()); declared after the controllers: their end unregisters them first. */
 			Base::ScopedRegistration m_nodeControllerRegistration;

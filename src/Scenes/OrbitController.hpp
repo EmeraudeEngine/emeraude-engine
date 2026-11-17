@@ -24,21 +24,20 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <cstdint>
-#include <memory>
 
 /* Local inclusions for inheritances. */
+#include "AbstractNodeController.hpp"
 #include "Input/PointerListenerInterface.hpp"
 
 /* Local inclusions for usages. */
 #include "Math/Vector.hpp"
-
-/* Forward declarations. */
-namespace EmEn::Scenes
-{
-	class Node;
-}
+#include "Mutex.hpp"
+#include "ThreadSafety.hpp"
 
 namespace EmEn::Scenes
 {
@@ -50,11 +49,14 @@ namespace EmEn::Scenes
 	 * (target, azimuth, elevation, distance), never integrated incrementally, and the
 	 * dolly distance derives from an integer step index to stay exactly reproducible.
 	 * The controller is inert without a controlled node and consumes no event.
+	 * @note The pointer callbacks and the setters only change the canonical state, under the controller's mutex; the
+	 * logic thread places the node from it at its next cycle (the family's contract: AbstractNodeController).
 	 * @note The controlled node must be a direct child of the scene root : the controller
 	 * positions it in parent space, which equals world space only at the first level.
+	 * @extends EmEn::Scenes::AbstractNodeController The controlled node, and who writes it.
 	 * @extends EmEn::Input::PointerListenerInterface
 	 */
-	class EMEN_API OrbitController final : public Input::PointerListenerInterface
+	class EMEN_API OrbitController final : public AbstractNodeController, public Input::PointerListenerInterface
 	{
 		public:
 
@@ -78,156 +80,131 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets the camera node to move around the target.
-			 * @note The node must be a direct child of the scene root.
-			 * @param node A reference to a node smart pointer.
-			 */
-			void
-			controlNode (const std::shared_ptr< Node > & node) noexcept
-			{
-				m_controlledNode = node;
-
-				this->applyToNode();
-			}
-
-			/**
-			 * @brief Releases the controlled node.
-			 */
-			void
-			releaseNode () noexcept
-			{
-				m_controlledNode.reset();
-
-				m_dragActive = false;
-			}
-
-			/**
-			 * @brief Returns whether a node is controlled.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			hasNode () const noexcept
-			{
-				return m_controlledNode != nullptr;
-			}
-
-			/**
-			 * @brief Returns the controlled node.
-			 * @return std::shared_ptr< Node >
-			 */
-			[[nodiscard]]
-			std::shared_ptr< Node >
-			node () const noexcept
-			{
-				return m_controlledNode;
-			}
-
-			/**
 			 * @brief Sets the world point the node orbits around and looks at.
+			 * @note Any thread; the node follows at the logic thread's next cycle (at once from controlNode()).
 			 * @param target A reference to a vector.
 			 */
-			void setTarget (const Base::Math::Vector< 3, float > & target) noexcept;
+			void setTarget (const Base::Math::Vector< 3, float > & target) noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
 			 * @brief Returns the orbited world point.
-			 * @return const Base::Math::Vector< 3, float > &
+			 * @return Base::Math::Vector< 3, float >
 			 */
 			[[nodiscard]]
-			const Base::Math::Vector< 3, float > &
-			target () const noexcept
-			{
-				return m_target;
-			}
+			Base::Math::Vector< 3, float > target () const noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
 			 * @brief Sets the distance between the node and the target.
 			 * @note This re-anchors the dolly : the value becomes the new reference
 			 * distance and the wheel step index restarts from zero.
+			 * @note Any thread; the node follows at the logic thread's next cycle (at once from controlNode()).
 			 * @param distance The distance to the target.
 			 */
-			void setDistance (float distance) noexcept;
+			void setDistance (float distance) noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
 			 * @brief Returns the current distance between the node and the target.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float distance () const noexcept;
+			float distance () const noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
 			 * @brief Sets the dolly distance limits.
+			 * @note Any thread; the node follows at the logic thread's next cycle (at once from controlNode()).
 			 * @param minimum The closest allowed distance.
 			 * @param maximum The furthest allowed distance.
 			 */
-			void setDistanceLimits (float minimum, float maximum) noexcept;
+			void setDistanceLimits (float minimum, float maximum) noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
 			 * @brief Sets the orbit angles.
+			 * @note Any thread; the node follows at the logic thread's next cycle (at once from controlNode()).
 			 * @param azimuth The angle around the world Y axis, in radians.
 			 * @param elevation The angle above the target horizontal plane, in radians.
 			 * Positive looks from above. Clamped near the poles to keep the view stable.
 			 */
-			void setOrientation (float azimuth, float elevation) noexcept;
+			void setOrientation (float azimuth, float elevation) noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
 			 * @brief Returns the angle around the world Y axis, in radians.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float
-			azimuth () const noexcept
-			{
-				return m_azimuth;
-			}
+			float azimuth () const noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
 			 * @brief Returns the angle above the target horizontal plane, in radians.
 			 * @return float
 			 */
 			[[nodiscard]]
-			float
-			elevation () const noexcept
-			{
-				return m_elevation;
-			}
+			float elevation () const noexcept EMEN_EXCLUDES(m_stateAccess);
 
 		private:
 
-			/** @copydoc EmEn::Input::PointerListenerInterface::onPointerMove() */
-			bool onPointerMove (float positionX, float positionY) noexcept override;
+			/** @brief The canonical state the node's position and aim are computed from. */
+			struct Orbit final
+			{
+				Base::Math::Vector< 3, float > target;
+				float azimuth{0.0F};
+				float elevation{0.0F};
+				float referenceDistance{10.0F};
+				float minimumDistance{0.1F};
+				float maximumDistance{4096.0F};
+				int32_t dollyStepIndex{0};
 
-			/** @copydoc EmEn::Input::PointerListenerInterface::onButtonPress() */
-			bool onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept override;
-
-			/** @copydoc EmEn::Input::PointerListenerInterface::onButtonRelease() */
-			bool onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept override;
-
-			/** @copydoc EmEn::Input::PointerListenerInterface::onMouseWheel() */
-			bool onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers) noexcept override;
+				/**
+				 * @brief Returns the distance to the target: the reference distance and the integer dolly index, clamped.
+				 * @return float
+				 */
+				[[nodiscard]]
+				float distance () const noexcept;
+			};
 
 			/**
-			 * @brief Recomputes the node position and aim from the canonical state.
+			 * @brief Returns an elevation kept off the poles.
+			 * @param elevation The angle above the target horizontal plane, in radians.
+			 * @return float
 			 */
-			void applyToNode () noexcept;
+			[[nodiscard]]
+			static float clampedElevation (float elevation) noexcept;
+
+			/** @copydoc EmEn::Scenes::AbstractNodeController::onNodeControlled() */
+			void onNodeControlled () noexcept override EMEN_EXCLUDES(m_stateAccess);
+
+			/** @copydoc EmEn::Scenes::AbstractNodeController::onNodeReleased() */
+			void onNodeReleased () noexcept override EMEN_EXCLUDES(m_stateAccess);
+
+			/** @copydoc EmEn::Scenes::AbstractNodeController::onUpdate() */
+			void onUpdate (Node & node) noexcept override EMEN_EXCLUDES(m_stateAccess);
+
+			/** @copydoc EmEn::Input::PointerListenerInterface::onPointerMove() */
+			bool onPointerMove (float positionX, float positionY) noexcept override EMEN_EXCLUDES(m_stateAccess);
+
+			/** @copydoc EmEn::Input::PointerListenerInterface::onButtonPress() */
+			bool onButtonPress (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept override EMEN_EXCLUDES(m_stateAccess);
+
+			/** @copydoc EmEn::Input::PointerListenerInterface::onButtonRelease() */
+			bool onButtonRelease (float positionX, float positionY, int32_t buttonNumber, int32_t modifiers) noexcept override EMEN_EXCLUDES(m_stateAccess);
+
+			/** @copydoc EmEn::Input::PointerListenerInterface::onMouseWheel() */
+			bool onMouseWheel (float positionX, float positionY, float xOffset, float yOffset, int32_t modifiers) noexcept override EMEN_EXCLUDES(m_stateAccess);
 
 			/** @brief Gap kept between the elevation and the poles, in radians.
 			 * @note The node up vector is derived from the aim direction, an orbit
 			 * crossing a pole would flip the view. */
 			static constexpr auto PoleGap{0.01F};
 
-			std::shared_ptr< Node > m_controlledNode;
-			Base::Math::Vector< 3, float > m_target;
-			float m_azimuth{0.0F};
-			float m_elevation{0.0F};
-			float m_referenceDistance{10.0F};
-			float m_minimumDistance{0.1F};
-			float m_maximumDistance{4096.0F};
-			int32_t m_dollyStepIndex{0};
-			float m_lastPointerX{0.0F};
-			float m_lastPointerY{0.0F};
+			/** @brief Guards the canonical state and the drag: written by the pointer callbacks (main thread) and the
+			 * setters (any thread), read by the logic thread that places the node. */
+			mutable Base::Mutex m_stateAccess;
+			Orbit m_orbit EMEN_GUARDED_BY(m_stateAccess);
+			float m_lastPointerX EMEN_GUARDED_BY(m_stateAccess){0.0F};
+			float m_lastPointerY EMEN_GUARDED_BY(m_stateAccess){0.0F};
 			/** @brief Fractional wheel motion kept until a whole dolly step is reached (touchpads). */
-			float m_pendingDollySteps{0.0F};
-			bool m_dragActive{false};
+			float m_pendingDollySteps EMEN_GUARDED_BY(m_stateAccess){0.0F};
+			bool m_dragActive EMEN_GUARDED_BY(m_stateAccess){false};
+			/** @brief The canonical state changed since the logic thread last placed the node. */
+			bool m_orbitChanged EMEN_GUARDED_BY(m_stateAccess){false};
 	};
 }

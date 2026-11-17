@@ -9,6 +9,7 @@
 - `Scene.rendering.cpp` - Render targets, shadow casting, rendering pipeline
 - `Scene.debug.cpp` - Debug displays (compass, ground zero, boundary planes, octrees)
 - `Debug/Compass.cpp/.hpp` - Orientation compass, drawn **after** the post-process chain. ⚠️ **NOT a scene entity** — see "Debug Helpers and the Exposure Trap"
+- `AbstractNodeController.cpp/.hpp` - The base of the node controllers: the input records, the logic thread applies (scenes doc 02 § Controllers)
 - `NodeController.cpp/.hpp` - Keyboard/gamepad debug node manipulator (value member of Scene)
 - `OrbitController.cpp/.hpp` - Pointer-driven camera orbit around a fixed target (value member of Scene). See "Controllers"
 - `Viewers/ImageViewer.cpp/.hpp` - Builds the `+ImageViewer` scene (unlit picture quad). See "Viewer Scenes"

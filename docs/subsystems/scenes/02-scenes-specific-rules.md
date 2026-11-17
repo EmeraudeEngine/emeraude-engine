@@ -177,7 +177,7 @@ Standalone scene editor for entity picking and gizmo manipulation. See [`Editor/
 - **Activation**: Shift+F3 via Core → `Scenes::Manager::toggleEditorMode()`
 - **Rendering**: Standalone pipeline (not scene entities), renders before overlay
 
-### Controllers (NodeController & OrbitController)
+### Controllers: the family `AbstractNodeController` (NodeController & OrbitController)
 
 Two input-driven manipulators live BY VALUE inside every `Scene` and are registered/unregistered
 by `Scene::enable()`/`Scene::disable()`. Both are **inert without a controlled node** and consume
@@ -185,12 +185,32 @@ no event until one is attached.
 
 | Controller | Input | Registered as | Behavior |
 |------------|-------|---------------|----------|
-| `NodeController` | Keyboard (numpad) + gamepad | Keyboard listener | Debug node manipulation (move/yaw/pitch/roll) |
+| `NodeController` | Keyboard (numpad) + gamepad | Keyboard listener | Debug node manipulation (move/yaw/pitch/roll), one step per key release; the gamepad is polled |
 | `OrbitController` | Pointer | Pointer listener | Orbits a camera node around a fixed target : left-drag = azimuth/elevation, wheel = dolly |
+
+**THE contract of the family — the input records, the logic applies** (owner decisions, 2026-11-17;
+`AbstractNodeController.hpp`):
+- An input callback runs on the MAIN thread, inside the input manager's event pump. It only RECORDS what the user
+  asked, in the finality's own state under the finality's own mutex (the keypad's steps in a bounded list, the orbit's
+  canonical state). **It never touches the node.**
+- `update()` runs on the LOGIC thread, once per cycle (`Scene::processLogics()` walks `m_nodeControllers`, the family
+  as an array of the base): it takes what was recorded and writes the node. The logic thread is the ONLY writer of a
+  controlled node, as of every node of a running scene. What the user did reaches the node one logic cycle later at
+  most (16.7 ms); the main thread never waits.
+- `controlNode()` belongs to the thread that BUILDS the scene (not enabled yet) or to the logic thread: it places the
+  node at once. The setters (`setTarget()`, `setDistance()`…) are for any thread: the node follows at the next cycle.
+- The scene does to all what it does to one: `update()` at every cycle, `releaseNode()` when it is disabled or
+  cleared, `releaseNode(node)` when that node leaves the scene.
+- A new controller is a finality of the base: it derives the base and its device's listener interface, guards what
+  its callbacks record with a mutex of its own, implements `onUpdate(Node &)`, and joins `Scene::m_nodeControllers`.
+
+⚠️ Why: a node has no lock. A controller that moved its node from the callback tore the camera's view under the logic
+thread's publication — 31 ThreadSanitizer reports on one drag in the model viewer (input doc 03 § *What a listener
+does*).
 
 `OrbitController` rules:
 - **Canonical state** `(target, azimuth, elevation, distance)` — the node position is RECOMPUTED
-  from it on every event, never integrated incrementally. The dolly distance derives from an
+  from it by the logic thread whenever it changed, never integrated incrementally. The dolly distance derives from an
   INTEGER step index over a reference distance (`reference × factor^index`, re-anchored by
   `setDistance()`) — the project's anti-FP-accumulation rule.
 - The controlled node **must be a direct child of the scene root** (positioned in Parent space,

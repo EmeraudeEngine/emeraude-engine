@@ -44,6 +44,35 @@ reported the three of them (and the testbed's own flags) written by the main thr
 thread read them; the owner chose that one ordering over per-member atomics (a group of switches changes together, and
 the listener interfaces stay copyable). 0 report after, 3 runs.
 
+### What a listener DOES: it records, the logic thread applies (owner decisions, 2026-11-17)
+
+The sections above are about the STATE of a device and a listener's switch. A listener's CALLBACK
+(`onKeyRelease()`, `onPointerMove()`, `onMouseWheel()`…) runs on the main thread, inside
+`Input::Manager::waitSystemEvents()` — and what it does there must not touch what the logic thread owns. The scene's
+node controllers did: `OrbitController` wrote its camera node at every pointer event (`Node::setPosition()` +
+`lookAt()`, which push the camera's coordinates into the view's logic state), while the logic thread processed the
+node and published the view. A node has no lock.
+
+The contract (`Scenes::AbstractNodeController`, scenes doc 02 § Controllers): **the callback only records, under the
+controller's own mutex; `update()`, called by the logic thread at every cycle, applies what was recorded to the node.**
+One logic cycle of delay at most; the main thread never waits for a cycle (a wait per pointer event would stall the
+event pump: a mouse sends dozens of moves per cycle). Any listener that drives a scene object follows it — the
+alternative for a rare, discrete change is `Scenes::Manager::betweenLogicCycles()`.
+
+Proof (Linux, engine 3186ee4e + the change):
+- ThreadSanitizer (Debug, window-less, the software device; no demo, a glTF file opened in the model viewer through
+  `Core.openFiles`, then two drags of 60 pointer moves and 20 wheel notches injected by the console): 31 reports
+  before — `ViewMatrices2DUBO::updateViewCoordinates()` and `Node::lookAt()` on the main thread against the logic
+  thread's `publishStateForRendering()` and `Node::getWorldCoordinates()` —, exit code 66; 0 report after, exit 0.
+- The same behaviour (Release, RTX 3070 Ti, window-less, the validation layer loaded, 0 VUID): the camera node's
+  position read after each stage — framed at the opening, after a drag of 40 moves, three notches in, five out, a move
+  without a drag — is the SAME to nine digits with the binary before and the binary after.
+- `NodeController` has no caller that gives it a node (engine, testbed, a downstream application): exercised by a
+  temporary change that handed it a probe node in the model viewer. The keypad's steps arrive one by one (-6, 0, +6
+  on X, then Y, then Z; the transform-space and mode keys move nothing), none dropped; 91 injected keys and a drag
+  under ThreadSanitizer: 0 report; the node destroyed, the controller lets it go. ⚠️ Its gamepad page was NOT
+  exercised (no gamepad can be injected): its 18 bindings were compared one by one with the code they replace.
+
 ### Reading it from the console (2026-10-16)
 
 `Core.InputManagerService.gamepadState(slot)` and `joystickState(slot)` (read-only, also MCP tools) report a connected

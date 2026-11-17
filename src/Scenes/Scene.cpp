@@ -50,6 +50,7 @@
 #include "ObservableTrait.hpp"
 #include "Physics/MovableTrait.hpp"
 #include "PrimaryServices.hpp"
+#include "Scenes/AbstractNodeController.hpp"
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 #include "Scenes/BindlessTextureSet.hpp"
 #include "Scenes/Component/Abstract.hpp"
@@ -198,7 +199,10 @@ namespace EmEn::Scenes
 		/* From 'Managers deeply linked to the scene content' */
 		{
 			/* Release the shared_ptr on a scene node. */
-			m_nodeController.releaseNode();
+			for ( auto * controller : m_nodeControllers )
+			{
+				controller->releaseNode();
+			}
 
 			/* Release all shared_ptr on renderable. */
 			for ( auto & renderList : m_renderLists )
@@ -392,15 +396,16 @@ namespace EmEn::Scenes
 	void
 	Scene::disable () noexcept
 	{
-		/* FIXME: Find a better way to stop the node controller! */
-		m_nodeController.releaseNode();
-		m_nodeController.disconnectDevice();
-
+		/* The input manager stops calling the controllers first, then they let their node go. */
 		m_nodeControllerRegistration.reset();
-
-		m_orbitController.releaseNode();
-
 		m_orbitControllerRegistration.reset();
+
+		for ( auto * controller : m_nodeControllers )
+		{
+			controller->releaseNode();
+		}
+
+		m_nodeController.disconnectDevice();
 
 		this->suspendAllEntities();
 	}
@@ -445,7 +450,12 @@ namespace EmEn::Scenes
 		 * this frame (an enabled RTGI gathers the same sky itself). */
 		this->updateIBLDiffuseOwnership();
 
-		m_nodeController.update();
+		/* The node controllers apply what the input devices recorded since the last cycle: this thread is the only
+		 * writer of a controlled node (AbstractNodeController). */
+		for ( auto * controller : m_nodeControllers )
+		{
+			controller->update();
+		}
 
 		/* Update scene static entities logics. */
 		{
