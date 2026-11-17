@@ -266,9 +266,9 @@ rendering side, the ambient, the extent a frame culls an entity on) are the seve
 The last three rows (2026-11-16) were never reported: found by READING — a configuration written on a LIVE object from
 another thread (the console's tangent-space toggle, the renderer's switches), and an entity's renderable flag. Their
 proof and the peers' round 15 close this section, and the item that carried all of them
-(`tsan-logic-render-instance-state-races`, closed on 2026-11-17). What the main thread still does to a running scene
-through the scene service's other console commands is item
-`scene-console-commands-write-the-scene-outside-the-exclusive-access`.
+(`tsan-logic-render-instance-state-races`, closed on 2026-11-17). What the main thread did to a running scene through
+the scene service's other console commands is the last proof of this section (2026-11-17, closed after the peers'
+round 16).
 
 Proof (Linux, 2026-11-15). ThreadSanitizer — Debug, llvmpipe forced in a settings copy, the testbed driven through
 the console (its active scene unloaded, reloaded, destroyed, rebuilt; the recipe: `docs/caution-points.md` § *TSan on a
@@ -492,6 +492,20 @@ the console's argument parser refuses `nan`, `inf` and an overflowing `1e39` bef
 "Argument 'x' expects a float, got 'nan'."). It was first recorded here as a fixed defect; it never was one.
 ⚠️ Seen in these runs, in BOTH binaries, not explained: `sky-lab` ends the same scenario at one of two brightness
 levels (mean 155 / 255 in four launches, 118 in two; the sky's reported state is identical).
+
+**Peers' round 16** (2026-11-17, engine 8332013e: the console commands under the exclusive access). macOS (Apple M6,
+MoltenVK 1.4.2, Apple clang with `-Wdocumentation -Werror`, `-Wunused-lambda-capture` silent) and Windows (RTX 3500
+Ada, MSVC 19.44 under /W4 /WX) build Release and Debug with 0 warning — the generic lambdas captured by value, the
+default argument of class type, the abbreviated templates, and nothing missing once `StaticVector.hpp` left the file —
+and send the same 41 commands to `animation-debug` (window-less, the validation layer loaded): every one answers with
+the expected text, the refusals included ("Unknown mesh …", "Unknown skybox …", "Argument 'x' expects a float, got
+'nan'."), none waits for itself, exit 0, 0 VUID, 0 error line. `enableTBN`: 23 instances and 2 skipped then 25 on
+Windows as on Linux; refused on macOS (no geometry stage), then 25. `getRenderStatistics()` thirty times: median 0.012 s
+on both (macOS on a persistent connection, Windows with its client), the slowest 0.015 s.
+⚠️ What the exclusive access costs shows where a frame is long: on Windows `getGroundLevel` answered in 0.76 s right
+after `setGround(default)`, and the first `toggleCompass` in 0.37 s, every other command in 0.01 to 0.045 s (macOS:
+0.18 s for `clearHighlight`, the rest under 0.045 s). Not investigated; it fits a command that waits for the frame in
+flight — the one that prepares the new ground — and a compass whose resources are created under the access.
 
 ### A resource's load reaches a scene object on the logic thread (2026-11-15, owner decisions)
 
