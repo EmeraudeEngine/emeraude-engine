@@ -246,6 +246,9 @@ orders a plain write on one side against a read on the other. ThreadSanitizer fo
 | The view (its position, its matrices, its near and far planes) as the rendering side reads it outside the chain | the logic thread (`Camera` → `updateViewCoordinates()`; `DirectionalLight::updateCascades()` rewrites a cascaded shadow map's planes at every cycle) | the rendering thread: the sprite billboards of the acceleration-structure rebuild, the temporal-history mask, the editor's gizmos, the debug compass; the view distance of the two render list builders, the selection outline's planes, `RTGI`'s sky distance | the FRAME'S VIEW, like the chain's effects: `position(m_frameReadStateIndex)` for the rebuild, a `Graphics::FrameView` for the others (`Editor::Manager::render(commandBuffer, readStateIndex)`, `Gizmo::Abstract::render(commandBuffer, frameView)`, `Debug::Compass::render(commandBuffer, frameView)`, `SelectionOutline::recordComposite(…, frameView, …)`). The planes: `ViewMatricesInterface::nearPlane()` / `farPlane(readStateIndex)`, `FrameView::nearPlane()` / `farPlane()` — the frame's view itself answered the far plane from the logic state. ⚠️ `RenderTarget::Abstract::viewDistance()` and its six implementations are REMOVED (owner decision): the view distance of a frame is `viewMatrices().farPlane(readStateIndex)`, one source for every target. They read the view's LOGIC state (2026-11-16) |
 | The scene's ambient (chromaticity, effective illuminance) as a traced effect adds it at its hits | the logic thread (`LightSet::setAmbientLight*()`, `Scene::applyBackgroundLightingNow()`) | the rendering thread (`RTR`'s frame block, the irradiance probe volume's inputs, `FrameContext::ambientIlluminance`) | the FRAME'S VIEW again: `Scene::refreshAmbientLightProperties()` already gives the ambient to the view matrices, and their published slot is what the raster of the frame reads — `FrameView::ambientChromaticity()` / `ambientIlluminance()` (`ViewMatricesInterface::ambient*(readStateIndex)`). The traced value is the raster's by construction; nothing on the rendering side reads the light set's ambient nor `Scene::m_IBLAmbientEnabled` any more (2026-11-16, owner decision over a slot of the light set's own) |
 | What a frame CULLS an entity on (its world extent) | the logic thread: the entity's coordinates (physics, a vehicle, an animation), its render box (`updateEntityProperties()`), its collision model (`refreshCollisionBoundaries()` at every pose of a skinned visual) | the rendering thread: `Scene::populateRenderLists()` and `populateShadowCastingRenderList()` — they called `isVisibleTo()`, which read all three live | a RENDER STATE SLOT (2026-11-16, owner decision): `AbstractEntity::publishRenderExtent(slot)`, from `publishStateForRendering()` right after the coordinates of the slot, writes the world box of what the components draw (else the collision model's, else nothing: the published position decides); the two list builders test their volume against `publishedRenderExtent(readStateIndex)` (`isSeenBy()` in `Scene.rendering.cpp`). An entity that neither moved nor rebuilt its render box copies the extent of its previous publication. `LocatableInterface::isVisibleTo()` stays, for the LOGIC thread |
+| Whether an entity draws anything, as a frame asks it before it visits the entity | the logic side: `AbstractEntity::updateEntityProperties()` rewrites the entity's renderable flag each time its components change — RESET first, set again when it finds a drawing component | the rendering thread: the two list builders (shadow casters, the ray-traced list, the raster lists, the particle emitters), the tangent-space pass | a RENDER STATE SLOT (2026-11-16, owner decision): the answer is the `None` kind of the extent the entity publishes (`RenderExtentKind::None`, `AbstractEntity::isPublishedRenderable(readStateIndex)`), written at the end of the cycle with the coordinates and the extent of the same state. The live flag (`isRenderable()`) is the logic side's: a frame that read it between the reset and the set left a DRAWN entity out, shadow included. A slot never written says `None`: an entity created during a cycle is not drawn by a frame that latched an earlier state (its coordinates of that state are the default ones, the world origin). `Scene::forEachRenderableInstance()` — no frame's state: the console, a new render target — visits every entity instead of testing the flag |
+| An instance's CONFIGURATION: its flag word (lighting, shadow casting and receiving, ray tracing, depth test and write, the infinity view, the tangent-space display…), its draw range, its shadow distance and shadow level-of-detail bias | whoever builds the component; the console (main thread) | the rendering thread: the list builders at every frame, the program generation | a RULE, no mechanism (2026-11-16, owner decision): written BEFORE the component is linked to its entity — the `setup()` of the component builder, the frame cannot reach the instance yet — or under the scene's EXCLUSIVE access (`Scenes::Manager::withExclusiveActiveScene()`: the component console adapters since 2026-09-27, and the scene service's `enableTBN`, which took a mere snapshot of the scene). Never on a linked instance otherwise. `Toolkit::generateHLODProxy()` configured its instance after the link: moved into the setup (`docs/component-builder-pattern.md`) |
+| The renderer's switches written by another thread: the tangent-space display, the grab pass forced on, the shadow maps and the render-to-textures | a scene being built while another one may be drawn (`enableTBNSpaceRendering()`, `enableGrabPass()`), the console, the main thread (`toggleOffscreenRendering()`, Core's key) | the rendering thread, at every frame | four atomics of `Graphics::Renderer`, relaxed: each a switch on its own. The renderer's, not a scene's — the exclusive access of the active scene does not order a scene under construction against the frame. The frame reads the shadow-map and render-to-texture switches ONCE (the video memory it updates for a target is that of a target it renders) |
 
 Choosing the protocol of a new datum that both threads touch:
 
@@ -259,10 +262,13 @@ Choosing the protocol of a new datum that both threads touch:
 
 What this does NOT cover: the pool worker that finishes a resource's load — the next section. The members other
 scenes reported after the first six (an instance's animation time and flag word, the view's logic state read on the
-rendering side, the ambient, the extent a frame culls an entity on) are the last seven rows of the table, and their
-proof closes this section. What is left of item `tsan-logic-render-instance-state-races` is a rule, not a report: a
-configuration written on a LIVE object from another thread (the console's tangent-space toggle on an instance, an
-entity's own flag word).
+rendering side, the ambient, the extent a frame culls an entity on) are the seven rows that follow the first six.
+The last three rows (2026-11-16) were never reported: found by READING — a configuration written on a LIVE object from
+another thread (the console's tangent-space toggle, the renderer's switches), and an entity's renderable flag. Their
+proof closes this section;
+item `tsan-logic-render-instance-state-races`, which carried all of them, stays open until the peers have run that
+last lot. What the main thread still does to a running scene through the scene service's other console commands is
+item `scene-console-commands-write-the-scene-outside-the-exclusive-access`.
 
 Proof (Linux, 2026-11-15). ThreadSanitizer — Debug, llvmpipe forced in a settings copy, the testbed driven through
 the console (its active scene unloaded, reloaded, destroyed, rebuilt; the recipe: `docs/caution-points.md` § *TSan on a
@@ -326,7 +332,7 @@ emitters play among 157. The final code, after the analysers' form corrections: 
 console shutdown. Every scene starts and reaches a clean engine exit; 33 report nothing. What the 7 others report is
 NOT in the table above:
 - `node-relation`, `collision-debug`, `beams`, `paths`, `city`, `citadel` — the CULLING reads an entity's logic state:
-  what remains of item `tsan-logic-render-instance-state-races`.
+  fixed the same day (the extent row, its proof below).
 - `sky-lab`, `city` — a sky material's atmosphere read while its creation function sets it on a pool worker: item
   `sky-material-atmosphere-read-while-its-creation-sets-it`.
 - `city`, the testbed's own code — an image's average colour read while the image loads (the testbed's item
@@ -381,6 +387,53 @@ older binary was the only one the peer still held, engine 31d39b6a of five round
 the fault-injection option (no injection switch passed). Linux, the same configuration, six alternated launches of
 each binary: 105.2 to 106.9 nits before, 104.8 to 106.5 after. ⚠️ Not verified by the peers: entities MOVING while they are culled — `node-relation`'s default framing shows
 none of its moving objects (both peers); that part rests on Linux's ThreadSanitizer runs and statistics.
+
+**A configuration written on a live object, and whether an entity draws (2026-11-16, owner decisions) — proof.**
+Linux, engine ebe81919 + the change.
+
+ThreadSanitizer (the same recipe, `default`, a console scenario: `enableTBN` on and off 16 times, `addTexturedShape`
+three times in between): before, 1 report — `Renderer::enableTBNSpaceRendering()` on the main thread against the
+frame's read of the switch — and exit code 66; after, 0 report and exit 0, the same replies (1 instance toggled and 1
+skipped for its geometry without tangent space, 4 and 1 once the three shapes exist).
+⚠️ The flag words of the instances were written 16 times while frames read them and were NOT reported before: when
+both threads take a common mutex a little later (the scene's entity lists here), ThreadSanitizer orders the two
+accesses after the fact. A clean run proves nothing about a window of a few microseconds — these three rows rest on
+the reading, and on the widened window below.
+
+The entity's flag, with the window WIDENED (a temporary pause of 400 ms between the reset and the set in
+`updateEntityProperties()` for the node `Fox` of `animation-debug`; Release, RTX 3070 Ti, window-less, the validation
+layer loaded, 0 VUID, exit 0):
+- the logic thread recomputes the entity's properties through its deferred path — what the end of a resource's load
+  does — 4 times in 24 s: the LIVE flag said "draws nothing" in 561 raster list builds (the test of the code before
+  left the entity out each time), the frame's render state said so in NONE;
+- ⚠️ the same recomputation started from the MAIN thread by a console command that takes no access
+  (`attachMicrophone(Fox, …)`) still loses the entity: 153 and 161 list builds before, 150 and 161 after. The logic
+  thread's publication reads the half-written flag and publishes it. The slot protects a frame from the logic thread's
+  own work, not from a third thread that changes the entity in the middle of a cycle (item
+  `scene-console-commands-write-the-scene-outside-the-exclusive-access`).
+
+Outside any pause the two tests decide the same: counted at every entity test of the three list builders, the live
+flag and the frame's state agree on 3 000 000 tests of `game-logic` in 25 s (0 disagreement; none either on `particles`
+and `animation-debug`).
+
+Hardware device (RTX 3070 Ti, Release, window-less, the validation layer loaded; the binary before against the binary
+after, one launch after the other, the render statistics read 10 s and 14 s after the start — 30 s and 36 s for the
+last four; every launch exit 0, 0 VUID, 0 error line). The SAME statistics on the ten scenes that do not move:
+`default` (2 / 62 | 0 / 0), `animation-debug` (22 / 61198 | 21 / 61186), `light-and-shadow-debug` (7 / 673958 |
+30 / 4033408), `node-relation` (4 / 86), `sprite` (100003 / 200016), `beams` (8 / 1142), `terrain` (60611 / 31958641 |
+8776 / 16147070), `sponza` (290 / 10494160 | 454 / 12833689), `global-illumination` (19 / 266 | 30 / 15340),
+`reflexion-debug` (9 / 70529 | 15 / 153407). Two scenes move by themselves: `particles` (1939 to 1946 instances with
+both binaries) and `game-logic`, whose counts change from launch to launch — five launches of each binary: 266 to 285
+instances in the view and 93 to 111 shadow casters before, 265 to 291 and 87 to 116 after; hence the count above.
+The tangent-space display, `geometry-loader`, the command sent to both binaries: the same replies, about 84 000 pixels
+changed by the display with each (looked at: the vectors cover the model), back to the image of before once disabled.
+The final code (the renderer's three other switches made atomic): the same statistics again on `default`,
+`light-and-shadow-debug`, `animation-debug` and `liminal` (6 / 160 | 126 / 4457264, a scene that forces the grab pass
+on), and the console scenario under ThreadSanitizer once more: 0 report, exit 0.
+⚠️ `water-world` cannot serve such a comparison to the unit: its palms are planted at random (2534 to 2596 instances
+from launch to launch with either binary), and about one launch in 25 starts in another state — 3600 instances and
+twice the shadow casters, with the binary of BEFORE too (1 launch of 30; 2 of 44 after): item
+`instanced-tile-sometimes-escapes-the-culling-after-a-launch`.
 
 ### A resource's load reaches a scene object on the logic thread (2026-11-15, owner decisions)
 
@@ -469,8 +522,9 @@ the binary after).
   that kill it disabled — `docs/caution-points.md` § *The software device gives a ray-query hit the identity of another
   instance* —, a console shutdown): `global-illumination` with the projection — registered in that run —, 0 report,
   exit 0; `animation-debug`, 0 report; `light-and-shadow-debug` with projections, 1 report, and `game-logic`, 4: none
-  on a light or a sound emitter — they are the three members of item `tsan-logic-render-instance-state-races` (an
-  instance's animation time, its flag word, the view's logic state read by the acceleration-structure rebuild).
+  on a light or a sound emitter — they are three rows of § *Plain state shared by the logic and rendering threads* (an
+  instance's animation time, its flag word, the view's logic state read by the acceleration-structure rebuild), fixed
+  the same day.
   ⚠️ The binary BEFORE the change was not run under the sanitizer: this is the absence of a report after, not a
   before / after. The cancellation of an awaited play by `stop()` is verified by reading only: no console command
   plays a sound on an emitter, so the window between `play()` and the end of the load cannot be driven from outside

@@ -374,11 +374,13 @@ namespace EmEn::Scenes
 
 		m_lastExtentSlot = writeStateIndex;
 
-		/* An entity that draws nothing is not culled at all: the rendering thread leaves it before any visibility test. */
+		/* An entity that draws nothing says so in the slot: the rendering thread leaves it before any visibility test
+		 * (isPublishedRenderable()), and reads the answer of ITS render state, never the flag — read here, on the thread
+		 * that owns it, once updateEntityProperties() is done with it. */
 		if ( !this->isRenderable() )
 		{
 			extent.box.reset();
-			extent.kind = RenderExtentKind::Point;
+			extent.kind = RenderExtentKind::None;
 
 			return;
 		}

@@ -188,12 +188,21 @@ namespace EmEn::Scenes
 		{
 			const auto & extent = entity.publishedRenderExtent(readStateIndex);
 
-			if ( extent.kind == AbstractEntity::RenderExtentKind::Point )
+			switch ( extent.kind )
 			{
-				return volume.isSeeing(publishedCoordinates.position());
+				/* Nothing to draw in this render state (the callers leave such an entity before this test). */
+				case AbstractEntity::RenderExtentKind::None :
+					return false;
+
+				case AbstractEntity::RenderExtentKind::Point :
+					return volume.isSeeing(publishedCoordinates.position());
+
+				case AbstractEntity::RenderExtentKind::RenderBox :
+				case AbstractEntity::RenderExtentKind::CollisionBox :
+					return volume.isSeeing(extent.box);
 			}
 
-			return volume.isSeeing(extent.box);
+			return false;
 		}
 
 		/**
@@ -1197,7 +1206,7 @@ namespace EmEn::Scenes
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
-				if ( !staticEntity->isRenderable() )
+				if ( !staticEntity->isPublishedRenderable(readStateIndex) )
 				{
 					continue;
 				}
@@ -1238,7 +1247,7 @@ namespace EmEn::Scenes
 			{
 				const auto & currentNode = crawler.currentNode();
 
-				if ( !currentNode->isRenderable() )
+				if ( !currentNode->isPublishedRenderable(readStateIndex) )
 				{
 					continue;
 				}
@@ -1654,7 +1663,7 @@ namespace EmEn::Scenes
 
 		const auto castFrom = [&] (const AbstractEntity & entity) noexcept {
 			/* Check whether the entity contains something to render. */
-			if ( !entity.isRenderable() )
+			if ( !entity.isPublishedRenderable(readStateIndex) )
 			{
 				return;
 			}
@@ -1774,7 +1783,7 @@ namespace EmEn::Scenes
 			{
 				const auto & entity = emitter->parentEntity();
 
-				if ( !entity.isRenderable() )
+				if ( !entity.isPublishedRenderable(readStateIndex) )
 				{
 					continue;
 				}
@@ -2147,7 +2156,7 @@ namespace EmEn::Scenes
 		 * materialIndices[geometryIndex] (multi-geometry BLAS). Distance-only culling, no frustum: a reflection or a
 		 * bounce reaches what the camera does not see. */
 		const auto traceFrom = [&] (const AbstractEntity & entity) noexcept {
-			if ( !entity.isRenderable() )
+			if ( !entity.isPublishedRenderable(readStateIndex) )
 			{
 				return;
 			}
@@ -2211,7 +2220,7 @@ namespace EmEn::Scenes
 		 * because their volume was the flat quad at Z=0, which ignores the billboard rotation done in the vertex
 		 * shader. SpriteResource now returns the SWEPT volume instead, which is rotation-invariant. */
 		const auto rasterFrom = [&] (const AbstractEntity & entity) noexcept {
-			if ( !entity.isRenderable() )
+			if ( !entity.isPublishedRenderable(readStateIndex) )
 			{
 				return;
 			}
@@ -2327,7 +2336,7 @@ namespace EmEn::Scenes
 			{
 				const auto & entity = emitter->parentEntity();
 
-				if ( !entity.isRenderable() )
+				if ( !entity.isPublishedRenderable(readStateIndex) )
 				{
 					continue;
 				}
@@ -2761,13 +2770,10 @@ namespace EmEn::Scenes
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
-				/* Check whether the static entity contains something to render. */
-				if ( !staticEntity->isRenderable() )
-				{
-					continue;
-				}
-
-				/* Go through each entity component to update visuals. */
+				/* Go through each entity component to update visuals.
+				 * NOTE: Every entity is visited: AbstractEntity::isRenderable() belongs to the thread that changes the
+				 * entity's components, this walk runs on its caller's thread with no frame's render state, and an entity
+				 * that draws nothing gives no instance. */
 				staticEntity->forEachComponent([&instances] (const Component::Abstract & component) {
 					if ( auto renderableInstance = component.getRenderableInstance(); renderableInstance != nullptr )
 					{
@@ -2788,13 +2794,7 @@ namespace EmEn::Scenes
 			{
 				const auto & currentNode = crawler.currentNode();
 
-				/* Check whether the scene node contains something to render. */
-				if ( !currentNode->isRenderable() )
-				{
-					continue;
-				}
-
-				/* Go through each entity component to update visuals. */
+				/* Go through each entity component to update visuals (every node: see the static entities above). */
 				currentNode->forEachComponent([&instances] (const Component::Abstract & component) {
 					if ( auto renderableInstance = component.getRenderableInstance(); renderableInstance != nullptr )
 					{

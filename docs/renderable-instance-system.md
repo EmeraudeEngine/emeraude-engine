@@ -64,6 +64,14 @@ is an atomic (`isBroken()`), "an extra transformation matrix applies" is an atom
 `Multiple` under its local-data mutex. The logic thread wrote those bits while the rendering thread read the word
 (scenes doc 12 § *Plain state shared by the logic and rendering threads*).
 
+⚠️ **When the configuration is written** (2026-11-16, owner decision) — the flag word, and the draw range, the shadow
+distance and the shadow level-of-detail bias beside it: **before the component that owns the instance is linked to its
+entity** (the `setup()` of the entity's component builder, `docs/component-builder-pattern.md`), **or under the scene's
+exclusive access** (`Scenes::Manager::withExclusiveActiveScene()` — the component console adapters, and the scene
+service's `enableTBN`). Never on a linked instance otherwise: the rendering frame reads the word with no lock. Every
+switch but `DisplayTBNSpaceEnabled` is read when the instance's programs are generated, so a later change would change
+nothing anyway.
+
 ## Layer System
 
 A Renderable can contain multiple **layers**, where each layer corresponds to a sub-geometry with its own material.

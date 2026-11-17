@@ -740,12 +740,13 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Controls the state of shadow maps rendering.
+			 * @note Any thread: an atomic switch the rendering thread reads (m_shadowMapsEnabled).
 			 * @param state The state.
 			 */
 			void
 			enableShadowMaps (bool state) noexcept
 			{
-				m_shadowMapsEnabled = state;
+				m_shadowMapsEnabled.store(state, std::memory_order_relaxed);
 			}
 
 			/**
@@ -756,7 +757,7 @@ namespace EmEn::Graphics
 			bool
 			isShadowMapsEnabled () const noexcept
 			{
-				return m_shadowMapsEnabled;
+				return m_shadowMapsEnabled.load(std::memory_order_relaxed);
 			}
 
 			/**
@@ -823,12 +824,13 @@ namespace EmEn::Graphics
 
 			/**
 			 * @brief Controls the state of rendering to textures.
+			 * @note Any thread: an atomic switch the rendering thread reads (m_renderToTexturesEnabled).
 			 * @param state The state.
 			 */
 			void
 			enableRenderToTextures (bool state) noexcept
 			{
-				m_renderToTexturesEnabled = state;
+				m_renderToTexturesEnabled.store(state, std::memory_order_relaxed);
 			}
 
 			/**
@@ -839,23 +841,29 @@ namespace EmEn::Graphics
 			bool
 			isRenderToTexturesEnabled () const noexcept
 			{
-				return m_renderToTexturesEnabled;
+				return m_renderToTexturesEnabled.load(std::memory_order_relaxed);
 			}
 
 			/**
 			 * @brief Toggles offscreen-rendering.
+			 * @note ONE thread toggles (the main thread: Core's key handler): the read and the two stores are not one
+			 * operation. The rendering thread reads each switch once per frame.
 			 */
 			void
 			toggleOffscreenRendering () noexcept
 			{
-				m_renderToTexturesEnabled = !m_renderToTexturesEnabled;
-				m_shadowMapsEnabled = m_renderToTexturesEnabled;
+				const bool enabled = !m_renderToTexturesEnabled.load(std::memory_order_relaxed);
+
+				m_renderToTexturesEnabled.store(enabled, std::memory_order_relaxed);
+				m_shadowMapsEnabled.store(enabled, std::memory_order_relaxed);
 			}
 
 			/**
 			 * @brief Controls the state of the TBN space rendering.
 			 * @note Visual debug functionality, this needs a geometry shader stage support from the GPU: on a device
 			 * without it (MoltenVK), enabling is refused with a warning and the state stays disabled.
+			 * @note Any thread (a scene being built, the console): the switch is an atomic the rendering thread reads at
+			 * every frame. The bit of each instance is another matter (RenderableInstance::Abstract::enableDisplayTBNSpace()).
 			 * @see isTBNSpaceRenderingAvailable()
 			 * @param state The state.
 			 */
@@ -878,17 +886,18 @@ namespace EmEn::Graphics
 			bool
 			isTBNSpaceRenderingEnabled () const noexcept
 			{
-				return m_TBNSpaceRenderingEnabled;
+				return m_TBNSpaceRenderingEnabled.load(std::memory_order_relaxed);
 			}
 
 			/**
 			 * @brief Controls the state of the grab pass.
+			 * @note Any thread (a scene being built forces it on): an atomic switch the rendering thread reads.
 			 * @param state The state.
 			 */
 			void
 			enableGrabPass (bool state) noexcept
 			{
-				m_grabPassEnabled = state;
+				m_grabPassEnabled.store(state, std::memory_order_relaxed);
 			}
 
 			/**
@@ -899,7 +908,7 @@ namespace EmEn::Graphics
 			bool
 			isGrabPassEnabled () const noexcept
 			{
-				return m_grabPassEnabled;
+				return m_grabPassEnabled.load(std::memory_order_relaxed);
 			}
 
 			/**
@@ -2229,10 +2238,13 @@ namespace EmEn::Graphics
 			Base::Mutex m_surfaceGeometriesAccess; ///< Guards m_surfaceGeometries (loading threads register, the render thread updates).
 			std::vector< std::weak_ptr< Geometry::Interface > > m_surfaceGeometries EMEN_GUARDED_BY(m_surfaceGeometriesAccess); ///< Geometries whose surface follows the camera every frame.
 			bool m_motionBlurAllowed{false};
-			bool m_shadowMapsEnabled{true};
-			bool m_renderToTexturesEnabled{true};
-			bool m_TBNSpaceRenderingEnabled{false};
-			bool m_grabPassEnabled{false};
+			/* The four switches below are written by another thread than the one that reads them at every frame — the main
+			 * thread (Core's offscreen-rendering key, the console), a scene being built (the tangent-space display, the grab
+			 * pass forced on) against the rendering thread: atomics, relaxed (each a switch on its own). */
+			std::atomic< bool > m_shadowMapsEnabled{true};
+			std::atomic< bool > m_renderToTexturesEnabled{true};
+			std::atomic< bool > m_TBNSpaceRenderingEnabled{false};
+			std::atomic< bool > m_grabPassEnabled{false};
 			bool m_shutdownRequested{false};
 			bool m_MDIEnabled{false};
 			/* Decided once per recorded frame: the post-processor master switch AND actual work

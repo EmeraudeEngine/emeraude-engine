@@ -1,54 +1,47 @@
 ---
 id: tsan-logic-render-instance-state-races
-title: A configuration written on a LIVE object from another thread (an instance's tangent-space toggle, an entity's flag word) — what is left once the six states ThreadSanitizer reported have a protocol
+title: The states shared by the logic and rendering threads all have a protocol — the last lot (a configuration written on a live object, whether an entity draws anything) awaits the peers
 status: in-progress
 priority: high
-scope: Graphics/RenderableInstance::Abstract (the configuration setters, the flag word), Scenes/AbstractEntity (its flag word: isRenderable()), Scenes/Manager.console.cpp (the tangent-space toggle)
+scope: Graphics/RenderableInstance::Abstract (when its configuration is written), Scenes/AbstractEntity (isPublishedRenderable()), Scenes/Manager.console.cpp (enableTBN), Graphics/Renderer (its four switches)
 opened: 2026-11-15
 tags: [tsan, concurrency, defect]
 ---
 
-# A configuration written on a LIVE object from another thread (an instance's tangent-space toggle, an entity's flag word) — what is left once the six states ThreadSanitizer reported have a protocol
+# The states shared by the logic and rendering threads all have a protocol — the last lot (a configuration written on a live object, whether an entity draws anything) awaits the peers
 
 ## Why
 
 Both threads hold the active scene's access SHARED, so nothing orders a plain write on one side against a read on the
-other (scenes doc 12 § *Plain state shared by the logic and rendering threads*).
+other. Every such state found — by ThreadSanitizer, then by reading — has ONE protocol since 2026-11-16: the table,
+the rule for choosing a protocol, the proofs and the numbers are scenes doc 12 § *Plain state shared by the logic and
+rendering threads*. The peers passed all of it but the last lot (rounds 10, 13 and 14).
 
-**Fixed on 2026-11-16** (owner decisions; the protocols, the proofs and the numbers are in scenes doc 12, the last
-seven rows of its table): an instance's animation time, its flag word's three state bits, the view read on the
-rendering side — its position, its matrices, its near and far planes, `RenderTarget::Abstract::viewDistance()` removed
-—, the scene's ambient as the traced effects add it, and the extent a frame culls an entity on. The sweep of the
-testbed's scenes under ThreadSanitizer, twice: NO report is left between the logic and the rendering threads.
-The peers passed them on 2026-11-16 (round 14, macOS and Windows: scenes doc 12).
-
-**What is left was never reported — found by reading**:
-
-- An instance's flag word now holds configuration only, set when its component is created. ONE caller writes it on a
-  live instance from another thread: the console command that toggles the tangent-space display
-  (`Scenes/Manager.console.cpp` → `RenderableInstance::Abstract::enableDisplayTBNSpace()`), on the main thread, while
-  the rendering thread reads the word (`isLightingEnabled()`, `isShadowCastingDisabled()`…). No run sent that command.
-- An ENTITY has a flag word too: `AbstractEntity::isRenderable()` is read by the rendering thread (the two list
-  builders) and written by `updateEntityProperties()` on the logic thread, each time its components change.
+The last lot (2026-11-16, owner decisions, proven on Linux — the last three rows of the table and the proof that
+closes the section):
+- whether an entity draws anything is read by a frame in ITS render state (`AbstractEntity::isPublishedRenderable()`,
+  the `None` kind of the published extent), never on the live flag `updateEntityProperties()` resets and sets again;
+- an instance's configuration is written before its component is linked to the entity (the builder's `setup()`) or
+  under the scene's exclusive access — `enableTBN` takes it, `Toolkit::generateHLODProxy()` configures in the setup;
+- the renderer's four switches written by another thread (the tangent-space display, the grab pass, the shadow maps
+  and the render-to-textures) are atomics.
 
 ## What remains
 
-- **The rule for a configuration change on a live object — an owner decision**: e.g. the word becomes atomic (one
-  mechanism for every bit, a locked operation per write), or a configuration change goes through the logic cycle and
-  is published like a state, or the bits that change while the scene runs leave the word as the three state bits did.
-- Apply it to the instance's word and to the entity's, then send the console command in a ThreadSanitizer run.
+- **The peers' round on that lot** (macOS, Windows): Release and Debug with 0 warning; the render statistics of the
+  reference scenes unchanged (`animation-debug` 22 / 61198 | 21 / 61186, `light-and-shadow-debug` with projections
+  7 / 673958 | 30 / 4033408, `terrain` as their round 14); `enableTBN(1)` then `enableTBN(0)` on `geometry-loader`
+  (Windows: the vectors drawn then gone; macOS: refused, the device has no geometry stage — MoltenVK); exit 0, 0 VUID.
+- Record the verdicts in scenes doc 12 and the ledger, then delete this file.
 
 ## ⚠️ Traps
 
-- The recipe and the traps of a TSan run on the software device: `docs/caution-points.md` § *The software device
-  gives a ray-query hit the identity of another instance*.
-- ThreadSanitizer stops repeating a report, and a family hidden behind another shows only once the first is fixed (the
-  far plane appeared after the culling was fixed): run the sweep again after each fix.
-- The reports that remain in the sweep are LOADING threads, other items:
-  `sky-material-atmosphere-read-while-its-creation-sets-it`, `renderable-flags-read-while-its-loader-writes-them`, and
-  the testbed's `city-reads-an-image-average-colour-while-it-loads`.
+- ThreadSanitizer misses these windows of a few microseconds (scenes doc 12, the last proof): a clean run on a peer
+  proves nothing about them; what the peers verify is the build on their compiler and the unchanged behaviour.
+- What the MAIN thread still does to a running scene through the scene service's other console commands is another
+  item: `scene-console-commands-write-the-scene-outside-the-exclusive-access`.
 
 ## References
 
-- Scenes doc 12 § *Plain state shared by the logic and rendering threads* (the table, the rule for choosing a
-  protocol, the proofs, the two sweeps, the cost of the published extent).
+- Scenes doc 12 § *Plain state shared by the logic and rendering threads*; `docs/component-builder-pattern.md`
+  (the setup note); `docs/renderable-instance-system.md` (when the configuration is written).

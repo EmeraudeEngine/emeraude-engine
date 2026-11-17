@@ -2334,53 +2334,59 @@ namespace EmEn::Scenes
 				{"enabled", "1 (true) draws the tangent/bitangent/normal of every vertex, 0 (false) stops.", true}
 			},
 			[this] (bool state) {
-				const auto activeScene = this->activeSceneSnapshot();
+				auto result = Console::CommandResult::error("No active scene !");
 
-				if ( activeScene == nullptr )
-				{
-					return Console::CommandResult::error("No active scene !");
-				}
+				/* EXCLUSIVE: this command writes configuration the rendering frame reads — the bit of every instance (its
+				 * flag word is written before its component is linked, or under this access: RenderableInstance::Abstract)
+				 * and the renderer's switch. They change together, between two frames and two logic cycles. */
+				this->withExclusiveActiveScene([this, state, &result] (const std::shared_ptr< Scene > & activeScene) {
+					auto & renderer = m_resourceManager.graphicsRenderer();
 
-				if ( state && !m_resourceManager.graphicsRenderer().isTBNSpaceRenderingAvailable() )
-				{
-					return Console::CommandResult::error("The TBN space rendering is unavailable: the device has no geometry shader stage !");
-				}
-
-				m_resourceManager.graphicsRenderer().enableTBNSpaceRendering(state);
-
-				size_t toggled = 0;
-				size_t skipped = 0;
-
-				activeScene->forEachRenderableInstance([state, &toggled, &skipped] (const auto & renderableInstance) {
-					if ( renderableInstance == nullptr )
+					if ( state && !renderer.isTBNSpaceRenderingAvailable() )
 					{
-						return;
-					}
-
-					/* NOTE: A geometry without a vertex tangent space cannot show it: never enabled (a geometry still
-					 * loading is decided by the instance itself, once). */
-					if ( state && renderableInstance->geometryLacksTangentSpace() )
-					{
-						++skipped;
+						result = Console::CommandResult::error("The TBN space rendering is unavailable: the device has no geometry shader stage !");
 
 						return;
 					}
 
-					renderableInstance->enableDisplayTBNSpace(state);
-					++toggled;
-				});
+					renderer.enableTBNSpaceRendering(state);
 
-				std::stringstream message;
-				message << "TBN space rendering " << (state ? "enabled" : "disabled") << " on " << toggled << " renderable instance(s) of scene '" << activeScene->name() << "'";
+					size_t toggled = 0;
+					size_t skipped = 0;
 
-				if ( skipped > 0 )
-				{
-					message << ", skipped " << skipped << " whose geometry has no tangent space";
-				}
+					activeScene->forEachRenderableInstance([state, &toggled, &skipped] (const auto & renderableInstance) {
+						if ( renderableInstance == nullptr )
+						{
+							return;
+						}
 
-				message << '.';
+						/* NOTE: A geometry without a vertex tangent space cannot show it: never enabled (a geometry still
+						 * loading is decided by the instance itself, once). */
+						if ( state && renderableInstance->geometryLacksTangentSpace() )
+						{
+							++skipped;
 
-				return Console::CommandResult::success(message.str());
+							return;
+						}
+
+						renderableInstance->enableDisplayTBNSpace(state);
+						++toggled;
+					});
+
+					std::stringstream message;
+					message << "TBN space rendering " << (state ? "enabled" : "disabled") << " on " << toggled << " renderable instance(s) of scene '" << activeScene->name() << "'";
+
+					if ( skipped > 0 )
+					{
+						message << ", skipped " << skipped << " whose geometry has no tangent space";
+					}
+
+					message << '.';
+
+					result = Console::CommandResult::success(message.str());
+				}, true);
+
+				return result;
 			}, Console::CommandHint::Idempotent);
 
 		this->bindCommand("setNodeLookAt", "Orients a root-level node of the active scene toward a world point.",

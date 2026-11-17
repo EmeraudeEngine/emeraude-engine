@@ -888,6 +888,9 @@ namespace EmEn::Scenes
 			 * @return bool True if entity has renderable components, false otherwise.
 			 *
 			 * @note Automatically set based on component properties (updateEntityProperties()).
+			 * @warning The LOGIC side only — the thread that changes the entity's components. updateEntityProperties()
+			 * resets the flag before it finds a drawing component: a rendering frame that read it in between left a drawn
+			 * entity out. A frame asks isPublishedRenderable(), the answer of its render state.
 			 */
 			[[nodiscard]]
 			bool
@@ -1105,6 +1108,9 @@ namespace EmEn::Scenes
 			 */
 			enum class RenderExtentKind : uint8_t
 			{
+				/** @brief The entity drew nothing in that render state (no drawing component then, or a state published
+				 * before the entity existed): a frame leaves it before any visibility test. The value of a slot never written. */
+				None,
 				/** @brief Nothing measurable: the entity is culled on the position of its published coordinates. */
 				Point,
 				/** @brief The world box of what its components draw (the render bounding box at the published coordinates). */
@@ -1118,8 +1124,8 @@ namespace EmEn::Scenes
 			 */
 			struct PublishedRenderExtent final
 			{
-				Base::Math::Space3D::AACuboid< float > box; /**< Invalid when the kind is Point. */
-				RenderExtentKind kind{RenderExtentKind::Point};
+				Base::Math::Space3D::AACuboid< float > box; /**< Invalid when the kind is None or Point. */
+				RenderExtentKind kind{RenderExtentKind::None};
 			};
 
 			/**
@@ -1135,6 +1141,22 @@ namespace EmEn::Scenes
 			publishedRenderExtent (uint32_t readStateIndex) const noexcept
 			{
 				return *std::next(m_publishedRenderExtents.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex % m_publishedRenderExtents.size()));
+			}
+
+			/**
+			 * @brief Returns whether the entity had something to draw in a render state.
+			 * @note RENDER thread: what a frame asks before it visits the entity, never isRenderable() — that flag is
+			 * rewritten by the logic side each time the components change. The answer is published with the extent and the
+			 * coordinates of the same render state, so the three always agree; a state published before the entity drew
+			 * anything (or existed) answers false, and its coordinates of that state are not the entity's either.
+			 * @param readStateIndex The slot the frame latched (Scene::beginRenderFrame()).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isPublishedRenderable (uint32_t readStateIndex) const noexcept
+			{
+				return this->publishedRenderExtent(readStateIndex).kind != RenderExtentKind::None;
 			}
 
 		protected:

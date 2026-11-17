@@ -166,6 +166,17 @@ ComponentBuilder& setup(function_t&& setupFunction)
 })
 ```
 
+⚠️ **A visual's renderable instance is configured HERE, never after `build()`** (2026-11-16). The setup runs once the
+component is constructed and BEFORE it is linked to its entity: no rendering frame can reach the instance yet. After
+`build()` returned, the instance belongs to the running scene — `getRenderableInstance()->disableShadowCasting()`,
+`setDrawDistanceRange()`, `disableDepthWrite()`… written there race with the frame that reads the instance, and every
+switch but the tangent-space display is read when the instance's programs are generated: changed later, it changes
+nothing. A helper that hands back a built component (`Toolkit::generateRenderableInstance()`) gives no setup: build the
+entity (`Toolkit::generateEntity()`) and use the builder when the instance needs configuring
+(`Toolkit::generateHLODProxy()` does). A change on a RUNNING scene goes through the scene's exclusive access
+(`Scenes::Manager::withExclusiveActiveScene()`: the console's commands). See `docs/renderable-instance-system.md`
+(the flags) and scenes doc 12 § *Plain state shared by the logic and rendering threads*.
+
 ##### `asPrimary()`
 
 Marks the component as a primary device (cameras and microphones only).

@@ -353,7 +353,7 @@ namespace EmEn::Graphics
 			return;
 		}
 
-		m_TBNSpaceRenderingEnabled = state;
+		m_TBNSpaceRenderingEnabled.store(state, std::memory_order_relaxed);
 	}
 
 	bool
@@ -737,7 +737,7 @@ namespace EmEn::Graphics
 		this->setPreExposureOverride(m_primaryServices.settings().getOrSetDefault< float >(GraphicsPPPreExposureOverrideKey, DefaultGraphicsPPPreExposureOverride));
 		m_depthOfFieldAllowed = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPDepthOfFieldEnabledKey, DefaultGraphicsPPDepthOfFieldEnabled);
 		m_motionBlurAllowed = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsPPMotionBlurEnabledKey, DefaultGraphicsPPMotionBlurEnabled);
-		m_shadowMapsEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsShadowMappingEnabledKey, DefaultGraphicsShadowMappingEnabled);
+		m_shadowMapsEnabled.store(m_primaryServices.settings().getOrSetDefault< bool >(GraphicsShadowMappingEnabledKey, DefaultGraphicsShadowMappingEnabled), std::memory_order_relaxed);
 		m_MDIEnabled = m_primaryServices.settings().getOrSetDefault< bool >(GraphicsMDIEnabledKey, DefaultGraphicsMDIEnabled);
 
 		/* NOTE: Graphics device selection from the vulkan instance.
@@ -2077,18 +2077,23 @@ namespace EmEn::Graphics
 			this->flushGeometryVideoMemoryUpdates();
 			this->updateSurfaceGeometries(scene->frameReadStateIndex());
 
-			scene->updateVideoMemory(this->isShadowMapsEnabled(), this->isRenderToTexturesEnabled());
+			/* Read ONCE for the frame: the main thread may toggle them meanwhile (toggleOffscreenRendering()), and the
+			 * video memory updated for a target must be the one of a target this frame renders. */
+			const bool shadowMapsEnabled = this->isShadowMapsEnabled();
+			const bool renderToTexturesEnabled = this->isRenderToTexturesEnabled();
+
+			scene->updateVideoMemory(shadowMapsEnabled, renderToTexturesEnabled);
 
 			/* Before every pass that draws the sky: the render-to-textures (probes) draw it too. */
 			this->renderSkyAtmosphere(currentFrameScope, *scene, m_graphicsQueue);
 
-			if ( this->isShadowMapsEnabled() )
+			if ( shadowMapsEnabled )
 			{
 				/* [VULKAN-SHADOW] */
 				this->renderShadowMaps(currentFrameScope, *scene, m_graphicsQueue);
 			}
 
-			if ( this->isRenderToTexturesEnabled() )
+			if ( renderToTexturesEnabled )
 			{
 				this->renderRenderToTextures(currentFrameScope, *scene, m_graphicsQueue);
 			}
@@ -2473,7 +2478,7 @@ namespace EmEn::Graphics
 			scenePtr->renderOpaque(m_swapChain, *commandBuffer);
 			scenePtr->renderTranslucent(m_swapChain, *commandBuffer);
 
-			if ( m_TBNSpaceRenderingEnabled )
+			if ( this->isTBNSpaceRenderingEnabled() )
 			{
 				scenePtr->renderTBNSpace(m_swapChain, *commandBuffer);
 			}
@@ -2500,7 +2505,7 @@ namespace EmEn::Graphics
 		 * unfilled slot (measured on CarConcept: uniform sky-blue glass, no interior). */
 		/* The outline needs the SCENE's depth too (full where visible, dimmed where hidden): the only sample-able copy of
 		 * it on this path is this grab (the swap-chain depth is an attachment of the pass the outline draws in). */
-		const bool grabbed = ( m_grabPassEnabled || selectionOutlined || ( sceneHasContent && scenePtr->hasTranslucentGBObjects() ) ) && m_grabPass != nullptr && m_grabPass->isCreated();
+		const bool grabbed = ( this->isGrabPassEnabled() || selectionOutlined || ( sceneHasContent && scenePtr->hasTranslucentGBObjects() ) ) && m_grabPass != nullptr && m_grabPass->isCreated();
 
 		if ( grabbed )
 		{
@@ -2714,7 +2719,7 @@ namespace EmEn::Graphics
 			 * too: each forward light pass redraws the whole batch. */
 			scenePtr->renderTranslucent(m_sceneTarget, *commandBuffer, deferredLightsPrepared ? m_deferredLightResolve.invisibleLights() : std::span< const Scenes::Component::AbstractLightEmitter * const >{});
 
-			if ( m_TBNSpaceRenderingEnabled )
+			if ( this->isTBNSpaceRenderingEnabled() )
 			{
 				scenePtr->renderTBNSpace(m_sceneTarget, *commandBuffer);
 			}
@@ -2767,7 +2772,7 @@ namespace EmEn::Graphics
 		 * The internal target's color image is in COLOR_ATTACHMENT_OPTIMAL (matching GrabPass expectations).
 		 * NEED-DRIVEN (see the swap-chain path): armed by the frame's TranslucentGB content,
 		 * `enableGrabPass(true)` remains a manual force-on. */
-		if ( ( m_grabPassEnabled || ( sceneHasContent && scenePtr->hasTranslucentGBObjects() ) ) && m_grabPass != nullptr && m_grabPass->isCreated() )
+		if ( ( this->isGrabPassEnabled() || ( sceneHasContent && scenePtr->hasTranslucentGBObjects() ) ) && m_grabPass != nullptr && m_grabPass->isCreated() )
 		{
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "GrabPass"};
 

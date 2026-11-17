@@ -321,24 +321,40 @@ namespace EmEn::Scenes
 			return {};
 		}
 
-		auto built = this->generateRenderableInstance< StaticEntity >(entityName, renderable);
+		const auto entity = this->generateEntity< StaticEntity >(entityName);
 
-		if ( !built.isValid() )
+		if ( entity == nullptr )
 		{
 			return {};
 		}
 
-		built.entity()->setCollidable(false);
+		/* The instance is configured in the builder's setup, BEFORE the component is linked to the entity: once linked,
+		 * a rendering frame may read it (the note of Graphics::RenderableInstance::RenderableInstanceFlagBits). */
+		const auto component = entity->componentBuilder< Component::Visual >(entityName)
+			.setup([&options] (Component::Visual & visual) {
+				const auto instance = visual.getRenderableInstance();
 
-		auto instance = built.component()->getRenderableInstance();
-		instance->setDrawDistanceRange(options.switchDistance, std::numeric_limits< float >::max());
+				if ( instance == nullptr )
+				{
+					return;
+				}
 
-		if ( !options.castShadows )
+				instance->setDrawDistanceRange(options.switchDistance, std::numeric_limits< float >::max());
+
+				if ( !options.castShadows )
+				{
+					instance->disableShadowCasting();
+				}
+			}).build(renderable, Graphics::RenderableInstance::Lighting::Lit);
+
+		if ( component == nullptr )
 		{
-			instance->disableShadowCasting();
+			return {};
 		}
 
-		return built;
+		entity->setCollidable(false);
+
+		return {entity, component};
 	}
 
 	Toolkit::TreeImposter

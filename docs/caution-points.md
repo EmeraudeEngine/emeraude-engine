@@ -6680,8 +6680,8 @@ After: 0 `WL:` line, no close request, a start in 9 s with the validation ON and
 > structures, the skinned refit, the traced ambient occlusion and contact shadows, the probes all run — and the five
 > scenes above run and shut down cleanly (Release, 20 to 75 s each, exit 0). Under ThreadSanitizer (Debug, a console
 > shutdown, engine 82c7efe0): `global-illumination`, `animation-debug` and `terrain` — its release included — 0 report
-> and exit 0; `light-and-shadow-debug` and `game-logic` reach a clean engine exit and report the members of item
-> `tsan-logic-render-instance-state-races`, which is what the sanitizer is for.
+> and exit 0; `light-and-shadow-debug` and `game-logic` reach a clean engine exit and report states shared by the logic
+> and rendering threads (fixed the same day: scenes doc 12), which is what the sanitizer is for.
 > ⚠️ A scene whose acceleration structure holds ALPHA-TESTED or BLENDED instances needs a THIRD key,
 > `Core/Graphics/PostProcessing/AmbientOcclusion/Enabled = false`: a candidate hit has its triangle fetched for the
 > alpha test (`rtCandidateIsSolid()`), by the traced ambient occlusion too. Measured on `sponza` (Release): dead 8.3 s

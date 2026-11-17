@@ -37,6 +37,11 @@ previous extent; computing it for every entity cost 5.9 to 6.6 ms).
 
 ## ⚠️ Traps
 
+- **A slot an entity did not write says "draws nothing"** (2026-11-16): a frame asks
+  `AbstractEntity::isPublishedRenderable(readStateIndex)`, the `None` kind of the published extent, and a slot never
+  written is `None`. Skipping the publication of an unchanged entity must leave ALL THREE slots holding its state
+  first (or copy the previous slot), else the entity vanishes from the frames that latch the slot it skipped.
+
 - The publication is what makes a frame consistent (scenes doc 12): skipping an entity must never leave a slot with a
   state older than the one the logic thread last decided.
 - A node's world coordinates depend on its parents: "this node did not move" does not mean its world frame is the same.

@@ -49,8 +49,8 @@ scene answers `hasAccelerationStructure()` and nothing stores its structure.
 **Proof** (Linux, 2026-11-15).
 - ThreadSanitizer (Debug, llvmpipe, the active scene switched through the console to a skinned scene): the
   `heap-use-after-free` of `isRayTracingReady()` once in 3 runs before; 0 in 4 runs after — three of them without any
-  report, the fourth with a race of another family (the light set's ambient, item
-  `tsan-logic-render-instance-state-races`).
+  report, the fourth with a race of another family (the light set's ambient: scenes doc 12, the ambient row, fixed
+  on 2026-11-16).
 - Release, RTX 3070 Ti, the validation layer loaded, the binary before against the binary after:
   `global-illumination` — the lane lines of `PostProcess.getStatus` identical (RTGI, RTR, RTAO running; the contact
   shadows on their fallback in both), statistics identical (19 instances / 266 triangles, shadows 30 / 15 340), mean

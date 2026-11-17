@@ -132,6 +132,12 @@ refused and why): `docs/ai-runtime-control.md` § "Driving an entity's component
   { … })`, which resolves the entity in the ACTIVE scene, checks the type, and runs under
   `withExclusiveActiveScene()`. `sceneManager()` serves a command that addresses no component
   (`Camera.getActive()`).
+- ⚠️ **The same rule for a command of the scene SERVICE that changes the running scene** (`Scenes/Manager.console.cpp`):
+  its body runs inside `withExclusiveActiveScene()`, never on a mere `activeSceneSnapshot()` — the snapshot keeps the
+  scene alive, it orders nothing against the logic cycle and the rendering frame. `enableTBN` does since 2026-11-16
+  (scenes doc 12, the configuration rows); most of the others still do not: item
+  `scene-console-commands-write-the-scene-outside-the-exclusive-access` (what to check before wrapping one: how long
+  the access is held, re-entrance, notifications under the lock).
 - **Addressing** (owner decision 2026-09-27): `entity` is an ADDRESS — the shortest suffix of the node
   path that is unique in the scene (`Head`, else `ACTOR_…06/Head`), or a static entity's name.
   `resolveEntity()` REFUSES an ambiguous address with its candidates (every projet-alpha actor carries a

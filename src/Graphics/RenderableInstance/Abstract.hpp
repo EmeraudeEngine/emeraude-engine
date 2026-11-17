@@ -143,7 +143,13 @@ namespace EmEn::Graphics::RenderableInstance
 		 * the other reads the word, and left it, each to its owner's protocol: bit 0 "the instanced positions are
 		 * uploaded" is a member of Multiple under its local-data mutex; bit 1 "broken" and bit 11 "an extra
 		 * transformation matrix applies" are atomics of Abstract (isBroken(), publishTransformationMatrix()).
-		 * Bits 0, 1 and 11 are unused. A new bit that changes while the scene runs does NOT belong here either. */
+		 * Bits 0, 1 and 11 are unused. A new bit that changes while the scene runs does NOT belong here either.
+		 * ⚠️ WHEN the configuration is written — this word, and the draw range, the shadow distance and the shadow
+		 * level-of-detail bias beside it: BEFORE the component that owns the instance is linked to its entity (the
+		 * setup() of the entity's component builder: no rendering frame can reach the instance yet), or under the
+		 * EXCLUSIVE access of the scene (Scenes::Manager::withExclusiveActiveScene(): the console's commands). Never
+		 * else: a write on a linked instance races with the frame that reads it, and every bit but the tangent-space
+		 * display is read when the instance's programs are generated — changed later, it changes nothing. */
 		/** @brief This flag is set when the renderable instance needs to generate a shader with lighting code. */
 		EnableLighting = 1U << 2,
 		/** @brief This flag disables shadow casting (the instance won't be rendered in shadow maps). */
@@ -726,7 +732,9 @@ namespace EmEn::Graphics::RenderableInstance
 			/**
 			 * @brief Enables the display of TBN space.
 			 * @note Enabling re-arms an instance whose TBN space program was refused (a geometry without a vertex tangent
-			 * space, a failed generation): the next frame tries once more. Main thread (the console, the scene setup).
+			 * space, a failed generation): the next frame tries once more.
+			 * @warning Configuration: in the component builder's setup (before the link), or under the scene's exclusive
+			 * access — the console's enableTBN command (the note of RenderableInstanceFlagBits).
 			 * @see geometryLacksTangentSpace()
 			 * @param state The state.
 			 * @return Abstract *
