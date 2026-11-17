@@ -1,6 +1,6 @@
 ## 15c. Vegetation Wind (Sept 2026)
 
-A renderable flagged `HasVegetationWind` has its vertices displaced in the vertex stage by a
+A renderable declared as vegetation (`Renderable::Abstract::enableVegetationWind()`) has its vertices displaced in the vertex stage by a
 per-frame wind state, from the four colour channels the emeraude-base tree skinner writes:
 **R** trunk bending weight, **G** branch bending weight (cumulative from the trunk), **B** limb
 phase (shared by a first-order branch and all it carries), **A** baked occlusion.
@@ -89,4 +89,4 @@ multiply.
 - `Saphir/AbstractVertexStage.cpp` — `generateVegetationWindCode()`, the two position accessors
 - `Saphir/Generator/SceneRendering.cpp` — the enable and the cache-key contribution
 - `Scenes/SceneInstanceTransforms.hpp` — `setWindState()` and the header layout
-- `Graphics/Renderable/Abstract.hpp` — `HasVegetationWind`
+- `Graphics/Renderable/Abstract.hpp` — `enableVegetationWind()` / `hasVegetationWind()`: declared by the creator INSIDE the creation function, before the load (never on a renderable already published — scenes doc 12)

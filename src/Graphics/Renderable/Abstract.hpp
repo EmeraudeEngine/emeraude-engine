@@ -76,22 +76,14 @@ namespace EmEn::Graphics::Renderable
 	enum EMEN_API RenderableFlagBits : uint32_t
 	{
 		None = 0U,
-		/* NOTE: The bit 0 was "ready for instantiation". That state is set by a loading thread and read by the logic and
-		 * rendering threads: it is an atomic of its own (Abstract::isReadyForInstantiation()), not a bit of this plain
-		 * word, whose other bits are written before the renderable is published. */
-		/** @brief This flag tells that the renderable has a skeletal animation available. */
-		HasSkeletalAnimation = 1U << 1,
+		/* NOTE: This word is the resource's own (Resources::ResourceTrait): a renderable's bits say what its TYPE is,
+		 * are given to the CONSTRUCTOR and never written afterwards — a component built on a renderable still loading
+		 * reads them (isSprite() decides the layout of its instance buffer). What a load or a creation function
+		 * declares is NOT a bit here: it is a member of its own, written before the renderable is published and read
+		 * after (isUprightSprite(), hasVegetationWind()); "ready for instantiation" is an atomic
+		 * (isReadyForInstantiation()). The bits 0, 1, 3 and 4 held such states: free. */
 		/** @brief This flag tells the system this renderable uses a single quad which should always face the camera. */
-		IsSprite = 1U << 2,
-		/** @brief This flag tells the renderable is vegetation: its vertex stage displaces the
-		 * vertices by the per-frame wind state, reading the four colour channels a tree skinner
-		 * fills. It is a property of the OBJECT, not of its materials — the same bark material
-		 * stays still on a palm asset and sways on a generated tree. */
-		HasVegetationWind = 1U << 3,
-		/** @brief A sprite that faces the camera around the world's vertical (+Y) ONLY — an upright billboard, for
-		 * what stands on the ground (a flame, a figure). Without it a sprite faces the camera fully and, anchored at
-		 * its foot, leans back as the camera rises. Declared by a sprite manifest: "Billboard": "Upright". */
-		IsUprightSprite = 1U << 4
+		IsSprite = 1U << 2
 	};
 
 	/**
@@ -174,36 +166,23 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/**
-			 * @brief Returns whether the renderable has a skeletal animation.
-			 * @return bool
-			 */
-			[[nodiscard]]
-			bool
-			hasSkeletalAnimation () const noexcept
-			{
-				return this->isFlagEnabled(HasSkeletalAnimation);
-			}
-
-			/**
 			 * @brief Declares the renderable as vegetation swaying in the wind.
 			 * @warning ⚠️ The geometry must carry VERTEX COLOURS, and they must mean what the tree
 			 * skinner writes: R trunk bending weight, G branch bending weight (cumulative from the trunk,
 			 * continuous across junctions), B limb phase (shared by a first-order branch and all it carries),
 			 * A baked occlusion. Setting this on a mesh whose colours mean anything else displaces it
 			 * by nonsense.
+			 * @note A property of the OBJECT, not of its materials — the same bark material stays still on a palm asset
+			 * and sways on a generated tree.
+			 * @pre Called by whoever CREATES the renderable, before it is published: inside its creation function (the one
+			 * given to Resources::Container::getOrCreateResource()), before its load. Never on a renderable a scene may
+			 * already draw: the rendering thread reads it when it generates the programs.
 			 * @param state The state.
 			 */
 			void
 			enableVegetationWind (bool state) noexcept
 			{
-				if ( state )
-				{
-					this->enableFlag(HasVegetationWind);
-				}
-				else
-				{
-					this->disableFlag(HasVegetationWind);
-				}
+				m_vegetationWind = state;
 			}
 
 			/**
@@ -214,12 +193,13 @@ namespace EmEn::Graphics::Renderable
 			bool
 			hasVegetationWind () const noexcept
 			{
-				return this->isFlagEnabled(HasVegetationWind);
+				return m_vegetationWind;
 			}
 
 			/**
 			 * @brief Declares which layer holds the leaf cards: that layer's programs add the flutter (weighted by the
 			 * card V). A tree's is Base::VertexFactory::TreeMesh::LeafGroup.
+			 * @pre As enableVegetationWind(): by the creator, before the renderable is published.
 			 * @param layerIndex The layer index, or NoFoliageLayer.
 			 */
 			void
@@ -246,6 +226,8 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Returns whether the renderable is a sprite to differentiate it from a regular 3D mesh.
 			 * @note This mainly means the renderable should always face the camera by providing a model matrix without initial rotation.
+			 * @note A property of the TYPE, given to the constructor: true from the construction on, whatever the state of
+			 * the load.
 			 * @return bool
 			 */
 			[[nodiscard]]
@@ -256,14 +238,18 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/**
-			 * @brief Returns whether this sprite is an UPRIGHT billboard (it turns around +Y only).
+			 * @brief Returns whether this sprite is an UPRIGHT billboard: it faces the camera around the world's vertical
+			 * (+Y) ONLY, for what stands on the ground (a flame, a figure). Otherwise a sprite faces the camera fully and,
+			 * anchored at its foot, leans back as the camera rises.
+			 * @note Declared by the sprite's manifest ("Billboard": "Upright"), so known once it is loaded: meaningful on a
+			 * renderable ready for instantiation only.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			bool
 			isUprightSprite () const noexcept
 			{
-				return this->isFlagEnabled(IsUprightSprite);
+				return m_uprightBillboard;
 			}
 
 			/**
@@ -434,6 +420,17 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/**
+			 * @brief Declares a sprite as an upright billboard (isUprightSprite()).
+			 * @pre Called by the renderable's own load, before setReadyForInstantiation(true).
+			 * @param state The state.
+			 */
+			void
+			setUprightBillboard (bool state) noexcept
+			{
+				m_uprightBillboard = state;
+			}
+
+			/**
 			 * @brief Sets the renderable ready to prepare an instance on GPU.
 			 * @param state The state.
 			 */
@@ -464,5 +461,9 @@ namespace EmEn::Graphics::Renderable
 			/** @brief Whether the geometry is fully usable by the GPU, thus ready to make instances: written by the
 			 * thread that finishes the load (a pool worker), read by the logic and the rendering threads. */
 			std::atomic< bool > m_readyForInstantiation{false};
+			/** @brief enableVegetationWind(): written by the creator before the publication, read after. */
+			bool m_vegetationWind{false};
+			/** @brief setUprightBillboard(): written by the load before the publication, read after. */
+			bool m_uprightBillboard{false};
 	};
 }

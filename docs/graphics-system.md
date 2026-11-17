@@ -126,7 +126,7 @@ Why it exists: a spherical `CenterAtBottom` flame TILTS towards a camera looking
 below, pivoting on its base — close to a torch the flame visibly "walks away" from its cup. Measured on
 `citadel`'s torches (owner report, 2026-09-28).
 
-The path: `SpriteResource` reads the key → `Renderable::IsUprightSprite` → the generators
+The path: `SpriteResource` reads the key → `Renderable::Abstract::isUprightSprite()` (a member its load sets before the publication) → the generators
 (`Saphir::Generator::Abstract`, `ShadowCasting`) raise `IsRenderableUpright` (part of the program cache
 key) → `AbstractVertexStage::enableUprightBillBoarding()` for the GPU instanced path; the CPU path
 (`RenderableInstance::Abstract::worldModelMatrix()`, used by the instance staging and `Unique`) picks the

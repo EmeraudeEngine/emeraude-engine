@@ -137,8 +137,8 @@ a `const Base::Any &`; the reads already went through `Base::anyValue< T >()` (n
 - **Never replace a cross-cast with a `static_cast`** (`Abstract*` → `SkeletalDataTrait*` are
   unrelated subobjects): the accessor pattern is the only correct form.
 - Group A accessors must be **`virtual` on the interface, overridden by the concrete class**,
-  never a flag plus an unchecked cast: `HasSkeletalAnimation`
-  (`Renderable/Abstract.hpp:82`) is a rendering flag, not a type witness.
+  never a flag plus an unchecked cast (the renderable's `HasSkeletalAnimation` bit, which nothing set nor read, was
+  removed on 2026-11-17: a renderable's flag word now only says what its type is).
 - A Linux-only green build proves nothing for `std::any` (libstdc++ compiles it without RTTI);
   the Windows build is part of the acceptance.
 

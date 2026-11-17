@@ -1205,22 +1205,19 @@ namespace EmEn::Scenes
 					RasterizationOptions{PolygonMode::Fill, CullingMode::None}
 				};
 
-				auto renderable = m_resourceManager.container< MultiLayerMeshResource >()
+				/* A generated tree is vegetation by construction: its four colour channels mean what the
+				 * wind expects. The property is on the OBJECT, so the same bark material stays still on a
+				 * palm asset. It does nothing until a scene actually sets a wind strength.
+				 * ⚠️ Declared INSIDE the creation function, before the load: the renderable is not published yet. Written
+				 * after getOrCreateResource() returned, it was set on a renderable a scene may already draw. */
+				return m_resourceManager.container< MultiLayerMeshResource >()
 					->getOrCreateResource(resourceName, [geometryLODs, bark, leaf, rasterizationOptions] (auto & meshResource) {
+						meshResource.enableVegetationWind(true);
+						/* The leaf cards flutter on top of the sway, weighted by their V (0 at the petiole). */
+						meshResource.setVegetationFoliageLayer(Base::VertexFactory::TreeMesh< float >::LeafGroup);
+
 						return meshResource.load(geometryLODs, {bark, leaf}, rasterizationOptions);
 					});
-
-				/* A generated tree is vegetation by construction: its four colour channels mean what the
-				 * wind expects. The flag is on the OBJECT, so the same bark material stays still on a
-				 * palm asset. It does nothing until a scene actually sets a wind strength. */
-				if ( renderable != nullptr )
-				{
-					renderable->enableVegetationWind(true);
-					/* The leaf cards flutter on top of the sway, weighted by their V (0 at the petiole). */
-					renderable->setVegetationFoliageLayer(Base::VertexFactory::TreeMesh< float >::LeafGroup);
-				}
-
-				return renderable;
 			}
 
 			/**

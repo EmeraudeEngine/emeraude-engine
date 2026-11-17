@@ -246,7 +246,7 @@ namespace EmEn::Graphics::Renderable
 
 		if ( const auto billboard = FastJSON::getValue< std::string >(data, JKBillboard).value_or("Spherical"); billboard == "Upright" )
 		{
-			this->enableFlag(IsUprightSprite);
+			this->setUprightBillboard(true);
 		}
 		else if ( billboard != "Spherical" )
 		{
