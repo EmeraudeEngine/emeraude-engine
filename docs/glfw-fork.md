@@ -50,6 +50,12 @@ in `wl_shm_pool_create_buffer()`. The patch indexes with `currentImage % wlCurso
   `crash-wayland-cursor-image-segfault-62c5eb`, 1 Manjaro machine, AMD RX 6600, 2 reports). The mechanism is a
   reading, not a reproduction; the bound is correct either way. The same index exists upstream: reported as
   [glfw/glfw#2929](https://github.com/glfw/glfw/issues/2929) (2026-11-12).
+  ⚠️ **Upstream accepts no pull request from outside (2026-11-18)**: glfw/glfw limits the opening of a pull request to
+  its collaborators ("An owner of this repository has limited the ability to open a pull request to users that are
+  collaborators"; `gh pr create` fails with "does not have the correct permissions to execute CreatePullRequest"). The
+  owner then decided to keep both Wayland patches (§ 1b, § 1c) in the fork and not to offer them upstream (the two
+  branches prepared for it, rebased on upstream `master`, were deleted). Both applied cleanly on upstream `master`
+  (`92dcf4ce`, "Start 3.6") and added no warning with `-Wall -Wextra`: a future rebase onto 3.6 should be quiet.
 - Commit `27737a13` on `em/customization`, **patch-id `31f9e91abd46cd4c46004009d6e8ed22d860e07d`**. `update-glfw.py`
   then printed **2 commit(s)** above the target; the input-state patch keeps `6cf953c0…`. A rebase that conflicts here
   re-expresses the same bound (upstream may fix it: then this patch is dropped, its patch-id gone from the list).
@@ -74,7 +80,8 @@ two in `handleEvents()`: GLFW's own on the default queue, and the one of libdeco
   libdecor's.
 - Commit `e7bb6749` on `em/customization`, **patch-id `5e5956fa9d4031e80953f27ab983db32e97f3813`**; `update-glfw.py`
   prints **3 commit(s)** above the target.
-  Not reported upstream, neither this patch to GLFW nor its loop to libdecor (owner decision 2026-11-14). A rebase
+  Not reported upstream, neither this patch to GLFW nor its loop to libdecor (owner decisions 2026-11-14, and
+  2026-11-18 after upstream turned out to accept no outside pull request — § 1b). A rebase
   that conflicts here re-expresses the two tests; if upstream bounds its loop, this patch is dropped.
 
 ## 2. Updating GLFW — `update-glfw.py`
