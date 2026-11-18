@@ -18,15 +18,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 1 — per version: 8.0.3 ×1 |
-| Reports | 2 (first 2026-10-29, last 2026-10-31) |
-| Versions | 8.0.3 ×2 |
-| Platforms | windows ×2 |
-| OS | Windows 11 Pro ×2 |
-| GPU (selected) | Radeon RX 580 Series (driver 2.0.233) ×2 |
-| ANGLE backend | d3d11 ×2 |
-| Died at milestone | ApplicationStarted ×1, Stopping ×1 |
-| Single-instance lock | not recorded ×2 |
+| Machines | 2 — per version: 8.0.3 ×2 |
+| Reports | 3 (first 2026-10-29, last 2026-11-15) |
+| Versions | 8.0.3 ×3 |
+| Platforms | windows ×3 |
+| OS | Windows 11 Pro ×3 |
+| GPU (selected) | Radeon RX 580 Series (driver 2.0.233) ×2, AMD Radeon RX 7900 XTX (driver 2.0.416) ×1 |
+| ANGLE backend | d3d11 ×3 |
+| Died at milestone | Stopping ×2, ApplicationStarted ×1 |
+| Single-instance lock | not recorded ×3 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the swap-chain : VK_ERROR_UNKNOWN !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createBaseSwapChain`
@@ -34,17 +34,17 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
+- ×2 `died at Stopping`
 - ×1 `died at ApplicationStarted`
-- ×1 `died at Stopping`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[VulkanDeviceMemory][Error] (vendors/emeraude-engine/src/Vulkan/DeviceMemory.cpp `EmEn::Vulkan::DeviceMemory::createOnHardware`) Unable to allocate <n> bytes (alignment:<n> bytes) in the device memory <n> : VK_ERROR_UNKNOWN !
-[VulkanImage][Error] (vendors/emeraude-engine/src/Vulkan/Image.cpp `EmEn::Vulkan::Image::importFromWin32Handle`) Unable to import the external D3D11 texture memory (handle @@00000000000021E8) !
-[a line of the downstream application, redacted]
-[VulkanDeviceMemory][Error] (vendors/emeraude-engine/src/Vulkan/DeviceMemory.cpp `EmEn::Vulkan::DeviceMemory::createOnHardware`) Unable to allocate <n> bytes (alignment:<n> bytes) in the device memory <n> : VK_ERROR_UNKNOWN !
-[VulkanImage][Error] (vendors/emeraude-engine/src/Vulkan/Image.cpp `EmEn::Vulkan::Image::importFromWin32Handle`) Unable to import the external D3D11 texture memory (handle @@00000000000025A4) !
+[VulkanImageTransferOperation][Error] (vendors/emeraude-engine/src/Vulkan/ImageTransferOperation.cpp `EmEn::Vulkan::ImageTransferOperation::transferToGPU`) Unable to transfer an image (<n>/<n>) !
+[VulkanImageTransferOperation][Error] (vendors/emeraude-engine/src/Vulkan/ImageTransferOperation.cpp `EmEn::Vulkan::ImageTransferOperation::transfer`) The first step of image transfer failed!
+[OverlaySurface][Error] (vendors/emeraude-engine/src/Overlay/Surface.cpp `EmEn::Overlay::Surface::processUpdates`) Unable to update the content of surface 'ViewUI' !
+[UIScreen][Error] (vendors/emeraude-engine/src/Overlay/UIScreen.cpp `EmEn::Overlay::UIScreen::processSurfaceUpdates`) The UI screen 'ApplicationUI' physical representation update failed ! Disabling it ...
+[OverlayManagerService][Error] (vendors/emeraude-engine/src/Overlay/Manager.cpp `EmEn::Overlay::Manager::updateVideoMemory`) Failed to process screen 'ApplicationUI' updates!
 [a line of the downstream application, redacted]
 [VulkanSwapChain][Fatal] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createBaseSwapChain`) Unable to create the swap-chain : VK_ERROR_UNKNOWN !
 [VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::recreate`) Unable to recreate the base of the swap-chain !
@@ -52,7 +52,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives:
 
-- 2 archive(s), in the downstream application's crash-report mirror.
+- 3 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-11-10)

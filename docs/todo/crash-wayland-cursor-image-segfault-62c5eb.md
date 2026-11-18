@@ -20,15 +20,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 1 — per version: 8.0.4 ×1 |
-| Reports | 2 (first 2026-11-04, last 2026-11-05) |
-| Versions | 8.0.4 ×2 |
-| Platforms | linux ×2 |
-| OS | Manjaro Linux ×2 |
-| GPU (selected) | AMD Radeon RX 6600 (RADV NAVI23) (driver 26.2.4) ×2 |
-| ANGLE backend | vulkan ×2 |
-| Died at milestone | ApplicationStarted ×2 |
-| Single-instance lock | Acquired ×2 |
+| Machines | 2 — per version: 8.0.4 ×2 |
+| Reports | 9 (first 2026-11-04, last 2026-11-17) |
+| Versions | 8.0.4 ×9 |
+| Platforms | linux ×9 |
+| OS | CachyOS ×7, Manjaro Linux ×2 |
+| GPU (selected) | NVIDIA GeForce RTX 3060 Ti (driver 620.70.06) ×7, AMD Radeon RX 6600 (RADV NAVI23) (driver 26.2.4) ×2 |
+| ANGLE backend | vulkan ×9 |
+| Died at milestone | ApplicationStarted ×9 |
+| Single-instance lock | Acquired ×9 |
 
 - **Cause (normalized):** `SIGSEGV / SEGV_MAPERR in the browser process: libwayland-client.so.0`
 - **Where:** `libwayland-client.so.0` (no symbols: a driver or a system library)
@@ -36,37 +36,34 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×2 `browser process, then the run died at ApplicationStarted`
+- ×9 `browser process, then the run died at ApplicationStarted`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[a line of the downstream application, redacted] (×2)
-[VulkanTransferManagerService][Info] (vendors/emeraude-engine/src/Vulkan/TransferManager.cpp `EmEn::Vulkan::TransferManager::releaseIdleStagingBuffers`) <n> staging buffer released (<n> MiB), <n> buffer and <n> image transfer operations kept. (×4)
-[InputManagerService][Info] (vendors/emeraude-engine/src/Input/Manager.cpp `EmEn::Input::Manager::processJoystickEvent`) Game device #<n> disconnected! (×2)
+[VulkanTransferManagerService][Info] (vendors/emeraude-engine/src/Vulkan/TransferManager.cpp `EmEn::Vulkan::TransferManager::releaseIdleStagingBuffers`) <n> staging buffer released (<n> MiB), <n> buffer and <n> image transfer operations kept.
+[WindowService][Info] (vendors/emeraude-engine/src/Window.cpp `EmEn::Window::monitorConfigurationChanged`) New monitor removed from the configuration ! (×2)
+[WindowService][Error] (vendors/emeraude-engine/src/Window.cpp `EmEn::Window::getDesktopSize`) Unable to query the primary monitor ! (×5)
 ```
 
 Native stacks of the latest report (minidumps, crashing thread; `?` = guessed by stack scanning):
 
 ```
 SIGSEGV / SEGV_MAPERR in the browser process
- 0   libwayland-client.so.0 + 0x0000000000005284
+ 0   libwayland-client.so.0 + 0x0000000000005704
  1 ? libEmeraude.so.1!setCursorImage [dependencies/glfw/src/wl_window.c:1283]
  2 ? libEmeraude.so.1!handleEvents [dependencies/glfw/src/wl_window.c:1473]
  3 ? libEmeraude.so.1!_glfwWaitEventsTimeoutWayland [dependencies/glfw/src/wl_window.c:2951]
  4 ? libEmeraude.so.1!EmEn::Input::Manager::waitSystemEvents(double) const [src/Input/Manager.cpp:898]
  5 ? libEmeraude.so.1!EmEn::Core::run() [src/Core.cpp:716]
  6 ? <a frame of the downstream application>
- 7 ? libc.so.6 + 0x0000000000027780
- 8 ? libc.so.6 + 0x00000000000278b8
- 9 ? <a frame of the downstream application>
-10 ? <a frame of the downstream application>
-11 ? <a frame of the downstream application>
+ 7 ? libc.so.6 + 0x0000000000027d0d
+ 8 ? ? + 0x00007fff5432915e
 ```
 
 Archives:
 
-- 2 archive(s), in the downstream application's crash-report mirror.
+- 9 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-11-10)

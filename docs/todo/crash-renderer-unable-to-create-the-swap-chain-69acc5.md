@@ -18,15 +18,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 1 — per version: 8.0.4 ×1 |
-| Reports | 5 (first 2026-11-09, last 2026-11-09) |
-| Versions | 8.0.4 ×5 |
-| Platforms | windows ×5 |
-| OS | Windows 10 Pro ×5 |
-| GPU (selected) | unknown ×5 |
-| ANGLE backend | d3d11 ×5 |
-| Died at milestone | SessionOpened ×5 |
-| Single-instance lock | Acquired ×5 |
+| Machines | 3 — per version: 8.0.4 ×3 |
+| Reports | 7 (first 2026-11-09, last 2026-11-15) |
+| Versions | 8.0.4 ×7 |
+| Platforms | windows ×7 |
+| OS | Windows 10 Pro ×5, Windows 10 Home Single Language ×1, Windows 11 Pro ×1 |
+| GPU (selected) | unknown ×7 |
+| ANGLE backend | d3d11 ×7 |
+| Died at milestone | SessionOpened ×7 |
+| Single-instance lock | Acquired ×7 |
 
 - **Cause (normalized):** `RendererService: Unable to create the swap-chain!`
 - **Where:** `vendors/emeraude-engine/src/Graphics/Renderer.cpp` — `EmEn::Graphics::Renderer::initializeRenderingStack`
@@ -34,16 +34,16 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×5 `died at SessionOpened`
+- ×7 `died at SessionOpened`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[VulkanImage][Error] (vendors/emeraude-engine/src/Vulkan/Image.cpp `EmEn::Vulkan::Image::createWithVMA`) Unable to create an image with VMA : VK_ERROR_OUT_OF_DEVICE_MEMORY !
-[VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createDepthStencilBuffer`) Unable to create image 'Frame0DepthStencilBuffer' !
-[VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createImageArray`) Unable to create the depth buffer #<n> !
-[VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createFramebuffer`) Unable to create the swap-chain images !
-[VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::onCreate`) Unable to complete the framebuffer !
+[RendererService][Success] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) PostProcessorService service up!
+[RendererService][Warning] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) GraphicsExternalInputService service failed or disabled at startup!
+[RendererService][Warning] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) GraphicsRecorderService service failed or disabled at startup!
+[VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createBaseSwapChain`) Unable to create the swap-chain : VK_ERROR_OUT_OF_DEVICE_MEMORY !
+[VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::onCreate`) Unable to create the base of the swap-chain !
 [RenderTarget][Error] (vendors/emeraude-engine/src/Graphics/RenderTarget/Abstract.cpp `EmEn::Graphics::RenderTarget::Abstract::createRenderTarget`) Unable to create a complete render target! Destroying it...
 [RendererService][Fatal] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeRenderingStack`) Unable to create the swap-chain!
 [RendererService][Info] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::requestShutdown`) Graceful shutdown requested. Waiting for frames in-flight to complete...
@@ -51,7 +51,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives:
 
-- 5 archive(s), in the downstream application's crash-report mirror.
+- 7 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-11-10)

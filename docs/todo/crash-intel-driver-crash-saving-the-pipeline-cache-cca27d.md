@@ -20,15 +20,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 1 — per version: 8.0.4 ×1 |
-| Reports | 4 (first 2026-11-09, last 2026-11-10) |
-| Versions | 8.0.4 ×4 |
-| Platforms | windows ×4 |
-| OS | Windows 11 Home ×4 |
-| GPU (selected) | Intel(R) UHD Graphics 630 (driver 100.7925) ×4 |
-| ANGLE backend | d3d11 ×4 |
-| Died at milestone | Stopping ×4 |
-| Single-instance lock | Acquired ×4 |
+| Machines | 3 — per version: 8.0.4 ×2, 8.0.5 ×1 |
+| Reports | 10 (first 2026-11-09, last 2026-11-17) |
+| Versions | 8.0.4 ×7, 8.0.5 ×3 |
+| Platforms | windows ×10 |
+| OS | Windows 11 Home ×10 |
+| GPU (selected) | Intel(R) UHD Graphics 630 (driver 100.7925) ×5, Intel(R) UHD Graphics (driver 100.7926) ×3, Intel(R) UHD Graphics 620 (driver 100.7927) ×2 |
+| ANGLE backend | d3d11 ×10 |
+| Died at milestone | Stopping ×10 |
+| Single-instance lock | Acquired ×10 |
 
 - **Cause (normalized):** `EXCEPTION_ACCESS_VIOLATION_READ in the browser process: igvk64.dll`
 - **Where:** `igvk64.dll` (no symbols: a driver or a system library)
@@ -36,7 +36,7 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×4 `browser process, then the run died at Stopping`
+- ×10 `browser process, then the run died at Stopping`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
@@ -55,23 +55,23 @@ Native stacks of the latest report (minidumps, crashing thread; `?` = guessed by
 
 ```
 EXCEPTION_ACCESS_VIOLATION_READ in the browser process
- 0   igvk64.dll + 0x0000000000818517
+ 0   igvk64.dll + 0x0000000000818557
  1 ? igvk64.dll + 0x00000000006552b9
  2 ? Emeraude.dll!_malloc_base(unsigned long long) [src/appcrt/heap/malloc_base.cpp:34]
- 3 ? ? + 0x0000028ebd9b85e7
+ 3 ? ? + 0x000001cd1b623e17
  4 ? igvk64.dll + 0x0000000000653cbe
  5 ? Emeraude.dll!std::vector<unsigned char,std::allocator<unsigned char> >::assign(const unsigned long long, unsigned char const&) [vector:1362]
- 6 ? Emeraude.dll!EmEn::Vulkan::(anonymous namespace)::readPipelineCacheData(VkDevice_T*, VkPipelineCache_T*, std::vector<unsigned char,std::allocator<unsigned char> >&) [vendors/emeraude-engine/src/Vulkan/Device.cpp:1320]
- 7 ? Emeraude.dll!EmEn::Vulkan::Device::getPipelineCacheData(std::vector<unsigned char,std::allocator<unsigned char> >&) const [vendors/emeraude-engine/src/Vulkan/Device.cpp:1392]
- 8 ? Emeraude.dll!EmEn::Graphics::Renderer::savePipelineCache() const [vendors/emeraude-engine/src/Graphics/Renderer.cpp:3910]
- 9 ? Emeraude.dll!EmEn::Graphics::Renderer::onTerminate() [vendors/emeraude-engine/src/Graphics/Renderer.cpp:1042]
-10 ? Emeraude.dll!EmEn::Core::terminate() [vendors/emeraude-engine/src/Core.cpp:2019]
-11 ? Emeraude.dll!EmEn::Core::run() [vendors/emeraude-engine/src/Core.cpp:823]
+ 6 ? Emeraude.dll!EmEn::Vulkan::(anonymous namespace)::readPipelineCacheData(VkDevice_T*, VkPipelineCache_T*, std::vector<unsigned char,std::allocator<unsigned char> >&) [vendors/emeraude-engine/src/Vulkan/Device.cpp:1328]
+ 7 ? Emeraude.dll!EmEn::Vulkan::Device::getPipelineCacheData(std::vector<unsigned char,std::allocator<unsigned char> >&) const [vendors/emeraude-engine/src/Vulkan/Device.cpp:1400]
+ 8 ? Emeraude.dll!EmEn::Graphics::Renderer::savePipelineCache() const [vendors/emeraude-engine/src/Graphics/Renderer.cpp:4505]
+ 9 ? Emeraude.dll!EmEn::Graphics::Renderer::onTerminate() [vendors/emeraude-engine/src/Graphics/Renderer.cpp:1100]
+10 ? Emeraude.dll!EmEn::Core::terminate() [vendors/emeraude-engine/src/Core.cpp:2219]
+11 ? Emeraude.dll!EmEn::Core::run() [vendors/emeraude-engine/src/Core.cpp:853]
 ```
 
 Archives:
 
-- 4 archive(s), in the downstream application's crash-report mirror.
+- 10 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-11-10)

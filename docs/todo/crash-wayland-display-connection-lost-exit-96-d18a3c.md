@@ -18,15 +18,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 13 — per version: 8.0.4 ×13 |
-| Reports | 15 (first 2026-11-04, last 2026-11-10) |
-| Versions | 8.0.4 ×15 |
-| Platforms | linux ×15 |
-| OS | CachyOS ×6, Bazzite ×3, Fedora Linux 44 (KDE Plasma Desktop Edition) ×2, Arch Linux ×1, Manjaro Linux ×1, Ubuntu 26.04.1 LTS ×1, … (1 more) |
-| GPU (selected) | AMD Radeon RX 6900 XT (RADV NAVI21) (driver 26.2.6) ×2, AMD Radeon RX 7900 XTX (RADV NAVI31) (driver 26.2.6) ×2, AMD Radeon R9 200 Series (RADV HAWAII) (driver 26.2.5) ×1, AMD Radeon RX 6950 XT (RADV NAVI21) (driver 26.2.6) ×1, Intel(R) Graphics (ADL GT2) (driver 26.2.5) ×1, Intel(R) Graphics (ADL GT2) (driver 26.2.6) ×1, … (7 more) |
-| ANGLE backend | vulkan ×15 |
-| Died at milestone | Stopping ×15 |
-| Single-instance lock | Acquired ×15 |
+| Machines | 41 — per version: 8.0.4 ×38, 8.0.5 ×4 |
+| Reports | 51 (first 2026-11-04, last 2026-11-18) |
+| Versions | 8.0.4 ×47, 8.0.5 ×4 |
+| Platforms | linux ×51 |
+| OS | CachyOS ×22, Ubuntu 26.04.1 LTS ×8, Bazzite ×5, Omarchy ×3, Arch Linux ×2, Fedora Linux 44 (KDE Plasma Desktop Edition) ×2, … (8 more) |
+| GPU (selected) | AMD Radeon RX 7800 XT (RADV NAVI32) (driver 26.2.6) ×3, NVIDIA GeForce GTX 1060 6GB (driver 580.178.04) ×3, NVIDIA GeForce RTX 5080 (driver 620.70.06) ×3, AMD Radeon RX 6900 XT (RADV NAVI21) (driver 26.2.6) ×2, AMD Radeon RX 7900 XTX (RADV NAVI31) (driver 26.2.6) ×2, NVIDIA GeForce GTX 860M (driver 580.178.04) ×2, … (36 more) |
+| ANGLE backend | vulkan ×51 |
+| Died at milestone | Stopping ×51 |
+| Single-instance lock | Acquired ×51 |
 
 - **Cause (normalized):** `exit code 96 after Stopping`
 - **Where:** no source location
@@ -34,8 +34,11 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×11 `Core: The connection to the display server is lost (on Wayland a compositor protocol error, printed on stderr by libwayland) : the engine stops no`
-- ×4 `VulkanQueue: Unable to present an image : VK_ERROR_SURFACE_LOST_KHR !`
+- ×33 `Core: The connection to the display server is lost (on Wayland a compositor protocol error, printed on stderr by libwayland) : the engine stops no`
+- ×12 `VulkanQueue: Unable to present an image : VK_ERROR_SURFACE_LOST_KHR !`
+- ×3 `Core: Display connection lost: The connection to the display was lost: the application must close.`
+- ×2 `VulkanSwapChain: Error from the swap-chain : VK_ERROR_SURFACE_LOST_KHR !`
+- ×1 `RendererService: Unable to refresh the swap-chain (attempt <n>/<n>), retrying every <n> ms.`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
@@ -52,7 +55,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives:
 
-- 15 archive(s), in the downstream application's crash-report mirror.
+- 51 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-11-10)

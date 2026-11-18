@@ -18,15 +18,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 1 — per version: 8.0.3 ×1 |
-| Reports | 1 (first 2026-11-03, last 2026-11-03) |
-| Versions | 8.0.3 ×1 |
-| Platforms | macos ×1 |
-| OS | Apple macOS 26.6 ×1 |
-| GPU (selected) | unknown ×1 |
-| ANGLE backend | metal ×1 |
-| Died at milestone | SessionOpened ×1 |
-| Single-instance lock | not recorded ×1 |
+| Machines | 2 — per version: 8.0.3 ×1, 8.0.4 ×1 |
+| Reports | 4 (first 2026-11-03, last 2026-11-17) |
+| Versions | 8.0.3 ×3, 8.0.4 ×1 |
+| Platforms | macos ×4 |
+| OS | Apple macOS 26.6 ×3, Apple macOS 15.6 ×1 |
+| GPU (selected) | unknown ×4 |
+| ANGLE backend | metal ×4 |
+| Died at milestone | SessionOpened ×4 |
+| Single-instance lock | not recorded ×3, Acquired ×1 |
 
 - **Cause (normalized):** `died at SessionOpened on macos`
 - **Where:** no source location
@@ -34,21 +34,24 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
+- ×2 `Application: A global preference has been changed !`
 - ×1 `Application: A request context preference has been changed !`
+- ×1 `[a line of the downstream application, redacted]`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
+[ResourcesManagerService][Success] (vendors/emeraude-engine/src/Resources/Manager.cpp `EmEn::Resources::Manager::onInitialize`) Geometry manager service up !
 [ResourcesManagerService][Success] (vendors/emeraude-engine/src/Resources/Manager.cpp `EmEn::Resources::Manager::onInitialize`) Skeleton manager service up !
 [Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeBaseLevel`) ResourcesManagerService service up !
 [Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeBaseLevel`) UserService service up !
 [Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeBaseLevel`) *** Core level created ***
-[a line of the downstream application, redacted] (×4)
+[a line of the downstream application, redacted] (×3)
 ```
 
 Archives:
 
-- 1 archive(s), in the downstream application's crash-report mirror.
+- 4 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-11-10)

@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 7 — per version: 8.0.2 ×4, 8.0.3 ×3 |
-| Reports | 7 (first 2026-10-20, last 2026-11-02) |
-| Versions | 8.0.2 ×4, 8.0.3 ×3 |
-| Platforms | windows ×7 |
-| OS | Windows 11 Pro ×4, Windows 11 Home ×2, Windows 11 Home Single Language ×1 |
-| GPU (selected) | NVIDIA GeForce RTX 3050 Laptop GPU (driver 617.42) ×1, NVIDIA GeForce RTX 4060 Ti (driver 610.88) ×1, NVIDIA GeForce RTX 4090 (driver 621.1) ×1, NVIDIA GeForce RTX 5070 Laptop GPU (driver 610.60) ×1, NVIDIA GeForce RTX 5070 Ti (driver 617.14) ×1, NVIDIA GeForce RTX 5070 Ti Laptop GPU (driver 595.79) ×1, … (1 more) |
-| ANGLE backend | d3d11 ×7 |
-| Died at milestone | Stopping ×3, ApplicationStarted ×2, QuitRequested ×2 |
-| Single-instance lock | not recorded ×7 |
+| Machines | 8 — per version: 8.0.2 ×4, 8.0.3 ×4 |
+| Reports | 8 (first 2026-10-20, last 2026-11-17) |
+| Versions | 8.0.2 ×4, 8.0.3 ×4 |
+| Platforms | windows ×8 |
+| OS | Windows 11 Pro ×4, Windows 11 Home ×3, Windows 11 Home Single Language ×1 |
+| GPU (selected) | NVIDIA GeForce RTX 3050 Laptop GPU (driver 617.42) ×1, NVIDIA GeForce RTX 4060 Ti (driver 610.88) ×1, NVIDIA GeForce RTX 4090 (driver 621.1) ×1, NVIDIA GeForce RTX 5070 Laptop GPU (driver 610.60) ×1, NVIDIA GeForce RTX 5070 Ti (driver 610.88) ×1, NVIDIA GeForce RTX 5070 Ti (driver 617.14) ×1, … (2 more) |
+| ANGLE backend | d3d11 ×8 |
+| Died at milestone | Stopping ×4, ApplicationStarted ×2, QuitRequested ×2 |
+| Single-instance lock | not recorded ×8 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the swap-chain : VK_ERROR_OUT_OF_DEVICE_MEMORY !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createBaseSwapChain`
@@ -37,7 +37,7 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×3 `died at Stopping`
+- ×4 `died at Stopping`
 - ×2 `died at ApplicationStarted`
 - ×2 `died at QuitRequested`
 
@@ -45,10 +45,10 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 ```
 [VulkanDeviceMemory][Error] (vendors/emeraude-engine/src/Vulkan/DeviceMemory.cpp `EmEn::Vulkan::DeviceMemory::createOnHardware`) Unable to allocate <n> bytes (alignment:<n> bytes) in the device memory <n> : VK_ERROR_OUT_OF_DEVICE_MEMORY !
-[VulkanImage][Error] (vendors/emeraude-engine/src/Vulkan/Image.cpp `EmEn::Vulkan::Image::importFromWin32Handle`) Unable to import the external D3D11 texture memory (handle @@0000000000002F64) !
+[VulkanImage][Error] (vendors/emeraude-engine/src/Vulkan/Image.cpp `EmEn::Vulkan::Image::importFromWin32Handle`) Unable to import the external D3D11 texture memory (handle @@<n>) !
 [a line of the downstream application, redacted]
 [VulkanDeviceMemory][Error] (vendors/emeraude-engine/src/Vulkan/DeviceMemory.cpp `EmEn::Vulkan::DeviceMemory::createOnHardware`) Unable to allocate <n> bytes (alignment:<n> bytes) in the device memory <n> : VK_ERROR_OUT_OF_DEVICE_MEMORY !
-[VulkanImage][Error] (vendors/emeraude-engine/src/Vulkan/Image.cpp `EmEn::Vulkan::Image::importFromWin32Handle`) Unable to import the external D3D11 texture memory (handle @@0000000000002E00) !
+[VulkanImage][Error] (vendors/emeraude-engine/src/Vulkan/Image.cpp `EmEn::Vulkan::Image::importFromWin32Handle`) Unable to import the external D3D11 texture memory (handle @@<n>) !
 [a line of the downstream application, redacted]
 [VulkanSwapChain][Fatal] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createBaseSwapChain`) Unable to create the swap-chain : VK_ERROR_OUT_OF_DEVICE_MEMORY !
 [VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::recreate`) Unable to recreate the base of the swap-chain !
@@ -56,7 +56,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives:
 
-- 7 archive(s), in the downstream application's crash-report mirror.
+- 8 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

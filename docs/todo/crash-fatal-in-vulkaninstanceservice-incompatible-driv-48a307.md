@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 68 — per version: 8.0.2 ×68 |
-| Reports | 237 (first 2026-10-15, last 2026-11-08) |
-| Versions | 8.0.2 ×237 |
-| Platforms | windows ×237 |
-| OS | Windows 10 Pro ×91, Windows 11 Pro ×60, Windows 10 Home ×50, Windows 10 Home Single Language ×10, Windows 11 Home ×10, Windows 10 Enterprise ×9, … (4 more) |
-| GPU (selected) | unknown ×237 |
-| ANGLE backend | d3d11 ×237 |
-| Died at milestone | SessionOpened ×237 |
-| Single-instance lock | not recorded ×237 |
+| Machines | 74 — per version: 8.0.2 ×72, 8.0.4 ×2 |
+| Reports | 251 (first 2026-10-15, last 2026-11-17) |
+| Versions | 8.0.2 ×248, 8.0.4 ×3 |
+| Platforms | windows ×251 |
+| OS | Windows 10 Pro ×97, Windows 11 Pro ×65, Windows 10 Home ×52, Windows 11 Home ×11, Windows 10 Home Single Language ×10, Windows 10 Enterprise ×9, … (4 more) |
+| GPU (selected) | unknown ×251 |
+| ANGLE backend | d3d11 ×251 |
+| Died at milestone | SessionOpened ×251 |
+| Single-instance lock | not recorded ×248, Acquired ×3 |
 
 - **Cause (normalized):** `VulkanInstanceService: Incompatible driver !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/Instance.cpp` — `EmEn::Vulkan::Instance::onInitialize`
@@ -37,7 +37,7 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×237 `died at SessionOpened`
+- ×251 `died at SessionOpened`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
@@ -50,7 +50,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives:
 
-- 237 archive(s), in the downstream application's crash-report mirror.
+- 251 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

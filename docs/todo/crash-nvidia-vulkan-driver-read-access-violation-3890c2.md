@@ -20,15 +20,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 2 — per version: 8.0.4 ×2 |
-| Reports | 2 (first 2026-11-06, last 2026-11-09) |
-| Versions | 8.0.4 ×2 |
-| Platforms | windows ×2 |
-| OS | Windows 10 Pro ×1, Windows 11 Pro ×1 |
-| GPU (selected) | Intel(R) UHD Graphics 770 (driver 101.6129) ×1, NVIDIA GeForce RTX 3060 (driver 610.62) ×1 |
-| ANGLE backend | d3d11 ×2 |
-| Died at milestone | ApplicationStarted ×2 |
-| Single-instance lock | Acquired ×2 |
+| Machines | 3 — per version: 8.0.4 ×3 |
+| Reports | 3 (first 2026-11-06, last 2026-11-14) |
+| Versions | 8.0.4 ×3 |
+| Platforms | windows ×3 |
+| OS | Windows 10 Home ×1, Windows 10 Pro ×1, Windows 11 Pro ×1 |
+| GPU (selected) | Intel(R) UHD Graphics 770 (driver 101.6129) ×1, NVIDIA GeForce RTX 3060 (driver 610.62) ×1, unknown ×1 |
+| ANGLE backend | d3d11 ×3 |
+| Died at milestone | ApplicationStarted ×2, CoreStarted ×1 |
+| Single-instance lock | Acquired ×3 |
 
 - **Cause (normalized):** `EXCEPTION_ACCESS_VIOLATION_READ in the browser process: nvoglv64.dll`
 - **Where:** `nvoglv64.dll` (no symbols: a driver or a system library)
@@ -37,37 +37,37 @@ tags: [crash, crash-report-auto]
 Last error before the death (else the last trace), by number of reports:
 
 - ×2 `browser process, then the run died at ApplicationStarted`
+- ×1 `browser process, then the run died at CoreStarted`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[GLFW][Error] Win32: Failed to query display settings (errno:<n>)
-[GLFW][Error] Win32: Failed to query monitor DPI (errno:<n>)
-[WindowService][Info] (vendors/emeraude-engine/src/Window.cpp `EmEn::Window::monitorConfigurationChanged`) New monitor removed from the configuration !
-[WindowService][Error] (vendors/emeraude-engine/src/Window.cpp `EmEn::Window::getDesktopSize`) Unable to query the primary monitor ! (×5)
+[SystemNotificationService][Info] (vendors/emeraude-engine/src/SystemNotification.cpp `EmEn::SystemNotification::onInitialize`) System notification service initialized.
+[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) SystemNotificationService service up!
+[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) OverlayManagerService service up!
+[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) SceneManagerService service up!
+[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeCoreLevel`) Engine at core level initialized ! Now initialization at the application level ...
+[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::run`) Engine at application level initialized !
+[Core][Info] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::updateNoScenePacing`) Without an active scene, the Continuous rendering loop is paced at <n> Hz (by the present itself when it blocks).
+[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::run`) Core level execution started !
 ```
 
 Native stacks of the latest report (minidumps, crashing thread; `?` = guessed by stack scanning):
 
 ```
 EXCEPTION_ACCESS_VIOLATION_READ in the browser process
- 0   nvoglv64.dll + 0x0000000000ba5336
- 1 ? nvoglv64.dll + 0x0000000000ba4ba1
- 2 ? nvoglv64.dll + 0x0000000000aa2afb
- 3 ? nvoglv64.dll + 0x0000000000a7ebaf
- 4 ? nvoglv64.dll + 0x0000000000af04fc
- 5 ? nvoglv64.dll + 0x0000000000aefc5d
- 6 ? nvoglv64.dll + 0x0000000000aeffd3
- 7 ? nvoglv64.dll + 0x0000000000af670a
- 8 ? nvoglv64.dll + 0x0000000000a6310f
- 9 ? nvoglv64.dll + 0x0000000000af224a
-10 ? nvoglv64.dll + 0x0000000002c3352f
-11 ? nvoglv64.dll + 0x0000000000aa2fb5
+ 0   nvoglv64.dll + 0x0000000000cb7b30
+ 1 ? ntdll.dll + 0x000000000002b44c
+ 2 ? nvoglv64.dll + 0x0000000000c49b2b
+ 3 ? nvoglv64.dll + 0x0000000000c48ed9
+ 4 ? nvoglv64.dll + 0x0000000000c7c008
+ 5 ? KERNELBASE.dll + 0x000000000005f212
+ 6 ? nvoglv64.dll + 0x0000000000c7b14b
 ```
 
 Archives:
 
-- 2 archive(s), in the downstream application's crash-report mirror.
+- 3 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-11-10)

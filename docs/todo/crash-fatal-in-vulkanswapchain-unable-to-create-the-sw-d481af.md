@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 12 — per version: 8.0.2 ×7, 8.0.3 ×6 |
-| Reports | 16 (first 2026-10-21, last 2026-11-08) |
-| Versions | 8.0.2 ×9, 8.0.3 ×7 |
-| Platforms | windows ×10, linux ×6 |
-| OS | Ubuntu 24.04.5 LTS ×6, Windows 10 Pro ×3, Windows 11 Home ×3, Windows 11 Pro ×2, Windows 10 Home ×1, Windows 10 Home Single Language ×1 |
-| GPU (selected) | unknown ×6, Microsoft Direct3D12 (NVIDIA GeForce RTX 3070 Ti Laptop GPU) (driver 26.0.129.35) ×1, NVIDIA GeForce GTX 1050 Ti (driver 581.80) ×1, NVIDIA GeForce RTX 2070 (driver 617.42) ×1, NVIDIA GeForce RTX 3050 (driver 617.14) ×1, NVIDIA GeForce RTX 3070 Laptop GPU (driver 572.16) ×1, … (5 more) |
-| ANGLE backend | d3d11 ×10, vulkan ×6 |
-| Died at milestone | Stopping ×9, SessionOpened ×6, ApplicationStarted ×1 |
-| Single-instance lock | not recorded ×16 |
+| Machines | 14 — per version: 8.0.2 ×8, 8.0.3 ×7 |
+| Reports | 18 (first 2026-10-21, last 2026-11-15) |
+| Versions | 8.0.2 ×10, 8.0.3 ×8 |
+| Platforms | windows ×12, linux ×6 |
+| OS | Ubuntu 24.04.5 LTS ×6, Windows 11 Home ×4, Windows 10 Pro ×3, Windows 11 Pro ×3, Windows 10 Home ×1, Windows 10 Home Single Language ×1 |
+| GPU (selected) | unknown ×6, Microsoft Direct3D12 (NVIDIA GeForce RTX 3070 Ti Laptop GPU) (driver 26.0.129.35) ×1, NVIDIA GeForce GTX 1050 Ti (driver 581.80) ×1, NVIDIA GeForce RTX 2070 (driver 617.42) ×1, NVIDIA GeForce RTX 3050 (driver 617.14) ×1, NVIDIA GeForce RTX 3060 (driver 621.14) ×1, … (7 more) |
+| ANGLE backend | d3d11 ×12, vulkan ×6 |
+| Died at milestone | Stopping ×10, SessionOpened ×6, ApplicationStarted ×2 |
+| Single-instance lock | not recorded ×18 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the swap-chain : VK_ERROR_INITIALIZATION_FAILED !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createBaseSwapChain`
@@ -37,22 +37,25 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×9 `died at Stopping`
+- ×10 `died at Stopping`
 - ×6 `died at SessionOpened`
-- ×1 `died at ApplicationStarted`
+- ×2 `died at ApplicationStarted`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[a line of the downstream application, redacted] (×5)
-[VulkanDevice][Error] (vendors/emeraude-engine/src/Vulkan/Device.cpp `EmEn::Vulkan::Device::waitIdle`) Unable to wait the device 00000235DAF132E0 : VK_ERROR_OUT_OF_DEVICE_MEMORY ! Call location: Renderer::recreateSystem()
+[WindowService][Info] (vendors/emeraude-engine/src/Window.cpp `EmEn::Window::monitorConfigurationChanged`) New monitor added to the configuration ! (×2)
+[GLFW][Error] Win32: Failed to query display settings (errno:<n>)
+[WindowService][Info] (vendors/emeraude-engine/src/Window.cpp `EmEn::Window::monitorConfigurationChanged`) New monitor removed from the configuration !
+[VulkanDevice][Error] (vendors/emeraude-engine/src/Vulkan/Device.cpp `EmEn::Vulkan::Device::dumpDeviceLostDiagnostics`) DEVICE LOST (Device::waitIdle) — GPU diagnostics follow: [device_fault] [checkpoints] last GPU markers reached per queue: - queue <hex> stage=<hex> marker='transfer:image-layout-transition' - queue <h
+[VulkanDevice][Error] (vendors/emeraude-engine/src/Vulkan/Device.cpp `EmEn::Vulkan::Device::waitIdle`) Unable to wait the device 0000021D806A00D0 : VK_ERROR_DEVICE_LOST ! Call location: Renderer::recreateSystem()
 [VulkanSwapChain][Fatal] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createBaseSwapChain`) Unable to create the swap-chain : VK_ERROR_INITIALIZATION_FAILED !
 [VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::recreate`) Unable to recreate the base of the swap-chain !
 ```
 
 Archives:
 
-- 16 archive(s), in the downstream application's crash-report mirror.
+- 18 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-22)

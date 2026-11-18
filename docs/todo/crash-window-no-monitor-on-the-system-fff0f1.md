@@ -18,15 +18,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 1 — per version: 8.0.3 ×1 |
-| Reports | 3 (first 2026-11-02, last 2026-11-02) |
-| Versions | 8.0.3 ×3 |
-| Platforms | windows ×3 |
-| OS | Windows 11 Pro ×3 |
-| GPU (selected) | unknown ×3 |
-| ANGLE backend | d3d11 ×3 |
-| Died at milestone | SessionOpened ×3 |
-| Single-instance lock | not recorded ×3 |
+| Machines | 3 — per version: 8.0.3 ×1, 8.0.4 ×2 |
+| Reports | 6 (first 2026-11-02, last 2026-11-15) |
+| Versions | 8.0.3 ×4, 8.0.4 ×2 |
+| Platforms | windows ×6 |
+| OS | Windows 11 Pro ×6 |
+| GPU (selected) | unknown ×6 |
+| ANGLE backend | d3d11 ×6 |
+| Died at milestone | SessionOpened ×6 |
+| Single-instance lock | not recorded ×4, Acquired ×2 |
 
 - **Cause (normalized):** `WindowService: There is no monitor on the system !`
 - **Where:** `vendors/emeraude-engine/src/Window.cpp` — `EmEn::Window::checkMonitors`
@@ -34,7 +34,7 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×3 `died at SessionOpened`
+- ×6 `died at SessionOpened`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
@@ -50,7 +50,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives:
 
-- 3 archive(s), in the downstream application's crash-report mirror.
+- 6 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-11-10)

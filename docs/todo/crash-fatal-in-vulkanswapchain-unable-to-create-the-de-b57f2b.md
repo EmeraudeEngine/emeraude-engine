@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 9 — per version: 8.0.2 ×4, 8.0.3 ×5 |
-| Reports | 9 (first 2026-10-18, last 2026-11-10) |
-| Versions | 8.0.3 ×5, 8.0.2 ×4 |
-| Platforms | windows ×9 |
-| OS | Windows 11 Pro ×6, Windows 10 Pro ×1, Windows 10 Pro for Workstations ×1, Windows 11 Home ×1 |
-| GPU (selected) | NVIDIA GeForce RTX 5070 Ti (driver 616.92) ×2, AMD Radeon RX 9060 XT (driver 2.0.395) ×1, AMD Radeon RX 9060 XT (driver 2.0.416) ×1, NVIDIA GeForce GTX 1650 Ti (driver 591.44) ×1, NVIDIA GeForce RTX 4070 (driver 617.14) ×1, NVIDIA GeForce RTX 4090 (driver 610.88) ×1, … (2 more) |
-| ANGLE backend | d3d11 ×9 |
-| Died at milestone | Stopping ×4, ApplicationStarted ×3, QuitRequested ×2 |
-| Single-instance lock | not recorded ×9 |
+| Machines | 13 — per version: 8.0.2 ×6, 8.0.3 ×7 |
+| Reports | 13 (first 2026-10-18, last 2026-11-12) |
+| Versions | 8.0.3 ×7, 8.0.2 ×6 |
+| Platforms | windows ×13 |
+| OS | Windows 11 Pro ×7, Windows 11 Home ×3, Windows 10 Pro ×2, Windows 10 Pro for Workstations ×1 |
+| GPU (selected) | NVIDIA GeForce RTX 5070 Ti (driver 616.92) ×2, AMD Radeon RX 9060 XT (driver 2.0.395) ×1, AMD Radeon RX 9060 XT (driver 2.0.416) ×1, AMD Radeon(TM) Graphics (driver 2.0.353) ×1, NVIDIA GeForce GTX 1050 Ti (driver 581.57) ×1, NVIDIA GeForce GTX 1650 Ti (driver 591.44) ×1, … (6 more) |
+| ANGLE backend | d3d11 ×13 |
+| Died at milestone | Stopping ×7, ApplicationStarted ×4, QuitRequested ×2 |
+| Single-instance lock | not recorded ×13 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the depth buffer #<n> !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createImageArray`
@@ -37,26 +37,26 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×4 `died at Stopping`
-- ×3 `died at ApplicationStarted`
+- ×7 `died at Stopping`
+- ×4 `died at ApplicationStarted`
 - ×2 `died at QuitRequested`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
 [a line of the downstream application, redacted]
-[VulkanDeviceMemory][Error] (vendors/emeraude-engine/src/Vulkan/DeviceMemory.cpp `EmEn::Vulkan::DeviceMemory::createOnHardware`) Unable to allocate <n> bytes (alignment:<n> bytes) in the device memory <n> : VK_ERROR_OUT_OF_DEVICE_MEMORY !
-[VulkanImage][Error] (vendors/emeraude-engine/src/Vulkan/Image.cpp `EmEn::Vulkan::Image::importFromWin32Handle`) Unable to import the external D3D11 texture memory (handle @@0000000000002C04) !
-[a line of the downstream application, redacted]
+[OverlaySurface][Success] (vendors/emeraude-engine/src/Overlay/Surface.cpp `EmEn::Overlay::Surface::importAcceleratedFrame`) Surface 'View3D' transition buffer committed by an accelerated frame (<n>x<n>px).
+[OverlaySurface][Success] (vendors/emeraude-engine/src/Overlay/Surface.cpp `EmEn::Overlay::Surface::importAcceleratedFrame`) Surface 'ViewFile' transition buffer committed by an accelerated frame (<n>x<n>px).
+[OverlaySurface][Success] (vendors/emeraude-engine/src/Overlay/Surface.cpp `EmEn::Overlay::Surface::commitTransitionBuffer`) Surface 'ViewUI' transition buffer committed (<n>x<n>px, scale:<n>).
 [VulkanImage][Error] (vendors/emeraude-engine/src/Vulkan/Image.cpp `EmEn::Vulkan::Image::createWithVMA`) Unable to create an image with VMA : VK_ERROR_OUT_OF_DEVICE_MEMORY !
-[VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createDepthStencilBuffer`) Unable to create image 'Frame0DepthStencilBuffer' !
+[VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createDepthStencilBuffer`) Unable to create image 'Frame1DepthStencilBuffer' !
 [VulkanSwapChain][Fatal] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createImageArray`) Unable to create the depth buffer #<n> !
 [VulkanSwapChain][Error] (vendors/emeraude-engine/src/Vulkan/SwapChain.cpp `EmEn::Vulkan::SwapChain::createFramebuffer`) Unable to create the swap-chain images !
 ```
 
 Archives:
 
-- 9 archive(s), in the downstream application's crash-report mirror.
+- 13 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

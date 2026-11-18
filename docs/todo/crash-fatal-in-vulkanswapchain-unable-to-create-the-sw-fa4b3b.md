@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 12 — per version: 8.0.2 ×10, 8.0.3 ×2 |
-| Reports | 18 (first 2026-10-17, last 2026-11-05) |
-| Versions | 8.0.2 ×15, 8.0.3 ×3 |
-| Platforms | windows ×18 |
-| OS | Windows 10 Pro ×7, Windows 11 Home ×4, Windows 11 Pro ×4, Windows 10 Home ×2, Windows 11 Home Single Language ×1 |
-| GPU (selected) | Intel(R) UHD Graphics 610 (driver 101.2111) ×5, AMD Radeon 740M Graphics (driver 2.0.395) ×2, Intel(R) HD Graphics 620 (driver 100.9171) ×2, Intel(R) UHD Graphics (driver 100.9805) ×2, AMD Radeon RX 7900 XTX (driver 2.0.406) ×1, AMD Radeon(TM) 860M Graphics (driver 2.0.373) ×1, … (5 more) |
-| ANGLE backend | d3d11 ×18 |
-| Died at milestone | ApplicationStarted ×14, Stopping ×3, QuitRequested ×1 |
-| Single-instance lock | not recorded ×18 |
+| Machines | 13 — per version: 8.0.2 ×11, 8.0.3 ×2 |
+| Reports | 23 (first 2026-10-17, last 2026-11-18) |
+| Versions | 8.0.2 ×20, 8.0.3 ×3 |
+| Platforms | windows ×23 |
+| OS | Windows 11 Pro ×9, Windows 10 Pro ×7, Windows 11 Home ×4, Windows 10 Home ×2, Windows 11 Home Single Language ×1 |
+| GPU (selected) | Intel(R) UHD Graphics 610 (driver 101.2111) ×5, Intel(R) UHD Graphics 630 (driver 100.7926) ×5, AMD Radeon 740M Graphics (driver 2.0.395) ×2, Intel(R) HD Graphics 620 (driver 100.9171) ×2, Intel(R) UHD Graphics (driver 100.9805) ×2, AMD Radeon RX 7900 XTX (driver 2.0.406) ×1, … (6 more) |
+| ANGLE backend | d3d11 ×23 |
+| Died at milestone | ApplicationStarted ×19, Stopping ×3, QuitRequested ×1 |
+| Single-instance lock | not recorded ×23 |
 
 - **Cause (normalized):** `VulkanSwapChain: Unable to create the swap-chain : VK_ERROR_OUT_OF_HOST_MEMORY !`
 - **Where:** `vendors/emeraude-engine/src/Vulkan/SwapChain.cpp` — `EmEn::Vulkan::SwapChain::createBaseSwapChain`
@@ -37,7 +37,7 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×14 `died at ApplicationStarted`
+- ×19 `died at ApplicationStarted`
 - ×3 `died at Stopping`
 - ×1 `died at QuitRequested`
 
@@ -51,7 +51,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives:
 
-- 18 archive(s), in the downstream application's crash-report mirror.
+- 23 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)
