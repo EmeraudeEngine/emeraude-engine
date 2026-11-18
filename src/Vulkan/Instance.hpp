@@ -116,7 +116,11 @@ namespace EmEn::Vulkan
 					/** @brief The device does not advertise a required feature: the hardware (or its driver) cannot run the engine. */
 					MissingFeatures,
 					/** @brief vkCreateDevice() failed for another reason. */
-					CreationFailed
+					CreationFailed,
+					/** @brief The physical device list never settled (a driver answers inconsistently): an outdated or
+					 * broken driver. Not tied to one Vulkan device: the startup diagnosis names the GPUs the operating
+					 * system lists. */
+					UnstableDeviceList
 				};
 
 				std::string deviceName;
@@ -461,6 +465,18 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns whether the physical device list never settled: every enumeration attempt answered
+			 * VK_INCOMPLETE, so a driver answers inconsistently and no device was queried (preparePhysicalDevices()).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			physicalDeviceListUnstable () const noexcept
+			{
+				return m_physicalDeviceListUnstable;
+			}
+
+			/**
 			 * @brief Returns a list of validation layers available from Vulkan.
 			 * @note This method follows the vkEnumerateDeviceLayerProperties() deprecation.
 			 * @return std::vector< VkLayerProperties >
@@ -783,5 +799,6 @@ namespace EmEn::Vulkan
 			bool m_useVulkanMemoryAllocator{false};
 			bool m_creationAttempted{false};
 			bool m_graphicsSelectionAttempted{false};
+			bool m_physicalDeviceListUnstable{false};
 	};
 }

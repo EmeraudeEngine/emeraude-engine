@@ -57,6 +57,7 @@
 #include "BlobTrait.hpp"
 #include "Device.hpp"
 #include "DeviceRequirements.hpp"
+#include "FaultInjection.hpp"
 #include "Identification.hpp"
 #include "PhysicalDevice.hpp"
 #include "PortabilitySubset.hpp"
@@ -426,7 +427,20 @@ namespace EmEn::Vulkan
 			return false;
 		}
 
-		if ( outcome.retries > 0 || outcome.result == VK_INCOMPLETE )
+		/* NOTE: Still VK_INCOMPLETE after every attempt: the list never settled, a driver answers inconsistently. Querying
+		 * a device of such a list made the Vulkan loader abort the process (a fast-fail inside the loader, at every launch,
+		 * on hybrid laptops with a 2020 AMD driver: 12 user crash reports on 3 machines, 2026-11-18; none of the reports of
+		 * a working machine ever showed this trace). Refused like an outdated driver instead (Core::diagnoseStartupRefusal()). */
+		if ( outcome.result == VK_INCOMPLETE || FaultInjection::unstableDeviceListInjected() )
+		{
+			m_physicalDeviceListUnstable = true;
+
+			TraceError{ClassId} << "The physical device list never settled (" << outcome.retries << " retr" << ( outcome.retries == 1 ? "y" : "ies" ) << ", last answer " << vkResultToCString(outcome.result) << ") : a graphics driver answers inconsistently, no device is queried.";
+
+			return false;
+		}
+
+		if ( outcome.retries > 0 )
 		{
 			TraceWarning{ClassId} << "The physical device list changed during its enumeration (" << outcome.retries << " retr" << ( outcome.retries == 1 ? "y" : "ies" ) << ", last answer " << vkResultToCString(outcome.result) << ") : the last list is used.";
 		}

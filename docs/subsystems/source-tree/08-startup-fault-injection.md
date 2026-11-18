@@ -33,6 +33,8 @@ release), and the measure before the fixes.
   (`Core::stopOnDisplayLoss()`: 96), `--inject-frame-submit-failure` (one frame's main submission refused: the frame
   dropped, the swap-chain recreated, the run goes on), `--inject-swap-chain-image-count=N` (the driver's image count
   replaced at every swap-chain creation: above 5 the swap-chain is refused) — `docs/subsystems/vulkan/26-swap-chain-failure-paths.md`.
+  At startup: `--inject-unstable-device-list` (2026-11-18) — the physical device list looks as if it never settled:
+  no device is queried, the startup is refused as an outdated driver (exit 97) — `docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md`.
   At exit: `--inject-pipeline-cache-save-crash` (2026-11-15) — the process aborts inside `Renderer::savePipelineCache()`,
   between its save marker and the read of the driver's data, as a driver which crashes in `vkGetPipelineCacheData()`
   does; the NEXT launch is what is tested (vulkan doc 18 § A SAVE marker, and a refusal).

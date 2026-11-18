@@ -108,7 +108,9 @@ namespace EmEn
 		/* The GPUs the operating system knows, independently of Vulkan (empty when the platform cannot list them), and
 		 * one driver page per vendor among them. A software adapter is not a GPU. */
 		std::string knownGPUs;
+		std::string knownDriverVersions;
 		std::string driverPages;
+		uint32_t firstVendorID{0};
 
 		for ( const auto & gpu : m_primaryServices.systemInfo().getGPUDeviceInformation() )
 		{
@@ -119,6 +121,14 @@ namespace EmEn
 
 			knownGPUs += knownGPUs.empty() ? "" : ", ";
 			knownGPUs += gpu.deviceName;
+
+			knownDriverVersions += knownDriverVersions.empty() ? "" : ", ";
+			knownDriverVersions += gpu.driverVersion.empty() ? std::string{"unknown"} : gpu.driverVersion;
+
+			if ( firstVendorID == 0 )
+			{
+				firstVendorID = gpu.vendorID;
+			}
 
 			if ( const auto * page = driverPageOf(gpu.vendorID); page != nullptr && driverPages.find(page) == std::string::npos )
 			{
@@ -138,6 +148,35 @@ namespace EmEn
 		switch ( m_coreLevelFailure )
 		{
 			case CoreLevelFailure::VulkanInstance :
+				/* NOTE: A driver answers, but the physical device list never settled: no Vulkan device can be named (none
+				 * was queried, Vulkan::Instance::preparePhysicalDevices()), so the GPUs the operating system lists are named
+				 * instead, as an outdated driver: the user is told to update it (owner decision 2026-11-18). */
+				if ( m_vulkanInstance.physicalDeviceListUnstable() )
+				{
+					Vulkan::Instance::DeviceRefusal unstable;
+					unstable.deviceName = knownGPUs.empty() ? std::string{"the graphics card"} : knownGPUs;
+					unstable.driverVersion = knownDriverVersions.empty() ? std::string{"unknown"} : knownDriverVersions;
+					unstable.detail = "a stable list of graphics devices";
+					unstable.vendorID = firstVendorID;
+					unstable.reason = Reason::UnstableDeviceList;
+
+					refusal.refusals.push_back(unstable);
+					refusal.namedDevice = refusal.refusals.size() - 1;
+					refusal.cause = StartupRefusal::Cause::OutdatedDriver;
+					refusal.title = "Graphics driver too old";
+					/* NOTE: The faulty driver is not known: every vendor's page among the GPUs listed. */
+					refusal.driverURL = driverPages;
+
+					std::stringstream message;
+					message << "The graphics driver of '" << unstable.deviceName << "' (version " << unstable.driverVersion << ") is too old: ";
+					message << "it lacks what this application requires (" << unstable.detail << ").\n\n";
+					message << "Update the graphics driver" << ( driverPages.empty() ? "." : ":\n" + driverPages );
+
+					refusal.message = message.str();
+
+					return refusal;
+				}
+
 				/* NOTE: No driver answers the Vulkan loader, or it answers with no device at all. Only once vkCreateInstance()
 				 * ran: a failure before it is not a driver's (found by the startup fault injection, 2026-10-16, which told
 				 * the user to install a driver). */

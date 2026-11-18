@@ -70,6 +70,11 @@ namespace EmEn::FaultInjection
 	 * runtimeFailureDelay() after the main loop started: `--inject-display-loss`. */
 	constexpr auto DisplayLossArgument{"--inject-display-loss"};
 
+	/** @brief The command-line switch making the physical device list look as if it never settled (every enumeration
+	 * attempt answering VK_INCOMPLETE, Vulkan::Instance::preparePhysicalDevices()): `--inject-unstable-device-list`. The
+	 * startup is then refused like an outdated driver. */
+	constexpr auto UnstableDeviceListArgument{"--inject-unstable-device-list"};
+
 	/** @brief The command-line switch making the main submission of ONE frame fail as a refused vkQueueSubmit()
 	 * (Graphics::Renderer::renderFrame()), runtimeFailureDelay() after the main loop started:
 	 * `--inject-frame-submit-failure`. Nothing reaches the queue, as the specification states for a failed submission. */
@@ -156,6 +161,14 @@ namespace EmEn::FaultInjection
 	 */
 	[[nodiscard]]
 	EMEN_API bool displayLossInjected () noexcept;
+
+	/**
+	 * @brief Returns whether the physical device list is made to look unstable. Always false in a build without
+	 * EMERAUDE_FAULT_INJECTION.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	EMEN_API bool unstableDeviceListInjected () noexcept;
 
 	/**
 	 * @brief Returns whether one frame's main submission is made to fail. Always false in a build without

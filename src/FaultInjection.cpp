@@ -103,6 +103,16 @@ namespace EmEn::FaultInjection
 			return injected;
 		}
 
+		/** @brief Whether the physical device list is made to look unstable (same discipline). */
+		[[nodiscard]]
+		bool &
+		unstableDeviceList () noexcept
+		{
+			static bool injected{false};
+
+			return injected;
+		}
+
 		/** @brief Whether one frame's main submission fails (same discipline). */
 		[[nodiscard]]
 		bool &
@@ -212,6 +222,13 @@ namespace EmEn::FaultInjection
 			TraceWarning{"FaultInjection"} << "FAULT INJECTION: the engine will stop as on a lost display connection (" << DisplayLossArgument << ").";
 		}
 
+		if ( arguments.isSwitchPresent(UnstableDeviceListArgument) )
+		{
+			unstableDeviceList() = true;
+
+			TraceWarning{"FaultInjection"} << "FAULT INJECTION: the physical device list will look as if it never settled (" << UnstableDeviceListArgument << ").";
+		}
+
 		if ( arguments.isSwitchPresent(FrameSubmitFailureArgument) )
 		{
 			frameSubmitFailure() = true;
@@ -318,6 +335,12 @@ namespace EmEn::FaultInjection
 	}
 
 	bool
+	unstableDeviceListInjected () noexcept
+	{
+		return unstableDeviceList();
+	}
+
+	bool
 	frameSubmitFailureInjected () noexcept
 	{
 		return frameSubmitFailure();
@@ -391,6 +414,12 @@ namespace EmEn::FaultInjection
 
 	bool
 	displayLossInjected () noexcept
+	{
+		return false;
+	}
+
+	bool
+	unstableDeviceListInjected () noexcept
 	{
 		return false;
 	}

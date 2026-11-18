@@ -16,6 +16,15 @@ extensions, tool properties, surface formats, present modes, present rectangles,
 The swap-chain image query keeps `VK_SUCCESS` only: its count is the swap-chain's own, a partial list would miss images.
 `preparePhysicalDevices()` logs "N physical device(s) found" and warns on a retry.
 
+⚠️ **A list that never settles is refused, not used (2026-11-18).** When every attempt still answers `VK_INCOMPLETE`,
+a driver answers inconsistently (the count announces N devices, the fill writes fewer, at every attempt). Querying a
+device of that list made the Vulkan loader ABORT the process (a fast-fail inside the loader, impossible to catch) at
+every launch: 12 crash reports of a downstream application on 3 hybrid Windows laptops (UHD 620 + R7 M460, Vega 8 +
+GTX 1650, Vega 10 + NVIDIA), all with a 2020 AMD driver (27.20.10xx); no report of a working machine ever showed the
+"changed during its enumeration" trace with a final `VK_INCOMPLETE`. `preparePhysicalDevices()` now traces "The
+physical device list never settled", queries no device, raises `Instance::physicalDeviceListUnstable()` and fails; the
+startup is refused as an outdated driver (below). A list that settles after retries is still used, with the warning.
+
 ### Which devices may be used (`Vulkan::Instance`)
 
 - `minimumDeviceAPIVersion()`: the application's target (`23-the-application-targets-a-vulkan-version.md`; 1.3 by
@@ -63,6 +72,7 @@ graphics renderer WITHOUT a graphics device, `diagnoseStartupRefusal()` classifi
 |---|---|---|
 | `NoVulkanDriver` | `vkCreateInstance()` → `VK_ERROR_INCOMPATIBLE_DRIVER`, or no physical device | "needs a graphics driver supporting Vulkan 1.3, and none was found" + the OS-listed GPUs + one driver page per vendor + "an old integrated graphics chip is not compatible" |
 | `OutdatedDriver` | a device refused below the minimum version, or without timeline semaphores | names the GPU, its driver version and Vulkan version (or what it lacks), "update the graphics driver" + the vendor's page |
+| `OutdatedDriver` (unstable list) | the physical device list never settled (`physicalDeviceListUnstable()`, owner decision 2026-11-18: a driver problem is told as "update the driver") | no Vulkan device can be named: a `DeviceRefusal` with `Reason::UnstableDeviceList` names the GPUs the OS lists and their driver versions, "it lacks what this application requires (a stable list of graphics devices)", "update the graphics driver" + every vendor's page among them (the faulty driver is not known) |
 | `IncompatibleHardware` | a device lacking a required feature, or no compatible device | names the GPU and the missing features, "not compatible", "updating an old driver may help" |
 | `Other` | not classified as above | (no dialog: `EXIT_FAILURE` as before) |
 

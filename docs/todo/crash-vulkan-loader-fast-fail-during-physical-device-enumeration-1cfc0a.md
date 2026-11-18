@@ -21,6 +21,14 @@ loader or a driver changes the device list between two calls, and a query on one
 device that disappeared between the enumeration and the query can be skipped instead of queried. One machine: likely a
 driver / layer installation issue, but the engine should survive it.
 
+**Fix (2026-11-18, engine `develop`, not shipped yet).** The machines of the reports were found: 12 reports on 3 hybrid
+Windows laptops, all with a 2020 AMD driver (27.20.10xx), all "8 retries, VK_INCOMPLETE" then the abort; no working
+machine ever showed that trace. A list that never settles is no longer used: `Instance::preparePhysicalDevices()`
+queries no device and fails, and the startup is refused as an outdated driver naming the GPUs the OS lists (exit 97,
+"update the graphics driver"); `docs/subsystems/vulkan/22-startup-refusals-told-to-the-user.md`. Proven by
+`--inject-unstable-device-list`. **Close this item only on the reports of the release that ships it** (the cause must
+turn into a startup refusal).
+
 ## Why
 
 <!-- crash-reports:begin -->
