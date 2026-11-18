@@ -159,6 +159,18 @@ written, and dropped (owner decision, the same day):
 redirected, so the same reference does not exist there. If the question comes back, measure it there first (a tool
 which pushes lines then dies at once, and counts what the file holds).
 
+## The first dumps (2026-11-18): 8 of the 13 reports of the newest version are not the engine's
+
+The downstream application's newest version collects the system's dumps: 8 of its 13 reports under this signature
+carry one, and the 8 read the same (the frames after `KERNELBASE.dll` found by stack scanning, with the application's
+symbols): `main → startCEF → _tailMerge_libcef_dll → __delayLoadHelper2`, exception `FACILITY_VISUALCPP /
+ERROR_MOD_NOT_FOUND`. The application delay-loads its web engine library (`libcef.dll`), and on 6 Windows 11 machines
+(an active antivirus on each, the same machine at every launch) that file could not be loaded: a quarantined or damaged
+installation, not an engine death. Fixed in the downstream application (it loads the library first and tells the user,
+its own exit code 93); its crash-report tool now signs such stacks by the frames found by scanning (`native-scanned`),
+so these reports leave this item at its next run. The 5 other reports of that version carry no dump: what remains here
+is still unexplained.
+
 ## What remains
 
 - Read the dumps of the first reports which carry one (the downstream application's next version).
