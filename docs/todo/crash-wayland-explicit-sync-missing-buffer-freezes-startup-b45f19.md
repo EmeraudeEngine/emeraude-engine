@@ -21,6 +21,23 @@ buffer. A Wayland protocol error is fatal for the connection, which matches the 
 window before the swap-chain presents), the compositors and drivers of the reports, and whether forcing implicit sync or
 X11 avoids it.
 
+**Already fixed after the release of these reports (2026-11-18).** The downstream release that sent them was built on
+2026-11-12: its Linux engine symbols contain neither `Window::deliverRecordedEvents` (`94bcc9a1`, 2026-11-14: the
+native-surface lock — a main-thread surface commit no longer races the WSI present; `0441aed4`, 2026-11-13) nor
+`Window::refuseDispatchOnLostDisplay` (`7b6e9d50`, 2026-11-14: a dead display connection no longer keeps the main thread
+inside the GLFW / libdecor dispatch — the freeze these reports show). See `docs/caution-points.md` § the buffer-less
+commit of the window surface. Re-measured on `develop` (`ccd738b1`), 2026-11-18, explicit sync in use on both machines:
+NVIDIA 620.70 + GNOME 48 (10 079 resizes) and RADV (Mesa 26.0.8) + GNOME 50 (14 264 resizes): no protocol error, no
+freeze. The protocol trace of the RADV run shows that a client resize only commits the libdecor title-bar SUBSURFACE;
+the parent surface is committed from the main thread on a compositor configure (focus, interactive resize, maximize,
+output change) or a title / decoration redraw — the triggers to keep in mind. That trigger was exercised too (RADV: a title change every 10 ms
+and a maximize / restore every 300 ms, 151 compositor configures): 4 450 main-thread commits of the swap-chain surface,
+585 of them within 0.1 ms of a present, NONE inside a WSI acquire-point..commit sequence, no error — the lock holds. The
+freeze's fix has a GLFW half too: `dependencies/glfw` `e7bb6749` ("Wayland: leave the event loop on a display in
+error", 2026-11-14) — a checkout must have its submodule updated (`git submodule update dependencies/glfw`). Of the reports grouped here, only the
+Arch one shows "Missing buffer"; the Zorin one (repeated stalls that resume) is another freeze. **Close this item on the
+reports of the first release built after 2026-11-14.**
+
 ## Why
 
 <!-- crash-reports:begin -->
