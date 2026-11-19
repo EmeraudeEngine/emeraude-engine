@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 93 — per version: 8.0.2 ×36, 8.0.3 ×34, 8.0.4 ×22, 8.0.5 ×1 |
-| Reports | 138 (first 2026-10-16, last 2026-11-18) |
-| Versions | 8.0.2 ×56, 8.0.3 ×56, 8.0.4 ×25, 8.0.5 ×1 |
-| Platforms | windows ×128, macos ×8, linux ×2 |
-| OS | Windows 11 Pro ×60, Windows 11 Home ×37, Windows 10 Home Single Language ×10, Windows 10 Home ×9, Windows 10 Pro ×9, Apple macOS 26.5 ×5, … (6 more) |
-| GPU (selected) | Apple M1 (driver MoltenVK 1.4.2) ×8, NVIDIA GeForce GTX 1050 Ti (driver 581.80) ×8, Intel(R) Arc(TM) 140V GPU (16GB) (driver 101.8132) ×7, AMD Radeon Pro WX 3100 (driver 2.0.250) ×4, NVIDIA GeForce MX150 (driver 511.69) ×4, NVIDIA GeForce RTX 3050 Laptop GPU (driver 592.82) ×4, … (74 more) |
-| ANGLE backend | d3d11 ×128, metal ×8, vulkan ×2 |
-| Died at milestone | Stopping ×138 |
-| Single-instance lock | not recorded ×112, Acquired ×26 |
+| Machines | 96 — per version: 8.0.2 ×36, 8.0.3 ×34, 8.0.4 ×25, 8.0.5 ×1 |
+| Reports | 142 (first 2026-10-16, last 2026-11-19) |
+| Versions | 8.0.2 ×56, 8.0.3 ×56, 8.0.4 ×29, 8.0.5 ×1 |
+| Platforms | windows ×131, macos ×8, linux ×3 |
+| OS | Windows 11 Pro ×62, Windows 11 Home ×38, Windows 10 Home Single Language ×10, Windows 10 Home ×9, Windows 10 Pro ×9, Apple macOS 26.5 ×5, … (7 more) |
+| GPU (selected) | Apple M1 (driver MoltenVK 1.4.2) ×8, NVIDIA GeForce GTX 1050 Ti (driver 581.80) ×8, Intel(R) Arc(TM) 140V GPU (16GB) (driver 101.8132) ×7, AMD Radeon Pro WX 3100 (driver 2.0.250) ×4, AMD Radeon RX 9070 XT (driver 2.0.416) ×4, NVIDIA GeForce MX150 (driver 511.69) ×4, … (76 more) |
+| ANGLE backend | d3d11 ×131, metal ×8, vulkan ×3 |
+| Died at milestone | Stopping ×142 |
+| Single-instance lock | not recorded ×112, Acquired ×30 |
 
 - **Cause (normalized):** `exit code 98 after Stopping`
 - **Where:** no source location
@@ -37,16 +37,16 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×78 `Core: The graphics device is lost or the renderer is no longer usable : the engine stops now (exit code <n>).`
+- ×80 `Core: The graphics device is lost or the renderer is no longer usable : the engine stops now (exit code <n>).`
 - ×17 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'View3D' (<n>x<n>px) !`
 - ×14 `UIManagerService: Failed to create the startup error overlay web view !`
 - ×12 `OverlayManagerService: Failed to process screen 'ApplicationUI' updates!`
 - ×5 `UIManagerService: The browser of the web-view 'ViewLib' did not complete its close within <n> ms : left to CEF.`
-- ×4 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'ViewFile' (<n>x<n>px) !`
+- ×5 `WebView: [CEF-ACCEL] Unable to import the accelerated frame for 'ViewFile' (<n>x<n>px) !`
 - ×2 `VulkanDevice: DEVICE LOST (Queue::present) — GPU diagnostics follow: [checkpoints] last GPU markers reached per queue: - queue <hex> stage=<hex> marker='t`
+- ×2 `WebView: [CEF-ACCEL] Unable to create the D3D11.<n> device used to open shared texture handles !`
 - ×1 `Core: *** Core level terminated ***`
 - ×1 `VulkanDevice: DEVICE LOST (Fence::wait) — GPU diagnostics follow: [device_fault] extension not available on this driver. [checkpoints] last GPU markers re`
-- ×1 `WebView: Unable to blit the Chromium whole buffer to pixmap !`
 - … 3 other(s), 3 report(s)
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
@@ -64,7 +64,7 @@ Traces of the main journal (normalized, latest report; around the Fatal trace wh
 
 Archives:
 
-- 138 archive(s), in the downstream application's crash-report mirror.
+- 142 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

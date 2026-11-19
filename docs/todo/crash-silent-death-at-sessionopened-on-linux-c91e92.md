@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 7 — per version: 8.0.2 ×1, 8.0.3 ×2, 8.0.4 ×4 |
-| Reports | 7 (first 2026-10-15, last 2026-11-13) |
-| Versions | 8.0.4 ×4, 8.0.3 ×2, 8.0.2 ×1 |
-| Platforms | linux ×7 |
-| OS | Ubuntu 26.04.1 LTS ×3, Fedora Linux 44 (Workstation Edition) ×1, Pop!_OS 24.04 LTS ×1, Ubuntu 24.04.4 LTS ×1, Ubuntu 25.10 ×1 |
-| GPU (selected) | unknown ×7 |
-| ANGLE backend | default ×6, vulkan ×1 |
-| Died at milestone | SessionOpened ×7 |
-| Single-instance lock | Acquired ×4, not recorded ×3 |
+| Machines | 8 — per version: 8.0.2 ×1, 8.0.3 ×2, 8.0.4 ×5 |
+| Reports | 8 (first 2026-10-15, last 2026-11-19) |
+| Versions | 8.0.4 ×5, 8.0.3 ×2, 8.0.2 ×1 |
+| Platforms | linux ×8 |
+| OS | Ubuntu 26.04.1 LTS ×3, Fedora Linux 44 (Workstation Edition) ×1, Pop!_OS 24.04 LTS ×1, SteamOS ×1, Ubuntu 24.04.4 LTS ×1, Ubuntu 25.10 ×1 |
+| GPU (selected) | unknown ×8 |
+| ANGLE backend | default ×6, vulkan ×2 |
+| Died at milestone | SessionOpened ×8 |
+| Single-instance lock | Acquired ×5, not recorded ×3 |
 
 - **Cause (normalized):** `died at SessionOpened on linux`
 - **Where:** no source location
@@ -40,24 +40,26 @@ Last error before the death (else the last trace), by number of reports:
 - ×2 `CrashReporter: Requesting an upload URL for the crash report 'crash-report-<n>-<n>.zip' from 'https:<path>' (attempt <n>/<n>, ticket #<n>).`
 - ×2 `CrashReporter: Session token '<path>' written.`
 - ×1 `Application: Crash report question in 'portuguese' (preferred language: 'pt-BR').`
+- ×1 `NetAPIClientService: 'https:<path>' (ticket #<n>) failed: Unreachable.`
 - ×1 `VulkanInstanceService: Vulkan Video H.<n> encode extensions detected and enabled (hardware RushMaker path).`
 - ×1 `no journal`
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[PrimaryServices][Success] (vendors/emeraude-engine/src/PrimaryServices.cpp `EmEn::PrimaryServices::Impl::initialize`) SystemInfoService primary service up! [main]
-[NetAPIClientService][Success] (vendors/emeraude-engine/src/Net/APIClient.cpp `EmEn::Net::APIClient::onInitialize`) API calls enabled (<n> trusted CA certificates, response ceiling <n> bytes, keeping <n> terminal ticket(s)).
-[PrimaryServices][Success] (vendors/emeraude-engine/src/PrimaryServices.cpp `EmEn::PrimaryServices::Impl::initialize`) NetAPIClientService primary service up! [main]
-[NetManagerService][Success] (vendors/emeraude-engine/src/Net/Manager.cpp `EmEn::Net::Manager::onInitialize`) Downloads enabled, <n> file(s) in cache (<n> trusted CA certificates).
-[PrimaryServices][Success] (vendors/emeraude-engine/src/PrimaryServices.cpp `EmEn::PrimaryServices::Impl::initialize`) NetManagerService primary service up! [main]
-[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeBaseLevel`) Primary services up !
-[a line of the downstream application, redacted] (×2)
+[RendererService][Success] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) TextureCompressorService service up!
+[RendererService][Success] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) TextureCacheService service up!
+[IndexedVertexResource][Warning] (vendors/emeraude-engine/src/Graphics/Geometry/IndexedVertexResource.cpp `EmEn::Graphics::Geometry::IndexedVertexResource::createOnHardware`) The buffers are already in video memory ! Use processLogics() instead.
+[RendererService][Success] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) PostProcessorService service up!
+[RendererService][Warning] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) GraphicsExternalInputService service failed or disabled at startup!
+[RendererService][Warning] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) GraphicsRecorderService service failed or disabled at startup!
+[Network::TLSConnection][Error] (vendors/emeraude-engine/src/Tracer.cpp `EmEn::Tracer::earlySetup`) tunnelThroughProxy(), the proxy refused the tunnel (status <n>).
+[NetAPIClientService][Error] (vendors/emeraude-engine/src/Net/APIClient.cpp `EmEn::Net::APIClient::performRequest`) 'https:<path>' (ticket #<n>) failed: Unreachable.
 ```
 
 Archives:
 
-- 7 archive(s), in the downstream application's crash-report mirror.
+- 8 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

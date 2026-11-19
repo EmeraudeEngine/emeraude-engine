@@ -21,15 +21,15 @@ tags: [crash, crash-report-auto]
 <!-- crash-reports:begin -->
 | | |
 |---|---|
-| Machines | 104 — per version: 8.0.2 ×45, 8.0.3 ×26, 8.0.4 ×24, 8.0.5 ×9 |
-| Reports | 153 (first 2026-10-15, last 2026-11-18) |
-| Versions | 8.0.2 ×79, 8.0.3 ×31, 8.0.4 ×30, 8.0.5 ×13 |
-| Platforms | windows ×153 |
-| OS | Windows 11 Home ×59, Windows 11 Pro ×55, Windows 10 Pro ×16, Windows 10 Home ×10, Windows 11 Home Single Language ×8, Windows 10 Home Single Language ×2, … (3 more) |
-| GPU (selected) | unknown ×153 |
-| ANGLE backend | d3d11 ×92, default ×61 |
-| Died at milestone | SessionOpened ×153 |
-| Single-instance lock | not recorded ×110, Acquired ×43 |
+| Machines | 99 — per version: 8.0.2 ×46, 8.0.3 ×26, 8.0.4 ×24, 8.0.5 ×3 |
+| Reports | 147 (first 2026-10-15, last 2026-11-19) |
+| Versions | 8.0.2 ×80, 8.0.3 ×31, 8.0.4 ×30, 8.0.5 ×6 |
+| Platforms | windows ×147 |
+| OS | Windows 11 Home ×57, Windows 11 Pro ×50, Windows 10 Pro ×17, Windows 10 Home ×10, Windows 11 Home Single Language ×8, Windows 10 Home Single Language ×2, … (3 more) |
+| GPU (selected) | unknown ×147 |
+| ANGLE backend | d3d11 ×93, default ×54 |
+| Died at milestone | SessionOpened ×147 |
+| Single-instance lock | not recorded ×111, Acquired ×36 |
 
 - **Cause (normalized):** `died at SessionOpened on windows`
 - **Where:** no source location
@@ -37,50 +37,34 @@ tags: [crash, crash-report-auto]
 
 Last error before the death (else the last trace), by number of reports:
 
-- ×44 `CrashReporter: Session token '<path>' written.`
+- ×40 `CrashReporter: Session token '<path>' written.`
 - ×22 `NetAPIClientService: 'https:<path>' (ticket #<n>) answered HTTP <n> (<n> bytes).`
 - ×15 `ShaderManagerService: The shader 'OverlayRenderingFragmentShader' (<n> bytes) loaded from binary cache !`
 - ×11 `RendererService: GraphicsRecorderService service failed or disabled at startup!`
 - ×8 `Application: [CEF-ACCEL] DirectComposition disabled (the windowed DevTools present path is incompatible with the process-wide shared-texture state).`
-- ×6 `CrashReporter: Requesting an upload URL for the crash report 'crash-report-<n>-<n>.zip' from 'https:<path>' (attempt <n>/<n>, ticket #<n>).`
 - ×5 `Core: WindowService service up!`
+- ×5 `CrashReporter: Requesting an upload URL for the crash report 'crash-report-<n>-<n>.zip' from 'https:<path>' (attempt <n>/<n>, ticket #<n>).`
 - ×4 `Core: PlatformManagerService service up!`
 - ×4 `VulkanInstanceService: <n> physical device(s) found.`
 - ×4 `VulkanInstanceService: The physical device 'Intel(R) UHD Graphics <n>' is missing 'descriptorIndexing' feature !`
-- … 18 other(s), 30 report(s)
+- … 18 other(s), 29 report(s)
 
 Traces of the main journal (normalized, latest report; around the Fatal trace when there is one):
 
 ```
-[ResourcesManagerService][Success] (vendors/emeraude-engine/src/Resources/Manager.cpp `EmEn::Resources::Manager::onInitialize`) Basic sea manager service up !
-[ResourcesManagerService][Success] (vendors/emeraude-engine/src/Resources/Manager.cpp `EmEn::Resources::Manager::onInitialize`) Cloud shape manager service up !
-[ResourcesManagerService][Success] (vendors/emeraude-engine/src/Resources/Manager.cpp `EmEn::Resources::Manager::onInitialize`) Scene definition manager service up !
-[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeBaseLevel`) ResourcesManagerService service up !
-[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeBaseLevel`) UserService service up !
-[Core][Success] (vendors/emeraude-engine/src/Core.cpp `EmEn::Core::initializeBaseLevel`) *** Core level created ***
-[a line of the downstream application, redacted] (×2)
-```
-
-Native stacks of the latest report (minidumps, crashing thread; `?` = guessed by stack scanning):
-
-```
-FACILITY_VISUALCPP / ERROR_MOD_NOT_FOUND in the browser process
- 0   KERNELBASE.dll + 0x00000000000c569a
- 1 ? KERNELBASE.dll + 0x00000000000c5699
- 2 ? <a frame of the downstream application>
- 3 ? <a frame of the downstream application>
- 4 ? <a frame of the downstream application>
- 5 ? <a frame of the downstream application>
- 6 ? <a frame of the downstream application>
- 7 ? <a frame of the downstream application>
- 8 ? kernel32.dll + 0x000000000002dda6
- 9 ? ntdll.dll + 0x00000000000c9c5b
-10 ? KERNELBASE.dll + 0x000000000010f8af
+[RendererService][Success] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) VertexBufferFormatManagerService service up!
+[TextureCompressorService][Success] (vendors/emeraude-engine/src/Graphics/TextureCompressor.cpp `EmEn::Graphics::TextureCompressor::onInitialize`) BC7 encoder initialized.
+[RendererService][Success] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) TextureCompressorService service up!
+[RendererService][Success] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) TextureCacheService service up!
+[IndexedVertexResource][Warning] (vendors/emeraude-engine/src/Graphics/Geometry/IndexedVertexResource.cpp `EmEn::Graphics::Geometry::IndexedVertexResource::createOnHardware`) The buffers are already in video memory ! Use processLogics() instead.
+[RendererService][Success] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) PostProcessorService service up!
+[RendererService][Warning] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) GraphicsExternalInputService service failed or disabled at startup!
+[RendererService][Warning] (vendors/emeraude-engine/src/Graphics/Renderer.cpp `EmEn::Graphics::Renderer::initializeSubServices`) GraphicsRecorderService service failed or disabled at startup!
 ```
 
 Archives:
 
-- 153 archive(s), in the downstream application's crash-report mirror.
+- 147 archive(s), in the downstream application's crash-report mirror.
 <!-- crash-reports:end -->
 
 ## Triage (2026-10-21)

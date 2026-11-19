@@ -38,6 +38,10 @@ error", 2026-11-14) — a checkout must have its submodule updated (`git submodu
 Arch one shows "Missing buffer"; the Zorin one (repeated stalls that resume) is another freeze. **Close this item on the
 reports of the first release built after 2026-11-14.**
 
+**Sibling (2026-11-19):** `crash-wayland-explicit-sync-no-buffer-freezes-at-corestarted-81a754` — the same
+protocol error worded "Release or Acquire point set but no buffer attached", the freeze at `CoreStarted`, from the same
+pre-fix release; close both together.
+
 ## Why
 
 <!-- crash-reports:begin -->
