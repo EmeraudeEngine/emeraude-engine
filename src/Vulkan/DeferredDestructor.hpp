@@ -151,6 +151,7 @@ namespace EmEn::Vulkan
 					{
 						m_entries.emplace_back(Entry{
 							.retiredAtTick = m_currentTick,
+							.serial = ++m_lastSerial,
 							.object = std::move(object),
 							.action = nullptr,
 							.isReady = nullptr
@@ -199,6 +200,7 @@ namespace EmEn::Vulkan
 					{
 						m_entries.emplace_back(Entry{
 							.retiredAtTick = m_currentTick,
+							.serial = ++m_lastSerial,
 							.object = nullptr,
 							.action = std::move(action),
 							.isReady = nullptr
@@ -236,6 +238,7 @@ namespace EmEn::Vulkan
 					{
 						m_entries.emplace_back(Entry{
 							.retiredAtTick = m_currentTick,
+							.serial = ++m_lastSerial,
 							.object = nullptr,
 							.action = std::move(action),
 							.isReady = std::move(isReady)
@@ -300,6 +303,70 @@ namespace EmEn::Vulkan
 			}
 
 			/**
+			 * @brief Returns a mark of the retirements made so far, for releaseRetiredUpTo().
+			 * @note Take it BEFORE waiting for the device to be idle: what is retired after it may belong to work
+			 * submitted during or after the wait.
+			 * @return uint64_t
+			 */
+			[[nodiscard]]
+			uint64_t
+			retirementMark () noexcept
+			{
+				const Base::MutexLock lock{m_mutex};
+
+				return m_lastSerial;
+			}
+
+			/**
+			 * @brief Destroys every entry retired up to a mark, whatever its tick, once its condition holds.
+			 * @note For a render thread that waited for the device to be idle AFTER taking the mark: nothing the GPU
+			 * executes can reference those objects any more, and the render thread records nothing meanwhile. The frame
+			 * delay of tick() cannot cover that case: a swap-chain recreated at every frame (a window resize storm) drops
+			 * every frame, tick() never runs, and the retired generations piled up until the video memory ran out
+			 * (measured 2026-11-19: 1 776 entries, 5.5 GiB after 48 s). A conditional entry (retireActionWhen()) still
+			 * waits for its condition, which an idle device makes true in practice.
+			 * @param mark The mark returned by retirementMark() before the wait.
+			 */
+			void
+			releaseRetiredUpTo (uint64_t mark) noexcept
+			{
+				std::vector< Entry > released;
+
+				{
+					const Base::MutexLock lock{m_mutex};
+
+					/* NOTE: Entries are in retirement order: the scan stops at the first one retired after the mark. */
+					for ( auto entryIt = m_entries.begin(); entryIt != m_entries.end(); )
+					{
+						if ( entryIt->serial > mark )
+						{
+							break;
+						}
+
+						if ( entryIt->isReady != nullptr && !entryIt->isReady() )
+						{
+							++entryIt;
+
+							continue;
+						}
+
+						released.emplace_back(std::move(*entryIt));
+
+						entryIt = m_entries.erase(entryIt);
+					}
+				}
+
+				/* NOTE: Outside the lock, as in tick(). */
+				for ( auto & entry : released )
+				{
+					if ( entry.action != nullptr )
+					{
+						entry.action();
+					}
+				}
+			}
+
+			/**
 			 * @brief Destroys every pending entry immediately.
 			 * @warning The caller must guarantee the device is idle (shutdown, resize).
 			 */
@@ -329,6 +396,8 @@ namespace EmEn::Vulkan
 			struct Entry
 			{
 				uint64_t retiredAtTick{0};
+				/* NOTE: Increasing in retirement order (retirementMark()). */
+				uint64_t serial{0};
 				std::shared_ptr< void > object;
 				std::function< void () > action;
 				/* NOTE: Null for a plain retirement (the delay alone). */
@@ -338,6 +407,7 @@ namespace EmEn::Vulkan
 			Base::Mutex m_mutex;
 			std::deque< Entry > m_entries EMEN_GUARDED_BY(m_mutex);
 			uint64_t m_currentTick EMEN_GUARDED_BY(m_mutex){0};
+			uint64_t m_lastSerial EMEN_GUARDED_BY(m_mutex){0};
 			uint32_t m_delayTicks EMEN_GUARDED_BY(m_mutex){5};
 			/* NOTE: close(): a retirement is destroyed at once (the renderer terminated). */
 			bool m_closed EMEN_GUARDED_BY(m_mutex){false};

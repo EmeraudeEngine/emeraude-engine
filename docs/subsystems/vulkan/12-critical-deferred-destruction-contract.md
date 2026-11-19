@@ -53,6 +53,17 @@
 > its object with no device (a latent hazard of every retiring destructor, the BLAS of `Geometry::Interface`
 > included). `setFramesInFlight()` (the renderer's initialization) reopens it.
 >
+> ⚠️ **A dropped frame does not tick** (2026-11-19). `tick()` runs only in a frame that acquired an image. A window
+> resized faster than the swap-chain is recreated (a resize storm, a drag on a slow machine) makes EVERY frame find the
+> swap-chain out of date: each one recreates it — retiring a whole generation of render targets — and drops, so nothing
+> was ever released. Measured (Linux, RTX 3070 Ti, projet-alpha `--load-demo default --disable-cef`, resizes every
+> 50 ms): 100 % of the frames dropped, 1 776 pending entries and 5.5 GiB of device-local memory after 48 s, then the
+> spill into system memory (OOM at a 16 GiB cap; uncapped, `VK_ERROR_OUT_OF_DEVICE_MEMORY` and the exit-95 stop after
+> ~4 min). **`Renderer::recreateRenderingSubSystem()` releases what was retired before its device-idle wait**:
+> `retirementMark()` BEFORE `waitIdle()`, `releaseRetiredUpTo(mark)` right after (a conditional entry still waits for
+> its condition). The mark must precede the wait: an object retired during it may belong to work submitted meanwhile.
+> Any other device-idle wait on the render thread may do the same.
+>
 > Known candidates NOT yet migrated: `Overlay::Surface` framebuffer recreation,
 > material/shared-UBO teardown paths, `LightSet::terminate()` (scene teardown — currently
 > in-place).

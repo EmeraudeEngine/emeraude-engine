@@ -3808,8 +3808,15 @@ namespace EmEn::Graphics
 			return true;
 		}
 
+		/* NOTE: The mark is taken BEFORE the wait: what was retired up to here is unreachable by the GPU once the device is
+		 * idle, and is released right after it. A resize storm recreates at every frame and drops every frame, so tick()
+		 * never ran: the retired generations piled up until the video memory ran out (Vulkan doc 12, 2026-11-19). */
+		const auto retirementMark = m_deferredDestructor.retirementMark();
+
 		/* NOTE: Wait the device to finish all his work before destroying/recreating the swap-chain. */
 		this->device()->waitIdle("Renderer::recreateSystem()");
+
+		m_deferredDestructor.releaseRetiredUpTo(retirementMark);
 
 		/* A capture's frames must share one extent and have no hole. */
 		m_frameCapture.abandon("The swap-chain was recreated during the capture.");
