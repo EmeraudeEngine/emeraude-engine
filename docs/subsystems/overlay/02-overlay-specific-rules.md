@@ -105,6 +105,20 @@ For asynchronous content providers (e.g., CEF browsers), Surface supports a tran
 > Measured: projet-alpha 60/60 bursts clean with it taken 143 times; a downstream application with several
 > front-end-sized views, 30/30 clean (outside a centred panel whose text re-rasterises), taken 523 times, its WebGL view
 > still at its 60 Hz `requestAnimationFrame` cadence during the bursts.
+>
+> ⚠️ **A hidden surface does not follow the size changes** (2026-11-19). `processUpdates()` skips Step 1 (size
+> generation) and Step 1.b (provider request) while `isVisible()` is false: the generation stays ahead and the request
+> stays raised, so nothing is lost — `show()` requests a redraw, and the next pass rebuilds at the current size (the
+> active buffer keeps the old size until then, as during any transition). Step 2 (upload) still runs. Before, every
+> window resize rebuilt the buffers of every surface of the screen, the hidden ones included — at their full size, for
+> nothing on screen (a downstream application keeps window-sized web views hidden between uses). A consumer that writes
+> a hidden surface's pixmap right after a resize must check `isVideoMemorySizeValid()` (the `Notifier` does): the
+> buffer is not rebuilt before the surface is shown.
+> ⚠️ **A surface "hidden" by a tiny geometry is VISIBLE** and still follows every resize: hide it with `hide()`. Measured
+> 2026-11-18, a downstream web view created at 0.1 % of the window and left visible: a 10-minute resize storm
+> (14 264 resizes) made it oscillate between 1x1 and 2x1 px, commit 6 766 transitions, come back to its active size
+> 3 048 times and print 2 417 "diverges" warnings comparing EQUAL sizes (the retired buffer still reports its pixmap
+> size, see the item `overlay-transition-buffer-recreated-at-every-resize`).
 
 **Code references:**
 - `Surface.hpp:Framebuffer` struct definition

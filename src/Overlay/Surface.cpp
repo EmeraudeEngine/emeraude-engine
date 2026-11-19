@@ -457,12 +457,18 @@ namespace EmEn::Overlay
 
 		const Base::MutexLock lock{m_framebufferAccess, std::adopt_lock};
 
+		/* NOTE: A hidden surface does not follow the size changes: steps 1 and 1.b wait, pending (the size generation stays
+		 * ahead, a provider's request stays raised), until show() — whose redraw request brings the next pass here. Every
+		 * window resize used to rebuild the buffers of every surface, the hidden ones included, at their full size and for
+		 * nothing on screen. A surface "hidden" by a tiny geometry is visible: it still follows every resize. */
+		const bool visible = m_isVisible.load();
+
 		/* Step 1: Handle size changes.
 		 * This is triggered by invalidate() from window resize or manual setSize()/setGeometry(). The size generation is
 		 * read BEFORE updatePhysicalRepresentation() reads the geometry: an invalidate() landing during the rebuild moves
 		 * the generation past the one stored below, so the next pass rebuilds again instead of losing it. The model
 		 * matrix is already current (the setters recompute it). */
-		if ( const auto sizeGeneration = m_sizeGeneration.load(); sizeGeneration != m_validSizeGeneration.load() )
+		if ( const auto sizeGeneration = m_sizeGeneration.load(); visible && sizeGeneration != m_validSizeGeneration.load() )
 		{
 			if ( !this->updatePhysicalRepresentation(renderer) )
 			{
@@ -487,7 +493,7 @@ namespace EmEn::Overlay
 		 * neither buffer and the resize commit stalls (black render). The provider then requests a
 		 * resize to its painted size via requestTransitionBufferResize(); we honor it here so the
 		 * next identical frame can commit. This converges within one render iteration. */
-		if ( m_transitionBufferEnabled && !this->recreateTransitionBufferToRequestedSize(renderer) )
+		if ( visible && m_transitionBufferEnabled && !this->recreateTransitionBufferToRequestedSize(renderer) )
 		{
 			TraceError{ClassId} << "Unable to honor the requested transition buffer resize for surface '" << this->name() << "' !";
 
