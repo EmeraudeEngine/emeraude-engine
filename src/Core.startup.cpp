@@ -27,16 +27,29 @@
 #include "Core.hpp"
 
 /* STL inclusions. */
-#include <algorithm>
+#include <algorithm> // IWYU pragma: keep (std::ranges::find_if is <algorithm>'s by the standard; libstdc++ defines it in a header <ranges> re-exports)
+#include <cstdint>
 #include <iterator>
+#include <memory>
 #include <optional>
+#include <ranges>
 #include <sstream>
 #include <string>
+#include <vector>
+
+/* Third-party inclusions. */
+#include "volk.h"
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "PlatformSpecific/Desktop/Dialog/Message.hpp"
+#include "PlatformSpecific/Desktop/Dialog/Types.hpp"
 #include "PlatformSpecific/SystemInfo.hpp"
+#include "PlatformSpecific/Types.hpp"
+#include "PrimaryServices.hpp"
+#include "StaticVector.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Instance.hpp"
 
 /*
  * A startup refused for the graphics hardware or its driver, told to the user
