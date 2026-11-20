@@ -101,7 +101,9 @@ For asynchronous content providers (e.g., CEF browsers), Surface supports a tran
 > now tracks `m_providerTransitionPending` (under `m_framebufferAccess`; set on `onTransitionBufferReady()`, cleared by
 > both commits) and on that early return retires the abandoned transition buffer and calls `onActiveBufferReady()`
 > (a CEF web view re-latches and resizes). `recreateTransitionBufferToRequestedSize()` checks `isValid()` before
-> "already at the requested size" (a retired buffer keeps its pixmap size). Info trace "came back to its active size".
+> "already at the requested size" (a retired buffer keeps its pixmap size). Its "diverges" Warning is printed only for
+> a VALID buffer of another size; a missing one is a Debug line (2026-11-19: the stale pixmap size made it print "2x1
+> diverges from 2x1"). Info trace "came back to its active size".
 > Measured: projet-alpha 60/60 bursts clean with it taken 143 times; a downstream application with several
 > front-end-sized views, 30/30 clean (outside a centred panel whose text re-rasterises), taken 523 times, its WebGL view
 > still at its 60 Hz `requestAnimationFrame` cadence during the bursts.

@@ -47,14 +47,16 @@ Done on 2026-11-19: a HIDDEN surface (`hide()`) no longer follows the size chang
 Steps 1 and 1.b until `show()`; overlay doc 02, "A hidden surface does not follow the size changes"). The downstream
 application was asked to hide its views with `hide()` instead of a tiny geometry (its own ticket).
 
+Done on 2026-11-19 too: the trace is split. A missing (invalid) transition buffer is a Debug line ("has no transition
+buffer: creating it at the content provider's painted size"); the "diverges" Warning is kept for a VALID buffer of
+another size, with both real sizes.
+
 ## What remains
 
-1. Split the trace: a retired (invalid) buffer recreated is not a size divergence — a quieter message, with the
-   abandoned size named as such, or none; a real divergence keeps the Warning with both real sizes.
-2. Optional, owner to decide: on step 2 above, keep the abandoned buffer (not committable) instead of retiring it, so
+1. Optional, owner to decide: on step 2 above, keep the abandoned buffer (not committable) instead of retiring it, so
    a request at that same size re-arms it without an allocation; and reuse a transition buffer that already has the
    target size in `updatePhysicalRepresentation()`.
-3. Re-run a resize storm with the downstream views hidden by `hide()`: no rebuild of a hidden surface, no warning.
+2. Re-run a resize storm once the downstream views are hidden by `hide()`: no rebuild of a hidden surface, no warning.
 
 ## References
 

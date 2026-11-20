@@ -856,10 +856,20 @@ namespace EmEn::Overlay
 			return true;
 		}
 
-		TraceWarning{ClassId} <<
-			"Surface '" << this->name() << "' transition buffer size (" << m_transitionBuffer.width() << "x" << m_transitionBuffer.height() <<
-			"px) diverges from the content provider's painted size (" << requestedWidth << "x" << requestedHeight <<
-			"px). Recreating the transition buffer at the painted size.";
+		/* NOTE: An invalid buffer (retired when the surface came back to its active size, or never created) has no size to
+		 * diverge from: width()/height() would report its stale pixmap, the "2x1 diverges from 2x1" of 2026-11-18 (2 417
+		 * warnings in a resize storm). Only a valid buffer of another size is a divergence. */
+		if ( m_transitionBuffer.isValid() )
+		{
+			TraceWarning{ClassId} <<
+				"Surface '" << this->name() << "' transition buffer size (" << m_transitionBuffer.width() << "x" << m_transitionBuffer.height() <<
+				"px) diverges from the content provider's painted size (" << requestedWidth << "x" << requestedHeight <<
+				"px). Recreating the transition buffer at the painted size.";
+		}
+		else
+		{
+			TraceDebug{ClassId} << "Surface '" << this->name() << "' has no transition buffer: creating it at the content provider's painted size (" << requestedWidth << "x" << requestedHeight << "px).";
+		}
 
 		/* NOTE: Block any transition write/commit from the content provider while we destroy and
 		 * recreate the GPU resources (isTransitionBufferReady() returns false during Resizing). */
