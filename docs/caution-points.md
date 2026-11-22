@@ -7085,6 +7085,57 @@ priority 97R in `ps -M`. ⚠️ A relative `sleep_for(period - work)` is wrong o
 Linux (RTX 3070 Ti, `forest`, 2026-10-12, the deadline only): 600 / 600 / 601 cycles in 3 × 10 s = 59.96-60.08 cycles/s.
 ⚠️ Measure a tick rate with a COUNTER (`getNodePhysics().sceneCycle` over wall-clock seconds), never by eye; the physics
 bench compares BY CYCLE (`physics-bench.py --compare`), so the rate changes its wall-clock pace, never its results.
+⚠️ That policy holds only while the process is not put to sleep by App Nap: the next section.
+
+### macOS: App Nap demoted a window-less process after 30 s — the engine declares itself active (2026-11-22)
+
+A process that shows no window and holds no power assertion is what App Nap is made for, and a window-less instance is
+a FOREGROUND application to the system (`lsappinfo`). `runningboardd` registers it at its check-in (`Set AppNap state:
+enabled:Y active:N … timer:Tier0`) and, exactly 30.0 s later, turns the nap on (`enabled:Y active:Y socket:Y disk:Y
+priority:Y cpu:Y timer:Tier5`). The kernel then caps the WHOLE process at priority 4 (its 68 threads, `4T` in `ps -M`),
+which withdraws the logic thread's Mach time-constraint policy and coalesces its timers: that thread sleeps 92 % of the
+time (its `sleep_until` oversleeps by about 50 ms a cycle) and the simulation runs at a fifth of the wall clock until
+the end — a car asked to accelerate for 2.5 s reached 1.7-4 m/s instead of 13. The shell that launched it stays at
+priority 31.
+
+**Fix (owner decision 2026-11-22: every run, with a window or without one):** `PlatformSpecific::ProcessActivity`
+(`ProcessActivity.mac.mm`, ARC), an RAII token in the mould of `DisplaySleepInhibitor`, holds an NSProcessInfo activity
+(`beginActivityWithOptions:reason:`, `NSActivityUserInitiatedAllowingIdleSystemSleep | NSActivityLatencyCritical`).
+`PlatformManager` owns it: begun in `onInitialize()` before `glfwInit()` (the application checks in with the system
+there), ended in `onTerminate()` after GLFW and the Vulkan loader, and by its destructor when the start failed. A
+refusal is a warning, never a failed start. The journal says `The process is declared active to the system (no App Nap,
+latency critical).` before GLFW's version line.
+
+Measured by the macOS peer (Mac mini M6, macOS 27.2.1, a downstream testbed's city scene, validation layer on, sampled
+every 5 s; the logic thread found by its policy and confirmed with `sample`; cycles counted from
+`getNodePhysics().sceneCycle`, never wall seconds):
+
+| Run | Process priority | Logic thread (`ps -M`, Mach policy) | Scene cycles per second |
+|---|---|---|---|
+| Window-less, before the fix | 97 until 30.0 s, then 4 | `97R`, policy 2 → `4T`, policy 1 | 59.9-60.0, then 11.7-16.9 to the end |
+| Window-less + `-NSAppSleepDisabled YES` (the argument domain), before the fix | 97 | `97R`, policy 2 | 59.8-60.1 for the 90 s |
+| Windowed, never frontmost (the session locked), before the fix, twice | 97 | `97R`, policy 2 | 59.6-60.4 for the 90 s |
+| Window-less, WITH the activity | 97 for the 120 s | `97R`, policy 2 | 59.70-60.26 at each of the 22 samples |
+| Windowed, with the activity (locked, never frontmost) | 97 for the 90 s | `97R`, policy 2 | 59.62-60.28 |
+
+With the activity `runningboardd` writes ONE App Nap line for the process — the check-in's `enabled:Y active:N` — and
+never re-evaluates it; before, the windowed runs were re-evaluated at 30 s too and stayed `active:N priority:N`. Both
+runs with the activity: exit code 0, 0.34 and 0.47 s after `Core.shutdown()`, 0 `VUID-`; Release and Debug build with
+0 warning under `-Wdocumentation -Werror`.
+
+⚠️ **The activity is invisible to `pmset -g assertions`**: no line names a window-less process, and a windowed one
+lists the display assertion alone ("Emeraude engine: a window is open"). It is the "allowing idle system sleep" form:
+the machine still sleeps on the user's idle timers. Its proof is the App Nap line that is NOT in `log show`
+(`runningboardd`, `Set AppNap state`, the process id), and a cycle count taken past 30 s.
+⚠️ **Every macOS window-less measurement older than 30 s and taken before 2026-11-22 is suspect** (timings, frame
+rates, anything that waited in wall seconds — a slow frame rate also stretches every temporal effect, TAA and the GI
+converge per FRAME). The "60.00 cycles/s" of the section above was measured over 3 × 10 s: it says nothing beyond 30 s.
+A verification that waits counts CYCLES, never wall seconds.
+Not proven: a frontmost window (the session was locked in every run), and whether the window or the display assertion
+kept the windowed runs awake before the fix. Not chosen: `NSAppSleepDisabled` registered as a volatile default beside
+`ApplePersistenceIgnoreState` (proven in the argument domain only) — a declared activity says what the process does and
+asks for the timer precision with it.
+Reference: Apple, NSProcessInfo § Managing Activities; "Energy Efficiency Guide for Mac Apps" § Extend App Nap.
 
 ## Vector::normalize() at any scale (2026-10-09, base `83878a5`)
 

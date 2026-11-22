@@ -7,6 +7,8 @@ PlatformSpecific/
 │                                #   thread helper runFileDialogOnDedicatedThread())
 ├── Helpers.linux.cpp            # Linux helper implementations
 ├── Helpers.mac.cpp              # macOS helper implementations
+├── AppKitDefaults.mac.mm        # macOS: disableWindowStateRestoration() (a volatile user default, ARC)
+├── ProcessActivity.mac.mm       # macOS: ProcessActivity, the activity that keeps App Nap away (NSProcessInfo, ARC)
 ├── Helpers.windows.cpp          # Windows helper implementations (incl. runFileDialogOnDedicatedThread()
 │                                #   — dedicated STA thread, dialog owned by the real main window)
 ├── SystemInfo.hpp/.cpp          # System information (+ hybrid CPU detection via hwloc)
