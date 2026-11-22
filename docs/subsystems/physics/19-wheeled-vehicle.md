@@ -101,6 +101,9 @@ earliest hit with the static world's ties broken as in step 4b.
   its hand brake released stays only while its chassis sleeps; on a downstream testbed's 3° street, boarded with no
   key held, a steering tap woke it and it rolled 23.4 m in 10 s (4.7 m/s and accelerating); with the aid, 0.001 m
   over the same 10 s, asleep again (Linux, validation on, 0 VUID; the same binary, the aid's switch alone).
+  Three OS (engine `ef3e5a2b`, MSVC and AppleClang Release and Debug 0 warning, 0 VUID): after the steering tap
+  Windows reads 1.0 mm and macOS 2.2 mm (mostly sideways, the wheels steering), asleep again within a second; 0.000 m
+  boarded with no key and after a stop on the hand brake, on the three.
 - Both shares stay under the SLIDING torque (Jolt's curves: 1.0 / 1.2 = 0.83 of the peak): a wheel past its peak slip
   gets less from the road, so a drive above it runs away and a brake above it stays held.
 - A CAP from the load, not a slip feedback: a 0.9 kg·m² wheel under 1250 N·m changes its spin by ~50 rad/s in one

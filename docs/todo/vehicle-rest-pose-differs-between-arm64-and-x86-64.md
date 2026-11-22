@@ -29,6 +29,11 @@ macOS rests **15.8 mm lower**, 6.6 mm further in X and 3.2 mm in Z. It is not a 
 identical to the last digit over the 60 reads that follow, to cycle 3240. The same pose was read in another run of the
 same day.
 
+⚠️ The poses above were read BEFORE the vehicle's hold aid (engine `ef3e5a2b`, 2026-11-22): with it the vehicle
+settles with its service brakes applied and every machine rests a little elsewhere — Linux and Windows at
+(27.7760, 0.1535, −8.0289), the forward pitched −3.03°; macOS at (27.7823, 0.1403, −8.0228), pitched −2.64°. The gap
+is then 13.2 mm in height and 0.39° in pitch: compare poses of ONE engine version only.
+
 The owner ranked it a defect (2026-11-22): one vehicle, one ground, two rest heights. A suspension has ONE
 equilibrium; 16 mm is far beyond a rounding difference, so on one side at least the body sleeps away from it, or the
 two machines do not resolve the same contacts.
