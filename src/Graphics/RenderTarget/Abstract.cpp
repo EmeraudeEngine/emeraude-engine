@@ -29,13 +29,18 @@
 #include <algorithm>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/DescriptorSetLayout.hpp"
+#include "Vulkan/Device.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
 #include "Vulkan/Instance.hpp"
+#include "Vulkan/LayoutManager.hpp"
+#include "Vulkan/Sync/Semaphore.hpp"
 
 namespace EmEn::Graphics::RenderTarget
 {
@@ -131,6 +136,12 @@ namespace EmEn::Graphics::RenderTarget
 		m_renderOutOfDate = true;
 
 		return true;
+	}
+
+	void
+	Abstract::onInputDeviceConnected (EngineContext & /*engineContext*/, Scenes::AVConsole::AbstractVirtualDevice & /*inputDevice*/) noexcept
+	{
+		this->viewMatrices().breakFrameHistory();
 	}
 
 	bool

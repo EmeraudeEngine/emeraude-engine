@@ -4606,6 +4606,17 @@ at every pose update; `Visual` expands it by a per-axis "flesh margin" measured 
 asset (bind mesh box vs first joints box) and publishes `ComponentBoundariesModified`; the
 entity refreshes the collision model SHAPE only (`refreshCollisionBoundaries()` — not the full
 `updateEntityProperties()`).
+⚠️ **Half of it was lost when the culling moved to the published render extent (2026-11-16), found
+on 2026-11-22**: a frame culls on the extent published from the entity's RENDER box, and that box
+was rebuilt by `updateEntityProperties()` alone — `ComponentBoundariesModified` refreshed the
+collision shape, which the culling reads only for an entity without a render box. A beam whose
+points moved (a reused laser trace) was drawn only while the box of its first shape was in view.
+The notification now also rebuilds the render box (`refreshRenderBoundaries()`: the cheap subset,
+nothing published nor refiled when the box is the same) and the scene files the entity again in
+its rendering octree (`takeRenderBoxChange()`, both entity loops of `Scene::processLogics()`): the
+octree is asked BEFORE an entity's extent is tested, so the sector of the old box culled it too.
+Rule: **a component whose drawn shape changes notifies `ComponentBoundariesModified`, and the
+entity answers for BOTH volumes.**
 
 > [!CAUTION]
 > **GENERAL RULE — a signal fired from inside an iteration must be DEFERRED (twice lived,

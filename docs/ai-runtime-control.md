@@ -708,8 +708,8 @@ The outline is the editor's selection feedback, usable to POINT at an entity in 
 
 **Addressing** (owner decision, 2026-09-27): `entity` is the entity's ADDRESS — its name when unique in
 the scene, else the shortest suffix of its node path that is (`ACTOR_…06/Head`). Every projet-alpha actor
-carries a `Head` node (camera `Eyes`, microphone `Ears`, `SoundEmitter`): on `animation-debug` six of them,
-and a bare `Head` is **refused** with the six candidate addresses — it used to act silently on the first
+carries a `Head` node (camera `Eyes`, microphone `Ears`, `SoundEmitter`): on `animation-debug` seven of them
+(six until a seventh actor joined the demo on 2026-11-21), and a bare `Head` is **refused** with the candidate addresses — it used to act silently on the first
 node found. `listEntities()` gives each entity's `address`; `Camera.getActive()` answers the rendering
 camera's `address` and component `name`, ready to pass. A static entity's address is its name.
 

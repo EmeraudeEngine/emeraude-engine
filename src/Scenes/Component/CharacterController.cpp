@@ -26,6 +26,9 @@
 
 #include "CharacterController.hpp"
 
+/* Local inclusions. */
+#include "Any.hpp"
+
 namespace EmEn::Scenes::Component
 {
 	CharacterController::~CharacterController () = default;
@@ -48,6 +51,11 @@ namespace EmEn::Scenes::Component
 		if ( events.landed )
 		{
 			this->notify(Landed, events.landingSpeed);
+		}
+
+		if ( events.struck )
+		{
+			this->notify(Struck, events.strike);
 		}
 	}
 }

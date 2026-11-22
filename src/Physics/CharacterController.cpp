@@ -219,6 +219,23 @@ namespace EmEn::Physics
 		return Capsule< float >{feet + (upward * m_radius), feet + (upward * (m_height - m_radius)), m_radius};
 	}
 
+	bool
+	CharacterController::reportStrike (float speed, float mass) noexcept
+	{
+		if ( !std::isfinite(speed) || !std::isfinite(mass) || !(speed > 0.0F) || !(mass > 0.0F) )
+		{
+			return false;
+		}
+
+		if ( !m_events.struck || (speed * mass) > (m_events.strike.speed * m_events.strike.mass) )
+		{
+			m_events.strike = {.speed = speed, .mass = mass};
+			m_events.struck = true;
+		}
+
+		return true;
+	}
+
 	Vector< 3, float >
 	CharacterController::step (CharacterWorldInterface & world, const Vector< 3, float > & feet, const Vector< 3, float > & upward, float gravity, float deltaTime) noexcept
 	{

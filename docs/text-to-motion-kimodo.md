@@ -49,7 +49,8 @@ searching the wrong one returns nothing). Fetched by `scripts/download_gguf_weig
 verifies SHA-256 against a manifest.
 
 ⚠️ The encoder ships as **32 files of 441 MB, one per layer**, plus a 1.05 GB embedding table. That
-layout is what makes `KIMODO_TEXT_LAYER_CHUNK` (8 layers at a time) meaningful.
+layout is what makes `KIMODO_TEXT_LAYER_CHUNK` (8 layers at a time) meaningful. It is the layout ON
+THIS DISK; upstream moved to monolithic weights on 2026-10-29 — see the binary trap in § 7.
 
 ## 3. Measured cost
 
@@ -59,6 +60,10 @@ layout is what makes `KIMODO_TEXT_LAYER_CHUNK` (8 layers at a time) meaningful.
 | VRAM peak, Vulkan backend | **2779 MiB / 8192** on an RTX 3070 Ti |
 | host RSS peak | 391 MB — weights are mmapped and streamed |
 | subsequent generations | 14.5 s |
+
+⚠️ **Those are WARM figures.** The first generation after a boot took **112 s** (measured 2026-11-21,
+same binary, same card, 120 frames, 100 steps): the 15 GB encoder is read from disk. The second run
+took 15.2 s and returned the same rotations to the bit for the same seed.
 
 ⚠️ **The 15 GB encoder fits comfortably on an 8 GB card** thanks to the per-layer streaming. The
 naive reading — "an 8 Md parameter model needs 16 GB of VRAM" — is wrong here and led to a
@@ -134,6 +139,10 @@ translation is not scaled by the leg-length ratio — see [`animation-retargetin
   hand, enough for a rough open/close, nothing more. The 77-joint SOMA expansion is **not
   implemented** in the port. For a sword-and-shield character this decides whether the model serves
   combat or only secondary body motion.
+- **The `End` joints are not padding.** Largest rotation each joint takes over 13 generated clips:
+  `HandMiddleEnd` 90°, `HandThumbEnd` 42°, the eyes 13°, the jaw 0.8°. A vertex skinned to an End
+  joint turns about the fingertip — see [`animation-retargeting.md`](animation-retargeting.md) § 8.4
+  for which of them should carry skin.
 - **No foot-contact output** (§ 4).
 - **Prompt following is loose on intensity** — "steady, natural pace" produced 1.60 m/s.
 
@@ -175,7 +184,12 @@ mannequins/            the produced glTF
 ```
 
 ```
-tools/                 the retargeting prototype and its README
+characters/<name>/     a character rigged on SOMA-30: prepared mesh, joints, weights, rules, GLB
+motions/generic/       the takes of the generic game clips (prompt, seed, frames) and their manifest
+```
+
+```
+tools/                 the retargeting prototype, the rigging chain and their README
 tools/0001-guard-vulkan-calls-in-the-text-encoder.patch
 tools/kmd-bench-embedding.c   the denoiser-only benchmark (exercises the C ABI)
 ```
@@ -184,6 +198,13 @@ tools/kmd-bench-embedding.c   the denoiser-only benchmark (exercises the C ABI)
 the CLI. Its build line is in its own header comment. ⚠️ Built that way it loses fp16/coopmat2 —
 see the measurement trap above — so **cross-check its absolute numbers against `kmd-generate`**;
 its value is the per-step *shape*, not the per-step *value*.
+
+⚠️⚠️ **The binary is older than the checkout (found 2026-11-21).** `build/release/` was built on
+2026-08-31; the checkout was fast-forwarded on 2026-10-16 and 2026-11-10 and now sits on `75ed52d`,
+"Simplify text distribution to monolithic weights and one tokenizer". The OLD binary still reads
+the per-layer bundle of § 2 — a generation was run and verified that day. A rebuild at the current
+head may expect the new layout: read what it loads before rebuilding, or the working pair (binary +
+15 GB bundle) is lost and the weights have to be fetched again.
 
 ⚠️ `strtok` is not reentrant and something inside the generation path calls it: parsing a list with
 it around a `kimodo_generate_*` call silently truncates the loop to one entry.
@@ -221,6 +242,10 @@ proxy (the mannequin tool) is what makes the motion land on the skeletal path.
 Roughly **85 % engine, 15 % Kimodo**. The expensive half is
 [`animation-retargeting.md`](animation-retargeting.md), which is worth building on its own merits:
 it unlocks any motion-capture library and any third-party glTF rig, whatever happens to Kimodo.
+
+⚠️ **That split is for a character that already carries ANOTHER rig.** A mesh with no skeleton can be
+rigged on SOMA-30 itself, and then plays Kimodo's output verbatim with no retargeter at all — done
+offline for a generated mesh on 2026-11-21, [`animation-retargeting.md`](animation-retargeting.md) § 8.
 
 ## Link Index
 

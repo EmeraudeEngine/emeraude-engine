@@ -1285,6 +1285,13 @@ namespace EmEn::Graphics
 	bool
 	GIDenoiser::updateFrameData (uint32_t frameIndex, const FrameView & frameView, const FrameInputs & inputs) noexcept
 	{
+		/* A view that is not the previous frame's (a camera cut, another scene): the histories are another picture's.
+		 * The resolve then starts over as it does after its creation. */
+		if ( !frameView.frameHistoryContinues() )
+		{
+			m_historyValid = false;
+		}
+
 		/* The frame's view: the SAME view matrix that produced the depth buffer. */
 		const auto & viewMat = frameView.viewMatrix();
 		/* JITTERED (the default projectionMatrix contract): the depth buffer was rasterized

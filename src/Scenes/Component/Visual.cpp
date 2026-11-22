@@ -186,7 +186,7 @@ namespace EmEn::Scenes::Component
 
 		m_animatedBoundingBox.set((jointsBox.maximum() + m_fleshMargin) * scale, (jointsBox.minimum() - m_fleshMargin) * scale);
 
-		/* The entity refreshes its collision model shape (the frustum culling volume). */
+		/* The entity refreshes its collision model shape and its render box (the frustum culling volume). */
 		this->notify(ComponentBoundariesModified);
 	}
 

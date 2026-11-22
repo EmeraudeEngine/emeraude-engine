@@ -174,9 +174,10 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
 > [!NOTE]
 > **A flickering light marks** (owner decision 2026-11-03): a flicker IS a discontinuity, and TAA and the GI follow it
 > sharply, as since 2026-11-01. In a scene with a flickering light on screen the marked variants run most of the time:
-> no gain there, the look of today. A change nobody signals (an emissive material switched without a light, a
-> camera cut) converges at the pre-2026-11-01 rate — TAA ~20 frames per e-fold, the GI's 6-frame cap: the accepted
+> no gain there, the look of today. A change nobody signals (an emissive material switched without a light)
+> converges at the pre-2026-11-01 rate — TAA ~20 frames per e-fold, the GI's 6-frame cap: the accepted
 > trade-off (owner decision 2026-11-03); a public `Scene` call raising the epoch comes only with a real case.
+> A camera cut is no longer one of them: it is a VIEW discontinuity (below, 2026-11-22).
 
 - **The peers on engine eed27ab5** (2026-11-04; the four commits 0389c34e, 3e484a60, 4a29d706, eed27ab5):
   macOS-PA (M6, the REDUCED bindless profile — 1212 descriptors, Cube[128]) Release 0 warning, every `.mm` /
@@ -206,6 +207,56 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
 > `labyrinth`'s GI noise runs vary from launch to launch (the dying lamp's flicker inside the 16-frame window: max
 > ~189, the level dips — RTGI 14.8-18.0 in 3 runs of 14, SSGI 19.3 / 21.5 in 2 of 13). Compare its median over several
 > runs, never one run.
+
+### The VIEW discontinuity — a frame without a past (owner decision 2026-11-22)
+
+**Why.** The mark above says the LIGHTING stepped: the histories still describe this view and must converge fast. A
+camera cut (`Scene::switchToCamera()`) or another scene is something else: the previous frame is another picture, and
+no history describes this one. Until 2026-11-22 nothing said so — the view matrices' frame history "does not signal
+validity" — and the first frame of a cut was streaked from edge to edge: the velocity buffer measured the jump from
+the previous camera, the motion blur walked it (projet-alpha's `city`, a car's chase camera cut to its cockpit camera
+at 13 m/s: that frame differed from the next by 16.9 / 255 on average, the following ones by 0.6-0.8).
+
+**The signal** is the view matrices' own (they own the frame history):
+- `ViewMatricesInterface::breakFrameHistory()` — the PRODUCER. `RenderTarget::Abstract::onInputDeviceConnected()` calls
+  it when another source feeds the target (data only: a counter of the view's logic state, `DataState::viewEpoch`,
+  published with the matrices — so the break lands on the very frame that first renders the new view).
+- `ViewMatricesInterface::latchFrameHistory(readStateIndex, broken)` — RENDER THREAD, once per frame, from
+  `Renderer::latchTemporalDiscontinuity()` (before `Scene::prepareRender()` and the chain): the history continues
+  when a frame was archived, its epoch is the frame's, and the caller does not say otherwise (`broken`: another scene
+  than the previous frame's). When it does not, the PREVIOUS matrices become the frame's own — no camera motion.
+- `frameHistoryContinues()`, read by the effects through `FrameView::frameHistoryContinues()`.
+- `Renderer.temporalCapture` writes it per frame (`"viewDiscontinuity"`), beside `"temporalDiscontinuity"`.
+
+**The consumers** drop what they accumulated, for that frame (each keeps its own way of starting over):
+
+| Consumer | On a frame without a past |
+|---|---|
+| `TAA` | `m_historyValid = false`: the input passes through, the history restarts |
+| `GIDenoiser` (`updateFrameData()`: RTGI, RTR, SSGI) | `m_historyValid = false`: as after its creation |
+| `VolumetricLight` | `m_historyValid = false`: the previous mask is not blended |
+| `DepthOfField` | `m_focusValid = false`: the focus snaps to this view's subject instead of racking from the other's |
+| `MotionBlur` | passes the frame through: its velocity measures nothing |
+
+`ToneMapping` keeps its adaptation on purpose: two cameras of one scene meter the same light.
+
+⚠️ **Zero camera motion is not enough for the motion blur.** With the previous matrices equal to the frame's, what
+RIDES with a moving camera (a car's cabin seen from its cockpit) carries its whole world speed against a camera that
+"did not move": measured, the cut frame at 13 m/s was still soft (mean gradient 4.19 against 7.96 for the next ones,
+15.8 / 255 from the next) while a cut of the parked car was already clean (0.58 against 0.55). Hence the pass-through.
+
+**Measured** (projet-alpha `city`, Linux RTX 3070 Ti, window-less 1280×720, validation layers on, 0 VUID, clean exit;
+`temporalCapture(12, 4, "Core.InputManagerService.keyPress(67, 0)")`, the mark on exactly ONE frame each time):
+
+| Cut | The cut frame against the next | The following frames among themselves |
+|---|---|---|
+| Parked, chase → cockpit | 0.57 / 255, gradient 8.38 → 8.29 | 0.54-0.57 |
+| Parked, cockpit → bonnet | 0.99, gradient 12.09 → 11.90 | 0.88-0.95 |
+| 13 m/s, chase → cockpit | 0.68, gradient 8.94 → 8.62 (before the fix: 16.9, gradient 3.55 → 4.7) | 0.70-0.90 |
+| 13 m/s, cockpit → bonnet | 18.8, gradient 12.03 → 5.85: the ONE frame without motion blur, then the road's smear | 13.6-18.7 |
+
+Not exercised on Linux: the scene switch (`!sameScene`), which the item `temporal-history-smear-after-scene-switch`
+saw once on Windows.
 
 References: § 06 (the TAA resolve), § 16 (the anti-lag), § 41
 (the FAST forms), graphics doc 42 § The environment.

@@ -3964,6 +3964,7 @@ namespace EmEn::Graphics
 		metadata.preExposure = m_preExposure;
 		/* Latched earlier in this frame (latchTemporalDiscontinuity()). */
 		metadata.temporalDiscontinuity = m_postProcessor.frameTemporalDiscontinuity();
+		metadata.viewDiscontinuity = !this->mainRenderTarget()->viewMatrices().frameHistoryContinues();
 
 		return m_frameCapture.recordCopy(commandBuffer, *image, m_swapChain->finalColorLayout(), m_currentFrameIndex, metadata);
 	}
@@ -3989,6 +3990,12 @@ namespace EmEn::Graphics
 		/* The same scene as the previous frame: the same control block (a weak pointer keeps it, so a new scene at a
 		 * reused address never compares equal). */
 		const bool sameScene = !m_temporalDiscontinuityScene.expired() && !m_temporalDiscontinuityScene.owner_before(scene) && !scene.owner_before(m_temporalDiscontinuityScene);
+
+		/* The VIEW's own continuity (the view matrices' frame history, graphics doc 13-12 § 43): the previous frame is
+		 * not this one's past at a camera cut (the view matrices know it: another source feeds the target) nor in
+		 * another scene (known here). Before anything of the frame reads the previous matrices (Scene::prepareRender(),
+		 * the chain). */
+		this->mainRenderTarget()->viewMatrices().latchFrameHistory(readStateIndex, !sameScene);
 
 		if ( !sameScene || epoch != m_temporalDiscontinuityEpoch )
 		{

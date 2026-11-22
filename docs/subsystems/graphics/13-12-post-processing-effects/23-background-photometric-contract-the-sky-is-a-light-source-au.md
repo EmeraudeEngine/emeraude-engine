@@ -316,6 +316,27 @@ source feeding the primary output) AND the photographic authority (active camera
 call: image + look together. Validated on Sponza with fixed showcase cameras carrying
 different presets (KeyPad8 cycle in the projet-alpha demos).
 
+**One look, several cameras** (`Component::Camera::copyPhotographicSetup(const Camera & source)`, 2026-11-22):
+each camera keeps its own setup, so a cut swaps the whole look — right for showcase cameras carrying different
+presets, wrong for cameras that film one scene from several places (a vehicle's views, a multi-camera shoot), where
+a cut must change the point of view and nothing else. The call COPIES the body: the format, the aperture, the shutter
+speed, the sensitivity and its range, the exposure compensation, the auto-exposure and auto-focus modes, the manual
+focus distance, the glare's threshold and intensity, the four materialization states, the view distance (the far
+plane the shadow cascades are derived from) and the lens effect stack (the source's immutable snapshot, shared). It
+KEEPS the shot: the framing (with another format the focal length is scaled by the ratio of the sensor widths; with
+the same format it is not touched at all, so a copy at every cut never drifts it), the nearest object distance, the
+projection kind. Refused (`false`, traced, nothing changed) when either camera is a technical one. Logic thread, like
+the setters. Copy BEFORE the cut: the first frame of the new view already has the look. The exposure does not jump at
+such a cut: the metering's adaptation lives in the scene's `ToneMapping` effect, not in the camera.
+Verified in projet-alpha's `city` (Linux, RTX 3070 Ti, window-less 1280×720, validation layers on, 0 VUID, three
+launches): the player's camera (f/8, 1/125 s, ISO 100-25 600 auto, glare threshold 3000 nits, depth of field and
+motion blur on, view distance 25 000 m) cut to six cameras of a car and back; `Camera.getState` answers that same body
+on each, each with its own lens (13.096, 18, 16 and 24 mm).
+**A cut is a VIEW discontinuity** (same day): until then its first frame was streaked from edge to edge when the
+motion blur was on — the velocity measured the jump from the previous camera. The view matrices now break their frame
+history when another camera feeds the target, and the temporal effects drop theirs for that frame: graphics doc 13-12
+§ 43 — The VIEW discontinuity (the measurements are there).
+
 ⚠️ **Active-camera lifetime contract (2026-07-26)**: the scene holds the photographic
 authority as a WEAK reference behind an internal publication mutex.
 `Scene::activeCamera()` returns a `std::shared_ptr` — a camera whose entity

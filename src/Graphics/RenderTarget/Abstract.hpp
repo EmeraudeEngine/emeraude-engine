@@ -31,19 +31,23 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
-#include "PixelFactory/Pixmap.hpp"
 #include "Graphics/FramebufferPrecisions.hpp"
-#include "Graphics/Types.hpp"
+#include "PixelFactory/Pixmap.hpp"
+#include "Scenes/AVConsole/Types.hpp"
 
 namespace EmEn
 {
@@ -51,6 +55,7 @@ namespace EmEn
 	{
 		class ViewMatricesInterface;
 		class Renderer;
+		enum class RenderTargetType : uint8_t;
 
 		namespace RenderableInstance
 		{
@@ -688,6 +693,13 @@ namespace EmEn::Graphics::RenderTarget
 			static std::shared_ptr< Vulkan::DescriptorSetLayout > getDescriptorSetLayout (Vulkan::LayoutManager & layoutManager) noexcept;
 
 		protected:
+
+			/**
+			 * @copydoc EmEn::Scenes::AVConsole::AbstractVirtualDevice::onInputDeviceConnected()
+			 * @note Another source feeds the target from now on (a camera cut): the frames rendered before are not
+			 * this view's past (ViewMatricesInterface::breakFrameHistory()). DATA only, as a connection handler must be.
+			 */
+			void onInputDeviceConnected (EngineContext & engineContext, Scenes::AVConsole::AbstractVirtualDevice & inputDevice) noexcept override;
 
 			/**
 			 * @brief RENDER THREAD. Returns whether the render being recorded drew anything.

@@ -2227,6 +2227,9 @@ namespace EmEn::Graphics
 			 * the scene's epoch of the latched slot differs from the previous frame's (Scenes::Scene::temporalDiscontinuityEpoch()),
 			 * the scene changed, or the sky recorded an immediate cycle this frame (renderSkyAtmosphere()). The mark holds
 			 * TemporalDiscontinuityFrames frames from the last raise. After renderSkyAtmosphere(), before the chain.
+			 * @note It also latches the VIEW's continuity for the frame (ViewMatricesInterface::latchFrameHistory(),
+			 * 2026-11-22): a camera cut or another scene makes the previous matrices the frame's own and tells the
+			 * temporal integrators, through FrameView::frameHistoryContinues(), to drop their history.
 			 * @param scene The scene of the frame, or null (nothing marked).
 			 */
 			void latchTemporalDiscontinuity (const std::shared_ptr< Scenes::Scene > & scene) noexcept;

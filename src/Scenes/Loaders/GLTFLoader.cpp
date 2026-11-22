@@ -40,6 +40,7 @@
 #include <span>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -105,6 +106,25 @@ namespace
 	using namespace EmEn::Graphics;
 	using namespace EmEn::Base::Math;
 	using namespace EmEn::Base::PixelFactory;
+
+	/**
+	 * @brief Returns what follows the resource key of a material this load owns (LoaderOptions::perLoadMaterialNames),
+	 * and of a mesh that uses one: `@<perLoadKey>`. Empty for a shared material, and while no key is given.
+	 * @param options The loader's options.
+	 * @param materialName The material's name in the file.
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	std::string
+	perLoadSuffix (const EmEn::Scenes::Loaders::LoaderOptions & options, std::string_view materialName) noexcept
+	{
+		if ( options.perLoadKey.empty() || !options.perLoadMaterialNames.contains(std::string{materialName}) )
+		{
+			return {};
+		}
+
+		return '@' + options.perLoadKey;
+	}
 
 	/* Where a glTF buffer lies in a FILE (an image's encoded source, docs/subsystems/resources/03 § CPU Copies). */
 	struct BufferLocation final
@@ -458,6 +478,11 @@ namespace EmEn::Scenes::Loaders
 		if ( !GLTF::analyse(*analysed, m_resourcePrefix, m_options, sourceName) )
 		{
 			return false;
+		}
+
+		if ( !m_options.perLoadMaterialNames.empty() && m_options.perLoadKey.empty() )
+		{
+			TraceWarning{ClassId} << "'" << sourceName << "': " << m_options.perLoadMaterialNames.size() << " per-load material name(s) given without a per-load key, they stay shared.";
 		}
 
 		const auto & asset = *analysed->gltf;
@@ -893,7 +918,9 @@ namespace EmEn::Scenes::Loaders
 
 			/* ⚠️ Keyed on the INDEX, not on the name: TransmissionTest carries three genuinely
 			 * different materials all named 'BlueTransWithMask'. See buildResourceKey(). */
-			const auto name = buildResourceKey(m_resourcePrefix, "Material/", {glTFMaterial.name.data(), glTFMaterial.name.size()}, materialIndex);
+			/* A material this load owns (LoaderOptions::perLoadMaterialNames) is keyed on the load too, with its variants. */
+			const auto name = buildResourceKey(m_resourcePrefix, "Material/", {glTFMaterial.name.data(), glTFMaterial.name.size()}, materialIndex) +
+				perLoadSuffix(m_options, {glTFMaterial.name.data(), glTFMaterial.name.size()});
 
 			/* Resolve a glTF texture index to a Texture2D resource, creating it on demand. */
 			const auto resolveTexture = [&] (size_t textureIndex, const TextureResource::Usage & usage = {}) -> std::shared_ptr< TextureResource::Texture2D > {
@@ -1983,6 +2010,10 @@ namespace EmEn::Scenes::Loaders
 			materialList.reserve(glTFMesh.primitives.size());
 			rasterizationList.reserve(glTFMesh.primitives.size());
 
+			/* A mesh resource holds its materials: one that uses a material this load owns is this load's too (its
+			 * geometry stays shared). Every such material carries the same suffix. */
+			std::string meshOwnerSuffix;
+
 			for ( const auto & primitive : glTFMesh.primitives )
 			{
 				RasterizationOptions rasterization{};
@@ -1990,6 +2021,13 @@ namespace EmEn::Scenes::Loaders
 				if ( primitive.materialIndex.has_value() )
 				{
 					const auto materialIndex = primitive.materialIndex.value();
+
+					if ( meshOwnerSuffix.empty() && materialIndex < asset.materials.size() )
+					{
+						const auto & usedMaterial = asset.materials[materialIndex];
+
+						meshOwnerSuffix = perLoadSuffix(m_options, {usedMaterial.name.data(), usedMaterial.name.size()});
+					}
 
 					/* ⚠️ The choice is PER PRIMITIVE, because COLOR_0 is: the same glTF material may
 					 * serve a coloured primitive and a colourless one, and only the first may carry
@@ -2045,6 +2083,7 @@ namespace EmEn::Scenes::Loaders
 			}
 
 			/* Create renderable mesh resource. */
+			const auto meshResourceName = meshName + meshOwnerSuffix;
 			std::shared_ptr< Renderable::Abstract > mesh;
 
 			if ( materialList.size() <= 1 )
@@ -2056,7 +2095,7 @@ namespace EmEn::Scenes::Loaders
 				const RasterizationOptions singleRasterization = rasterizationList.empty() ? RasterizationOptions{} : rasterizationList[0];
 
 				mesh = m_resources.container< Renderable::MeshResource >()
-					->getOrCreateResource(meshName, [geometry, material = std::move(singleMaterial), singleRasterization] (auto & meshResource) {
+					->getOrCreateResource(meshResourceName, [geometry, material = std::move(singleMaterial), singleRasterization] (auto & meshResource) {
 						return meshResource.load(geometry, material, singleRasterization);
 					});
 			}
@@ -2065,7 +2104,7 @@ namespace EmEn::Scenes::Loaders
 				mesh = m_resources.container< Renderable::MultiLayerMeshResource >()
 					/* NOTE: materialList is COPIED (shared pointers): the scene-data descriptor below needs it too. Moved
 					 * here, it left every multi-material mesh with the DEFAULT material in its descriptor (triad 2026-09-30). */
-					->getOrCreateResource(meshName, [geometry, materialList, rasterizations = std::move(rasterizationList)] (auto & meshResource) {
+					->getOrCreateResource(meshResourceName, [geometry, materialList, rasterizations = std::move(rasterizationList)] (auto & meshResource) {
 						return meshResource.load(geometry, materialList, rasterizations);
 					});
 			}

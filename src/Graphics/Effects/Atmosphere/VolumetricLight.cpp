@@ -394,6 +394,12 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		/* 1. Project light direction to screen space.
 		 * The frame's view: the matrices that produced the depth buffer. */
 		const auto & frameView = *context.frameView;
+
+		/* A view that is not the previous frame's (a camera cut, another scene): the previous mask is another picture. */
+		if ( !frameView.frameHistoryContinues() )
+		{
+			m_historyValid = false;
+		}
 		const auto & viewMat = frameView.viewMatrix();
 		/* UNJITTERED: the light screen position is the origin of every radial sampling
 		 * line. Projected through the jittered matrix it wobbles with the Halton phase,

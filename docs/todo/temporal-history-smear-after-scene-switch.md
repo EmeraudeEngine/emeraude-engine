@@ -20,12 +20,21 @@ scene's camera and history). Six seconds later (the menu capture) the scene was 
 Not reproduced on Linux the same day (RTX 3070 Ti): the capture 1 s after the same switch was sharp — the timing of
 the first presented frames differs between the machines, so it is not ruled out.
 
+## Fixed for the camera cut, and by construction for the scene switch (2026-11-22)
+
+`Scene::switchToCamera()` with the motion blur on streaked the FIRST frame after the cut, every time (projet-alpha
+`city`, a car's chase camera cut to its cockpit camera at 13 m/s: that frame 16.9 / 255 from the next, the following
+ones 0.6-0.8 from one another). The view matrices now break their frame history when another camera feeds the target
+or when the scene is another one (`ViewMatricesInterface::latchFrameHistory()`), and TAA, the GI denoiser, the
+volumetric light, the depth of field's focus and the motion blur start over on that frame: graphics doc 13-12 § 43 —
+The VIEW discontinuity, with the measurements (the cut frame 0.68 / 255 from the next at 13 m/s, 0.57 parked).
+
 ## What remains
 
-- Find what holds a temporal history across a scene switch (TAA history, motion vectors' previous view-projection,
-  motion blur, any accumulation of the post-processor) and whether the switch invalidates it.
-- Reproduce on Windows with screenshots every 100 ms after the switch (the smear is transient), then on Linux.
-- If confirmed: reset every temporal history at a scene switch (and at a camera cut), traced.
+- **The scene switch itself, on Windows**, where it was seen: `--load-demo default`, then `Stage.loadDemo("sponza")`,
+  with `Renderer.temporalCapture` around the switch — its JSON must show `"viewDiscontinuity": true` on the first
+  frame of the new scene, and that frame must be sharp. On Linux the switch never smeared, before or after.
+- macOS and Windows: the camera cut's measurement of doc 43 (`city`, the car's views).
 
 ## References
 

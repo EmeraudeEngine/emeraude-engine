@@ -37,6 +37,7 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Math/Vector.hpp"
 #include "PrimaryServices.hpp"
@@ -808,6 +809,12 @@ namespace EmEn::Graphics::Effects::Resolve
 		 * is statically used, so it must always hold a valid image. */
 		static_cast< void >(m_descriptorSets[frameIndex]->writeCombinedImageSampler(4, context.reactive != nullptr ? *context.reactive : inputColor));
 		static_cast< void >(m_descriptorSets[frameIndex]->writeUniformBufferObject(ViewBinding, *context.view));
+
+		/* A view that is not the previous frame's (a camera cut, another scene): the history is another picture. */
+		if ( context.frameView != nullptr && !context.frameView->frameHistoryContinues() )
+		{
+			m_historyValid = false;
+		}
 
 		/* Without velocity there is no valid reprojection: pass the input through
 		 * (alpha 1) rather than accumulating a smear. */

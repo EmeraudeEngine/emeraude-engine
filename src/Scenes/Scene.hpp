@@ -42,6 +42,7 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <ratio>
 #include <set>
@@ -1571,6 +1572,46 @@ namespace EmEn::Scenes
 			{
 				return m_groundLevel;
 			}
+
+			/** @brief What a ray met first (castRay()). */
+			struct RayHit final
+			{
+				/** @brief The entity met; null for the ground. */
+				std::shared_ptr< AbstractEntity > entity;
+				/** @brief Where, in world space. */
+				Base::Math::Vector< 3, float > point;
+				/** @brief The surface's normal there, toward the ray's origin. */
+				Base::Math::Vector< 3, float > normal;
+				/** @brief How far from the ray's origin, metres. */
+				float distance{0.0F};
+			};
+
+			/** @brief The longest ray castRay() follows, metres: a longer one is cut there. */
+			static constexpr float MaxRayDistance{10000.0F};
+
+			/**
+			 * @brief Casts a ray through the PHYSICS world of the scene and returns what it meets first: the ground's
+			 * triangles and every collidable entity with a collision model — the static solids, the bodies, the
+			 * kinematic characters (2026-11-22; a direct-hit weapon, a line of sight).
+			 * @note The same shapes the bodies collide with: what has no collision model is not met (a visual, a
+			 * decorative tree). A TRIANGLE — the ground's, a mesh's — is met exactly (segment against triangle), from
+			 * its front only as for the bodies (a two-sided mesh from both); a convex shape — a capsule, a box, a
+			 * sphere — by a point swept by the solver's narrow phase. A shape the ray STARTS inside is not met (the ray
+			 * leaves it).
+			 * @note The ray is followed in stretches of 32 m, each with its own small box of triangles to visit: the
+			 * first stretch that meets something ends it.
+			 * @note Thread: the thread that runs the scene's logic, OUTSIDE the physics step — it takes the physics
+			 * octree's lock. Called from inside the step (a contact handler run under it) it is refused, with an
+			 * error: the step's own events are emitted after it, where a ray may be cast.
+			 * @param origin Where the ray starts, in world space.
+			 * @param direction Where it goes, any length.
+			 * @param maxDistance How far it is followed, metres (> 0; beyond MaxRayDistance it is cut there).
+			 * @param ignored An entity the ray passes through (the one that casts it), or null.
+			 * @return std::optional< RayHit > Nothing when the ray meets nothing, or for an origin, a direction or a
+			 * distance that is not finite, a zero direction, a distance that is not positive.
+			 */
+			[[nodiscard]]
+			std::optional< RayHit > castRay (const Base::Math::Vector< 3, float > & origin, const Base::Math::Vector< 3, float > & direction, float maxDistance, const AbstractEntity * ignored = nullptr) const noexcept;
 
 			/**
 			 * @brief Returns the current scene terrain renderable.

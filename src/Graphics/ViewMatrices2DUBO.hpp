@@ -151,6 +151,25 @@ namespace EmEn::Graphics
 				return m_previousState.projection;
 			}
 
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::breakFrameHistory() */
+			void
+			breakFrameHistory () noexcept override
+			{
+				/* NOTE: Unsigned on purpose: it only has to differ from the archived one, a wrap-around is harmless. */
+				++m_logicState.viewEpoch;
+			}
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::latchFrameHistory(uint32_t, bool) */
+			void latchFrameHistory (uint32_t readStateIndex, bool broken) noexcept override;
+
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::frameHistoryContinues() const */
+			[[nodiscard]]
+			bool
+			frameHistoryContinues () const noexcept override
+			{
+				return m_frameHistoryContinues;
+			}
+
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::setProjectionJitter() */
 			void
 			setProjectionJitter (const Base::Math::Vector< 2, float > & ndcOffset) noexcept override
@@ -281,7 +300,9 @@ namespace EmEn::Graphics
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::publishStateForRendering(uint32_t) */
 			void publishStateForRendering (uint32_t writeStateIndex) noexcept override;
 
-			/** @copydoc EmEn::Graphics::ViewMatricesInterface::archiveStateAfterRendering(uint32_t) */
+			/** @copydoc EmEn::Graphics::ViewMatricesInterface::archiveStateAfterRendering(uint32_t)
+			 * @note It also remembers which view (the state's epoch) the frame rendered: latchFrameHistory() compares
+			 * the next frame's with it. */
 			void archiveStateAfterRendering (uint32_t readStateIndex) noexcept override;
 
 			/** @copydoc EmEn::Graphics::ViewMatricesInterface::updateVideoMemory(uint32_t) const */
@@ -364,6 +385,7 @@ namespace EmEn::Graphics
 					 * a zero default would black out every ambient pass until a scene pushes one. */
 					0.0F, 0.0F, 1.0F, 0.0F
 				};
+				uint32_t viewEpoch{0}; /**< Which view this is: stepped when another camera feeds it (breakFrameHistory()), published with the matrices. */
 			};
 
 			/**
@@ -371,14 +393,16 @@ namespace EmEn::Graphics
 			 * @note Written by archiveStateAfterRendering() and read by the previous*Matrix()
 			 * getters, both on the render thread — no locking required. Distinct from the
 			 * logic/render triple buffer: state indices track logic ticks, not rendered frames.
-			 * Identity matrices until the first frame has been archived (consumers handle
-			 * their own first-frame invalidation).
+			 * Until a first frame is archived, and on the first frame of another view, latchFrameHistory()
+			 * makes them the frame's own matrices.
 			 */
 			struct PreviousFrameState
 			{
 				Base::Math::Matrix< 4, float > view; /**< View matrix of the previous rendered frame. */
 				Base::Math::Matrix< 4, float > infinityView; /**< Infinity (translation-free) view matrix of the previous rendered frame, for the renderables rendered with it (sky background). */
 				Base::Math::Matrix< 4, float > projection; /**< Projection matrix of the previous rendered frame (NEVER jittered: the TAA jitter is a per-draw push constant, see archiveStateAfterRendering()). */
+				uint32_t viewEpoch{0}; /**< Which view the previous rendered frame showed (DataState::viewEpoch). */
+				bool archived{false}; /**< A frame was rendered and archived. */
 			};
 
 			/**
@@ -393,6 +417,7 @@ namespace EmEn::Graphics
 			DataState m_logicState; /**< Current logic state (write). */
 			std::array< DataState, RenderStateSlotCount > m_renderState; /**< Published render states, one per state slot (triple buffer, see RenderStateSlotCount). */
 			PreviousFrameState m_previousState; /**< View state of the previous rendered frame (render thread only). */
+			bool m_frameHistoryContinues{false}; /**< Whether m_previousState is the past of the frame being recorded (latchFrameHistory(), render thread only). */
 			Base::Math::Vector< 2, float > m_currentJitter; /**< NDC projection jitter of the frame being rendered (render thread only). */
 			mutable Base::Math::Matrix< 4, float > m_jitteredProjection; /**< Jittered projection served by projectionMatrix(readStateIndex) while jitter is enabled (render thread only). */
 			/**

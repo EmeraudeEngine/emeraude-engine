@@ -27,7 +27,8 @@ character->controller().jump(5.0F);                               // a launch sp
   gives it a capsule back until a model is set again (`AbstractEntity::isCollisionModelWithdrawn()`). A corpse that
   must still lie on the ground keeps a body: shrink it with `setSize()` instead (projet-alpha's paladin).
 - Events, notified after the physics step (outside its lock): `Landed` (data: the fall speed, float m/s — fall damage),
-  `LeftGround`, `HitWall`. `MovableTrait::isGrounded()` / `groundedSource()` are kept up to date for existing code.
+  `LeftGround`, `HitWall`, `Struck` (2026-11-21; data: `Physics::CharacterController::Strike` — § Struck by a dynamic
+  body). `MovableTrait::isGrounded()` / `groundedSource()` are kept up to date for existing code.
 - Console / MCP: `setCharacterVelocity(name, x, y, z)`, `characterJump(name, speed)`; `getNodePhysics()` adds a
   `character` object (grounded, velocity, groundNormal, supportKey).
 
@@ -49,6 +50,38 @@ character->controller().jump(5.0F);                               // a launch sp
    it and snaps it down (stairs and slopes down stay grounded); a steep hit is accepted when it is a step's edge with a
    walkable top, else a half-radius probe looks for the floor under the character (a walker standing against a 50°
    ramp stays grounded).
+
+### Struck by a dynamic body (2026-11-21)
+
+A dynamic body that runs into a character stops on it (a character is never pushed, decision 9.4) and, until
+2026-11-21, only the BODY was told (`NodeCollision`, its own impact): a game could not hurt what a car runs into.
+Now the character is told too — `Component::CharacterController::Struck`, data `Physics::CharacterController::Strike`:
+
+| Field | Meaning |
+|---|---|
+| `speed` | the BODY's own speed toward the character, m/s: the pair's approach LESS the character's own motion toward the body. A character that runs into a parked body is not struck; one that flees a car is struck at the car's speed |
+| `mass` | the body's mass, kg — a consumer weighs a thrown ball against a car with it |
+
+- Where it is found: the solver's impact step (`Scene::resolveCollisions()` step 6, the pair's approach along its
+  resultant impulse, above `ImpactSpeedThreshold`), and the continuous step (4) for a body the sweep stopped on the
+  character before it crossed it. Recorded on the controller (`reportStrike()`: the hardest of the step, the largest
+  speed × mass; a value that is not finite or not positive is refused), emitted with the other events after the step.
+- The SIMULATION is unchanged: the code reads the solver's state and writes the character's event record. The physics
+  bench stays bit-identical run to run (`collision-debug`, 49 stations, 3 launches, 98 fields: 0 differing sample).
+- ONE event per collision: the solver takes the body's whole approach in the step of the hit; the next step sees a
+  body at rest against the character, under the threshold a consumer cares about.
+- ⚠️ The body's REBOUND is the pair's restitution, the LARGER of the two bouncinesses: a character whose
+  `BodyPhysicalProperties` say 0.8 throws a car back at three quarters of its speed (measured: 37.8 m/s in, 28.6 m/s
+  out, backwards). A character's bounciness had no visible effect before a heavy body met it — check it.
+
+Measured (projet-alpha's `city`, a driverless car of 1888 kg driven by `setVehicleInput()` into a standing character
+of bounciness 0.1, window-less, validation layer loaded, 0 `VUID-`, 0 `[Error]`):
+
+| Run-up | Car at the hit | Event | The car after |
+|---|---|---|---|
+| 12 m, half throttle | 10.3 m/s | one `Struck`: speed 10.34, mass 1888 | stopped dead (0.2 m/s, then 0), held while the character stood |
+| 90 m, full throttle | 37.4 m/s | one `Struck`: speed 38.32, mass 1888 | 3.8 m/s back, then at rest |
+| the character RUNS (3 m/s) into the parked car | 0 | none | — (the character slides round it) |
 
 ### Flying (2026-10-02)
 

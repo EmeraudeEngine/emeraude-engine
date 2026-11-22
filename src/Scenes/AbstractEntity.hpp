@@ -862,6 +862,23 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns whether the render box changed WITHOUT a content notification since the last call — a beam
+			 * or a path whose points moved, a skinned pose (refreshRenderBoundaries()) — and forgets it [LOGIC THREAD].
+			 * @note The scene asks it after the entity's processLogics() and files the entity again in its rendering
+			 * octree: a frame gathers its candidates sector by sector BEFORE it tests an entity's extent
+			 * (Scene::gatherRenderingCandidates()), so an entity left in the sector of its old box is skipped with it,
+			 * whatever its new extent. A box rebuilt by updateEntityProperties() is not reported here: that derivation
+			 * notifies the scene itself (EntityContentModified).
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			takeRenderBoxChange () noexcept
+			{
+				return std::exchange(m_renderBoxReshaped, false);
+			}
+
+			/**
 			 * @brief Returns the scene time when the entity was created (in milliseconds).
 			 *
 			 * @return uint32_t Entity creation timestamp in scene time (milliseconds).
@@ -1352,10 +1369,9 @@ namespace EmEn::Scenes
 			 * @brief Refreshes ONLY the collision model shape from the component bounding
 			 * volumes — the cheap subset of updateEntityProperties() for per-tick callers.
 			 *
-			 * Fired by the ComponentBoundariesModified notification: an animated skinned
-			 * Visual publishes a new bounding box at every pose update, and the frustum
-			 * culling (isVisibleTo) reads the collision model AABB — a stale shape culls
-			 * body parts the animation moved outside of it.
+			 * Fired by the ComponentBoundariesModified notification, with refreshRenderBoundaries(): an animated
+			 * skinned Visual publishes a new bounding box at every pose update, and the collision model is the extent
+			 * a frame culls on when the entity has no render box (publishRenderExtent()).
 			 *
 			 * @note Overridden shape parameters are respected (no-op), like everywhere else.
 			 * @note [THREAD-SAFETY] LOGIC thread. The rendering thread does not read the collision model: its culling
@@ -1363,6 +1379,24 @@ namespace EmEn::Scenes
 			 * with the state that carries it.
 			 */
 			void refreshCollisionBoundaries () noexcept;
+
+			/**
+			 * @brief Rebuilds ONLY the render box — the union of what the components draw, the extent a frame culls the
+			 * entity on — from the components' render boxes: the cheap subset of updateEntityProperties().
+			 *
+			 * Fired by the ComponentBoundariesModified notification, with refreshCollisionBoundaries(): a component
+			 * whose drawn shape changes without its content changing — a Beam or a Path whose points move, a skinned
+			 * Visual at every pose — must be culled on its NEW box. Until 2026-11-22 the notification refreshed the
+			 * collision shape alone: the render box stayed the one of the last updateEntityProperties(), and a beam
+			 * moved out of it vanished whenever that first box left the view.
+			 *
+			 * @note A box that did not change is left as it is: nothing is published again, nothing is refiled.
+			 * @note The rendering ability is not derived again (a component that starts or stops drawing notifies
+			 * ComponentContentModified).
+			 * @note [THREAD-SAFETY] LOGIC thread, outside the component dispatch (it takes m_componentsMutex). The
+			 * rendering thread reads the extent published from the box (publishRenderExtent()), never the box.
+			 */
+			void refreshRenderBoundaries () noexcept;
 
 			/**
 			 * @brief Publishes the world extent the rendering thread culls this entity on, into a render state slot.
@@ -1591,7 +1625,7 @@ namespace EmEn::Scenes
 			Base::Math::Vector< 3, float > m_filedPosition; ///< World position at the last logic-thread filing (recordFiledFrame()).
 			Base::Math::Vector< 3, float > m_filedUpward; ///< World upward at the last logic-thread filing.
 			Base::Math::Vector< 3, float > m_filedBackward; ///< World backward at the last logic-thread filing.
-			bool m_collisionBoundariesDirty{false};		 ///< Deferred collision shape refresh request (set under m_componentsMutex, consumed after it).
+			bool m_boundariesDirty{false};		 ///< Deferred request to refresh the collision shape and the render box (ComponentBoundariesModified: set under m_componentsMutex, consumed after it).
 			/** @brief Signalled when a component dispatch ends (awaitComponentDispatch()). */
 			Base::ConditionVariable m_componentDispatchEnded;
 			/** @brief The thread running the component dispatch, while m_dispatchingComponentLogics is set. */
@@ -1602,6 +1636,7 @@ namespace EmEn::Scenes
 			bool m_containerMoveDeferred EMEN_GUARDED_BY(m_componentsMutex){false};			///< A move arrived during the component loop: dispatch m_deferredMoveCoordinates after it.
 			bool m_contentRefreshDeferred EMEN_GUARDED_BY(m_componentsMutex){false};		   ///< A content refresh was asked during the component loop: updateEntityProperties() runs after it (deferContentRefreshDuringDispatch()).
 			bool m_filedFrameRecorded{false};				///< recordFiledFrame() ran (logic thread only).
+			bool m_renderBoxReshaped{false};				///< refreshRenderBoundaries() changed the render box and the scene has not refiled the entity yet (takeRenderBoxChange(), logic thread only).
 	};
 
 	template< typename component_t >

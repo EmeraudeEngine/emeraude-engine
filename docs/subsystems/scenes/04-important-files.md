@@ -26,6 +26,7 @@
 - `StaticEntity.cpp/.hpp` - Optimized static entity (flat map)
 - `AbstractEntity.cpp/.hpp` - Common base for Component management
 - `LocatableInterface.cpp/.hpp` - Interface for coordinates/movement
+- `NavigationInterface.hpp` - OPTIONAL contract a world offers its walking bodies (2026-11-21): `isClear(from, to, clearance)` (the straight way, a line of sight as well) and `waypoint(from, to, clearance)` (the point to head for now). The scene does not hold one: the CONSUMER does (a game's world object) and asks from the thread that moves its bodies. First member: `TileWorld::Navigation` ([tileworld overview](../tileworld/01-overview.md) § Navigation)
 - `Toolkit.cpp/.hpp` - High-level scene construction helper. See [`@docs/toolkit-system.md`](../../toolkit-system.md)
 - `Component/Abstract.hpp` - Base class for all Components (pure virtual onSuspend/onWakeup)
 - `Component/SoundEmitter.cpp/.hpp` - Audio emitter with suspend/wakeup source management

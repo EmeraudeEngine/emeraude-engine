@@ -15,6 +15,7 @@ connections, zones and relief — never "a road" or "a city").
 | `Layout.hpp` | The N × M grid (≤ 512 per side), `place()`, `validate()` (every cell holds a tile; two sides sharing an edge carry the same mask; the border connects to nothing — every mismatch logged). Centred on the origin, a column along +X, a row along +Z. |
 | `Relief.hpp` | The heights at the tile corners, (N+1) × (N+1), shared by the neighbours: the surface is continuous by construction. `generate()` (two octaves of the base Perlin noise, `PortableRandom`-shuffled: the same relief on the three OS), `flatten()`, `constrain()`, `solve()`, `setHeight()` (an editor's tool). |
 | `Scatter.hpp` | `scatter(layout, relief, {zoneKind, spacing, jitter, margin, seed})` → `Placement`s (world position on the relief, facing, own seed, cell): every zone of a kind filled by a JITTERED GRID (R. L. Cook, "Stochastic Sampling in Computer Graphics", ACM TOG 5(1), 1986) — round(size / spacing) steps a side — along its length at least `minimumPerZone` (1; 0 leaves a short zone empty), across it at least one row (a 1 m strip holds a single file); an arc along its middle radius; `shapes` fills rectangles, arcs or both. Seeded PER CELL (`cellSeed()`): an edit moves its cell's points only. `MinSpacing` 0.25 m, `MaxPlacements` 2²⁰. Users: `city`'s park trees and street lamps. |
+| `Navigation.hpp` | Where a body may go over a layout and the way to a point (2026-11-21): each cell OPEN or CLOSED — the CONSUMER says which (`build(layout, isOpen)`) — `isClear(from, to, clearance)` (the straight way, a line of sight as well), `waypoint(from, to, clearance)` (the point to head for now, round what stands between). Implements the engine's `Scenes::NavigationInterface`. § Navigation below. User: `city`'s hunt. |
 | `Builder.hpp` | Surface slots (`declareSurface()`: name, material, contact), the plinth, zone overlays; `buildGeometry()` / `buildRegion()` (pure, no scene), `instantiate()` (one solid static entity per region and slot, colliding as its triangles). |
 
 ## Owner decisions (2026-10-28)
@@ -61,6 +62,67 @@ connections, zones and relief — never "a road" or "a city").
 - `TileContext::variationSeed`: the world seed (`setVariationSeed()`) and the cell, mixed by MurmurHash3's `fmix32`
   finalizer (Appleby, public domain; `cellSeed()` in `Types.hpp`): any bits are independent (the bare XOR of the products left the low bit
   alternating cell to cell). `city`'s lots draw a tower's storeys and facade from it.
+
+## Navigation (2026-11-21)
+
+`Navigation.hpp` answers the two questions of `Scenes::NavigationInterface` over a layout: can a body go STRAIGHT
+from a point to another, and which point does it head for now to reach a target. Asked for projet-alpha's `city`
+(characters that hunt the player between the towers); nothing else in the engine depends on it.
+
+Owner decisions (2026-11-21):
+
+- **Open cells, named by the consumer.** `build(layout, isOpen)` asks once per cell: a built lot is closed, a road,
+  a park, a lawn are open. The engine never knows "a building". The first proposal — to walk the road NETWORK
+  (`Layout::connections()`) — was dropped: a park is open ground too, and a target standing in one must be reached.
+  A WHOLE cell is open or closed: what stands inside an open cell (a post, a bench) and the relief are not seen.
+- **A contract, then its first member.** `Scenes::NavigationInterface` (`src/Scenes/NavigationInterface.hpp`) is
+  what a consumer's walking characters depend on; `TileWorld::Navigation` implements it. Another navigation (a
+  navigation mesh, a maze) answers the same two questions without touching the characters.
+- **The line of sight is the same question.** `isClear()` is what a consumer aims along: a character that fires
+  only along a clear segment no longer fires through a block.
+
+How it answers:
+
+- `isClear()`: the segment and its two parallels a clearance away cross open cells only. The cells of a segment by
+  J. Amanatides and A. Woo ("A Fast Voxel Traversal Algorithm for Ray Tracing", Eurographics 1987), the segment
+  first clipped to the grid (Y.-D. Liang, B. A. Barsky, "A New Concept and Method for Line Clipping", ACM TOG 3(1),
+  1984): off the grid nothing stands. The walk counts the steps left on each axis, so it stays inside the grid
+  whatever the rounding and ends after at most columns + rows cells. The heights are ignored.
+- `waypoint()`: the target itself when the straight way is clear. Else a breadth-first wavefront from the target's
+  cell (C. Y. Lee, "An Algorithm for Path Connections and Its Applications", IRE Transactions on Electronic
+  Computers EC-10(3), 1961) gives every open cell its distance in cells, and the body heads for the centre of the
+  FARTHEST of the next `LookAhead` (8) cells down the way that it can still head straight for — the next one always
+  (two neighbouring open cells make a rectangle: the straight way to the neighbour's centre never leaves them). The
+  corners are cut wherever the grid shows room; a body does not walk from centre to centre.
+- **One walk for every pursuer of one target.** The distances are KEPT until another target cell is asked (the idea
+  of the flow fields of crowd path finding: E. Emerson, "Crowd Pathfinding and Steering Using Flow Field Tiles",
+  Game AI Pro, CRC Press, 2013): N pursuers cost N small grid traversals a cycle, and one wavefront each time the
+  target enters another cell. The wavefront allocates nothing (its queue is sized once for every cell).
+- A body in a CLOSED cell (pushed against a wall, on a lot's edge) heads for the centre of the nearest open cell. A
+  target in a closed cell, or off the grid, is reached through the open cell the nearest its own (centre to centre,
+  kept with the distances). A body off the grid, a target no way reaches, an empty navigation: the waypoint is the
+  target — the body goes straight, as in a world without navigation.
+
+Measured (projet-alpha's `city`, side 32, seed 1: 579 open cells of 1024; characters of 0.45 m radius running at
+3 m/s; window-less, validation layer loaded, 0 `VUID-`, 0 `[Error]`): four pursuers, each sent after a target hidden
+210 to 220 m away behind the blocks, walked 18, 19, 21 and 22 cells of streets and parks — 212 to 314 m for 208 to
+220 m as the crow flies — with NO traced position in a closed cell (0 of 414, 533, 610 and 619); the heading changed
+by more than 20° between two traces (a sixth of a second) 1 to 9 times a way, the corners cut. Two short stalls
+(under 1 m/s for about 0.7 s) on one way: a street prop inside an open cell, which the grid does not see — the
+capsule slid round it. The line of sight: a target 17.9 m away behind a corner lot (8 m of the segment inside it)
+read as NOT clear for 40 traces at 9.4 to 17.8 m, then clear once the pursuer had turned the corner.
+
+⚠️ Traps:
+
+- **One thread.** Built once, then asked from the thread that moves the bodies (the logic thread): `waypoint()`
+  writes its cache (`mutable` members, documented as such).
+- **One target at a time is cheap, two alternating are not**: a single set of distances is kept, so two targets in
+  different cells asked in turn walk the wavefront at every call (≤ 262 144 cells at the largest layout). Keep one
+  field per target if that case appears.
+- `build()` COPIES the openness: an edit of the layout is not seen until `build()` runs again.
+- A clearance beyond half a tile is tested as half a tile (a wider parallel could step over a closed cell).
+- A trace printed by a behaviour that is only called when free says nothing about TIME: a character held by a
+  one-shot clip prints nothing meanwhile, the positions still look evenly spaced (read while verifying, 2026-11-21).
 
 ## Measured (`city`, Linux, 3070 Ti, 2026-10-28, validation layers on)
 

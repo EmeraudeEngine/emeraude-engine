@@ -83,6 +83,9 @@ earliest hit with the static world's ties broken as in step 4b.
   axle, chassis-local X when the forward is −Z). Make it `setCollidable(false)`: the wheels are the vehicle's casts.
 - A chassis is woken by a throttle or by a steering its wheels have not reached (`VehicleController::wantsToMove()`):
   a parked car steered shows its wheels turned, then sleeps again.
+- What a consumer reads back: `forwardInput()` (the throttle), `brakeInput()` (the SERVICE brake as `setInput()` left
+  it, never the hand brake — 2026-11-22, a vehicle's brake lights), `engineRPM()`, `gear()`, `clutch()`, and each
+  wheel's state through `wheels()` (`steerAngle`: positive turns it left — a steering wheel follows it).
 
 ### Electronic aids (2026-10-31, `VehicleSettings::aids`, off by default)
 - **Traction control** (`tractionControl`): each driven wheel's drive torque at most `tractionGripShare` (0.8) of what

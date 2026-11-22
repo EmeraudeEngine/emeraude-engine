@@ -332,6 +332,14 @@ namespace EmEn::Physics
 				return m_forward;
 			}
 
+			/** @brief Returns the service brake (0 to 1) as setInput() left it: the pedal, never the hand brake. */
+			[[nodiscard]]
+			float
+			brakeInput () const noexcept
+			{
+				return m_brake;
+			}
+
 			/**
 			 * @brief Returns whether the driver's inputs need the chassis awake: a throttle, or a steering the wheels
 			 * have not reached yet (a parked car steered shows its wheels turned).

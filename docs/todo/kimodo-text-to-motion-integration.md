@@ -58,6 +58,11 @@ emits a 30-joint SOMA skeleton; every character in this project is a 70-bone Mix
 retargeting there is nothing to play the motion on. The cost split is roughly **85 % engine,
 15 % Kimodo**.
 
+⚠️ **True only for a character that carries another rig (2026-11-21).** A mesh rigged natively on
+SOMA-30 plays Kimodo's output verbatim, with no retargeter: proven offline on a generated,
+unrigged mesh ([`../animation-retargeting.md`](../animation-retargeting.md) § 8). Whether that
+unblocks this item for such characters is an owner decision, **not taken**.
+
 ## What remains
 
 - [ ] Optional CMake dependency on kimodo.cpp, defaulted **off**.

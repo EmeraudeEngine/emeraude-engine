@@ -121,14 +121,30 @@ namespace EmEn::Physics
 	{
 		public:
 
+			/**
+			 * @brief A dynamic body that ran into the character (2026-11-21): how fast and how heavy.
+			 * @note The speed is the BODY's own, toward the character: the character's own motion is left out, so a
+			 * character running into a parked body is not struck, and one fleeing a body is struck at the body's speed.
+			 */
+			struct Strike final
+			{
+				/** The body's speed toward the character (m/s, positive). */
+				float speed{0.0F};
+				/** The body's mass (kg, positive). */
+				float mass{0.0F};
+			};
+
 			/** @brief What happened during one step (the scene emits it after its physics step). */
 			struct Events final
 			{
 				/** The fall speed at a landing (m/s, positive), valid when landed. */
 				float landingSpeed{0.0F};
+				/** The hardest strike of the step (the largest speed × mass), valid when struck. */
+				Strike strike;
 				bool landed{false};
 				bool leftGround{false};
 				bool hitWall{false};
+				bool struck{false};
 			};
 
 			/** @brief The default radius (m), a human. */
@@ -293,6 +309,16 @@ namespace EmEn::Physics
 			{
 				return m_events;
 			}
+
+			/**
+			 * @brief Records that a dynamic body ran into the character during this step. The world's solver knows it,
+			 * not the character (a dynamic body never pushes it): it reports AFTER step(), before the events are emitted.
+			 * The hardest strike of the step is kept (the largest speed × mass).
+			 * @param speed The body's speed toward the character (m/s).
+			 * @param mass The body's mass (kg).
+			 * @return bool False (and nothing recorded) for a value that is not finite or not positive.
+			 */
+			bool reportStrike (float speed, float mass) noexcept;
 
 			/** @brief Returns the radius (m). */
 			[[nodiscard]]

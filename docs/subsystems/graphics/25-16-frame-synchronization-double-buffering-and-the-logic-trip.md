@@ -40,8 +40,12 @@ thread ticks twice between two frames, no slot index is "the previous frame". Te
 **frame-history contract** instead:
 
 - `ViewMatricesInterface::previousViewMatrix()` / `previousProjectionMatrix()` — the state
-  consumed by the previously RENDERED frame (identity until first archive; consumers handle
-  their own first-frame invalidation).
+  consumed by the previously RENDERED frame. On a frame the history does not continue into
+  (the first one, a camera cut, another scene) they are that frame's OWN matrices, and
+  `frameHistoryContinues()` says so: `latchFrameHistory(readStateIndex, broken)`, called by
+  the renderer once per frame before anything reads them; the break itself is
+  `breakFrameHistory()`, called when another source feeds the target (2026-11-22, graphics
+  doc 13-12 § 43 — The VIEW discontinuity).
 - `archiveStateAfterRendering(readStateIndex)` — called by `Renderer::renderFrame()` ONCE
   per rendered frame, on the render thread, AFTER the command buffer is recorded (so during
   the recording of frame N the archive still holds frame N-1). Real implementation in

@@ -173,9 +173,24 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns whether the previous rendered frame is this frame's past
+			 * (ViewMatricesInterface::frameHistoryContinues()): false at the first frame, at the first frame of another
+			 * camera (a cut) and of another scene.
+			 * @note A temporal integrator then drops what it accumulated: its history is another picture. The previous
+			 * matrices below are this frame's own on such a frame.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			frameHistoryContinues () const noexcept
+			{
+				return m_viewMatrices.frameHistoryContinues();
+			}
+
+			/**
 			 * @brief Returns the view matrix of the PREVIOUS rendered frame (the frame-history contract of the view
 			 * matrices: what a temporal effect reprojects from).
-			 * @note Identity until a first frame was archived: a consumer handles its own first-frame invalidation.
+			 * @note This frame's own matrix when the history does not continue into it (frameHistoryContinues()).
 			 * @return const Base::Math::Matrix< 4, float > &
 			 */
 			[[nodiscard]]

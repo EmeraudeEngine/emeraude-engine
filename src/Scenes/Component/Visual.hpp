@@ -216,8 +216,8 @@ namespace EmEn::Scenes::Component
 			std::weak_ptr< Graphics::Renderable::Abstract > m_renderableInterface;
 			/**
 			 * @brief Refreshes the animated bounding box from the animator's joints box and
-			 * notifies the entity (ComponentBoundariesModified) so the collision model —
-			 * hence the frustum culling — follows the pose.
+			 * notifies the entity (ComponentBoundariesModified) so its collision model and its
+			 * render box — hence the frustum culling — follow the pose.
 			 */
 			void updateAnimatedBoundingBox () noexcept;
 

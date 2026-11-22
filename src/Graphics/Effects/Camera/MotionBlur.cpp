@@ -36,6 +36,7 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -584,9 +585,14 @@ namespace EmEn::Graphics::Effects::Camera
 		const auto frameIndex = this->renderer().currentFrameIndex();
 		const auto & constants = context.constants;
 
+		/* A frame without a past (a camera cut, another scene, the first frame): its velocity buffer measures nothing.
+		 * The view matrices then give it no camera motion, so what rides with a moving camera — a car's cabin seen
+		 * from its cockpit — would carry its whole world speed: one frame without smear instead. */
+		const bool hasPast = context.frameView == nullptr || context.frameView->frameHistoryContinues();
+
 		/* No velocity buffer means no motion blur: pass the colour through untouched rather
 		 * than blur by garbage. requiresVelocity() makes this a defensive branch only. */
-		if ( context.velocity == nullptr || context.depth == nullptr || context.view == nullptr )
+		if ( context.velocity == nullptr || context.depth == nullptr || context.view == nullptr || !hasPast )
 		{
 			return inputColor;
 		}
