@@ -29,10 +29,13 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <set>
+#include <span>
 #include <string>
 #include <utility>
 
@@ -43,6 +46,7 @@
 #include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Frustum.hpp"
+#include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/SceneRenderTarget.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
@@ -97,11 +101,28 @@ namespace EmEn::Graphics
 			std::array< float, 4 > colorIntensity;
 			/* xyz = spot direction (view space, normalised), w = type (1 point, 2 spot). */
 			std::array< float, 4 > directionType;
-			/* x = cos(inner angle), y = cos(outer angle). */
+			/* x = cos(inner angle), y = cos(outer angle), z = the colour projection's kind (NoProjection...). */
 			std::array< float, 4 > cone;
 		};
 
 		static_assert(sizeof(DeferredLightData) == 64, "DeferredLightData must be 64 bytes (std430).");
+
+		/** @brief What DeferredLightData::cone[2] holds: how the resolve samples the light's colour projection. */
+		constexpr float NoProjection{0.0F};
+		constexpr float PictureProjection{1.0F}; /**< A 2D picture at the pixel's projection coordinates (a spot light). */
+		constexpr float CubemapProjection{2.0F}; /**< A cubemap along the light → pixel direction (a point light). */
+
+		/** @brief The colour projection of one light of the resolve buffer (std430, 80 bytes), at the light's own index. */
+		struct DeferredProjectionData
+		{
+			/* A picture: the frame's VIEW space → the light's projection coordinates (its published matrix × the inverse
+			 * view). A cubemap: the inverse view, whose rotation brings the light → pixel direction back to world space. */
+			std::array< float, 16 > viewToProjection;
+			/* x = the texture's bindless index (uint bits), y = the boost. */
+			std::array< float, 4 > textureBoost;
+		};
+
+		static_assert(sizeof(DeferredProjectionData) == 80, "DeferredProjectionData must be 80 bytes (std430).");
 
 		/** @brief Push constants of the resolve and of the tile culling (96 bytes, the GLSL blocks below). */
 		struct ResolvePushConstants
@@ -140,6 +161,7 @@ void main()
 		 * the deferred-lighting bit are shaded: every other one keeps its forward passes. */
 		constexpr auto ResolveFragmentShader = R"GLSL(
 #version 450
+#extension GL_EXT_nonuniform_qualifier : require
 
 layout(location = 0) out vec4 outColor;
 
@@ -166,6 +188,22 @@ layout(std430, set = 0, binding = 5) readonly buffer TileMasks
 {
 	uint tileMasks[];
 };
+
+/* The colour projection of a light (a gobo), at the light's own index: read only when lights[index].cone.z says so. */
+struct DeferredProjection
+{
+	mat4 viewToProjection;
+	vec4 textureBoost;
+};
+
+layout(std430, set = 0, binding = 6) readonly buffer DeferredProjections
+{
+	DeferredProjection projections[];
+};
+
+/* The bindless tables (BindlessTextureManager): the pictures and the cubemaps the lights project. */
+layout(set = 1, binding = 1) uniform sampler2D textures2D[];
+layout(set = 1, binding = 3) uniform samplerCube texturesCube[];
 
 layout(push_constant) uniform PushConstants
 {
@@ -303,8 +341,35 @@ void main()
 				const vec3 specular = (NDF * G * F) / (4.0 * NdotV * NdotL + 0.0001);
 				const vec3 kD = (vec3(1.0) - F) * (1.0 - metalness);
 
+				/* The light's colour projection, the forward pass's projectionColor term for term: the picture at the
+				 * pixel's projection coordinates (a spot), the cubemap along the light → pixel direction (a point light),
+				 * then the boost. The base mip level: this loop has no screen derivative to give. */
+				vec3 projectionColor = vec3(1.0);
+				const float projectionKind = lights[index].cone.z;
+
+				if ( projectionKind > 0.5 )
+				{
+					const uint projectionTexture = floatBitsToUint(projections[index].textureBoost.x);
+					vec3 picture;
+
+					if ( projectionKind < 1.5 )
+					{
+						const vec4 coordinates = projections[index].viewToProjection * vec4(P, 1.0);
+
+						picture = textureLod(textures2D[nonuniformEXT(projectionTexture)], coordinates.xy / coordinates.w, 0.0).rgb;
+					}
+					else
+					{
+						picture = textureLod(texturesCube[nonuniformEXT(projectionTexture)], mat3(projections[index].viewToProjection) * (-L), 0.0).rgb;
+					}
+
+					const float boost = projections[index].textureBoost.y;
+
+					projectionColor = boost > 0.0 ? vec3(1.0) + picture * boost : picture;
+				}
+
 				const vec4 colorIntensity = lights[index].colorIntensity;
-				const vec3 radiance = colorIntensity.rgb * colorIntensity.a * lightFactor;
+				const vec3 radiance = colorIntensity.rgb * projectionColor * colorIntensity.a * lightFactor;
 
 				radianceSum += (kD * albedo / 3.14159265 + specular) * radiance * NdotL;
 		}
@@ -578,6 +643,7 @@ void main()
 			newLayout->declareCombinedImageSampler(3, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
 			newLayout->declareStorageBuffer(4, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
 			newLayout->declareStorageBuffer(5, VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
+			newLayout->declareStorageBuffer(6, VK_SHADER_STAGE_FRAGMENT_BIT);
 
 			if ( !layoutManager.createDescriptorSetLayout(newLayout) )
 			{
@@ -625,12 +691,41 @@ void main()
 				return false;
 			}
 
+			auto projectionBuffer = std::make_unique< ShaderStorageBufferObject >(m_renderer.device(), static_cast< VkDeviceSize >(MaxLights * sizeof(DeferredProjectionData)));
+			projectionBuffer->setIdentifier(ClassId, "Projections", "ShaderStorageBufferObject");
+
+			if ( !projectionBuffer->createOnHardware() )
+			{
+				Tracer::error(ClassId, "Unable to create a projection buffer !");
+
+				return false;
+			}
+
+			if ( !descriptorSet->writeStorageBuffer(6, projectionBuffer->getDescriptorInfo(0, static_cast< uint32_t >(MaxLights * sizeof(DeferredProjectionData)))) )
+			{
+				Tracer::error(ClassId, "Unable to bind a projection buffer !");
+
+				return false;
+			}
+
+			m_projectionBuffers.emplace_back(std::move(projectionBuffer));
 			m_lightBuffers.emplace_back(std::move(lightBuffer));
 			m_descriptorSets.emplace_back(std::move(descriptorSet));
 		}
 
+		/* Set 1 = the bindless table (the textures the lights project). A scene renderer always has it. */
+		const auto bindlessLayout = m_renderer.bindlessTextureManager().descriptorSetLayout();
+
+		if ( bindlessLayout == nullptr )
+		{
+			Tracer::error(ClassId, "The bindless texture table has no layout: the lights keep their forward passes !");
+
+			return false;
+		}
+
 		StaticVector< std::shared_ptr< DescriptorSetLayout >, 6 > sets;
 		sets.emplace_back(m_descriptorSetLayout);
+		sets.emplace_back(bindlessLayout);
 
 		m_pipelineLayout = layoutManager.getPipelineLayout(sets, {
 			VkPushConstantRange{
@@ -913,7 +1008,15 @@ void main()
 			return false;
 		}
 
+		/* The resolve's shader reads the bindless table (the textures the lights project): without the table's set this
+		 * frame, every light keeps its forward passes. */
+		if ( m_renderer.bindlessTextureManager().descriptorSet() == nullptr )
+		{
+			return false;
+		}
+
 		const auto & lightBuffer = *m_lightBuffers[m_renderer.currentFrameIndex() % m_lightBuffers.size()];
+		const auto & projectionBuffer = *m_projectionBuffers[m_renderer.currentFrameIndex() % m_projectionBuffers.size()];
 		auto * gpuData = lightBuffer.mapMemoryAs< DeferredLightData >();
 
 		if ( gpuData == nullptr )
@@ -923,7 +1026,23 @@ void main()
 			return false;
 		}
 
+		auto * projectionData = projectionBuffer.mapMemoryAs< DeferredProjectionData >();
+
+		if ( projectionData == nullptr )
+		{
+			Tracer::error(ClassId, "Unable to map the projection buffer !");
+
+			lightBuffer.unmapMemory();
+
+			return false;
+		}
+
+		/* One projection entry per light slot: at most MaxLights lights are written below. */
+		const std::span< DeferredProjectionData > projections{projectionData, MaxLights};
+
 		const auto & viewMatrix = viewMatrices.viewMatrix(readStateIndex, false, 0);
+		/* The frame's view space → world space: a projected light's matrix is a WORLD one. */
+		const auto inverseViewMatrix = viewMatrix.inverse();
 		const auto & frustum = viewMatrices.frustum(readStateIndex, 0);
 		const auto & viewPosition = viewMatrices.position(readStateIndex);
 
@@ -994,7 +1113,11 @@ void main()
 				const auto & block = light->publishedBlock(readStateIndex);
 				const Vector< 3, float > position{block[PointLight::PositionOffset + 0], block[PointLight::PositionOffset + 1], block[PointLight::PositionOffset + 2]};
 
-				if ( Scenes::LightSet::isDeferredPunctualLight(*light, readStateIndex, shadowMapsEnabled) )
+				/* A point light's projection is resolved when it is a STILL cubemap: an animated one is a frame of a cubemap
+				 * array, a table the resolve does not read (it keeps its forward passes). */
+				const auto projectionResolved = std::bit_cast< uint32_t >(block[PointLight::ColorProjectionFrameIndexOffset]) == Scenes::Component::AbstractLightEmitter::NoColorProjectionTexture;
+
+				if ( Scenes::LightSet::isDeferredPunctualLight(*light, readStateIndex, shadowMapsEnabled, projectionResolved) )
 				{
 					classify(*light, position, block[PointLight::RadiusOffset], false);
 				}
@@ -1009,7 +1132,8 @@ void main()
 				const auto & block = light->publishedBlock(readStateIndex);
 				const Vector< 3, float > position{block[SpotLight::PositionOffset + 0], block[SpotLight::PositionOffset + 1], block[SpotLight::PositionOffset + 2]};
 
-				if ( Scenes::LightSet::isDeferredPunctualLight(*light, readStateIndex, shadowMapsEnabled) )
+				/* A spot's projection is a picture: always resolved. */
+				if ( Scenes::LightSet::isDeferredPunctualLight(*light, readStateIndex, shadowMapsEnabled, true) )
 				{
 					classify(*light, position, block[SpotLight::RadiusOffset], true);
 				}
@@ -1069,8 +1193,25 @@ void main()
 					entry.directionType[3] = 2.0F;
 					entry.cone[0] = block[SpotLight::InnerCosAngleOffset];
 					entry.cone[1] = block[SpotLight::OuterCosAngleOffset];
-					entry.cone[2] = 0.0F;
+					entry.cone[2] = NoProjection;
 					entry.cone[3] = 0.0F;
+
+					/* The colour projection, a picture: the very matrix, index and boost the forward light pass reads in
+					 * this published block, the matrix brought to the frame's view space. A texture not registered yet
+					 * (still loading) projects nothing, as in the forward pass. */
+					if ( std::bit_cast< uint32_t >(block[SpotLight::ColorProjectionIndexOffset]) != Scenes::Component::AbstractLightEmitter::NoColorProjectionTexture )
+					{
+						std::array< float, 16 > lightMatrixData{};
+						std::copy_n(std::next(block.cbegin(), SpotLight::LightMatrixOffset), lightMatrixData.size(), lightMatrixData.begin());
+
+						const auto viewToProjection = Matrix< 4, float >{lightMatrixData} * inverseViewMatrix;
+						auto & projection = *std::next(projections.begin(), static_cast< std::ptrdiff_t >(m_lights.size()));
+
+						std::copy_n(viewToProjection.data(), projection.viewToProjection.size(), projection.viewToProjection.begin());
+						projection.textureBoost = {block[SpotLight::ColorProjectionIndexOffset], block[SpotLight::ColorProjectionBoostOffset], 0.0F, 0.0F};
+
+						entry.cone[2] = PictureProjection;
+					}
 				}
 				else
 				{
@@ -1082,8 +1223,20 @@ void main()
 					entry.directionType[3] = 1.0F;
 					entry.cone[0] = 0.0F;
 					entry.cone[1] = 0.0F;
-					entry.cone[2] = 0.0F;
+					entry.cone[2] = NoProjection;
 					entry.cone[3] = 0.0F;
+
+					/* The colour projection, a still cubemap sampled along the light → pixel direction in WORLD space: the
+					 * inverse view brings the view-space direction back (an animated cubemap was refused above). */
+					if ( std::bit_cast< uint32_t >(block[PointLight::ColorProjectionIndexOffset]) != Scenes::Component::AbstractLightEmitter::NoColorProjectionTexture )
+					{
+						auto & projection = *std::next(projections.begin(), static_cast< std::ptrdiff_t >(m_lights.size()));
+
+						std::copy_n(inverseViewMatrix.data(), projection.viewToProjection.size(), projection.viewToProjection.begin());
+						projection.textureBoost = {block[PointLight::ColorProjectionIndexOffset], block[PointLight::ColorProjectionBoostOffset], 0.0F, 0.0F};
+
+						entry.cone[2] = CubemapProjection;
+					}
 				}
 
 				/* The fade before the draw distance (1 elsewhere). */
@@ -1111,6 +1264,7 @@ void main()
 
 		m_overflowReported = droppedCount > 0;
 
+		projectionBuffer.unmapMemory();
 		lightBuffer.unmapMemory();
 
 		if ( m_lights.empty() )
@@ -1146,6 +1300,14 @@ void main()
 		const auto & depthImage = *sceneTarget.depthStencilImage();
 
 		if ( m_cullPipeline == nullptr || m_tileMaskBuffers.empty() )
+		{
+			return false;
+		}
+
+		/* The bindless table the resolve's shader reads: prepare() checked it for this frame. */
+		const auto * bindlessSet = m_renderer.bindlessTextureManager().descriptorSet();
+
+		if ( bindlessSet == nullptr )
 		{
 			return false;
 		}
@@ -1228,6 +1390,7 @@ void main()
 		vkCmdPushConstants(commandBuffer.handle(), m_pipelineLayout->handle(), VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pushConstants), &pushConstants);
 
 		commandBuffer.bind(descriptorSet, *m_pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 0);
+		commandBuffer.bind(*bindlessSet, *m_pipelineLayout, VK_PIPELINE_BIND_POINT_GRAPHICS, 1);
 
 		commandBuffer.draw(3, 1);
 
@@ -1277,6 +1440,7 @@ void main()
 		m_pipelineLayout.reset();
 		m_descriptorSets.clear();
 		m_lightBuffers.clear();
+		m_projectionBuffers.clear();
 		m_descriptorSetLayout.reset();
 		m_sampler.reset();
 

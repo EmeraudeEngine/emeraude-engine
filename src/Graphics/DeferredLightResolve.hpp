@@ -325,6 +325,9 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::vector< std::unique_ptr< Vulkan::DescriptorSet > > m_descriptorSets;
 			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_lightBuffers;
+			/* The colour projections of the lights, one entry per light slot of m_lightBuffers, one buffer per frame in
+			 * flight (written only for the lights that project). */
+			std::vector< std::unique_ptr< Vulkan::ShaderStorageBufferObject > > m_projectionBuffers;
 			std::shared_ptr< Vulkan::PipelineLayout > m_pipelineLayout;
 			std::shared_ptr< Vulkan::RenderPass > m_renderPass;
 			std::shared_ptr< Vulkan::Framebuffer > m_framebuffer;

@@ -82,6 +82,9 @@ render thread the moment a barrel exploded):
   directional light's projection (its matrix depends on the block layout, and a cascaded light does not project in
   the raster either) and a point light's ANIMATED cubemap (the traced lanes do not bind the cubemap arrays): those
   entries say `NoProjection` and keep the light's full emission, as before.
+  Three OS (engine `060cb003`): Windows (RTX 3500 Ada, MSVC Release and Debug 0 warning, the RT lane, validation on,
+  0 VUID) reads the bonnet 11.4 with the beams, 9.1 without, 1.2 with the Reflections slot off; macOS (Apple M6,
+  AppleClang Release and Debug 0 warning, the template guard included) has no RT lane: a build check there, 0 VUID.
 - **The RT light SSBO is one buffer PER FRAME IN FLIGHT, filled from the PUBLISHED state** (2026-11-11, owner decision;
   `LightSet::RTLightBuffer(frameIndex)`, bound by `RayTracing::bindFrame()` for the frame being rendered like
   the three `SceneMetaData` SSBOs beside it). `LightSet::updateVideoMemory()` writes only the recorded frame's buffer,
