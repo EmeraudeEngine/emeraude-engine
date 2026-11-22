@@ -255,8 +255,20 @@ RIDES with a moving camera (a car's cabin seen from its cockpit) carries its who
 | 13 m/s, chase → cockpit | 0.68, gradient 8.94 → 8.62 (before the fix: 16.9, gradient 3.55 → 4.7) | 0.70-0.90 |
 | 13 m/s, cockpit → bonnet | 18.8, gradient 12.03 → 5.85: the ONE frame without motion blur, then the road's smear | 13.6-18.7 |
 
-Not exercised on Linux: the scene switch (`!sameScene`), which the item `temporal-history-smear-after-scene-switch`
-saw once on Windows.
+**The three OS** (2026-11-22, engine 0afa7ad5, the same captures; 0 VUID and a clean exit everywhere):
+
+| | The mark | The marked frame |
+|---|---|---|
+| Windows (RTX 3500 Ada, MSVC 14.44, Release and Debug 0 warning) | one frame, parked and at 13.07 m/s | sharp; 1.18 / 255 from the next parked (the following ones 1.15-0.90), 1.00 at speed (0.99-1.27) |
+| macOS (M6, MoltenVK 1.4.2, Release 0 warning, `-Wdocumentation` clean) | one frame, parked and at 13.68 m/s | sharp; 2.71 / 255 from the next parked (2.48-1.89: the exposure adapting, 60 ms a frame), 1.22 at speed (1.21-1.48) |
+
+The differences from one frame to the next are each machine's own floor for that view (the auto-exposure adapts after
+a cut: the two cameras do not frame the same light), never the streak of before (16.9).
+
+**The scene switch** (`!sameScene`): on Windows, where the smear had been seen once in October, `--load-demo default`
+then `Stage.loadDemo("sponza")` (answered after 3.54 s), ten screenshots in a row and one 6 s later: all sharp. The
+first frame of the new scene cannot be captured by `temporalCapture` (the load outlasts any capture), so its mark was
+read on no OS: the switch is covered by construction, and by those eleven frames.
 
 References: § 06 (the TAA resolve), § 16 (the anti-lag), § 41
 (the FAST forms), graphics doc 42 § The environment.
