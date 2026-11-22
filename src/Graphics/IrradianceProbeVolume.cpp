@@ -32,6 +32,7 @@
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/StarMaskGLSL.hpp"
+#include "Graphics/Effects/Shared/TracedLightGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
 
 /* STL inclusions. */
@@ -171,7 +172,7 @@ float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
 }
 
-)GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL EMEN_STAR_MASK_GLSL R"GLSL(
+)GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL EMEN_TRACED_LIGHT_GLSL EMEN_STAR_MASK_GLSL R"GLSL(
 /* Direct IRRADIANCE at a hit (no albedo): the RTGI bounce shading, light for light. Only the
  * lights that cast shadows in the raster get a shadow ray — the others shine through geometry on
  * screen and the cached light must match the image. */
@@ -182,7 +183,7 @@ vec3 computeDirectIrradiance (vec3 hitPos, vec3 hitNormal)
 
 	for (uint i = 0u; i < lightCount; i++)
 	{
-		uint base = i * 4u;
+		uint base = i * EmTracedLightStride;
 		vec4 colorIntensity = lightSSBO.lights[base];
 		vec4 posRadius = lightSSBO.lights[base + 1u];
 		vec4 dirType = lightSSBO.lights[base + 2u];
@@ -236,6 +237,9 @@ vec3 computeDirectIrradiance (vec3 hitPos, vec3 hitNormal)
 		{
 			continue;
 		}
+
+		/* The light's colour projection (a gobo), as the raster light pass applies it. */
+		lightColor *= emTracedLightProjection(base, hitPos, -L);
 
 		float visibility = 1.0;
 

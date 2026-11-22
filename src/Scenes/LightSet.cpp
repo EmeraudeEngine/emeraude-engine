@@ -29,6 +29,7 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstddef>
 #include <functional>
 #include <sstream>
@@ -900,8 +901,16 @@ namespace EmEn::Scenes
 					entry.outerCosAngle = 0.0F;
 					/* Raster shadow-casting flag: RT effects only trace shadow rays for lights that
 					 * cast shadows in the raster passes, so reflections/GI match the rendered scene. */
-					entry.pad0 = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
-					entry.pad1 = 0.0F;
+					entry.castsShadow = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
+					/* NOTE: A directional light's colour projection is not carried to the traced lanes (its matrix depends
+					 * on the block layout, and a cascaded light does not project in the raster either). The entry lives in
+					 * mapped memory: every field is written. */
+					entry.projectionKind = NoProjection;
+					entry.projectionIndex = 0.0F;
+					entry.projectionBoost = 0.0F;
+					entry.unused0 = 0.0F;
+					entry.unused1 = 0.0F;
+					entry.projectionMatrix.fill(0.0F);
 
 					lightIndex++;
 				}
@@ -958,8 +967,17 @@ namespace EmEn::Scenes
 					entry.outerCosAngle = 0.0F;
 					/* Raster shadow-casting flag: RT effects only trace shadow rays for lights that
 					 * cast shadows in the raster passes, so reflections/GI match the rendered scene. */
-					entry.pad0 = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
-					entry.pad1 = 0.0F;
+					entry.castsShadow = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
+
+					/* The colour projection, a cubemap sampled along the light → point direction. An ANIMATED one (a frame
+					 * of a cubemap array) is not carried: the traced lanes do not bind that table. */
+					if ( std::bit_cast< uint32_t >(block[PointLight::ColorProjectionIndexOffset]) != Component::AbstractLightEmitter::NoColorProjectionTexture &&
+						std::bit_cast< uint32_t >(block[PointLight::ColorProjectionFrameIndexOffset]) == Component::AbstractLightEmitter::NoColorProjectionTexture )
+					{
+						entry.projectionKind = CubemapProjection;
+						entry.projectionIndex = block[PointLight::ColorProjectionIndexOffset];
+						entry.projectionBoost = block[PointLight::ColorProjectionBoostOffset];
+					}
 				}
 
 				/* Spotlights (type = 2). */
@@ -999,8 +1017,18 @@ namespace EmEn::Scenes
 					entry.outerCosAngle = block[SpotLight::OuterCosAngleOffset];
 					/* Raster shadow-casting flag: RT effects only trace shadow rays for lights that
 					 * cast shadows in the raster passes, so reflections/GI match the rendered scene. */
-					entry.pad0 = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
-					entry.pad1 = 0.0F;
+					entry.castsShadow = light->isShadowCastingEnabled() ? 1.0F : 0.0F;
+
+					/* The colour projection, a picture through the light's matrix: the very matrix, index and boost the
+					 * raster light pass reads in this published block. */
+					if ( std::bit_cast< uint32_t >(block[SpotLight::ColorProjectionIndexOffset]) != Component::AbstractLightEmitter::NoColorProjectionTexture )
+					{
+						entry.projectionKind = PictureProjection;
+						entry.projectionIndex = block[SpotLight::ColorProjectionIndexOffset];
+						entry.projectionBoost = block[SpotLight::ColorProjectionBoostOffset];
+
+						std::copy_n(std::next(block.cbegin(), SpotLight::LightMatrixOffset), entry.projectionMatrix.size(), entry.projectionMatrix.begin());
+					}
 				}
 
 				/* Line lights (type = 3): ONE entry per segment of the published polyline — pos = its start, dir = start →
@@ -1054,8 +1082,8 @@ namespace EmEn::Scenes
 						entry.type = 3.0F;
 						entry.innerCosAngle = line.tubeRadius;
 						entry.outerCosAngle = 0.0F;
-						entry.pad0 = 0.0F;
-						entry.pad1 = 0.0F;
+						entry.castsShadow = 0.0F;
+						entry.projectionKind = NoProjection;
 					}
 				}
 

@@ -41,6 +41,7 @@
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/StarMaskGLSL.hpp"
+#include "Graphics/Effects/Shared/TracedLightGLSL.hpp"
 #include "Graphics/IndirectPostProcessEffect.hpp"
 #include "Math/Vector.hpp"
 #include "PrimaryServices.hpp"
@@ -379,7 +380,7 @@ float shadowRayVisibility (vec3 origin, vec3 direction, float maxT)
 	return rayQueryGetIntersectionTypeEXT(shadowQuery, true) == gl_RayQueryCommittedIntersectionNoneEXT ? 1.0 : 0.0;
 }
 
-)GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL R"GLSL(
+)GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL EMEN_TRACED_LIGHT_GLSL R"GLSL(
 /* Compute direct lighting at hit point (Lambert diffuse over all scene lights).
  * lightCount is the frame's RT light count (skyParams.w of the frame block, RayTracingFrame::lightCount), capped at 16.
  * Each contribution is gated by a shadow ray: without the occlusion test, every hit
@@ -391,7 +392,7 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 
 	for (uint i = 0u; i < lightCount; i++)
 	{
-		uint base = i * 4u;
+		uint base = i * EmTracedLightStride;
 		vec4 colorIntensity = lightSSBO.lights[base];
 		vec4 posRadius = lightSSBO.lights[base + 1u];
 		vec4 dirType = lightSSBO.lights[base + 2u];
@@ -452,6 +453,10 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, uint lightCount)
 		{
 			continue;
 		}
+
+		/* The light's colour projection (a gobo), as the raster light pass applies it: the bounce carries the light
+		 * the pattern lets through, not the light's full cone. */
+		lightColor *= emTracedLightProjection(base, hitPos, -L);
 
 		float visibility = 1.0;
 
@@ -557,7 +562,7 @@ void main()
 	 * ⚠️ Until 2026-09-25 it walked min(SSBO length, 16) slots whatever the count: the packer never clears the tail,
 	 * so a light disabled since (the sun course at dusk shifts the later lights down one slot) left a stale copy
 	 * counted twice. */
-	uint lightCount = min(min(uint(skyParams.w + 0.5), 16u), uint(lightSSBO.lights.length()) / 4u);
+	uint lightCount = min(min(uint(skyParams.w + 0.5), 16u), uint(lightSSBO.lights.length()) / EmTracedLightStride);
 
 	/* Accumulate indirect radiance. */
 	vec3 indirectLight = vec3(0.0);

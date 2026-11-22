@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <atomic>
+#include <array>
 #include <cstdint>
 #include <iosfwd>
 #include <iterator> // IWYU pragma: keep (std::pair: IWYU adds then removes it across the TUs, libstdc++ mapping)
@@ -109,15 +110,32 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief GPU-side light data for RT shaders (flat, type-unified).
-			 * @note Layout matches std430. 64 bytes per light.
+			 * @note Layout matches std430: nine vec4, 144 bytes per light. ⚠️ The traced shaders read it through
+			 * `EmTracedLightStride` and `emTracedLightProjection()` (Graphics/Effects/Shared/TracedLightGLSL.hpp): the two
+			 * stay in lockstep.
+			 * @note The projection fields carry a light's colour projection (a gobo) as the raster light pass applies it,
+			 * so that a traced hit point is lit through the same pattern (2026-11-22). Not carried: a directional light's
+			 * projection and a point light's animated cubemap.
 			 */
 			struct GPULightData
 			{
 				float colorR, colorG, colorB, intensity;
 				float posX, posY, posZ, radius;
 				float dirX, dirY, dirZ, type;
-				float innerCosAngle, outerCosAngle, pad0, pad1;
+				/** castsShadow: 1 when the light casts a shadow in the raster passes. projectionKind: a ProjectionKind. */
+				float innerCosAngle, outerCosAngle, castsShadow, projectionKind;
+				/** projectionIndex: the bindless index of the projected texture, as uint bits. */
+				float projectionIndex, projectionBoost, unused0, unused1;
+				/** The light's matrix, world → projection coordinates, column by column (a 2D projection only). */
+				std::array< float, 16 > projectionMatrix;
 			};
+
+			static_assert(sizeof(GPULightData) == 144, "GPULightData is nine vec4 (144 bytes): EmTracedLightStride in TracedLightGLSL.hpp.");
+
+			/** @brief What GPULightData::projectionKind holds: how the traced shaders sample a light's colour projection. */
+			static constexpr float NoProjection{0.0F};
+			static constexpr float PictureProjection{1.0F}; /**< A 2D picture through the light's matrix (a spot light). */
+			static constexpr float CubemapProjection{2.0F}; /**< A cubemap along the light → point direction (a point light). */
 
 			/* Default variables. */
 			static constexpr auto DefaultLightPercentToAmbient{0.1F};

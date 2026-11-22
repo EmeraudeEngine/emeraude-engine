@@ -63,6 +63,25 @@ render thread the moment a barrel exploded):
   directional light's state as read by VolumetricClouds, VolumetricLight, VolumetricScattering, AtmosphericFog and
   LensFlare (`mainDirectionalLight()` — enabled, direction and illuminance live; engine item
   `effects-read-the-live-main-light`).
+- **A traced light entry carries the light's COLOUR PROJECTION** (2026-11-22, owner decision: "the pattern in the traced
+  effects"). `LightSet::GPULightData` is nine vec4 (144 bytes, asserted): the four of before, then the projection —
+  its kind (`NoProjection`, `PictureProjection`, `CubemapProjection`, in the fourth vec4's last slot), the bindless
+  index of the texture and the boost, and the light's matrix (world → projection coordinates). They are copied from
+  the published block: for a SPOT the very matrix, index and boost the raster light pass reads; for a POINT light its
+  cubemap. RTR, RTGI and the irradiance probes read the list through ONE GLSL chunk,
+  `Graphics/Effects/Shared/TracedLightGLSL.hpp`: `EmTracedLightStride` (9) and
+  `emTracedLightProjection(base, litPosition, lightToPoint)`, the raster's `projectionColor` term for term (the base
+  mip level: a ray has no screen derivative). ⚠️ The structure and the chunk stay in lockstep. **Why:** the traced
+  lanes shaded their hit points with a projected light's FULL cone. A headlight whose dipped-beam pattern lets 2.4 %
+  of its cone through (14 000 cd at its peak, 744 lm, where the full cone would be 31 400 lm) lit the reflections 42
+  times too much: on a downstream testbed's car at night, the bonnet's reflection read 50.95 / 255 with the beam and
+  1.20 with the Reflections slot off, against 9.72 without the beam — the reflections alone, RTR's hit shading. With
+  the projection carried: 18.68 with the beam, 13.98 without, in one launch (Linux, RTX 3070 Ti, RT lane, a pinned
+  exposure, validation on, 0 VUID). The traced zones of the GPU profiler do not move beyond 0.05 ms on one pair of
+  launches at 1280×720 (RTR trace 0.50 → 0.54 ms, RTGI trace 1.24 → 1.31, the probes 0.61 → 0.64). **Not carried**: a
+  directional light's projection (its matrix depends on the block layout, and a cascaded light does not project in
+  the raster either) and a point light's ANIMATED cubemap (the traced lanes do not bind the cubemap arrays): those
+  entries say `NoProjection` and keep the light's full emission, as before.
 - **The RT light SSBO is one buffer PER FRAME IN FLIGHT, filled from the PUBLISHED state** (2026-11-11, owner decision;
   `LightSet::RTLightBuffer(frameIndex)`, bound by `RayTracing::bindFrame()` for the frame being rendered like
   the three `SceneMetaData` SSBOs beside it). `LightSet::updateVideoMemory()` writes only the recorded frame's buffer,

@@ -7123,6 +7123,17 @@ never re-evaluates it; before, the windowed runs were re-evaluated at 30 s too a
 runs with the activity: exit code 0, 0.34 and 0.47 s after `Core.shutdown()`, 0 `VUID-`; Release and Debug build with
 0 warning under `-Wdocumentation -Werror`.
 
+Verified again from the pushed tree (engine `53b0ecc6`, the same Mac): 97 / `97R` / 59.89-60.05 cycles a second from
+35 to 60 s, the check-in App Nap line alone over the 94.7 s of the instance, and the frame rate with it — 54 to 59
+frames a second in that scene, where the demoted process drew about 16.
+
+**Windows has no such demotion** (Windows peer, 2026-11-22, RTX 3500 Ada, Windows 11, engine `53b0ecc6`, the same scene
+window-less for 120 s, validation layer on): 59.95-60.06 cycles a second at every 10 s sample from 30 to 120 s, the
+priority class NORMAL throughout, no power-throttling policy on the process (`GetProcessInformation(ProcessPowerThrottling)`,
+which shows the explicit efficiency mode only — the rate is the evidence), about 1.05 cores of CPU, exit 0, 0 `VUID-`.
+Linux neither (RTX 3070 Ti, the same scene window-less): 600 cycles in 10.00 s, 59.98 a second, from the 34th to the
+44th second of the process.
+
 ⚠️ **The activity is invisible to `pmset -g assertions`**: no line names a window-less process, and a windowed one
 lists the display assertion alone ("Emeraude engine: a window is open"). It is the "allowing idle system sleep" form:
 the machine still sleeps on the user's idle timers. Its proof is the App Nap line that is NOT in `log show`

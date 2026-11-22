@@ -33,6 +33,7 @@
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
+#include "Graphics/Effects/Shared/TracedLightGLSL.hpp"
 #include "Graphics/IndirectPostProcessEffect.hpp"
 #include "Graphics/RayTracingFrame.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
@@ -124,11 +125,12 @@ layout(set = 0, binding = 2) readonly buffer MaterialData
 } materialSSBO;
 
 /* Light SSBO (set 0, binding 3).
- * Each light = 4 vec4 (64 bytes):
+ * Each light = EmTracedLightStride vec4 (Graphics/Effects/Shared/TracedLightGLSL.hpp states the layout):
  *   vec4[0]: colorR, colorG, colorB, intensity
  *   vec4[1]: posX, posY, posZ, radius
- *   vec4[2]: dirX, dirY, dirZ, type (0=dir, 1=point, 2=spot)
- *   vec4[3]: innerCosAngle, outerCosAngle, pad, pad */
+ *   vec4[2]: dirX, dirY, dirZ, type (0=dir, 1=point, 2=spot, 3=line segment)
+ *   vec4[3]: innerCosAngle, outerCosAngle, casts a shadow, projection kind
+ *   vec4[4-8]: the colour projection (texture, boost, the light's matrix) */
 layout(set = 0, binding = 3) readonly buffer LightData
 {
 	vec4 lights[];
@@ -485,7 +487,7 @@ float specularLobeVisibility (vec3 origin, vec3 mirrorDir, float coneTan, float 
 	return visibility / float(SpecularOcclusionSamples);
 }
 
-)GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL R"GLSL(
+)GLSL" EMEN_LIGHT_FALLOFF_GLSL EMEN_LINE_LIGHT_GLSL EMEN_TRACED_LIGHT_GLSL R"GLSL(
 /* Compute direct lighting at the reflection hit point (Lambert diffuse over all scene lights).
  * Each contribution is gated by a shadow ray: without the occlusion test, every hit point
  * received the light straight through walls — shadows simply did not exist INSIDE the
@@ -499,7 +501,7 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, vec3 V, vec3 albedo, fl
 
 	for (uint i = 0u; i < lightCount; i++)
 	{
-		uint base = i * 4u;
+		uint base = i * EmTracedLightStride;
 		vec4 colorIntensity = lightSSBO.lights[base];
 		vec4 posRadius = lightSSBO.lights[base + 1u];
 		vec4 dirType = lightSSBO.lights[base + 2u];
@@ -576,6 +578,10 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, vec3 V, vec3 albedo, fl
 		{
 			continue;
 		}
+
+		/* The light's colour projection (a gobo), as the raster light pass applies it: a reflected surface is lit
+		 * through the same pattern as the rendered one. */
+		lightColor *= emTracedLightProjection(base, hitPos, -L);
 
 		float visibility = 1.0;
 
