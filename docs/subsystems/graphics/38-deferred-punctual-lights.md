@@ -177,8 +177,14 @@ batch, per light. The resolve now samples the projection itself — the forward 
   | The two lights as forward passes (before) | 2.50 → 3.97 ms (+1.47) | 8.5 → 10.0 ms (+1.5) |
   | The two lights in the resolve | 2.51 → 2.56 ms (+0.05) | 8.5 → 8.6 ms (+0.09) |
 
-  `DeferredLights` itself 0.15 → 0.17 ms for 142 → 144 resolved lights. On an Apple M6 (MoltenVK) the forward passes
-  took the frame from 18 to 24 ms (55 → 41 frames a second).
+  `DeferredLights` itself 0.15 → 0.17 ms for 142 → 144 resolved lights.
+- **macOS** (Apple M6, MoltenVK, the screen-space lane, engine `2e8067e2`, AppleClang Release and Debug 0 warning,
+  validation on, 0 VUID, no shader refused; the bindless table there is cut to the device budget, 956 2D slots): the
+  same boarded view ran at 41 frames a second with the two lights as forward passes against 55 with the car empty;
+  with the resolve, 56-57. The picture against the forward passes, nine captures: 0.11-0.51 / 255 between the two
+  states, inside the 0.01-0.55 of one state; no pixel beyond 12 / 255 on the road the beams light, and the signed
+  mean there is −0.001. (With the resolve off, every point and spot light forward, that machine draws 18 frames a
+  second.)
 - **The picture** against the forward passes (the reference), one launch, `setDeferredPunctualLights(1 | 0 | 1)`, a
   pinned exposure, three captures a state, three views, validation on, 0 VUID: the mean difference between the two
   states sits inside the difference between two captures of ONE state (bonnet view 0.59-1.56 against 0.24-1.52 /

@@ -2736,19 +2736,25 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			Graphics::Compute::IBLBaker::StarMask environmentStarMask () const noexcept;
 
-		private:
-
 			/**
-			 * @brief Counts one temporal discontinuity of the scene (a background swap, an IBL replaced at once), published
-			 * with the next render state slot (temporalDiscontinuityEpoch()).
-			 * @note Any thread. Private on purpose (owner decision 2026-11-03): game code gets a public call only with a
-			 * real case.
+			 * @brief Counts one temporal discontinuity of the scene — its lighting just stepped — published with the next
+			 * render state slot (temporalDiscontinuityEpoch()): the renderer marks the 25 frames that follow
+			 * (FrameContext::temporalDiscontinuity) and the temporal integrators converge at once instead of over their
+			 * history (graphics doc 13-12 § 43).
+			 * @note The scene raises it itself for a background swap and an IBL replaced at once, the light set for a light
+			 * added, removed, switched or stepped. PUBLIC since 2026-11-22 (owner decision) for the emission the engine cannot
+			 * see step: an EMISSIVE MATERIAL switched by the code that owns it (a vehicle's brake lamps, a sign that lights
+			 * up), which is no light of the light set. Call it on the logic cycle that writes the step, once per step:
+			 * every marked frame runs TAA's large-change test and the GI denoiser's pooled reset over the whole picture.
+			 * @note Any thread.
 			 */
 			void
 			raiseTemporalDiscontinuity () noexcept
 			{
 				m_temporalDiscontinuityEpoch.fetch_add(1, std::memory_order_relaxed);
 			}
+
+		private:
 
 			/* ============================================================
 			 * [PRIVATE: OBSERVER]

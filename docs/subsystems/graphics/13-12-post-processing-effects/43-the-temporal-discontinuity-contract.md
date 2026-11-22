@@ -30,6 +30,16 @@ raise, the raising frame included.
 | A picture sky's IBL baked (it replaces the previous one at once) | `Scene::updateEnvironmentIBL()` | logic |
 | The sky recorded an immediate cycle THIS frame (the frame its direct light jumps) | `SkyEnvironment::recordedImmediateCycle()`, read by `renderSkyAtmosphere()` | render |
 | Another scene than the previous frame's | `latchTemporalDiscontinuity()` (a `weak_ptr`'s control block: a new scene at a reused address never compares equal) | render |
+| An emission the engine cannot see step: an EMISSIVE MATERIAL switched by the code that owns it (a vehicle's brake lamps, a sign) | `Scene::raiseTemporalDiscontinuity()`, PUBLIC since 2026-11-22 (owner decision: "an engine call, raised by the car"), called by that code on the logic cycle that writes the step | any |
+
+**The public raise** (2026-11-22). `Scene::raiseTemporalDiscontinuity()` was private "until a real case" (owner,
+2026-11-03); the case came with a car's brake lamps, emissive materials and no light of the light set. Measured on a
+downstream testbed (Linux, RTX 3070 Ti, the RT lane, 9 ms a frame, a fixed pose behind the parked car by night, the
+count of red pixels around the lamps, 60 frames recorded across the switch): without the raise the glow on the body
+and the road reaches 7 % of its final extent on the first frame after the brake and 37 % sixty frames later, and it
+is still there sixty frames after the release; with it, 62 % on the first frame and 78 % sixty frames later, and the
+release reads its final level on the FIRST frame. 25 frames marked at each switch, 0 VUID. ⚠️ One raise per step, on
+the cycle that writes it: every marked frame pays TAA's large-change test and the denoiser's pooled reset.
 
 **The transport: a monotonic epoch** (owner decision 2026-11-03). `Scene::publishStateForRendering()` writes, with each
 render state slot, the scene's own counter plus the light set's (`Scene::temporalDiscontinuityEpoch(slot)`); both are
