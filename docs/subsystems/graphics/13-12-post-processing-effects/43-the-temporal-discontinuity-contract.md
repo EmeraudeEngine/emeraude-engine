@@ -40,6 +40,14 @@ and the road reaches 7 % of its final extent on the first frame after the brake 
 is still there sixty frames after the release; with it, 62 % on the first frame and 78 % sixty frames later, and the
 release reads its final level on the FIRST frame. 25 frames marked at each switch, 0 VUID. ⚠️ One raise per step, on
 the cycle that writes it: every marked frame pays TAA's large-change test and the denoiser's pooled reset.
+Three OS (engine `01b3984d`, MSVC and AppleClang Release and Debug 0 warning, 0 VUID). Windows (RTX 3500 Ada, the RT
+lane): 25 marked frames from the first frame after each switch; on the press the red pixels jump × 3.2 on that frame,
+on the release they read their idle level from it on. macOS (Apple M6, the screen-space lane, 17 ms a frame): before
+the raise the lamps' OWN pixels faded for 2.3 s after the release (median red 255 for 0.17 s, 127 at 0.88 s, 10 at
+2.26 s); with it they read 7 / 255 on the first frame (the idle is 4), and on the press 244 on the first frame, the
+halo at 82 % of its steady level. ⚠️ A capture also shows marks nobody asked for (frames before the command, a run
+of 25 three seconds later): another producer of the scene, most likely its traffic signals switching colour (a
+light's emission stepping per channel) — the JSON does not say who raised a mark.
 
 **The transport: a monotonic epoch** (owner decision 2026-11-03). `Scene::publishStateForRendering()` writes, with each
 render state slot, the scene's own counter plus the light set's (`Scene::temporalDiscontinuityEpoch(slot)`); both are

@@ -185,6 +185,11 @@ batch, per light. The resolve now samples the projection itself — the forward 
   states, inside the 0.01-0.55 of one state; no pixel beyond 12 / 255 on the road the beams light, and the signed
   mean there is −0.001. (With the resolve off, every point and spot light forward, that machine draws 18 frames a
   second.)
+- **Windows** (RTX 3500 Ada, the RT lane, engine `2e8067e2`, MSVC Release and Debug 0 warning, validation on, 0 VUID,
+  no shader refused): 453 → 455 eligible once boarded; the picture against the forward passes 0.71-1.21 / 255 between
+  the two states against 0.33-0.85 inside one, the excess being a traffic signal that turned from red to green
+  between two states; what differs in the closest pair is the wind-blown tree, the far lights, one-pixel edges — on
+  the beams' footprint only scattered single-pixel speckle, the same grain as between two captures of one state.
 - **The picture** against the forward passes (the reference), one launch, `setDeferredPunctualLights(1 | 0 | 1)`, a
   pinned exposure, three captures a state, three views, validation on, 0 VUID: the mean difference between the two
   states sits inside the difference between two captures of ONE state (bonnet view 0.59-1.56 against 0.24-1.52 /

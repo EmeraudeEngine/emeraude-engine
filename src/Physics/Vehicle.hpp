@@ -126,7 +126,7 @@ namespace EmEn::Physics
 	};
 
 	/**
-	 * @brief The vehicle's electronic aids, each wheel on its own (both off by default: the raw vehicle).
+	 * @brief The vehicle's electronic aids (all off by default: the raw vehicle).
 	 * @note Each one CAPS a wheel's torque at a share of what its tyre can transmit: the peak of its longitudinal
 	 * friction curve × its load (the last step's, WheelState::load) × its radius. The share stays under the tyre's
 	 * SLIDING torque (Jolt's curves: 1.0 / 1.2 = 0.83 of the peak), so a wheel past its peak slip — which then gives less
@@ -143,8 +143,14 @@ namespace EmEn::Physics
 		float brakeGripShare{0.8F};
 		/** The anti-lock brakes stay off below this ground speed at the wheel (m/s): the car stops and holds. */
 		float minimumSpeed{1.0F};
+		/** The hold at a standstill engages under this ground speed of the chassis along its forward axis (m/s). */
+		float holdSpeed{0.5F};
 		bool tractionControl{false};
 		bool antiLockBrakes{false};
+		/** Hold at a standstill (an "auto hold"): without a drive input, once the chassis is slower than holdSpeed, the
+		 * vehicle applies its own SERVICE brakes in full, on every wheel, and keeps them until a drive input comes
+		 * (VehicleController::isHoldingAtStandstill()). Not a cap like the two others: a brake nobody presses. */
+		bool holdAtStandstill{false};
 	};
 
 	/**
@@ -341,6 +347,18 @@ namespace EmEn::Physics
 			}
 
 			/**
+			 * @brief Returns whether the vehicle holds itself at a standstill: its service brakes applied by the aid
+			 * (VehicleAidSettings::holdAtStandstill), as the last step decided. A consumer's brake lights follow it.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isHoldingAtStandstill () const noexcept
+			{
+				return m_holding;
+			}
+
+			/**
 			 * @brief Returns whether the driver's inputs need the chassis awake: a throttle, or a steering the wheels
 			 * have not reached yet (a parked car steered shows its wheels turned).
 			 * @return bool
@@ -399,5 +417,7 @@ namespace EmEn::Physics
 			int32_t m_gear{0};
 			/** Whether the Ackermann geometry applies (VehicleSettings::ackermann > 0 and a usable axle, setup()). */
 			bool m_ackermann{false};
+			/** Whether the hold at a standstill has the service brakes (isHoldingAtStandstill()). */
+			bool m_holding{false};
 	};
 }

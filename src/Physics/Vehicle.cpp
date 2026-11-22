@@ -135,7 +135,7 @@ namespace EmEn::Physics
 			return std::isfinite(share) && share > 0.0F && share <= 1.0F;
 		};
 
-		if ( !validShare(aids.tractionGripShare) || !validShare(aids.brakeGripShare) || !isPositive(aids.minimumSpeed) )
+		if ( !validShare(aids.tractionGripShare) || !validShare(aids.brakeGripShare) || !isPositive(aids.minimumSpeed) || !isPositive(aids.holdSpeed) )
 		{
 			return false;
 		}
@@ -506,11 +506,26 @@ namespace EmEn::Physics
 			m_wheels[differential.rightWheel].driveTorque += torque * (1.0F - leftShare);
 		}
 
+		/* The hold at a standstill: without a drive input, once the chassis is slower than the aid's speed, the vehicle
+		 * applies its own service brakes in full and keeps them until a drive input comes (an exact test on purpose:
+		 * the input is a clamped command, zero is "no pedal"). The anti-lock brakes are off at that speed: the wheels
+		 * hold. */
+		if ( !settings.aids.holdAtStandstill || m_forward != 0.0F )
+		{
+			m_holding = false;
+		}
+		else if ( std::abs(forwardSpeed) < settings.aids.holdSpeed )
+		{
+			m_holding = true;
+		}
+
+		const auto serviceBrake = m_holding ? 1.0F : m_brake;
+
 		Base::StaticVector< float, 8 > serviceBrakes;
 
 		for ( size_t index = 0; index < m_wheels.size(); ++index )
 		{
-			serviceBrakes.push_back(m_brake * settings.wheels[index].maxBrakeTorque);
+			serviceBrakes.push_back(serviceBrake * settings.wheels[index].maxBrakeTorque);
 		}
 
 		this->applyAids(serviceBrakes);
