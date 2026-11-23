@@ -1,8 +1,8 @@
 ---
 id: overlay-transition-buffer-recreated-at-every-resize
-title: A hidden overlay surface's transition buffer is recreated at every resize, with a warning that calls equal sizes divergent
-status: open
-priority: high
+title: A transition buffer abandoned on a size flip is thrown away and reallocated (parked; the hidden-surface case is fixed)
+status: parked
+priority: low
 scope: src/Overlay/Surface.cpp (the transition buffer resize, around the "diverges from the content provider's painted size" warning)
 opened: 2026-11-18
 tags: [overlay, resize, log-noise]
@@ -59,7 +59,22 @@ rebuild at its first show, and the other hidden one 0. No overlay warning or err
 warnings of the run were a visible surface following the resizes with really different sizes). A hidden surface opened
 after the storm appears at the right size.
 
-## What remains
+## Parked (2026-11-23): not treated, on purpose
+
+The part that hurt is fixed: a hidden surface no longer follows size changes, the warning no longer calls a missing buffer a
+divergence, and the downstream application no longer hides a surface with a tiny geometry (measured above). What is left is
+an optimisation, and the decision is **not to do it**:
+
+- The only case that produced the allocations — a *visible* surface oscillating between two tiny sizes — no longer comes
+  from the downstream application. It stays possible only for a caller that hides a surface with a tiny geometry, which the
+  creation contract forbids (`docs/subsystems/overlay/05-development-patterns.md`).
+- A normal window drag has nothing to reuse: every size is new, so no abandoned buffer ever matches.
+- Keeping an abandoned buffer reopens the risk that `retire()` guards (a late frame at the abandoned size committed: the view
+  shown at a wrong size, or frozen, 2026-10-14), and holds one more buffer per surface (~27 MB at 3456x1950 px).
+
+Reopen it if a caller again flips a visible surface between two sizes and the allocations show in a journal.
+
+## If it is ever reopened
 
 1. Optional, owner to decide: on step 2 above, keep the abandoned buffer (not committable) instead of retiring it, so
    a request at that same size re-arms it without an allocation; and reuse a transition buffer that already has the
