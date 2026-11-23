@@ -51,12 +51,21 @@ Done on 2026-11-19 too: the trace is split. A missing (invalid) transition buffe
 buffer: creating it at the content provider's painted size"); the "diverges" Warning is kept for a VALID buffer of
 another size, with both real sizes.
 
+Done on 2026-11-23: the downstream application now creates its preloaded views hidden (not by a tiny geometry) and
+shows them only when needed, and the resize storm was re-run (macOS, Release, 400 window resizes in 8 s, the views never
+shown, a control surface created the former way — `[0, 0, 0.001, 0.001]`, left visible — next to them). The control
+committed **76** transition buffers (26 "came back to its active size"); a hidden surface committed **1**, its single
+rebuild at its first show, and the other hidden one 0. No overlay warning or error names a hidden surface (all 107
+warnings of the run were a visible surface following the resizes with really different sizes). A hidden surface opened
+after the storm appears at the right size.
+
 ## What remains
 
 1. Optional, owner to decide: on step 2 above, keep the abandoned buffer (not committable) instead of retiring it, so
    a request at that same size re-arms it without an allocation; and reuse a transition buffer that already has the
-   target size in `updatePhysicalRepresentation()`.
-2. Re-run a resize storm once the downstream views are hidden by `hide()`: no rebuild of a hidden surface, no warning.
+   target size in `updatePhysicalRepresentation()`. The case that produced the allocations (a visible surface that
+   oscillates between two tiny sizes) no longer comes from the downstream application; it remains for any caller that
+   hides a surface with a tiny geometry (the contract is in `docs/subsystems/overlay/05-development-patterns.md`).
 
 ## References
 
