@@ -68,6 +68,7 @@ namespace
 
 	/* ---- GLSL Shader Sources ---- */
 
+	/* ⚠️ The `maxDistance * 10.0` of the distance fade below is RTContactShadows::FadeRangeFactor: change both. */
 	constexpr auto RTShadowFragmentShader = R"GLSL(
 #version 460
 

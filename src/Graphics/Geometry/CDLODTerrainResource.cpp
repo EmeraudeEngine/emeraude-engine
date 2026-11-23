@@ -28,16 +28,21 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <functional>
 #include <limits>
 #include <numbers>
+#include <span>
 #include <stop_token>
 #include <utility>
+#include <vector>
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/Effects/Lighting/RTAO.hpp"
+#include "Graphics/Effects/Lighting/RTContactShadows.hpp"
 #include "Graphics/Frustum.hpp"
 #include "Graphics/Geometry/HeightfieldSurface.hpp"
 #include "Graphics/Geometry/Interface.hpp"
@@ -51,6 +56,7 @@
 #include "Settings.hpp"
 #include "StaticVector.hpp"
 #include "Tracer.hpp"
+#include "VertexFactory/NestedLattice.hpp"
 #include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
@@ -181,6 +187,88 @@ void main ()
 		}
 
 		return segments;
+	}
+
+	/** @brief The windows of a ray-tracing proxy, finest first (Base::VertexFactory::buildNestedLattice()). */
+	using ProxyWindows = EmEn::Base::StaticVector< EmEn::Base::VertexFactory::NestedLatticeWindow, EmEn::Base::VertexFactory::MaxNestedLatticeLevels >;
+
+	/** @brief A cell of a proxy window: its column and its row, in terrain cells from the window's first point. */
+	struct ProxyCell final
+	{
+		uint32_t x{0};
+		uint32_t z{0};
+	};
+
+	/**
+	 * @brief Returns the cell of a proxy window a point falls in, kept inside the window.
+	 * @param offset Where the point stands from the window's first point, in terrain cells on X and on Z (a value that
+	 * is no number gives the first cell).
+	 * @param cells The side of the window, in terrain cells.
+	 * @return ProxyCell Each coordinate in [0, cells].
+	 */
+	[[nodiscard]]
+	ProxyCell
+	proxyCellOf (const EmEn::Base::Math::Vector< 2, float > & offset, uint32_t cells) noexcept
+	{
+		const auto clamped = [cells] (float value) noexcept -> uint32_t {
+			/* Written so that a NaN takes the first branch. */
+			if ( !(value > 0.0F) )
+			{
+				return 0;
+			}
+
+			return value >= static_cast< float >(cells) ? cells : static_cast< uint32_t >(value);
+		};
+
+		return {.x = clamped(offset[EmEn::Base::Math::X]), .z = clamped(offset[EmEn::Base::Math::Y])};
+	}
+
+	/**
+	 * @brief Lays the windows of a ray-tracing proxy around a camera cell, finest first, in the cells of its finest level.
+	 * @note Without a detail window (`detailLevels` 0) the proxy is ONE window, in cells of `step` terrain cells. With
+	 * one, the unit is the terrain cell: window k is `detailCells << k` cells wide, centred on the multiple of
+	 * 2^(k + 1) cells nearest to the camera and kept inside the proxy window, and the last window is the proxy window
+	 * itself. Every window is then made of whole cells of the level around it, lies inside the next one (they are
+	 * centred within 3 × 2^k cells of one another and each is twice as wide), and a window pushed against the proxy
+	 * window's border has every wider one pushed against it too — what buildNestedLattice() requires.
+	 * @pre CDLODTerrainResource::planRayTracingProxy()'s plan: `cells` a multiple of `step`, `step` = 2^`detailLevels`
+	 * below 2^16 when there is a detail window, `detailCells` a multiple of 4, at least 8, and
+	 * `detailCells << (detailLevels - 1)` at most half of `cells`.
+	 * @param plan The plan.
+	 * @param camera The camera's cell in the proxy window, each coordinate in [0, plan.cells].
+	 * @return ProxyWindows
+	 */
+	[[nodiscard]]
+	ProxyWindows
+	layProxyWindows (const EmEn::Graphics::Geometry::CDLODRayTracingProxyPlan & plan, const ProxyCell & camera) noexcept
+	{
+		ProxyWindows windows;
+
+		if ( plan.detailLevels == 0 )
+		{
+			windows.push_back({.firstX = 0, .firstY = 0, .cells = plan.cells / plan.step});
+
+			return windows;
+		}
+
+		/* The capacity holds every step a 16-bit cell count allows; the loop still leaves room for the last window. */
+		for ( uint32_t level = 0; level < plan.detailLevels && windows.size() + 1 < windows.capacity(); ++level )
+		{
+			const auto side = plan.detailCells << level;
+			const auto half = side / 2U;
+			const auto snap = 2U << level;
+			const auto firstCell = [half, snap, cells = plan.cells] (uint32_t cameraCell) noexcept {
+				const auto snapped = ((cameraCell + (snap / 2U)) / snap) * snap;
+
+				return std::clamp(snapped, half, cells - half) - half;
+			};
+
+			windows.push_back({.firstX = firstCell(camera.x), .firstY = firstCell(camera.z), .cells = side});
+		}
+
+		windows.push_back({.firstX = 0, .firstY = 0, .cells = plan.cells});
+
+		return windows;
 	}
 }
 
@@ -397,6 +485,8 @@ namespace EmEn::Graphics::Geometry
 		{
 			return this->setLoadSuccess(false);
 		}
+
+		this->planRayTracingProxy();
 
 		/* The grid's UVs are linear in the point index: u = u(0) + index / N · U. In world metres, with
 		 * the grid centred on the origin, that is u(x) = x · U / size + (u(0) + U / 2). */
@@ -897,15 +987,16 @@ namespace EmEn::Graphics::Geometry
 		/* The first ray-tracing proxy, around the origin, before the BLAS is built from it
 		 * (Interface::onDependenciesLoaded() builds it right after this). */
 		{
-			const auto proxyCells = std::min(m_cellCount, static_cast< uint32_t >(std::lround(m_parameters.rayTracingProxySize / m_cellSize)));
-			const auto center = m_source->subGridCenter({0.0F, 0.0F}, proxyCells);
+			const Vector< 2, float > origin{0.0F, 0.0F};
+			const RayTracingProxyPlace place{.center = m_source->subGridCenter(origin, m_rtProxyPlan.cells), .camera = origin};
 			PendingRayTracingProxy proxy;
 
-			if ( this->generateRayTracingProxy(center, proxy) )
+			if ( this->generateRayTracingProxy(place, proxy) )
 			{
 				m_rtVertexBufferObject = std::move(proxy.vertexBufferObject);
 				m_rtIndexBufferObjectProxy = std::move(proxy.indexBufferObject);
-				m_rtProxyCenter = center;
+				m_rtProxyCenter = place.center;
+				m_rtProxyDetailCenter = this->rayTracingProxyDetailCenter(place);
 			}
 		}
 
@@ -1517,14 +1608,12 @@ namespace EmEn::Graphics::Geometry
 		return m_descriptorSets[m_currentFrameIndex].get();
 	}
 
-	bool
-	CDLODTerrainResource::generateRayTracingProxy (const Vector< 2, float > & center, PendingRayTracingProxy & proxy) const noexcept
+	void
+	CDLODTerrainResource::planRayTracingProxy () noexcept
 	{
-		const auto start = std::chrono::steady_clock::now();
-
-		/* A BLAS has no level of detail: one fixed surface around the camera, at the finest step whose
-		 * triangle count fits the budget (the full resolution of a 4 km window is 33.5 M triangles, and
-		 * +2.5 GiB of VRAM, measured on the former adaptive grid). */
+		/* A BLAS has no level of detail of its own: the proxy is one fixed surface around the camera, at the finest step
+		 * whose regular grid fits the budget (the full resolution of a 4 km window is 33.5 M triangles, and +2.5 GiB of
+		 * VRAM, measured on the former adaptive grid). */
 		auto & settings = this->serviceProvider().primaryServices().settings();
 		const auto triangleBudget = std::max(2U, settings.getOrSetDefault< uint32_t >(GraphicsRayTracingTerrainBLASMaxTrianglesKey, DefaultGraphicsRayTracingTerrainBLASMaxTriangles));
 		const auto proxyCells = std::min(m_cellCount, static_cast< uint32_t >(std::lround(m_parameters.rayTracingProxySize / m_cellSize)));
@@ -1536,13 +1625,138 @@ namespace EmEn::Graphics::Geometry
 			step *= 2;
 		}
 
-		const auto cells = std::max(step, (proxyCells / step) * step);
-		auto window = m_source->subGrid(center, cells);
+		m_rtProxyPlan = {};
+		m_rtProxyPlan.cells = std::max(step, (proxyCells / step) * step);
+		m_rtProxyPlan.step = step;
+		m_rtProxyPlan.triangleBudget = triangleBudget;
 
-		if ( step > 1 )
+		/* ⚠️ At a step above 1 the proxy is NOT the drawn surface: in a hollow its chord passes above the ground, and a
+		 * short traced ray (contact shadows, ambient occlusion) born on the drawn ground starts INSIDE the proxy — dark
+		 * patches in every hollow near the camera (docs/caution-points.md § CDLOD terrain, 2026-11-23). Hence a window
+		 * of the terrain's own cells around the camera, reached through levels that halve the cells one at a time. */
+		const auto radius = m_parameters.rayTracingProxyDetailRadius;
+
+		if ( step == 1 || radius == 0.0F )
 		{
-			window = window.coarsened(step);
+			return;
 		}
+
+		if ( !std::isfinite(radius) || radius < 0.0F )
+		{
+			TraceWarning{ClassId} << "Terrain '" << this->name() << "': a ray-tracing proxy detail radius of " << radius << " m is no distance, the proxy keeps one step of " << step << " cells everywhere.";
+
+			return;
+		}
+
+		/* The window's side: whole cells of the two levels around it (a multiple of 4), and narrow enough for the widest
+		 * nested window, half the step times as wide, to take at most half of the proxy window. */
+		const auto levels = static_cast< uint32_t >(std::countr_zero(step));
+		const auto widest = ((m_rtProxyPlan.cells / step) / 4U) * 4U;
+		const auto wantedCells = std::ceil((2.0F * radius) / m_cellSize);
+		const auto detailCells = wantedCells >= static_cast< float >(widest) ? widest : std::min(widest, ((static_cast< uint32_t >(wantedCells) + 3U) / 4U) * 4U);
+
+		if ( detailCells < 8U )
+		{
+			TraceWarning{ClassId} << "Terrain '" << this->name() << "': the ray-tracing proxy window (" << m_rtProxyPlan.cells << " cells at a step of " << step << ") is too small for a window of the terrain's own cells, the proxy keeps one step everywhere.";
+
+			return;
+		}
+
+		if ( static_cast< float >(detailCells) < wantedCells )
+		{
+			TraceWarning{ClassId} << "Terrain '" << this->name() << "': a ray-tracing proxy detail radius of " << radius << " m does not fit the proxy window at a step of " << step << ", clamped to " << (static_cast< float >(detailCells) * m_cellSize * 0.5F) << " m.";
+		}
+
+		/* The count with the windows in the middle of the proxy window: against its border they take fewer triangles. */
+		auto candidate = m_rtProxyPlan;
+
+		candidate.detailCells = detailCells;
+		candidate.detailLevels = levels;
+
+		const auto middle = candidate.cells / 2U;
+		const auto windows = layProxyWindows(candidate, {.x = middle, .z = middle});
+		const auto counts = countNestedLattice(std::span< const NestedLatticeWindow >{windows.data(), windows.size()});
+
+		if ( !counts.has_value() )
+		{
+			TraceError{ClassId} << "Terrain '" << this->name() << "': the windows of the ray-tracing proxy are refused, the proxy keeps one step of " << step << " cells everywhere !";
+
+			return;
+		}
+
+		/* The step of the rest of the proxy is the budget's alone: the window never coarsens it. */
+		if ( counts->triangleCount > triangleBudget )
+		{
+			TraceWarning{ClassId} <<
+				"Terrain '" << this->name() << "': with a window of the terrain's own cells the ray-tracing proxy takes " << counts->triangleCount << " triangles, above the budget of " << triangleBudget <<
+				" ('" << GraphicsRayTracingTerrainBLASMaxTrianglesKey << "'): the window is left out, the short traced rays see cells of " << (static_cast< float >(step) * m_cellSize) << " m.";
+
+			return;
+		}
+
+		m_rtProxyPlan = candidate;
+
+		/* The slack: the camera keeps the terrain's own cells around it over the window's half-side, less what it
+		 * travels before a rebuild, less the two cells the window's centre is snapped by. */
+		const auto halfSide = static_cast< float >(detailCells) * m_cellSize * 0.5F;
+		const auto snapped = 2.0F * m_cellSize;
+		const auto slack = m_parameters.rayTracingProxyDetailSlack;
+		const auto longestSlack = std::max(snapped, (halfSide * 0.75F) - snapped);
+
+		if ( !std::isfinite(slack) || slack < snapped || slack > longestSlack )
+		{
+			m_parameters.rayTracingProxyDetailSlack = std::isfinite(slack) ? std::clamp(slack, snapped, longestSlack) : std::clamp(halfSide * 0.5F, snapped, longestSlack);
+
+			TraceWarning{ClassId} << "Terrain '" << this->name() << "': a ray-tracing proxy detail slack of " << slack << " m does not suit a window of " << halfSide << " m of half-side, set to " << m_parameters.rayTracingProxyDetailSlack << " m.";
+		}
+
+		/* What the short traced rays need of it, with the settings of this run (read, never written, here). */
+		const auto exactRadius = halfSide - m_parameters.rayTracingProxyDetailSlack - snapped;
+		const auto contactShadowsReach = settings.get< float >(GraphicsPPContactShadowsMaxDistanceKey, DefaultGraphicsPPContactShadowsMaxDistance) * Effects::Lighting::RTContactShadows::FadeRangeFactor;
+		const auto ambientOcclusionReach = settings.get< float >(GraphicsPPAmbientOcclusionRTMaxDistanceKey, DefaultGraphicsPPAmbientOcclusionRTMaxDistance) * Effects::Lighting::RTAO::FadeRangeFactor;
+		const auto reach = std::max(contactShadowsReach, ambientOcclusionReach);
+
+		if ( !std::isfinite(reach) || reach > exactRadius )
+		{
+			TraceWarning{ClassId} <<
+				"Terrain '" << this->name() << "': the traced contact shadows act up to " << contactShadowsReach << " m from the camera and the traced ambient occlusion up to " << ambientOcclusionReach <<
+				" m, but the ray-tracing proxy only keeps the drawn surface within " << exactRadius << " m: beyond, hollows may darken. Raise CDLODTerrainParameters::rayTracingProxyDetailRadius.";
+		}
+	}
+
+	Vector< 2, float >
+	CDLODTerrainResource::rayTracingProxyDetailCenter (const RayTracingProxyPlace & place) const noexcept
+	{
+		const auto & plan = m_rtProxyPlan;
+
+		if ( plan.detailLevels == 0 )
+		{
+			return place.center;
+		}
+
+		/* The proxy window's first point: Grid::subGrid() centres the window on a cell corner, half its cells before. */
+		const auto halfCells = plan.cells / 2U;
+		const auto halfWindow = static_cast< float >(halfCells) * m_cellSize;
+		const Vector< 2, float > origin{place.center[X] - halfWindow, place.center[Y] - halfWindow};
+		const Vector< 2, float > offset{(place.camera[X] - origin[X]) / m_cellSize, (place.camera[Y] - origin[Y]) / m_cellSize};
+		const auto windows = layProxyWindows(plan, proxyCellOf(offset, plan.cells));
+		const auto & finest = *windows.cbegin();
+		const auto halfSide = finest.cells / 2U;
+
+		return {
+			origin[X] + (static_cast< float >(finest.firstX + halfSide) * m_cellSize),
+			origin[Y] + (static_cast< float >(finest.firstY + halfSide) * m_cellSize)
+		};
+	}
+
+	bool
+	CDLODTerrainResource::generateRayTracingProxy (const RayTracingProxyPlace & place, PendingRayTracingProxy & proxy) const noexcept
+	{
+		const auto start = std::chrono::steady_clock::now();
+		const auto & plan = m_rtProxyPlan;
+
+		/* The proxy window at the terrain's own cells: every level of the proxy takes its points from it. */
+		const auto window = m_source->subGrid(place.center, plan.cells);
 
 		if ( !window.isValid() )
 		{
@@ -1551,74 +1765,80 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		/* Position, tangent, binormal, normal, UV: the layout of RayTracingProxyFlags, read by the hit shaders. */
-		const auto pointCount = window.pointCount();
-		const auto elementCount = getElementCountFromFlags(RayTracingProxyFlags);
-		std::vector< float > attributes(static_cast< size_t >(pointCount) * elementCount);
+		/* The windows, in the cells of the proxy's finest level, around where the camera stands in the window. */
+		const auto origin = window.position(0U);
+		const Vector< 2, float > offset{(place.camera[X] - origin[X]) / m_cellSize, (place.camera[Y] - origin[Z]) / m_cellSize};
+		const auto windows = layProxyWindows(plan, proxyCellOf(offset, plan.cells));
 
-		for ( uint32_t index = 0; index < pointCount; ++index )
+		NestedLatticeMesh lattice;
+
+		if ( !buildNestedLattice(std::span< const NestedLatticeWindow >{windows.data(), windows.size()}, lattice) )
 		{
-			const auto position = window.position(index);
-			const auto normal = window.normal(index, position);
-			const auto tangent = window.tangent(index, position, window.textureCoordinates3D(index));
-			const auto binormal = Vector< 3, float >::crossProduct(normal, tangent);
-			const auto uv = window.textureCoordinates2D(index);
-			auto * out = attributes.data() + (static_cast< size_t >(index) * elementCount);
+			TraceError{ClassId} << "Terrain '" << this->name() << "': unable to lay the ray-tracing proxy out !";
 
-			*out++ = position[X];
-			*out++ = position[Y];
-			*out++ = position[Z];
-			*out++ = tangent[X];
-			*out++ = tangent[Y];
-			*out++ = tangent[Z];
-			*out++ = binormal[X];
-			*out++ = binormal[Y];
-			*out++ = binormal[Z];
-			*out++ = normal[X];
-			*out++ = normal[Y];
-			*out++ = normal[Z];
-			*out++ = uv[X];
-			*out = uv[Y];
+			return false;
 		}
 
-		/* ⚠️ The SAME diagonal as the drawn patch (topLeft-bottomRight, see the patch index buffer): the traced
-		 * surface must be the rasterized one. Split along the other diagonal, the two surfaces part by
-		 * |(h00 + h11) - (h10 + h01)| / 2 at every cell centre — metres on a rough relief — and the RT effects,
-		 * whose rays then start BELOW the proxy, blacken the triangles where the drawn surface sinks under it
-		 * (docs/caution-points.md § CDLOD terrain, 2026-09-27). Same winding as before. */
-		const auto quads = window.squaredQuadCount();
-		std::vector< uint32_t > indices;
-		indices.reserve(static_cast< size_t >(quads) * quads * 6);
+		/* One grid per level: the window's points, one out of `finestStep << level` per axis — point samples, so a
+		 * node keeps its position, its height and its texture coordinates whatever the level (Grid::coarsened()). The
+		 * level at the terrain's own cells is the window itself. */
+		const auto finestStep = plan.detailLevels > 0 ? 1U : plan.step;
+		std::vector< Grid< float > > coarsenedWindows;
 
-		for ( uint32_t z = 0; z < quads; ++z )
+		coarsenedWindows.reserve(windows.size());
+
+		for ( uint32_t level = finestStep > 1 ? 0U : 1U; level < windows.size(); ++level )
 		{
-			for ( uint32_t x = 0; x < quads; ++x )
+			if ( !coarsenedWindows.emplace_back(window.coarsened(finestStep << level)).isValid() )
 			{
-				const auto topLeft = window.index(x, z);
-				const auto topRight = window.index(x + 1, z);
-				const auto bottomLeft = window.index(x, z + 1);
-				const auto bottomRight = window.index(x + 1, z + 1);
+				TraceError{ClassId} << "Terrain '" << this->name() << "': unable to cut the ray-tracing proxy window at a step of " << (finestStep << level) << " !";
 
-				indices.push_back(topLeft);
-				indices.push_back(bottomLeft);
-				indices.push_back(bottomRight);
-
-				indices.push_back(topLeft);
-				indices.push_back(bottomRight);
-				indices.push_back(topRight);
+				return false;
 			}
 		}
 
+		/* Position, tangent, binormal, normal, UV: the layout of RayTracingProxyFlags, read by the hit shaders. */
+		const auto elementCount = getElementCountFromFlags(RayTracingProxyFlags);
+		std::vector< float > attributes;
+
+		attributes.reserve(lattice.vertices.size() * elementCount);
+
+		for ( const auto & vertex : lattice.vertices )
+		{
+			const auto & grid = (finestStep == 1 && vertex.level == 0) ? window : coarsenedWindows[vertex.level - (finestStep == 1 ? 1U : 0U)];
+			const auto & levelWindow = windows[vertex.level];
+			const auto index = grid.index((levelWindow.firstX >> vertex.level) + vertex.x, (levelWindow.firstY >> vertex.level) + vertex.y);
+			const auto position = grid.position(index);
+			const auto normal = grid.normal(index, position);
+			const auto tangent = grid.tangent(index, position, grid.textureCoordinates3D(index));
+			const auto binormal = Vector< 3, float >::crossProduct(normal, tangent);
+			const auto uv = grid.textureCoordinates2D(index);
+
+			attributes.insert(attributes.end(), {
+				position[X], position[Y], position[Z],
+				tangent[X], tangent[Y], tangent[Z],
+				binormal[X], binormal[Y], binormal[Z],
+				normal[X], normal[Y], normal[Z],
+				uv[X], uv[Y]
+			});
+		}
+
+		/* ⚠️ The lattice cuts every plain cell along the DRAWN patch's diagonal, (x, z)-(x + 1, z + 1) (see the patch
+		 * index buffer): the traced surface must be the rasterized one. Split along the other diagonal, the two
+		 * surfaces part by |(h00 + h11) - (h10 + h01)| / 2 at every cell centre — metres on a rough relief — and the RT
+		 * effects, whose rays then start BELOW the proxy, blacken the triangles where the drawn surface sinks under it
+		 * (docs/caution-points.md § CDLOD terrain, 2026-09-27). Same winding as before. */
+		const auto pointCount = static_cast< uint32_t >(lattice.vertices.size());
 		auto & transferManager = this->serviceProvider().graphicsRenderer().transferManager();
 
 		proxy.vertexBufferObject = std::make_unique< VertexBufferObject >(transferManager.device(), pointCount, elementCount, false);
 		proxy.vertexBufferObject->setIdentifier(ClassId, this->name(), "RT_ProxyVertexBufferObject");
-		proxy.indexBufferObject = std::make_unique< IndexBufferObject >(transferManager.device(), static_cast< uint32_t >(indices.size()));
+		proxy.indexBufferObject = std::make_unique< IndexBufferObject >(transferManager.device(), static_cast< uint32_t >(lattice.indices.size()));
 		proxy.indexBufferObject->setIdentifier(ClassId, this->name(), "RT_ProxyIndexBufferObject");
 
 		if (
 			!proxy.vertexBufferObject->createOnHardware() || !proxy.vertexBufferObject->transferData(transferManager, attributes) ||
-			!proxy.indexBufferObject->createOnHardware() || !proxy.indexBufferObject->transferData(transferManager, indices)
+			!proxy.indexBufferObject->createOnHardware() || !proxy.indexBufferObject->transferData(transferManager, lattice.indices)
 		)
 		{
 			TraceError{ClassId} << "Terrain '" << this->name() << "': unable to upload the ray-tracing proxy !";
@@ -1629,10 +1849,24 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		TraceInfo{ClassId} <<
-			"Terrain '" << this->name() << "': ray-tracing proxy of " << (window.squaredSize()) << " m around (" << center[X] << ", " << center[Y] << "), step " << step <<
-			" (" << (indices.size() / 3) << " triangles, budget " << triangleBudget << "), built in " <<
-			std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - start).count() << " ms.";
+		TraceInfo trace{ClassId};
+
+		trace <<
+			"Terrain '" << this->name() << "': ray-tracing proxy of " << (window.squaredSize()) << " m around (" << place.center[X] << ", " << place.center[Y] << "), step " << plan.step <<
+			" (" << (lattice.indices.size() / 3) << " triangles, budget " << plan.triangleBudget << ")";
+
+		if ( plan.detailLevels > 0 )
+		{
+			const auto & finest = *windows.cbegin();
+			const auto halfSide = finest.cells / 2U;
+
+			trace <<
+				", the terrain's own cells within " << (static_cast< float >(halfSide) * m_cellSize) << " m of (" <<
+				(origin[X] + (static_cast< float >(finest.firstX + halfSide) * m_cellSize)) << ", " <<
+				(origin[Z] + (static_cast< float >(finest.firstY + halfSide) * m_cellSize)) << ") through " << plan.detailLevels << " nested window(s)";
+		}
+
+		trace << ", built in " << std::chrono::duration_cast< std::chrono::milliseconds >(std::chrono::steady_clock::now() - start).count() << " ms.";
 
 		return true;
 	}
@@ -1646,32 +1880,61 @@ namespace EmEn::Graphics::Geometry
 			return;
 		}
 
-		const auto half = m_parameters.rayTracingProxySize * 0.5F;
-		const auto margin = std::min(m_parameters.rayTracingProxyMargin, half * 0.75F);
 		const Vector< 2, float > camera{worldPosition[X], worldPosition[Z]};
 
-		if ( Vector< 2, float >::distance(m_rtProxyCenter, camera) <= half - margin )
+		/* A position that is no place moves nothing. */
+		if ( !std::isfinite(camera[X]) || !std::isfinite(camera[Y]) )
 		{
 			return;
 		}
 
-		/* Where the proxy CAN go (snapped and clamped like the extraction): against the grid border the
-		 * camera stays past the threshold for ever, and only a real move is worth a rebuild. */
-		const auto proxyCells = std::min(m_cellCount, static_cast< uint32_t >(std::lround(m_parameters.rayTracingProxySize / m_cellSize)));
-		const auto wanted = m_source->subGridCenter(camera, proxyCells);
+		const auto half = m_parameters.rayTracingProxySize * 0.5F;
+		const auto margin = std::min(m_parameters.rayTracingProxyMargin, half * 0.75F);
+		auto wanted = m_rtProxyCenter;
+		auto moves = false;
 
-		if ( Vector< 2, float >::distance(wanted, m_rtProxyCenter) <= half - margin )
+		if ( Vector< 2, float >::distance(m_rtProxyCenter, camera) > half - margin )
+		{
+			/* Where the proxy CAN go (snapped and clamped like the extraction): against the grid border the
+			 * camera stays past the threshold for ever, and only a real move is worth a rebuild. */
+			const auto candidate = m_source->subGridCenter(camera, m_rtProxyPlan.cells);
+
+			if ( Vector< 2, float >::distance(candidate, m_rtProxyCenter) > half - margin )
+			{
+				wanted = candidate;
+				moves = true;
+			}
+		}
+
+		/* The window of the terrain's own cells follows the camera INSIDE the proxy window, by the same rule: the
+		 * window it would get against the one it has, never the camera against a threshold — against the proxy
+		 * window's border the wanted window stops moving, and so do the rebuilds. */
+		const RayTracingProxyPlace place{.center = wanted, .camera = camera};
+		auto wantedDetail = m_rtProxyDetailCenter;
+
+		if ( m_rtProxyPlan.detailLevels > 0 )
+		{
+			wantedDetail = this->rayTracingProxyDetailCenter(place);
+
+			if ( Vector< 2, float >::distance(wantedDetail, m_rtProxyDetailCenter) > m_parameters.rayTracingProxyDetailSlack )
+			{
+				moves = true;
+			}
+		}
+
+		if ( !moves )
 		{
 			return;
 		}
 
 		m_rtProxyUpdating.store(true, std::memory_order_release);
 		m_rtProxyCenter = wanted;
+		m_rtProxyDetailCenter = wantedDetail;
 
 		/* NOTE: The job holds the terrain (`self`) and hands it to the renderer; the resource provider OWNS it (Ave
 		 * Robustus II): its stop waits for it before the renderer goes (Core::terminate()). A job stopped before it
 		 * starts never runs. */
-		const auto enqueued = this->serviceProvider().submitResourceJob([self = std::static_pointer_cast< CDLODTerrainResource >(this->shared_from_this()), wanted] (const std::stop_token & stopToken) {
+		const auto enqueued = this->serviceProvider().submitResourceJob([self = std::static_pointer_cast< CDLODTerrainResource >(this->shared_from_this()), place] (const std::stop_token & stopToken) {
 			if ( stopToken.stop_requested() )
 			{
 				self->m_rtProxyUpdating.store(false, std::memory_order_release);
@@ -1681,7 +1944,7 @@ namespace EmEn::Graphics::Geometry
 
 			PendingRayTracingProxy proxy;
 
-			if ( !self->generateRayTracingProxy(wanted, proxy) )
+			if ( !self->generateRayTracingProxy(place, proxy) )
 			{
 				self->m_rtProxyUpdating.store(false, std::memory_order_release);
 

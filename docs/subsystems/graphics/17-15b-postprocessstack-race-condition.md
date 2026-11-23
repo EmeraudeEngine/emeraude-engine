@@ -82,10 +82,34 @@ This is what removed the dark streaks of the adaptive grid (one 1 m normal per v
 
 **The ray-tracing proxy** (`updateRayTracingProxy()`, logic thread via `TerrainResource::updateVisibility()`):
 4096 m around the camera at the finest power-of-two step fitting `Core/Graphics/RayTracing/TerrainBLASMaxTriangles`
-(step 8, 524 288 triangles, 51 ms on `terrain`), 14-float vertices built on the pool from the CPU grid,
-published by `updateVideoMemory()` (old buffers retired, BLAS marked stale LAST); rebuilt when less than
-1500 m is left to its edge. Physics keeps reading the CPU `Grid< float >`, shared (never copied) between
-`TerrainResource` and the geometry.
+(step 8 on `terrain`), 14-float vertices built on the pool from the CPU grid, published by `updateVideoMemory()`
+(old buffers retired, BLAS marked stale LAST); rebuilt when less than 1500 m is left to its edge. Physics keeps
+reading the CPU `Grid< float >`, shared (never copied) between `TerrainResource` and the geometry.
+
+**A level of detail in the proxy, centred on the camera (2026-11-23).** At a step above 1 the proxy is not the drawn
+surface, and a short traced ray born on the drawn ground of a hollow starts inside it (`docs/caution-points.md`
+§ CDLOD terrain). So the proxy is ONE mesh — one vertex buffer, one index buffer, one BLAS, the traced path
+unchanged — made of square windows nested around the camera: the terrain's own cells within
+`CDLODTerrainParameters::rayTracingProxyDetailRadius` (128 m of half-side), then cells twice as large over a window
+twice as wide, and so on up to the step of the rest of the proxy, which the window never changes.
+- The plan is made once, at load (`planRayTracingProxy()`: the step by the budget, then the window; the budget is no
+  longer read at each rebuild). The triangulation is the base's `VertexFactory::buildNestedLattice()`: watertight (a
+  fan around the finer node where two levels meet), one vertex per node, the drawn patch's diagonal in every plain
+  cell. Each level takes its points from `Grid::coarsened()` of the one proxy window: point samples, so a node has
+  the same position at every level.
+- `layProxyWindows()` (the `.cpp`'s anonymous namespace) lays the windows for a camera cell: window k centred on the
+  multiple of 2^(k + 1) cells nearest to the camera, kept inside the proxy window. `rayTracingProxyDetailCenter()`
+  gives the first window's centre; the proxy is rebuilt when that centre would move by more than
+  `rayTracingProxyDetailSlack` (64 m) — the window it would get against the one it has, so a camera against the
+  proxy window's border, or outside it, triggers nothing.
+- Numbers (2026-11-23, RTX 3070 Ti): 654 912 triangles on `water-world`'s archipelago (524 288 without the window,
+  +8 MiB of VRAM), 44–50 ms to generate on the pool; 820 736 on `terrain` (three nested windows, 94 ms). A rebuild's
+  BLAS is built synchronously on the frame path: 3.9–4.7 ms each over a 500 m flight at 50 m/s (one rebuild per
+  ~71 m), 7.5 ms at most over 13 builds.
+- The window is left out, with a warning, when it does not fit the budget; shrunk, with a warning, when the proxy
+  window is too small for it; and a warning at load says when the traced contact shadows or ambient occlusion act
+  farther from the camera than the window guarantees (`RTContactShadows::FadeRangeFactor`, `RTAO::FadeRangeFactor`
+  times their `MaxDistance`).
 
 ⚠️ **The object space of the terrain IS the world** (a ground answers levels in world coordinates):
 `worldCoordinates` is ignored by the selection, the nodes and the camera are pushed in world space.

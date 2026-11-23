@@ -731,7 +731,47 @@ Traps of the CDLOD work itself:
   **Bisect such a patch by LANE first** (`PostProcess.setLightingMode(ScreenSpace)` on the same instance): a
   patch that only the RT lane draws is a traced-vs-drawn geometry mismatch, not a G-buffer defect.
   ⚠️ At step > 1 (the `terrain` demo: 8 m proxy cells) the proxy cannot match the drawn 1 m surface at all; the
-  sub-step relief is missing from what the rays hit, so the same kind of self-occlusion remains possible there.
+  sub-step relief is missing from what the rays hit, so the same kind of self-occlusion remained possible there —
+  and it happened: the next point.
+- ⚠️⚠️⚠️ **A proxy coarser than the drawn surface blackens the hollows near the camera** (owner report on
+  `water-world`'s archipelago, fixed 2026-11-23): grey lobes with comb-shaped edges around a brown core, in the
+  hollows of the sand, close to the ground, gone when the camera rises. The archipelago's 2048 cells of 1.25 m make
+  8.4 M triangles, so under the 2 M budget the proxy took step 4 — 5 m cells — and in a hollow its chord passed
+  above the drawn ground: up to **0.58 m** on a surveyed 80 m block (43 % of the dry nodes under it by more than
+  5 mm). The traced effects start their rays from the DRAWN surface, lifted along the normal by a bias that grows
+  with the camera distance (`normalBias × max(1, distance) × min(1 / N·V, 10)`: 1 cm per metre for
+  `RTContactShadows`, 5 mm for `RTAO`); close to the camera the lift is smaller than the gap, the ray starts INSIDE
+  the proxy and hits the underside of its triangle at once (every TLAS instance carries
+  `VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR`). The contact shadows draw the lobes, RTAO and RTGI the
+  core; the comb is the normal map moving the lift from ripple to ripple. It vanishes from above because the lift
+  grows with the distance and both effects fade out (`RTContactShadows` at `maxDistance × 10` = 20 m, `RTAO` at
+  `maxDistance × 20` = 40 m) — NOT because the CDLOD joins the proxy (its finest level reaches 384 m).
+  - **Measured** (RTX 3070 Ti, window-less 1280 × 720, exposure pinned, 0 `VUID-`; pixels of the traced capture
+    darker than the screen-space capture of the SAME launch and pose by more than 12/255, of 537 600; target
+    (−547.5, 3.78, −218.0), eye (−543.5, 7.28, −214.0)): **249 929** at step 4, 79 183 at step 2 (budget 2.1 M,
+    +162 MiB), 0 at step 1 (budget 8.4 M, **+846 MiB**) — and **0 with the fix at the default budget** (654 912
+    triangles, +8 MiB). With a 600 000 budget the same binary leaves the window out (a warning) and shows 249 923
+    again. `AmbientOcclusion` off removes 16 % of the patch pixels of a 12 m pose, `ContactShadows` off 93 %.
+    Confirmed by the owner's eye the same day, in a 2880 × 1620 window on the screen the report came from.
+  - **The fix: a level of detail in the proxy, centred on the camera** (owner decision; graphics doc 17-15b
+    § "A level of detail in the proxy"): the terrain's own cells within 128 m, then nested windows that halve the
+    resolution up to the budget's step, in ONE watertight mesh (base `VertexFactory::buildNestedLattice()`). The
+    alternatives weighed: back-face culling of the terrain's instance (removes the false occlusion, not the
+    mismatch), a larger budget (quadratic: refused by the 8 GiB target).
+  - **A nested proxy re-centres with the camera, and a rebuild's BLAS is built synchronously on the frame path**
+    (`Interface::buildAccelerationStructure()` waits for the builder's fence): 4.5 ms for 524 288 triangles, 8.2 ms
+    for 2.1 M, 54 ms for 8.4 M at load; in motion, 3.9–4.7 ms per rebuild of the 654 912-triangle proxy, one per
+    ~71 m at 50 m/s, 7.5 ms at most over 13 builds; none standing still, none drifting outside the map (the move
+    decision compares the window wanted with the window held). Owner decision: synchronous, a non-blocking rebuild
+    only if a hitch is ever seen.
+  - ⚠️ **Two levels must never give one node two vertices**: a border node of a finer window is THE vertex the
+    coarser cells use (the lattice does it); two copies an ulp apart are a crack for a ray.
+  - ⚠️ The window must cover the camera distance up to which a short ray acts, less the slack travelled between
+    two rebuilds (64 m): the terrain warns at load when `MaxDistance` × the effect's `FadeRangeFactor` passes it.
+    Those two factors MIRROR the shaders' literals (`RTContactShadows.hpp`, `RTAO.hpp`): change both.
+  - Not measured: a before / after on `terrain` (its proxy is at step 8, but the 48 m block surveyed near its
+    origin sinks under such a proxy by 8 cm at most; it loads with three nested windows, 820 736 triangles, 0
+    `VUID-`); macOS and Windows.
 - ⚠️⚠️⚠️ **`PushConstantBlock::bytes()` counted a `vec2` as 16 bytes** (it summed `size_bytes()`, the
   PADDED size) while std430 packs it in 8. The range only grew, so nothing ever failed — until the
   heightfield computed its node offset from it: the CPU pushed the node at **96** while the shader read it
