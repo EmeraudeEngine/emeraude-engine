@@ -769,9 +769,23 @@ Traps of the CDLOD work itself:
   - ⚠️ The window must cover the camera distance up to which a short ray acts, less the slack travelled between
     two rebuilds (64 m): the terrain warns at load when `MaxDistance` × the effect's `FadeRangeFactor` passes it.
     Those two factors MIRROR the shaders' literals (`RTContactShadows.hpp`, `RTAO.hpp`): change both.
+  - ⚠️ **How to find such a mismatch again**: bisect by lane first, then by slot, on ONE instance
+    (`PostProcess.setLightingMode(ScreenSpace)`, `PostProcess.disable(slot)` / `select(slot, effect)`) — a patch
+    only the ray-traced lane draws is a traced-versus-drawn mismatch. The gap needs no picture:
+    `Core.SceneManagerService.getGroundLevel(x, z)` on every drawn node, against the same nodes taken every `step`
+    cells and interpolated along the proxy's diagonal ((x, z)–(x + 1, z + 1)). The budget is read when the terrain
+    loads: a budget A/B needs a settings copy and a relaunch. `water-world`'s grove is not seeded: compare the two
+    lanes inside ONE launch, never two launches. The two other poses of the measurement — eyes
+    (−538.5, 13.01, −209.0), 12 m away, and (−541.5, 38.78, −212.0), 35 m up — keep a residue with or without the
+    fix (700 to 3 600 pixels): the sea's moving foam at the shore, not sand.
+  - **Verified on the three OS** (2026-11-23, base 7801d5a, engine a1b93c56). Windows (RTX 3500 Ada, MSVC, Release
+    and Debug 0 warning): the same eyes, the same two proxy lines, **0** at the close pose (89 and 3 575 at the two
+    others, on the foam line), 0 `VUID-`. macOS (M6, MoltenVK, no ray-traced lane): the same proxy line (built in
+    28 ms) and a rebuild on a move, a clean capture, 0 `VUID-`. A rebuild's window is centred on the camera's cell
+    snapped to 2 cells: (−537.5, −210) for a camera at (−538.5, −209.0), (−542.5, −215) at (−543.5, −214.0).
   - Not measured: a before / after on `terrain` (its proxy is at step 8, but the 48 m block surveyed near its
     origin sinks under such a proxy by 8 cm at most; it loads with three nested windows, 820 736 triangles, 0
-    `VUID-`); macOS and Windows.
+    `VUID-`); an AMD GPU.
 - ⚠️⚠️⚠️ **`PushConstantBlock::bytes()` counted a `vec2` as 16 bytes** (it summed `size_bytes()`, the
   PADDED size) while std430 packs it in 8. The range only grew, so nothing ever failed — until the
   heightfield computed its node offset from it: the CPU pushed the node at **96** while the shader read it
