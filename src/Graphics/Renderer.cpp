@@ -108,14 +108,15 @@
 #include "Resources/Manager.hpp"
 #include "Saphir/Program.hpp"
 #include "SceneRenderTarget.hpp"
+#include "Scenes/AtmosphericMedium.hpp"
 #include "Scenes/BindlessTextureSet.hpp"
 #include "Scenes/CloudSet.hpp"
 #include "Scenes/Component/Camera.hpp"
 #include "Scenes/Editor/Manager.hpp"
 #include "Scenes/LightSet.hpp"
-#include "Scenes/ParticipatingMedium.hpp"
 #include "Scenes/Scene.hpp"
 #include "Scenes/SceneInstanceTransforms.hpp"
+#include "Scenes/SeaLevelInterface.hpp"
 #include "Scenes/SkyState.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
@@ -204,19 +205,38 @@ namespace
 	 * happens to integrate it. Null when the scene is a vacuum, which is the default and therefore
 	 * what every existing scene gets: an effect reading null must behave exactly as before.
 	 * @param scene A pointer to the scene, may be nullptr.
-	 * @return const EmEn::Scenes::ParticipatingMedium *
+	 * @return const EmEn::Scenes::AtmosphericMedium *
 	 */
-	const EmEn::Scenes::ParticipatingMedium *
-	sceneParticipatingMedium (const EmEn::Scenes::Scene * scene) noexcept
+	const EmEn::Scenes::AtmosphericMedium *
+	sceneAtmosphericMedium (const EmEn::Scenes::Scene * scene) noexcept
 	{
 		if ( scene == nullptr )
 		{
 			return nullptr;
 		}
 
-		const auto & medium = scene->participatingMedium();
+		const auto & medium = scene->atmosphericMedium();
 
 		return medium.isEnabled() ? &medium : nullptr;
+	}
+
+	/**
+	 * @brief Returns the scene's sea when it declares its water, or nullptr.
+	 * @note Null is the "no underwater view" flag, the medium's contract: no sea, or a sea that declares no water.
+	 * @param scene A pointer to the scene, may be nullptr.
+	 * @return const EmEn::Scenes::SeaLevelInterface *
+	 */
+	const EmEn::Scenes::SeaLevelInterface *
+	sceneDeclaredSea (const EmEn::Scenes::Scene * scene) noexcept
+	{
+		if ( scene == nullptr )
+		{
+			return nullptr;
+		}
+
+		const auto * sea = scene->seaLevel().get();
+
+		return sea != nullptr && sea->waterMedium() != nullptr ? sea : nullptr;
 	}
 
 	/**
@@ -2160,7 +2180,8 @@ namespace EmEn::Graphics
 			 * that draws them, stack or not (PostProcessStack::syncSceneEffects(); owner decision
 			 * 2026-09-24, "placing a cloud is enough"); a scene under a physical sky gets its aerial
 			 * perspective (owner decision 2026-10-25), and its stars when the sky names a catalogue; a scene whose lights
-			 * show their sources gets the light glints. The new occupant brings its G-buffer
+			 * show their sources gets the light glints; a scene whose sea declares its water gets the water
+			 * volume of its underwater view (owner decision 2026-11-23). The new occupant brings its G-buffer
 			 * requirements, so a change retires the scene target exactly like a camera change does.
 			 * ⚠️ AFTER renderSkyAtmosphere(): the physical sky is the one this frame submitted. */
 			const auto * clouds = sceneCloudSet(scene.get());
@@ -2168,15 +2189,17 @@ namespace EmEn::Graphics
 			const bool starField = this->frameStarField() != nullptr;
 			/* A light of the scene shows a visible source: its glints (graphics doc 43). */
 			const bool lightGlints = scene->lightSet().hasVisibleSource(scene->frameReadStateIndex());
+			/* The scene's sea declares its water: its underwater view (engine item underwater-view). */
+			const bool declaredWater = sceneDeclaredSea(scene.get()) != nullptr;
 
-			if ( clouds != nullptr || physicalSky || lightGlints )
+			if ( clouds != nullptr || physicalSky || lightGlints || declaredWater )
 			{
 				if ( stack == nullptr )
 				{
 					stack = &scene->requirePostProcessStack();
 				}
 
-				if ( scene->requirePostProcessStack().syncSceneEffects(clouds, physicalSky, starField, lightGlints, *this) && m_sceneTarget != nullptr )
+				if ( scene->requirePostProcessStack().syncSceneEffects(clouds, physicalSky, starField, lightGlints, declaredWater, *this) && m_sceneTarget != nullptr )
 				{
 					m_deferredDestructor.retireAction([target = std::move(m_sceneTarget)] {
 						target->destroyRenderTarget();
@@ -2551,7 +2574,7 @@ namespace EmEn::Graphics
 			/* Process scene effects (multi-pass). */
 			if ( scenePtr->hasPostProcessStack() )
 			{
-				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr));
+				m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneAtmosphericMedium(scenePtr), sceneCloudSet(scenePtr), sceneDeclaredSea(scenePtr));
 			}
 
 			commandBuffer->beginRenderPass(*m_swapChain->postProcessFramebuffer(), m_swapChain->renderArea(), m_swapChainClearColors, VK_SUBPASS_CONTENTS_INLINE);
@@ -2765,7 +2788,7 @@ namespace EmEn::Graphics
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain/PreTranslucency"};
 
 			m_postProcessor.recordBlit(*commandBuffer);
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), ChainPhase::PreTranslucency);
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneAtmosphericMedium(scenePtr), sceneCloudSet(scenePtr), sceneDeclaredSea(scenePtr), ChainPhase::PreTranslucency);
 		}
 
 		/* Grab pass: capture the scene from the internal target for TranslucentGB refraction.
@@ -2825,7 +2848,7 @@ namespace EmEn::Graphics
 
 			const GPUProfiler::ScopedZone profilingZone{profiler, *commandBuffer, "PostFXChain"};
 
-			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneParticipatingMedium(scenePtr), sceneCloudSet(scenePtr), cutFrame ? ChainPhase::PostTranslucency : ChainPhase::Whole);
+			m_postProcessor.executeIndirectPostProcessEffects(*commandBuffer, *scenePtr->postProcessStack(), this->frameView(*scenePtr), &scenePtr->lightSet(), scenePtr->activeCamera().get(), sceneSkyLuminance(scenePtr), sceneAtmosphericMedium(scenePtr), sceneCloudSet(scenePtr), sceneDeclaredSea(scenePtr), cutFrame ? ChainPhase::PostTranslucency : ChainPhase::Whole);
 		}
 
 		/* RP-final (swap-chain offscreen-composite, UNDEFINED + CLEAR): Draw the PP fullscreen
@@ -3964,6 +3987,7 @@ namespace EmEn::Graphics
 		metadata.preExposure = m_preExposure;
 		/* Latched earlier in this frame (latchTemporalDiscontinuity()). */
 		metadata.temporalDiscontinuity = m_postProcessor.frameTemporalDiscontinuity();
+		metadata.viewDiscontinuity = !this->mainRenderTarget()->viewMatrices().frameHistoryContinues();
 
 		return m_frameCapture.recordCopy(commandBuffer, *image, m_swapChain->finalColorLayout(), m_currentFrameIndex, metadata);
 	}
@@ -3989,6 +4013,12 @@ namespace EmEn::Graphics
 		/* The same scene as the previous frame: the same control block (a weak pointer keeps it, so a new scene at a
 		 * reused address never compares equal). */
 		const bool sameScene = !m_temporalDiscontinuityScene.expired() && !m_temporalDiscontinuityScene.owner_before(scene) && !scene.owner_before(m_temporalDiscontinuityScene);
+
+		/* The VIEW's own continuity (the view matrices' frame history, graphics doc 13-12 § 43): the previous frame is
+		 * not this one's past at a camera cut (the view matrices know it: another source feeds the target) nor in
+		 * another scene (known here). Before anything of the frame reads the previous matrices (Scene::prepareRender(),
+		 * the chain). */
+		this->mainRenderTarget()->viewMatrices().latchFrameHistory(readStateIndex, !sameScene);
 
 		if ( !sameScene || epoch != m_temporalDiscontinuityEpoch )
 		{

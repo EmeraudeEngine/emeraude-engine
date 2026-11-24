@@ -39,7 +39,7 @@ not-sky and nothing about what occludes the volume. That is the test below.
   ABSENT by default, deliberately breaking the TAA/MotionBlur contract because the demos pass
   hand-tuned values an engine-wide default would silently double (five then; `water-world` still does).
 - **The medium has a scene-level owner** (`0d4b0e12`, `a24c8ecb`, alpha `08c37df`):
-  `Scenes::ParticipatingMedium` beside `EnvironmentPhysicalProperties`, reaching effects through
+  `Scenes::AtmosphericMedium` beside `EnvironmentPhysicalProperties`, reaching effects through
   `FrameContext::medium` the way `skyLuminance` already does. It had to move first: an effect's
   `Parameters` are private to one instance, and `AtmosphericFog` was used by ONE demo while
   `VolumetricLight` was used by eight (three on 2026-10-13, see "What remains").
@@ -94,14 +94,14 @@ were extracted rather than re-typed a fifth time:
 ## ⚠️⚠️ Two traps this work paid for
 
 - **The source term takes the sun's ILLUMINANCE in lux, NOT
-  `ParticipatingMedium::resolveLuminance()`.** That accessor is the contract of an effect which
+  `AtmosphericMedium::resolveLuminance()`.** That accessor is the contract of an effect which
   composites a LUMINANCE directly (AtmosphericFog's model) and returns E/pi with no authored
   luminance. Feeding it to an integral that already carries its own sigmaS and phase function is
   dimensionally wrong and under-reports by exactly pi. Corollary to keep rather than paper over: an
   authored `setLuminance()` has **no meaning** for this integrator — it overrides a composited
   result, and this pass computes the result.
 - **`light-and-shadow-debug` could not exercise this item as written.** It owns the testbed's only
-  `ParticipatingMedium`, but its sun was a CLASSIC shadow map, so the pass no-op'd on its own guard.
+  `AtmosphericMedium`, but its sun was a CLASSIC shadow map, so the pass no-op'd on its own guard.
   No scene had both a medium and a CSM sun. The sun is now cascaded (owner decision:
   `2048, 4, 0.5F, csmScale 80` — 10 km view distance / 80 = 125 m of covered depth, matching the
   100 m box the classic map covered). ⚠️ That switch also broke the scene's option 0, which passed

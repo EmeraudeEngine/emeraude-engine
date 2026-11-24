@@ -13,7 +13,7 @@
 > **The canonical order (this IS the enum):**
 > ```
 > ContactShadows → IndirectDiffuse → Reflections → AmbientOcclusion
->   → Clouds → VolumetricLight → Fog → Custom → TemporalAA
+>   → AerialPerspective → Clouds → VolumetricLight → Fog → WaterVolume → Custom → TemporalAA → Stars → LightGlints
 >   → [camera: DepthOfField → MotionBlur] → LensFlare → [camera: Glare → ToneMapping]
 >   → PostToneMapping
 > ```

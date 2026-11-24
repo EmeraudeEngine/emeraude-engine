@@ -49,6 +49,7 @@
 #include "Saphir/Keys.hpp"
 #include "Saphir/Program.hpp"
 #include "Saphir/SetIndexes.hpp"
+#include "Vulkan/AbstractObject.hpp"
 
 namespace EmEn::Saphir
 {
@@ -1176,6 +1177,24 @@ namespace EmEn::Saphir
 			Code{fragmentShader} <<
 				"/* Apply PBR lighting. */" << Line::End <<
 				m_fragmentColor << ".rgb += (kD * " << albedo << " / 3.14159265 + specular) * radiance * NdotL;";
+		}
+
+		/* THE VOLUME SEEN IN ITS INTERFACE'S MIRROR (declareSurfaceVolumeInterface(): a sea seen from under it). On the
+		 * back face the lobes above are null — the shading normal faces the eye, the light stands on the other side —
+		 * and the surface's own diffuse lobe is zero by construction (the transmission takes its whole energy). What
+		 * the reflecting part of the surface shows from inside is the volume, lit through the surface: its diffuse
+		 * reflectance under this light, on the surface's OUTWARD normal, weighted by the interface's reflectance. The
+		 * sky's share is the ambient pass's. */
+		if ( m_surfaceIsVolumeInterface && lightType != LightType::Line )
+		{
+			Code{fragmentShader} <<
+				"/* The volume in the interface's mirror, from inside it. */" << Line::End <<
+				"if ( !gl_FrontFacing )" << Line::End <<
+				"{" << Line::End <<
+				"\t" "const float interfaceNdotV = max(dot(N, V), 0.0);" << Line::End <<
+				this->interfaceFresnelDeclaration("interfaceNdotV") <<
+				"\t" << m_fragmentColor << ".rgb += " << m_surfaceVolumeReflectance << " / 3.14159265 * radiance * max(dot(-N, L), 0.0) * interfaceFresnel;" << Line::End <<
+				"}" << Line::Blank;
 		}
 
 		/* SSS back-lit transmittance (applies after main diffuse/specular regardless of clear coat). */

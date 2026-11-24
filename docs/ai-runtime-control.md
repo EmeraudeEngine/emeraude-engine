@@ -708,8 +708,8 @@ The outline is the editor's selection feedback, usable to POINT at an entity in 
 
 **Addressing** (owner decision, 2026-09-27): `entity` is the entity's ADDRESS — its name when unique in
 the scene, else the shortest suffix of its node path that is (`ACTOR_…06/Head`). Every projet-alpha actor
-carries a `Head` node (camera `Eyes`, microphone `Ears`, `SoundEmitter`): on `animation-debug` six of them,
-and a bare `Head` is **refused** with the six candidate addresses — it used to act silently on the first
+carries a `Head` node (camera `Eyes`, microphone `Ears`, `SoundEmitter`): on `animation-debug` seven of them
+(six until a seventh actor joined the demo on 2026-11-21), and a bare `Head` is **refused** with the candidate addresses — it used to act silently on the first
 node found. `listEntities()` gives each entity's `address`; `Camera.getActive()` answers the rendering
 camera's `address` and component `name`, ready to pass. A static entity's address is its name.
 
@@ -803,13 +803,16 @@ only way to see one, since the fallback is silent by design (a trace would be on
 per frame).
 
 - Slot names are `EffectSlot`'s own (`IndirectDiffuse`, `Reflections`, `AmbientOcclusion`,
-  `ContactShadows`, `Fog`, `VolumetricLight`, `Clouds`, `TemporalAA`, `LensFlare`, `Custom`); effect
+  `ContactShadows`, `Fog`, `WaterVolume`, `VolumetricLight`, `Clouds`, `TemporalAA`, `LensFlare`, `Custom`); effect
   names are the labels `listEffects()` prints (`RTGIEffect`, `SSGIEffect`, …).
 - `Clouds` (Sep 2026) is SCENE-DRIVEN: its `VolumetricCloudsEffect` appears the first frame the scene
   holds a `Component::CloudVolume` — no application adds it. `disable(Clouds)` / `select(Clouds,
   VolumetricCloudsEffect)` work like any slot. ⚠️ Listed is not drawn: the pass traces a census
   (`Clouds drawn: N of M (…)`) in the LOG when it changes; judge its look at a pinned exposure
   (`Camera.setExposure(...)`).
+- `WaterVolume` (Nov 2026) is SCENE-DRIVEN too: its `WaterVolumeEffect` appears the first frame the scene's sea
+  declares its water (`Scenes::SeaLevelInterface::waterMedium()`). ⚠️ Listed is not executed: above the sea the
+  pass is not recorded at all — move the eye under the sea level to judge it (graphics doc 13-12 § 44).
 - `select()` mixes lanes per slot — `RTGI` + `SSR` + `RTAO` is a legal and useful A/B.
 - ⚠️ **A selection is applied on the NEXT frame, never immediately.** The console runs on the main
   thread and the chain is walked on the render thread; `syncSlotSelection()` applies it at the

@@ -28,9 +28,14 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <iterator>
+#include <utility>
 
 /* Local inclusions. */
+#include "Animations/AnimationInterface.hpp"
+#include "BlobTrait.hpp"
 #include "Tracer.hpp"
+#include "Variant.hpp"
 
 namespace EmEn::Scenes::Component
 {
@@ -447,6 +452,84 @@ namespace EmEn::Scenes::Component
 		}
 
 		this->notify(LensEffectsChanged);
+	}
+
+	bool
+	Camera::copyPhotographicSetup (const Camera & source) noexcept
+	{
+		if ( &source == this )
+		{
+			return true;
+		}
+
+		if ( this->isTechnicalCamera() || source.isTechnicalCamera() )
+		{
+			TraceWarning{ClassId} << "Camera '" << this->name() << "' does not take the photographic setup of camera '" << source.name() << "': a technical camera (its field of view is a geometric constraint) has none.";
+
+			return false;
+		}
+
+		/* The format. The FRAMING stays this camera's: the field of view depends on the focal length over the sensor
+		 * width only, so the same shot on another format is the focal length scaled by the ratio of the widths.
+		 * NOTE: An exact comparison on purpose: with the same format the focal length is not touched at all, so a
+		 * copy at every cut never drifts it (both widths are >= 1 mm, setSensorWidth()). */
+		if ( m_sensorWidth != source.m_sensorWidth )
+		{
+			m_focalLength = std::max(m_focalLength * (source.m_sensorWidth / m_sensorWidth), 1.0F);
+			m_sensorWidth = source.m_sensorWidth;
+		}
+
+		/* The body: every value below was validated by the source's own setters. */
+		m_distance = source.m_distance;
+		m_aperture = source.m_aperture;
+		m_focusDistance = source.m_focusDistance;
+		m_shutterSpeed = source.m_shutterSpeed;
+		m_minSensitivity = source.m_minSensitivity;
+		m_maxSensitivity = source.m_maxSensitivity;
+		m_sensitivity = source.m_sensitivity;
+		m_bloomThreshold = source.m_bloomThreshold;
+		m_bloomIntensity = source.m_bloomIntensity;
+		m_exposureCompensation = source.m_exposureCompensation;
+
+		this->setFlag(AutoFocusEnabled, source.isAutoFocusEnabled());
+		this->setFlag(AutoExposureEnabled, source.isAutoExposureEnabled());
+
+		/* The materialized effects, through their own switches: each tells its observers when it changes. */
+		this->enableDepthOfField(source.isDepthOfFieldEnabled());
+		this->enableMotionBlur(source.isMotionBlurEnabled());
+		this->enableBloom(source.isBloomEnabled());
+		this->enableHDR(source.isHDREnabled());
+
+		/* The lens stack: the source's immutable snapshot, shared. The two locks are never held together (the source's
+		 * is taken and released inside lensEffects()). */
+		{
+			auto snapshot = source.lensEffects();
+			auto changed = false;
+
+			{
+				const Base::MutexLock lock{m_lensEffectsAccess};
+
+				const auto hadEffects = m_lensEffects != nullptr && !m_lensEffects->empty();
+				const auto hasEffects = snapshot != nullptr && !snapshot->empty();
+
+				changed = (hadEffects || hasEffects) && m_lensEffects != snapshot;
+
+				m_lensEffects = std::move(snapshot);
+			}
+
+			if ( changed )
+			{
+				this->notify(LensEffectsChanged);
+			}
+		}
+
+		/* The view distance and the format reach the connected render targets. */
+		if ( this->hasOutputConnected() )
+		{
+			this->updateAllVideoDeviceProperties();
+		}
+
+		return true;
 	}
 
 	bool

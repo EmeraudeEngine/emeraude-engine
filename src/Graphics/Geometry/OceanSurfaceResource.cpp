@@ -30,26 +30,34 @@
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <utility>
 
 /* Local inclusions. */
+#include "BlobTrait.hpp"
 #include "Graphics/Frustum.hpp"
+#include "Graphics/Geometry/Interface.hpp"
+#include "Graphics/Geometry/OceanSurface.hpp"
+#include "Graphics/Geometry/Types.hpp"
 #include "Graphics/Renderer.hpp"
-#include "Vulkan/DeferredDestructor.hpp"
+#include "Graphics/SeaShelterMap.hpp"
+#include "Graphics/Types.hpp"
 #include "Saphir/Generator/OceanSurfaceHelper.hpp"
 #include "Tracer.hpp"
+#include "Vulkan/Buffer.hpp"
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/CommandPool.hpp"
+#include "Vulkan/DeferredDestructor.hpp"
 #include "Vulkan/DescriptorPool.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 #include "Vulkan/Device.hpp"
+#include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
-#include "Vulkan/IndexBufferObject.hpp"
+#include "Vulkan/MemoryRegion.hpp"
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/Sampler.hpp"
 #include "Vulkan/TransferManager.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
-#include "Vulkan/VertexBufferObject.hpp"
 
 namespace EmEn::Graphics::Geometry
 {
@@ -122,6 +130,13 @@ namespace EmEn::Graphics::Geometry
 		if ( parameters.patchQuads < 2 || parameters.patchQuads % 2 != 0 || parameters.levelCount == 0 || parameters.levelCount > OceanSurface::MaxLevelsOfDetail || parameters.rootsPerSide == 0 || parameters.finestCell <= 0.0F )
 		{
 			TraceError{ClassId} << "Ocean '" << this->name() << "': invalid parameters (even patch quads, 1-" << OceanSurface::MaxLevelsOfDetail << " levels, a positive cell) !";
+
+			return this->setLoadSuccess(false);
+		}
+
+		if ( parameters.shelterMapSide == 0 || parameters.shelterMapSide > OceanSurface::MaxShelterMapSide )
+		{
+			TraceError{ClassId} << "Ocean '" << this->name() << "': a shelter map takes 1 to " << OceanSurface::MaxShelterMapSide << " texels a side, not " << parameters.shelterMapSide << " !";
 
 			return this->setLoadSuccess(false);
 		}
@@ -404,6 +419,16 @@ namespace EmEn::Graphics::Geometry
 			}
 		}
 
+		if ( !this->createShelterResources() )
+		{
+			return false;
+		}
+
+		m_shelterStaging.clear();
+		m_shelterStaging.resize(framesInFlight);
+		m_uploadedShelterGeneration = 0;
+		m_shelterRectangle = {};
+
 		/* One uniform section per frame in flight. */
 		{
 			const auto alignment = std::max< VkDeviceSize >(device->physicalDevice()->propertiesVK10().limits.minUniformBufferOffsetAlignment, 1);
@@ -423,7 +448,7 @@ namespace EmEn::Graphics::Geometry
 		m_descriptorPool = std::make_shared< DescriptorPool >(
 			device,
 			std::vector< VkDescriptorPoolSize >{
-				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 4U * framesInFlight},
+				{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 5U * framesInFlight},
 				{VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, framesInFlight}
 			},
 			framesInFlight,
@@ -438,7 +463,7 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
-		/* Displacement, slopes, uniforms, whitecap foam and previous displacement (Geometry::OceanSurface). */
+		/* Displacement, slopes, uniforms, whitecap foam, previous displacement and shelter map (Geometry::OceanSurface). */
 		const auto surfaceLayout = Saphir::Generator::getOceanSurfaceDescriptorSetLayout(renderer.layoutManager());
 
 		if ( surfaceLayout == nullptr )
@@ -466,6 +491,7 @@ namespace EmEn::Graphics::Geometry
 				!descriptorSet->writeCombinedImageSampler(OceanSurface::SlopesBinding, *m_waves->slopeView(), *m_sampler, VK_IMAGE_LAYOUT_GENERAL) ||
 				!descriptorSet->writeCombinedImageSampler(OceanSurface::FoamBinding, *m_waves->foamView(), *m_sampler, VK_IMAGE_LAYOUT_GENERAL) ||
 				!descriptorSet->writeCombinedImageSampler(OceanSurface::PreviousDisplacementBinding, *m_waves->previousDisplacementView(), *m_sampler, VK_IMAGE_LAYOUT_GENERAL) ||
+				!descriptorSet->writeCombinedImageSampler(OceanSurface::ShelterBinding, *m_shelterView, *m_shelterSampler, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) ||
 				!descriptorSet->writeUniformBuffer(OceanSurface::UniformsBinding, uniforms)
 			)
 			{
@@ -506,7 +532,182 @@ namespace EmEn::Graphics::Geometry
 			m_commandBuffers.emplace_back(std::move(commandBuffer));
 		}
 
+		/* What the underwater view binds to stand where this mesh does: the very resources this surface's stages read
+		 * (the uniforms' offset is each frame's, updateSurfaceVideoMemory()). */
+		m_surfaceWaves = {};
+		m_surfaceWaves.displacement = m_waves->displacementView();
+		m_surfaceWaves.sampler = m_sampler.get();
+		m_surfaceWaves.shelter = m_shelterView.get();
+		m_surfaceWaves.shelterSampler = m_shelterSampler.get();
+		m_surfaceWaves.uniforms = m_uniformBuffer.get();
+		m_surfaceWaves.uniformsRange = sizeof(OceanSurface::Uniforms);
+		m_surfaceWaves.reach = m_parameters.waveReach;
+
 		return true;
+	}
+
+	bool
+	OceanSurfaceResource::createShelterResources () noexcept
+	{
+		const auto & device = this->serviceProvider().graphicsRenderer().device();
+		const auto side = m_parameters.shelterMapSide;
+
+		/* NOTE: R8_UNORM is sampled, filtered and written by a transfer on every Vulkan device (a mandatory format). */
+		m_shelterImage = std::make_shared< Image >(device, VK_IMAGE_TYPE_2D, VK_FORMAT_R8_UNORM, VkExtent3D{side, side, 1}, VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT);
+		m_shelterImage->setIdentifier(ClassId, this->name(), "ShelterMap");
+
+		if ( !m_shelterImage->createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create the shelter map !");
+
+			return false;
+		}
+
+		m_shelterView = std::make_shared< ImageView >(m_shelterImage, VK_IMAGE_VIEW_TYPE_2D, VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1});
+		m_shelterView->setIdentifier(ClassId, this->name(), "ShelterMapView");
+
+		if ( !m_shelterView->createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create the shelter map's view !");
+
+			return false;
+		}
+
+		/* CLAMP TO EDGE: beyond its square the map's edge holds — the sea around the scene. */
+		VkSamplerCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+		createInfo.magFilter = VK_FILTER_LINEAR;
+		createInfo.minFilter = VK_FILTER_LINEAR;
+		createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+		createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+		createInfo.maxAnisotropy = 1.0F;
+		createInfo.maxLod = 0.0F;
+		createInfo.borderColor = VK_BORDER_COLOR_FLOAT_OPAQUE_WHITE;
+
+		m_shelterSampler = std::make_shared< Sampler >(device, createInfo);
+		m_shelterSampler->setIdentifier(ClassId, this->name(), "ShelterMapSampler");
+
+		if ( !m_shelterSampler->createOnHardware() )
+		{
+			Tracer::error(ClassId, "Unable to create the shelter map's sampler !");
+
+			return false;
+		}
+
+		return true;
+	}
+
+	void
+	OceanSurfaceResource::setShelterMap (std::shared_ptr< const SeaShelterMap > map) noexcept
+	{
+		if ( map != nullptr )
+		{
+			const auto side = static_cast< size_t >(m_parameters.shelterMapSide);
+
+			if ( map->side != m_parameters.shelterMapSide || map->texels.size() != side * side || !std::isfinite(map->originX) || !std::isfinite(map->originZ) || !std::isfinite(map->size) || map->size <= 0.0F )
+			{
+				TraceError{ClassId} <<
+					"Ocean surface '" << this->name() << "': a shelter map of " << map->side << " texels a side (" << map->texels.size() << " values) over " << map->size << " m is refused; "
+					"this surface takes " << m_parameters.shelterMapSide << " texels a side over a square that has an extent.";
+
+				return;
+			}
+		}
+
+		const Base::MutexLock lock{m_shelterAccess};
+
+		m_shelterMap = std::move(map);
+		++m_shelterGeneration;
+	}
+
+	bool
+	OceanSurfaceResource::stageShelterMap (uint32_t frameIndex, const SeaShelterMap * map) noexcept
+	{
+		const auto side = static_cast< size_t >(m_parameters.shelterMapSide);
+		const auto bytes = side * side;
+		auto & staging = m_shelterStaging[frameIndex];
+
+		/* This frame's staging buffer was last read by this frame index's previous cycle, which the in-flight fence
+		 * already waited for (as the terrain's clipmap). */
+		if ( staging == nullptr )
+		{
+			staging = std::make_unique< Buffer >(this->serviceProvider().graphicsRenderer().device(), 0, bytes, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, true);
+			staging->setIdentifier(ClassId, this->name(), "ShelterMapStaging");
+
+			if ( !staging->createOnHardware() )
+			{
+				Tracer::error(ClassId, "Unable to create the shelter map's staging buffer !");
+
+				staging.reset();
+
+				return false;
+			}
+		}
+
+		/* No map: the open sea everywhere, and a rectangle without extent (every read lands on one texel). */
+		const std::vector< uint8_t > openSea(map != nullptr ? size_t{0} : bytes, uint8_t{255});
+		const auto & texels = map != nullptr ? map->texels : openSea;
+
+		if ( !staging->writeData(MemoryRegion{texels.data(), bytes}) )
+		{
+			Tracer::error(ClassId, "Unable to write the shelter map's staging buffer !");
+
+			return false;
+		}
+
+		m_shelterRectangle = map != nullptr
+			? std::array< float, 4 >{map->originX, map->originZ, 1.0F / map->size, 1.0F / map->size}
+			: std::array< float, 4 >{};
+
+		return true;
+	}
+
+	void
+	OceanSurfaceResource::recordShelterUpload (const CommandBuffer & commandBuffer, uint32_t frameIndex) const noexcept
+	{
+		constexpr VkImageSubresourceRange wholeImage{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
+		constexpr VkPipelineStageFlags readers = VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+
+		auto * const handle = commandBuffer.handle();
+		const bool first = m_uploadedShelterGeneration == 0;
+
+		/* To transfer. The barrier's first scope is every earlier command of the graphics queue: the frames still in
+		 * flight have finished reading the map this frame rewrites. */
+		VkImageMemoryBarrier toTransfer{};
+		toTransfer.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		toTransfer.srcAccessMask = first ? 0 : VK_ACCESS_SHADER_READ_BIT;
+		toTransfer.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		toTransfer.oldLayout = first ? VK_IMAGE_LAYOUT_UNDEFINED : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		toTransfer.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		toTransfer.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		toTransfer.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		toTransfer.image = m_shelterImage->handle();
+		toTransfer.subresourceRange = wholeImage;
+
+		const VkPipelineStageFlags before = first ? VkPipelineStageFlags{VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT} : readers;
+
+		vkCmdPipelineBarrier(handle, before, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &toTransfer);
+
+		VkBufferImageCopy copy{};
+		copy.imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1};
+		copy.imageExtent = {.width = m_parameters.shelterMapSide, .height = m_parameters.shelterMapSide, .depth = 1};
+
+		vkCmdCopyBufferToImage(handle, m_shelterStaging[frameIndex]->handle(), m_shelterImage->handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+
+		VkImageMemoryBarrier toRead{};
+		toRead.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+		toRead.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+		toRead.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+		toRead.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+		toRead.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+		toRead.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		toRead.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+		toRead.image = m_shelterImage->handle();
+		toRead.subresourceRange = wholeImage;
+
+		vkCmdPipelineBarrier(handle, VK_PIPELINE_STAGE_TRANSFER_BIT, readers, 0, 0, nullptr, 0, nullptr, 1, &toRead);
 	}
 
 	void
@@ -537,6 +738,18 @@ namespace EmEn::Graphics::Geometry
 		deferredDestructor.retireObject(std::move(m_uniformBuffer));
 		deferredDestructor.retireObject(std::move(m_sampler));
 		deferredDestructor.retireObject(std::move(m_waves));
+		m_surfaceWaves = {};
+
+		for ( auto & staging : m_shelterStaging )
+		{
+			deferredDestructor.retireObject(std::move(staging));
+		}
+
+		m_shelterStaging.clear();
+		deferredDestructor.retireObject(std::move(m_shelterSampler));
+		deferredDestructor.retireObject(std::move(m_shelterView));
+		deferredDestructor.retireObject(std::move(m_shelterImage));
+		m_uploadedShelterGeneration = 0;
 		deferredDestructor.retireObject(std::move(m_indexBufferObject));
 		deferredDestructor.retireObject(std::move(m_vertexBufferObject));
 		m_surfaceUpdated = false;
@@ -576,6 +789,26 @@ namespace EmEn::Graphics::Geometry
 
 		frameIndex %= static_cast< uint32_t >(m_descriptorSets.size());
 		m_currentFrameIndex = frameIndex;
+		m_surfaceWaves.uniformsOffset = m_uniformSectionSize * frameIndex;
+
+		/* The shelter map of this frame: a new one (or the first, the open sea everywhere when none was given) is
+		 * staged now and uploaded ahead of the FFT, below. */
+		std::shared_ptr< const SeaShelterMap > shelterMap;
+		uint64_t shelterGeneration = 0;
+
+		{
+			const Base::MutexLock lock{m_shelterAccess};
+
+			shelterMap = m_shelterMap;
+			shelterGeneration = m_shelterGeneration;
+		}
+
+		const bool uploadShelter = shelterGeneration != m_uploadedShelterGeneration;
+
+		if ( uploadShelter && !this->stageShelterMap(frameIndex, shelterMap.get()) )
+		{
+			return false;
+		}
 
 		/* The uniforms of this frame. */
 		{
@@ -584,6 +817,13 @@ namespace EmEn::Graphics::Geometry
 			uniforms.level = {m_parameters.seaLevel, 0.0F, 0.0F, 0.0F};
 			uniforms.cascades = {m_parameters.waves.cascadeSizes[0], m_parameters.waves.cascadeSizes[1], m_parameters.waves.cascadeSizes[2], static_cast< float >(OceanWaves::CascadeCount)};
 			uniforms.textureCoordinates = {m_parameters.textureRepeatsPerMetre, m_parameters.textureRepeatsPerMetre, 0.0F, 0.0F};
+			uniforms.shelter = m_shelterRectangle;
+			/* A share is a part of the waves: 0 to 1, and nothing for a value that is not a number. */
+			const auto share = [] (float value) noexcept {
+				return std::isfinite(value) ? std::clamp(value, 0.0F, 1.0F) : 0.0F;
+			};
+
+			uniforms.shelteredShares = {share(std::get< 0 >(m_parameters.shelteredWaveShares)), share(std::get< 1 >(m_parameters.shelteredWaveShares)), share(std::get< 2 >(m_parameters.shelteredWaveShares)), 0.0F};
 
 			for ( uint32_t level = 0; level < OceanSurface::MaxLevelsOfDetail; ++level )
 			{
@@ -615,6 +855,11 @@ namespace EmEn::Graphics::Geometry
 
 		m_previousTime = elapsed;
 
+		if ( uploadShelter )
+		{
+			this->recordShelterUpload(*commandBuffer, frameIndex);
+		}
+
 		m_waves->recordUpdate(*commandBuffer, time, deltaTime);
 
 		if ( !commandBuffer->end() )
@@ -631,6 +876,12 @@ namespace EmEn::Graphics::Geometry
 			Tracer::error(ClassId, "Unable to submit the FFT !");
 
 			return false;
+		}
+
+		/* The upload is on the queue: the image holds this map from this frame on. */
+		if ( uploadShelter )
+		{
+			m_uploadedShelterGeneration = shelterGeneration;
 		}
 
 		m_surfaceUpdated = true;

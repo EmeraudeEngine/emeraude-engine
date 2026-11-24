@@ -317,7 +317,21 @@ Two interfaces define scene-wide physical levels for gameplay queries:
 - `getNormalAt(worldPosition)` - Water surface normal (flat = {0,1,0})
 - `isSubmerged(worldPosition)` - True if position.Y < water level
 - `getDepthAt(worldPosition)` - Depth below water (positive = submerged)
+- `waterMedium()` - The water the sea DECLARES (`Scenes::WaterMedium`), or null: what the underwater view reads; a
+  sea without declared water has no underwater view (2026-11-23). A renderable sea answers the water its surface
+  material declares (`Material::Interface::waterVolume()`, `StandardResource::setWaterVolume()` — one statement,
+  2026-11-24), once it is ready for instantiation
+- `surfaceWaves()` - What a pass binds to know where a MOVING surface stands (`Graphics::SeaSurfaceWaves`), null for a
+  surface at rest (render thread, valid for the frame)
+- `adaptToGround(ground, boundary)` - The scene presents its ground to its sea, whenever it holds both
+  (`Scene::presentGroundToSea()`: construction, `setGroundLevel()`, `setSeaLevel()`): an ocean learns there where the
+  land shelters its water and calms its waves (graphics doc 44, 2026-11-24); a surface at rest does nothing
 - `updateVisibility(cameraPosition)` - Visibility hint
+
+The two seas are one family (`Graphics::Renderable::AbstractSea`, 2026-11-23): the level, the material, the water,
+the flat-level answers and the two-sided drawing live at that level; `getLevelAt(worldPosition)` is its one
+customization point. ⚠️ The ocean still answers its level AT REST: the CPU does not know the waves. Graphics doc 13-12
+§ 44 (`44-watervolume-the-underwater-view.md`).
 
 **Scene accessors:**
 ```cpp

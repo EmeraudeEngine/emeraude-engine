@@ -441,6 +441,36 @@ namespace EmEn::Graphics
 	}
 
 	void
+	ViewMatrices2DUBO::latchFrameHistory (uint32_t readStateIndex, bool broken) noexcept
+	{
+		if ( readStateIndex >= m_renderState.size() ) [[unlikely]]
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			m_frameHistoryContinues = false;
+
+			return;
+		}
+
+		/* NOTE: The render state at this index is the frame's for its whole recording (see archiveStateAfterRendering()). */
+		const auto & frameState = *std::next(m_renderState.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex));
+
+		m_frameHistoryContinues = !broken && m_previousState.archived && m_previousState.viewEpoch == frameState.viewEpoch;
+
+		if ( m_frameHistoryContinues )
+		{
+			return;
+		}
+
+		/* Another view, or none before: the frame is its own past. A velocity built from these has no camera motion
+		 * (the motion blur streaked the whole first frame of a camera cut across the previous camera's view), and a
+		 * reprojection from them reads the same pixel — of a history its integrator drops (frameHistoryContinues()). */
+		m_previousState.view = frameState.view;
+		m_previousState.infinityView = frameState.infinityView;
+		m_previousState.projection = frameState.projection;
+	}
+
+	void
 	ViewMatrices2DUBO::archiveStateAfterRendering (uint32_t readStateIndex) noexcept
 	{
 		if constexpr ( IsDebug )
@@ -471,6 +501,8 @@ namespace EmEn::Graphics
 		 * SINGLE-buffered, and the resulting CPU/GPU race produced a constant ~1-2 px
 		 * bogus velocity on a static camera. */
 		m_previousState.projection = renderedState.projection;
+		m_previousState.viewEpoch = renderedState.viewEpoch;
+		m_previousState.archived = true;
 	}
 
 	bool

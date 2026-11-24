@@ -27,6 +27,7 @@
 #pragma once
 
 /* Project configuration. */
+#include "emeraude_platform.hpp"
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
@@ -39,6 +40,9 @@
 
 /* Local inclusions for usages. */
 #include "Vulkan/Loader.hpp"
+#if IS_MACOS
+	#include "PlatformSpecific/Helpers.hpp"
+#endif
 
 namespace EmEn
 {
@@ -189,6 +193,11 @@ namespace EmEn
 			bool onTerminate () noexcept override;
 
 			PrimaryServices & m_primaryServices;
+#if IS_MACOS
+			/* Held from onInitialize() to onTerminate(), in every run: without it App Nap demotes a window-less process
+			 * 30 s after its launch (owner decision 2026-11-22). Before the loader and GLFW: ended after both are gone. */
+			PlatformSpecific::ProcessActivity m_processActivity;
+#endif
 			/* NOTE: Opened before glfwInit(), closed after glfwTerminate(); this service is initialized before the Vulkan
 			 * instance and terminated after it, so every Vulkan object is gone before the loader closes. */
 			Vulkan::Loader m_vulkanLoader;

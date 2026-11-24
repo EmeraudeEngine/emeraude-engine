@@ -41,8 +41,18 @@
  * slopes, through the heightfield per-pixel frame.
  * @note Its descriptor set layout is the heightfield's plus one binding (Saphir::Generator::getOceanSurfaceDescriptorSetLayout()):
  * binding 0 is the displacement, binding 1 the slopes, binding 2 the Uniforms below, binding 3 the whitecap foam, binding
- * 4 the previous frame's displacement (the velocity of the displaced surface).
+ * 4 the previous frame's displacement (the velocity of the displaced surface), binding 5 the shelter map.
  * @note Everything both sides must agree on lives HERE.
+ * @note THE MESH: a patch cell of the finest level, between the lattice points (x, z) and (x + 1, z + 1) in cells of
+ * Uniforms::grid.x metres, is cut along its (x, z)-(x + 1, z + 1) diagonal into the triangles (x, z), (x, z + 1),
+ * (x + 1, z + 1) and (x, z), (x + 1, z + 1), (x + 1, z) — OceanSurfaceResource's patch indices. Each lattice point is
+ * moved by the displacement read AT that point and the surface is flat in between: what `ocSurfaceRiseAt()` walks
+ * (Saphir::Generator, the ocean surface helper) to tell how high the DRAWN surface stands over a world XZ. Change the
+ * two together.
+ * @note THE SHELTER MAP (owner decisions 2026-11-24, engine item ocean-sheltered-water): one channel over a rectangle
+ * of the world, 1 where the water is the open sea, 0 where land shelters it. Every read of the cascades — the
+ * displacement, the normals, the whitecaps — weighs each cascade by `mix(shelteredShares[cascade], 1, map)`: a
+ * sheltered water keeps the share of its smallest waves alone. Outside the rectangle the map's edge holds: the sea.
  */
 namespace EmEn::Graphics::Geometry::OceanSurface
 {
@@ -56,8 +66,12 @@ namespace EmEn::Graphics::Geometry::OceanSurface
 	static constexpr uint32_t FoamBinding{3};
 	/** @brief Binding of the PREVIOUS frame's displacement cascades (sampler2DArray, same layout as the displacement). */
 	static constexpr uint32_t PreviousDisplacementBinding{4};
+	/** @brief Binding of the shelter map (sampler2D, one channel): 1 the open sea, 0 a water sheltered by land. */
+	static constexpr uint32_t ShelterBinding{5};
 	/** @brief Maximum number of levels of detail (quadtree depth) the uniform block describes. */
 	static constexpr uint32_t MaxLevelsOfDetail{16};
+	/** @brief The most texels a side of the shelter map may hold (what base VertexFactory::buildShelterMap() takes). */
+	static constexpr uint32_t MaxShelterMapSide{4096};
 
 	/**
 	 * @brief The per-frame uniform block (std140, vec4 members only).
@@ -73,6 +87,12 @@ namespace EmEn::Graphics::Geometry::OceanSurface
 		std::array< float, 4 > cascades{};
 		/** @brief x = U per metre, y = V per metre, z = U at x = 0, w = V at z = 0. */
 		std::array< float, 4 > textureCoordinates{};
+		/** @brief The shelter map's rectangle: x = the world X of its first corner (m), y = its world Z, z = 1 / its
+		 * side on X (1/m), w = 1 / its side on Z. All zero without a map: every read lands on one texel of a map that
+		 * is the open sea everywhere. */
+		std::array< float, 4 > shelter{};
+		/** @brief xyz = the share of each cascade's waves a sheltered water keeps (0 to 1), w = unused. */
+		std::array< float, 4 > shelteredShares{};
 		/** @brief Per level of detail: x = morph start (m), y = 1 / (morph end − morph start), z = the distance it is drawn to (m), w = unused. */
 		std::array< std::array< float, 4 >, MaxLevelsOfDetail > levelsOfDetail{};
 	};
@@ -87,6 +107,11 @@ namespace EmEn::Graphics::Geometry::OceanSurface
 	static constexpr auto PreviousPositionVariable{"ocPreviousPosition"};
 	/** @brief GLSL name of the whitecap foam sampler. */
 	static constexpr auto FoamSamplerName{"ocFoam"};
+	/** @brief GLSL name of the shelter map sampler. */
+	static constexpr auto ShelterSamplerName{"ocShelter"};
+	/** @brief GLSL name of the function returning how high the DRAWN surface stands above the sea level over a world
+	 * XZ, around the eye (the finest level's mesh): `float ocSurfaceRiseAt(vec2)`. */
+	static constexpr auto SurfaceRiseFunction{"ocSurfaceRiseAt"};
 	/** @brief GLSL name of the fragment-stage function returning the whitecap coverage at a lattice XZ: `float ocWhitecapAt(vec2)`. */
 	static constexpr auto WhitecapFunction{"ocWhitecapAt"};
 	/** @brief GLSL block type name of the uniforms. */

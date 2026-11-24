@@ -73,6 +73,16 @@ class Interface {
   above 0 emits them at the glTF photometric anchor (2000 nits per unit, `EmissiveLuminanceAnchor`) — invisible by day,
   a coloured glow at night once the auto exposure opens (Khronos' CarConcept: its logo map's (4, 2, 4) background turned
   the rims and mirrors magenta, 2026-10-28)
+- `perLoadMaterialNames` + `perLoadKey` (2026-11-22) — create the named materials for THIS load only, under the key,
+  instead of sharing them with every load of the file; honoured by the glTF loader. A loader keys every resource on the
+  file, so two loads of one file get the SAME material: a change made at runtime on one object (a vehicle's brake light:
+  `StandardResource::setEmissiveStrengthValue()`) shows on every other. A named material's key gets `@<perLoadKey>`
+  (its `-vc` / `-uv0` variants with it), and so does every MESH resource that uses one (a mesh resource holds its
+  materials); the geometry, the textures and every other material stay shared. The caller takes its handles from
+  `onMeshLoaded` (`MeshDescriptor::materials`: their identity only, they are still being created) and writes them once
+  `isLoaded()`. Names without a key are ignored with a warning. Verified in projet-alpha's `city` (a car's three
+  lamps): `Visual.getState` answers `…/Mesh/BodyTaillights-38@ACTOR_…01` and its two siblings — three renderables of the car
+  carry the key, every other one keeps the file's.
 - `onMeshLoaded` — `std::function<void(MeshDescriptor &)>` callback invoked once per mesh, right after the renderable, geometry and materials have been registered in their containers and pushed to `output.meshes` (before nodes are wired). Lets the caller patch the descriptor in place — typical use cases: enable IBL reflection on the produced materials (`StandardResource::setReflectionComponentFromEnvironmentCubemap()`), swap a renderable, override geometry. Symmetric across `FBXLoader` and `GLTFLoader` (5 invocation sites total: 4 in FBXLoader including the fallback paths, 1 in GLTFLoader).
 - `skipSkinning` — skip bone weights, skins, and animations
 - `forceDoubleSided` — `bool`, default `false`. Forces **every** material part of the loaded model to `RasterizationOptions{ CullingMode::None }`, OR-ed with the per-material asset flag (see *Double-sided materials* below). Symmetric across `FBXLoader` (applied per material part, default-material parts included) and `GLTFLoader` (per primitive). Use it when the asset's format/exporter cannot carry a double-sided flag the loader can read — the canonical case is **Mixamo FBX rigs**, which ship plain `FbxSurfacePhong` materials: ufbx only surfaces `double_sided` for glTF-style materials, so these models always import single-sided and thin shells (inner armour, cloth) render with see-through holes. Blunt instrument (whole model); for per-mesh selectivity use the `onMeshLoaded` hook instead. Two-sided lighting (back-face normal flip) is already engine-side, so forced back-faces are correctly lit. Validated on the Paladin (`src/Actor/Paladin.cpp`).

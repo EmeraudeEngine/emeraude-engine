@@ -40,6 +40,12 @@
 /* Local inclusions for usages. */
 #include "Physics/CharacterController.hpp"
 
+/* Forward declarations. */
+namespace EmEn::Scenes
+{
+	class AbstractEntity;
+}
+
 namespace EmEn::Scenes::Component
 {
 	/**
@@ -69,6 +75,9 @@ namespace EmEn::Scenes::Component
 				LeftGround,
 				/** Hit a wall, a slope too steep or a ceiling. */
 				HitWall,
+				/** A dynamic body ran into the character (2026-11-21); data: Physics::CharacterController::Strike (the
+				 * body's own speed toward the character, m/s, and its mass, kg). The character is not moved by it. */
+				Struck,
 				/* Enumeration boundary. */
 				MaxEnum
 			};

@@ -32,8 +32,18 @@
 /* Local inclusions for usages. */
 #include "Math/Vector.hpp"
 
+/* Forward declarations. */
+namespace EmEn::Graphics
+{
+	struct SeaSurfaceWaves;
+}
+
 namespace EmEn::Scenes
 {
+	/* Forward declarations. */
+	class GroundLevelInterface;
+	class WaterMedium;
+
 	/**
 	 * @brief Interface to define a visible and physical sea level in a scene.
 	 */
@@ -120,6 +130,42 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			virtual float getDepthAt (const Base::Math::Vector< 3, float > & worldPosition) const noexcept = 0;
+
+			/**
+			 * @brief Returns the water the sea declares, or nullptr when it declares none.
+			 * @note The sea level answers the optics of its water (owner decision 2026-11-23, engine item
+			 * underwater-view): what the underwater view reads. A renderable sea answers the water its surface material
+			 * declares (Graphics::Material::Interface::waterVolume(), owner decision 2026-11-24): one statement, read by
+			 * the surface's shading and by the view from below. A sea without declared water has no underwater view and
+			 * is drawn as a surface seen from above.
+			 * @return const WaterMedium *
+			 */
+			[[nodiscard]]
+			virtual const WaterMedium * waterMedium () const noexcept = 0;
+
+			/**
+			 * @brief The scene presents its ground to its sea: the sea adapts to it.
+			 * @note Called by the scene whenever it holds both (Scene::setGroundLevel(), Scene::setSeaLevel(), its
+			 * construction), again if either changes. A sea whose surface moves learns there where the land shelters
+			 * its water — a basin enclosed in an island, behind a passage too narrow for the swell — and calms its waves
+			 * there (owner decisions 2026-11-24, engine item ocean-sheltered-water); a surface at rest has nothing to
+			 * adapt.
+			 * @note Synchronous, on the thread that builds the scene: a bounded computation over the scene's square.
+			 * @param ground A reference to the scene's ground. Only read during the call.
+			 * @param boundary The scene's boundary, in metres: the ground is read over the square [-boundary, boundary]
+			 * on X and Z.
+			 */
+			virtual void adaptToGround (const GroundLevelInterface & ground, float boundary) noexcept = 0;
+
+			/**
+			 * @brief Returns what a pass binds to know where the MOVING surface stands (the displacement its mesh is
+			 * drawn with), or nullptr when the surface is at rest — it then is the level, everywhere.
+			 * @note ⚠️ RENDER THREAD, valid for the frame it is asked in. Null too while a moving surface has not been
+			 * drawn yet: its displacement holds nothing before its first update.
+			 * @return const Graphics::SeaSurfaceWaves *
+			 */
+			[[nodiscard]]
+			virtual const Graphics::SeaSurfaceWaves * surfaceWaves () const noexcept = 0;
 
 			/**
 			 * @brief Updates the water surface visibility from the camera position.

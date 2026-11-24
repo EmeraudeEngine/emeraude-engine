@@ -136,6 +136,20 @@ behind a beam before calling it a defect.
 
 - One program set per beam: the renderable name enters the program cache key and every beam owns its material
   (tens of beams: fine; hundreds: batch them in a `Multiple` — the rejected alternative).
+- ⚠️ **Never create a beam per EVENT (a shot, a strike): keep one and move it.** A beam's material, geometry and
+  renderable (`Beam#<n>/<component>`) stay in their stores until the scene closes, whatever becomes of the component:
+  a weapon that created a beam per shot left 161 of each after 161 shots (2026-11-22; item
+  `beam-and-path-resources-outlive-their-component`, a path does the same). A beam is made to be REUSED:
+  `setStart()` / `setEnd()` re-tessellate on change only, `setEnabled(false)` publishes no station and takes it out
+  of the render lists, the material's luminance may be changed every cycle (a fade).
+- ⚠️ **A beam whose points move is culled on its NEW box — since 2026-11-22.** `updateBounds()` notifies
+  `ComponentBoundariesModified`; until that day the entity refreshed its COLLISION shape alone on it: its render box
+  (the extent a frame culls it on) stayed the one of its last `updateEntityProperties()`, and so did its sector of
+  the rendering octree. A reused laser trace showed only while the camera looked the way of its FIRST shot (495 red
+  pixels that way, 0 with the camera turned north or east, the beam enabled with its new points). Now
+  `AbstractEntity::refreshRenderBoundaries()` rebuilds the render box on the notification, and the scene files the
+  entity again (`takeRenderBoxChange()`): drawn in six directions, the first shot 5.6 m long, 0 validation message.
+  A path and a skinned visual go through the same notification (scenes doc 12, the culling row).
 - The material UBO lives in ONE frame region: only the look goes there. Endpoints never — they would race the
   frame in flight (`docs/subsystems/graphics/25-16-…` Rule 1).
 - A disabled or zero-length beam publishes NO station: its directory entry is empty, `isDrawnInScene()` keeps it out

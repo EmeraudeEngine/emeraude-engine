@@ -70,6 +70,22 @@ namespace EmEn::Scenes::Loaders
 		 */
 		std::unordered_set< std::string > nonEmissiveMaterialNames;
 		/**
+		 * @brief Materials (by their name in the file) created for THIS load only, under perLoadKey, instead of being
+		 * shared by every load of the file.
+		 * @note For a material the caller DRIVES at runtime per object (a vehicle's brake light: its emissive strength):
+		 * a loader creates every resource under a key derived from the file, so two loads of one file get the SAME
+		 * material and a change on one object shows on every other. A material named here is created under that key
+		 * followed by `@<perLoadKey>`, and so is every mesh resource that uses one (a mesh resource holds its
+		 * materials); the geometry, the textures and every other material stay shared. The caller keeps its handles
+		 * from onMeshLoaded (MeshDescriptor::materials: read their identity there, configure them once loaded).
+		 * @note Ignored, with a warning, while perLoadKey is empty. Like every resource, these leave their stores once
+		 * nothing uses them any more (Resources::Manager::unloadUnusedResources()).
+		 * Honoured by the glTF loader.
+		 */
+		std::unordered_set< std::string > perLoadMaterialNames;
+		/** @brief The key of this load's own materials (perLoadMaterialNames): unique per object, e.g. its node's name. */
+		std::string perLoadKey;
+		/**
 		 * @brief Optional per-mesh hook invoked right after a mesh's renderable, geometry
 		 * and materials have been registered. Lets the caller patch the DESCRIPTOR in place
 		 * (override geometry, swap a renderable, keep a handle).

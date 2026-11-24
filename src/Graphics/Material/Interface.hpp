@@ -89,6 +89,11 @@ namespace EmEn
 		class FragmentShader;
 	}
 
+	namespace Scenes
+	{
+		class WaterMedium;
+	}
+
 	namespace Graphics
 	{
 		class Renderer;
@@ -772,6 +777,24 @@ namespace EmEn::Graphics::Material
 			meshShadingReliefReach () const noexcept
 			{
 				return 0.0F;
+			}
+
+			/**
+			 * @brief Returns the WATER behind the surface when the material declares one: the surface is then the
+			 * interface of that water.
+			 * @note The ONE statement of a sea's water (owner decision 2026-11-24, engine item underwater-view): the
+			 * surface shades with it, and the sea that wears the material answers it to the scene
+			 * (Renderable::AbstractSea::waterMedium(), read by the underwater view) — above and below agree by
+			 * construction.
+			 * @note Stated while the material loads and never changed after: read without a lock once the resource
+			 * is loaded.
+			 * @return const Scenes::WaterMedium * Null when the material declares no water (the default).
+			 */
+			[[nodiscard]]
+			virtual const Scenes::WaterMedium *
+			waterVolume () const noexcept
+			{
+				return nullptr;
 			}
 
 			/**

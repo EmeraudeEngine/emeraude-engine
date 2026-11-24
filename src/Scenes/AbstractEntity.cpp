@@ -96,14 +96,14 @@ namespace EmEn::Scenes
 					}
 					break;
 
-				/* NOTE: Per-tick signal from animated skinned visuals — shape only, no
-				 * physical properties re-derivation.
+				/* NOTE: Per-tick signal from animated skinned visuals, and from a beam or a path whose points
+				 * moved — the collision shape and the render box only, no physical properties re-derivation.
 				 * DEFERRED: this notification fires from component->processLogics() (the logic
 				 * thread, during the component dispatch); the flag is consumed at the end of
-				 * AbstractEntity::processLogics(), which deduplicates multiple visuals notifying in
+				 * AbstractEntity::processLogics(), which deduplicates multiple components notifying in
 				 * the same tick. */
 				case Component::Abstract::ComponentBoundariesModified :
-					m_collisionBoundariesDirty = true;
+					m_boundariesDirty = true;
 					break;
 
 				default:
@@ -496,6 +496,38 @@ namespace EmEn::Scenes
 					break;
 			}
 		}
+	}
+
+	void
+	AbstractEntity::refreshRenderBoundaries () noexcept
+	{
+		Space3D::AACuboid< float > rebuilt;
+
+		{
+			const Base::MutexLock lock{m_componentsMutex};
+
+			for ( const auto & component : m_components )
+			{
+				/* The rule of updateEntityProperties(): what draws and is not a debug overlay. */
+				if ( component->isRenderable() && component->contributesToEntityExtents() )
+				{
+					rebuilt.merge(component->renderBoundingBox());
+				}
+			}
+		}
+
+		/* The same box (a component notified a volume that does not reach the union): nothing to publish nor to refile. */
+		if ( rebuilt.isValid() == m_renderBoundingBox.isValid() &&
+			(!rebuilt.isValid() || (rebuilt.minimum() == m_renderBoundingBox.minimum() && rebuilt.maximum() == m_renderBoundingBox.maximum())) )
+		{
+			return;
+		}
+
+		m_renderBoundingBox = rebuilt;
+		/* The render box is rebuilt: the extent published from it is computed again (publishRenderExtent()), and the
+		 * scene files the entity again in its rendering octree (takeRenderBoxChange()). */
+		++m_renderBoxGeneration;
+		m_renderBoxReshaped = true;
 	}
 
 	void
@@ -952,17 +984,18 @@ namespace EmEn::Scenes
 		/* cppcheck-suppress knownConditionTrueFalse ; m_contentRefreshDeferred is set by deferContentRefreshDuringDispatch() during the dispatch. */
 		if ( contentRefreshDeferred )
 		{
-			m_collisionBoundariesDirty = false;
+			m_boundariesDirty = false;
 
 			this->updateEntityProperties();
 		}
-		/* Deferred collision shape refresh (ComponentBoundariesModified, raised during the dispatch): consumed here, once
-		 * per cycle. */
-		else if ( m_collisionBoundariesDirty )
+		/* Deferred boundaries refresh (ComponentBoundariesModified, raised during the dispatch or by a setter since the
+		 * last cycle): the collision shape and the render box, consumed here, once per cycle. */
+		else if ( m_boundariesDirty )
 		{
-			m_collisionBoundariesDirty = false;
+			m_boundariesDirty = false;
 
 			this->refreshCollisionBoundaries();
+			this->refreshRenderBoundaries();
 		}
 
 		/* NOTE: If the entity has move, we save the cycle number. */

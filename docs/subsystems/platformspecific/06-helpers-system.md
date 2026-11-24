@@ -36,12 +36,17 @@ const bool useKdialog = hasKdialog() && (!hasZenity() || isKdeDesktop());
 | `createConsole(title)` | Creates debug console window |
 | `attachToParentConsole()` | Attaches to parent console |
 
-### macOS Helpers (`Helpers.mac.cpp`)
+### macOS Helpers (`Helpers.mac.cpp`, `AppKitDefaults.mac.mm`, `ProcessActivity.mac.mm`)
 
-macOS helpers are minimal - Objective-C provides native string handling. NSString conversion is done inline using `stringWithUTF8String:`.
+No string helper here: Objective-C provides native string handling, and an NSString conversion is done inline with `stringWithUTF8String:`. An Objective-C++ helper (`.mm`) is compiled with ARC and typed into the explicit macOS list of `cmake/PrepareEngineSourceFiles.cmake`.
 
 | Function | Purpose |
 |----------|---------|
 | `pinVulkanLoaderToBundledDriver()` | Sets `VK_DRIVER_FILES` to the bundle's `Contents/Resources/vulkan/icd.d/MoltenVK_icd.json` (unless already set, or absent), so the loader loads that driver only. Takes the resources directory (`FileSystem::resourcesDirectory()`). Called by `PlatformManager` before `glfwInit()`. See [18-macos-vulkan-driver-pinned-to-the-bundle.md](18-macos-vulkan-driver-pinned-to-the-bundle.md) |
+| `disableWindowStateRestoration()` | Registers `ApplePersistenceIgnoreState = YES` in the volatile registration domain (`AppKitDefaults.mac.mm`), before `glfwInit()`: no "reopen the windows?" modal after a crash. `docs/caution-points.md` § *macOS: AppKit's window state restoration is off* |
+| `wakeDisplays(timeout)` | Wakes the displays when EVERY online display sleeps, before `glfwInit()` (GLFW skips a sleeping display). `docs/caution-points.md` § *macOS: a sleeping display is woken to start* |
+| `DisplaySleepInhibitor` (macOS, Windows) | RAII token: the display stays awake while held (`Window`, setting `Core/Video/Window/PreventDisplaySleep`). Same section |
+| `ProcessActivity` | RAII token: the process is declared ACTIVE to macOS while held (`NSProcessInfo beginActivityWithOptions:reason:`, user initiated + latency critical, the system's idle sleep still allowed; `ProcessActivity.mac.mm`). Held by `PlatformManager` from `onInitialize()` (before `glfwInit()`) to `onTerminate()`, in EVERY run: without it App Nap demotes a process that shows no window 30 s after its launch. `docs/caution-points.md` § *macOS: App Nap demoted a window-less process after 30 s* |
+| `setCurrentThreadTimeConstraint(period, computation)` | Puts the calling thread under the Mach time-constraint policy (the logic thread, on itself). `docs/caution-points.md` § *macOS coalesces every non-real-time timed wait* |
 
 ---

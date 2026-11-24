@@ -94,6 +94,15 @@ namespace EmEn::Graphics::Effects::Lighting
 			}
 
 			/**
+			 * @brief The camera distance, in multiples of the reach (Parameters::maxDistance), at which the ambient occlusion has
+			 * faded out.
+			 * @warning The MIRROR of the trace shader's `maxDistance * 20.0` (RTAO.cpp): change both. A terrain reads it to
+			 * check that its ray-tracing proxy holds the drawn surface as far as the effect acts
+			 * (Geometry::CDLODTerrainResource::planRayTracingProxy()).
+			 */
+			static constexpr float FadeRangeFactor{20.0F};
+
+			/**
 			 * @brief User-facing RTAO parameters.
 			 */
 			struct EMEN_API Parameters

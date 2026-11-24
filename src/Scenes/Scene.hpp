@@ -42,6 +42,7 @@
 #include <iterator>
 #include <map>
 #include <memory>
+#include <optional>
 #include <ranges>
 #include <ratio>
 #include <set>
@@ -63,6 +64,7 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "AtmosphericMedium.hpp"
 #include "Audio/Source.hpp"
 #include "BaseUtility.hpp"
 #include "BindlessTextureSet.hpp"
@@ -94,7 +96,6 @@
 #include "NodeController.hpp"
 #include "OctreeSector.hpp"
 #include "OrbitController.hpp"
-#include "ParticipatingMedium.hpp"
 #include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "Physics/SoftStepSolver.hpp"
 #include "PhysicsRecorder.hpp"
@@ -554,6 +555,9 @@ namespace EmEn::Scenes
 				this->rebuildRenderingOctree(true);
 
 				this->rebuildPhysicsOctree(true);
+
+				/* The sea reads the ground over the scene's square: a new square, a new reading. */
+				this->presentGroundToSea();
 			}
 
 			/**
@@ -1144,42 +1148,43 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets the scene's participating medium — the ONE atmosphere every volumetric
-			 * consumer integrates.
+			 * @brief Sets the scene's atmospheric medium — the AIR of the scene, the one atmosphere every
+			 * volumetric consumer of the air integrates.
+			 * @note The water of a sea is declared by the sea level itself (SeaLevelInterface::waterMedium()).
 			 *
 			 * @note ⚠️ The default is a VACUUM, and it must stay one: a non-zero default would put
 			 * fog in every scene of the engine at once.
 			 *
 			 * @param medium A reference to the medium.
 			 *
-			 * @see ParticipatingMedium::ClearAir(), ParticipatingMedium::Fog() For presets.
+			 * @see AtmosphericMedium::ClearAir(), AtmosphericMedium::Fog() For presets.
 			 */
 			void
-			setParticipatingMedium (const ParticipatingMedium & medium) noexcept
+			setAtmosphericMedium (const AtmosphericMedium & medium) noexcept
 			{
-				m_participatingMedium = medium;
+				m_atmosphericMedium = medium;
 			}
 
 			/**
-			 * @brief Returns the scene's participating medium (const).
-			 * @return const ParticipatingMedium &
+			 * @brief Returns the scene's atmospheric medium (const).
+			 * @return const AtmosphericMedium &
 			 */
 			[[nodiscard]]
-			const ParticipatingMedium &
-			participatingMedium () const noexcept
+			const AtmosphericMedium &
+			atmosphericMedium () const noexcept
 			{
-				return m_participatingMedium;
+				return m_atmosphericMedium;
 			}
 
 			/**
-			 * @brief Returns the scene's participating medium (mutable).
-			 * @return ParticipatingMedium &
+			 * @brief Returns the scene's atmospheric medium (mutable).
+			 * @return AtmosphericMedium &
 			 */
 			[[nodiscard]]
-			ParticipatingMedium &
-			participatingMedium () noexcept
+			AtmosphericMedium &
+			atmosphericMedium () noexcept
 			{
-				return m_participatingMedium;
+				return m_atmosphericMedium;
 			}
 
 			/* ============================================================
@@ -1555,6 +1560,8 @@ namespace EmEn::Scenes
 				m_groundLevel = ground;
 				m_groundLevelRenderable = std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(ground);
 
+				this->presentGroundToSea();
+
 				this->registerSceneVisualComponents();
 			}
 
@@ -1571,6 +1578,46 @@ namespace EmEn::Scenes
 			{
 				return m_groundLevel;
 			}
+
+			/** @brief What a ray met first (castRay()). */
+			struct RayHit final
+			{
+				/** @brief The entity met; null for the ground. */
+				std::shared_ptr< AbstractEntity > entity;
+				/** @brief Where, in world space. */
+				Base::Math::Vector< 3, float > point;
+				/** @brief The surface's normal there, toward the ray's origin. */
+				Base::Math::Vector< 3, float > normal;
+				/** @brief How far from the ray's origin, metres. */
+				float distance{0.0F};
+			};
+
+			/** @brief The longest ray castRay() follows, metres: a longer one is cut there. */
+			static constexpr float MaxRayDistance{10000.0F};
+
+			/**
+			 * @brief Casts a ray through the PHYSICS world of the scene and returns what it meets first: the ground's
+			 * triangles and every collidable entity with a collision model — the static solids, the bodies, the
+			 * kinematic characters (2026-11-22; a direct-hit weapon, a line of sight).
+			 * @note The same shapes the bodies collide with: what has no collision model is not met (a visual, a
+			 * decorative tree). A TRIANGLE — the ground's, a mesh's — is met exactly (segment against triangle), from
+			 * its front only as for the bodies (a two-sided mesh from both); a convex shape — a capsule, a box, a
+			 * sphere — by a point swept by the solver's narrow phase. A shape the ray STARTS inside is not met (the ray
+			 * leaves it).
+			 * @note The ray is followed in stretches of 32 m, each with its own small box of triangles to visit: the
+			 * first stretch that meets something ends it.
+			 * @note Thread: the thread that runs the scene's logic, OUTSIDE the physics step — it takes the physics
+			 * octree's lock. Called from inside the step (a contact handler run under it) it is refused, with an
+			 * error: the step's own events are emitted after it, where a ray may be cast.
+			 * @param origin Where the ray starts, in world space.
+			 * @param direction Where it goes, any length.
+			 * @param maxDistance How far it is followed, metres (> 0; beyond MaxRayDistance it is cut there).
+			 * @param ignored An entity the ray passes through (the one that casts it), or null.
+			 * @return std::optional< RayHit > Nothing when the ray meets nothing, or for an origin, a direction or a
+			 * distance that is not finite, a zero direction, a distance that is not positive.
+			 */
+			[[nodiscard]]
+			std::optional< RayHit > castRay (const Base::Math::Vector< 3, float > & origin, const Base::Math::Vector< 3, float > & direction, float maxDistance, const AbstractEntity * ignored = nullptr) const noexcept;
 
 			/**
 			 * @brief Returns the current scene terrain renderable.
@@ -1665,6 +1712,8 @@ namespace EmEn::Scenes
 			{
 				m_seaLevel = seaLevel;
 				m_seaLevelRenderable = std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(seaLevel);
+
+				this->presentGroundToSea();
 
 				this->registerSceneVisualComponents();
 			}
@@ -2695,19 +2744,25 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			Graphics::Compute::IBLBaker::StarMask environmentStarMask () const noexcept;
 
-		private:
-
 			/**
-			 * @brief Counts one temporal discontinuity of the scene (a background swap, an IBL replaced at once), published
-			 * with the next render state slot (temporalDiscontinuityEpoch()).
-			 * @note Any thread. Private on purpose (owner decision 2026-11-03): game code gets a public call only with a
-			 * real case.
+			 * @brief Counts one temporal discontinuity of the scene — its lighting just stepped — published with the next
+			 * render state slot (temporalDiscontinuityEpoch()): the renderer marks the 25 frames that follow
+			 * (FrameContext::temporalDiscontinuity) and the temporal integrators converge at once instead of over their
+			 * history (graphics doc 13-12 § 43).
+			 * @note The scene raises it itself for a background swap and an IBL replaced at once, the light set for a light
+			 * added, removed, switched or stepped. PUBLIC since 2026-11-22 (owner decision) for the emission the engine cannot
+			 * see step: an EMISSIVE MATERIAL switched by the code that owns it (a vehicle's brake lamps, a sign that lights
+			 * up), which is no light of the light set. Call it on the logic cycle that writes the step, once per step:
+			 * every marked frame runs TAA's large-change test and the GI denoiser's pooled reset over the whole picture.
+			 * @note Any thread.
 			 */
 			void
 			raiseTemporalDiscontinuity () noexcept
 			{
 				m_temporalDiscontinuityEpoch.fetch_add(1, std::memory_order_relaxed);
 			}
+
+		private:
 
 			/* ============================================================
 			 * [PRIVATE: OBSERVER]
@@ -2973,6 +3028,20 @@ namespace EmEn::Scenes
 			 * @brief Saves scene global visual components.
 			 */
 			void registerSceneVisualComponents () noexcept;
+
+			/**
+			 * @brief Presents the scene's ground to its sea, when it holds both: the sea adapts to it
+			 * (SeaLevelInterface::adaptToGround() — an ocean learns where the land shelters its water).
+			 * @note Called whenever either is set, and when the scene's boundary changes (the square the sea reads).
+			 */
+			void
+			presentGroundToSea () noexcept
+			{
+				if ( m_seaLevel != nullptr && m_groundLevel != nullptr )
+				{
+					m_seaLevel->adaptToGround(*m_groundLevel, m_boundary);
+				}
+			}
 
 			/**
 			 * @brief Applies the background lighting derivation for real — the background
@@ -3464,7 +3533,7 @@ namespace EmEn::Scenes
 			std::weak_ptr< Component::Camera > m_activeCamera EMEN_GUARDED_BY(m_activeCameraAccess);
 			/** @brief Physical environment (gravity, air density). Default: Earth. */
 			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
-			ParticipatingMedium m_participatingMedium{ParticipatingMedium::Vacuum()};
+			AtmosphericMedium m_atmosphericMedium{AtmosphericMedium::Vacuum()};
 			/** @brief The physics step's contact solver (soft step, persistent impulses). Mutable: the step runs from the const resolveCollisions(). */
 			mutable Physics::SoftStepSolver m_softStepSolver;
 			/** @brief The step's working sets, reused from one step to the next (no allocation once warm). */

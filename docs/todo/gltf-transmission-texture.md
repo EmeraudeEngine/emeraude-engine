@@ -16,6 +16,13 @@ tags: [gltf, material, defect]
 (its R channel modulates the factor per texel) is dropped. No model of the conformance bench fails on it, which is why
 the bench's 20 / 20 does not cover it (`docs/subsystems/scenes-loaders/07-gltf-conformance-bench-results.md`).
 
+## Confirmed on Linux (2026-11-24, RTX 3070 Ti, engine `develop` 74beadf5)
+
+The same capture of `TransmissionTest.glb` as for `transmission-ignores-metalness`: the red spheres of the
+"TransmissionTexture" column are uniform in the "Transmission" and "Metallic Transmission" rows, where the sample's
+reference picture shows them striped by the texture (the "Rough Transmission" row shows stripes: its roughness
+texture). `GLTFLoader.cpp` still reads the scalar factor alone (`setTransmissionComponentFromGrabPass(transmissionFactor)`).
+
 ## What remains
 
 - Read `transmissionTexture` (texture info + `KHR_texture_transform`) into the material's transmission component and

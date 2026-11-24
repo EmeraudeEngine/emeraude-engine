@@ -236,6 +236,222 @@ Missing, besides the retargeter itself: **no clip serializer** — `AnimationCli
 a path, a JSON value or memory, but nothing writes one back, so a retargeted clip does not survive
 the session.
 
+## 8. A mesh with NO skeleton — rig it on the source's own topology (2026-11-21)
+
+A generated character (a text-to-3D or image-to-3D mesh) arrives with no rig at all. There is then
+nothing to retarget **onto**, and the cheapest correct answer is to stop retargeting: give the mesh a
+skeleton with the **source's** topology — SOMA-30 — laid at the mesh's own joints. Kimodo's local
+rotations then play **verbatim**, with no table, no delta per clip and no `Animations::Retargeter`.
+That is what the prototype of § 6 did to the Paladin all along (it re-rigged it, it never
+retargeted it); the only new problems are the ones a rig used to solve for free.
+
+Proven end to end on `RevenantAlt.glb` (a projet-alpha test asset): 13 Kimodo clips baked in, loaded
+by `GLTFLoader` and cycled through `SkeletalAnimator` in the `+ModelViewer` — rest pose, clip 4 and
+clip 13 captured — with **0 `VUID-`, 0 `[Error]`**, the validation layer loaded (headless run, RTX
+3070 Ti). **Status**: the owner looked at that version on screen the same day — "it looks good, except
+that part of the chin moves with the thorax" — and the chin was fixed (§ 8.4). The joint positions
+are still the first estimate, never corrected by hand; the eight GAME clips of § 8.6 were verified by
+measurement and by a scripted run, not yet judged on screen.
+
+The chain is five scripts beside the prototype (`dependencies/kimodo.cpp/tools/`, README § 5; same
+warning as § 6: that checkout is unversioned).
+
+### 8.1 Preparing the mesh
+
+| | measured on `RevenantAlt.glb` |
+|---|---|
+| source | 1 028 441 vertices, **1 947 720 triangles**, ONE connected shell, 4 border and 2 non-manifold edges out of 2.92 M |
+| frame | unit height (0.98), centred on the origin, **facing +X** (so does `Hugo.glb`, from the same generator) |
+| prepared | 150 000 triangles, 116 341 vertices, turned to face +Z, feet on Y = 0 |
+| fidelity | source vertex → prepared surface: mean 0.03 %, max **0.14 %** of the height — the sampling floor |
+
+50 to 100 times the vertex count of every skinned mesh the engine had played (Paladin 9 805,
+`Character.glb` 19 322): the rigged version is a decimated SECOND file, the original stays static.
+
+⚠️ **A decimator must see the seams closed.** glTF stores a vertex once per (position, normal, UV):
+every UV seam is a row of duplicated vertices, i.e. an open border. Decimated as imported, each
+side of a seam collapses on its own and the surface tears along all of them. Import with the
+duplicates merged and let the UVs ride on the face corners.
+
+⚠️ **Never re-export the textures through the DCC.** Blender re-encodes a JPEG on export. The images
+are copied byte for byte from the source file into the result.
+
+### 8.2 Bind pose ≠ rest pose
+
+§ 3's shortcut needs both skeletons in the same pose. A generated mesh stands however its generator
+posed it — arms down at 13° from the vertical here, a 79° swing away from SOMA's T-pose. The full
+treatment, written for a skeleton being BUILT rather than mapped:
+
+```
+G(j)      the BIND rotation of joint j: the global rotation that carries SOMA's rest direction of
+          the bone leaving j onto the direction that bone has in the mesh
+offset(j) = G(parent)ᵀ · (p(j) − p(parent))     the bone, in its parent's T frame
+L_bind(j) = G(parent)ᵀ · G(j)                   the node's rest rotation — rest == bind
+IBM(j)    = [G(j) | p(j)]⁻¹                     the mesh is bound where it stands
+```
+
+A Kimodo rotation is then the node's animated rotation, unchanged: at `q = identity` the skeleton
+stands in SOMA's T-pose with this character's bone lengths; at `q = L_bind` it stands in the mesh.
+
+- `G(j)` is a **swing** only (shortest arc), taken **relative to the parent** so that a bent elbow
+  stays a pure bend instead of picking up a roll.
+- The **hand** needs a second direction or its roll about the forearm is arbitrary: the thumb. On the
+  Revenant the thumb moves the hand frame by 27.5° from the swing-only answer.
+- The **head** has no child along its axis: it aims at the midpoint of the eyes.
+- The hand bone follows the **palm** (wrist → knuckle), not the fingertip: curled claws would
+  otherwise be read as a flexed wrist and straightened backwards.
+- ⚠️ **The pitch of ankle → toe base IS the sole.** The foot's swing maps SOMA's flat foot (20.9°
+  below the horizontal) onto that direction: a toe base placed higher or lower tilts every planted
+  foot by the difference. The assembly prints both angles.
+
+Proof, in § 5's order: skinning the mesh with the hierarchy as stored moves it by **6.6e-8** of its
+height (rest == bind), read back from the file alone.
+
+### 8.3 Root translation — an affine map, not a scale
+
+X and Z scale by the leg-length ratio `s` (§ 3). The **height** does not: a character's standing hip
+height is not `s` times the source's — boots, a long pelvis, a heroic build.
+
+```
+y_target = h_target + s · (y_source − h_source)
+```
+
+`h` is the hip height at which each skeleton, legs straight, has its feet flat on the ground
+(Revenant: `s = 0.5034`, `h_source = 0.9886`, `h_target = 0.5531`; a pure scale would give 0.4977 and
+sink the feet by 5.6 % of the mesh height). Standing maps to standing, a crouch keeps its depth in
+leg lengths.
+
+⚠️ **This probably explains most of § 4's Paladin residual, and that was NOT re-measured.** The
+prototype scaled the height: `0.9558 − 0.9200 × 0.9887 = 0.046` — 4.6 cm of sinking at standing,
+against the "2 to 5 cm" recorded there and attributed to the −13 % shin. Re-measure with the affine
+map before sizing a ground-contact pass on that number.
+
+### 8.4 Skin weights
+
+Bone heat (Blender's automatic weights), then the model's own corrections, then the top-4.
+
+⚠️⚠️ **Bone heat fails on a small mesh, in silence.** On the unit-height mesh (0.98 high, 74 803
+welded vertices) it bound **0 vertex** and reported it only through a UI warning; scaled ×10 or
+×100, same topology, nothing cleaned, it bound **all of them**. Solve on a scaled copy — weights
+carry no length — and assert that something was bound.
+
+What bone heat cannot know, each seen on the Revenant and fixed by a rule in the model's data file:
+
+| artefact | cause | rule |
+|---|---|---|
+| the shoulder-mounted launchers bend like rubber | they sit above the clavicles, which take them: the two clavicles came out dominant on 11 378 and 11 765 welded vertices, more than any other joint | **rigid** region → `Chest` |
+| the collar and the harness follow the head | the neck bones are the nearest ones | neck and head **confined** to the skull, the chin and the neck column |
+| part of the chin moves with the thorax (owner, on screen) | the mandible hangs in front of the collar: bone heat gave part of the jaw to the clavicles and the chest (156 skull vertices under 0.95 on head and neck), and the first confinement box cut the chin at the wrong height | the whole skull, chin included, **rigid** → `Head` (a union of three boxes); 1 467 chin vertices now at 0.984 to 1.0 on `Head` |
+| the thigh plates flare out like a skirt when the arms rise | the hands hang 2 cm from them in the bind pose | forearm and hand confined to the arm's side of the gap, and the leg excluded from the hand's |
+
+⚠️ A confinement written as "the leg acts only inside this half-space" also cut the **boots**, wider
+than the plane lower down: it took 1 240 units of weight off 1 570 vertices of one boot and gave them
+to whatever else touched those vertices — the hand, for the ones left with nothing. Such a rule is an
+EXCLUSION bounded in height (3 units on 198 vertices once written that way), and its report (weight
+moved, vertices touched) is read every time.
+
+⚠️ **Draw a region on exact cross-sections, never on a front view.** The first head box was read off
+a shaded front view, which took the tooth line for the chin: the jaw actually ends 4 % of the mesh
+height lower, and it is a separate piece in FRONT of the neck column, fused to the collar on both
+sides. Intersecting the triangles with a few sagittal planes showed all of that in one picture. A
+skull is one bone: bone heat alone leaves a tenth of its weight on the neck joints (`Head` 0.893 of
+1.0 on average), which bends the jaw whenever the head and the neck disagree.
+
+Which SOMA joints carry skin at all — measured over 13 clips, the largest rotation each joint takes:
+
+| joints | max rotation | decision |
+|---|---|---|
+| `Jaw` | 0.8° | no skin: it never moves |
+| `LeftEye` / `RightEye` | 13° | no skin on a face with no separate eyeballs |
+| `HandThumbEnd` / `HandMiddleEnd` | 42° / **90°** | no skin: they are END joints, a vertex bound to one turns about the fingertip |
+
+So the hands and the skull are rigid. The "End" joints do rotate — they are not constant padding.
+
+### 8.5 What the result measures
+
+Read from the produced file by an independent evaluator (model units; the mesh is 0.98 high):
+
+| | |
+|---|---|
+| lowest point of the skinned mesh, idle | +0.003 to +0.004 — it floats by 0.4 %, the source's own offset (§ 4 of the Kimodo doc: toes never below +1.8 cm) |
+| lowest point, walk | −0.009 to +0.010 — the sole of a boot rolling, no contact pass |
+| foot slide per FLAT stance, walk | mean 0.0054, max 0.0125 |
+| the same stances, target against source × `s` | target mean **0.0027**, source 0.0049: the rig adds no slide |
+
+⚠️ **A stance detector decides the number.** "The ankle is low" takes the roll of the foot for a
+stance and reported a mean of 4 % and a maximum of 19 % of the height on that same walk. Require the
+ankle AND the toe base near their rest clearance (§ 5, step 4).
+
+### 8.6 Game clips — in place, and looping where they must
+
+A Kimodo motion is a TAKE: the character travels, a walk starts and stops wherever the take does,
+nothing loops. An actor moved by the game needs clips that stay on the spot, or the two displacements
+stack and the model jumps back at every loop — and `LoaderOptions::stripRootMotion` does not act on
+glTF ([`todo/root-motion-mode.md`](todo/root-motion-mode.md)). The clips are therefore prepared in
+the tooling, ON THE SOMA MOTION, which makes them generic: any character rigged on SOMA-30 bakes the
+same set (`tools/soma_clips.py`, a `clips.json` manifest beside the takes, `--clips` of the assembly).
+
+| mode | what it does |
+|---|---|
+| `once` | the take, cut to a frame range, standing on the origin at its first frame; the motion RELATIVE to that start is kept (a stagger still steps back, a body falls where it falls) |
+| `loop` | one cycle — the pair of frames whose poses AND velocities match best — closed exactly: the residual pose difference spread over the cycle, the travel removed as a straight drift (the sway around it stays), the last key a copy of the first |
+
+The cycle's own travel over its duration is the clip's **natural speed**: the speed at which the feet
+of an actor moved by the game do not slide. The first consumer walks and runs at exactly those.
+
+| clip | take → clip | measured |
+|---|---|---|
+| `idle` | frames 28..119 of 150 | 3.03 s, seam mismatch 1.3° before closure |
+| `walk` | frames 140..175 of 210 | one gait cycle, 1.17 s, seam 1.0°, **1.291 m/s** on the SOMA body |
+| `run` | frames 95..117 of 180 | one gait cycle, 0.73 s, seam 2.4°, **2.462 m/s** |
+| `fire` | frames 4..70 of 75, amplitude 0.27, speed 1.5 | 1.47 s; the chest leans 20.6° and holds above 92 % of it from key 17 to key 23: a projectile leaves at 17 |
+| `strike_1` (2026-11-22) | frames 0..54 of 60 | 1.8 s; a fist that CRUSHES something: on the 2.40 m character the right fist goes back and up to 2.36 m (frame 9), the right foot steps 0.2 m into the blow, the fist comes down at 8.5 m/s to 0.82 m, 0.5 m ahead (frame 19), the head bowing from 2.21 to 1.47 m and the hips shifting 0.35 m; the body is within 10° of its first pose at frame 50. The event `strike` at key 13 (26 logic cycles), when the fist passes 1.5 m. Prompt "angrily smashes something on the ground in front with the right fist, one hard blow, then stands up straight", seed 44. ⚠️ **Chosen by the owner, BY EYE, in the kimodo.cpp demo viewer** — after FOUR takes picked on measures were each rejected on screen, each for what the measures of the moment did not look at. 1: a "hammer strike" kept for its reach carried the hand to 2.40 m and brought it back at 2.2 m/s — a blow ABOVE a 1.75 m target. 2: a fist slammed from above the head — the OTHER hand travelled 2.86 m, the chest turned 85°: "a dance move". 3: "pounds a table once", calm, amplitude 1.5 — the fist stopped at 1.31 m with the arm held out: "he is handing something over". 4: "punches downward toward the ground", first of a ranking that weighed all of that — a deep bow, the fist put on the ground, a slow rise: "he is picking something up". The take kept was SIXTH of that ranking's real blows: it counted the step and the shift of the hips against it, and they are what makes it a blow. **A ranking finds the takes worth looking at; a person chooses.** Show the takes: `tools`-free, the demo viewer reads a gallery directory (`<id>.json` + `<id>/local_rotations_xyzw.f32`, `root_positions.f32`; `./build/release/kimodo-demo -addr 127.0.0.1:8094 -generator build/release/kmd-generate -output <gallery>`, the list newest first). And before any take, ask the INTENTION in one sentence ("he wants to crush something with his fist"): it names the prompt; "a blow in the manner of a robot" did not |
+| `strike_2` (2026-11-22) | frames 0..50 of 60 | 1.7 s; the ALTERNATIVE strike, chosen by the owner by eye like `strike_1` (the character draws one of the two per blow: two clips of one attack carry each its own event). Standing, feet planted (0.01 m), the head still: the take starts with the fists half raised (1.50 m), the right fist rises to 2.05 m (frame 6), is held there until frame 12, raps down at 5.8 m/s to 1.57 m, 0.58 m ahead (frame 15), springs back to 1.87 m, and the arms come down slowly. The event `strike` at key 14 (28 logic cycles), when the fist passes 1.75 m. Prompt "stands with feet planted and smashes downward with the right fist as if crushing a bug on a table", seed 42. The ranking called it a WEAK blow — the fist stops at 1.57 m: on a 1.75 m target that is its head |
+| `hit_1`, `hit_2` | frames 0..44 of 60 | 1.47 s |
+| `death_1`, `death_2` | frames 0..95 of 120 | 3.17 s, the body laid on the ground, its props sunk into it (below) |
+
+Read back from the produced file: every loop ends on its first key (0.04° of float rounding, root
+identical); nothing goes under the ground but the props of a dead body, on purpose (below).
+
+⚠️ **A loop ends on a COPY of its first key, one frame period after the last distinct pose.** A glTF
+clip lasts until its last key: without that copy the wrap skips one period every cycle.
+
+⚠️ **Pick a take on a measurement, the prompt is not obeyed.** "A steady pace" gave a run that
+accelerates to 3.5 m/s then decays to 1 m/s (best cycle: 7.2° of seam); of four takes the steadiest
+closed at 2.4°. "Shoulders slightly hunched" produced an idle leaning 16 to 41° with the hands on the
+hips. The chest's pitch (forward kinematics of four joints), the height of the hands and the drift
+of the feet sorted the takes in seconds; the prompt, the seed and the frame count of every kept take
+are recorded beside it (`generation.json`).
+
+⚠️ **The model gives the SHAPE of a motion, not its measure — scale the take.** The firing clip took
+two rounds. "Leans forward bracing" bent the chest 60°; the take kept at first stayed upright but
+crossed its arms, and the owner read it at once: "it seems to hold a real bazooka — it should simply
+stand facing forward and push its torso forward to present the launchers". Six takes asking for a
+SLIGHT lean, arms at the sides, all bow by 68 to 85°; one of them has exactly the wanted shape (arms
+hanging, feet planted, heading within 5°, back on its first pose). `amplitude: 0.27` scales every
+joint's excursion from the first key — `(q · q0⁻¹)^0.27 · q0`, the root alike — and the bow becomes a
+lean of 20.6°; `speed: 1.5` resamples it to 1.47 s. An arm that hangs vertical through a bow still
+hangs vertical through the scaled lean: both rotations scale together.
+
+⚠️ **A body lying down, and what it carries.** SOMA's hips come within 6 cm of the floor; mapped
+onto a character with launchers and a backpack, the mesh went 15 % of its height under the ground.
+The `ground: lift` pass skins every key, measures the lowest vertex and raises the root by the
+depth, widened then smoothed over nine keys so it never falls short. Done on the WHOLE mesh, the body
+rests on its props and floats on them — the owner, on screen: "the body floats above the ground,
+because of the size of the launchers" — and he chose the simple answer over a re-posed body: **the
+props sink**. A rigid rule of the model marked `sinks_into_ground` (the launchers, the backpack) is
+left out of the search: the body ends 0 to 0.5 % of its height from the ground, its props 12 to 13 %
+under it. With the launchers alone marked, a body on its back still floated 5 % on the backpack.
+
+### 8.7 Not done
+
+- The correction of the joints by hand, and a way to paint weights by hand (the chain recomputes them).
+- The owner's judgement of the idle, the walk, the run and the two reactions on screen (the fire and the deaths were
+  judged and redone, § 8.6).
+- A ground-contact pass; the 0.4 % float is removable by calibrating `h_source` on a standing clip.
+- Any GPU measurement of a 116 341-vertex skinned mesh (shadow passes, the ray-tracing mirror pass).
+- Secondary motion: cables, chains and armour plates are skin.
+
 ## Link Index
 
 - [`todo/skeletal-animation-retargeting.md`](todo/skeletal-animation-retargeting.md) — the open work

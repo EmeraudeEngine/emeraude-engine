@@ -37,6 +37,7 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
 #include "PrimaryServices.hpp"
 #include "Saphir/ShaderManager.hpp"
@@ -860,6 +861,13 @@ namespace EmEn::Graphics::Effects::Camera
 			if ( autoFocus )
 			{
 				flags |= 1U;
+			}
+
+			/* A view that is not the previous frame's (a camera cut, another scene): the focus it converged on is
+			 * another subject's — it snaps to this view's. */
+			if ( context.frameView != nullptr && !context.frameView->frameHistoryContinues() )
+			{
+				m_focusValid = false;
 			}
 
 			if ( !m_focusValid )

@@ -2711,7 +2711,9 @@ namespace EmEn::Graphics::Material
 				 * every indirect-diffuse estimator counts (setLightFace()). */
 				0.0F, 0.0F, 0.0F, 0.0F,
 				/* AO response (post-process ambient occlusion, unused, unused, unused): fully affected (setAOResponse()). */
-				DefaultAOResponse, 0.0F, 0.0F, 0.0F
+				DefaultAOResponse, 0.0F, 0.0F, 0.0F,
+				/* Volume reflectance (red, green, blue, unused): a dark volume (the water's, setWaterVolume()). */
+				0.0F, 0.0F, 0.0F, 0.0F
 					};
 
 		return properties;
@@ -3680,6 +3682,13 @@ namespace EmEn::Graphics::Material
 					 * the sky luminance downstream. */
 					m_isUsingGrabPassForTransmission
 				);
+
+				/* Depth-based opacity makes the surface the INTERFACE of a volume that reaches the scene behind it: seen
+				 * from its back face, the eye is inside that volume. */
+				if ( m_isUsingDepthBasedOpacity )
+				{
+					lightGenerator.declareSurfaceVolumeInterface(MaterialUB(UniformBlock::Component::VolumeReflectance) + ".rgb");
+				}
 			}
 		}
 
@@ -3944,6 +3953,7 @@ namespace EmEn::Graphics::Material
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::ShoreFoamParameters);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::LightFaceParameters);
 		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::AOResponseParameters);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::VolumeReflectance);
 
 		return block;
 	}
@@ -4797,9 +4807,24 @@ namespace EmEn::Graphics::Material
 					"const vec3 gpPosView = " << ShaderVariable::PositionViewSpace << ".xyz;" << Line::End <<
 					"/* The camera IS the origin in view space. */" << Line::End <<
 					"const vec3 gpIncidentView = normalize(gpPosView);" << Line::End <<
-					"const vec3 gpNormalView = " << viewNormal << ";" << Line::End <<
+					/* ⚠️ The interface of a volume (depth-based opacity) seen from INSIDE it: refract() wants the normal
+					 * facing the incident ray, and the index ratio the other way round (gpEtaOf() below). */
+					"const vec3 gpNormalView = " << (m_isUsingDepthBasedOpacity ? "(gl_FrontFacing ? 1.0 : -1.0) * " : "") << viewNormal << ";" << Line::End <<
 					"const vec4 gpClipHere = gpProjection * vec4(gpPosView, 1.0);";
 			}
+
+			/* The index ratio of the refraction, incident medium over transmitted one: 1 / n entering the volume. The
+			 * interface of a volume (depth-based opacity) seen from INSIDE it (its back face) leaves it: n. Past the
+			 * critical angle refract() then answers a null vector — no offset, and the Fresnel split gives that pixel
+			 * to the reflection alone (LightGenerator::declareSurfaceVolumeInterface()). */
+			const auto gpEtaOf = [this] (const std::string & index) -> std::string {
+				if ( m_isUsingDepthBasedOpacity )
+				{
+					return "(gl_FrontFacing ? 1.0 / " + index + " : " + index + ")";
+				}
+
+				return "1.0 / " + index;
+			};
 
 			if ( this->property(DispersionOffset) > 0.0F )
 			{
@@ -4810,9 +4835,9 @@ namespace EmEn::Graphics::Material
 					"float gpBlurLod = log2(float(textureSize(" << grabPassSampler << ", 0).x)) * clamp(" << blurRoughness << " * clamp(" << MaterialUB(UniformBlock::Component::RefractionIOR) << " * 2.0 - 2.0, 0.0, 1.0), 0.0, 1.0);" << Line::End <<
 					"float baseIOR = " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
 					"float gpSpread = (baseIOR - 1.0) * " << MaterialUB(UniformBlock::Component::Dispersion) << " / 20.0;" << Line::End <<
-					"float gpEtaR = 1.0 / (baseIOR - gpSpread * 0.5);" << Line::End <<
-					"float gpEtaG = 1.0 / baseIOR;" << Line::End <<
-					"float gpEtaB = 1.0 / (baseIOR + gpSpread * 0.5);" << Line::End <<
+					"float gpEtaR = " << gpEtaOf("(baseIOR - gpSpread * 0.5)") << ";" << Line::End <<
+					"float gpEtaG = " << gpEtaOf("baseIOR") << ";" << Line::End <<
+					"float gpEtaB = " << gpEtaOf("(baseIOR + gpSpread * 0.5)") << ";" << Line::End <<
 					(projectedRayAvailable
 						? "vec3 gpRefractDirR = refract(gpIncidentView, gpNormalView, gpEtaR);\n"
 						  "vec3 gpRefractDirG = refract(gpIncidentView, gpNormalView, gpEtaG);\n"
@@ -4836,7 +4861,7 @@ namespace EmEn::Graphics::Material
 					"vec2 gpScreenUV = gl_FragCoord.xy / vec2(textureSize(" << grabPassSampler << ", 0));" << Line::End <<
 					"/* Frosted glass: roughness -> mip level of the grab pass. */" << Line::End <<
 					"float gpBlurLod = log2(float(textureSize(" << grabPassSampler << ", 0).x)) * clamp(" << blurRoughness << " * clamp(" << MaterialUB(UniformBlock::Component::RefractionIOR) << " * 2.0 - 2.0, 0.0, 1.0), 0.0, 1.0);" << Line::End <<
-					"float gpEta = 1.0 / " << MaterialUB(UniformBlock::Component::RefractionIOR) << ";" << Line::End <<
+					"float gpEta = " << gpEtaOf(std::string{MaterialUB(UniformBlock::Component::RefractionIOR)}) << ";" << Line::End <<
 					(projectedRayAvailable
 						? "vec3 gpRefractDir = refract(gpIncidentView, gpNormalView, gpEta);\n"
 						  "vec3 gpRayScale = " + this->volumeThicknessExpression() + " * " + std::string{ShaderVariable::ModelScale} + ";\n"
@@ -4873,7 +4898,11 @@ namespace EmEn::Graphics::Material
 				"float gpFar = " << UniformBlock::View << "." << UniformBlock::Component::ViewProperties << ".w;" << Line::End <<
 				"float gpLinearSceneDepth = gpNear * gpFar / (gpFar - gpSceneDepth * (gpFar - gpNear));" << Line::End <<
 				"float gpLinearWaterDepth = gpNear * gpFar / (gpFar - gl_FragCoord.z * (gpFar - gpNear));" << Line::End <<
-				"float gpWaterColumnThickness = max(gpLinearSceneDepth - gpLinearWaterDepth, 0.0);";
+				/* ⚠️ Seen from INSIDE the volume (the back face: a sea seen from under it), what lies behind the surface is
+				 * not the volume — it is the air, and the sky behind it reads as kilometres of column, a full absorption.
+				 * No column there: the water between the eye and the surface is the underwater view's
+				 * (Effects::Atmosphere::WaterVolume, engine item underwater-view). */
+				"float gpWaterColumnThickness = gl_FrontFacing ? max(gpLinearSceneDepth - gpLinearWaterDepth, 0.0) : 0.0;";
 		}
 
 		return true;
@@ -5706,14 +5735,23 @@ namespace EmEn::Graphics::Material
 			 * horizon. A camera under the surface: no foam (the measure means nothing there).
 			 * ⚠️ No sea bed behind — the sky leaves the depth at the far plane — is tested on the raw depth: the ratio alone
 			 * does not reject it, since water drawn near the far plane (the horizon) sits right in front of that cleared
-			 * depth and read as a thin column (a dotted foam line along the horizon, water-world 2026-09-28). */
+			 * depth and read as a thin column (a dotted foam line along the horizon, water-world 2026-09-28).
+			 * ⚠️ The depth is the one of the point where the line of sight LANDS, and the foam is painted where it ENTERS
+			 * the water: seen from above the two are one point, at a grazing view they stand tens of metres apart — the
+			 * sight runs under the surface without going down, and all the water in front of a shore read as shallow: a
+			 * thick straight white line along the horizon for an eye near the sea level (owner, water-world 2026-11-23).
+			 * The measure is kept only where the sight lands near where it entered: it fades between two and four foam
+			 * widths of horizontal run under the surface (owner decision 2026-11-23). A real shoreline keeps its foam at
+			 * any angle — the column is thin along every direction there. */
 			Code{fragmentShader, Location::Top} <<
 				Line::End <<
 				"/* Shore foam */" << Line::End <<
 				"const vec3 sfToSurface = " << ShaderVariable::PositionWorldSpace << ".xyz - CameraWorldPosition;" << Line::End <<
 				"const float sfColumnRatio = max(gpLinearSceneDepth / max(gpLinearWaterDepth, 0.0001) - 1.0, 0.0);" << Line::End <<
 				"const float sfWaterDepth = max(-sfToSurface.y, 0.0) * sfColumnRatio;" << Line::End <<
-				"const float sfBand = (1.0 - smoothstep(0.0, " << foamParameters << ".x, sfWaterDepth)) * float(sfToSurface.y < 0.0) * float(gpSceneDepth < 0.99999);" << Line::End <<
+				"const float sfLandingRun = length(sfToSurface.xz) * sfColumnRatio;" << Line::End <<
+				"const float sfLandsNear = 1.0 - smoothstep(2.0 * " << foamParameters << ".x, 4.0 * " << foamParameters << ".x, sfLandingRun);" << Line::End <<
+				"const float sfBand = (1.0 - smoothstep(0.0, " << foamParameters << ".x, sfWaterDepth)) * sfLandsNear * float(sfToSurface.y < 0.0) * float(gpSceneDepth < 0.99999);" << Line::End <<
 				"const vec2 sfCell = " << ShaderVariable::PositionWorldSpace << ".xz * " << foamParameters << ".y;" << Line::End <<
 				"const float sfPattern = sfFoamPattern(sfCell, length(fwidth(sfCell)));" << Line::End <<
 				"/* The band against the pattern: solid at the water line, broken into patches toward its outer edge. */" << Line::End <<
@@ -5735,12 +5773,14 @@ namespace EmEn::Graphics::Material
 				"const vec2 wcCell = " << lattice << " * (3.0 * " << foamParameters << ".y);" << Line::End <<
 				"const float wcPattern = sfFoamPattern(wcCell, length(fwidth(wcCell)));" << Line::End <<
 				"const float wcCoverage = " << Geometry::OceanSurface::WhitecapFunction << "(" << lattice << ");" << Line::End <<
-				"const float " << SurfaceFoamCoverage << " = max(" << SurfaceShoreFoam << ", clamp((wcCoverage - wcPattern) * 4.0, 0.0, 1.0));";
+				/* The upper side only: from inside the volume the column is zero, the whole underside would be a shore. */
+				"const float " << SurfaceFoamCoverage << " = gl_FrontFacing ? max(" << SurfaceShoreFoam << ", clamp((wcCoverage - wcPattern) * 4.0, 0.0, 1.0)) : 0.0;";
 		}
 		else
 		{
 			Code{fragmentShader, Location::Top} <<
-				"const float " << SurfaceFoamCoverage << " = " << SurfaceShoreFoam << ";";
+				/* The upper side only: from inside the volume the column is zero, the whole underside would be a shore. */
+				"const float " << SurfaceFoamCoverage << " = gl_FrontFacing ? " << SurfaceShoreFoam << " : 0.0;";
 		}
 
 		Code{fragmentShader, Location::Top} <<
@@ -7305,6 +7345,20 @@ namespace EmEn::Graphics::Material
 	}
 
 	void
+	StandardResource::setVolumeReflectance (const Base::Math::Vector< 3, float > & reflectance) noexcept
+	{
+		{
+			const Base::MutexLock lock{m_propertiesAccess};
+
+			m_materialProperties[VolumeReflectanceOffset] = clampToUnit(reflectance[Base::Math::X]);
+			m_materialProperties[VolumeReflectanceOffset + 1] = clampToUnit(reflectance[Base::Math::Y]);
+			m_materialProperties[VolumeReflectanceOffset + 2] = clampToUnit(reflectance[Base::Math::Z]);
+		}
+
+		this->markVideoMemoryDirty();
+	}
+
+	void
 	StandardResource::setDoFMask (float value) noexcept
 	{
 		{
@@ -7538,6 +7592,44 @@ namespace EmEn::Graphics::Material
 		/* Enable GrabPass screen-space transmission (mutually exclusive with cubemap). */
 		m_isUsingGrabPassForTransmission = true;
 		m_isUsingEnvironmentCubemapForTransmission = false;
+
+		return true;
+	}
+
+	bool
+	StandardResource::setWaterVolume (const Scenes::WaterMedium & water, float thickness) noexcept
+	{
+		if ( !water.isEnabled() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' was given a water without extinction: "
+				"it declares no water.";
+
+			return false;
+		}
+
+		/* The statement is part of the material's definition: a sea reads it without a lock once the material is
+		 * loaded (Interface::waterVolume()), so it is never written after that. */
+		if ( this->isLoaded() )
+		{
+			TraceWarning{ClassId} <<
+				"The resource '" << this->name() << "' is loaded ! "
+				"Unable to declare its water.";
+
+			return false;
+		}
+
+		/* NOTE: Refuses a created material, and leaves it untouched. */
+		if ( !this->setTransmissionComponentFromGrabPass(1.0F, water.attenuationColor(), water.attenuationDistance(), thickness) )
+		{
+			return false;
+		}
+
+		this->enableDepthBasedOpacity(true);
+		this->setIOR(Scenes::WaterMedium::RefractiveIndex);
+		this->setVolumeReflectance(water.diffuseReflectance());
+
+		m_waterVolume = water;
 
 		return true;
 	}

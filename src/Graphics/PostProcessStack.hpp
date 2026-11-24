@@ -499,29 +499,35 @@ namespace EmEn::Graphics
 			 *   (Renderer::frameStarField()), a Graphics::Effects::Atmosphere::StarField is filed into EffectSlot::Stars;
 			 * - the light glints: the first frame a point or spot light of the scene publishes a visible source
 			 *   (Scenes::LightSet::hasVisibleSource()), a Graphics::Effects::Lighting::LightGlints is filed into
-			 *   EffectSlot::LightGlints.
+			 *   EffectSlot::LightGlints;
+			 * - the water volume: the first frame the scene's sea declares its water
+			 *   (Scenes::SeaLevelInterface::waterMedium()), a Graphics::Effects::Atmosphere::WaterVolume is filed into
+			 *   EffectSlot::WaterVolume (owner decision, 2026-11-23: a sea that declares its water is enough).
 			 * syncSlotSelection() materializes the newcomer.
 			 * @note Only the ARRIVAL is handled. Once filed an occupant stays resident: the cloud pass's gate
 			 * (IndirectPostProcessEffect::requiresCloudVolumes()) keeps it out of the frame while the scene holds
 			 * no cloud; the aerial perspective passes the chain colour through on a frame without a submitted
 			 * atmosphere, the stars draw nothing on a frame without a star field, the glints nothing without a lit
-			 * source. An application that filed its own occupant of a slot is left alone.
+			 * source, the water volume passes the chain colour through while the near plane stands clear of the water. An
+			 * application that filed its own occupant of a slot is left alone.
 			 * `Core/Graphics/PostProcessing/Clouds/Enabled = false`,
 			 * `Core/Graphics/PostProcessing/AerialPerspective/Enabled = false`,
-			 * `Core/Graphics/PostProcessing/Stars/Enabled = false` and
-			 * `Core/Graphics/PostProcessing/LightGlints/Enabled = false` decline the filings, read once.
+			 * `Core/Graphics/PostProcessing/Stars/Enabled = false`,
+			 * `Core/Graphics/PostProcessing/LightGlints/Enabled = false` and
+			 * `Core/Graphics/PostProcessing/WaterVolume/Enabled = false` decline the filings, read once.
 			 * @note ⚠️ RENDER THREAD, once per frame, AFTER Renderer::renderSkyAtmosphere() and BEFORE
 			 * syncSlotSelection().
 			 * @param clouds A pointer to the scene's clouds, nullptr when it holds none.
 			 * @param physicalSky Whether this frame submitted the scene's physical sky (Renderer::frameSkyAtmosphere()).
 			 * @param starField Whether that sky draws a star catalogue this frame (Renderer::frameStarField()).
 			 * @param lightGlints Whether a light of the scene publishes a visible source (Scenes::LightSet::hasVisibleSource()).
+			 * @param declaredWater Whether the scene's sea declares its water (Scenes::SeaLevelInterface::waterMedium()).
 			 * @param renderer A reference to the graphics renderer.
 			 * @return bool Whether the effect set changed (the pipeline must be reconfigured: the new
 			 * occupant brings its G-buffer requirements).
 			 */
 			[[nodiscard]]
-			bool syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, bool starField, bool lightGlints, Renderer & renderer) noexcept;
+			bool syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, bool starField, bool lightGlints, bool declaredWater, Renderer & renderer) noexcept;
 
 			/**
 			 * @brief Removes an effect from the chain.
@@ -841,6 +847,15 @@ namespace EmEn::Graphics
 			bool fileAerialPerspectiveEffect (Renderer & renderer) noexcept;
 
 			/**
+			 * @brief Files the water volume, unless the application filed its own or the settings decline it.
+			 * @note ⚠️ RENDER THREAD — syncSceneEffects() only.
+			 * @param renderer A reference to the graphics renderer.
+			 * @return bool Whether it was filed.
+			 */
+			[[nodiscard]]
+			bool fileWaterVolumeEffect (Renderer & renderer) noexcept;
+
+			/**
 			 * @brief Files the star field, unless the application filed its own or the settings decline it.
 			 * @note ⚠️ RENDER THREAD — syncSceneEffects() only.
 			 * @param renderer A reference to the graphics renderer.
@@ -956,6 +971,7 @@ namespace EmEn::Graphics
 			bool m_aerialPerspectiveResolved{false};
 			bool m_starFieldResolved{false};
 			bool m_lightGlintsResolved{false};
+			bool m_waterVolumeResolved{false};
 			/* The scene-effects bypass (bypassSceneEffects()): written on the main thread, read by
 			 * syncSlotSelection() on the render thread. */
 			std::atomic< bool > m_sceneEffectsBypassed{false};

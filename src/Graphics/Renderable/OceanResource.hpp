@@ -37,17 +37,20 @@
 #include <utility>
 
 /* Local inclusions for inheritances. */
-#include "Abstract.hpp"
-#include "Scenes/SeaLevelInterface.hpp"
+#include "AbstractSea.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/OceanSurfaceResource.hpp"
 #include "Hash/FNV1a.hpp"
-#include "Math/Vector.hpp"
 #include "Resources/ResourceTrait.hpp"
 #include "Resources/Types.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics::Material
+{
+	class Interface;
+}
+
 namespace EmEn::Resources
 {
 	template< typename resource_t >
@@ -60,12 +63,11 @@ namespace EmEn::Graphics::Renderable
 	 * @brief An animated sea: FFT spectral waves on a camera-following CDLOD plane (Geometry::OceanSurfaceResource).
 	 * @note Engine item ocean-fft-surface, owner decisions 2026-09-28: a new renderable, BasicSeaResource staying the lake
 	 * (its animated normal map); each demo picks one as its sea level.
-	 * @note The sea level it answers is still the FLAT one: the waves reach the physics later (a CPU copy of the
-	 * displacement, one frame late — item step 6).
-	 * @extends EmEn::Graphics::Renderable::Abstract This class is a renderable object in the 3D world.
-	 * @extends EmEn::Scenes::SeaLevelInterface This is a sea level.
+	 * @note The sea level it answers is still the FLAT one, the family level's (AbstractSea::getLevelAt()): the waves reach
+	 * the physics later (a CPU copy of the displacement, one frame late — item step 6).
+	 * @extends EmEn::Graphics::Renderable::AbstractSea The family level of the seas: the level, the material and its water.
 	 */
-	class EMEN_API OceanResource final : public Abstract, public Scenes::SeaLevelInterface
+	class EMEN_API OceanResource final : public AbstractSea
 	{
 		friend class Resources::Container< OceanResource >;
 
@@ -86,7 +88,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param resourceFlags The resource flag bits. Default none.
 			 */
 			OceanResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
-				: Abstract{serviceProvider, std::move(name), resourceFlags}
+				: AbstractSea{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -118,60 +120,12 @@ namespace EmEn::Graphics::Renderable
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::subGeometryCount() const */
-			[[nodiscard]]
-			uint32_t
-			subGeometryCount () const noexcept override
-			{
-				return 1;
-			}
-
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
-			[[nodiscard]]
-			uint32_t
-			layerCount () const noexcept override
-			{
-				return 1;
-			}
-
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque(uint32_t) const */
-			[[nodiscard]]
-			bool
-			isOpaque (uint32_t /*layerIndex*/) const noexcept override
-			{
-				return m_material != nullptr ? m_material->isOpaque() : true;
-			}
-
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass(uint32_t) const */
-			[[nodiscard]]
-			bool
-			requiresGrabPass (uint32_t /*layerIndex*/) const noexcept override
-			{
-				return m_material != nullptr ? m_material->requiresGrabPass() : false;
-			}
-
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry(uint32_t) const */
 			[[nodiscard]]
 			const Geometry::Interface *
 			geometry (uint32_t /*LODLevel*/) const noexcept override
 			{
 				return m_geometry.get();
-			}
-
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::material(uint32_t) const */
-			[[nodiscard]]
-			const Material::Interface *
-			material (uint32_t /*layerIndex*/) const noexcept override
-			{
-				return m_material.get();
-			}
-
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions(uint32_t) const */
-			[[nodiscard]]
-			const RasterizationOptions *
-			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
-			{
-				return nullptr;
 			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() const */
@@ -215,57 +169,30 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Loads an ocean.
 			 * @param parameters The surface and sea-state knobs.
-			 * @param materialResource A reference to the water material.
+			 * @param materialResource A reference to the water material. The water it declares
+			 * (Material::Interface::waterVolume()) is the ocean's: drawn on both sides, with an underwater view.
 			 * @return bool
 			 */
 			bool load (const Geometry::OceanSurfaceParameters & parameters, const std::shared_ptr< Material::Interface > & materialResource) noexcept;
 
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::getLevel() const */
-			[[nodiscard]]
-			float
-			getLevel () const noexcept override
-			{
-				return m_waterLevel;
-			}
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::adaptToGround()
+			 * @note The ocean reads the ground's height at the centre of each cell of its shelter map
+			 * (Geometry::OceanSurfaceParameters::shelterMapSide cells a side over the scene's square), tells which water
+			 * the open sea reaches (base VertexFactory::buildShelterMap(): the sea is beyond the square's border, a
+			 * passage narrower than shelterMinimumPassage keeps it out) and hands the map to its surface.
+			 */
+			void adaptToGround (const Scenes::GroundLevelInterface & ground, float boundary) noexcept override;
 
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::getLevelAt(const Base::Math::Vector< 3, float > &) const */
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::surfaceWaves() const
+			 * @note The FFT cascades of the surface, once it has been drawn.
+			 */
 			[[nodiscard]]
-			float
-			getLevelAt (const Base::Math::Vector< 3, float > & /*worldPosition*/) const noexcept override
+			const SeaSurfaceWaves *
+			surfaceWaves () const noexcept override
 			{
-				return m_waterLevel;
-			}
-
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::getLevelAt(float, float, float) const */
-			[[nodiscard]]
-			Base::Math::Vector< 3, float >
-			getLevelAt (float positionX, float positionZ, float deltaY) const noexcept override
-			{
-				return {positionX, m_waterLevel + deltaY, positionZ};
-			}
-
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::getNormalAt() const */
-			[[nodiscard]]
-			Base::Math::Vector< 3, float >
-			getNormalAt (const Base::Math::Vector< 3, float > & /*worldPosition*/) const noexcept override
-			{
-				return {0.0F, 1.0F, 0.0F};
-			}
-
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::isSubmerged() const */
-			[[nodiscard]]
-			bool
-			isSubmerged (const Base::Math::Vector< 3, float > & worldPosition) const noexcept override
-			{
-				return worldPosition[Base::Math::Y] < m_waterLevel;
-			}
-
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::getDepthAt() const */
-			[[nodiscard]]
-			float
-			getDepthAt (const Base::Math::Vector< 3, float > & worldPosition) const noexcept override
-			{
-				return m_waterLevel - worldPosition[Base::Math::Y];
+				return m_geometry != nullptr ? m_geometry->surfaceWaves() : nullptr;
 			}
 
 			/** @copydoc EmEn::Scenes::SeaLevelInterface::updateVisibility() */
@@ -282,8 +209,6 @@ namespace EmEn::Graphics::Renderable
 			bool onDependenciesLoaded (const std::stop_token & stopToken) noexcept override;
 
 			std::shared_ptr< Geometry::OceanSurfaceResource > m_geometry;
-			std::shared_ptr< Material::Interface > m_material;
-			float m_waterLevel{0.0F};
 	};
 }
 

@@ -476,6 +476,70 @@ namespace EmEn::PlatformSpecific
 
 #if IS_MACOS
 	/**
+	 * @brief Declares the process ACTIVE to macOS while held, so that App Nap never demotes it. Owner decision
+	 * 2026-11-22: held for every run, with a window or without one.
+	 * @details macOS puts an application that shows no window and holds no power assertion into App Nap 30 s after its
+	 * check-in: the whole process is capped at priority 4, which withdraws the Mach time-constraint policy of the logic
+	 * thread (setCurrentThreadTimeConstraint()) and coalesces its timers. A window-less run fell from 60 to about 15
+	 * logic cycles a second (measured 2026-11-22). The activity is NSProcessInfo's (beginActivityWithOptions:reason:)
+	 * with NSActivityUserInitiatedAllowingIdleSystemSleep | NSActivityLatencyCritical: no App Nap, the highest timer
+	 * precision, no sudden nor automatic termination. The display and the system still sleep on the user's idle timers
+	 * (the display is DisplaySleepInhibitor's business).
+	 * Reference: Apple, NSProcessInfo § Managing Activities; "Energy Efficiency Guide for Mac Apps" § Extend App Nap.
+	 * @note Two-phase, in the mould of DisplaySleepInhibitor: begin() declares the activity, end() or the destructor
+	 * ends it. Not copyable nor movable. NSProcessInfo is thread-safe; one object is driven by one thread at a time.
+	 */
+	class ProcessActivity final
+	{
+		public:
+
+			/** @brief Constructs an inactive token. */
+			ProcessActivity () noexcept = default;
+
+			/** @brief Copy constructor. */
+			ProcessActivity (const ProcessActivity & copy) noexcept = delete;
+
+			/** @brief Move constructor. */
+			ProcessActivity (ProcessActivity && copy) noexcept = delete;
+
+			/** @brief Copy assignment. @return ProcessActivity & */
+			ProcessActivity & operator= (const ProcessActivity & copy) noexcept = delete;
+
+			/** @brief Move assignment. @return ProcessActivity & */
+			ProcessActivity & operator= (ProcessActivity && copy) noexcept = delete;
+
+			/** @brief Destructs the token, ending the activity if declared. */
+			~ProcessActivity ();
+
+			/**
+			 * @brief Declares the activity. Idempotent.
+			 * @return bool False when the system returned no activity object.
+			 */
+			[[nodiscard]]
+			bool begin () noexcept;
+
+			/**
+			 * @brief Ends the activity. Idempotent.
+			 */
+			void end () noexcept;
+
+			/**
+			 * @brief Returns whether the activity is declared.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isActive () const noexcept
+			{
+				return m_token != nullptr;
+			}
+
+		private:
+
+			void * m_token{nullptr}; /**< The activity object (an id< NSObject >, retained while declared: ProcessActivity.mac.mm). */
+	};
+
+	/**
 	 * @brief Puts the CALLING thread under the Mach time-constraint (real-time) policy, so that its timed waits wake on
 	 * time.
 	 * @note Every other wait of a macOS thread (nanosleep, std::this_thread::sleep_until, mach_wait_until), whatever its

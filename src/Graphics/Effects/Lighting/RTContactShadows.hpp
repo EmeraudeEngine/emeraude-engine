@@ -94,6 +94,15 @@ namespace EmEn::Graphics::Effects::Lighting
 			}
 
 			/**
+			 * @brief The camera distance, in multiples of the reach (Parameters::maxDistance), at which the contact shadows have
+			 * faded out.
+			 * @warning The MIRROR of the trace shader's `maxDistance * 10.0` (RTContactShadows.cpp): change both. A terrain reads it to
+			 * check that its ray-tracing proxy holds the drawn surface as far as the effect acts
+			 * (Geometry::CDLODTerrainResource::planRayTracingProxy()).
+			 */
+			static constexpr float FadeRangeFactor{10.0F};
+
+			/**
 			 * @brief User-facing contact shadows parameters.
 			 */
 			struct EMEN_API Parameters

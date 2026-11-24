@@ -46,11 +46,13 @@ reference skeleton, the joint mapping, the traps, and the verification protocol.
       an `AnimationClip` targeting the destination skeleton's joint indices.
 - [ ] Root translation scaled by the **leg-length ratio** (not the stature). Coordinate with
       [`root-motion-mode.md`](root-motion-mode.md), which decides who consumes it.
+      ⚠️ The HEIGHT is an affine map, not a scale — [`../animation-retargeting.md`](../animation-retargeting.md) § 8.3.
 - [ ] Unmapped target joints keep their **rest** local rotation — never a zeroed quaternion.
 - [ ] Explicit mapping for **prop bones** (`Sword_joint`, `Shield_joint`): they have no source
       counterpart and geometric proximity is not a substitute.
 - [ ] A ground-contact pass. Measured residual after retargeting Kimodo onto the Paladin:
       **2 to 5 cm** of foot penetration, caused by the proportion mismatch, not by the source.
+      ⚠️ Re-measure first: the scaled height alone predicts 4.6 cm of it (§ 8.3 of the reference).
 - [ ] A **clip serializer**. `AnimationClipResource` loads from a path, a JSON value or memory, but
       nothing writes one back, so a retargeted clip does not survive the session.
 

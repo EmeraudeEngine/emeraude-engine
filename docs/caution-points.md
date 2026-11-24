@@ -20,6 +20,23 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 
 ## Graphics/Material System
 
+### Fixed: a half-resolution pass read the G-buffer on a texel CORNER — SSGI's 10 px grid at 1280 × 720 (2026-11-24)
+
+**Symptom** (`jungle-ruins` option 1, the screen-space lane, Windows and Linux): a thin line every 10 px across and
+every 45 px down over sloped ground, locked to the screen, at 1280 × 720 only (nothing at 1024 wide). SSAO drew the
+same lattice, far weaker.
+**Cause.** The centre of a half-resolution pixel is the corner four full-resolution texels share. Read there with the
+G-buffer's NEAREST samplers (`texture(depthTex, vUV)`) or by `texelFetch(…, ivec2(vUV * size), 0)`, the texel
+returned hangs on the rounding of the interpolated UV; the position unprojected at `vUV` with that depth is half a
+texel off its surface, on one side or the other with the pick. The rounding repeats with twice the odd factor of the
+reduced size (640 = 2⁷ · 5 → 10 px).
+**Fix.** `Effects/Shared/GBufferTexelGLSL.hpp`: `emGBufferTexel()` names the texel by integer arithmetic on
+`gl_FragCoord`, `emGBufferTexelUV()` gives its centre; SSGI (both passes) and SSAO read their centre from that texel
+and unproject at its centre. Far slope, profile folded on 10 px: 1.573 → 0.009 on Linux, 7.908 → 0.016 on Windows
+(its own captures); no lattice on macOS. Verified on the three OS on 2026-11-24; not run on AMD.
+**Rule.** A pass smaller than the G-buffer NEVER reads it at `vUV`: graphics doc 13-12 § 45 (the measurements, the
+two traps of the measurement). The other reduced passes still do: item `reduced-passes-name-their-gbuffer-texel`.
+
 ### Fixed: SSAO darkened the open sea by 20-30 % and striped it on Intel (2026-10-27)
 
 **Symptom** (`water-world`, screen-space lane; found by the macOS peer's slot sweep — only `AmbientOcclusion` removed a
@@ -731,7 +748,61 @@ Traps of the CDLOD work itself:
   **Bisect such a patch by LANE first** (`PostProcess.setLightingMode(ScreenSpace)` on the same instance): a
   patch that only the RT lane draws is a traced-vs-drawn geometry mismatch, not a G-buffer defect.
   ⚠️ At step > 1 (the `terrain` demo: 8 m proxy cells) the proxy cannot match the drawn 1 m surface at all; the
-  sub-step relief is missing from what the rays hit, so the same kind of self-occlusion remains possible there.
+  sub-step relief is missing from what the rays hit, so the same kind of self-occlusion remained possible there —
+  and it happened: the next point.
+- ⚠️⚠️⚠️ **A proxy coarser than the drawn surface blackens the hollows near the camera** (owner report on
+  `water-world`'s archipelago, fixed 2026-11-23): grey lobes with comb-shaped edges around a brown core, in the
+  hollows of the sand, close to the ground, gone when the camera rises. The archipelago's 2048 cells of 1.25 m make
+  8.4 M triangles, so under the 2 M budget the proxy took step 4 — 5 m cells — and in a hollow its chord passed
+  above the drawn ground: up to **0.58 m** on a surveyed 80 m block (43 % of the dry nodes under it by more than
+  5 mm). The traced effects start their rays from the DRAWN surface, lifted along the normal by a bias that grows
+  with the camera distance (`normalBias × max(1, distance) × min(1 / N·V, 10)`: 1 cm per metre for
+  `RTContactShadows`, 5 mm for `RTAO`); close to the camera the lift is smaller than the gap, the ray starts INSIDE
+  the proxy and hits the underside of its triangle at once (every TLAS instance carries
+  `VK_GEOMETRY_INSTANCE_TRIANGLE_FACING_CULL_DISABLE_BIT_KHR`). The contact shadows draw the lobes, RTAO and RTGI the
+  core; the comb is the normal map moving the lift from ripple to ripple. It vanishes from above because the lift
+  grows with the distance and both effects fade out (`RTContactShadows` at `maxDistance × 10` = 20 m, `RTAO` at
+  `maxDistance × 20` = 40 m) — NOT because the CDLOD joins the proxy (its finest level reaches 384 m).
+  - **Measured** (RTX 3070 Ti, window-less 1280 × 720, exposure pinned, 0 `VUID-`; pixels of the traced capture
+    darker than the screen-space capture of the SAME launch and pose by more than 12/255, of 537 600; target
+    (−547.5, 3.78, −218.0), eye (−543.5, 7.28, −214.0)): **249 929** at step 4, 79 183 at step 2 (budget 2.1 M,
+    +162 MiB), 0 at step 1 (budget 8.4 M, **+846 MiB**) — and **0 with the fix at the default budget** (654 912
+    triangles, +8 MiB). With a 600 000 budget the same binary leaves the window out (a warning) and shows 249 923
+    again. `AmbientOcclusion` off removes 16 % of the patch pixels of a 12 m pose, `ContactShadows` off 93 %.
+    Confirmed by the owner's eye the same day, in a 2880 × 1620 window on the screen the report came from.
+  - **The fix: a level of detail in the proxy, centred on the camera** (owner decision; graphics doc 17-15b
+    § "A level of detail in the proxy"): the terrain's own cells within 128 m, then nested windows that halve the
+    resolution up to the budget's step, in ONE watertight mesh (base `VertexFactory::buildNestedLattice()`). The
+    alternatives weighed: back-face culling of the terrain's instance (removes the false occlusion, not the
+    mismatch), a larger budget (quadratic: refused by the 8 GiB target).
+  - **A nested proxy re-centres with the camera, and a rebuild's BLAS is built synchronously on the frame path**
+    (`Interface::buildAccelerationStructure()` waits for the builder's fence): 4.5 ms for 524 288 triangles, 8.2 ms
+    for 2.1 M, 54 ms for 8.4 M at load; in motion, 3.9–4.7 ms per rebuild of the 654 912-triangle proxy, one per
+    ~71 m at 50 m/s, 7.5 ms at most over 13 builds; none standing still, none drifting outside the map (the move
+    decision compares the window wanted with the window held). Owner decision: synchronous, a non-blocking rebuild
+    only if a hitch is ever seen.
+  - ⚠️ **Two levels must never give one node two vertices**: a border node of a finer window is THE vertex the
+    coarser cells use (the lattice does it); two copies an ulp apart are a crack for a ray.
+  - ⚠️ The window must cover the camera distance up to which a short ray acts, less the slack travelled between
+    two rebuilds (64 m): the terrain warns at load when `MaxDistance` × the effect's `FadeRangeFactor` passes it.
+    Those two factors MIRROR the shaders' literals (`RTContactShadows.hpp`, `RTAO.hpp`): change both.
+  - ⚠️ **How to find such a mismatch again**: bisect by lane first, then by slot, on ONE instance
+    (`PostProcess.setLightingMode(ScreenSpace)`, `PostProcess.disable(slot)` / `select(slot, effect)`) — a patch
+    only the ray-traced lane draws is a traced-versus-drawn mismatch. The gap needs no picture:
+    `Core.SceneManagerService.getGroundLevel(x, z)` on every drawn node, against the same nodes taken every `step`
+    cells and interpolated along the proxy's diagonal ((x, z)–(x + 1, z + 1)). The budget is read when the terrain
+    loads: a budget A/B needs a settings copy and a relaunch. `water-world`'s grove is not seeded: compare the two
+    lanes inside ONE launch, never two launches. The two other poses of the measurement — eyes
+    (−538.5, 13.01, −209.0), 12 m away, and (−541.5, 38.78, −212.0), 35 m up — keep a residue with or without the
+    fix (700 to 3 600 pixels): the sea's moving foam at the shore, not sand.
+  - **Verified on the three OS** (2026-11-23, base 7801d5a, engine a1b93c56). Windows (RTX 3500 Ada, MSVC, Release
+    and Debug 0 warning): the same eyes, the same two proxy lines, **0** at the close pose (89 and 3 575 at the two
+    others, on the foam line), 0 `VUID-`. macOS (M6, MoltenVK, no ray-traced lane): the same proxy line (built in
+    28 ms) and a rebuild on a move, a clean capture, 0 `VUID-`. A rebuild's window is centred on the camera's cell
+    snapped to 2 cells: (−537.5, −210) for a camera at (−538.5, −209.0), (−542.5, −215) at (−543.5, −214.0).
+  - Not measured: a before / after on `terrain` (its proxy is at step 8, but the 48 m block surveyed near its
+    origin sinks under such a proxy by 8 cm at most; it loads with three nested windows, 820 736 triangles, 0
+    `VUID-`); an AMD GPU.
 - ⚠️⚠️⚠️ **`PushConstantBlock::bytes()` counted a `vec2` as 16 bytes** (it summed `size_bytes()`, the
   PADDED size) while std430 packs it in 8. The range only grew, so nothing ever failed — until the
   heightfield computed its node offset from it: the CPU pushed the node at **96** while the shader read it
@@ -4606,6 +4677,17 @@ at every pose update; `Visual` expands it by a per-axis "flesh margin" measured 
 asset (bind mesh box vs first joints box) and publishes `ComponentBoundariesModified`; the
 entity refreshes the collision model SHAPE only (`refreshCollisionBoundaries()` — not the full
 `updateEntityProperties()`).
+⚠️ **Half of it was lost when the culling moved to the published render extent (2026-11-16), found
+on 2026-11-22**: a frame culls on the extent published from the entity's RENDER box, and that box
+was rebuilt by `updateEntityProperties()` alone — `ComponentBoundariesModified` refreshed the
+collision shape, which the culling reads only for an entity without a render box. A beam whose
+points moved (a reused laser trace) was drawn only while the box of its first shape was in view.
+The notification now also rebuilds the render box (`refreshRenderBoundaries()`: the cheap subset,
+nothing published nor refiled when the box is the same) and the scene files the entity again in
+its rendering octree (`takeRenderBoxChange()`, both entity loops of `Scene::processLogics()`): the
+octree is asked BEFORE an entity's extent is tested, so the sector of the old box culled it too.
+Rule: **a component whose drawn shape changes notifies `ComponentBoundariesModified`, and the
+entity answers for BOTH volumes.**
 
 > [!CAUTION]
 > **GENERAL RULE — a signal fired from inside an iteration must be DEFERRED (twice lived,
@@ -4879,6 +4961,28 @@ everything after a `getGPUTimings("reset")`) was printed after `FinalComposite`,
 (macOS peer, M2, `labyrinth`; reproduced on the M6 by `setDeferredPunctualLights(0)`, `getGPUTimings("reset")`,
 `setDeferredPunctualLights(1)`). **Fix:** a new label is inserted after the furthest entry of the same frame's previous
 records. A lower sample count on such a scope is normal: it exists only in the frames that recorded it.
+
+### Not reproduced: a terrain drawn before its PerLight descriptor set exists (0 in 20 launches, 2026-11-24, its item closed)
+
+Seen by the Windows peer on 2026-10-02 (RTX 3060 Laptop, `--disable-cef`, validation layers off), once in three
+launches of `lighten-marbles` — and twice that day on NVIDIA during the physics validation: four errors right after
+the terrain was created and before the 'Moon' cubemap loaded, on `TerrainSceneFloorDetailWindow` and
+`TerrainSceneFloor`:
+
+```
+[RenderableInstance] Descriptor set contract violation: the sealed pipeline layout declares the 'PerLight' set,
+but the renderable instance cannot provide it. The draw call is skipped.
+```
+
+The draw is skipped: no crash, no VUID, and the next launches were clean. It read as a load-time race — the
+terrain's renderable instance drawn before the scene's lights give it its per-light set — and the engine item
+`lighten-marbles-perlight-descriptor-race` kept it until 2026-11-24 (engine 74beadf5): **0 time in 20 launches**,
+8 on Linux (RTX 3070 Ti, the layer loaded) and 12 on Windows (RTX 3500 Ada: six without the layer as on the day it
+was seen, six with it), the terrain and its detail window loading before the cubemap in every journal.
+
+⚠️ Which change removed it is not known, and the Windows machine is no longer the one of 2026-10-02. **If that
+message comes back, it is this race**: reopen it with the launch count and the device, and look at which side is
+late — the renderable instance's per-light resources, or the light set's.
 
 ## Shader/GLSL Pitfalls
 
@@ -6511,6 +6615,21 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 > size applied.
 
 
+### Not reproduced: the live-resize crash of July 2026 (re-checked 2026-11-24, its item closed)
+
+Seen on 2026-07-03 with projet-alpha's `liminal` loaded: a live `Core.WindowService.resize(1920,1080)` segfaulted
+during the post-process stack recreation, and a launch with the window settings at 1920x1080 gave storms of
+"descriptor set #0 not bound", then `VK_ERROR_DEVICE_LOST`. The engine item
+`resize-or-non-native-resolution-crash` kept it "to verify" until 2026-11-24 (engine `develop` 94632582, Linux,
+RTX 3070 Ti, driver 620.70.06): on `liminal`, `global-illumination` and `water-world` (both lighting lanes
+resident), a window-less instance launched at 1280 × 720 with the validation layer loaded, five live resizes each
+— 960 × 540, 1920 × 1080, 640 × 360, 2560 × 1440, back to 1280 × 720, five seconds apart. `getState()` gives the
+size asked and `screenshot()` an image of that size every time: 0 VUID, 0 `[Error]`, 0 `[Fatal]`, exit 0.
+
+⚠️ What that does NOT cover: a real window (a resize that comes from the compositor, Wayland or X11), a launch from
+window settings of another size, Windows, macOS, an Intel device (`intel-hang-render-thread-frees-memory-during-resize`
+is its own item). A crash met there is a new finding, not this one.
+
 ### Fixed: GNOME dropped the Wayland connection during a long load — a silent close, a 60 s stall, a crash at exit (Sep 2026)
 
 > **Symptom (owner, 2026-09-25, `terrain` with its 16 km forest):** "the engine fell over" — the window froze
@@ -7074,6 +7193,68 @@ priority 97R in `ps -M`. ⚠️ A relative `sleep_for(period - work)` is wrong o
 Linux (RTX 3070 Ti, `forest`, 2026-10-12, the deadline only): 600 / 600 / 601 cycles in 3 × 10 s = 59.96-60.08 cycles/s.
 ⚠️ Measure a tick rate with a COUNTER (`getNodePhysics().sceneCycle` over wall-clock seconds), never by eye; the physics
 bench compares BY CYCLE (`physics-bench.py --compare`), so the rate changes its wall-clock pace, never its results.
+⚠️ That policy holds only while the process is not put to sleep by App Nap: the next section.
+
+### macOS: App Nap demoted a window-less process after 30 s — the engine declares itself active (2026-11-22)
+
+A process that shows no window and holds no power assertion is what App Nap is made for, and a window-less instance is
+a FOREGROUND application to the system (`lsappinfo`). `runningboardd` registers it at its check-in (`Set AppNap state:
+enabled:Y active:N … timer:Tier0`) and, exactly 30.0 s later, turns the nap on (`enabled:Y active:Y socket:Y disk:Y
+priority:Y cpu:Y timer:Tier5`). The kernel then caps the WHOLE process at priority 4 (its 68 threads, `4T` in `ps -M`),
+which withdraws the logic thread's Mach time-constraint policy and coalesces its timers: that thread sleeps 92 % of the
+time (its `sleep_until` oversleeps by about 50 ms a cycle) and the simulation runs at a fifth of the wall clock until
+the end — a car asked to accelerate for 2.5 s reached 1.7-4 m/s instead of 13. The shell that launched it stays at
+priority 31.
+
+**Fix (owner decision 2026-11-22: every run, with a window or without one):** `PlatformSpecific::ProcessActivity`
+(`ProcessActivity.mac.mm`, ARC), an RAII token in the mould of `DisplaySleepInhibitor`, holds an NSProcessInfo activity
+(`beginActivityWithOptions:reason:`, `NSActivityUserInitiatedAllowingIdleSystemSleep | NSActivityLatencyCritical`).
+`PlatformManager` owns it: begun in `onInitialize()` before `glfwInit()` (the application checks in with the system
+there), ended in `onTerminate()` after GLFW and the Vulkan loader, and by its destructor when the start failed. A
+refusal is a warning, never a failed start. The journal says `The process is declared active to the system (no App Nap,
+latency critical).` before GLFW's version line.
+
+Measured by the macOS peer (Mac mini M6, macOS 27.2.1, a downstream testbed's city scene, validation layer on, sampled
+every 5 s; the logic thread found by its policy and confirmed with `sample`; cycles counted from
+`getNodePhysics().sceneCycle`, never wall seconds):
+
+| Run | Process priority | Logic thread (`ps -M`, Mach policy) | Scene cycles per second |
+|---|---|---|---|
+| Window-less, before the fix | 97 until 30.0 s, then 4 | `97R`, policy 2 → `4T`, policy 1 | 59.9-60.0, then 11.7-16.9 to the end |
+| Window-less + `-NSAppSleepDisabled YES` (the argument domain), before the fix | 97 | `97R`, policy 2 | 59.8-60.1 for the 90 s |
+| Windowed, never frontmost (the session locked), before the fix, twice | 97 | `97R`, policy 2 | 59.6-60.4 for the 90 s |
+| Window-less, WITH the activity | 97 for the 120 s | `97R`, policy 2 | 59.70-60.26 at each of the 22 samples |
+| Windowed, with the activity (locked, never frontmost) | 97 for the 90 s | `97R`, policy 2 | 59.62-60.28 |
+
+With the activity `runningboardd` writes ONE App Nap line for the process — the check-in's `enabled:Y active:N` — and
+never re-evaluates it; before, the windowed runs were re-evaluated at 30 s too and stayed `active:N priority:N`. Both
+runs with the activity: exit code 0, 0.34 and 0.47 s after `Core.shutdown()`, 0 `VUID-`; Release and Debug build with
+0 warning under `-Wdocumentation -Werror`.
+
+Verified again from the pushed tree (engine `53b0ecc6`, the same Mac): 97 / `97R` / 59.89-60.05 cycles a second from
+35 to 60 s, the check-in App Nap line alone over the 94.7 s of the instance, and the frame rate with it — 54 to 59
+frames a second in that scene, where the demoted process drew about 16.
+
+**Windows has no such demotion** (Windows peer, 2026-11-22, RTX 3500 Ada, Windows 11, engine `53b0ecc6`, the same scene
+window-less for 120 s, validation layer on): 59.95-60.06 cycles a second at every 10 s sample from 30 to 120 s, the
+priority class NORMAL throughout, no power-throttling policy on the process (`GetProcessInformation(ProcessPowerThrottling)`,
+which shows the explicit efficiency mode only — the rate is the evidence), about 1.05 cores of CPU, exit 0, 0 `VUID-`.
+Linux neither (RTX 3070 Ti, the same scene window-less): 600 cycles in 10.00 s, 59.98 a second, from the 34th to the
+44th second of the process.
+
+⚠️ **The activity is invisible to `pmset -g assertions`**: no line names a window-less process, and a windowed one
+lists the display assertion alone ("Emeraude engine: a window is open"). It is the "allowing idle system sleep" form:
+the machine still sleeps on the user's idle timers. Its proof is the App Nap line that is NOT in `log show`
+(`runningboardd`, `Set AppNap state`, the process id), and a cycle count taken past 30 s.
+⚠️ **Every macOS window-less measurement older than 30 s and taken before 2026-11-22 is suspect** (timings, frame
+rates, anything that waited in wall seconds — a slow frame rate also stretches every temporal effect, TAA and the GI
+converge per FRAME). The "60.00 cycles/s" of the section above was measured over 3 × 10 s: it says nothing beyond 30 s.
+A verification that waits counts CYCLES, never wall seconds.
+Not proven: a frontmost window (the session was locked in every run), and whether the window or the display assertion
+kept the windowed runs awake before the fix. Not chosen: `NSAppSleepDisabled` registered as a volatile default beside
+`ApplePersistenceIgnoreState` (proven in the argument domain only) — a declared activity says what the process does and
+asks for the timer precision with it.
+Reference: Apple, NSProcessInfo § Managing Activities; "Energy Efficiency Guide for Mac Apps" § Extend App Nap.
 
 ## Vector::normalize() at any scale (2026-10-09, base `83878a5`)
 

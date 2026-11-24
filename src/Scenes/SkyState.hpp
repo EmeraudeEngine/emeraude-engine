@@ -86,7 +86,7 @@ namespace EmEn::Scenes
 	 * @brief The state of the sky's bodies for one rendered frame: published by the scene's
 	 * Component::CelestialClock, read by the sky the renderer draws (Graphics::Renderable::DynamicSkyResource).
 	 * @note The sky resource is SHARED and stateless: the time, hence the sun, belongs to the scene (owner decision
-	 * 2026-10-24, the model of the ParticipatingMedium). A scene without a clock has an INVALID state, and a dynamic
+	 * 2026-10-24, the model of the AtmosphericMedium). A scene without a clock has an INVALID state, and a dynamic
 	 * sky then keeps its own default sun.
 	 */
 	struct SkyState

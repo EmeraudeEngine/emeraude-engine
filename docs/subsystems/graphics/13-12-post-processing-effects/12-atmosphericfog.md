@@ -51,7 +51,8 @@ Single-pass analytical fog using closed-form integral (no iterative sampling). R
 > **The MEDIUM belongs to the scene, not to the effect.** `AtmosphericFog::Parameters` used to hold
 > both: a participating medium (density, height falloff, base height, max distance, chromaticity,
 > luminance) and the technique's own knobs (inscatter exponent and intensity, sky fog). The medium
-> half now lives in `Scenes::ParticipatingMedium`, owned by the `Scene` beside its
+> half now lives in `Scenes::AtmosphericMedium` (named `ParticipatingMedium` until 2026-11-23: that name is now the
+> common level of the media family, [`44-watervolume`](44-watervolume-the-underwater-view.md)), owned by the `Scene` beside its
 > `EnvironmentPhysicalProperties`, and reaches effects through `FrameContext::medium` the way
 > `skyLuminance` already does.
 >
@@ -63,9 +64,9 @@ Single-pass analytical fog using closed-form integral (no iterative sampling). R
 > ⚠️ **No medium means NO FOG** — the effect returns the chain colour untouched and warns once. An
 > atmospheric fog without an atmosphere is a pass-through, not a fog with invented parameters; that
 > is the whole point of having exactly one place that describes the air. Every `Scene` defaults to
-> `ParticipatingMedium::Vacuum()`, so a scene that adds the effect must declare a medium.
+> `AtmosphericMedium::Vacuum()`, so a scene that adds the effect must declare a medium.
 >
-> ⚠️ `ParticipatingMedium::density` is an extinction coefficient in **1/m**.
+> ⚠️ `AtmosphericMedium::density` is an extinction coefficient in **1/m**.
 > `VolumetricLight::Parameters::density` is a **screen-space step multiplier** for a radial blur and
 > has no physical unit. Same word, nothing in common — never merge them.
 >

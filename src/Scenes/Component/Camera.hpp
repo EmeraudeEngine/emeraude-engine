@@ -30,24 +30,37 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstddef>
-#include <cstdint>
 #include <algorithm>
 #include <cmath>
+#include <cstddef> // IWYU pragma: keep (std::size_t: <cstdint> provides it with libstdc++ only)
+#include <cstdint>
+#include <cstring>
 #include <memory>
-#include <mutex>
+#include <ranges>
+#include <sstream>
 #include <string>
+#include <vector>
 
 /* Local inclusions for inheritances. */
 #include "Abstract.hpp"
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 
 /* Local inclusions for usages. */
-#include "Mutex.hpp"
 #include "Graphics/DirectPostProcessEffect.hpp"
 #include "Graphics/ViewMatricesInterface.hpp"
+#include "Math/Base.hpp"
+#include "Math/CartesianFrame.hpp"
+#include "Math/Vector.hpp"
+#include "Mutex.hpp"
 #include "Scenes/AVConsole/Types.hpp"
 #include "SettingKeys.hpp"
+#include "ThreadSafety.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Scenes
+{
+	class AbstractEntity;
+}
 
 namespace EmEn::Scenes::Component
 {
@@ -871,6 +884,28 @@ namespace EmEn::Scenes::Component
 			 * @brief Clears all shader lens effect of the camera.
 			 */
 			void clearLensEffects () noexcept;
+
+			/**
+			 * @brief Takes the whole photographic setup of another camera and keeps this camera's own shot.
+			 * @note For cameras that film ONE scene with ONE look from several places (the views of a vehicle, a
+			 * multi-camera shoot): a cut between them (Scene::switchToCamera()) then changes the point of view and
+			 * nothing else. Without it each camera keeps its own setup and a cut swaps the whole look.
+			 * @note COPIED: the format (sensor width), the aperture, the shutter speed, the sensitivity and its range,
+			 * the exposure compensation, the auto-exposure and auto-focus modes, the manual focus distance, the lens
+			 * glare's threshold and intensity, the four materialization states (depth of field, motion blur, lens glare,
+			 * HDR), the view distance (the far plane, which the shadow cascades are derived from) and the lens effect
+			 * stack — the SAME effect instances: the list is an immutable snapshot, a later change on either camera
+			 * replaces its own list only.
+			 * @note KEPT: the framing (the field of view: when the formats differ the focal length is re-expressed on
+			 * the copied format, as a style does; with the same format it is left untouched, exactly), the nearest
+			 * object distance, the projection kind and the orthographic planes.
+			 * @note Logic thread, like every setter of the camera.
+			 * @param source A reference to the camera to take the setup from. Copying a camera onto itself changes nothing.
+			 * @return bool False when refused, nothing changed: one of the two is a technical camera (its field of view
+			 * is a geometric constraint, it has no photographic setup). Traced.
+			 */
+			[[nodiscard]]
+			bool copyPhotographicSetup (const Camera & source) noexcept;
 
 		protected:
 

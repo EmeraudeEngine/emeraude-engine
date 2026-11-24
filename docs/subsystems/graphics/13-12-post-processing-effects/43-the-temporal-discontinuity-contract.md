@@ -30,6 +30,24 @@ raise, the raising frame included.
 | A picture sky's IBL baked (it replaces the previous one at once) | `Scene::updateEnvironmentIBL()` | logic |
 | The sky recorded an immediate cycle THIS frame (the frame its direct light jumps) | `SkyEnvironment::recordedImmediateCycle()`, read by `renderSkyAtmosphere()` | render |
 | Another scene than the previous frame's | `latchTemporalDiscontinuity()` (a `weak_ptr`'s control block: a new scene at a reused address never compares equal) | render |
+| An emission the engine cannot see step: an EMISSIVE MATERIAL switched by the code that owns it (a vehicle's brake lamps, a sign) | `Scene::raiseTemporalDiscontinuity()`, PUBLIC since 2026-11-22 (owner decision: "an engine call, raised by the car"), called by that code on the logic cycle that writes the step | any |
+
+**The public raise** (2026-11-22). `Scene::raiseTemporalDiscontinuity()` was private "until a real case" (owner,
+2026-11-03); the case came with a car's brake lamps, emissive materials and no light of the light set. Measured on a
+downstream testbed (Linux, RTX 3070 Ti, the RT lane, 9 ms a frame, a fixed pose behind the parked car by night, the
+count of red pixels around the lamps, 60 frames recorded across the switch): without the raise the glow on the body
+and the road reaches 7 % of its final extent on the first frame after the brake and 37 % sixty frames later, and it
+is still there sixty frames after the release; with it, 62 % on the first frame and 78 % sixty frames later, and the
+release reads its final level on the FIRST frame. 25 frames marked at each switch, 0 VUID. ⚠️ One raise per step, on
+the cycle that writes it: every marked frame pays TAA's large-change test and the denoiser's pooled reset.
+Three OS (engine `01b3984d`, MSVC and AppleClang Release and Debug 0 warning, 0 VUID). Windows (RTX 3500 Ada, the RT
+lane): 25 marked frames from the first frame after each switch; on the press the red pixels jump × 3.2 on that frame,
+on the release they read their idle level from it on. macOS (Apple M6, the screen-space lane, 17 ms a frame): before
+the raise the lamps' OWN pixels faded for 2.3 s after the release (median red 255 for 0.17 s, 127 at 0.88 s, 10 at
+2.26 s); with it they read 7 / 255 on the first frame (the idle is 4), and on the press 244 on the first frame, the
+halo at 82 % of its steady level. ⚠️ A capture also shows marks nobody asked for (frames before the command, a run
+of 25 three seconds later): another producer of the scene, most likely its traffic signals switching colour (a
+light's emission stepping per channel) — the JSON does not say who raised a mark.
 
 **The transport: a monotonic epoch** (owner decision 2026-11-03). `Scene::publishStateForRendering()` writes, with each
 render state slot, the scene's own counter plus the light set's (`Scene::temporalDiscontinuityEpoch(slot)`); both are
@@ -174,9 +192,10 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
 > [!NOTE]
 > **A flickering light marks** (owner decision 2026-11-03): a flicker IS a discontinuity, and TAA and the GI follow it
 > sharply, as since 2026-11-01. In a scene with a flickering light on screen the marked variants run most of the time:
-> no gain there, the look of today. A change nobody signals (an emissive material switched without a light, a
-> camera cut) converges at the pre-2026-11-01 rate — TAA ~20 frames per e-fold, the GI's 6-frame cap: the accepted
+> no gain there, the look of today. A change nobody signals (an emissive material switched without a light)
+> converges at the pre-2026-11-01 rate — TAA ~20 frames per e-fold, the GI's 6-frame cap: the accepted
 > trade-off (owner decision 2026-11-03); a public `Scene` call raising the epoch comes only with a real case.
+> A camera cut is no longer one of them: it is a VIEW discontinuity (below, 2026-11-22).
 
 - **The peers on engine eed27ab5** (2026-11-04; the four commits 0389c34e, 3e484a60, 4a29d706, eed27ab5):
   macOS-PA (M6, the REDUCED bindless profile — 1212 descriptors, Cube[128]) Release 0 warning, every `.mm` /
@@ -189,10 +208,26 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
   anti-lag 0.45 → 0.45, à-trous 3.93 → 3.90, SSR trace 8.39 → 8.32, the frame 44.80 → 44.79; ScenePass 9.35 → 9.44
   (B above A in the three pairs, ~1 %, under the 5 % bar). The same code measured 13.68 / 0.39 / 44.29 one day
   earlier: compare across days only interleaved.
-  ⚠️ Open observation (Windows RTX, RT lane, TAA OFF): after the jump the sea box keeps a slow tail, 2.6-3.0 at the
-  first night frame down to ~0.1 over ~1.4 s, a diagonal line of specks on the water — likely the ray-traced
-  reflections' own history (RTR's denoiser) converging; Linux's RT lane reads 0.0 there. Item
-  `rt-reflections-trail-after-a-lighting-jump` (owner, 2026-11-04: medium).
+  **An observation of 2026-11-04, no longer reproduced** (Windows RTX, RT lane, TAA OFF): after the jump the sea box
+  (0, 560, 400, 720 at 1280×720) kept a slow tail, 2.6-3.0 at the first night frame down to ~0.1 over ~1.4 s, a
+  diagonal line of specks on the water; the ray-traced reflections' own history was suspected, Linux's RT lane read
+  0.0 there, and the item `rt-reflections-trail-after-a-lighting-jump` tracked it. Re-checked on the same machine on
+  2026-11-24 (engine 74beadf5, `temporalCapture(N, 5, …setTimeOfDay(…, 0.95))`, N = 60 then 150, two jumps a case),
+  the item closed:
+
+  | reflections | first night frame | ≤ 0.05 after |
+  |---|---|---|
+  | RTR as selected | 0.23 / 0.24 | 94 / 100 ms |
+  | `disable(Reflections)` | 0.38 / 0.73 | 157 / 1316 ms |
+  | back to RTR | 0.18 / 0.38 | 66 / 533 ms |
+  | `select(Reflections, SSREffect)` | 0.28 / 0.17 | never in 1.5 s (0.10) / 61 ms |
+
+  The first night frame is about ten times lower than on 2026-11-04, and **what is left does not follow RTR**: it is
+  as large or larger with the reflections off. The reflections' history was not its source. Amplified, it is still
+  a diagonal line of specks along the quay wall's edge, the same with RTR, without reflections and with SSR — its
+  cause is not looked for. ⚠️ In several of those night captures the sea box steps up later on its own (0.00 → 0.60
+  → 0.73) and decays over about 60 frames with the TAA off: night events of the scene (signals, lamps), not the
+  jump.
 
 > [!NOTE]
 > **One unexplained freeze, never reproduced** (Linux, 2026-11-03, during the contract's validation): in a `labyrinth`
@@ -206,6 +241,68 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
 > `labyrinth`'s GI noise runs vary from launch to launch (the dying lamp's flicker inside the 16-frame window: max
 > ~189, the level dips — RTGI 14.8-18.0 in 3 runs of 14, SSGI 19.3 / 21.5 in 2 of 13). Compare its median over several
 > runs, never one run.
+
+### The VIEW discontinuity — a frame without a past (owner decision 2026-11-22)
+
+**Why.** The mark above says the LIGHTING stepped: the histories still describe this view and must converge fast. A
+camera cut (`Scene::switchToCamera()`) or another scene is something else: the previous frame is another picture, and
+no history describes this one. Until 2026-11-22 nothing said so — the view matrices' frame history "does not signal
+validity" — and the first frame of a cut was streaked from edge to edge: the velocity buffer measured the jump from
+the previous camera, the motion blur walked it (projet-alpha's `city`, a car's chase camera cut to its cockpit camera
+at 13 m/s: that frame differed from the next by 16.9 / 255 on average, the following ones by 0.6-0.8).
+
+**The signal** is the view matrices' own (they own the frame history):
+- `ViewMatricesInterface::breakFrameHistory()` — the PRODUCER. `RenderTarget::Abstract::onInputDeviceConnected()` calls
+  it when another source feeds the target (data only: a counter of the view's logic state, `DataState::viewEpoch`,
+  published with the matrices — so the break lands on the very frame that first renders the new view).
+- `ViewMatricesInterface::latchFrameHistory(readStateIndex, broken)` — RENDER THREAD, once per frame, from
+  `Renderer::latchTemporalDiscontinuity()` (before `Scene::prepareRender()` and the chain): the history continues
+  when a frame was archived, its epoch is the frame's, and the caller does not say otherwise (`broken`: another scene
+  than the previous frame's). When it does not, the PREVIOUS matrices become the frame's own — no camera motion.
+- `frameHistoryContinues()`, read by the effects through `FrameView::frameHistoryContinues()`.
+- `Renderer.temporalCapture` writes it per frame (`"viewDiscontinuity"`), beside `"temporalDiscontinuity"`.
+
+**The consumers** drop what they accumulated, for that frame (each keeps its own way of starting over):
+
+| Consumer | On a frame without a past |
+|---|---|
+| `TAA` | `m_historyValid = false`: the input passes through, the history restarts |
+| `GIDenoiser` (`updateFrameData()`: RTGI, RTR, SSGI) | `m_historyValid = false`: as after its creation |
+| `VolumetricLight` | `m_historyValid = false`: the previous mask is not blended |
+| `DepthOfField` | `m_focusValid = false`: the focus snaps to this view's subject instead of racking from the other's |
+| `MotionBlur` | passes the frame through: its velocity measures nothing |
+
+`ToneMapping` keeps its adaptation on purpose: two cameras of one scene meter the same light.
+
+⚠️ **Zero camera motion is not enough for the motion blur.** With the previous matrices equal to the frame's, what
+RIDES with a moving camera (a car's cabin seen from its cockpit) carries its whole world speed against a camera that
+"did not move": measured, the cut frame at 13 m/s was still soft (mean gradient 4.19 against 7.96 for the next ones,
+15.8 / 255 from the next) while a cut of the parked car was already clean (0.58 against 0.55). Hence the pass-through.
+
+**Measured** (projet-alpha `city`, Linux RTX 3070 Ti, window-less 1280×720, validation layers on, 0 VUID, clean exit;
+`temporalCapture(12, 4, "Core.InputManagerService.keyPress(67, 0)")`, the mark on exactly ONE frame each time):
+
+| Cut | The cut frame against the next | The following frames among themselves |
+|---|---|---|
+| Parked, chase → cockpit | 0.57 / 255, gradient 8.38 → 8.29 | 0.54-0.57 |
+| Parked, cockpit → bonnet | 0.99, gradient 12.09 → 11.90 | 0.88-0.95 |
+| 13 m/s, chase → cockpit | 0.68, gradient 8.94 → 8.62 (before the fix: 16.9, gradient 3.55 → 4.7) | 0.70-0.90 |
+| 13 m/s, cockpit → bonnet | 18.8, gradient 12.03 → 5.85: the ONE frame without motion blur, then the road's smear | 13.6-18.7 |
+
+**The three OS** (2026-11-22, engine 0afa7ad5, the same captures; 0 VUID and a clean exit everywhere):
+
+| | The mark | The marked frame |
+|---|---|---|
+| Windows (RTX 3500 Ada, MSVC 14.44, Release and Debug 0 warning) | one frame, parked and at 13.07 m/s | sharp; 1.18 / 255 from the next parked (the following ones 1.15-0.90), 1.00 at speed (0.99-1.27) |
+| macOS (M6, MoltenVK 1.4.2, Release 0 warning, `-Wdocumentation` clean) | one frame, parked and at 13.68 m/s | sharp; 2.71 / 255 from the next parked (2.48-1.89: the exposure adapting, 60 ms a frame), 1.22 at speed (1.21-1.48) |
+
+The differences from one frame to the next are each machine's own floor for that view (the auto-exposure adapts after
+a cut: the two cameras do not frame the same light), never the streak of before (16.9).
+
+**The scene switch** (`!sameScene`): on Windows, where the smear had been seen once in October, `--load-demo default`
+then `Stage.loadDemo("sponza")` (answered after 3.54 s), ten screenshots in a row and one 6 s later: all sharp. The
+first frame of the new scene cannot be captured by `temporalCapture` (the load outlasts any capture), so its mark was
+read on no OS: the switch is covered by construction, and by those eleven frames.
 
 References: § 06 (the TAA resolve), § 16 (the anti-lag), § 41
 (the FAST forms), graphics doc 42 § The environment.

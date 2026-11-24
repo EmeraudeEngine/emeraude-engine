@@ -105,6 +105,9 @@ namespace EmEn::Scenes
 		this->observe(m_rootNode.get());
 		this->observe(&graphicsRenderer);
 
+		/* A scene built with its ground and its sea presents one to the other at once. */
+		this->presentGroundToSea();
+
 		/* Mirror the GPU descriptor table capacities into the per-scene set: they are resolved from
 		 * the device's update-after-bind budget at renderer initialization and are lower than the
 		 * desired ones on MoltenVK (Metal caps argument buffers at 1024 samplers). Allocating a slot
@@ -497,7 +500,12 @@ namespace EmEn::Scenes
 
 			for ( const auto & staticEntity : std::ranges::views::values(m_staticEntities) )
 			{
-				if ( staticEntity->processLogics(*this, engineCycle) )
+				/* Refiled when it reports a move, and when what it draws changed its box without one (a beam or a path
+				 * whose points moved): else it stays in the sector of its first box and is culled with it. */
+				const auto moved = staticEntity->processLogics(*this, engineCycle);
+				const auto reshaped = staticEntity->takeRenderBoxChange();
+
+				if ( moved || reshaped )
 				{
 					this->checkEntityLocationInOctrees(staticEntity);
 				}
@@ -516,8 +524,13 @@ namespace EmEn::Scenes
 
 				/* A node is refiled when it reports its move, but also when its WORLD frame changed without one: a
 				 * parent moved it, a component set its frame, an animation, or it does not collide (its processLogics()
-				 * never reports). Otherwise it stays in its first sector and is culled with it. */
-				if ( currentNode->processLogics(*this, engineCycle) || (currentNode->isRenderable() && currentNode->movedSinceFiled(currentNode->getWorldCoordinates())) )
+				 * never reports) — and when what it draws changed its BOX without moving it: a beam or a path whose
+				 * points moved, a skinned pose (takeRenderBoxChange()). Otherwise it stays in its first sector and is
+				 * culled with it. */
+				const auto moved = currentNode->processLogics(*this, engineCycle);
+				const auto reshaped = currentNode->takeRenderBoxChange();
+
+				if ( moved || reshaped || (currentNode->isRenderable() && currentNode->movedSinceFiled(currentNode->getWorldCoordinates())) )
 				{
 					this->checkEntityLocationInOctrees(currentNode);
 					currentNode->recordFiledFrame(currentNode->getWorldCoordinates());

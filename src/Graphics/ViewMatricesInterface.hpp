@@ -145,9 +145,11 @@ namespace EmEn::Graphics
 			/**
 			 * @brief Returns the view matrix used by the previously rendered frame.
 			 * @note Frame-history contract for temporal effects (reprojection, accumulation).
-			 * Only meaningful after archiveStateAfterRendering() has been called at least once;
-			 * views that do not keep a history return an identity matrix. Consumers MUST handle
-			 * their own first-frame invalidation (this contract does not signal validity).
+			 * On a frame the history does not continue into — the first one, the first one of another
+			 * camera (breakFrameHistory()), of another scene — the previous matrices are THAT frame's
+			 * own: nothing computes a camera motion from a view that is not this one's past, and
+			 * frameHistoryContinues() tells a temporal integrator to drop what it accumulated
+			 * (latchFrameHistory(), 2026-11-22). Views that do not keep a history return an identity matrix.
 			 * @return const Matrix< 4, float > &
 			 */
 			[[nodiscard]]
@@ -409,6 +411,50 @@ namespace EmEn::Graphics
 			 * @param writeStateIndex The render state-free index to write data.
 			 */
 			virtual void publishStateForRendering (uint32_t writeStateIndex) noexcept = 0;
+
+			/**
+			 * @brief Declares that what feeds this view changed: another camera (a cut). The frames rendered before
+			 * are not this view's past.
+			 * @note DATA only, on the thread that connects the source: a counter of the logic state, published with
+			 * it, so the break lands on the very frame that first renders the new view (latchFrameHistory()).
+			 * Default implementation: a view that keeps no frame history has nothing to break.
+			 */
+			virtual
+			void
+			breakFrameHistory () noexcept
+			{
+				/* Default: this view keeps no frame history. */
+			}
+
+			/**
+			 * @brief RENDER THREAD, once per rendered frame, BEFORE anything of the frame reads the previous matrices:
+			 * decides whether the frame history continues into the frame being recorded.
+			 * @note It does not at the first frame, at the first frame rendered from a state published after
+			 * breakFrameHistory(), and when the caller says so. The previous matrices then become the frame's own, and
+			 * frameHistoryContinues() answers false until the next latch. Default implementation keeps no history.
+			 * @param readStateIndex The render state-valid index the frame is rendered with.
+			 * @param broken Whether the caller knows the previous frame is not this view's past (another scene).
+			 */
+			virtual
+			void
+			latchFrameHistory ([[maybe_unused]] uint32_t readStateIndex, [[maybe_unused]] bool broken) noexcept
+			{
+				/* Default: this view keeps no frame history. */
+			}
+
+			/**
+			 * @brief RENDER THREAD. Returns whether the previous rendered frame is the past of the frame being recorded
+			 * (latchFrameHistory()).
+			 * @return bool False: a temporal integrator drops its history for this frame. A view that keeps no
+			 * history never has one.
+			 */
+			[[nodiscard]]
+			virtual
+			bool
+			frameHistoryContinues () const noexcept
+			{
+				return false;
+			}
 
 			/**
 			 * @brief Archives the view state consumed by the frame that was just recorded.

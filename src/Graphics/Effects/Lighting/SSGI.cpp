@@ -38,6 +38,7 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/BindlessTextureManager.hpp"
+#include "Graphics/Effects/Shared/GBufferTexelGLSL.hpp"
 #include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
@@ -62,6 +63,10 @@ namespace EmEn::Vulkan
 namespace
 {
 	using namespace EmEn;
+
+	/** @brief How many G-buffer texels a pixel of the two passes covers along each side: they run at half resolution.
+	 * The ONE statement of it — create() sizes the targets with it and gives it to the shaders (GBufferTexelGLSL). */
+	constexpr uint32_t Reduction{2};
 
 	/** @brief The view reconstruction's bindings: after the horizon's two samplers; after the trace's four, or five
 	 * with the sky visibility. */
@@ -115,7 +120,7 @@ layout(set = 0, binding = 0) uniform sampler2D depthTex;
 layout(set = 0, binding = 1) uniform sampler2D normalTex;
 )GLSL";
 
-	/* The horizon search's body, after its header and the view reconstruction (binding 2). */
+	/* The horizon search's body, after its header, the G-buffer texel helpers and the view reconstruction (binding 2). */
 	constexpr auto SSGIHorizonFragmentBody = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
@@ -159,7 +164,14 @@ vec2 hash2 (uvec2 p)
 
 void main()
 {
-	float centerDepth = texture(depthTex, vUV).r;
+	/* The G-buffer texel this pixel stands for (GBufferTexelGLSL): at half resolution vUV is the corner four texels
+	 * share, where a NEAREST read returns one of the four on the rounding of the UV (the 10 px column grid at
+	 * 1280 x 720, graphics doc 13-12 § 45). Depth and normal come from THAT texel, and the centre is unprojected at
+	 * its centre, never at vUV. */
+	const ivec2 gbufferSize = textureSize(depthTex, 0);
+	const ivec2 centerTexel = emGBufferTexel(gbufferSize);
+	const vec2 centerUV = emGBufferTexelUV(centerTexel, gbufferSize);
+	float centerDepth = texelFetch(depthTex, centerTexel, 0).r;
 
 	/* Background: nothing to occlude, and the trace pass skips those pixels anyway. */
 	if (centerDepth >= 1.0)
@@ -169,7 +181,7 @@ void main()
 		return;
 	}
 
-	vec3 rawN = texture(normalTex, vUV).rgb;
+	vec3 rawN = texelFetch(normalTex, centerTexel, 0).rgb;
 
 	if (dot(rawN, rawN) < 0.0001)
 	{
@@ -183,7 +195,7 @@ void main()
 	float falloffFraction = invViewCol1.w;
 	float noiseFrameIndex = invViewCol2.w;
 
-	vec3 P = reconstructPosition(vUV, centerDepth);
+	vec3 P = reconstructPosition(centerUV, centerDepth);
 	/* Reconstruction space: the view-space normal with Z negated. */
 	vec3 N = normalize(vec3(rawN.x, rawN.y, -rawN.z));
 	/* The direction from the surface back to the eye — the axis every slice turns around. */
@@ -209,8 +221,8 @@ void main()
 	 * constant depth value the view Z is constant and the view XY are affine in the UV — in perspective (jittered or
 	 * not) as in orthographic — so these differences are exact, not a local approximation, and the out-of-screen UV is
 	 * only an operand of the matrix. They replace the former `2 * tanHalfFovY * aspect * z` scalars. */
-	vec2 uvToViewX = reconstructPosition(vUV + vec2(1.0, 0.0), centerDepth).xy - P.xy;
-	vec2 uvToViewY = reconstructPosition(vUV + vec2(0.0, 1.0), centerDepth).xy - P.xy;
+	vec2 uvToViewX = reconstructPosition(centerUV + vec2(1.0, 0.0), centerDepth).xy - P.xy;
+	vec2 uvToViewY = reconstructPosition(centerUV + vec2(0.0, 1.0), centerDepth).xy - P.xy;
 
 	float visibility = 0.0;
 	vec3 bentNormal = vec3(0.0);
@@ -276,8 +288,8 @@ void main()
 			float stepNorm = (float(step) + noise.y) / float(stepCount);
 			vec2 uvOffset = omega * (radius * stepNorm * stepNorm * uvPerUnit);
 
-			vec2 sampleUV0 = vUV + uvOffset;
-			vec2 sampleUV1 = vUV - uvOffset;
+			vec2 sampleUV0 = centerUV + uvOffset;
+			vec2 sampleUV1 = centerUV - uvOffset;
 
 			/* ⚠️ SKIPPED, never clamped — see the header. */
 			if (all(greaterThanEqual(sampleUV0, vec2(0.0))) && all(lessThanEqual(sampleUV0, vec2(1.0))))
@@ -390,7 +402,8 @@ const uint IrradianceCubemapSlot = 1u;
 #endif
 )GLSL";
 
-	/* The trace's body, after its header and the view reconstruction (binding 3, or 4 with the sky visibility). */
+	/* The trace's body, after its header, the G-buffer texel helpers and the view reconstruction (binding 4, or 5 with
+	 * the sky visibility). */
 	constexpr auto SSGITraceFragmentShaderMain = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
@@ -465,7 +478,14 @@ float screenEdgeFade (vec2 uv)
 
 void main()
 {
-	float centerDepth = texture(depthTex, vUV).r;
+	/* The G-buffer texel this pixel stands for (GBufferTexelGLSL): at half resolution vUV is the corner four texels
+	 * share, where a NEAREST read returns one of the four on the rounding of the UV (the 10 px column grid at
+	 * 1280 x 720, graphics doc 13-12 § 45). Depth and normal come from THAT texel, and the centre is unprojected at
+	 * its centre, never at vUV. */
+	const ivec2 gbufferSize = textureSize(depthTex, 0);
+	const ivec2 centerTexel = emGBufferTexel(gbufferSize);
+	const vec2 centerUV = emGBufferTexelUV(centerTexel, gbufferSize);
+	float centerDepth = texelFetch(depthTex, centerTexel, 0).r;
 
 	/* Skip far-plane fragments. */
 	if (centerDepth >= 1.0)
@@ -474,10 +494,10 @@ void main()
 		return;
 	}
 
-	vec3 centerPos = reconstructPosition(vUV, centerDepth);
+	vec3 centerPos = reconstructPosition(centerUV, centerDepth);
 
 	/* Read view-space normal from MRT normal buffer. */
-	vec3 rawN = texture(normalTex, vUV).rgb;
+	vec3 rawN = texelFetch(normalTex, centerTexel, 0).rgb;
 
 	if (dot(rawN, rawN) < 0.0001)
 	{
@@ -722,8 +742,8 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_parameters.temporalNeighborhoodClamp = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseTemporalNeighborhoodClampKey, DefaultGraphicsPPIndirectDiffuseTemporalNeighborhoodClamp);
 		m_parameters.temporalAnimatedNoise = settings.getOrSetDefault< bool >(GraphicsPPIndirectDiffuseTemporalAnimatedNoiseKey, DefaultGraphicsPPIndirectDiffuseTemporalAnimatedNoise);
 
-		const auto halfW = (width > 1) ? width / 2 : 1U;
-		const auto halfH = (height > 1) ? height / 2 : 1U;
+		const auto halfW = GBufferTexelGLSL::reducedSize(width, Reduction);
+		const auto halfH = GBufferTexelGLSL::reducedSize(height, Reduction);
 
 		/* Trace target (half-res, RGBA16F: indirect radiance RGB). */
 		if ( !m_traceTarget.create(renderer, halfW, halfH, VK_FORMAT_R16G16B16A16_SFLOAT, "SSGI_Trace") )
@@ -874,8 +894,8 @@ namespace EmEn::Graphics::Effects::Lighting
 			/* ⚠️ The variant is decided HERE, once: the sky block declares a sampler the no-sky pipeline
 			 * layout does not carry, and a `#extension` cannot live inside an `#ifdef` block. */
 			const std::string traceSource = m_skyVisibilityActive
-				? std::string{"#version 450\n#define EMEN_SSGI_SKY_VISIBILITY 1\n#extension GL_EXT_nonuniform_qualifier : require\n"} + SSGITraceFragmentShaderBody + ViewReconstructionGLSL::sourceGLSL(0, TraceSkyViewBinding, form) + SSGITraceFragmentShaderMain
-				: std::string{"#version 450\n"} + SSGITraceFragmentShaderBody + ViewReconstructionGLSL::sourceGLSL(0, TraceViewBinding, form) + SSGITraceFragmentShaderMain;
+				? std::string{"#version 450\n#define EMEN_SSGI_SKY_VISIBILITY 1\n#extension GL_EXT_nonuniform_qualifier : require\n"} + SSGITraceFragmentShaderBody + GBufferTexelGLSL::sourceGLSL(Reduction) + ViewReconstructionGLSL::sourceGLSL(0, TraceSkyViewBinding, form) + SSGITraceFragmentShaderMain
+				: std::string{"#version 450\n"} + SSGITraceFragmentShaderBody + GBufferTexelGLSL::sourceGLSL(Reduction) + ViewReconstructionGLSL::sourceGLSL(0, TraceViewBinding, form) + SSGITraceFragmentShaderMain;
 
 			const auto traceFragment = shaderManager.getShaderModuleFromSourceCode(device, (m_skyVisibilityActive ? "SSGI_TraceSky_FS" : "SSGI_Trace_FS") + suffix, ShaderType::FragmentShader, traceSource);
 
@@ -896,7 +916,7 @@ namespace EmEn::Graphics::Effects::Lighting
 
 			if ( m_skyVisibilityActive )
 			{
-				const auto horizonFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSGI_SkyVisibility_FS" + suffix, ShaderType::FragmentShader, std::string{SSGIHorizonFragmentShader} + ViewReconstructionGLSL::sourceGLSL(0, HorizonViewBinding, form) + SSGIHorizonFragmentBody);
+				const auto horizonFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSGI_SkyVisibility_FS" + suffix, ShaderType::FragmentShader, std::string{SSGIHorizonFragmentShader} + GBufferTexelGLSL::sourceGLSL(Reduction) + ViewReconstructionGLSL::sourceGLSL(0, HorizonViewBinding, form) + SSGIHorizonFragmentBody);
 
 				if ( horizonFragment == nullptr )
 				{

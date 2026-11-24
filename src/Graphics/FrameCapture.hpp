@@ -116,6 +116,9 @@ namespace EmEn::Graphics
 				/* Whether a temporal discontinuity marked the frame (the large-change variants of TAA and the GI anti-lag
 				 * ran): graphics doc 13-12 § 43. */
 				bool temporalDiscontinuity{false};
+				/* Whether the previous frame was not this one's past (a camera cut, another scene, the first frame): the
+				 * temporal integrators dropped their history (FrameView::frameHistoryContinues()). */
+				bool viewDiscontinuity{false};
 			};
 
 			/**

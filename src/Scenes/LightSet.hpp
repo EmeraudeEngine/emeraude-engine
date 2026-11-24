@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <atomic>
+#include <array>
 #include <cstdint>
 #include <iosfwd>
 #include <iterator> // IWYU pragma: keep (std::pair: IWYU adds then removes it across the TUs, libstdc++ mapping)
@@ -109,15 +110,32 @@ namespace EmEn::Scenes
 
 			/**
 			 * @brief GPU-side light data for RT shaders (flat, type-unified).
-			 * @note Layout matches std430. 64 bytes per light.
+			 * @note Layout matches std430: nine vec4, 144 bytes per light. ⚠️ The traced shaders read it through
+			 * `EmTracedLightStride` and `emTracedLightProjection()` (Graphics/Effects/Shared/TracedLightGLSL.hpp): the two
+			 * stay in lockstep.
+			 * @note The projection fields carry a light's colour projection (a gobo) as the raster light pass applies it,
+			 * so that a traced hit point is lit through the same pattern (2026-11-22). Not carried: a directional light's
+			 * projection and a point light's animated cubemap.
 			 */
 			struct GPULightData
 			{
 				float colorR, colorG, colorB, intensity;
 				float posX, posY, posZ, radius;
 				float dirX, dirY, dirZ, type;
-				float innerCosAngle, outerCosAngle, pad0, pad1;
+				/** castsShadow: 1 when the light casts a shadow in the raster passes. projectionKind: a ProjectionKind. */
+				float innerCosAngle, outerCosAngle, castsShadow, projectionKind;
+				/** projectionIndex: the bindless index of the projected texture, as uint bits. */
+				float projectionIndex, projectionBoost, unused0, unused1;
+				/** The light's matrix, world → projection coordinates, column by column (a 2D projection only). */
+				std::array< float, 16 > projectionMatrix;
 			};
+
+			static_assert(sizeof(GPULightData) == 144, "GPULightData is nine vec4 (144 bytes): EmTracedLightStride in TracedLightGLSL.hpp.");
+
+			/** @brief What GPULightData::projectionKind holds: how the traced shaders sample a light's colour projection. */
+			static constexpr float NoProjection{0.0F};
+			static constexpr float PictureProjection{1.0F}; /**< A 2D picture through the light's matrix (a spot light). */
+			static constexpr float CubemapProjection{2.0F}; /**< A cubemap along the light → point direction (a point light). */
 
 			/* Default variables. */
 			static constexpr auto DefaultLightPercentToAmbient{0.1F};
@@ -553,23 +571,25 @@ namespace EmEn::Scenes
 			/**
 			 * @brief Returns whether a point or spot light is shaded by the deferred light resolve
 			 * (Graphics::DeferredLightResolve) instead of by forward light passes.
-			 * @note THE predicate of the deferred punctual lights: enabled IN THE FRAME'S SLOT (publishedEnabled()), no colour
-			 * projection, and no ACTIVE shadow (the global switch, the light's own casting flag and its shadow descriptor
-			 * set — the same three the forward pass selection reads). A shadowed light keeps its forward passes for every
-			 * instance, receiving or not. The renderer evaluates it ONCE per frame into a snapshot that both the forward
-			 * skip and the resolve read.
+			 * @note THE predicate of the deferred punctual lights: enabled IN THE FRAME'S SLOT (publishedEnabled()), a colour
+			 * projection only when the resolve can sample it, and no ACTIVE shadow (the global switch, the light's own
+			 * casting flag and its shadow descriptor set — the same three the forward pass selection reads). A shadowed
+			 * light keeps its forward passes for every instance, receiving or not. The renderer evaluates it ONCE per frame
+			 * into a snapshot that both the forward skip and the resolve read.
 			 * @pre readStateIndex < RenderStateSlotCount.
 			 * @param light A reference to the light (point or spot).
 			 * @param readStateIndex The render state slot latched by the frame.
 			 * @param shadowMapsEnabled The renderer's global shadow switch.
+			 * @param projectionResolved Whether the resolve samples THIS light's colour projection this frame (a spot's
+			 * picture, a point light's still cubemap, the bindless table bound): a projected light is refused otherwise.
 			 * @return bool
 			 */
 			[[nodiscard]]
 			static
 			bool
-			isDeferredPunctualLight (const Component::AbstractLightEmitter & light, uint32_t readStateIndex, bool shadowMapsEnabled) noexcept
+			isDeferredPunctualLight (const Component::AbstractLightEmitter & light, uint32_t readStateIndex, bool shadowMapsEnabled, bool projectionResolved) noexcept
 			{
-				if ( !light.publishedEnabled(readStateIndex) || light.hasColorProjectionTexture() )
+				if ( !light.publishedEnabled(readStateIndex) || (light.hasColorProjectionTexture() && !projectionResolved) )
 				{
 					return false;
 				}

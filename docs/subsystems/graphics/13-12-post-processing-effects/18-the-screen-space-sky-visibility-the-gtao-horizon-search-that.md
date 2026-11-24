@@ -15,7 +15,8 @@
 > pass applied the **full irradiance cubemap** — the sky as if nothing stood in the way — attenuated
 > only by the short-range SSAO, with the SSGI bounce added on top.
 
-**The mechanism** (`Effects/Lighting/SSGI.cpp`, pass `SSGI_SkyVisibility`, half-res RGBA16F):
+**The mechanism** (`Effects/Lighting/SSGI.cpp`, pass `SSGI_SkyVisibility`, half-res RGBA16F; since 2026-11-24 the
+centre of a pixel is the G-buffer texel `emGBufferTexel()` names, unprojected at that texel's centre — § 45):
 a **GTAO horizon search** — Jimenez, Wu, Pesce, Jarabo, *"Practical Realtime Strategies for Accurate
 Indirect Occlusion"* (SIGGRAPH 2016 courses); implementation reference **Intel XeGTAO** (MIT). Per
 pixel, `SkyVisibilitySliceCount` planes through the view vector are walked on both sides; each depth

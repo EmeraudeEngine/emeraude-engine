@@ -162,6 +162,20 @@ namespace EmEn::Graphics
 		Fog,
 
 		/**
+		 * @brief The WATER between the eye and what it sees, when the eye is under the sea (WaterVolume, Nov 2026):
+		 * `scene · T + L` over the path in the water, T and L from the water the scene's sea declares
+		 * (Scenes::WaterMedium, engine item underwater-view).
+		 * @note A SCENE-DRIVEN slot, like the clouds: filed by `PostProcessStack::syncSceneEffects()` the first frame
+		 * the scene's sea declares its water (owner decision 2026-11-23: a sea that declares its water is enough); a
+		 * pass-through on every frame whose near plane stands clear of the water.
+		 * @note LAST of the media: the water is the medium nearest to the eye, and everything behind it — the surface
+		 * seen from below, the air's own effects beyond it — reaches the eye through it. AFTER the translucent pass,
+		 * like the fog: the sea surface wrote its depth, which is where the path in the water ends when the eye looks
+		 * up.
+		 */
+		WaterVolume,
+
+		/**
 		 * @brief Application-defined effects with no engine concept.
 		 * @note The ONLY slot that holds several effects at once, in their order of addition. An
 		 * effect landing here is an extension point, not a mistake — but a concept the engine
@@ -372,6 +386,7 @@ namespace EmEn::Graphics
 			case EffectSlot::Clouds :
 			case EffectSlot::VolumetricLight :
 			case EffectSlot::Fog :
+			case EffectSlot::WaterVolume :
 			case EffectSlot::Custom :
 			case EffectSlot::TemporalAA :
 			case EffectSlot::Stars :
@@ -418,6 +433,7 @@ namespace EmEn::Graphics
 			case EffectSlot::AerialPerspective : return "AerialPerspective";
 			case EffectSlot::Clouds : return "Clouds";
 			case EffectSlot::Fog : return "Fog";
+			case EffectSlot::WaterVolume : return "WaterVolume";
 			case EffectSlot::VolumetricLight : return "VolumetricLight";
 			case EffectSlot::LensFlare : return "LensFlare";
 			case EffectSlot::Custom : return "Custom";

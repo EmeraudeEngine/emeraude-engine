@@ -27,62 +27,81 @@
 #include "ParticipatingMedium.hpp"
 
 /* STL inclusions. */
-#include <sstream>
+#include <algorithm>
+#include <cmath>
+#include <cstddef>
 
 namespace EmEn::Scenes
 {
-	ParticipatingMedium
-	ParticipatingMedium::ClearAir () noexcept
-	{
-		/* The barely visible aerial perspective of a clear day: a kilometre of it removes about
-		 * three quarters of the contrast, which is what makes a distant ridge read as distant. */
-		ParticipatingMedium medium;
-		medium.setDensity(0.0015F);
-		medium.setHeightFalloff(0.2F);
-		medium.setScatteringAlbedo({0.55F, 0.65F, 0.8F, 1.0F});
-		medium.setPhaseAnisotropy(0.3F);
-		medium.setEnabled(true);
+	using namespace Base::Math;
 
-		return medium;
+	namespace
+	{
+		/**
+		 * @brief Returns a coefficient a medium can hold: finite and positive, else none.
+		 * @param value The stated coefficient, in 1/m.
+		 * @return float
+		 */
+		[[nodiscard]]
+		float
+		heldCoefficient (float value) noexcept
+		{
+			return std::isfinite(value) && value > 0.0F ? value : 0.0F;
+		}
 	}
 
-	ParticipatingMedium
-	ParticipatingMedium::Fog () noexcept
+	Vector< 3, float >
+	ParticipatingMedium::transmittance (float distance) const noexcept
 	{
-		/* A ground-hugging bank: dense, strongly forward-scattering, and thinning fast with
-		 * altitude so a hill emerges from it. */
-		ParticipatingMedium medium;
-		medium.setDensity(0.05F);
-		medium.setHeightFalloff(0.35F);
-		medium.setScatteringAlbedo({0.65F, 0.68F, 0.72F, 1.0F});
-		medium.setPhaseAnisotropy(0.6F);
-		medium.setEnabled(true);
+		/* NOTE: std::max() keeps its first argument against a NaN: no path. */
+		const auto length = std::max(0.0F, distance);
 
-		return medium;
+		Vector< 3, float > kept{1.0F, 1.0F, 1.0F};
+
+		for ( size_t channel = 0; channel < 3; ++channel )
+		{
+			const auto extinction = m_absorption[channel] + m_scattering[channel];
+
+			/* NOTE: A channel without extinction is skipped, never multiplied: 0 × ∞ is not a number. */
+			if ( extinction > 0.0F )
+			{
+				kept[channel] = std::exp(-extinction * length);
+			}
+		}
+
+		return kept;
 	}
 
-	std::ostream &
-	operator<< (std::ostream & out, const ParticipatingMedium & obj)
+	float
+	ParticipatingMedium::backscatterFraction () const noexcept
 	{
-		return out <<
-			"Participating medium :" "\n"
-			"Enabled : " << ( obj.isEnabled() ? "yes" : "no" ) << "\n"
-			"Density (extinction at base height) : " << obj.m_density << " 1/m" "\n"
-			"Height falloff : " << obj.m_heightFalloff << " 1/m (POSITIVE, the shader negates it)" "\n"
-			"Base height : " << obj.m_baseHeight << " m" "\n"
-			"Max distance : " << obj.m_maxDistance << " m" "\n"
-			"Scattering albedo (chromaticity) : " << obj.m_scatteringAlbedo << "\n"
-			"Phase anisotropy (Henyey-Greenstein g) : " << obj.m_phaseAnisotropy << "\n"
-			"Luminance : " << ( obj.m_luminance < 0.0F ? std::string{"derived from the main directional light"} : std::to_string(obj.m_luminance) + " nits" ) << "\n";
+		/* The backward hemisphere of the Henyey-Greenstein phase function, integrated:
+		 * B(g) = (1 − g) / (2 g) · ((1 + g) / sqrt(1 + g²) − 1), 1/2 at g = 0. */
+		const auto anisotropy = m_phaseAnisotropy;
+
+		if ( std::abs(anisotropy) < 1.0e-3F )
+		{
+			return 0.5F;
+		}
+
+		return ((1.0F - anisotropy) / (2.0F * anisotropy)) * (((1.0F + anisotropy) / std::sqrt(1.0F + (anisotropy * anisotropy))) - 1.0F);
 	}
 
-	std::string
-	to_string (const ParticipatingMedium & obj) noexcept
+	void
+	ParticipatingMedium::setAbsorption (const Vector< 3, float > & perMetre) noexcept
 	{
-		std::stringstream output;
+		for ( size_t channel = 0; channel < 3; ++channel )
+		{
+			m_absorption[channel] = heldCoefficient(perMetre[channel]);
+		}
+	}
 
-		output << obj;
-
-		return output.str();
+	void
+	ParticipatingMedium::setScattering (const Vector< 3, float > & perMetre) noexcept
+	{
+		for ( size_t channel = 0; channel < 3; ++channel )
+		{
+			m_scattering[channel] = heldCoefficient(perMetre[channel]);
+		}
 	}
 }

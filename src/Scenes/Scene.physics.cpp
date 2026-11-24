@@ -39,6 +39,7 @@
 #include <limits>
 #include <memory>
 #include <numeric>
+#include <optional>
 #include <ranges>
 #include <span>
 #include <thread>
@@ -58,6 +59,8 @@
 #include "Math/Space3D/Capsule.hpp"
 #include "Math/Space3D/Casts/ShapeCast.hpp"
 #include "Math/Space3D/Contacts/ContactManifold.hpp"
+#include "Math/Space3D/Intersections/SegmentTriangle.hpp"
+#include "Math/Space3D/Segment.hpp"
 #include "Math/Space3D/Sphere.hpp"
 #include "Math/Space3D/Triangle.hpp"
 #include "Math/Vector.hpp"
@@ -70,6 +73,7 @@
 #include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "Physics/MovableTrait.hpp"
 #include "Physics/NarrowPhase.hpp"
+#include "Physics/PointCollisionModel.hpp"
 #include "Physics/SoftStepSolver.hpp"
 #include "Physics/TriangleMeshCollisionModel.hpp"
 #include "Physics/Vehicle.hpp"
@@ -848,6 +852,237 @@ namespace EmEn::Scenes
 
 			return true;
 		}
+
+		/** @brief How long a stretch of a ray is, metres (Scene::castRay()): the ground's and a mesh's triangles are
+		 * visited in a stretch's own box, never in the whole ray's (a diagonal ray of 200 m spans a box of 2 hectares). */
+		constexpr float RayStretchLength{32.0F};
+
+		/** @brief A stretch's box is this much wider than its segment, metres: an axis-aligned ray has a box without
+		 * thickness. */
+		constexpr float RayBoxMargin{0.01F};
+
+		/** @brief The box of a segment, RayBoxMargin wider on every side. */
+		[[nodiscard]]
+		Space3D::AACuboid< float >
+		rayBox (const Vector< 3, float > & from, const Vector< 3, float > & to) noexcept
+		{
+			return Space3D::AACuboid< float >{
+				{std::max(from[X], to[X]) + RayBoxMargin, std::max(from[Y], to[Y]) + RayBoxMargin, std::max(from[Z], to[Z]) + RayBoxMargin},
+				{std::min(from[X], to[X]) - RayBoxMargin, std::min(from[Y], to[Y]) - RayBoxMargin, std::min(from[Z], to[Z]) - RayBoxMargin}
+			};
+		}
+
+		/** @brief An entity a ray may meet: its frame and its box do not change while the physics octree's lock is held. */
+		struct RayCandidate final
+		{
+			std::shared_ptr< AbstractEntity > entity;
+			CartesianFrame< float > frame;
+			Space3D::AACuboid< float > bounds;
+		};
+
+		/**
+		 * @brief Gathers the entities a ray may meet: every collidable entity of the physics octree with a collision
+		 * model whose box overlaps the ray's, the one that casts it left out.
+		 * @pre The physics octree's lock is held.
+		 * @param octree A reference to the physics octree.
+		 * @param rayBounds A reference to the box of the whole ray.
+		 * @param ignored The entity the ray passes through, or null.
+		 * @return std::vector< RayCandidate >
+		 */
+		[[nodiscard]]
+		std::vector< RayCandidate >
+		rayCandidates (const OctreeSector< AbstractEntity, true > & octree, const Space3D::AACuboid< float > & rayBounds, const AbstractEntity * ignored) noexcept
+		{
+			std::vector< RayCandidate > candidates;
+
+			octree.forEachSector([&candidates, &rayBounds, ignored] (const OctreeSector< AbstractEntity, true > & /*sector*/, const std::vector< std::shared_ptr< AbstractEntity > > & elements, size_t ownedOffset) {
+				for ( size_t index = ownedOffset; index < elements.size(); ++index )
+				{
+					const auto & entity = elements[index];
+
+					if ( entity.get() == ignored || !entity->hasCollisionModel() || !entity->isCollidable() )
+					{
+						continue;
+					}
+
+					const auto frame = entity->getWorldCoordinates();
+					const auto bounds = entity->collisionModel()->getAABB(frame);
+
+					if ( boxesOverlap(rayBounds, bounds, 0.0F) )
+					{
+						candidates.push_back({.entity = entity, .frame = frame, .bounds = bounds});
+					}
+				}
+			});
+
+			return candidates;
+		}
+
+		/**
+		 * @brief One stretch of a ray and the earliest thing it met so far.
+		 * @note A TRIANGLE (the ground's, a mesh's) is met by the exact meeting of a segment and a triangle (the base's
+		 * isIntersecting(): T. Möller, B. Trumbore, "Fast, Minimum Storage Ray-Triangle Intersection", Journal of
+		 * Graphics Tools 2(1), 1997) — NOT by the bodies' swept point: that one advances conservatively (GJK) and gives
+		 * up after its iterations on a long, shallow ray over small triangles (measured 2026-11-22: a ray of 32 m at
+		 * 18° over 2 m quads went through the road and was only "met" by the back of the plinth's base). A convex shape
+		 * (a capsule, a box, a sphere) keeps the swept point: its distance is exact, it converges at once.
+		 */
+		class RayStretch final
+		{
+			public:
+
+				/**
+				 * @brief Constructs a stretch.
+				 * @param start A reference to where the stretch starts, in world space.
+				 * @param unit A reference to the ray's unit direction.
+				 * @param length The stretch's length, in metres (> 0).
+				 */
+				RayStretch (const Vector< 3, float > & start, const Vector< 3, float > & unit, float length) noexcept
+					: m_segment{start, start + (unit * length)},
+					m_region{rayBox(start, start + (unit * length))},
+					m_unit{unit},
+					m_length{length}
+				{
+
+				}
+
+				/** @brief Returns the stretch's box: what may be met lies in it. */
+				[[nodiscard]]
+				const Space3D::AACuboid< float > &
+				region () const noexcept
+				{
+					return m_region;
+				}
+
+				/**
+				 * @brief Meets a triangle by its face: kept when it is nearer than what was met so far.
+				 * @param triangle A reference to the world triangle.
+				 * @param faceNormal A reference to its normal (any length).
+				 * @param twoSided Whether it is met from its back as well.
+				 * @param entity The entity it belongs to; null for the ground.
+				 */
+				void
+				meetTriangle (const Space3D::Triangle< float > & triangle, const Vector< 3, float > & faceNormal, bool twoSided, const std::shared_ptr< AbstractEntity > & entity) noexcept
+				{
+					const auto facing = Vector< 3, float >::dotProduct(m_unit, faceNormal);
+
+					if ( !twoSided && !(facing < 0.0F) )
+					{
+						return;
+					}
+
+					Vector< 3, float > where;
+
+					if ( !Space3D::isIntersecting(m_segment, triangle, where) )
+					{
+						return;
+					}
+
+					if ( const auto fraction = (where - m_segment.startPoint()).length() / m_length; fraction < m_earliest )
+					{
+						const auto normal = faceNormal.normalized();
+
+						m_earliest = fraction;
+						m_met = {.entity = entity, .point = where, .normal = facing < 0.0F ? normal : -normal, .distance = fraction * m_length};
+					}
+				}
+
+				/**
+				 * @brief Meets an entity's collision model: a mesh by its triangles, a convex shape by a swept point.
+				 * @param candidate A reference to the entity.
+				 */
+				void
+				meet (const RayCandidate & candidate) noexcept
+				{
+					const auto * model = candidate.entity->collisionModel();
+
+					if ( model == nullptr || !boxesOverlap(m_region, candidate.bounds, 0.0F) )
+					{
+						return;
+					}
+
+					if ( const auto * mesh = dynamic_cast< const TriangleMeshCollisionModel * >(model); mesh != nullptr )
+					{
+						/* Its front faces only, as for a body — unless the mesh is two-sided. */
+						mesh->forEachWorldTriangle(candidate.frame, m_region, [this, mesh, &candidate] (const Space3D::Triangle< float > & triangle, const Vector< 3, float > & faceNormal, uint32_t /*triangleIndex*/, uint8_t /*activeEdges*/) {
+							this->meetTriangle(triangle, faceNormal, mesh->isTwoSided(), candidate.entity);
+						});
+
+						return;
+					}
+
+					const PointCollisionModel point;
+					const CartesianFrame< float > frame{m_segment.startPoint()};
+					Space3D::CastHit< float > hit;
+
+					if ( NarrowPhase::sweepCore(point, frame, m_segment.endPoint() - m_segment.startPoint(), *model, candidate.frame, hit) && !hit.startedInside() && hit.fraction() < m_earliest )
+					{
+						m_earliest = hit.fraction();
+						m_met = {.entity = candidate.entity, .point = hit.point(), .normal = hit.normal(), .distance = hit.fraction() * m_length};
+					}
+				}
+
+				/** @brief Returns whether the stretch met something. */
+				[[nodiscard]]
+				bool
+				hasMet () const noexcept
+				{
+					return m_earliest < 1.0F;
+				}
+
+				/** @brief Returns what the stretch met first; its distance is from the STRETCH's start. */
+				[[nodiscard]]
+				const Scene::RayHit &
+				met () const noexcept
+				{
+					return m_met;
+				}
+
+			private:
+
+				Space3D::Segment< float > m_segment;
+				Space3D::AACuboid< float > m_region;
+				Vector< 3, float > m_unit;
+				Scene::RayHit m_met;
+				float m_length;
+				float m_earliest{1.0F};
+		};
+
+		/**
+		 * @brief Hands the ground's triangles to a stretch of a ray (Scene::castRay()): met from ABOVE only, the bodies'
+		 * rule.
+		 */
+		class RayGroundVisitor final : public GroundTriangleVisitor
+		{
+			public:
+
+				/**
+				 * @brief Constructs the visitor.
+				 * @param stretch A reference to the stretch; it outlives the visit.
+				 */
+				explicit
+				RayGroundVisitor (RayStretch & stretch) noexcept
+					: m_stretch{&stretch}
+				{
+
+				}
+
+				void
+				onTriangle (const Space3D::Triangle< float > & triangle, uint32_t /*featureId*/) noexcept override
+				{
+					const auto faceNormal = Vector< 3, float >::crossProduct(triangle.pointB() - triangle.pointA(), triangle.pointC() - triangle.pointA());
+
+					if ( faceNormal[Y] > 0.0F )
+					{
+						m_stretch->meetTriangle(triangle, faceNormal, false, nullptr);
+					}
+				}
+
+			private:
+
+				/* NOTE: Non-owning: the stretch of the cast that runs the visit. */
+				RayStretch * m_stretch;
+		};
 	}
 
 	void
@@ -1659,6 +1894,8 @@ namespace EmEn::Scenes
 			float restitution = 0.0F;
 			/* The dynamic body met first, if it is one (its velocity takes its share of the impact). */
 			uint32_t dynamicTarget = 0;
+			/* The body the earliest hit belongs to (0: a mesh's triangle, the ground): a kinematic character is told (below). */
+			uint32_t metBody = 0;
 			Space3D::CastHit< float > hit;
 			const auto & material = entity->bodyPhysicalProperties();
 
@@ -1698,6 +1935,7 @@ namespace EmEn::Scenes
 							normal = candidate.normal();
 							point = candidate.point();
 							restitution = std::max(material.bounciness(), bodyEntities[obstacle.index]->bodyPhysicalProperties().bounciness());
+							metBody = 0;
 						}
 					});
 
@@ -1711,6 +1949,7 @@ namespace EmEn::Scenes
 					point = hit.point();
 					restitution = std::max(material.bounciness(), bodyEntities[obstacle.index]->bodyPhysicalProperties().bounciness());
 					dynamicTarget = obstacle.dynamic ? obstacle.index : 0;
+					metBody = obstacle.index;
 				}
 			};
 
@@ -1807,6 +2046,16 @@ namespace EmEn::Scenes
 					if ( -approach > ImpactSpeedThreshold )
 					{
 						impacts.push_back({entity, -approach * body.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds});
+
+						/* A kinematic CHARACTER the sweep stopped this body on is struck (step 6 tells it for a plain
+						 * contact): the approach here is the body's own speed toward it. */
+						if ( metBody != 0 && bodyEntities[metBody] != nullptr )
+						{
+							if ( const auto character = bodyEntities[metBody]->characterController(); character != nullptr )
+							{
+								static_cast< void >(character->controller().reportStrike(-approach, body.movable->getBodyPhysicalProperties().mass()));
+							}
+						}
 					}
 				}
 			}
@@ -1913,10 +2162,13 @@ namespace EmEn::Scenes
 
 			/* Along the resultant when it has a direction, else (impulses cancelling out) along each normal as before. */
 			auto approach = alongNormals;
+			/* From A to B: the resultant's direction, else the pair's first normal. */
+			auto along = pair.front().normal;
 
 			if ( const auto magnitude = resultant.length(); magnitude > std::numeric_limits< float >::epsilon() )
 			{
 				const auto direction = resultant / magnitude;
+				along = direction;
 				approach = 0.0F;
 
 				for ( const auto & manifold : pair )
@@ -1947,6 +2199,37 @@ namespace EmEn::Scenes
 			{
 				impacts.push_back({bodyEntities[bodyIndexB], approach * bodyB.movable->getBodyPhysicalProperties().mass() / PhysicsStepSeconds});
 			}
+
+			/* A dynamic body running into a kinematic CHARACTER strikes it (2026-11-21). The solver stops the body on the
+			 * character — a character is never pushed — and nothing told the character: a game could not hurt what a car
+			 * runs into. It learns the BODY's own speed toward it: the approach less the character's own motion toward
+			 * the body, so a character running into a parked body is not struck, and one fleeing a car is struck at the
+			 * car's speed. Recorded on its controller (the hardest of the step), emitted with its events after the step. */
+			const auto strike = [&bodies, &bodyEntities, approach] (size_t characterIndex, size_t strikerIndex, const Vector< 3, float > & towardStriker) {
+				const auto & striker = bodies[strikerIndex];
+
+				if ( striker.movable == nullptr || !striker.dynamic || bodyEntities[characterIndex] == nullptr )
+				{
+					return;
+				}
+
+				const auto character = bodyEntities[characterIndex]->characterController();
+
+				if ( character == nullptr )
+				{
+					return;
+				}
+
+				const auto speed = approach - Vector< 3, float >::dotProduct(bodies[characterIndex].linearVelocity, towardStriker);
+
+				if ( speed > ImpactSpeedThreshold )
+				{
+					static_cast< void >(character->controller().reportStrike(speed, striker.movable->getBodyPhysicalProperties().mass()));
+				}
+			};
+
+			strike(bodyIndexA, bodyIndexB, along);
+			strike(bodyIndexB, bodyIndexA, -along);
 		}
 
 		/* The GROUNDED state, per manifold. */
@@ -2422,5 +2705,74 @@ namespace EmEn::Scenes
 		}
 
 		return corrected;
+	}
+
+	std::optional< Scene::RayHit >
+	Scene::castRay (const Vector< 3, float > & origin, const Vector< 3, float > & direction, float maxDistance, const AbstractEntity * ignored) const noexcept
+	{
+		/* A trust boundary (a game's weapon, a console command): refused, never undefined. */
+		const auto isFinite = [] (const Vector< 3, float > & vector) noexcept {
+			return std::isfinite(vector[X]) && std::isfinite(vector[Y]) && std::isfinite(vector[Z]);
+		};
+
+		if ( !isFinite(origin) || !isFinite(direction) || !std::isfinite(maxDistance) || !(maxDistance > 0.0F) )
+		{
+			return std::nullopt;
+		}
+
+		const auto length = direction.length();
+
+		if ( !(length > 0.0F) || !std::isfinite(length) )
+		{
+			return std::nullopt;
+		}
+
+		/* The step holds the octree's lock on this very thread: waiting for it here would never end. */
+		if ( m_physicsStepThread.load(std::memory_order_relaxed) == std::this_thread::get_id() )
+		{
+			TraceError{ClassId} << "castRay() called from inside the physics step: refused (cast it from the step's events, emitted after it) !";
+
+			return std::nullopt;
+		}
+
+		const Base::MutexLock lock{m_physicsOctreeAccess};
+
+		const auto unit = direction / length;
+		const auto reach = std::min(maxDistance, MaxRayDistance);
+
+		/* The entities the WHOLE ray may meet, gathered once. */
+		const auto candidates = m_physicsOctree != nullptr ? rayCandidates(*m_physicsOctree, rayBox(origin, origin + (unit * reach)), ignored) : std::vector< RayCandidate >{};
+
+		/* Stretch by stretch — a whole number of them, each from its own start (nothing is accumulated): the first one
+		 * that meets something ends the ray. */
+		const auto stretches = static_cast< uint32_t >(std::ceil(reach / RayStretchLength));
+
+		for ( uint32_t index = 0; index < stretches; ++index )
+		{
+			const auto done = static_cast< float >(index) * RayStretchLength;
+
+			RayStretch stretch{origin + (unit * done), unit, std::min(RayStretchLength, reach - done)};
+
+			if ( m_groundLevel != nullptr )
+			{
+				RayGroundVisitor visitor{stretch};
+				static_cast< void >(m_groundLevel->visitTriangles(stretch.region(), visitor));
+			}
+
+			for ( const auto & candidate : candidates )
+			{
+				stretch.meet(candidate);
+			}
+
+			if ( stretch.hasMet() )
+			{
+				auto met = stretch.met();
+				met.distance += done;
+
+				return met;
+			}
+		}
+
+		return std::nullopt;
 	}
 }

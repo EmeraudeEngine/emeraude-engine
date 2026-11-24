@@ -1,7 +1,8 @@
 # Deferred punctual lights — one resolve instead of one forward pass per light (Oct 2026)
 
-`Graphics::DeferredLightResolve` (`src/Graphics/DeferredLightResolve.{hpp,cpp}`) shades the **unshadowed,
-unprojected point and spot lights** of the eligible materials in ONE fullscreen pass from the G-buffer. The forward
+`Graphics::DeferredLightResolve` (`src/Graphics/DeferredLightResolve.{hpp,cpp}`) shades the **unshadowed point and
+spot lights** of the eligible materials — a light that PROJECTS a texture too, since 2026-11-22 (§ A light that
+projects a texture) — in ONE fullscreen pass from the G-buffer. The forward
 path draws every lit batch once per light that touches it (`Scene::renderLightedSelection()`), and on Sponza with
 its 22 lamps that cost 36 of the 45 ms of `ScenePass` — ≈ 87 % of it GEOMETRY re-submission, not fill (three OS
 measured, engine `docs/todo/mrt-single-pass-deferred.md` § Measured cost). Owner decision 2026-10-04, design
@@ -11,7 +12,7 @@ decisions 1-7 in the same item.
 
 | Party | Code | What it does |
 |---|---|---|
-| The light predicate | `Scenes::LightSet::isDeferredPunctualLight()` | enabled, no colour projection, no ACTIVE shadow (global switch AND casting flag AND shadow descriptor set). A shadowed light stays forward for every instance. |
+| The light predicate | `Scenes::LightSet::isDeferredPunctualLight()` | enabled, no ACTIVE shadow (global switch AND casting flag AND shadow descriptor set), and a colour projection only when the resolve samples it (`projectionResolved`: a spot's picture, a point light's still cubemap). A shadowed light stays forward for every instance. |
 | The snapshot | `DeferredLightResolve::prepare()` (Renderer, once per frame, before the scene pass) | applies the predicate ONCE, uploads the lights in VIEW space from their **published block** of the frame's render state (`AbstractLightEmitter::publishedBlock()`, the very bytes the forward UBO receives), sorts the pointers. |
 | The forward skip | `Scene::renderOpaque(…, deferredLights)` → `renderLightedSelection()` | skips the point/spot passes of the snapshot's lights, for the batches whose material answers `Material::Interface::deferredLightingEligible()`. OPAQUE lists only: a translucent list is drawn after the resolve, it keeps every pass. |
 | The material bit | `Saphir::LightGenerator::declareDeferredLightingCondition()` | the ambient program writes bit 0 of the material-properties R LOW nibble under the GPU half of the material's condition; the resolve shades only those pixels. (Bit 1 of the same nibble is the light-face bit, graphics doc 13-12 § 42; bits 2-3 are free.) |
@@ -149,6 +150,54 @@ Windows (Windows-PA, 1280×720, validation ON, 2026-10-06): same selection on bo
 21.9 → 14.2 ms (−35 %), AMD iGPU 69.1 → 48.8 ms (−30 %); `lighten-marbles` never sends a light forward; 0 VUID,
 0 MSVC warning.
 
+## A light that projects a texture (2026-11-22)
+
+Owner decision 2026-11-22 ("projection in the deferred resolve"). A light with a colour projection (a gobo: a
+flashlight's pattern, a headlight's dipped beam) used to be refused by the predicate: a forward pass over every lit
+batch, per light. The resolve now samples the projection itself — the forward pass's `projectionColor`, term for term.
+
+| Piece | Where | What |
+|---|---|---|
+| The table | `createSharedResources()`, `record()` | The pipeline layout has a second set, the bindless table (`Renderer::bindlessTextureManager()`), bound for the draw. No layout = the resources fail and every light keeps its forward passes; no set this frame = `prepare()` answers false. |
+| The data | `DeferredProjectionData` (80 bytes), binding 6 | One entry per LIGHT SLOT, a parallel buffer per frame in flight (`MaxLights` × 80 bytes = 80 KiB): the light entry stays 64 bytes for the tile culling and the hot loop. Written only for the lights that project. |
+| The kind | `DeferredLightData::cone[2]` | `NoProjection`, `PictureProjection` (a spot: the matrix is the light's published matrix × the frame's inverse view, VIEW space → projection coordinates), `CubemapProjection` (a point light: the matrix is the inverse view, whose rotation brings the light → pixel direction back to world space). |
+| The term | the resolve's fragment shader | The picture at the pixel's projection coordinates, or the cubemap along the light → pixel direction, then the boost (1 + picture × boost when above 0). The BASE mip level: the tile loop has no screen derivative to give. |
+| The predicate | `prepare()` | A spot's projection is always resolved; a point light's only when it is a STILL cubemap (an animated one is a frame of a cubemap array the resolve does not bind: it keeps its forward passes). |
+
+- A light whose texture is not registered yet (still loading) publishes no index: the resolve shades its full cone, as
+  the forward pass does.
+- A material the resolve does not shade (clear coat, translucent…) keeps its forward pass for these lights, which
+  projects as before.
+- **Measured** on a downstream testbed's car at night, two headlights, each a spot projecting a dipped-beam pattern
+  over a 50° cone with 100 m of reach (Linux, RTX 3070 Ti, 1280×720 window-less, no validation layer, an idle
+  machine, the GPU profiler, the same place with the lights off and on):
+
+  | | `ScenePass` | Frame |
+  |---|---|---|
+  | The two lights as forward passes (before) | 2.50 → 3.97 ms (+1.47) | 8.5 → 10.0 ms (+1.5) |
+  | The two lights in the resolve | 2.51 → 2.56 ms (+0.05) | 8.5 → 8.6 ms (+0.09) |
+
+  `DeferredLights` itself 0.15 → 0.17 ms for 142 → 144 resolved lights.
+- **macOS** (Apple M6, MoltenVK, the screen-space lane, engine `2e8067e2`, AppleClang Release and Debug 0 warning,
+  validation on, 0 VUID, no shader refused; the bindless table there is cut to the device budget, 956 2D slots): the
+  same boarded view ran at 41 frames a second with the two lights as forward passes against 55 with the car empty;
+  with the resolve, 56-57. The picture against the forward passes, nine captures: 0.11-0.51 / 255 between the two
+  states, inside the 0.01-0.55 of one state; no pixel beyond 12 / 255 on the road the beams light, and the signed
+  mean there is −0.001. (With the resolve off, every point and spot light forward, that machine draws 18 frames a
+  second.)
+- **Windows** (RTX 3500 Ada, the RT lane, engine `2e8067e2`, MSVC Release and Debug 0 warning, validation on, 0 VUID,
+  no shader refused): 453 → 455 eligible once boarded; the picture against the forward passes 0.71-1.21 / 255 between
+  the two states against 0.33-0.85 inside one, the excess being a traffic signal that turned from red to green
+  between two states; what differs in the closest pair is the wind-blown tree, the far lights, one-pixel edges — on
+  the beams' footprint only scattered single-pixel speckle, the same grain as between two captures of one state.
+- **The picture** against the forward passes (the reference), one launch, `setDeferredPunctualLights(1 | 0 | 1)`, a
+  pinned exposure, three captures a state, three views, validation on, 0 VUID: the mean difference between the two
+  states sits inside the difference between two captures of ONE state (bonnet view 0.59-1.56 against 0.24-1.52 /
+  255; chase view 0.09-0.23 against 0.02-0.23), and what differs in the closest pair is a wind-blown tree, the traced
+  speckle near the lamps and one-pixel edges — nothing on the road the beams light, nor along their cut-off.
+- ⚠️ The forward pass picks a mip level from the screen derivatives, the resolve reads the base level: a picture with
+  fine detail seen from far may alias in the resolve. Not met with the two smooth patterns measured.
+
 ## Tiled culling — the occluded lamps (2026-10-06)
 
 Owner decisions 2026-10-06 (item `deferred-resolve-occluded-lights-go-forward`, closed): tiled culling, `MaxLights`
@@ -220,6 +269,21 @@ decides the side from the GEOMETRIC normal (`LightGenerator.PBR.cpp`, `docs/caut
 | `ScenePass`, every scene effect bypassed | 45.5 ms | 13.8 ms (of which `DeferredLights` 0.64 ms) |
 | Full frame, RT lane, everything on | 111 ms (9 FPS) | 80 ms (13 FPS) |
 | `VUID-` with `VK_LAYER_KHRONOS_validation` | 0 | 0 |
+
+**The same pose since** (`ScenePass`, every scene effect bypassed, a copy of the owner's settings):
+
+| Date | forward | deferred | |
+|---|---|---|---|
+| 2026-10-04, after the cypress cutout | — | 10.2 ms | |
+| 2026-10-06 | 305 ms | 34-40 ms | a gap nobody explained (454 batches, 12 833 689 triangles "all at LOD 3"); the engine item `sponza-scenepass-far-above-its-baseline` |
+| 2026-11-24 (engine 94632582) | 48.2 ms | 11.3 ms | **the gap is gone**, the item closed; 36.0 ms / 5.1 ms at 1280 × 720 |
+
+⚠️ Not bisected: which commit closed the gap is not known (`c33426d9`, 2026-10-07, "onDependenciesLoaded() runs once;
+automatic LOD skips a mesh carrying its own levels", was the lead). On 2026-11-24 the VIEW lists hold 290 batches and
+10 494 160 triangles over the four levels; the "454 batches, 12 833 689 triangles, all at LOD 3" is, to the triangle,
+the SHADOW lists' line — the shadow pass draws every batch at the coarsest level, which is not smaller for the meshes
+the simplifier stalls on (item `lod-simplifier-stalls-on-disconnected-cards`). Windows and its AMD iGPU, which showed
+the gap too, were not re-measured.
 
 Fidelity, NIGHT (`--demo-options 1,60`: the 22 lamps alone light 95 % of the pixels; pinned f/2.8 1/30 ISO 3200;
 same instance, `Core.RendererService.setDeferredPunctualLights(0|1)`; two deferred captures bit-identical):

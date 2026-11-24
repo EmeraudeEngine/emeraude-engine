@@ -36,8 +36,11 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/FrameView.hpp"
+#include "Graphics/GrabPass.hpp"
 #include "Graphics/Renderer.hpp"
+#include "Graphics/SeaImmersion.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "PrimaryServices.hpp"
@@ -45,6 +48,7 @@
 #include "Saphir/Types.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/LightSet.hpp"
+#include "Scenes/WaterMedium.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
 #include "StaticVector.hpp"
@@ -66,7 +70,10 @@ namespace
 
 	/* ---- GLSL Shader Sources ---- */
 
-	constexpr auto OcclusionFragmentShader = R"GLSL(
+	/** @brief The view reconstruction's binding in the occlusion pass (after its four samplers: getInputLayout(4, 1)). */
+	constexpr uint32_t OcclusionViewBinding{4};
+
+	constexpr auto OcclusionHeader = R"GLSL(
 #version 450
 
 layout(location = 0) in vec2 vUV;
@@ -76,7 +83,11 @@ layout(set = 0, binding = 0) uniform sampler2D depthTex;
 layout(set = 0, binding = 1) uniform sampler2D previousMaskTex;
 /* The clouds' view transmittance (VolumetricClouds, R), meaningful when cloudTransmittanceEnabled. */
 layout(set = 0, binding = 2) uniform sampler2D cloudTransmittanceTex;
+/* The depth from BEFORE the translucent pass (the material grab pass), meaningful when seaWindowEnabled. */
+layout(set = 0, binding = 3) uniform sampler2D opaqueDepthTex;
+)GLSL";
 
+	constexpr auto OcclusionFragmentShader = R"GLSL(
 layout(push_constant) uniform PushConstants
 {
 	float lightScreenX;
@@ -97,6 +108,7 @@ layout(push_constant) uniform PushConstants
 	float jitterUVY;
 	float temporalAlpha;
 	float cloudTransmittanceEnabled;
+	float seaWindowEnabled;
 };
 
 void main()
@@ -116,6 +128,27 @@ void main()
 
 	/* The sky behind a cloud is worth what the cloud lets through: the clouds write no depth, so the
 	 * test above alone let the shafts shine straight through them (2026-09-24). */
+	/* THE SEA SEEN FROM UNDER IT (2026-11-23). The sea's underside is drawn and writes its depth: read alone, the
+	 * test above takes it for a wall and the shafts vanish the instant the eye goes under (owner, water-world). A
+	 * surface that lets the sky through does not block the sun: where the depth from BEFORE the translucent pass is
+	 * the sky, the pixel is lit for what the surface transmits from below — Schlick at the transmitted angle, nothing
+	 * past the critical angle (Snell's window), the surface taken at rest. */
+	if ( seaWindowEnabled > 0.5 )
+	{
+		vec4 opaqueQuad = textureGather(opaqueDepthTex, sampleUV, 0);
+		float skyBehind = dot(vec4(greaterThanEqual(opaqueQuad, vec4(depthThreshold))), vec4(0.25));
+		float cosIncidence = max(normalize(emRelativePosition(vUV, 1.0)).y, 0.0);
+		float sin2Transmitted = WATER_IOR * WATER_IOR * (1.0 - (cosIncidence * cosIncidence));
+		float through = 0.0;
+
+		if ( sin2Transmitted < 1.0 )
+		{
+			through = 1.0 - (WATER_F0 + ((1.0 - WATER_F0) * pow(1.0 - sqrt(1.0 - sin2Transmitted), 5.0)));
+		}
+
+		isLit = max(isLit, skyBehind * through);
+	}
+
 	if ( cloudTransmittanceEnabled > 0.5 )
 	{
 		isLit *= texture(cloudTransmittanceTex, sampleUV).r;
@@ -165,6 +198,7 @@ layout(push_constant) uniform PushConstants
 	float jitterUVY;
 	float temporalAlpha;
 	float cloudTransmittanceEnabled;
+	float seaWindowEnabled;
 };
 
 void main()
@@ -277,8 +311,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		/* ---- Descriptor set layouts ---- */
 		auto & layoutManager = renderer.layoutManager();
 
-		/* Occlusion: depth + previous mask + the clouds' transmittance. Radial: occlusion mask. */
-		auto occlusionInputLayout = this->getInputLayout(3);
+		/* Occlusion: depth + previous mask + the clouds' transmittance + the depth from before the translucent pass,
+		 * then the view reconstruction. Radial: occlusion mask. */
+		auto occlusionInputLayout = this->getInputLayout(OcclusionViewBinding, 1);
 		auto singleInputLayout = this->getInputLayout(1);
 
 		if ( occlusionInputLayout == nullptr || singleInputLayout == nullptr )
@@ -323,7 +358,12 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		auto & shaderManager = renderer.shaderManager();
 		const auto & device = renderer.device();
 
-		const auto occlusionFragment = shaderManager.getShaderModuleFromSourceCode(device, "VL_Occlusion_FS", ShaderType::FragmentShader, OcclusionFragmentShader);
+		const auto occlusionFragment = shaderManager.getShaderModuleFromSourceCode(device, "VL_Occlusion_FS", ShaderType::FragmentShader,
+			std::string{OcclusionHeader} +
+			"\n#define WATER_IOR " + std::to_string(Scenes::WaterMedium::RefractiveIndex) +
+			"\n#define WATER_F0 " + std::to_string(Scenes::WaterMedium::NormalReflectance) + "\n" +
+			ViewReconstructionGLSL::sourceGLSL(0, OcclusionViewBinding) +
+			OcclusionFragmentShader);
 
 		if ( occlusionFragment == nullptr )
 		{
@@ -394,6 +434,12 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		/* 1. Project light direction to screen space.
 		 * The frame's view: the matrices that produced the depth buffer. */
 		const auto & frameView = *context.frameView;
+
+		/* A view that is not the previous frame's (a camera cut, another scene): the previous mask is another picture. */
+		if ( !frameView.frameHistoryContinues() )
+		{
+			m_historyValid = false;
+		}
 		const auto & viewMat = frameView.viewMatrix();
 		/* UNJITTERED: the light screen position is the origin of every radial sampling
 		 * line. Projected through the jittered matrix it wobbles with the Halton phase,
@@ -461,6 +507,33 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		{
 			static_cast< void >(m_occlusionPerFrame[frameIndex]->writeCombinedImageSampler(2, *cloudTransmittance));
 		}
+
+		/* Binding 3: the depth from before the translucent pass (the material grab pass) when the frame's view is
+		 * not clear of a sea that declares its water (FrameContext::seaImmersion, the one decision of the frame);
+		 * otherwise the depth stands in, and the flag below tells the shader to ignore it. Binding 4: the view
+		 * reconstruction (the pixel's ray, for what the surface lets through).
+		 * NOTE: On an Astride frame the eye may be in the air: the term then changes nothing where the sky or an
+		 * opaque surface is seen, and nothing on the sea seen from above (a ray that goes down is let through by
+		 * no amount). What it wrongly lights is a translucent surface OTHER than the sea, seen more than 41 degrees
+		 * above the horizon in front of the sky (engine item underwater-light-shafts). */
+		const auto * grabPass = this->renderer().grabPass();
+		const bool seaWindow =
+			context.seaImmersion != SeaImmersion::Clear && context.view != nullptr && inputDepth != nullptr &&
+			grabPass != nullptr && grabPass->hasDepth() && grabPass->depthImageView() != nullptr && grabPass->depthSampler() != nullptr;
+
+		if ( seaWindow )
+		{
+			static_cast< void >(m_occlusionPerFrame[frameIndex]->writeCombinedImageSampler(3, *grabPass->depthImageView(), *grabPass->depthSampler(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
+		}
+		else if ( inputDepth != nullptr )
+		{
+			static_cast< void >(m_occlusionPerFrame[frameIndex]->writeCombinedImageSampler(3, *inputDepth));
+		}
+
+		if ( context.view != nullptr )
+		{
+			static_cast< void >(m_occlusionPerFrame[frameIndex]->writeUniformBufferObject(OcclusionViewBinding, *context.view));
+		}
 		static_cast< void >(m_radialPerFrame[frameIndex]->writeCombinedImageSampler(0, m_occlusionTargets[writeIdx]));
 
 		/* Build scatter push constants (shared by occlusion and radial passes). */
@@ -486,7 +559,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			.jitterUVY = context.projectionJitter.y() * 0.5F,
 			/* First frame after (re)creation: the previous-mask image is uninitialised. */
 			.temporalAlpha = m_historyValid ? m_parameters.temporalAlpha : 1.0F,
-			.cloudTransmittanceEnabled = m_cloudTransmittance != nullptr ? 1.0F : 0.0F
+			.cloudTransmittanceEnabled = m_cloudTransmittance != nullptr ? 1.0F : 0.0F,
+			.seaWindowEnabled = seaWindow ? 1.0F : 0.0F
 		};
 
 		/* 4. Pass 1: Occlusion extraction + temporal EMA. */

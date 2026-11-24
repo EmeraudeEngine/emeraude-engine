@@ -119,6 +119,19 @@ namespace EmEn
 		}
 
 #if IS_MACOS
+		/* NOTE: Before glfwInit() (the application checks in with the system there, and App Nap counts from that
+		 * moment): a process that shows no window is otherwise demoted 30 s later, its logic thread losing its real-time
+		 * policy (owner decision 2026-11-22: every run). A refusal costs the timing of a window-less run, never the
+		 * start. */
+		if ( m_processActivity.begin() )
+		{
+			TraceInfo{ClassId} << "The process is declared active to the system (no App Nap, latency critical).";
+		}
+		else
+		{
+			TraceWarning{ClassId} << "Unable to declare the process active to the system : App Nap may demote it when it shows no window.";
+		}
+
 		/* NOTE: Before glfwInit() (NSApplication starts there): a crash must never make the next launch wait on AppKit's
 		 * "reopen the windows?" modal. NSUserDefaults is thread-safe. */
 		PlatformSpecific::disableWindowStateRestoration();
@@ -316,6 +329,10 @@ namespace EmEn
 
 		/* NOTE: Last: GLFW and the Vulkan instance (terminated before this service) no longer use the loader. */
 		m_vulkanLoader.close();
+
+#if IS_MACOS
+		m_processActivity.end();
+#endif
 
 		return true;
 	}

@@ -83,12 +83,27 @@ earliest hit with the static world's ties broken as in step 4b.
   axle, chassis-local X when the forward is −Z). Make it `setCollidable(false)`: the wheels are the vehicle's casts.
 - A chassis is woken by a throttle or by a steering its wheels have not reached (`VehicleController::wantsToMove()`):
   a parked car steered shows its wheels turned, then sleeps again.
+- What a consumer reads back: `forwardInput()` (the throttle), `brakeInput()` (the SERVICE brake as `setInput()` left
+  it, never the hand brake — 2026-11-22, a vehicle's brake lights), `isHoldingAtStandstill()` (the hold aid has the
+  service brakes — brake lights follow it too), `engineRPM()`, `gear()`, `clutch()`, and each
+  wheel's state through `wheels()` (`steerAngle`: positive turns it left — a steering wheel follows it).
 
-### Electronic aids (2026-10-31, `VehicleSettings::aids`, off by default)
+### Electronic aids (2026-10-31, the hold 2026-11-22; `VehicleSettings::aids`, off by default)
 - **Traction control** (`tractionControl`): each driven wheel's drive torque at most `tractionGripShare` (0.8) of what
   its tyre transmits at its peak: μ_peak(longitudinal curve) × its load × its radius. **Anti-lock brakes**
   (`antiLockBrakes`): each wheel's SERVICE brake at most `brakeGripShare` (0.8) of the same, at a ground speed of
   `minimumSpeed` (1 m/s) or more (below it the car stops and holds); the hand brake is never capped (a hand-brake turn).
+- **Hold at a standstill** (`holdAtStandstill`, 2026-11-22, owner decision: "an aid of the engine's vehicle"): without
+  a drive input (`forwardInput()` exactly 0), once the chassis is slower than `holdSpeed` (0.5 m/s along its forward
+  axis), the vehicle applies its own SERVICE brakes in full on every wheel and keeps them until a drive input comes.
+  Not a cap like the two others: a brake nobody presses. It does not stop a vehicle that coasts faster than
+  `holdSpeed` (down a slope it keeps rolling: the driver brakes, then the aid holds). **Why:** a stopped vehicle with
+  its hand brake released stays only while its chassis sleeps; on a downstream testbed's 3° street, boarded with no
+  key held, a steering tap woke it and it rolled 23.4 m in 10 s (4.7 m/s and accelerating); with the aid, 0.001 m
+  over the same 10 s, asleep again (Linux, validation on, 0 VUID; the same binary, the aid's switch alone).
+  Three OS (engine `ef3e5a2b`, MSVC and AppleClang Release and Debug 0 warning, 0 VUID): after the steering tap
+  Windows reads 1.0 mm and macOS 2.2 mm (mostly sideways, the wheels steering), asleep again within a second; 0.000 m
+  boarded with no key and after a stop on the hand brake, on the three.
 - Both shares stay under the SLIDING torque (Jolt's curves: 1.0 / 1.2 = 0.83 of the peak): a wheel past its peak slip
   gets less from the road, so a drive above it runs away and a brake above it stays held.
 - A CAP from the load, not a slip feedback: a 0.9 kg·m² wheel under 1250 N·m changes its spin by ~50 rad/s in one

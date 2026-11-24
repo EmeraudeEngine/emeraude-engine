@@ -92,7 +92,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			/**
 			 * @brief The TECHNIQUE knobs of the fog effect.
 			 * @note ⚠️ The MEDIUM is no longer here. Density, height falloff, base height, max
-			 * distance, chromaticity and luminance moved to Scenes::ParticipatingMedium, owned by
+			 * distance, chromaticity and luminance moved to Scenes::AtmosphericMedium, owned by
 			 * the scene and reached through FrameContext — because a medium is a property of the
 			 * WORLD, not of whichever effect integrates it, and keeping it private to one effect
 			 * instance is what made it unshareable with the volumetric pass. What remains here is

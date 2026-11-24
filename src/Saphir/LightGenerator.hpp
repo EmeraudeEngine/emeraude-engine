@@ -672,6 +672,58 @@ namespace EmEn::Saphir
 			}
 
 			/**
+			 * @brief Declares the transmissive surface as the INTERFACE of a volume: the volume lies behind its front
+			 * face, and a fragment of its back face is seen from INSIDE that volume (a sea seen from under it).
+			 * @note On a back face the index is inverted — Schlick's term takes the cosine of the TRANSMITTED angle and
+			 * the reflection is total past the critical angle (Snell's window) — and what that mirror shows is the
+			 * volume itself, never the environment above it: the volume's diffuse reflectance, lit from the OTHER side
+			 * of the surface (its outward normal) by the sky in the ambient pass and by each direct light in its pass.
+			 * @note To call after declareSurfaceTransmission(). A material that does not call it generates the code it
+			 * always did.
+			 * @param volumeReflectanceVariableName A reference to a string for the GLSL vec3 holding the diffuse
+			 * reflectance of the volume, per channel.
+			 */
+			void
+			declareSurfaceVolumeInterface (const std::string & volumeReflectanceVariableName) noexcept
+			{
+				m_surfaceVolumeReflectance = volumeReflectanceVariableName;
+				m_surfaceIsVolumeInterface = true;
+			}
+
+			/**
+			 * @brief Returns the GLSL expression of the cosine of the TRANSMITTED angle of a volume's interface seen
+			 * from INSIDE the volume: cos²θt = 1 − n² sin²θi, zero from the critical angle on.
+			 * @note ONE expression for the ambient pass and the light passes: Schlick's term at this cosine is the
+			 * interface's reflectance from inside, exactly 1 where the reflection is total.
+			 * @param NdotVExpression The GLSL expression giving the cosine of the view's incidence on the interface.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string
+			interfaceCosineExpression (const std::string & NdotVExpression) const noexcept
+			{
+				const std::string index{m_useMaterialIOR ? m_surfaceMaterialIOR : std::string{"1.5"}};
+
+				return "sqrt(max(1.0 - " + index + " * " + index + " * (1.0 - " + NdotVExpression + " * " + NdotVExpression + "), 0.0))";
+			}
+
+			/**
+			 * @brief Returns the GLSL statements declaring `interfaceFresnel` (float): the reflectance of a volume's
+			 * interface seen from INSIDE the volume (Schlick at interfaceCosineExpression()).
+			 * @param NdotVExpression The GLSL expression giving the cosine of the view's incidence on the interface.
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string
+			interfaceFresnelDeclaration (const std::string & NdotVExpression) const noexcept
+			{
+				return
+					"const float interfaceCosine = " + this->interfaceCosineExpression(NdotVExpression) + ";\n"
+					"const float interfaceF0 = " + this->dielectricF0Expression() + ";\n"
+					"const float interfaceFresnel = interfaceF0 + (1.0 - interfaceF0) * pow(1.0 - interfaceCosine, 5.0);\n";
+			}
+
+			/**
 			 * @brief Returns whether the transmitted color is already an absolute scene luminance.
 			 *
 			 * The environment cubemap is a NORMALIZED [0,1] source, so a reflection or a transmission
@@ -1378,6 +1430,8 @@ namespace EmEn::Saphir
 			bool m_useAnisotropy{false};
 			bool m_useTransmission{false};
 			bool m_transmissionIsSceneRadiance{false};
+			bool m_surfaceIsVolumeInterface{false};
+			std::string m_surfaceVolumeReflectance;
 			bool m_useIridescence{false};
 			bool m_useKHRSpecular{false};
 			bool m_useMaterialIOR{false};

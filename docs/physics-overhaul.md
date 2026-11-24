@@ -325,7 +325,8 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   10.000 m/s, ±10 m/s, lands at V off; citadel's west flight climbed grounded at 1.4 m/s (top y 10.01); 18 demo
   launches clean. Seen there, not physics: citadel's teardown VUIDs (item `texture-destroyed-while-upload-in-flight`),
   terrain's 60 s shutdown during its loads (`shutdown-hangs-after-act-removal`, closed 2026-10-07: the wait is the load, item `act-load-blocks-main-thread`), the PerLight race twice on NVIDIA
-  (`lighten-marbles-perlight-descriptor-race`).
+  (the item `lighten-marbles-perlight-descriptor-race`, closed on 2026-11-24: 0 in 20 launches, `docs/caution-points.md`
+  § *Not reproduced: a terrain drawn before its PerLight descriptor set exists*).
 - **P4, the owner's play test (2026-10-02, citadel)**: (1) the three paladins vanished — a character met twice by the
   physics step (the octree's `expand()` kept a splitting sector's elements AND filed them in the children: ~100 statics
   and a paladin 2 to 7 times per cycle) collided with its own capsule and sank under the ground. Fixed in the octree
@@ -388,8 +389,16 @@ measured unless stated; P0 measures it.
 
 ### E. Terrain
 - The ground correction is applied along the slope normal with the VERTICAL depth as length
-  (`accumulateGroundCorrection()`), which pushes the body sideways downhill every tick. Hypothesis for
-  `physics-no-rest-on-generated-terrain`, not measured.
+  (`accumulateGroundCorrection()`), which pushes the body sideways downhill every tick. It was the hypothesis for
+  "bodies never come to rest on generated terrain" (2026-08-25: a ball on `balls-of-steel` descending for 50 s,
+  |v| between 0.2 and 1.8), never measured — and that function no longer exists.
+  **Re-measured on 2026-11-24 (engine 94632582), the item closed: the bodies REST.** `balls-of-steel
+  --demo-options 5,0` (the diamond-square ground), each ball read every second for 120 s with
+  `getNodePhysics()`: three come to rest at t = 40, 47 and 49 s (|v| exactly 0, `grounded` on `Ground`,
+  `simulationPaused`, a position constant to the fourth decimal for the 70 s that follow). On `terrain`, the
+  player — a kinematic character since 2026-10-31 — stands on its slope for 79 s without moving by a tenth of a
+  millimetre (the creep of −2.3 m in 75 s recorded for that demo is gone). ⚠️ The two other balls never rest for
+  ANOTHER reason: pinned on the scene's boundary (item `physics-body-pinned-on-the-boundary-never-sleeps`).
 - An AABB tests its 4 bottom corners only; a sphere tests the height under its centre only.
 
 ### F. Walking

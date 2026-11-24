@@ -12,6 +12,11 @@ tags: [sampler]
 
 Priority: medium by owner decision (2026-10-13), although a defect.
 
+**Code re-read (2026-11-24, engine `develop` 94632582): unchanged.** The three `addressMode*` lines of
+`AnimatedTexture2D.cpp` are still commented out (now `:425-427`) and `SpriteResource.cpp` sets no wrap mode: every
+sprite still samples with REPEAT. The symptom on screen (an edge texel bleeding around the quad) is still not
+looked at.
+
 ## What remains
 
 - [ ] Verify the sampler addressing used by sprites: an edge texel bleeding around the quad is the

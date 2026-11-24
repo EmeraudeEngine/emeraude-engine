@@ -30,8 +30,11 @@
 #include <algorithm>
 #include <cassert>
 #include <chrono>
+#include <cmath>
 #include <cstddef> // IWYU pragma: keep (std::size_t: <cstdint> provides it with libstdc++ only)
 #include <functional>
+#include <initializer_list>
+#include <limits>
 #include <span>
 #include <string>
 #include <utility>
@@ -53,6 +56,7 @@
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Graphics/RayTracing.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/SeaSurfaceWaves.hpp"
 #include "IndirectPostProcessEffect.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
@@ -65,6 +69,8 @@
 #include "Saphir/Program.hpp"
 #include "SceneRenderTarget.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/SeaLevelInterface.hpp"
+#include "SeaImmersion.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
 #include "StaticVector.hpp"
@@ -673,6 +679,60 @@ namespace
 			bool m_hasVelocity;
 			bool m_hasReactive;
 	};
+
+	/**
+	 * @brief Returns where the near plane of a frame's view stands against a sea (Graphics/SeaImmersion.hpp).
+	 * @note The near plane's lowest and highest points are among its four corners, taken through the read state's
+	 * matrices — the ones of the chain's view reconstruction block, hence the points a shader finds with
+	 * emRelativePosition(uv, 0). They are compared with the sea level and how far the surface can stand from it: the
+	 * reach of a moving surface once it has been drawn, zero before and for a surface at rest.
+	 * @param frameView A reference to the frame's view.
+	 * @param sea A reference to the scene's sea.
+	 * @return EmEn::Graphics::SeaImmersion Astride when the projection cannot be inverted or a height is not a
+	 * number: the per-pixel test then decides.
+	 */
+	[[nodiscard]]
+	EmEn::Graphics::SeaImmersion
+	seaImmersionOf (const EmEn::Graphics::FrameView & frameView, const EmEn::Scenes::SeaLevelInterface & sea) noexcept
+	{
+		using namespace EmEn::Base::Math;
+		using EmEn::Graphics::SeaImmersion;
+
+		const auto inverseRelativeViewProjection = (frameView.projectionMatrix() * frameView.infinityViewMatrix()).inverse();
+
+		auto lowest = std::numeric_limits< float >::max();
+		auto highest = std::numeric_limits< float >::lowest();
+
+		for ( const auto & corner : {Vector< 4, float >{-1.0F, -1.0F, 0.0F, 1.0F}, Vector< 4, float >{1.0F, -1.0F, 0.0F, 1.0F}, Vector< 4, float >{-1.0F, 1.0F, 0.0F, 1.0F}, Vector< 4, float >{1.0F, 1.0F, 0.0F, 1.0F}} )
+		{
+			const auto point = inverseRelativeViewProjection * corner;
+
+			if ( std::abs(point[W]) <= std::numeric_limits< float >::min() )
+			{
+				return SeaImmersion::Astride;
+			}
+
+			lowest = std::min(lowest, point[Y] / point[W]);
+			highest = std::max(highest, point[Y] / point[W]);
+		}
+
+		const auto * waves = sea.surfaceWaves();
+		const auto reach = waves != nullptr ? waves->reach : 0.0F;
+		const auto eyeHeight = frameView.position()[Y];
+		const auto level = sea.getLevel();
+
+		if ( eyeHeight + lowest > level + reach )
+		{
+			return SeaImmersion::Clear;
+		}
+
+		if ( eyeHeight + highest < level - reach )
+		{
+			return SeaImmersion::Submerged;
+		}
+
+		return SeaImmersion::Astride;
+	}
 }
 
 namespace EmEn::Graphics
@@ -2104,7 +2164,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const FrameView & frameView, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, const Scenes::ParticipatingMedium * medium, const Scenes::CloudSet * clouds, ChainPhase phase) const noexcept
+	PostProcessor::executeIndirectPostProcessEffects (const Vulkan::CommandBuffer & commandBuffer, const PostProcessStack & stack, const FrameView & frameView, const Scenes::LightSet * lightSet, const Scenes::Component::Camera * activeCamera, float skyLuminance, const Scenes::AtmosphericMedium * medium, const Scenes::CloudSet * clouds, const Scenes::SeaLevelInterface * sea, ChainPhase phase) const noexcept
 	{
 		if ( !stack.hasEffects() || m_grabPass == nullptr || !m_grabPass->isCreated() )
 		{
@@ -2142,6 +2202,7 @@ namespace EmEn::Graphics
 			.ambientIlluminance = frameView.ambientIlluminance(),
 			.medium = medium,
 			.clouds = clouds,
+			.sea = sea,
 			/* The renderer's own frame state, not the scene's: the atmosphere THIS frame submitted. */
 			.atmosphere = m_renderer.frameSkyAtmosphere(),
 			.stars = m_renderer.frameStarField(),
@@ -2173,6 +2234,7 @@ namespace EmEn::Graphics
 				.time = clock.elapsedTime,
 				.deltaTime = clock.deltaTime
 			},
+			.seaImmersion = sea != nullptr ? seaImmersionOf(frameView, *sea) : SeaImmersion::Clear,
 			.viewProjectionSparse = viewBlock.sparse,
 			.temporalDiscontinuity = m_frameTemporalDiscontinuity
 		};

@@ -596,7 +596,13 @@ namespace EmEn
 			 * on the former adaptive grid. At 2 M that window takes step 8 (524 288 triangles, 51 ms to
 			 * build, 2026-09-22) — step 4 would be 2.1 M, one hair over — while a 128-division floor keeps
 			 * its exact surface. Raising it buys exactness for the RT occlusion of fine relief, and costs
-			 * VRAM quadratically. */
+			 * VRAM quadratically.
+			 * Since 2026-11-23 a step above 1 no longer leaves the SHORT traced rays (contact shadows, ambient
+			 * occlusion) on a coarse surface: the proxy keeps the terrain's own cells in a window around the
+			 * camera, through nested levels that halve the cells (CDLODTerrainParameters::rayTracingProxyDetailRadius;
+			 * +130 624 triangles on a 2048-cell terrain of 1.25 m, +296 448 on `terrain`). That window counts
+			 * against this budget WITHOUT changing the step: when it does not fit, it is left out with a
+			 * warning. The key is read once, when a terrain loads. */
 			constexpr auto GraphicsRayTracingTerrainBLASMaxTrianglesKey{"Core/Graphics/RayTracing/TerrainBLASMaxTriangles"};
 			constexpr auto DefaultGraphicsRayTracingTerrainBLASMaxTriangles{2000000U};
 
@@ -1187,6 +1193,13 @@ namespace EmEn
 			 * (PostProcessStack::syncSceneEffects()). 'Enabled' = false declines that filing for the session. */
 			constexpr auto GraphicsPPAerialPerspectiveEnabledKey{"Core/Graphics/PostProcessing/AerialPerspective/Enabled"};
 			constexpr auto DefaultGraphicsPPAerialPerspectiveEnabled{true};
+
+			/* Water volume (Graphics::Effects::Atmosphere::WaterVolume, Nov 2026) — the water between the eye and what it
+			 * sees when the eye is under the sea, from the water the scene's sea declares (Scenes::WaterMedium). A
+			 * SCENE-DRIVEN effect: the stack files it the first frame the scene's sea declares its water
+			 * (PostProcessStack::syncSceneEffects()). 'Enabled' = false declines that filing for the session. */
+			constexpr auto GraphicsPPWaterVolumeEnabledKey{"Core/Graphics/PostProcessing/WaterVolume/Enabled"};
+			constexpr auto DefaultGraphicsPPWaterVolumeEnabled{true};
 
 			/* Stars (Graphics::Effects::Atmosphere::StarField, Oct 2026) — the catalogue a physical sky names ("StarCatalogue" in
 			 * its manifest), drawn as points after the temporal anti-aliasing. A SCENE-DRIVEN effect: the stack files it

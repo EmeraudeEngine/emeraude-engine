@@ -15,10 +15,10 @@ Context for developing Emeraude Engine platform-specific code.
 |---|---|---|
 | Module Overview | [`docs/subsystems/platformspecific/01-module-overview.md`](../../docs/subsystems/platformspecific/01-module-overview.md) | 1 KB |
 | Critical Rules | [`docs/subsystems/platformspecific/02-critical-rules.md`](../../docs/subsystems/platformspecific/02-critical-rules.md) | 2 KB |
-| Directory Structure | [`docs/subsystems/platformspecific/03-directory-structure.md`](../../docs/subsystems/platformspecific/03-directory-structure.md) | 3 KB |
+| Directory Structure | [`docs/subsystems/platformspecific/03-directory-structure.md`](../../docs/subsystems/platformspecific/03-directory-structure.md) | 4 KB |
 | Windows: native file dialogs run on a dedicated STA thread | [`docs/subsystems/platformspecific/04-windows-native-file-dialogs-run-on-a-dedicated-sta-thread.md`](../../docs/subsystems/platformspecific/04-windows-native-file-dialogs-run-on-a-dedicated-sta-thread.md) | 8 KB |
 | Linux: native dialogs pump the caller's event loop | [`docs/subsystems/platformspecific/05-linux-native-dialogs-pump-the-caller-s-event-loop.md`](../../docs/subsystems/platformspecific/05-linux-native-dialogs-pump-the-caller-s-event-loop.md) | 3 KB |
-| Helpers System | [`docs/subsystems/platformspecific/06-helpers-system.md`](../../docs/subsystems/platformspecific/06-helpers-system.md) | 2 KB |
+| Helpers System | [`docs/subsystems/platformspecific/06-helpers-system.md`](../../docs/subsystems/platformspecific/06-helpers-system.md) | 5 KB |
 | UTF-8 Encoding Practices | [`docs/subsystems/platformspecific/07-utf-8-encoding-practices.md`](../../docs/subsystems/platformspecific/07-utf-8-encoding-practices.md) | 1 KB |
 | Dialog System | [`docs/subsystems/platformspecific/08-dialog-system.md`](../../docs/subsystems/platformspecific/08-dialog-system.md) | 7 KB |
 | Taskbar Progress | [`docs/subsystems/platformspecific/09-taskbar-progress.md`](../../docs/subsystems/platformspecific/09-taskbar-progress.md) | 1 KB |

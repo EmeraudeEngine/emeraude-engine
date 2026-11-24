@@ -73,6 +73,7 @@ namespace
 	 *   binding 0: depth texture
 	 *   binding 1: normals texture
 	 */
+	/* ⚠️ The `maxDistance * 20.0` of the distance fadeout below is RTAO::FadeRangeFactor: change both. */
 	constexpr auto RTAOTraceFragmentShader = R"GLSL(
 #version 460
 #extension GL_EXT_ray_query : require

@@ -49,9 +49,9 @@
 #include "PixelFactory/Color.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Saphir/Types.hpp"
+#include "Scenes/AtmosphericMedium.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/LightSet.hpp"
-#include "Scenes/ParticipatingMedium.hpp"
 #include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
@@ -210,7 +210,7 @@ void main()
 		vec3 samplePosition = cameraPosition + rayDir * distanceAlongRay;
 
 		/* Extinction at this altitude. ⚠️ This is character-for-character the expression of
-		 * Scenes::ParticipatingMedium::densityAt(), negation included: heightFalloff is a POSITIVE
+		 * Scenes::AtmosphericMedium::densityAt(), negation included: heightFalloff is a POSITIVE
 		 * decay rate, so density must fall off going UP (+Y). The analytic form stays valid for
 		 * either sign, which is exactly what made the same mistake silent in AtmosphericFog until
 		 * the Y-up flip turned it into fog that thickened with altitude. */
@@ -380,7 +380,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			{
 				m_missingMediumReported = true;
 
-				TraceWarning{TracerTag} << "The scene declares no participating medium: the volumetric scattering is a no-op. Set one with Scene::setParticipatingMedium().";
+				TraceWarning{TracerTag} << "The scene declares no atmospheric medium: the volumetric scattering is a no-op. Set one with Scene::setAtmosphericMedium().";
 			}
 
 			return inputColor;
@@ -424,7 +424,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		const auto lightDir = mainLight->direction().normalized();
 
 		/* ⚠️⚠️ The source term takes the sun's ILLUMINANCE, in lux — NOT
-		 * ParticipatingMedium::resolveLuminance(). That accessor is the contract of an effect that
+		 * AtmosphericMedium::resolveLuminance(). That accessor is the contract of an effect that
 		 * composites a LUMINANCE directly (AtmosphericFog: `mix(sceneColor, fogColor, fogAmount)`
 		 * with fogColor = albedo * resolveLuminance), and with no authored luminance it returns
 		 * E/pi. Feeding it to a radiative-transfer integral that already carries its own sigmaS and
@@ -432,7 +432,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		 * the fix on light-and-shadow-debug, pinned pose and exposure: mean luminance 188/255 with
 		 * the E/pi form.
 		 * ⚠️ Consequence to keep in mind rather than paper over: an authored
-		 * ParticipatingMedium::setLuminance() has NO meaning for this integrator. It overrides a
+		 * AtmosphericMedium::setLuminance() has NO meaning for this integrator. It overrides a
 		 * composited RESULT, and this pass computes the result instead of assuming it. Honouring it
 		 * would mean inventing a convention the medium's contract does not define. */
 		/* A switched-off sun scatters nothing — and its cascaded map is not rendered any more (its light suspends it),
