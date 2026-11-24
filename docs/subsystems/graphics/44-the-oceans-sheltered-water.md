@@ -92,8 +92,19 @@ indices of `OceanSurfaceResource` (C++) and the walk of `ocSurfaceRiseAt()` (GLS
   closest pair) — the waterline included, now read through the ocean's own GLSL. The sun's shafts add 62.2 luma above
   the water and 24.5 under it, as before.
 - 0 VUID, 0 `[Error]`, no shader that fails to compile, over the launches of the series.
-- NOT measured: the map's cost in the ocean's own stages (one more fetch a read); macOS, Windows, AMD; the look of
-  the ripples from the owner's seat.
+- **Verified on the three OS (2026-11-24, the peers, on base 7824170 / engine 94632582 / projet-alpha 7c172234).**
+  macOS (Apple M6, MoltenVK, AppleClang 21; the screen-space lane alone) and Windows (RTX 3500 Ada, MSVC 14.44 /WX; both
+  lanes): the cascade in Release and Debug, 0 error, 0 warning; the base suite as expected (2867 and 2864 ran, 2860
+  passed on each); `water-world` with the validation layer loaded, 0 VUID, no shader that fails to compile. The log's
+  shelter line gives the SAME areas on the three OS — 15 381.2 m² of 5.90067e+06 m² — in 39 to 44 ms on the M6 and
+  166 ms on Windows. The five poses show what Linux shows: the veil and the surface from below, Snell's window, a
+  basin that does not move (mean difference between two frames a second apart: 0.26 to 0.34 on the pond, 4 to 16 on
+  the open sea), a straight waterline in the pond. ⚠️ Windows caught no frame cut by the waterline in its twelve (each
+  was all air or all water): the cut along the mesh is seen on Linux and macOS only. ⚠️ On the M6 the water volume
+  joins the chain about 10 s after the scene is up (the sea answers its water once it is ready for instantiation).
+  NOT run: AMD (no session on the AMD laptop that day).
+- NOT measured: the map's cost in the ocean's own stages (one more fetch a read); the look of the ripples from the
+  owner's seat.
 
 ### ⚠️ Limits
 

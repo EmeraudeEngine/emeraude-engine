@@ -155,8 +155,18 @@ contract: `docs/static-analysis-ledger.md`, the lot's row and § 7g). The docs a
 ## What remains
 
 - Snell's window compressed (step 3 above); the veil's isotropic source (graphics doc 13-12 § 44).
-- macOS, Windows, AMD (`gate.py feature` ran on 2026-11-24: the Debug build, the base suite under ASan / UBSan
-  and TSan, 0 report).
+- AMD. **Verified on the three OS (2026-11-24, the peers, on base 7824170 / engine 94632582 / projet-alpha 7c172234).**
+  macOS (Apple M6, MoltenVK, AppleClang 21; the screen-space lane alone) and Windows (RTX 3500 Ada, MSVC 14.44 /WX; both
+  lanes): the cascade in Release and Debug, 0 error, 0 warning; the base suite as expected (2867 and 2864 ran, 2860
+  passed on each); `water-world` with the validation layer loaded, 0 VUID, no shader that fails to compile. The log's
+  shelter line gives the SAME areas on the three OS — 15 381.2 m² of 5.90067e+06 m² — in 39 to 44 ms on the M6 and
+  166 ms on Windows. The five poses show what Linux shows: the veil and the surface from below, Snell's window, a
+  basin that does not move (mean difference between two frames a second apart: 0.26 to 0.34 on the pond, 4 to 16 on
+  the open sea), a straight waterline in the pond. ⚠️ Windows caught no frame cut by the waterline in its twelve (each
+  was all air or all water): the cut along the mesh is seen on Linux and macOS only. ⚠️ On the M6 the water volume
+  joins the chain about 10 s after the scene is up (the sea answers its water once it is ready for instantiation).
+  NOT run: AMD (no session on the AMD laptop that day). `gate.py feature` ran on Linux the same day (the Debug build, the base suite under ASan /
+  UBSan and TSan, 0 report).
 - ⚠️ An `Astride` frame is a BOUND: with the default `OceanSurfaceParameters::waveReach` of 8 m, an eye up to 8 m
   above a calm sea records the moving variant (up to 18 evaluations of the displacement a pixel) on every frame with
   no pixel under water — `water-world` keeps that default. Measured 2026-11-24: 0.064 ms a frame at 720p on an RTX

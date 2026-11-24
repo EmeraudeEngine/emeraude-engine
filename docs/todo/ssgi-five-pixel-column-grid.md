@@ -30,10 +30,26 @@ at 1280x720, 6.82 with the autocorrelation broken to 0.37-0.41 at lags 4-7. 1280
 size. Suspects: a tile or thread-group size, a half-resolution buffer whose size does not divide evenly at 1280 (640
 against an 8- or 16-wide tile), a sample pattern keyed on the pixel coordinate.
 
+## Re-checked on Linux at 1280 × 720 (2026-11-24, RTX 3070 Ti, engine `develop` 94632582) — no grid
+
+The first step below, on two other scenes (`global-illumination`, `sponza`; `JungleRuins` option 1 was not loaded),
+window-less at 1280 × 720, the screen-space lane selected (`IndirectDiffuse: SSGIEffect`), `IndirectDiffuse` on, off,
+on again. Rows 400-700:
+
+| scene | step standard deviation, SSGI on / off / on | spectrum at a 5 px period (× its median), on / off |
+|---|---|---|
+| `global-illumination` | 4.11 / 4.68 / 4.18 | 1.1 / 1.1 |
+| `sponza` | 23.5 / 25.4 / 22.9 | 2.2 / 2.6 |
+
+SSGI raises neither (Windows: 6.8 against 0.09), and the autocorrelation of the column profile falls smoothly in both
+states (lags 4 to 7: 0.29 to −0.04 on the first scene, on as off) where Windows broke to 0.37-0.41. So 1280 × 720
+alone does not draw the grid: it takes that machine (RTX 3500 Ada, its driver) too. To repeat on Windows on the
+current engine before anything is read into the code.
+
 ## What remains
 
-- Confirm cross-platform: SSGI on Linux at 1280x720 (a resize crashes on Linux — engine item on the resolution change;
-  launch at that size instead, the owner's screen permitting).
+- ~~Confirm cross-platform: SSGI on Linux at 1280x720~~ — done on 2026-11-24, above (a window-less instance IS
+  1280 × 720; the live-resize crash this line feared no longer reproduces, `docs/caution-points.md`).
 - Read SSGIEffect for a per-column or per-tile pattern tied to the resolution (a half-resolution pass, a tile size, a
   jitter or noise texture period) — 5 px at 1280 wide.
 - Verify: the grid gone on Windows (step standard deviation near the SSGI-off value), Linux unchanged.

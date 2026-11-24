@@ -6576,6 +6576,21 @@ archive is "mapped" again. ⚠️ The PUBLISHED macOS dependency release predate
 > size applied.
 
 
+### Not reproduced: the live-resize crash of July 2026 (re-checked 2026-11-24, its item closed)
+
+Seen on 2026-07-03 with projet-alpha's `liminal` loaded: a live `Core.WindowService.resize(1920,1080)` segfaulted
+during the post-process stack recreation, and a launch with the window settings at 1920x1080 gave storms of
+"descriptor set #0 not bound", then `VK_ERROR_DEVICE_LOST`. The engine item
+`resize-or-non-native-resolution-crash` kept it "to verify" until 2026-11-24 (engine `develop` 94632582, Linux,
+RTX 3070 Ti, driver 620.70.06): on `liminal`, `global-illumination` and `water-world` (both lighting lanes
+resident), a window-less instance launched at 1280 × 720 with the validation layer loaded, five live resizes each
+— 960 × 540, 1920 × 1080, 640 × 360, 2560 × 1440, back to 1280 × 720, five seconds apart. `getState()` gives the
+size asked and `screenshot()` an image of that size every time: 0 VUID, 0 `[Error]`, 0 `[Fatal]`, exit 0.
+
+⚠️ What that does NOT cover: a real window (a resize that comes from the compositor, Wayland or X11), a launch from
+window settings of another size, Windows, macOS, an Intel device (`intel-hang-render-thread-frees-memory-during-resize`
+is its own item). A crash met there is a new finding, not this one.
+
 ### Fixed: GNOME dropped the Wayland connection during a long load — a silent close, a 60 s stall, a crash at exit (Sep 2026)
 
 > **Symptom (owner, 2026-09-25, `terrain` with its 16 km forest):** "the engine fell over" — the window froze

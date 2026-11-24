@@ -270,6 +270,21 @@ decides the side from the GEOMETRIC normal (`LightGenerator.PBR.cpp`, `docs/caut
 | Full frame, RT lane, everything on | 111 ms (9 FPS) | 80 ms (13 FPS) |
 | `VUID-` with `VK_LAYER_KHRONOS_validation` | 0 | 0 |
 
+**The same pose since** (`ScenePass`, every scene effect bypassed, a copy of the owner's settings):
+
+| Date | forward | deferred | |
+|---|---|---|---|
+| 2026-10-04, after the cypress cutout | — | 10.2 ms | |
+| 2026-10-06 | 305 ms | 34-40 ms | a gap nobody explained (454 batches, 12 833 689 triangles "all at LOD 3"); the engine item `sponza-scenepass-far-above-its-baseline` |
+| 2026-11-24 (engine 94632582) | 48.2 ms | 11.3 ms | **the gap is gone**, the item closed; 36.0 ms / 5.1 ms at 1280 × 720 |
+
+⚠️ Not bisected: which commit closed the gap is not known (`c33426d9`, 2026-10-07, "onDependenciesLoaded() runs once;
+automatic LOD skips a mesh carrying its own levels", was the lead). On 2026-11-24 the VIEW lists hold 290 batches and
+10 494 160 triangles over the four levels; the "454 batches, 12 833 689 triangles, all at LOD 3" is, to the triangle,
+the SHADOW lists' line — the shadow pass draws every batch at the coarsest level, which is not smaller for the meshes
+the simplifier stalls on (item `lod-simplifier-stalls-on-disconnected-cards`). Windows and its AMD iGPU, which showed
+the gap too, were not re-measured.
+
 Fidelity, NIGHT (`--demo-options 1,60`: the 22 lamps alone light 95 % of the pixels; pinned f/2.8 1/30 ISO 3200;
 same instance, `Core.RendererService.setDeferredPunctualLights(0|1)`; two deferred captures bit-identical):
 

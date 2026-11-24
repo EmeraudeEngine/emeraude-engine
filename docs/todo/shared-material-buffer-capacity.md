@@ -27,6 +27,23 @@ buffers now hold four times as many elements (16 MiB, 256 banks of 113: 28 928 m
 `NodePerformanceTest` measurement below has not been run again: its 10 000 materials should now fit, the cached
 materials of a long session still hold their seats.
 
+## Re-measured (2026-11-24, Linux, RTX 3070 Ti, engine `develop` 94632582) — CONFIRMED, and the capacity is not 28 928
+
+`NodePerformanceTest.glb` alone, opened with `Core.openFiles()` in a fresh instance with NO scene loaded (a running
+scene refuses the file: "a viewer never disturbs it"), window-less, under an 8 GB memory cap. The model viewer holds
+10 004 entities; the log says, 1 297 times:
+
+`The shared uniform buffer is full at 8704 elements (256 banks of 34) and cannot grow any further !`
+
+**1 297 materials of 10 001 fail** (the viewer's own sky box material among them: its sky box fails with it), 1 296
+meshes leave the scene, 10 374 `[Error]` lines in all.
+
+⚠️ **A bank holds 34 materials, not 113.** Since `77168d0f` (2026-11-11, "one uniform-block region and descriptor set
+per frame in flight") `SharedUniformBuffer` divides a bank by the frames in flight:
+`m_maxElementCountPerUBO = (maxUBOSize / m_frameCount) / m_blockAlignedSize`. The raise to 256 banks (2026-10-28)
+multiplied the seats by four, the per-frame regions divided them by 3.3: 8 704 materials, against 7 232 on
+2026-10-01. The paragraph above ("28 928 materials … should now fit") was written before that commit.
+
 ## What remains
 
 - [ ] Measure `NodePerformanceTest` alone in a fresh instance: how many of its 10 000 materials fail.

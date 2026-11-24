@@ -166,6 +166,9 @@ A material that does not enable the depth-based opacity generates the code it al
   (−9.5 m, the variant at rest). The moving variant costs three times the variant at rest and is paid from 8 m above
   the sea to 8 m under it (`waveReach`): 1.5 % of that frame, and it grows with the pixel count (16 times the pixels
   on a 5K screen).
+- **Verified on macOS and Windows** (2026-11-24, the peers, engine 94632582: builds, 0 VUID, the five poses; the
+  cut along the mesh seen on Linux and macOS, not caught in Windows's twelve frames) — the detail is in graphics doc
+  44 (`44-the-oceans-sheltered-water.md`), the measurements. Not run on AMD.
 - ⚠️ NOT measured: the mismatch between the waterline and the mesh
   in pixels (judged on magnified captures: the line follows the surface's edge), an orthographic camera.
 

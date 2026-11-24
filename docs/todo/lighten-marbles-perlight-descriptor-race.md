@@ -25,6 +25,13 @@ on `TerrainSceneFloorDetailWindow` and `TerrainSceneFloor`, render target View (
 crash, no VUID reported), and the next launches were clean. It looks like a load-time race: the terrain's renderable
 instance is drawn before the scene's lights / environment give it its per-light set. Not physics.
 
+## Re-checked (2026-11-24, Linux, RTX 3070 Ti, engine `develop` 94632582) — not reproduced on Linux
+
+Eight launches of `lighten-marbles` in a row (window-less, `--disable-cef`, the validation layer loaded, shut down
+6 s after the console answers): the message `the sealed pipeline layout declares the 'PerLight' set` 0 time in the
+eight, 0 VUID, 0 `[Error]`, exit 0 each time. ⚠️ It was seen on Windows, once in three launches, with the layers
+off: eight clean launches on another OS do not clear a race. To repeat on Windows before the item is judged.
+
 ## What remains
 
 - [ ] Reproduce: repeated launches of `lighten-marbles` (and other terrain demos), counting the message; with the

@@ -388,8 +388,16 @@ measured unless stated; P0 measures it.
 
 ### E. Terrain
 - The ground correction is applied along the slope normal with the VERTICAL depth as length
-  (`accumulateGroundCorrection()`), which pushes the body sideways downhill every tick. Hypothesis for
-  `physics-no-rest-on-generated-terrain`, not measured.
+  (`accumulateGroundCorrection()`), which pushes the body sideways downhill every tick. It was the hypothesis for
+  "bodies never come to rest on generated terrain" (2026-08-25: a ball on `balls-of-steel` descending for 50 s,
+  |v| between 0.2 and 1.8), never measured — and that function no longer exists.
+  **Re-measured on 2026-11-24 (engine 94632582), the item closed: the bodies REST.** `balls-of-steel
+  --demo-options 5,0` (the diamond-square ground), each ball read every second for 120 s with
+  `getNodePhysics()`: three come to rest at t = 40, 47 and 49 s (|v| exactly 0, `grounded` on `Ground`,
+  `simulationPaused`, a position constant to the fourth decimal for the 70 s that follow). On `terrain`, the
+  player — a kinematic character since 2026-10-31 — stands on its slope for 79 s without moving by a tenth of a
+  millimetre (the creep of −2.3 m in 75 s recorded for that demo is gone). ⚠️ The two other balls never rest for
+  ANOTHER reason: pinned on the scene's boundary (item `physics-body-pinned-on-the-boundary-never-sleeps`).
 - An AABB tests its 4 bottom corners only; a sphere tests the height under its centre only.
 
 ### F. Walking
