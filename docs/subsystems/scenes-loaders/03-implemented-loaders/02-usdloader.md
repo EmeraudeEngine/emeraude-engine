@@ -42,7 +42,7 @@ WorldLobby with composition (942 meshes, 141 materials, 348 textures, 30 lights)
 87 materials, 778 point instancers) and option 2 (6 instance sets, 138 instances); 0 VUID; AppleClang PARANOID and
 MSVC 0 warning. JungleRuins option 1's untextured terrain (1 103 warnings, 196 texture paths) is the same on the three
 systems and before the split: item `usd-texture-paths-relative-to-authoring-layer`. Windows' grid of lines over that
-scene is SSGI at 1280x720: item `ssgi-five-pixel-column-grid`.
+scene was SSGI at 1280x720, fixed on 2026-11-24 (graphics doc 13-12 § 45).
 
 > [!CAUTION]
 > **`lightusd::LoadUSDFromFile()` composes NOTHING.** It reads the root layer, parses the

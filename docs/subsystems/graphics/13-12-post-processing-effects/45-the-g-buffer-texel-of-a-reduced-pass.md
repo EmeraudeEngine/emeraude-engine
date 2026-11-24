@@ -71,8 +71,25 @@ the spectrum's median; "folded" is the peak-to-peak of the profile folded on a p
   of 921 600 off by more than 16. `sponza`, same lane: 25.37 → 25.55, mean |difference| 0.66, p99 4.6; 1 139 pixels
   (0.12 %) off by more than 16, all one-pixel lines along geometric edges — the texel of an edge pixel is now always
   the same one.
-- NOT run: macOS, Windows, AMD (the peers, after the push); the ray-traced lane's reduced passes (`jungle-ruins`
-  option 1 has no main directional light: its four ray-traced effects fall back to the screen-space ones).
+- **Verified on macOS (2026-11-24, the peer, on engine 60479064)**: Apple M6, MoltenVK, AppleClang 21. The cascade
+  in Release and Debug, 0 error, 0 warning (`-Wdocumentation` accepts the new header); the two effects' GLSL compiles
+  under SPIRV-Cross, 0 VUID. Same scene, same pinned exposure: std of the first difference 0.025 with SSGI on and
+  0.030 off; 10 px ×3.5 on (the pyramid) and ×1.7 off, ×1.1 with the ambient occlusion off too; 5 px ×1.2 to ×1.4;
+  the far slope folded on 7 to 13 px: 0.004 to 0.018, 0.006 to 0.008 at 10 px — not above its neighbours. The
+  frame means are Linux's (38.4 with SSGI on, 45.4 off). macOS was never measured before the fix. `sponza`: 0 VUID,
+  the occlusion and the bounce in place, no lattice.
+- **Verified on Windows (2026-11-24, the peer that found the defect, on engine 60479064)**: RTX 3500 Ada, MSVC 14.44
+  /W4 /WX. Release and Debug, 0 error, 0 warning; the GLSL compiles on the NVIDIA Windows driver, 0 VUID, 0 `[Error]`.
+  Its own run of the morning, repeated (auto exposure): the std of the first difference 0.856 / 0.105 / 0.866 (SSGI
+  on / off / on) before, **0.114 / 0.098 / 0.114** now; the 5 px peak ×38.3 before, ×1.8 now. The far slope folded on
+  10 px: 7.908 before (0.34 to 0.82 at the neighbouring periods), 0.016 now (0.011 to 0.037). Exposure pinned: 0.026
+  with SSGI on, 0.030 off; 10 px ×4.0 on (the pyramid), ×1.9 off, ×1.4 with the ambient occlusion off too; the far
+  slope folded on 7 to 13 px: 0.005 to 0.015, 0.008 at 10 px. `sponza`: 0 VUID, the occlusion and the bounce in
+  place, no lattice, the same black and white pixels as before the fix (1 014 / 160 against 986 / 168).
+- ⚠️ With SSGI off the 10 px value is ×1.0 on Linux and ×1.7 to ×2.0 on the two peers, ×1.1 to ×1.4 once the ambient
+  occlusion is off too: the same direction on the three, a level the peers' images show no grid for.
+- NOT run: AMD (no session on the AMD laptop); the ray-traced lane's reduced passes (`jungle-ruins` option 1 has
+  no main directional light: its four ray-traced effects fall back to the screen-space ones).
 
 ⚠️ **Two traps of this measurement.**
 - A spectrum over the whole band takes regular CONTENT for a lattice: `jungle-ruins`' stepped pyramid sits in the

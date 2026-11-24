@@ -32,7 +32,8 @@ texel off its surface, on one side or the other with the pick. The rounding repe
 reduced size (640 = 2⁷ · 5 → 10 px).
 **Fix.** `Effects/Shared/GBufferTexelGLSL.hpp`: `emGBufferTexel()` names the texel by integer arithmetic on
 `gl_FragCoord`, `emGBufferTexelUV()` gives its centre; SSGI (both passes) and SSAO read their centre from that texel
-and unproject at its centre. Far slope, profile folded on 10 px: 1.573 → 0.009.
+and unproject at its centre. Far slope, profile folded on 10 px: 1.573 → 0.009 on Linux, 7.908 → 0.016 on Windows
+(its own captures); no lattice on macOS. Verified on the three OS on 2026-11-24; not run on AMD.
 **Rule.** A pass smaller than the G-buffer NEVER reads it at `vUV`: graphics doc 13-12 § 45 (the measurements, the
 two traps of the measurement). The other reduced passes still do: item `reduced-passes-name-their-gbuffer-texel`.
 

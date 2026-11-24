@@ -56,4 +56,4 @@ is measured before and after, one effect at a time:
 ## References
 
 - Graphics doc 13-12 § 45; `docs/reflection-pipeline.md` § 3.2, *Unprojection at the TEXEL centre*.
-- Engine item `ssgi-five-pixel-column-grid` (SSGI and SSAO, awaiting the peers).
+- The SSGI and SSAO fix, verified on the three OS on 2026-11-24 (engine 60479064): doc § 45.
