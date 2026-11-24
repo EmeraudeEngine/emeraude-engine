@@ -16,3 +16,9 @@ position or a distance; the scalar `constants.nearPlane / farPlane / tanHalfFovY
 ambient, the background, the sky): a temporal integrator then records the pipeline variant carrying its own
 large-change test (TAA, the GI anti-lag) —
 [`43-the-temporal-discontinuity-contract`](43-the-temporal-discontinuity-contract.md).
+
+`FrameContext::sea` and `FrameContext::seaImmersion` (Nov 2026) are the scene's sea when it declares its water, and
+where the frame's near plane stands against it (`Graphics/SeaImmersion.hpp`: `Clear`, `Astride`, `Submerged`) — THE
+answer to "is the eye under water?", decided once a frame when the context is built. An effect reads the state; it
+never works it out from the sea or from the eye's height:
+[`44-watervolume`](44-watervolume-the-underwater-view.md) § 2.

@@ -296,6 +296,36 @@ scene target (3 of 3), none after the fix (3 of 3 with the recreation).
 the fragment's own depth, `gpWaterColumnThickness`. `enableShoreFoam(colour, width, coverage, patternScale,
 roughness)` adds a foam band where that column thins to nothing:
 
+- ⚠️ **The BACK face is seen from inside the volume (2026-11-23).** Depth-based opacity makes the surface the
+  interface of a volume reaching the scene behind it; a sea whose material declares its water is drawn on both sides, and on
+  its back face what lies behind the surface is the AIR — the sky there read as kilometres of column, a black
+  underside. On a back face: the column is zero, the foam is off, the refraction takes n instead of 1 / n with the
+  normal facing the ray, the Fresnel split takes the cosine of the transmitted angle (total internal reflection past
+  the critical angle), and what that mirror shows is the volume's diffuse reflectance lit from the other side of the
+  surface — the water's, the block's `volumeReflectance` (offset 148; the block is 152 floats),
+  `LightGenerator::declareSurfaceVolumeInterface()`. The water between the eye and the surface is the underwater
+  view's: graphics doc 13-12 § 44 (`13-12-post-processing-effects/44-watervolume-the-underwater-view.md`).
+- **`setWaterVolume(water, thickness)` is the ONE statement of the water behind a surface (2026-11-24).** While the
+  material loads, one call: the grab-pass transmission, fully transmissive, absorbed by the water's attenuation colour and
+  distance; depth-based opacity; the index of water (`Scenes::WaterMedium::RefractiveIndex`); the block's
+  `volumeReflectance` from `WaterMedium::diffuseReflectance()`. The material keeps the water and answers it
+  (`Material::Interface::waterVolume()`, null by default): a sea that wears the material answers the scene with it
+  and gets its underwater view. `thickness` is the transmission's thickness factor — how far the refraction
+  displaces what is seen through the surface. A water without extinction is refused; so is a material already
+  loaded (the statement is read without a lock from then on). ⚠️ `setIOR()`, `setAttenuationColor()` and `setAttenuationDistance()` called afterwards make the
+  surface disagree with its water.
+- ⚠️ **The shore foam is kept only where the line of sight lands near where it entered the water (2026-11-23).** The
+  depth it reads is the one of the point where the sight LANDS; the foam is painted where it ENTERS. Seen from above
+  the two are one point; at a grazing view the sight runs under the surface without going down and all the water in
+  front of a shore read as shallow — a thick straight white line along the horizon for an eye near the sea level
+  (owner, `water-world`; it predates the underwater view: on a capture of the build before it, eye at the sea level,
+  the band departs from a straight line by 1.9 px over 98 % of the width, by 13.4 px from 2 m up). The band is now
+  weighted by the horizontal run of the sight under the surface: it fades between two and four foam widths (owner
+  decision). Measured on a burst of 14 frames at the sea level: the widest white row falls from 720–1247 px to
+  0–172 px. ⚠️ The band thins at moderate heights too — its white pixels: −12 % from 6 m up, −71 % from 2.5 m,
+  −84 % from 1.2 m (35 m from the shore): what it loses there was the same over-reading in a milder form, but the
+  look the owner approved on 2026-09-28 included it. His to judge on screen; the two factors are the knob.
+
 - **Vertical depth, not the column along the view.** The scene point behind the pixel is on the same ray at
   `sceneDepth / waterDepth` times the camera-to-surface vector, so the depth under the surface is that vector's
   downward component times `(ratio − 1)` — the band keeps its width at every viewing angle, and follows a displaced

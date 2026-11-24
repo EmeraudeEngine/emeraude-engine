@@ -105,6 +105,9 @@ namespace EmEn::Scenes
 		this->observe(m_rootNode.get());
 		this->observe(&graphicsRenderer);
 
+		/* A scene built with its ground and its sea presents one to the other at once. */
+		this->presentGroundToSea();
+
 		/* Mirror the GPU descriptor table capacities into the per-scene set: they are resolved from
 		 * the device's update-after-bind budget at renderer initialization and are lower than the
 		 * desired ones on MoltenVK (Metal caps argument buffers at 1024 samplers). Allocating a slot

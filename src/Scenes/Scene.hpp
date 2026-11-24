@@ -64,6 +64,7 @@
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "AtmosphericMedium.hpp"
 #include "Audio/Source.hpp"
 #include "BaseUtility.hpp"
 #include "BindlessTextureSet.hpp"
@@ -95,7 +96,6 @@
 #include "NodeController.hpp"
 #include "OctreeSector.hpp"
 #include "OrbitController.hpp"
-#include "ParticipatingMedium.hpp"
 #include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "Physics/SoftStepSolver.hpp"
 #include "PhysicsRecorder.hpp"
@@ -555,6 +555,9 @@ namespace EmEn::Scenes
 				this->rebuildRenderingOctree(true);
 
 				this->rebuildPhysicsOctree(true);
+
+				/* The sea reads the ground over the scene's square: a new square, a new reading. */
+				this->presentGroundToSea();
 			}
 
 			/**
@@ -1145,42 +1148,43 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Sets the scene's participating medium — the ONE atmosphere every volumetric
-			 * consumer integrates.
+			 * @brief Sets the scene's atmospheric medium — the AIR of the scene, the one atmosphere every
+			 * volumetric consumer of the air integrates.
+			 * @note The water of a sea is declared by the sea level itself (SeaLevelInterface::waterMedium()).
 			 *
 			 * @note ⚠️ The default is a VACUUM, and it must stay one: a non-zero default would put
 			 * fog in every scene of the engine at once.
 			 *
 			 * @param medium A reference to the medium.
 			 *
-			 * @see ParticipatingMedium::ClearAir(), ParticipatingMedium::Fog() For presets.
+			 * @see AtmosphericMedium::ClearAir(), AtmosphericMedium::Fog() For presets.
 			 */
 			void
-			setParticipatingMedium (const ParticipatingMedium & medium) noexcept
+			setAtmosphericMedium (const AtmosphericMedium & medium) noexcept
 			{
-				m_participatingMedium = medium;
+				m_atmosphericMedium = medium;
 			}
 
 			/**
-			 * @brief Returns the scene's participating medium (const).
-			 * @return const ParticipatingMedium &
+			 * @brief Returns the scene's atmospheric medium (const).
+			 * @return const AtmosphericMedium &
 			 */
 			[[nodiscard]]
-			const ParticipatingMedium &
-			participatingMedium () const noexcept
+			const AtmosphericMedium &
+			atmosphericMedium () const noexcept
 			{
-				return m_participatingMedium;
+				return m_atmosphericMedium;
 			}
 
 			/**
-			 * @brief Returns the scene's participating medium (mutable).
-			 * @return ParticipatingMedium &
+			 * @brief Returns the scene's atmospheric medium (mutable).
+			 * @return AtmosphericMedium &
 			 */
 			[[nodiscard]]
-			ParticipatingMedium &
-			participatingMedium () noexcept
+			AtmosphericMedium &
+			atmosphericMedium () noexcept
 			{
-				return m_participatingMedium;
+				return m_atmosphericMedium;
 			}
 
 			/* ============================================================
@@ -1556,6 +1560,8 @@ namespace EmEn::Scenes
 				m_groundLevel = ground;
 				m_groundLevelRenderable = std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(ground);
 
+				this->presentGroundToSea();
+
 				this->registerSceneVisualComponents();
 			}
 
@@ -1706,6 +1712,8 @@ namespace EmEn::Scenes
 			{
 				m_seaLevel = seaLevel;
 				m_seaLevelRenderable = std::dynamic_pointer_cast< Graphics::Renderable::Abstract >(seaLevel);
+
+				this->presentGroundToSea();
 
 				this->registerSceneVisualComponents();
 			}
@@ -3022,6 +3030,20 @@ namespace EmEn::Scenes
 			void registerSceneVisualComponents () noexcept;
 
 			/**
+			 * @brief Presents the scene's ground to its sea, when it holds both: the sea adapts to it
+			 * (SeaLevelInterface::adaptToGround() — an ocean learns where the land shelters its water).
+			 * @note Called whenever either is set, and when the scene's boundary changes (the square the sea reads).
+			 */
+			void
+			presentGroundToSea () noexcept
+			{
+				if ( m_seaLevel != nullptr && m_groundLevel != nullptr )
+				{
+					m_seaLevel->adaptToGround(*m_groundLevel, m_boundary);
+				}
+			}
+
+			/**
 			 * @brief Applies the background lighting derivation for real — the background
 			 * resource MUST be loaded (its manifest parsed) when this runs.
 			 * @note See Scene::applyBackgroundLighting() for the deferred entry point.
@@ -3511,7 +3533,7 @@ namespace EmEn::Scenes
 			std::weak_ptr< Component::Camera > m_activeCamera EMEN_GUARDED_BY(m_activeCameraAccess);
 			/** @brief Physical environment (gravity, air density). Default: Earth. */
 			Physics::EnvironmentPhysicalProperties m_environmentPhysicalProperties{Physics::EnvironmentPhysicalProperties::Earth()};
-			ParticipatingMedium m_participatingMedium{ParticipatingMedium::Vacuum()};
+			AtmosphericMedium m_atmosphericMedium{AtmosphericMedium::Vacuum()};
 			/** @brief The physics step's contact solver (soft step, persistent impulses). Mutable: the step runs from the const resolveCollisions(). */
 			mutable Physics::SoftStepSolver m_softStepSolver;
 			/** @brief The step's working sets, reused from one step to the next (no allocation once warm). */

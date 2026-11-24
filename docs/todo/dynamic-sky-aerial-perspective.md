@@ -21,7 +21,7 @@ it.
 ## Owner decisions (2026-10-25)
 
 1. **Under a dynamic sky the aerial perspective (AP) owns the distance haze**; `AtmosphericFog` keeps the LOCAL medium
-   only (a valley, a marsh: the scene's `ParticipatingMedium`, height fog) — never two models for one thing.
+   only (a valley, a marsh: the scene's `AtmosphericMedium`, height fog) — never two models for one thing.
 2. **RGB transmittance** (a distant mountain loses more blue than red), not Unreal's mean: the application is a
    fullscreen pass that reads the scene colour, so it costs a second 32³ volume only.
 3. **A new chain slot `AerialPerspective`**, after the geometry (translucents included, at the depth they wrote — the

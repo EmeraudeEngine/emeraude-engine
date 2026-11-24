@@ -372,7 +372,7 @@ Three readings worth keeping:
 > **THE WHOLE `Fog` SLOT IS DEAD ON THIS SCENE, and it is instrumented as such: 0.000 ms over
 > 300+ frames for whichever occupant holds it.** `AtmosphericFog` and `VolumetricScattering`
 > share the slot on purpose and both early-out on the same missing
-> `Scene::setParticipatingMedium()`, each emitting one warning; the march additionally needs a
+> `Scene::setAtmosphericMedium()`, each emitting one warning; the march additionally needs a
 > CSM directional light. A `sponza` run with `VolumetricScattering` added after the fog measured
 > `VolumetricScatteringEffect` 0.000 ms and no `AtmosphericFogEffect` scope at all — but swapping
 > them back measured `AtmosphericFogEffect` 0.000 ms. **Adding the effect is not what turns fog

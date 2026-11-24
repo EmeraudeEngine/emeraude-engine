@@ -1105,12 +1105,26 @@ namespace EmEn::Saphir
 			 * factor a coloured glass transmits WHITE: TransmissionTest's yellow, green, orange
 			 * and blue spheres all came out as colourless ghosts. Beer's law is NOT a substitute —
 			 * it needs KHR_materials_volume, which those materials do not declare. */
+			/* ⚠️ The INTERFACE of a volume seen from inside it (declareSurfaceVolumeInterface(): a sea seen from under
+			 * it, its back face). The light leaves the dense medium: Schlick's term takes the cosine of the TRANSMITTED
+			 * angle (cos²θt = 1 − n² sin²θi), which falls to zero at the critical angle — the term is then exactly 1,
+			 * the total internal reflection around Snell's window — and what that mirror shows is the volume below,
+			 * not the environment above: the environment reflection gives way to the volume's diffuse reflectance
+			 * (declareSurfaceVolumeInterface()). */
+			const std::string fresnelCosine{m_surfaceIsVolumeInterface ? "interfaceCosine" : "NdotV"};
+
 			Code{fragmentShader, Location::Output} <<
 				"/* PBR Reflection + Transmission - energy-conserving Fresnel blend. */" "\n"
 				"const float NdotV = max(dot(reflectionNormal, -reflectionI), 0.0);" "\n" <<
+				(m_surfaceIsVolumeInterface
+					? "const float interfaceCosine = gl_FrontFacing ? NdotV : " + this->interfaceCosineExpression("NdotV") + ";\n"
+					: std::string{}) <<
 				"/* Dielectric F0 from the material IOR, replaced by the thin film when the material declares one. */" "\n" <<
-				this->ambientFresnelDeclaration("fresnelDielectric", "vec3(" + this->dielectricF0Expression() + ")", "NdotV") <<
-				"const vec3 reflectedColor = " << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << ";" "\n"
+				this->ambientFresnelDeclaration("fresnelDielectric", "vec3(" + this->dielectricF0Expression() + ")", fresnelCosine) <<
+				/* ⚠️ From inside the volume the mirror shows the volume below, lit from above: its diffuse reflectance under
+				 * the sky's luminance (a uniform sky: E / π is its luminance) — the direct lights add theirs in their own
+				 * passes. */
+				"const vec3 reflectedColor = " << (m_surfaceIsVolumeInterface ? "gl_FrontFacing ? (" : "") << m_surfaceReflectionColor << ".rgb * " << m_surfaceReflectionAmount << " * " << this->reflectionIntensity() << (m_surfaceIsVolumeInterface ? ") : (" + m_surfaceVolumeReflectance + " * " + ViewUB(Keys::UniformBlock::Component::EnvironmentLuminance, false) + ")" : std::string{}) << ";" "\n"
 				"/* Beer's law absorption for transmission. */" "\n"
 				"const vec3 transAbsorption = exp(log(max(" << m_surfaceAttenuationColor << ".rgb, vec3(0.001))) / max(" << m_surfaceAttenuationDistance << ", 0.0001) * " << m_surfaceThicknessFactor << ");" "\n"
 				"const vec3 transmittedLight = " << m_surfaceTransmissionColor << " * transAbsorption * " << this->albedoShaderExpression() << ".rgb;" "\n"

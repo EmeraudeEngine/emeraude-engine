@@ -31,6 +31,7 @@
 
 /* STL inclusions. */
 #include <memory>
+#include <string>
 
 /* Forward declarations. */
 namespace EmEn::Vulkan
@@ -47,11 +48,39 @@ namespace EmEn::Saphir
 namespace EmEn::Saphir::Generator
 {
 	/**
+	 * @brief Where a shader finds what tells where an ocean surface stands (getOceanSurfaceStandingSource()).
+	 */
+	struct OceanSurfaceStandingBindings final
+	{
+		/** @brief The descriptor set. */
+		uint32_t set{0};
+		/** @brief The binding of the displacement cascades (sampler2DArray). */
+		uint32_t displacement{0};
+		/** @brief The binding of the shelter map (sampler2D). */
+		uint32_t shelter{0};
+		/** @brief The binding of the surface's per-frame uniform block (Graphics::Geometry::OceanSurface::Uniforms). */
+		uint32_t uniforms{0};
+	};
+
+	/**
+	 * @brief Returns the GLSL of where an ocean surface stands, for a shader written by hand (an effect): the
+	 * displacement cascades, the shelter map and the uniform block at the given bindings, `ocShelterAt()`,
+	 * `ocCascadeWeight()`, `ocDisplacementAt()` and `ocSurfaceRiseAt()` — how high the DRAWN surface stands above the
+	 * sea level over a world XZ around the eye.
+	 * @note The SAME declarations declareOceanSurface() gives the ocean's own stages (owner decision 2026-11-24: one
+	 * source for where the surface stands): what draws the sea and what stands a pixel against it cannot disagree.
+	 * @param bindings Where the shader binds the three resources.
+	 * @return std::string
+	 */
+	[[nodiscard]]
+	std::string getOceanSurfaceStandingSource (const OceanSurfaceStandingBindings & bindings) noexcept;
+
+	/**
 	 * @brief Declares an ocean surface's resources and functions in a shader (Graphics::Geometry::OceanSurface): the
 	 * displacement, slope and foam cascades (and, in a vertex stage, the previous displacement with
-	 * `ocPreviousDisplacementAt()`), the per-frame uniform block, `ocDisplacementAt()` and `ocNormalAt()`, and —
-	 * in a fragment stage — `hfPixelNormalAt()`, the normal the heightfield per-pixel frame rebuilds, and
-	 * `ocWhitecapAt()`, the whitecap coverage.
+	 * `ocPreviousDisplacementAt()`), the shelter map with `ocShelterAt()`, the per-frame uniform block,
+	 * `ocDisplacementAt()` and `ocNormalAt()`, and — in a fragment stage — `hfPixelNormalAt()`, the normal the
+	 * heightfield per-pixel frame rebuilds, and `ocWhitecapAt()`, the whitecap coverage.
 	 * @note The set layout is getOceanSurfaceDescriptorSetLayout().
 	 * @param shader The shader.
 	 * @param setIndex The PerModel set index of the program.
@@ -62,8 +91,8 @@ namespace EmEn::Saphir::Generator
 
 	/**
 	 * @brief Returns the descriptor set layout of an ocean surface (Graphics::Geometry::OceanSurface): the heightfield's
-	 * three bindings (displacement, slopes, uniforms), the whitecap foam at binding 3 and the previous frame's
-	 * displacement at binding 4 (the velocity).
+	 * three bindings (displacement, slopes, uniforms), the whitecap foam at binding 3, the previous frame's
+	 * displacement at binding 4 (the velocity) and the shelter map at binding 5.
 	 * @param layoutManager The layout manager.
 	 * @return std::shared_ptr< Vulkan::DescriptorSetLayout >
 	 */

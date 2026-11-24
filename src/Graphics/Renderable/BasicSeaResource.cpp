@@ -66,7 +66,7 @@ namespace EmEn::Graphics::Renderable
 			return this->setLoadSuccess(false);
 		}
 
-		if ( !this->setMaterial(this->serviceProvider().container< Material::StandardResource >()->getDefaultResource()) )
+		if ( !this->setSeaMaterial(this->serviceProvider().container< Material::StandardResource >()->getDefaultResource()) )
 		{
 			return this->setLoadSuccess(false);
 		}
@@ -104,7 +104,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 2. Check the material. */
-		if ( !this->setMaterial(materialResource) )
+		if ( !this->setSeaMaterial(materialResource) )
 		{
 			TraceError{ClassId} << "Unable to use material for basic sea '" << this->name() << "' !";
 
@@ -112,7 +112,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 3. Set the water level height. */
-		m_waterLevel = waterLevel;
+		this->setSeaLevel(waterLevel);
 
 		return this->setLoadSuccess(true);
 	}
@@ -170,7 +170,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 2. Check the material. */
-		if ( !this->setMaterial(materialResource) )
+		if ( !this->setSeaMaterial(materialResource) )
 		{
 			TraceError{ClassId} << "Unable to use material for basic sea '" << this->name() << "' !";
 
@@ -178,7 +178,7 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		/* 3. Set the water level height. */
-		m_waterLevel = waterLevel;
+		this->setSeaLevel(waterLevel);
 
 		return this->setLoadSuccess(true);
 	}
@@ -202,27 +202,6 @@ namespace EmEn::Graphics::Renderable
 
 		/* Checks if all is loaded */
 		return this->addDependency(m_geometry);
-	}
-
-	bool
-	BasicSeaResource::setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept
-	{
-		if ( materialResource == nullptr )
-		{
-			TraceError{ClassId} <<
-				"The material resource is null ! "
-				"Unable to attach it to the renderable object '" << this->name() << "' " << this << ".";
-
-			return false;
-		}
-
-		this->setReadyForInstantiation(false);
-
-		/* Change the material. */
-		m_material = materialResource;
-
-		/* Checks if all is loaded */
-		return this->addDependency(m_material);
 	}
 
 	bool

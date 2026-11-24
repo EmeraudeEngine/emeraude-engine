@@ -9,7 +9,7 @@
 | **VeilingGlare** (ex-Bloom) | `Effects/Camera/VeilingGlare.hpp/cpp` | Multi-pass | HDR |
 | **DepthOfField** | `Effects/Camera/DepthOfField.hpp/cpp` | 7-pass (Focus→Setup→DilateH/V→FarGather→NearGather→Composite) | Depth, MaterialProps, **camera-materialized** |
 | **ToneMapping** | `Effects/Camera/ToneMapping.hpp/cpp` | Multi-pass (auto-exposure chain) | HDR, **camera-materialized** |
-| **VolumetricLight** | `Effects/Atmosphere/VolumetricLight.hpp/cpp` | 2-pass (Occlusion+EMA ping-pong → RadialBlur); IGN-dithered march, jitter-compensated mask, `temporalAlpha` 0.2 (sub-pixel sources rasterize jitter-unstable — caution-points § dash train) | Depth, HDR |
+| **VolumetricLight** | `Effects/Atmosphere/VolumetricLight.hpp/cpp` | 2-pass (Occlusion+EMA ping-pong → RadialBlur); IGN-dithered march, jitter-compensated mask, `temporalAlpha` 0.2 (sub-pixel sources rasterize jitter-unstable — caution-points § dash train) | Depth, HDR On a frame whose view is not clear of a sea that declares its water (`FrameContext::seaImmersion`) its mask also counts the sky seen THROUGH the sea's underside (the depth from before the translucent pass, Snell's window): [`44-watervolume`](44-watervolume-the-underwater-view.md) § 5 |
 
 > [!CAUTION]
 > **`VolumetricLight` is NOT a volumetric effect, and its settings keys are an OVERRIDE, not a
@@ -39,6 +39,7 @@
 > is real.
 | **AtmosphericFog** | `Effects/Atmosphere/AtmosphericFog.hpp/cpp` | 1-pass | Depth, HDR |
 | **AerialPerspective** | `Effects/Atmosphere/AerialPerspective.hpp/cpp` | 1-pass, full-res (+ the sky's 32³ froxel volume, compute, `SkyAtmosphere::recordAerialPerspective()`) | Depth, HDR, MaterialProps (fog response), **the frame's submitted physical sky** (`Renderer::frameSkyAtmosphere()`) — **scene-driven: filed the first frame a `DynamicSkyResource` is submitted**; slot `AerialPerspective`, after the geometry and before `Clouds` / `Fog` (graphics doc 42) |
+| **WaterVolume** | `Effects/Atmosphere/WaterVolume.hpp/cpp` | 1-pass, full-res, two pipeline variants (the surface at rest / the moving surface) | Depth, HDR, **the scene's sea when it declares its water** (`FrameContext::sea`, `FrameContext::seaImmersion`) — **scene-driven: filed the first frame the sea declares its water**; slot `WaterVolume`, after `Fog`; not executed on a `Clear` frame, the near plane standing clear of the water ([`44-watervolume`](44-watervolume-the-underwater-view.md)) |
 | **VolumetricClouds** | `Effects/Atmosphere/VolumetricClouds.hpp/cpp` | 1-pass, FULL-res, two shader variants (with / without cascades) | Depth, HDR, **the scene's `CloudSet`**, bindless (3D shapes + irradiance cubemap), CSM when present — **scene-driven: never added by an application** |
 | **RTR** | `Effects/Lighting/RTR.hpp/cpp` | 4-pass (Trace→BlurH→BlurV→Composite) | Depth, Normals, RT (TLAS+SSBOs) |
 | **RTGI** | `Effects/Lighting/RTGI.hpp/cpp` | SVGF chain (Trace→Temporal→Moments→NormalHistory→À-trous×N→Apply); all post-trace passes live in the owned `GIDenoiser` | Depth, Normals, MaterialProps, Albedo, Velocity, RT (TLAS+SSBOs) |

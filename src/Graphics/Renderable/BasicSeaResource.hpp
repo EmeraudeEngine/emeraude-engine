@@ -37,17 +37,20 @@
 #include <utility>
 
 /* Local inclusions for inheritances. */
-#include "Abstract.hpp"
-#include "Scenes/SeaLevelInterface.hpp"
+#include "AbstractSea.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/Geometry/VertexGridResource.hpp"
 #include "Hash/FNV1a.hpp"
-#include "Math/Vector.hpp"
 #include "Resources/ResourceTrait.hpp"
 #include "Resources/Types.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics::Material
+{
+	class Interface;
+}
+
 namespace EmEn::Resources
 {
 	template< typename resource_t >
@@ -58,10 +61,10 @@ namespace EmEn::Graphics::Renderable
 {
 	/**
 	 * @brief The basic sea resource class.
-	 * @extends EmEn::Graphics::Renderable::Abstract This class is a renderable object in the 3D world.
-	 * @extends EmEn::Scenes::SeaLevelInterface This is a sea level.
+	 * @note A flat grid at the sea level: the lake.
+	 * @extends EmEn::Graphics::Renderable::AbstractSea The family level of the seas: the level, the material and its water.
 	 */
-	class EMEN_API BasicSeaResource : public Abstract, public Scenes::SeaLevelInterface
+	class EMEN_API BasicSeaResource final : public AbstractSea
 	{
 		friend class Resources::Container< BasicSeaResource >;
 
@@ -86,7 +89,7 @@ namespace EmEn::Graphics::Renderable
 			 * @param resourceFlags The resource flag bits. Default none.
 			 */
 			BasicSeaResource (Resources::AbstractServiceProvider & serviceProvider, std::string name, uint32_t resourceFlags = 0) noexcept
-				: Abstract{serviceProvider, std::move(name), resourceFlags}
+				: AbstractSea{serviceProvider, std::move(name), resourceFlags}
 			{
 
 			}
@@ -118,60 +121,12 @@ namespace EmEn::Graphics::Renderable
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::subGeometryCount() const */
-			[[nodiscard]]
-			uint32_t
-			subGeometryCount () const noexcept override
-			{
-				return 1;
-			}
-
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerCount() const */
-			[[nodiscard]]
-			uint32_t
-			layerCount () const noexcept override
-			{
-				return 1;
-			}
-
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::isOpaque(uint32_t) const */
-			[[nodiscard]]
-			bool
-			isOpaque (uint32_t /*layerIndex*/) const noexcept override
-			{
-				return m_material != nullptr ? m_material->isOpaque() : true;
-			}
-
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::requiresGrabPass(uint32_t) const */
-			[[nodiscard]]
-			bool
-			requiresGrabPass (uint32_t /*layerIndex*/) const noexcept override
-			{
-				return m_material != nullptr ? m_material->requiresGrabPass() : false;
-			}
-
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::geometry(uint32_t) const */
 			[[nodiscard]]
 			const Geometry::Interface *
 			geometry (uint32_t /*LODLevel*/) const noexcept override
 			{
 				return m_geometry.get();
-			}
-
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::material(uint32_t) const */
-			[[nodiscard]]
-			const Material::Interface *
-			material (uint32_t /*layerIndex*/) const noexcept override
-			{
-				return m_material.get();
-			}
-
-			/** @copydoc EmEn::Graphics::Renderable::Abstract::layerRasterizationOptions(uint32_t) const */
-			[[nodiscard]]
-			const RasterizationOptions *
-			layerRasterizationOptions (uint32_t /*layerIndex*/) const noexcept override
-			{
-				return nullptr;
 			}
 
 			/** @copydoc EmEn::Graphics::Renderable::Abstract::boundingBox() const */
@@ -219,7 +174,8 @@ namespace EmEn::Graphics::Renderable
 			/**
 			 * @brief Loads a water level from geometry and material resources.
 			 * @param geometryResource A reference to a geometry resource smart pointer.
-			 * @param materialResource A reference to a material resource smart pointer.
+			 * @param materialResource A reference to a material resource smart pointer. The water it declares
+			 * (Material::Interface::waterVolume()) is the sea's: drawn on both sides, with an underwater view.
 			 * @param waterLevel The height of the water surface. Default 0.0F.
 			 * @return bool
 			 */
@@ -236,69 +192,11 @@ namespace EmEn::Graphics::Renderable
 			 */
 			bool load (float gridSize, uint32_t gridDivision, const std::shared_ptr< Material::Interface > & materialResource, float waterLevel = 0.0F, float UVMultiplier = 1.0F) noexcept;
 
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::getLevel() const */
-			[[nodiscard]]
-			float
-			getLevel () const noexcept override
-			{
-				return m_waterLevel;
-			}
-
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::getLevelAt(const Base::Math::Vector< 3, float > &) const */
-			[[nodiscard]]
-			float
-			getLevelAt (const Base::Math::Vector< 3, float > & /*worldPosition*/) const noexcept override
-			{
-				return m_waterLevel;
-			}
-
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::getLevelAt(float, float, float) const */
-			[[nodiscard]]
-			Base::Math::Vector< 3, float >
-			getLevelAt (float positionX, float positionZ, float deltaY) const noexcept override
-			{
-				return {positionX, m_waterLevel + deltaY, positionZ};
-			}
-
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::getNormalAt() const */
-			[[nodiscard]]
-			Base::Math::Vector< 3, float >
-			getNormalAt (const Base::Math::Vector< 3, float > & /*worldPosition*/) const noexcept override
-			{
-				return {0.0F, 1.0F, 0.0F};
-			}
-
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::isSubmerged() const */
-			[[nodiscard]]
-			bool
-			isSubmerged (const Base::Math::Vector< 3, float > & worldPosition) const noexcept override
-			{
-				return worldPosition[Base::Math::Y] < m_waterLevel;
-			}
-
-			/** @copydoc EmEn::Scenes::SeaLevelInterface::getDepthAt() const */
-			[[nodiscard]]
-			float
-			getDepthAt (const Base::Math::Vector< 3, float > & worldPosition) const noexcept override
-			{
-				return m_waterLevel - worldPosition[Base::Math::Y];
-			}
-
 			/** @copydoc EmEn::Scenes::SeaLevelInterface::updateVisibility() */
 			void
 			updateVisibility (const Base::Math::Vector< 3, float > & /*worldPosition*/) noexcept override
 			{
 				/* NOTE: Nothing to do for a simple flat water plane. */
-			}
-
-			/**
-			 * @brief Sets the water level height.
-			 * @param waterLevel The new water level.
-			 */
-			void
-			setWaterLevel (float waterLevel) noexcept
-			{
-				m_waterLevel = waterLevel;
 			}
 
 		private:
@@ -314,16 +212,7 @@ namespace EmEn::Graphics::Renderable
 			 */
 			bool setGeometry (const std::shared_ptr< Geometry::VertexGridResource > & geometryResource) noexcept;
 
-			/**
-			 * @brief Attaches the material resource.
-			 * @param materialResource A reference to a material resource smart pointer.
-			 * @return bool
-			 */
-			bool setMaterial (const std::shared_ptr< Material::Interface > & materialResource) noexcept;
-
 			std::shared_ptr< Geometry::VertexGridResource > m_geometry;
-			std::shared_ptr< Material::Interface > m_material;
-			float m_waterLevel{0.0F};
 	};
 }
 

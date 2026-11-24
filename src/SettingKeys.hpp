@@ -1194,6 +1194,13 @@ namespace EmEn
 			constexpr auto GraphicsPPAerialPerspectiveEnabledKey{"Core/Graphics/PostProcessing/AerialPerspective/Enabled"};
 			constexpr auto DefaultGraphicsPPAerialPerspectiveEnabled{true};
 
+			/* Water volume (Graphics::Effects::Atmosphere::WaterVolume, Nov 2026) — the water between the eye and what it
+			 * sees when the eye is under the sea, from the water the scene's sea declares (Scenes::WaterMedium). A
+			 * SCENE-DRIVEN effect: the stack files it the first frame the scene's sea declares its water
+			 * (PostProcessStack::syncSceneEffects()). 'Enabled' = false declines that filing for the session. */
+			constexpr auto GraphicsPPWaterVolumeEnabledKey{"Core/Graphics/PostProcessing/WaterVolume/Enabled"};
+			constexpr auto DefaultGraphicsPPWaterVolumeEnabled{true};
+
 			/* Stars (Graphics::Effects::Atmosphere::StarField, Oct 2026) — the catalogue a physical sky names ("StarCatalogue" in
 			 * its manifest), drawn as points after the temporal anti-aliasing. A SCENE-DRIVEN effect: the stack files it
 			 * the first frame such a sky is submitted under a celestial clock (PostProcessStack::syncSceneEffects()).

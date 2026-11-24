@@ -62,6 +62,7 @@
 #include "PixelFactory/Types.hpp"
 #include "Resources/ResourceTrait.hpp"
 #include "Resources/Types.hpp"
+#include "Scenes/WaterMedium.hpp"
 #include "ScopedRegistration.hpp"
 #include "StaticVector.hpp"
 #include "ThreadSafety.hpp"
@@ -725,6 +726,14 @@ namespace EmEn::Graphics::Material
 			/** @copydoc EmEn::Graphics::Material::Interface::meshShadingReliefReach() const */
 			[[nodiscard]]
 			float meshShadingReliefReach () const noexcept override;
+
+			/** @copydoc EmEn::Graphics::Material::Interface::waterVolume() const */
+			[[nodiscard]]
+			const Scenes::WaterMedium *
+			waterVolume () const noexcept override
+			{
+				return m_waterVolume.isEnabled() ? &m_waterVolume : nullptr;
+			}
 
 			/**
 			 * @brief Sets the reflection/IBL component as a cubemap texture.
@@ -1411,6 +1420,32 @@ namespace EmEn::Graphics::Material
 			void enableDepthBasedOpacity (bool state) noexcept;
 
 			/**
+			 * @brief Declares the WATER behind the surface: the surface becomes the interface of that water, and the
+			 * material its ONE statement (Interface::waterVolume(), owner decision 2026-11-24).
+			 * @warning This function is available while the material loads only (before its load succeeds): the
+			 * statement is read without a lock afterwards.
+			 * @note One call sets everything the surface reads of its water, so that nothing is typed twice:
+			 * - the transmission through the grab pass, fully transmissive, absorbed by the water's own attenuation
+			 *   (setTransmissionComponentFromGrabPass());
+			 * - the real water column as the absorption's thickness (enableDepthBasedOpacity());
+			 * - the index of refraction of water (Scenes::WaterMedium::RefractiveIndex);
+			 * - the water's diffuse reflectance (Scenes::WaterMedium::diffuseReflectance(), material UBO slot 148,
+			 *   `volumeReflectance.rgb`): what the BACK face shows where it reflects — seen from inside the water, the
+			 *   total internal reflection around Snell's window is the water itself, lit from the other side of the
+			 *   surface by the direct lights and the sky.
+			 * @note A sea that wears the material answers this water to the scene (Renderable::AbstractSea): it is drawn
+			 * on both sides and the scene gets its underwater view.
+			 * @warning ⚠️ The dynamic setters of those values (setIOR(), setAttenuationColor(), setAttenuationDistance())
+			 * stay free: called afterwards, they make the surface disagree with the water it declared.
+			 * @param water A reference to the water. One without extinction (a default-constructed one) is refused.
+			 * @param thickness The transmission's thickness factor: how far the refraction displaces what is seen
+			 * through the surface. Default 1.0.
+			 * @return bool False when the material is already loaded or the water has no extinction: nothing changed.
+			 */
+			[[nodiscard]]
+			bool setWaterVolume (const Scenes::WaterMedium & water, float thickness = DefaultThicknessFactor) noexcept;
+
+			/**
 			 * @brief Enables a foam band along the shore line: where the water column measured by the depth-based opacity
 			 * thins to nothing, the surface turns to a lit, rough, opaque foam.
 			 * @warning This function is available before creation time. Needs enableDepthBasedOpacity(true) and the grab-pass
@@ -1968,6 +2003,14 @@ namespace EmEn::Graphics::Material
 			bool parseTextureMapComponent (const Json::Value & data, const char * componentName, ComponentType componentType, const char * samplerName, const char * variableName, Resources::AbstractServiceProvider & serviceProvider) noexcept;
 
 			/**
+			 * @brief Writes the diffuse reflectance of the volume behind the surface (material UBO slot 148,
+			 * `volumeReflectance.rgb`): what the back face of a depth-based-opacity surface shows where it reflects.
+			 * @note The water's, through setWaterVolume() alone: black (the default) leaves that mirror dark.
+			 * @param reflectance The reflectance per channel (red, green, blue), each clamped to [0, 1].
+			 */
+			void setVolumeReflectance (const Base::Math::Vector< 3, float > & reflectance) noexcept EMEN_EXCLUDES(m_propertiesAccess);
+
+			/**
 			 * @brief Raises every frame region after a change of the material properties, and registers the material for
 			 * the renderer's per-frame flush when it is not registered yet (DirtyFrameRegions) — the single path every
 			 * dynamic setter takes, AFTER it released the properties lock.
@@ -2292,8 +2335,10 @@ namespace EmEn::Graphics::Material
 			static constexpr auto LightFaceParametersOffset{140UL};
 			/** @brief AO-response vec4: (post-process ambient occlusion response 0-1, unused, unused, unused). */
 			static constexpr auto AOResponseParametersOffset{144UL};
+			/** @brief Volume-reflectance vec4: (the diffuse reflectance of the volume behind the surface, per channel; unused). */
+			static constexpr auto VolumeReflectanceOffset{148UL};
 			/** @brief Float count of the material UBO. */
-			static constexpr auto MaterialPropertiesSize{148UL};
+			static constexpr auto MaterialPropertiesSize{152UL};
 
 			/* Default values. */
 			/* White, NOT grey: the albedo colour is also the TINT factor multiplying the albedo
@@ -2462,6 +2507,8 @@ namespace EmEn::Graphics::Material
 			float m_refractionSourceScale{1.0F};
 			/** @brief The deferred-lighting structure the last generated program was compiled with (deferredLightingStructure()). */
 			mutable std::atomic< bool > m_deferredLightingCompiled{false};
+			/** @brief The water behind the surface (setWaterVolume()); disabled when the material declares none. */
+			Scenes::WaterMedium m_waterVolume;
 			bool m_isUsingEnvironmentCubemapForRefraction{false};
 			bool m_isUsingEnvironmentCubemapForTransmission{false};
 			bool m_isUsingGrabPassForTransmission{false};

@@ -868,6 +868,8 @@ namespace EmEn::Saphir
 				constexpr auto LightFaceParameters{"lightFaceParameters"};
 				/** @brief AO response: (post-process ambient occlusion response 0-1, unused, unused, unused). */
 				constexpr auto AOResponseParameters{"aoResponseParameters"};
+				/** @brief Volume reflectance: (the diffuse reflectance of the volume behind the surface, per channel; unused). */
+				constexpr auto VolumeReflectance{"volumeReflectance"};
 				/** @brief Octahedral imposter: the object's bounding sphere (centre.xyz, radius), object space. */
 				constexpr auto ImposterBounds{"imposterBounds"};
 				/** @brief Octahedral imposter: (views per side, 1 / views per side, unused, unused). */

@@ -45,6 +45,7 @@
 /* Local inclusions for usages. */
 #include "Math/Vector.hpp"
 #include "PostProcessor.hpp"
+#include "SeaImmersion.hpp"
 #include "StaticVector.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
@@ -65,9 +66,10 @@ namespace EmEn
 
 	namespace Scenes
 	{
+		class AtmosphericMedium;
 		class CloudSet;
 		class LightSet;
-		class ParticipatingMedium;
+		class SeaLevelInterface;
 
 		namespace Component
 		{
@@ -453,10 +455,15 @@ namespace EmEn::Graphics
 				 * ⚠️ The medium had no owner before Aug 2026: it lived inside AtmosphericFog's
 				 * private Parameters while AtmosphericFog was used by ONE demo and VolumetricLight by
 				 * EIGHT, so nothing could share it. */
-				const Scenes::ParticipatingMedium * medium{nullptr};
+				const Scenes::AtmosphericMedium * medium{nullptr};
 				/* The scene's volumetric clouds, or null when it holds none — the same "null means
 				 * absent" contract as the medium. Walked under its own mutex (Scenes::CloudSet). */
 				const Scenes::CloudSet * clouds{nullptr};
+				/* The scene's sea WHEN IT DECLARES ITS WATER (Scenes::SeaLevelInterface::waterMedium() is then not null),
+				 * or null — no sea, or a sea without declared water: the same "null means absent" contract. What the
+				 * underwater view reads: the level, the water. Where the frame's view stands against it is seaImmersion,
+				 * below: an effect never works that out from the sea itself. */
+				const Scenes::SeaLevelInterface * sea{nullptr};
 				/* The physical sky's atmosphere whose frame THIS frame submitted (Renderer::frameSkyAtmosphere()): its
 				 * aerial perspective volume is recorded and in SHADER_READ_ONLY_OPTIMAL. Null otherwise — no physical
 				 * sky, or its submission failed —, the same "null means absent" contract. Kept alive by the renderer
@@ -511,6 +518,12 @@ namespace EmEn::Graphics
 				 * 0 without a camera. */
 				float shutterSpeed{0.0F};
 				PostProcessor::PushConstants constants{};
+				/* Where the NEAR plane of the frame's view stands against the sea above (Graphics/SeaImmersion.hpp):
+				 * clear of it, astride its surface, or submerged. THE answer to "is the eye under water?", decided once
+				 * a frame when this context is built (owner decision 2026-11-24): the water volume records nothing on a
+				 * Clear frame and decides per pixel on an Astride one; the sun's shafts count the sky seen through the
+				 * surface on every frame that is not Clear. Clear whenever sea is null. */
+				SeaImmersion seaImmersion{SeaImmersion::Clear};
 				/* Whether the frame's projection has the sparse layout (ViewReconstructionGLSL::isSparseProjection()): a
 				 * marching effect then records the pipeline built with ProjectionForm::Sparse, else its Matrix variant
 				 * (owner decision 2026-11-02: two pipeline variants, never a runtime branch in the shader). */

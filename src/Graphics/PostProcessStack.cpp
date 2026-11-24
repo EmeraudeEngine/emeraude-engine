@@ -42,6 +42,7 @@
 #include "Effects/Atmosphere/AerialPerspective.hpp"
 #include "Effects/Atmosphere/StarField.hpp"
 #include "Effects/Atmosphere/VolumetricClouds.hpp"
+#include "Effects/Atmosphere/WaterVolume.hpp"
 #include "Effects/Camera/DepthOfField.hpp"
 #include "Effects/Camera/MotionBlur.hpp"
 #include "Effects/Camera/ToneMapping.hpp"
@@ -820,7 +821,7 @@ namespace EmEn::Graphics
 	}
 
 	bool
-	PostProcessStack::syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, bool starField, bool lightGlints, Renderer & renderer) noexcept
+	PostProcessStack::syncSceneEffects (const Scenes::CloudSet * clouds, bool physicalSky, bool starField, bool lightGlints, bool declaredWater, Renderer & renderer) noexcept
 	{
 		bool changed = false;
 
@@ -854,6 +855,14 @@ namespace EmEn::Graphics
 			m_lightGlintsResolved = true;
 
 			changed = this->fileLightGlintsEffect(renderer) || changed;
+		}
+
+		/* Decided once, the first frame the scene's sea declares its water. */
+		if ( !m_waterVolumeResolved && declaredWater )
+		{
+			m_waterVolumeResolved = true;
+
+			changed = this->fileWaterVolumeEffect(renderer) || changed;
 		}
 
 		return changed;
@@ -911,6 +920,29 @@ namespace EmEn::Graphics
 		this->addEffect(std::make_shared< Effects::Atmosphere::AerialPerspective >(renderer));
 
 		TraceInfo{ClassId} << "The scene is under a physical sky: its aerial perspective joins the chain.";
+
+		return true;
+	}
+
+	bool
+	PostProcessStack::fileWaterVolumeEffect (Renderer & renderer) noexcept
+	{
+		/* An application that filed its own occupant of the concept keeps it. */
+		if ( !m_slots[static_cast< size_t >(EffectSlot::WaterVolume)].empty() )
+		{
+			return false;
+		}
+
+		if ( !renderer.primaryServices().settings().getOrSetDefault< bool >(GraphicsPPWaterVolumeEnabledKey, DefaultGraphicsPPWaterVolumeEnabled) )
+		{
+			TraceInfo{ClassId} << "The scene's sea declares its water, but '" << GraphicsPPWaterVolumeEnabledKey << "' is false: no underwater view.";
+
+			return false;
+		}
+
+		this->addEffect(std::make_shared< Effects::Atmosphere::WaterVolume >(renderer));
+
+		TraceInfo{ClassId} << "The scene's sea declares its water: the water volume of its underwater view joins the chain.";
 
 		return true;
 	}

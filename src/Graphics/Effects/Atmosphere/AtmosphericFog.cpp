@@ -39,9 +39,9 @@
 #include "Math/Vector.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Saphir/Types.hpp"
+#include "Scenes/AtmosphericMedium.hpp"
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/LightSet.hpp"
-#include "Scenes/ParticipatingMedium.hpp"
 #include "StaticVector.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/DescriptorSet.hpp"
@@ -305,7 +305,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			{
 				m_missingMediumReported = true;
 
-				TraceWarning{ClassId} << "The scene declares no participating medium: the atmospheric fog is a no-op. Set one with Scene::setParticipatingMedium().";
+				TraceWarning{ClassId} << "The scene declares no atmospheric medium: the atmospheric fog is a no-op. Set one with Scene::setAtmosphericMedium().";
 			}
 
 			return inputColor;

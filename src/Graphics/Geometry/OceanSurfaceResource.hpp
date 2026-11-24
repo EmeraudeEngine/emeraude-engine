@@ -26,6 +26,9 @@
 
 #pragma once
 
+/* Project configuration. */
+#include "emeraude_export.hpp"
+
 /* STL inclusions. */
 #include <array>
 #include <chrono>
@@ -34,20 +37,40 @@
 #include <string>
 #include <vector>
 
+/* Third-party inclusions. */
+#include "volk.h"
+
 /* Local inclusions for inheritances. */
 #include "Interface.hpp"
 
 /* Local inclusions for usages. */
 #include "Graphics/OceanWaves.hpp"
+#include "Graphics/SeaSurfaceWaves.hpp"
+#include "Hash/FNV1a.hpp"
+#include "Math/Space3D/AACuboid.hpp"
+#include "Math/Space3D/Sphere.hpp"
+#include "Math/Vector.hpp"
+#include "Mutex.hpp"
 #include "OceanSurface.hpp"
+#include "Resources/ResourceTrait.hpp"
+#include "ThreadSafety.hpp"
 
 /* Forward declarations. */
+namespace EmEn::Graphics
+{
+	class Frustum;
+	struct SeaShelterMap;
+}
+
 namespace EmEn::Vulkan
 {
+	class Buffer;
 	class CommandBuffer;
 	class CommandPool;
 	class DescriptorPool;
 	class DescriptorSet;
+	class Image;
+	class ImageView;
 	class Sampler;
 	class UniformBufferObject;
 }
@@ -73,12 +96,23 @@ namespace EmEn::Graphics::Geometry
 		float waveReach{8.0F};
 		/** @brief Texture repeats per metre (the material's UV). */
 		float textureRepeatsPerMetre{0.125F};
+		/** @brief The narrowest passage the swell enters, in metres: a basin joined to the open sea by a narrower one
+		 * stays sheltered (owner decision 2026-11-24: 30 m to start with). */
+		float shelterMinimumPassage{30.0F};
+		/** @brief The distance, in metres, over which the sea calms down once it has gone as far as it can. */
+		float shelterFade{25.0F};
+		/** @brief The share of each cascade's waves a sheltered water keeps, largest cascade first: the swell goes, the
+		 * smallest waves stay, much attenuated (owner decision 2026-11-24). ⚠️ First values: the look is the owner's
+		 * to tune on screen. */
+		std::array< float, OceanWaves::CascadeCount > shelteredWaveShares{0.0F, 0.04F, 0.35F};
 		/** @brief Quads per side of the shared patch. Even. */
 		uint32_t patchQuads{64};
 		/** @brief Levels of detail (quadtree depth). */
 		uint32_t levelCount{8};
 		/** @brief Root nodes per side of the square around the camera. Even. */
 		uint32_t rootsPerSide{4};
+		/** @brief Texels per side of the shelter map (one byte each): the scene's square is cut into that many cells. */
+		uint32_t shelterMapSide{1024};
 	};
 
 	/**
@@ -240,6 +274,30 @@ namespace EmEn::Graphics::Geometry
 				return m_parameters;
 			}
 
+			/**
+			 * @brief Gives the surface its shelter map: where the land shelters the water, the waves are weighed down
+			 * to their sheltered shares (OceanSurfaceParameters::shelteredWaveShares).
+			 * @note ANY THREAD: the map is taken by the render thread at the next surface update, which uploads it
+			 * ahead of the frame. It is kept, and uploaded again after the surface's GPU resources are created anew.
+			 * @param map The map, of OceanSurfaceParameters::shelterMapSide texels a side; null for none (the open
+			 * sea everywhere, the default). A map of another size, or of a square without extent, is refused with an
+			 * error and the previous one kept.
+			 */
+			void setShelterMap (std::shared_ptr< const SeaShelterMap > map) noexcept EMEN_EXCLUDES(m_shelterAccess);
+
+			/**
+			 * @brief Returns what a pass binds to know where the drawn surface stands (SeaSurfaceWaves), or nullptr
+			 * until the surface has been updated once: its cascades hold nothing before.
+			 * @note ⚠️ RENDER THREAD, valid for the frame it is asked in.
+			 * @return const SeaSurfaceWaves *
+			 */
+			[[nodiscard]]
+			const SeaSurfaceWaves *
+			surfaceWaves () const noexcept
+			{
+				return m_surfaceUpdated ? &m_surfaceWaves : nullptr;
+			}
+
 		private:
 
 			/** @brief One selected node: its index range in the patch and its placement (origin x, z, size, level). */
@@ -261,6 +319,30 @@ namespace EmEn::Graphics::Geometry
 			 */
 			bool createSurfaceResources () noexcept;
 
+			/**
+			 * @brief Creates the shelter map's image, view and sampler.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool createShelterResources () noexcept;
+
+			/**
+			 * @brief Writes a shelter map — or the open sea everywhere — into a frame's staging buffer, and takes its
+			 * rectangle for the uniforms.
+			 * @param frameIndex The frame in flight.
+			 * @param map The map, null for none.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool stageShelterMap (uint32_t frameIndex, const SeaShelterMap * map) noexcept;
+
+			/**
+			 * @brief Records the copy of a frame's staging buffer into the shelter image, which ends ready to be read.
+			 * @param commandBuffer The frame's command buffer, begun.
+			 * @param frameIndex The frame in flight.
+			 */
+			void recordShelterUpload (const Vulkan::CommandBuffer & commandBuffer, uint32_t frameIndex) const noexcept;
+
 			OceanSurfaceParameters m_parameters{};
 			std::array< float, OceanSurface::MaxLevelsOfDetail > m_lodRanges{};
 			std::array< std::array< float, 2 >, OceanSurface::MaxLevelsOfDetail > m_morphTable{};
@@ -281,6 +363,22 @@ namespace EmEn::Graphics::Geometry
 			uint32_t m_currentFrameIndex{0};
 			/** @brief The previous FFT's time (the whitecaps decay over the step); negative before the first one. */
 			double m_previousTime{-1.0};
+			/** @brief What the underwater view binds, filled with the surface's resources (createSurfaceResources()). */
+			SeaSurfaceWaves m_surfaceWaves{};
+			std::shared_ptr< Vulkan::Image > m_shelterImage;
+			std::shared_ptr< Vulkan::ImageView > m_shelterView;
+			std::shared_ptr< Vulkan::Sampler > m_shelterSampler;
+			/** @brief One staging buffer per frame in flight, created when that frame first uploads a map. */
+			std::vector< std::unique_ptr< Vulkan::Buffer > > m_shelterStaging;
+			mutable Base::Mutex m_shelterAccess;
+			/** @brief The map to show, null for none (setShelterMap()). */
+			std::shared_ptr< const SeaShelterMap > m_shelterMap EMEN_GUARDED_BY(m_shelterAccess);
+			/** @brief Counts the maps given: the render thread uploads when it differs from the one it uploaded. */
+			uint64_t m_shelterGeneration EMEN_GUARDED_BY(m_shelterAccess){1};
+			/** @brief The generation the image holds; 0 while it holds nothing (render thread). */
+			uint64_t m_uploadedShelterGeneration{0};
+			/** @brief The rectangle of the map the image holds, as the uniforms state it (render thread). */
+			std::array< float, 4 > m_shelterRectangle{};
 			mutable std::vector< Selection > m_selection; ///< Render thread, one pass at a time.
 			bool m_surfaceUpdated{false};
 	};

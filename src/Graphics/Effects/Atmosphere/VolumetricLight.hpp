@@ -141,6 +141,10 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				/* 1 when the clouds' view transmittance is bound at the occlusion pass's binding 2 and
 				 * must weight the sky it finds (the cloud transmittance pairing), 0 otherwise. */
 				float cloudTransmittanceEnabled;
+				/* 1 when the eye stands under the sea and the depth from BEFORE the translucent pass is bound at the
+				 * occlusion pass's binding 3: the sky behind the sea's underside then counts, for what the surface lets
+				 * through (Snell's window), 0 otherwise. */
+				float seaWindowEnabled;
 			};
 
 			/**

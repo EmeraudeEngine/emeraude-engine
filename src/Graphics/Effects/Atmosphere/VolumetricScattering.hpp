@@ -81,7 +81,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 	 *
 	 * @note The medium is NOT a parameter of this effect. Density, height falloff, base height,
 	 * max distance, scattering albedo, phase anisotropy and luminance belong to
-	 * Scenes::ParticipatingMedium, owned by the scene and reached through FrameContext — a medium
+	 * Scenes::AtmosphericMedium, owned by the scene and reached through FrameContext — a medium
 	 * is a property of the WORLD, not of whichever effect integrates it.
 	 *
 	 * @note Photometry: the integral yields **nits directly**. The source term is
@@ -149,7 +149,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				float cameraForwardX;
 				float cameraForwardY;
 				float cameraForwardZ;
-				/* The medium, straight from Scenes::ParticipatingMedium. */
+				/* The medium, straight from Scenes::AtmosphericMedium. */
 				float mediumDensity;
 				float mediumHeightFalloff;
 				float mediumBaseHeight;
