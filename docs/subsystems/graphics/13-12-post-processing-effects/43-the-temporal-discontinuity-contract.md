@@ -208,10 +208,26 @@ SSGI is the same in the three (16.7-16.9 at +0.1 s, 13.8-14.2 at +1 s). Owner de
   anti-lag 0.45 → 0.45, à-trous 3.93 → 3.90, SSR trace 8.39 → 8.32, the frame 44.80 → 44.79; ScenePass 9.35 → 9.44
   (B above A in the three pairs, ~1 %, under the 5 % bar). The same code measured 13.68 / 0.39 / 44.29 one day
   earlier: compare across days only interleaved.
-  ⚠️ Open observation (Windows RTX, RT lane, TAA OFF): after the jump the sea box keeps a slow tail, 2.6-3.0 at the
-  first night frame down to ~0.1 over ~1.4 s, a diagonal line of specks on the water — likely the ray-traced
-  reflections' own history (RTR's denoiser) converging; Linux's RT lane reads 0.0 there. Item
-  `rt-reflections-trail-after-a-lighting-jump` (owner, 2026-11-04: medium).
+  **An observation of 2026-11-04, no longer reproduced** (Windows RTX, RT lane, TAA OFF): after the jump the sea box
+  (0, 560, 400, 720 at 1280×720) kept a slow tail, 2.6-3.0 at the first night frame down to ~0.1 over ~1.4 s, a
+  diagonal line of specks on the water; the ray-traced reflections' own history was suspected, Linux's RT lane read
+  0.0 there, and the item `rt-reflections-trail-after-a-lighting-jump` tracked it. Re-checked on the same machine on
+  2026-11-24 (engine 74beadf5, `temporalCapture(N, 5, …setTimeOfDay(…, 0.95))`, N = 60 then 150, two jumps a case),
+  the item closed:
+
+  | reflections | first night frame | ≤ 0.05 after |
+  |---|---|---|
+  | RTR as selected | 0.23 / 0.24 | 94 / 100 ms |
+  | `disable(Reflections)` | 0.38 / 0.73 | 157 / 1316 ms |
+  | back to RTR | 0.18 / 0.38 | 66 / 533 ms |
+  | `select(Reflections, SSREffect)` | 0.28 / 0.17 | never in 1.5 s (0.10) / 61 ms |
+
+  The first night frame is about ten times lower than on 2026-11-04, and **what is left does not follow RTR**: it is
+  as large or larger with the reflections off. The reflections' history was not its source. Amplified, it is still
+  a diagonal line of specks along the quay wall's edge, the same with RTR, without reflections and with SSR — its
+  cause is not looked for. ⚠️ In several of those night captures the sea box steps up later on its own (0.00 → 0.60
+  → 0.73) and decays over about 60 frames with the TAA off: night events of the scene (signals, lamps), not the
+  jump.
 
 > [!NOTE]
 > **One unexplained freeze, never reproduced** (Linux, 2026-11-03, during the contract's validation): in a `labyrinth`

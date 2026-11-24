@@ -4945,6 +4945,28 @@ everything after a `getGPUTimings("reset")`) was printed after `FinalComposite`,
 `setDeferredPunctualLights(1)`). **Fix:** a new label is inserted after the furthest entry of the same frame's previous
 records. A lower sample count on such a scope is normal: it exists only in the frames that recorded it.
 
+### Not reproduced: a terrain drawn before its PerLight descriptor set exists (0 in 20 launches, 2026-11-24, its item closed)
+
+Seen by the Windows peer on 2026-10-02 (RTX 3060 Laptop, `--disable-cef`, validation layers off), once in three
+launches of `lighten-marbles` — and twice that day on NVIDIA during the physics validation: four errors right after
+the terrain was created and before the 'Moon' cubemap loaded, on `TerrainSceneFloorDetailWindow` and
+`TerrainSceneFloor`:
+
+```
+[RenderableInstance] Descriptor set contract violation: the sealed pipeline layout declares the 'PerLight' set,
+but the renderable instance cannot provide it. The draw call is skipped.
+```
+
+The draw is skipped: no crash, no VUID, and the next launches were clean. It read as a load-time race — the
+terrain's renderable instance drawn before the scene's lights give it its per-light set — and the engine item
+`lighten-marbles-perlight-descriptor-race` kept it until 2026-11-24 (engine 74beadf5): **0 time in 20 launches**,
+8 on Linux (RTX 3070 Ti, the layer loaded) and 12 on Windows (RTX 3500 Ada: six without the layer as on the day it
+was seen, six with it), the terrain and its detail window loading before the cubemap in every journal.
+
+⚠️ Which change removed it is not known, and the Windows machine is no longer the one of 2026-10-02. **If that
+message comes back, it is this race**: reopen it with the launch count and the device, and look at which side is
+late — the renderable instance's per-light resources, or the light set's.
+
 ## Shader/GLSL Pitfalls
 
 ### The ambient-pass chain has ONE lighting model — three legacy legs were deleted as dead (2026-10-08)

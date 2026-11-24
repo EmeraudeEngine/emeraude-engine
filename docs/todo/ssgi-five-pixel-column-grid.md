@@ -30,26 +30,36 @@ at 1280x720, 6.82 with the autocorrelation broken to 0.37-0.41 at lags 4-7. 1280
 size. Suspects: a tile or thread-group size, a half-resolution buffer whose size does not divide evenly at 1280 (640
 against an 8- or 16-wide tile), a sample pattern keyed on the pixel coordinate.
 
-## Re-checked on Linux at 1280 × 720 (2026-11-24, RTX 3070 Ti, engine `develop` 94632582) — no grid
+## Re-checked on both OS (2026-11-24, engine `develop` 74beadf5) — STILL THERE, on Linux too: it is the scene and the size, not the machine
 
-The first step below, on two other scenes (`global-illumination`, `sponza`; `JungleRuins` option 1 was not loaded),
-window-less at 1280 × 720, the screen-space lane selected (`IndirectDiffuse: SSGIEffect`), `IndirectDiffuse` on, off,
-on again. Rows 400-700:
+Window-less at 1280 × 720, the screen-space lane selected (`IndirectDiffuse: SSGIEffect`), `IndirectDiffuse` on, off,
+on again, a capture 5 s after each switch. The metric, rebuilt by the Windows peer and run identically on Linux: luma
+of the 8-bit values over rows 400-700; P the column profile, D its first difference; **A = std(D)**; the spectrum of D
+at a period over its median; the autocorrelation of D at lags 3 to 8.
 
-| scene | step standard deviation, SSGI on / off / on | spectrum at a 5 px period (× its median), on / off |
-|---|---|---|
-| `global-illumination` | 4.11 / 4.68 / 4.18 | 1.1 / 1.1 |
-| `sponza` | 23.5 / 25.4 / 22.9 | 2.2 / 2.6 |
+| scene | machine | A, SSGI on / off / on | D's spectrum at 5 px, on / off | autocorrelation of D, on |
+|---|---|---|---|---|
+| `jungle-ruins --demo-options 1` | Windows, RTX 3500 Ada | **0.856 / 0.105 / 0.866** | ×38.3 / ×1.5 | −0.41 −0.15 −0.05 −0.15 −0.39 −0.31 |
+| `jungle-ruins --demo-options 1` | Linux, RTX 3070 Ti | **0.969 / 0.124 / 0.958** | ×37.6 / ×1.5 | −0.38 −0.10 −0.02 −0.10 −0.36 −0.36 |
+| `global-illumination` | Windows / Linux | 1.42 / 1.48 / 1.48 — 1.77 / 1.88 / 1.82 | ×1.4 / ×1.5 — ×1.4 / ×1.4 | flat (0.00) |
+| `sponza` | Windows / Linux | 4.96 / 4.09 / 4.83 — 5.57 / 4.97 / 5.39 | ×2.2 / ×2.0 — ×1.9 / ×2.2 | no period |
 
-SSGI raises neither (Windows: 6.8 against 0.09), and the autocorrelation of the column profile falls smoothly in both
-states (lags 4 to 7: 0.29 to −0.04 on the first scene, on as off) where Windows broke to 0.37-0.41. So 1280 × 720
-alone does not draw the grid: it takes that machine (RTX 3500 Ada, its driver) too. To repeat on Windows on the
-current engine before anything is read into the code.
+- **The two machines give the same grid on `jungle-ruins` option 1**: the step is 8 times its SSGI-off value, the
+  strongest periods are 10.07 px and 5.02 px (the fundamental and its harmonic), on both. The Windows captures also
+  show lines across the whole width at irregular heights (y ≈ 225, 315, 365, 405, 455, 495, 545, 585, 635, 685).
+- **It does not show on `global-illumination` nor on `sponza`, on either machine.** `jungle-ruins` option 1 renders
+  grey-white and untextured-looking; whether the other scenes have no grid or hide it under their textures is not
+  known.
+- ⚠️ A first Linux check that day, on those two scenes only, was read as "it takes the Windows machine": wrong, and
+  corrected here by the peer's remark. The 2026-10-18 Linux check found no grid at 1920 × 1080, where Windows had
+  none either.
+- The per-pixel step (the standard deviation of the horizontal step over the band: 1.5 to 1.8 on `jungle-ruins`,
+  on as off) does not see the grid; A does.
 
 ## What remains
 
-- ~~Confirm cross-platform: SSGI on Linux at 1280x720~~ — done on 2026-11-24, above (a window-less instance IS
-  1280 × 720; the live-resize crash this line feared no longer reproduces, `docs/caution-points.md`).
+- ~~Confirm cross-platform: SSGI on Linux at 1280x720~~ — done on 2026-11-24, above: it reproduces (a window-less
+  instance IS 1280 × 720; the live-resize crash this line feared no longer reproduces, `docs/caution-points.md`).
 - Read SSGIEffect for a per-column or per-tile pattern tied to the resolution (a half-resolution pass, a tile size, a
   jitter or noise texture period) — 5 px at 1280 wide.
 - Verify: the grid gone on Windows (step standard deviation near the SSGI-off value), Linux unchanged.

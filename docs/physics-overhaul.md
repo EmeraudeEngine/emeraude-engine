@@ -325,7 +325,8 @@ idea in the `docs/todo/` of the repository that must change (ids in § 4).
   10.000 m/s, ±10 m/s, lands at V off; citadel's west flight climbed grounded at 1.4 m/s (top y 10.01); 18 demo
   launches clean. Seen there, not physics: citadel's teardown VUIDs (item `texture-destroyed-while-upload-in-flight`),
   terrain's 60 s shutdown during its loads (`shutdown-hangs-after-act-removal`, closed 2026-10-07: the wait is the load, item `act-load-blocks-main-thread`), the PerLight race twice on NVIDIA
-  (`lighten-marbles-perlight-descriptor-race`).
+  (the item `lighten-marbles-perlight-descriptor-race`, closed on 2026-11-24: 0 in 20 launches, `docs/caution-points.md`
+  § *Not reproduced: a terrain drawn before its PerLight descriptor set exists*).
 - **P4, the owner's play test (2026-10-02, citadel)**: (1) the three paladins vanished — a character met twice by the
   physics step (the octree's `expand()` kept a splitting sector's elements AND filed them in the children: ~100 statics
   and a paladin 2 to 7 times per cycle) collided with its own capsule and sank under the ground. Fixed in the octree
