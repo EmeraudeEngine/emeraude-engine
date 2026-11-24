@@ -53,7 +53,7 @@ planes, and the scalar COPY is what went out of sync.
 | `AtmosphericFog` | 3 | `emRelativePosition()` + `emView.cameraPosition` |
 | `VolumetricScattering` | 5 (after the cascade block at 4) | the same |
 | `SSR` trace / resolve | 2 / 6 (`SSRResolveInputView`) | positions, `emUVFromView()`, `emDepthFromView()` |
-| `SSGI` horizon / trace | 2 / 3 (4 with the sky visibility) | positions, `emUVFromView()` |
+| `SSGI` horizon / trace | 2 / 4 (5 with the sky visibility; the material properties took binding 3) | positions, `emUVFromView()` |
 
 `VolumetricLight` only lost two dead push fields. `RTGI` took its sky-ray distance from the frozen `farPlane`
 (1000 m): it now reads the REAL far plane of the main view, so geometry between 1 km and the view distance hides the

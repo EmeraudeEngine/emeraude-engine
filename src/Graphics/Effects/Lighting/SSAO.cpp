@@ -35,6 +35,7 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/Effects/Shared/GBufferTexelGLSL.hpp"
 #include "Graphics/Effects/Shared/MarchDitherGLSL.hpp"
 #include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
 #include "Graphics/Renderer.hpp"
@@ -58,6 +59,10 @@ namespace EmEn::Vulkan
 namespace
 {
 	using namespace EmEn;
+
+	/** @brief How many G-buffer texels a pixel of the occlusion pass covers along each side: it runs at half resolution.
+	 * The ONE statement of it — create() sizes the targets with it and gives it to the shader (GBufferTexelGLSL). */
+	constexpr uint32_t Reduction{2};
 
 	/** @brief The view reconstruction's binding (after the three samplers: getInputLayout(3, 1)). */
 	constexpr uint32_t ViewBinding{3};
@@ -116,7 +121,14 @@ vec3 hemispherePoint (uint i, vec2 noise)
 
 void main()
 {
-	float centerDepth = texture(depthTex, vUV).r;
+	/* The G-buffer texel this pixel stands for (GBufferTexelGLSL): at half resolution vUV is the corner four texels
+	 * share, where a NEAREST read returns one of the four on the rounding of the UV (the 10 px column grid at
+	 * 1280 x 720, graphics doc 13-12 § 45). Depth, material properties and normal come from THAT texel, and the
+	 * centre is unprojected at its centre, never at vUV. */
+	const ivec2 gbufferSize = textureSize(depthTex, 0);
+	const ivec2 centerTexel = emGBufferTexel(gbufferSize);
+	const vec2 centerUV = emGBufferTexelUV(centerTexel, gbufferSize);
+	float centerDepth = texelFetch(depthTex, centerTexel, 0).r;
 
 	/* Skip far-plane fragments. */
 	if (centerDepth >= 1.0)
@@ -127,18 +139,18 @@ void main()
 
 	/* A surface that takes no ambient occlusion (aoResponse 0: an unlit one, whose normal is a placeholder) gets none
 	 * here, so the blur cannot spread a value computed around that placeholder onto its neighbours. */
-	if ((uint(texture(materialPropsTex, vUV).g * 255.0) >> 4u) == 0u)
+	if ((uint(texelFetch(materialPropsTex, centerTexel, 0).g * 255.0) >> 4u) == 0u)
 	{
 		outAO = 1.0;
 		return;
 	}
 
-	vec3 centerPos = reconstructPosition(vUV, centerDepth);
+	vec3 centerPos = reconstructPosition(centerUV, centerDepth);
 
 	/* Read view-space normal from MRT normal buffer and convert to reconstruction space.
 	 * Reconstruction space matches view space for X and Y, but Z is negated
 	 * (linearDepth is positive, view-space Z is negative for objects in front of the camera). */
-	vec3 rawN = texture(normalTex, vUV).rgb;
+	vec3 rawN = texelFetch(normalTex, centerTexel, 0).rgb;
 
 	if (dot(rawN, rawN) < 0.0001)
 	{
@@ -151,7 +163,7 @@ void main()
 	/* DEPTH PRECISION (2026-10-27): a sample is "behind" only beyond what the depth buffer can tell apart — two steps,
 	 * the centre's and the sample's. A constant bias under the step turned the quantization into occlusion: the open
 	 * sea far away read ~50 % occluded, in row stripes (docs/caution-points.md § SSAO darkened the open sea). */
-	const float effectiveBias = max(bias, 2.0 * depthStepMetres(vUV, centerDepth, centerPos.z));
+	const float effectiveBias = max(bias, 2.0 * depthStepMetres(centerUV, centerDepth, centerPos.z));
 
 	/* Per-pixel random rotation: the engine's interleaved gradient noise on the PIXEL coordinates (2026-10-27). It was
 	 * fract(sin(dot(vUV, …)) * 43758.5453) on the UV: the precision of sin() over such arguments is the GPU's own, and
@@ -222,8 +234,8 @@ namespace EmEn::Graphics::Effects::Lighting
 		m_parameters.bias = settings.getOrSetDefault< float >(GraphicsPPAmbientOcclusionSSBiasKey, DefaultGraphicsPPAmbientOcclusionSSBias);
 		m_parameters.sampleCount = settings.getOrSetDefaultInRange< uint32_t >(GraphicsPPAmbientOcclusionSSSampleCountKey, DefaultGraphicsPPAmbientOcclusionSSSampleCount, MinGraphicsPPAmbientOcclusionSSSampleCount, MaxGraphicsPPAmbientOcclusionSSSampleCount);
 
-		const auto halfW = (width > 1) ? width / 2 : 1U;
-		const auto halfH = (height > 1) ? height / 2 : 1U;
+		const auto halfW = GBufferTexelGLSL::reducedSize(width, Reduction);
+		const auto halfH = GBufferTexelGLSL::reducedSize(height, Reduction);
 
 		/* AO computation target (half-res, single channel). */
 		if ( !m_aoTarget.create(renderer, halfW, halfH, VK_FORMAT_R8_UNORM, "SSAO_AO") )
@@ -280,7 +292,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		const auto & device = renderer.device();
 
 		const auto vertexModule = this->getFullscreenVertexShader();
-		const auto aoFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_AO_FS", Saphir::ShaderType::FragmentShader, std::string{SSAOHeader} + ViewReconstructionGLSL::sourceGLSL(0, ViewBinding) + EMEN_MARCH_DITHER_GLSL + SSAOComputeFragmentShader);
+		const auto aoFragment = shaderManager.getShaderModuleFromSourceCode(device, "SSAO_AO_FS", Saphir::ShaderType::FragmentShader, std::string{SSAOHeader} + GBufferTexelGLSL::sourceGLSL(Reduction) + ViewReconstructionGLSL::sourceGLSL(0, ViewBinding) + EMEN_MARCH_DITHER_GLSL + SSAOComputeFragmentShader);
 
 		if ( vertexModule == nullptr || aoFragment == nullptr )
 		{

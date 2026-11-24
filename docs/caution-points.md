@@ -20,6 +20,22 @@ Critical warnings, known pitfalls, and hard-won lessons for Emeraude Engine deve
 
 ## Graphics/Material System
 
+### Fixed: a half-resolution pass read the G-buffer on a texel CORNER — SSGI's 10 px grid at 1280 × 720 (2026-11-24)
+
+**Symptom** (`jungle-ruins` option 1, the screen-space lane, Windows and Linux): a thin line every 10 px across and
+every 45 px down over sloped ground, locked to the screen, at 1280 × 720 only (nothing at 1024 wide). SSAO drew the
+same lattice, far weaker.
+**Cause.** The centre of a half-resolution pixel is the corner four full-resolution texels share. Read there with the
+G-buffer's NEAREST samplers (`texture(depthTex, vUV)`) or by `texelFetch(…, ivec2(vUV * size), 0)`, the texel
+returned hangs on the rounding of the interpolated UV; the position unprojected at `vUV` with that depth is half a
+texel off its surface, on one side or the other with the pick. The rounding repeats with twice the odd factor of the
+reduced size (640 = 2⁷ · 5 → 10 px).
+**Fix.** `Effects/Shared/GBufferTexelGLSL.hpp`: `emGBufferTexel()` names the texel by integer arithmetic on
+`gl_FragCoord`, `emGBufferTexelUV()` gives its centre; SSGI (both passes) and SSAO read their centre from that texel
+and unproject at its centre. Far slope, profile folded on 10 px: 1.573 → 0.009.
+**Rule.** A pass smaller than the G-buffer NEVER reads it at `vUV`: graphics doc 13-12 § 45 (the measurements, the
+two traps of the measurement). The other reduced passes still do: item `reduced-passes-name-their-gbuffer-texel`.
+
 ### Fixed: SSAO darkened the open sea by 20-30 % and striped it on Intel (2026-10-27)
 
 **Symptom** (`water-world`, screen-space lane; found by the macOS peer's slot sweep — only `AmbientOcclusion` removed a

@@ -414,8 +414,10 @@ The trace pass is the interesting one:
   full-res texel (`texelFetch`) but unprojected the half-res pixel's own centre — half a full-res
   pixel away — so the ray origin sat off the surface by that offset times the depth slope, a bias
   along the view ray on a floor seen at a grazing angle. The NDC now comes from the fetched texel.
-  ⚠️ `RTAO.cpp` (one site) and `SSR.cpp` carry the same pattern — engine `docs/todo/`
-  `half-res-unprojection-texel-centre-rtao-ssr`.
+  ⚠️ `RTAO.cpp` (one site) and `SSR.cpp` carry the same pattern, and the texel itself is still picked on the
+  rounding of `vUV` (`ivec2(vUV * size)`: a texel corner at half resolution). The shared rule since 2026-11-24 is
+  `Effects/Shared/GBufferTexelGLSL.hpp` (graphics doc 13-12 § 45), applied to SSGI and SSAO; the other reduced
+  passes are engine item `reduced-passes-name-their-gbuffer-texel`.
 - **⚠️⚠️ Temporal stability — the trace has NO accumulation of its own, and it shows under TAA.**
   The trace is deterministic (one mirror ray per texel, per-pixel gather rotation, no frame term),
   so on a parked camera with the jitter OFF the reflection is stable: **0.052** on the brick cube's

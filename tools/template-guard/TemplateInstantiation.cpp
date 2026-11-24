@@ -163,6 +163,7 @@
 #include "Graphics/Effects/Shared/AtmosphereGLSL.hpp"
 #include "Graphics/Effects/Shared/CSMSamplingGLSL.hpp"
 #include "Graphics/Effects/Shared/CloudVolumeGLSL.hpp"
+#include "Graphics/Effects/Shared/GBufferTexelGLSL.hpp"
 #include "Graphics/Effects/Shared/IrradianceProbesGLSL.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"

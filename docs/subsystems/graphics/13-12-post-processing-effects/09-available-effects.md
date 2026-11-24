@@ -4,7 +4,7 @@
 
 | Effect | File | Passes | Dependencies |
 |--------|------|--------|-------------|
-| **SSAO** | `Effects/Lighting/SSAO.hpp/cpp` | Multi-pass | Depth, Normals |
+| **SSAO** | `Effects/Lighting/SSAO.hpp/cpp` | Multi-pass, half-res (its centre: the G-buffer texel of § 45) | Depth, Normals, MaterialProps |
 | **SSR** | `Effects/Lighting/SSR.hpp/cpp` | 5-pass (Trace→Resolve→BlurH→BlurV→Composite) | Depth, Normals, HDR |
 | **VeilingGlare** (ex-Bloom) | `Effects/Camera/VeilingGlare.hpp/cpp` | Multi-pass | HDR |
 | **DepthOfField** | `Effects/Camera/DepthOfField.hpp/cpp` | 7-pass (Focus→Setup→DilateH/V→FarGather→NearGather→Composite) | Depth, MaterialProps, **camera-materialized** |
