@@ -27,6 +27,8 @@
 #include "MeshShadingSurfaceHelper.hpp"
 
 /* STL inclusions. */
+#include <memory>
+#include <set>
 #include <sstream>
 #include <string>
 
@@ -35,7 +37,9 @@
 #include "Graphics/Geometry/MeshShadingSurface.hpp"
 #include "Graphics/Material/Interface.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/Types.hpp"
 #include "Saphir/Code.hpp"
+#include "Saphir/Declaration/Function.hpp"
 #include "Saphir/Keys.hpp"
 #include "Saphir/MeshShader.hpp"
 #include "Saphir/Program.hpp"
@@ -134,7 +138,7 @@ namespace EmEn::Saphir::Generator
 	}
 
 	bool
-	generateMeshShadingSurface (const Abstract & generator, const Graphics::Material::Interface & material, TaskShader & taskShader, MeshShader & meshShader, const std::string & cullingMatrix) noexcept
+	generateMeshShadingSurface (const Abstract & generator, const Graphics::Material::Interface & material, TaskShader & taskShader, MeshShader & meshShader, const std::string & cullingMatrix, bool skirts) noexcept
 	{
 		const std::string grid{MatrixPC(PushConstant::Component::MeshSurfaceGrid)};
 		const std::string view{MatrixPC(PushConstant::Component::MeshSurfaceView)};
@@ -256,7 +260,7 @@ namespace EmEn::Saphir::Generator
 			"if ( gl_LocalInvocationIndex == 0u ) {" << Line::End <<
 			"	/* Skirts only toward a COARSER neighbour (W, E, N, S bits, as msEdges()). */" << Line::End <<
 			"	uint skirtEdges = 0u;" << Line::End <<
-			"	if ( !tileCulled && geometryShare > 0.0 && subdivision > 1u ) {" << Line::End <<
+			"	if ( " << (skirts ? "true" : "false") << " && !tileCulled && geometryShare > 0.0 && subdivision > 1u ) {" << Line::End <<
 			"		const float g = " << grid << ".z;" << Line::End <<
 			"		skirtEdges |= msNeighbourSubdivision(tileOrigin - vec2(g, 0.0)) < subdivision ? 1u : 0u;" << Line::End <<
 			"		skirtEdges |= msNeighbourSubdivision(tileOrigin + vec2(g, 0.0)) < subdivision ? 2u : 0u;" << Line::End <<

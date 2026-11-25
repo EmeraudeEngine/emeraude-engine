@@ -64,3 +64,18 @@ build:
 subdivision with the same functions (`msNeighbourSubdivision()`) and hangs a skirt only on an edge it shares with a
 coarser tile — the only edges that can crack. Skirts on every edge showed as bright one-pixel lines along convex folds:
 the skirt's top ties in depth with the fold and its vertical strip has degenerate UV derivatives.
+
+⚠️ **No skirt in an additive light pass** (owner decision 2026-11-25; `generateMeshShadingSurface()`'s `skirts`
+argument, false for `Graphics::renderPassIsLightPass()`): the coarser-neighbour skirts still drew a bright DOTTED
+line — one pixel a cell along the ring where the subdivision changes, seen on the seabed of `water-world` on Linux
+and Windows, on both lanes. A RenderDoc pixel history gave the mechanism: the ambient pass writes the surface and
+rejects the skirt's top row by depth (0.9886910 against 0.9886830); the sun's pass tests `LESS_OR_EQUAL` under a
+slope-scaled bias of −1 (`Vulkan::GraphicsPipeline`), which lands its fragments 4 × 10⁻⁵ nearer than the stored depth
+— so the surface AND the skirt both pass and their light adds up (0.43 then 0.875 in red). The 2026-09-28 lines were
+the same double lighting, not the UV derivatives. A skirt is now drawn by the ambient pass (and the shadow pass)
+only: it plugs its crack lit by the ambient alone. Verified at the pose (`setPosition(-401, -2.55, -189)`,
+`lookAt(-401, -3.4, -180)`, the sea's light off): the line is gone on the ray-traced and screen-space lanes, 0 VUID.
+⚠️ Wrong leads on the way, not to retry: the CDLOD's border against the window, a base height misread at a lattice
+point, `invariant` clip positions. ⚠️ The general case stays: ANY geometry that puts two fragments within the light
+passes' depth margin on one pixel is lit twice (a stencil mark a light pass sets and tests would end it for every
+geometry — not done).

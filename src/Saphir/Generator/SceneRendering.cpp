@@ -493,7 +493,7 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		if ( !generateMeshShadingSurface(*this, *this->getMaterialInterface(), *taskShader, *meshShader, cullingMatrix) )
+		if ( !generateMeshShadingSurface(*this, *this->getMaterialInterface(), *taskShader, *meshShader, cullingMatrix, !Graphics::renderPassIsLightPass(m_renderPassType)) )
 		{
 			Tracer::error(ClassId, "Unable to generate the mesh-shading surface stages !");
 

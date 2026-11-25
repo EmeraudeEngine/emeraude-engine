@@ -98,8 +98,13 @@ namespace EmEn::Saphir::Generator
 	 * @param taskShader The task stage.
 	 * @param meshShader The mesh stage.
 	 * @param cullingMatrix The task stage's local-to-clip matrix (declareMeshSurfaceCullingMatrix()), empty for none.
+	 * @param skirts Whether the pass draws the skirts. False for an ADDITIVE light pass (owner decision 2026-11-25): a
+	 * skirt's top row ties in depth with the surface it hangs from, a light pass tests LESS_OR_EQUAL under a
+	 * slope-scaled bias, so both fragments passed and their light added up — one bright pixel a cell along the ring
+	 * where the subdivision changes (docs/subsystems/saphir/21-the-mesh-shading-surface.md). The ambient pass still
+	 * draws them: a skirt plugs its crack, lit by the ambient alone.
 	 * @return bool
 	 */
 	[[nodiscard]]
-	bool generateMeshShadingSurface (const Abstract & generator, const Graphics::Material::Interface & material, TaskShader & taskShader, MeshShader & meshShader, const std::string & cullingMatrix) noexcept;
+	bool generateMeshShadingSurface (const Abstract & generator, const Graphics::Material::Interface & material, TaskShader & taskShader, MeshShader & meshShader, const std::string & cullingMatrix, bool skirts) noexcept;
 }

@@ -579,7 +579,7 @@ namespace EmEn::Saphir::Generator
 			return false;
 		}
 
-		if ( !generateMeshShadingSurface(*this, *this->getMaterialInterface(), *taskShader, *meshShader, cullingMatrix) )
+		if ( !generateMeshShadingSurface(*this, *this->getMaterialInterface(), *taskShader, *meshShader, cullingMatrix, true) )
 		{
 			Tracer::error(ClassId, "Unable to generate the mesh-shading surface stages of a shadow map !");
 
