@@ -237,6 +237,32 @@ namespace EmEn::Graphics::Renderable
 		return true;
 	}
 
+	std::optional< Scenes::SeaCausticSettings >
+	OceanResource::causticSettings () const noexcept
+	{
+		if ( m_geometry == nullptr )
+		{
+			return std::nullopt;
+		}
+
+		const auto tuning = m_geometry->causticTuning();
+
+		return Scenes::SeaCausticSettings{.strength = tuning.strength, .softening = tuning.softening, .fadeDepth = tuning.fadeDepth};
+	}
+
+	bool
+	OceanResource::setCausticSettings (const Scenes::SeaCausticSettings & settings) noexcept
+	{
+		if ( m_geometry == nullptr || !settings.isValid() )
+		{
+			return false;
+		}
+
+		m_geometry->setCausticTuning({.strength = settings.strength, .softening = settings.softening, .fadeDepth = settings.fadeDepth});
+
+		return true;
+	}
+
 	bool
 	OceanResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{

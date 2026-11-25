@@ -908,9 +908,24 @@ namespace EmEn::Scenes
 					entry.projectionKind = NoProjection;
 					entry.projectionIndex = 0.0F;
 					entry.projectionBoost = 0.0F;
-					entry.unused0 = 0.0F;
+					entry.throughSea = 0.0F;
+					entry.seaAttenuationR = 0.0F;
+					entry.seaAttenuationG = 0.0F;
+					entry.seaAttenuationB = 0.0F;
+					entry.seaLevel = 0.0F;
 					entry.unused1 = 0.0F;
 					entry.projectionMatrix.fill(0.0F);
+
+					/* What the sea does to this light under its level, as the light's published block carries it: the
+					 * traced lanes shade their hits with the light the raster shades the same points with. */
+					if ( const auto seaWater = light->publishedSeaWater(readStateIndex); seaWater.has_value() )
+					{
+						entry.throughSea = 1.0F;
+						entry.seaAttenuationR = (*seaWater)[0];
+						entry.seaAttenuationG = (*seaWater)[1];
+						entry.seaAttenuationB = (*seaWater)[2];
+						entry.seaLevel = (*seaWater)[3];
+					}
 
 					lightIndex++;
 				}

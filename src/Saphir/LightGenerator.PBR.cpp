@@ -40,6 +40,7 @@
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
+#include "Graphics/OceanWaves.hpp"
 #include "Graphics/Types.hpp"
 #include "Math/Base.hpp"
 #include "PixelFactory/Types.hpp"
@@ -1024,6 +1025,96 @@ namespace EmEn::Saphir
 				"	  cloudShadow = exp(-min(beer.b, beer.g * max(csMap.z - beer.r, 0.0))); } } }" << Line::End;
 		}
 
+		/* ⚠️ THE SUN UNDER A SEA (Nov 2026, engine item underwater-caustics-and-depth-light; owner decisions 2026-11-23
+		 * and 2026-11-25) — what the light's own path through the water does to it, on every surface under the sea
+		 * level, seen from above through the surface as from under it:
+		 *  - it crosses the surface (Schlick's transmission, F0 = 0.02) and refracts (n = 1.33);
+		 *  - it is absorbed along its path, per channel: exp(-attenuation × depth / cos(refracted angle)) — the red goes
+		 *    first, a deep seabed is dim and blue;
+		 *  - the waves focus it — the CAUSTICS. A ray that crosses the surface at x lands at
+		 *    x' = x + path × (the refracted direction - k ∇h(x)), k = 1 - 1/n, so the irradiance is
+		 *    1 / |det(I - k × path × H)|, H the Hessian of the wave height: Graphics::OceanWaves' curvature cascades,
+		 *    read through the bindless table at the point of the level the ray crossed. Each cascade is read at the mip
+		 *    whose texel is the softening × the depth × the cascade's weight: the waves shorter than that have crossed
+		 *    their focus above the receiver and their light is spread again — that low-pass is what turns the sharp net
+		 *    of a shallow water into the soft dapple of a deep one. A sheltered water keeps the sheltered share of each
+		 *    cascade (the shelter map), like the surface itself; its waves are that much flatter, so they focus that
+		 *    much deeper and their low-pass is that much narrower (the weight above).
+		 * The light carries it all (Scenes::SeaLight), as it carries the clouds' shadow;
+		 * a light that carries no sea skips it on a uniform branch. The sea's OWN surface is not under itself.
+		 * The depth is taken from where the surface really STANDS near the level (owner, 2026-11-25, on screen: a beach
+		 * a wave had just left still showed the caustics): the displacement cascades, read at the lattice point one
+		 * round of x - D(x) lands on, within the waves' reach of the level; deeper, the level at rest is close enough.
+		 * ⚠️ One branch of the refraction map only: past the first fold the true irradiance is a sum over several
+		 * surface points; the low-pass above is what keeps the single branch honest. ⚠️ The surface read here is the
+		 * cascades' sum, not the drawn mesh's interpolation (Generator::ocSurfaceRiseAt()): a centimetre apart at most
+		 * on the finest cell, and the mesh's own fade of a cascade with the distance is not applied.
+		 * References: J. Guardado, D. Sánchez-Crespo, "Rendering Water Caustics", GPU Gems, ch. 2, 2004 (the
+		 * refracted-ray model); E. Wallace, "WebGL Water", 2011 (the irradiance as an area ratio of the refracted
+		 * wavefront). */
+		Code{fragmentShader} << "vec3 seaLight = vec3(1.0);" << Line::End;
+
+		if ( enableCloudShadow && !m_surfaceIsVolumeInterface )
+		{
+			const std::string textures{Bindless::Textures2D};
+			const std::string nonUniform{GLSL::Functions::NonUniformEXT};
+			const std::string position = std::string{ShaderVariable::PositionWorldSpace} + ".xyz";
+			const auto curvatureTexels = std::to_string(Graphics::OceanWaves::Resolution) + ".0";
+
+			Code{fragmentShader} <<
+				"{ const vec4 slWater = " << LightUB(UniformBlock::Component::SeaWater) << ";" << Line::End <<
+				"  const vec4 slSurface = " << LightUB(UniformBlock::Component::SeaSurface) << ";" << Line::End <<
+				"  const float slRest = slWater.w - (" << position << ").y;" << Line::End <<
+				"  if ( " << LightUB(UniformBlock::Component::SeaTuning) << ".y > 0.5 && slRest > -slSurface.w )" << Line::End <<
+				"  { const vec4 slCascades = " << LightUB(UniformBlock::Component::SeaCascades) << ";" << Line::End <<
+				"	const vec4 slTextures = " << LightUB(UniformBlock::Component::SeaTextures) << ";" << Line::End <<
+				"	const vec4 slShelter = " << LightUB(UniformBlock::Component::SeaShelter) << ";" << Line::End <<
+				"	const vec4 slShares = " << LightUB(UniformBlock::Component::SeaShares) << ";" << Line::End <<
+				"	const uint slShelterSlot = floatBitsToUint(slTextures.w);" << Line::End <<
+				"	const bool slMoving = slShelterSlot != 0xFFFFFFFFu;" << Line::End <<
+				"	/* Where the surface really stands over this point, near the level: the displacement cascades, read at the" << Line::End <<
+				"	 * lattice point one round of x - D(x) lands on. Past the waves' reach the level at rest is close enough. */" << Line::End <<
+				"	float slRise = 0.0;" << Line::End <<
+				"	if ( slMoving && slRest < slSurface.w )" << Line::End <<
+				"	{ const float slOpenHere = textureLod(" << textures << "[" << nonUniform << "(slShelterSlot)], ((" << position << ").xz - slShelter.xy) * slShelter.zw, 0.0).r;" << Line::End <<
+				"	  vec2 slLattice = (" << position << ").xz;" << Line::End <<
+				"	  for ( int slRound = 0; slRound < 2; ++slRound )" << Line::End <<
+				"	  { vec3 slDisplacement = vec3(0.0);" << Line::End <<
+				"		for ( int slCascade = 0; slCascade < 3; ++slCascade )" << Line::End <<
+				"		{ const uint slSlot = floatBitsToUint(slSurface[slCascade]);" << Line::End <<
+				"		  const float slWeight = mix(slShares[slCascade], 1.0, slOpenHere);" << Line::End <<
+				"		  if ( slSlot != 0xFFFFFFFFu && slWeight > 0.0 )" << Line::End <<
+				"		  { slDisplacement += slWeight * textureLod(" << textures << "[" << nonUniform << "(slSlot)], slLattice / slCascades[slCascade], 0.0).xyz; } }" << Line::End <<
+				"		if ( slRound == 0 ) { slLattice = (" << position << ").xz - slDisplacement.xz; } else { slRise = slDisplacement.y; } }" << Line::End <<
+				"	  slRise *= 1.0 - smoothstep(0.5 * slSurface.w, slSurface.w, slRest); }" << Line::End <<
+				"	const float slDepth = slRest + slRise;" << Line::End <<
+				"	if ( slDepth > 0.0 )" << Line::End <<
+				"	{ const vec3 slDown = normalize(" << LightUB(UniformBlock::Component::DirectionWorldSpace) << ".xyz);" << Line::End <<
+				"	  const float slCosIncident = clamp(-slDown.y, 0.0, 1.0);" << Line::End <<
+				"	  const float slSinRefracted = sqrt(max(1.0 - slCosIncident * slCosIncident, 0.0)) / 1.33;" << Line::End <<
+				"	  const float slCosRefracted = sqrt(max(1.0 - slSinRefracted * slSinRefracted, 0.0));" << Line::End <<
+				"	  const float slPath = slDepth / slCosRefracted;" << Line::End <<
+				"	  seaLight = (1.0 - (0.02 + 0.98 * pow(1.0 - slCosIncident, 5.0))) * exp(-slWater.xyz * slPath);" << Line::End <<
+				"	  if ( slCascades.w > 0.0 && slMoving )" << Line::End <<
+				"	  { const float slHorizontal = length(slDown.xz);" << Line::End <<
+				"		const vec2 slAxis = slHorizontal > 1.0e-5 ? slDown.xz / slHorizontal : vec2(0.0);" << Line::End <<
+				"		const vec2 slCrossing = (" << position << ").xz - slAxis * (slSinRefracted / slCosRefracted) * slDepth;" << Line::End <<
+				"		const float slOpen = textureLod(" << textures << "[" << nonUniform << "(slShelterSlot)], (slCrossing - slShelter.xy) * slShelter.zw, 0.0).r;" << Line::End <<
+				"		const vec2 slFootprint = max(abs(dFdx((" << position << ").xz)), abs(dFdy((" << position << ").xz)));" << Line::End <<
+				"		const float slPixel = max(slFootprint.x, slFootprint.y);" << Line::End <<
+				"		vec3 slCurvature = vec3(0.0);" << Line::End <<
+				"		for ( int slCascade = 0; slCascade < 3; ++slCascade )" << Line::End <<
+				"		{ const uint slSlot = floatBitsToUint(slTextures[slCascade]);" << Line::End <<
+				"		  if ( slSlot != 0xFFFFFFFFu )" << Line::End <<
+				"		  { const float slWeight = mix(slShares[slCascade], 1.0, slOpen);" << Line::End <<
+				"			const float slLevel = log2(max(max(slShares.w * slDepth * slWeight, slPixel) * " << curvatureTexels << " / slCascades[slCascade], 1.0));" << Line::End <<
+				"			slCurvature += slWeight * textureLod(" << textures << "[" << nonUniform << "(slSlot)], slCrossing / slCascades[slCascade], slLevel).xyz; } }" << Line::End <<
+				"		const float slFocus = 0.248 * slPath;" << Line::End <<
+				"		const float slArea = (1.0 - slFocus * slCurvature.x) * (1.0 - slFocus * slCurvature.y) - (slFocus * slCurvature.z) * (slFocus * slCurvature.z);" << Line::End <<
+				"		const float slCaustic = 1.0 / max(abs(slArea), 0.125);" << Line::End <<
+				"		seaLight *= mix(1.0, slCaustic, clamp(slCascades.w, 0.0, 1.0) * exp(-slDepth / max(" << LightUB(UniformBlock::Component::SeaTuning) << ".x, 0.01))); } } } }" << Line::End;
+		}
+
 		/* Compute radiance and final output. */
 		if ( lightType == LightType::Line )
 		{
@@ -1069,7 +1160,7 @@ namespace EmEn::Saphir
 		{
 			Code{fragmentShader} <<
 				"/* Light radiance. */" << Line::End <<
-				"const vec3 radiance = " << this->lightColor() << ".rgb * projectionColor * cloudShadow * " << this->lightIntensity() << " * " << LightFactor << ";" << Line::Blank;
+				"const vec3 radiance = " << this->lightColor() << ".rgb * projectionColor * cloudShadow * seaLight * " << this->lightIntensity() << " * " << LightFactor << ";" << Line::Blank;
 		}
 
 		/* Fragment color output. */

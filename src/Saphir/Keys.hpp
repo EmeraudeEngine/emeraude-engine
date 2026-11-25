@@ -928,6 +928,24 @@ namespace EmEn::Saphir
 				 * along the light) of the scene's Beer shadow map, and its bindless 2D slot. */
 				constexpr auto CloudShadowMatrix{"cloudShadowMatrix"};
 				constexpr auto CloudShadowIndex{"cloudShadowIndex"};
+				/* How a sea lets a directional light reach what lies under its level (Nov 2026, engine item
+				 * underwater-caustics-and-depth-light): seven vec4 at the END of both directional blocks, the mirror of
+				 * Scenes::SeaLight.
+				 * seaWater = (the attenuation per metre of path in the water, per channel; the sea level in metres),
+				 * seaCascades = (the tile side of each wave cascade in metres; the caustics' strength, 0 = none),
+				 * seaShelter = the shelter map's rectangle (first corner X, Z, 1 / side X, 1 / side Z),
+				 * seaShares = (what a sheltered water keeps of each cascade; the softening per metre of depth),
+				 * seaTextures = the bindless 2D slots of the three curvature cascades and of the shelter map (bit patterns),
+				 * seaTuning = (the depth the caustics fade over in metres; 1 when a sea is carried, else 0; unused),
+				 * seaSurface = (the bindless 2D slots of the three displacement cascades, bit patterns; the bound of the
+				 * surface's reach above and below the level, in metres). */
+				constexpr auto SeaWater{"seaWater"};
+				constexpr auto SeaCascades{"seaCascades"};
+				constexpr auto SeaShelter{"seaShelter"};
+				constexpr auto SeaShares{"seaShares"};
+				constexpr auto SeaTextures{"seaTextures"};
+				constexpr auto SeaTuning{"seaTuning"};
+				constexpr auto SeaSurface{"seaSurface"};
 			}
 		}
 

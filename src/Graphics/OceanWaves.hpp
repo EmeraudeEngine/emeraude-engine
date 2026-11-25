@@ -30,6 +30,7 @@
 #include <array>
 #include <complex>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -112,6 +113,13 @@ namespace EmEn::Graphics
 	 * every output: the foam stays with the water, not with the moving crest. References: Tessendorf 2001 § 4.4.3 (the
 	 * Jacobian), J. Dupuy & E. Bruneton, "Real-time Animation and Rendering of Ocean Whitecaps", SIGGRAPH Asia 2012
 	 * (whitecaps from the Jacobian), the accumulate-and-decay of Crest and GodotOceanWaves (MIT).
+	 * @note The curvature (engine item underwater-caustics-and-depth-light, owner decision 2026-11-25): the resolve
+	 * pass also writes the Hessian of each cascade's height, (∂²h/∂x², ∂²h/∂z², ∂²h/∂x∂z, 0) in 1/m — central
+	 * differences of the slopes over the wrapping tile — into one more RGBA16F 2D array, WITH a mip chain rebuilt every
+	 * update (linear blits). It is what a light pass reads to know how the surface focuses the sun on what lies under
+	 * it: a mip is the curvature of the waves that level can hold, the low-pass a deeper receiver asks for. Taken at
+	 * the UNDISPLACED lattice point, like every output: the choppy displacement moves the real surface by up to its
+	 * λ D, which this ignores.
 	 */
 	class OceanWaves final
 	{
@@ -125,6 +133,9 @@ namespace EmEn::Graphics
 
 			/** @brief Number of cascades. */
 			static constexpr uint32_t CascadeCount{3};
+
+			/** @brief Mip levels of the curvature output: the whole chain of a Resolution-sided layer, down to 1 texel. */
+			static constexpr uint32_t CurvatureMipLevels{9};
 
 			/**
 			 * @brief Constructs an ocean wave generator.
@@ -221,6 +232,58 @@ namespace EmEn::Graphics
 			}
 
 			/**
+			 * @brief Returns the displacement image (a 2D array, one layer per cascade, GENERAL layout).
+			 * @return const std::shared_ptr< Vulkan::Image > &
+			 */
+			[[nodiscard]]
+			const std::shared_ptr< Vulkan::Image > &
+			displacementImage () const noexcept
+			{
+				return m_displacementImage;
+			}
+
+			/**
+			 * @brief Returns the view of ONE cascade's displacement (a plain 2D view of its layer): what a pass that
+			 * reads the cascades through a table of 2D textures samples.
+			 * @param cascade The cascade index. @pre cascade < CascadeCount.
+			 * @return const std::shared_ptr< Vulkan::ImageView > & A null pointer for a cascade that does not exist.
+			 */
+			[[nodiscard]]
+			const std::shared_ptr< Vulkan::ImageView > &
+			displacementLayerView (uint32_t cascade) const noexcept
+			{
+				static const std::shared_ptr< Vulkan::ImageView > None;
+
+				return cascade < CascadeCount ? *std::next(m_displacementLayerViews.begin(), cascade) : None;
+			}
+
+			/**
+			 * @brief Returns the curvature image (a 2D array, one layer per cascade, CurvatureMipLevels mips, GENERAL
+			 * layout): (∂²h/∂x², ∂²h/∂z², ∂²h/∂x∂z, 0) in 1/m.
+			 * @return const std::shared_ptr< Vulkan::Image > &
+			 */
+			[[nodiscard]]
+			const std::shared_ptr< Vulkan::Image > &
+			curvatureImage () const noexcept
+			{
+				return m_curvatureImage;
+			}
+
+			/**
+			 * @brief Returns the view of ONE cascade's curvature (a plain 2D view over every mip of its layer).
+			 * @param cascade The cascade index. @pre cascade < CascadeCount.
+			 * @return const std::shared_ptr< Vulkan::ImageView > & A null pointer for a cascade that does not exist.
+			 */
+			[[nodiscard]]
+			const std::shared_ptr< Vulkan::ImageView > &
+			curvatureView (uint32_t cascade) const noexcept
+			{
+				static const std::shared_ptr< Vulkan::ImageView > None;
+
+				return cascade < CascadeCount ? *std::next(m_curvatureViews.begin(), cascade) : None;
+			}
+
+			/**
 			 * @brief Returns the sea state.
 			 * @return const OceanWaveParameters &
 			 */
@@ -265,12 +328,16 @@ namespace EmEn::Graphics
 			std::shared_ptr< Vulkan::Image > m_slopeImage;
 			std::shared_ptr< Vulkan::Image > m_foamImage;
 			std::shared_ptr< Vulkan::Image > m_previousDisplacementImage;
+			std::shared_ptr< Vulkan::Image > m_curvatureImage;
 			std::shared_ptr< Vulkan::ImageView > m_spectrumView;
 			std::array< std::shared_ptr< Vulkan::ImageView >, 2 > m_fieldViews;
 			std::shared_ptr< Vulkan::ImageView > m_displacementView;
 			std::shared_ptr< Vulkan::ImageView > m_slopeView;
 			std::shared_ptr< Vulkan::ImageView > m_foamView;
 			std::shared_ptr< Vulkan::ImageView > m_previousDisplacementView;
+			std::shared_ptr< Vulkan::ImageView > m_curvatureStorageView;
+			std::array< std::shared_ptr< Vulkan::ImageView >, CascadeCount > m_curvatureViews;
+			std::array< std::shared_ptr< Vulkan::ImageView >, CascadeCount > m_displacementLayerViews;
 			std::shared_ptr< Vulkan::DescriptorSetLayout > m_descriptorSetLayout;
 			std::shared_ptr< Vulkan::DescriptorPool > m_descriptorPool;
 			std::unique_ptr< Vulkan::DescriptorSet > m_descriptorSet;

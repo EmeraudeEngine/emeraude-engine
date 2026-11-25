@@ -27,6 +27,7 @@
 #include "Scene.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -47,6 +48,7 @@
 #include "Graphics/Renderable/DynamicSkyResource.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/RenderTarget/Abstract.hpp"
+#include "Graphics/SeaCaustics.hpp"
 #include "Graphics/SkyAtmosphere.hpp"
 #include "Graphics/SkyEnvironment.hpp"
 #include "Graphics/TextureResource/TextureCubemap.hpp"
@@ -54,6 +56,7 @@
 #include "Math/Base.hpp"
 #include "Math/CartesianFrame.hpp"
 #include "Math/Vector.hpp"
+#include "Mutex.hpp"
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
 #include "Scenes/AVConsole/Manager.hpp"
 #include "Scenes/BindlessTextureSet.hpp"
@@ -61,7 +64,10 @@
 #include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/DirectionalShadowOptions.hpp"
 #include "Scenes/LightSet.hpp"
+#include "Scenes/SeaLevelInterface.hpp"
+#include "Scenes/SeaLight.hpp"
 #include "Scenes/StaticEntity.hpp"
+#include "Scenes/WaterMedium.hpp"
 #include "Tracer.hpp"
 #include "Vulkan/TextureInterface.hpp"
 
@@ -306,6 +312,138 @@ namespace EmEn::Scenes
 
 		/* The state THIS frame latched (beginRenderFrame()): the scene's own, never a copy kept by the renderer. */
 		m_cloudSet.recordShadowMap(commandBuffer, renderer, m_bindlessTextureSet, *sun, m_frameReadStateIndex);
+	}
+
+	void
+	Scene::syncSeaLight () noexcept
+	{
+		SeaLight seaLight{};
+
+		/* NOTE: The sea as the render thread reads it everywhere (Graphics::Renderer, the frame's sea). */
+		const auto * sea = m_seaLevel.get();
+		const auto * water = sea != nullptr ? sea->waterMedium() : nullptr;
+		const Graphics::SeaCaustics * caustics = nullptr;
+
+		if ( water != nullptr && this->isSeaLightEnabled() )
+		{
+			/* What a metre of the light's own path takes: the absorption and the backscattering (the forward
+			 * scattering keeps the light going down). The lit shader divides the depth by the refracted cosine. */
+			const auto attenuation = water->diffuseAttenuation(1.0F);
+
+			seaLight.attenuation = {attenuation[Base::Math::X], attenuation[Base::Math::Y], attenuation[Base::Math::Z]};
+			seaLight.level = sea->getLevel();
+			seaLight.enabled = true;
+
+			caustics = sea->caustics();
+		}
+
+		/* The textures the caustics read, in the bindless table: the ones of this frame replace the ones filed before
+		 * (another sea, a sea gone, or a sea whose GPU resources were created anew). */
+		SeaLightTextures wanted{};
+
+		if ( caustics != nullptr )
+		{
+			wanted = {caustics->curvature[0], caustics->curvature[1], caustics->curvature[2], caustics->shelter, caustics->displacement[0], caustics->displacement[1], caustics->displacement[2]};
+		}
+
+		const auto sameTextures = std::equal(wanted.cbegin(), wanted.cend(), m_seaLightTextures.cbegin(), [] (const auto & texture, const auto & filed) {
+			return texture == filed.texture;
+		});
+
+		if ( !sameTextures )
+		{
+			this->withdrawSeaLightTextures();
+
+			/* NOTE: Kept even when the filing below fails: it is tried once for a set of textures, not every frame. */
+			std::ranges::transform(wanted, m_seaLightTextures.begin(), [] (const auto & texture) {
+				return FiledSeaLightTexture{.texture = texture, .slot = SeaLight::NoTexture};
+			});
+
+			if ( caustics != nullptr && !this->fileSeaLightTextures() )
+			{
+				TraceError{ClassId} << "The textures of the sea's caustics cannot be filed in the bindless table: the sea draws no caustics.";
+
+				this->withdrawSeaLightTextures();
+			}
+		}
+
+		if ( caustics != nullptr && m_seaLightTextures[6].slot != SeaLight::NoTexture )
+		{
+			seaLight.cascadeSizes = caustics->cascadeSizes;
+			seaLight.strength = caustics->strength;
+			seaLight.shelterRectangle = caustics->shelterRectangle;
+			seaLight.shelteredShares = caustics->shelteredShares;
+			seaLight.softening = caustics->softening;
+			seaLight.curvatureSlots = {m_seaLightTextures[0].slot, m_seaLightTextures[1].slot, m_seaLightTextures[2].slot};
+			seaLight.shelterSlot = m_seaLightTextures[3].slot;
+			seaLight.fadeDepth = caustics->fadeDepth;
+			seaLight.displacementSlots = {m_seaLightTextures[4].slot, m_seaLightTextures[5].slot, m_seaLightTextures[6].slot};
+			seaLight.reach = caustics->reach;
+		}
+
+		const Base::MutexLock lock{m_seaLightAccess};
+
+		m_seaLight = seaLight;
+	}
+
+	void
+	Scene::withdrawSeaLightTextures () noexcept
+	{
+		for ( auto & filed : m_seaLightTextures )
+		{
+			if ( filed.slot != SeaLight::NoTexture )
+			{
+				m_bindlessTextureSet.unregisterTexture2D(filed.texture.get());
+
+				filed.slot = SeaLight::NoTexture;
+			}
+		}
+	}
+
+	bool
+	Scene::fileSeaLightTextures () noexcept
+	{
+		for ( auto & filed : m_seaLightTextures )
+		{
+			if ( filed.texture == nullptr || !filed.texture->isCreated() )
+			{
+				return false;
+			}
+
+			filed.slot = m_bindlessTextureSet.registerTexture2D(filed.texture);
+
+			if ( filed.slot == SeaLight::NoTexture )
+			{
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	void
+	Scene::updateSeaLight () const noexcept
+	{
+		SeaLight seaLight{};
+
+		{
+			const Base::MutexLock lock{m_seaLightAccess};
+
+			seaLight = m_seaLight;
+		}
+
+		/* ⚠️ The light-set mutex guards the CONTAINER: copy, then work outside it (updateCSMCascades()). */
+		std::vector< std::shared_ptr< Component::DirectionalLight > > directionalLights;
+
+		m_lightSet.forEachDirectionalLight([&directionalLights] (const auto & light) {
+			directionalLights.push_back(light);
+		});
+
+		/* Every directional light goes through the same water: the moon's light is absorbed and focused like the sun's. */
+		for ( const auto & light : directionalLights )
+		{
+			light->updateSeaLight(seaLight);
+		}
 	}
 
 	float

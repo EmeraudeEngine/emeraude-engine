@@ -415,6 +415,15 @@ namespace EmEn::Saphir
 				block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::CloudShadowMatrix);
 				block.addMember(Declaration::VariableType::Float, UniformBlock::Component::CloudShadowIndex);
 
+				/* How the sea lets the light through (Nov 2026): seven vec4, see Keys.hpp. */
+				block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaWater);
+				block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaCascades);
+				block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaShelter);
+				block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaShares);
+				block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaTextures);
+				block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaTuning);
+				block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaSurface);
+
 				return block;
 			}
 
@@ -502,6 +511,7 @@ namespace EmEn::Saphir
 		 * float intensity (4 bytes + padding to 16)
 		 * mat4 cloudShadowMatrix (64 bytes)
 		 * float cloudShadowIndex (4 bytes + padding to 16)
+		 * vec4[7] the sea's light (112 bytes)
 		 */
 		Declaration::UniformBlock block{set, binding, Declaration::MemoryLayout::Std140, UniformBlock::Type::DirectionalLightCSM, UniformBlock::Light};
 
@@ -523,6 +533,15 @@ namespace EmEn::Saphir
 		/* The volumetric clouds' shadow (Sep 2026): mat4 at float 84, the bindless slot at float 100. */
 		block.addMember(Declaration::VariableType::Matrix4, UniformBlock::Component::CloudShadowMatrix);
 		block.addMember(Declaration::VariableType::Float, UniformBlock::Component::CloudShadowIndex);
+
+		/* How the sea lets the light through (Nov 2026): seven vec4, see Keys.hpp. */
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaWater);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaCascades);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaShelter);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaShares);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaTextures);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaTuning);
+		block.addMember(Declaration::VariableType::FloatVector4, UniformBlock::Component::SeaSurface);
 
 		return block;
 	}

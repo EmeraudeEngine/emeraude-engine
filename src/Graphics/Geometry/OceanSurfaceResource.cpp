@@ -38,6 +38,7 @@
 #include "Graphics/Geometry/Interface.hpp"
 #include "Graphics/Geometry/OceanSurface.hpp"
 #include "Graphics/Geometry/Types.hpp"
+#include "Graphics/ImageViewTexture.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Graphics/SeaShelterMap.hpp"
 #include "Graphics/Types.hpp"
@@ -56,6 +57,7 @@
 #include "Vulkan/PhysicalDevice.hpp"
 #include "Vulkan/Queue.hpp"
 #include "Vulkan/Sampler.hpp"
+#include "Vulkan/TextureInterface.hpp"
 #include "Vulkan/TransferManager.hpp"
 #include "Vulkan/UniformBufferObject.hpp"
 
@@ -144,6 +146,7 @@ namespace EmEn::Graphics::Geometry
 		m_parameters = parameters;
 
 		this->setShelterTuning({.minimumPassage = parameters.shelterMinimumPassage, .fade = parameters.shelterFade, .waveShares = parameters.shelteredWaveShares});
+		this->setCausticTuning({.strength = parameters.causticStrength, .softening = parameters.causticSoftening, .fadeDepth = parameters.causticFadeDepth});
 
 		/* The level ranges and the geomorph table, as the terrain's (CDLODTerrainResource::load()). */
 		const auto ratio = std::clamp(m_parameters.morphStartRatio, 0.0F, 0.95F);
@@ -518,6 +521,31 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
+		/* The curvature cascades are low-passed by their mips: REPEAT, trilinear. */
+		{
+			VkSamplerCreateInfo createInfo{};
+			createInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+			createInfo.magFilter = VK_FILTER_LINEAR;
+			createInfo.minFilter = VK_FILTER_LINEAR;
+			createInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+			createInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			createInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+			createInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+			createInfo.maxAnisotropy = 1.0F;
+			createInfo.maxLod = static_cast< float >(OceanWaves::CurvatureMipLevels - 1U);
+			createInfo.borderColor = VK_BORDER_COLOR_FLOAT_TRANSPARENT_BLACK;
+
+			m_curvatureSampler = std::make_shared< Sampler >(device, createInfo);
+			m_curvatureSampler->setIdentifier(ClassId, this->name(), "CurvatureSampler");
+
+			if ( !m_curvatureSampler->createOnHardware() )
+			{
+				Tracer::error(ClassId, "Unable to create the curvature sampler !");
+
+				return false;
+			}
+		}
+
 		m_commandBuffers.clear();
 
 		for ( uint32_t frame = 0; frame < framesInFlight; ++frame )
@@ -544,6 +572,38 @@ namespace EmEn::Graphics::Geometry
 		m_surfaceWaves.uniforms = m_uniformBuffer.get();
 		m_surfaceWaves.uniformsRange = sizeof(OceanSurface::Uniforms);
 		m_surfaceWaves.reach = m_parameters.waveReach;
+
+		/* What a light draws this surface's caustics with: each cascade's curvature and the shelter map, as textures a
+		 * table can hold (they share the objects above; nothing is created). */
+		m_caustics = {};
+
+		{
+			uint32_t cascade = 0;
+
+			for ( auto & curvature : m_caustics.curvature )
+			{
+				curvature = std::make_shared< ImageViewTexture >(m_waves->curvatureImage(), m_waves->curvatureView(cascade), m_curvatureSampler);
+
+				++cascade;
+			}
+
+			cascade = 0;
+
+			for ( auto & displacement : m_caustics.displacement )
+			{
+				displacement = std::make_shared< ImageViewTexture >(m_waves->displacementImage(), m_waves->displacementLayerView(cascade), m_sampler);
+
+				++cascade;
+			}
+
+			static_assert(SeaCaustics::CascadeCount == OceanWaves::CascadeCount, "A sea's caustics are made of the ocean's cascades.");
+
+			m_caustics.cascadeSizes = m_parameters.waves.cascadeSizes;
+		}
+
+		m_caustics.reach = std::isfinite(m_parameters.waveReach) ? std::max(m_parameters.waveReach, 0.0F) : 0.0F;
+
+		m_caustics.shelter = std::make_shared< ImageViewTexture >(m_shelterImage, m_shelterView, m_shelterSampler);
 
 		return true;
 	}
@@ -598,6 +658,10 @@ namespace EmEn::Graphics::Geometry
 			return false;
 		}
 
+		/* What a sampler finds it in: every upload leaves it there (recordShelterUpload()), and the first one runs ahead
+		 * of the first frame that reads it. A texture table writes its descriptor with this layout. */
+		m_shelterImage->setCurrentImageLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
 		return true;
 	}
 
@@ -638,6 +702,22 @@ namespace EmEn::Graphics::Geometry
 		const Base::MutexLock lock{m_shelterAccess};
 
 		m_shelterTuning = tuning;
+	}
+
+	OceanSurfaceResource::CausticTuning
+	OceanSurfaceResource::causticTuning () const noexcept
+	{
+		const Base::MutexLock lock{m_shelterAccess};
+
+		return m_causticTuning;
+	}
+
+	void
+	OceanSurfaceResource::setCausticTuning (const CausticTuning & tuning) noexcept
+	{
+		const Base::MutexLock lock{m_shelterAccess};
+
+		m_causticTuning = tuning;
 	}
 
 	bool
@@ -755,6 +835,9 @@ namespace EmEn::Graphics::Geometry
 		deferredDestructor.retireObject(std::move(m_descriptorPool));
 		deferredDestructor.retireObject(std::move(m_uniformBuffer));
 		deferredDestructor.retireObject(std::move(m_sampler));
+		/* The textures a table may still hold share the objects retired here: they outlive them unharmed. */
+		m_caustics = {};
+		deferredDestructor.retireObject(std::move(m_curvatureSampler));
 		deferredDestructor.retireObject(std::move(m_waves));
 		m_surfaceWaves = {};
 
@@ -814,6 +897,7 @@ namespace EmEn::Graphics::Geometry
 		std::shared_ptr< const SeaShelterMap > shelterMap;
 		uint64_t shelterGeneration = 0;
 		std::array< float, OceanWaves::CascadeCount > shelteredWaveShares{};
+		CausticTuning causticTuning{};
 
 		{
 			const Base::MutexLock lock{m_shelterAccess};
@@ -821,7 +905,13 @@ namespace EmEn::Graphics::Geometry
 			shelterMap = m_shelterMap;
 			shelterGeneration = m_shelterGeneration;
 			shelteredWaveShares = m_shelterTuning.waveShares;
+			causticTuning = m_causticTuning;
 		}
+
+		/* The caustics' tuning of this frame, bounded: nothing for a value that is not a number. */
+		m_caustics.strength = std::isfinite(causticTuning.strength) ? std::clamp(causticTuning.strength, 0.0F, 1.0F) : 0.0F;
+		m_caustics.softening = std::isfinite(causticTuning.softening) ? std::max(causticTuning.softening, 0.0F) : 0.0F;
+		m_caustics.fadeDepth = std::isfinite(causticTuning.fadeDepth) ? std::max(causticTuning.fadeDepth, 0.01F) : 0.01F;
 
 		const bool uploadShelter = shelterGeneration != m_uploadedShelterGeneration;
 
@@ -844,6 +934,10 @@ namespace EmEn::Graphics::Geometry
 			};
 
 			uniforms.shelteredShares = {share(std::get< 0 >(shelteredWaveShares)), share(std::get< 1 >(shelteredWaveShares)), share(std::get< 2 >(shelteredWaveShares)), 0.0F};
+
+			/* The caustics follow the surface: the same shares, the same map. */
+			m_caustics.shelteredShares = {uniforms.shelteredShares[0], uniforms.shelteredShares[1], uniforms.shelteredShares[2]};
+			m_caustics.shelterRectangle = m_shelterRectangle;
 
 			for ( uint32_t level = 0; level < OceanSurface::MaxLevelsOfDetail; ++level )
 			{

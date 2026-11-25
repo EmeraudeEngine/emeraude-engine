@@ -107,6 +107,7 @@
 #include "Scenes/AVConsole/Manager.hpp"
 #include "ScopedRegistration.hpp"
 #include "SeaLevelInterface.hpp"
+#include "SeaLight.hpp"
 #include "SettingKeys.hpp"
 #include "SkyState.hpp"
 #include "StaticEntity.hpp"
@@ -895,6 +896,15 @@ namespace EmEn::Scenes
 			 * @param renderer A reference to the graphics renderer.
 			 */
 			void recordCloudShadowMap (const Vulkan::CommandBuffer & commandBuffer, Graphics::Renderer & renderer) noexcept;
+
+			/**
+			 * @brief Notes how the scene's sea lets a directional light through, for the lights to carry, and files the
+			 * textures of its caustics in the scene's bindless table [RENDER THREAD].
+			 * @note Called by the Renderer every frame, BEFORE the bindless table is synchronized: a texture filed here
+			 * is in the table of this frame, and the lights carry its slot from the next tick on (updateSeaLight()).
+			 * A scene without a sea that declares its water pays one test; a sea at rest gives the absorption alone.
+			 */
+			void syncSeaLight () noexcept EMEN_EXCLUDES(m_seaLightAccess);
 
 			/**
 			 * @brief Returns the scene's bindless texture set (const).
@@ -1730,6 +1740,30 @@ namespace EmEn::Scenes
 			seaLevel () const noexcept
 			{
 				return m_seaLevel;
+			}
+
+			/**
+			 * @brief Sets whether the scene's sea acts on the light that goes under it: the absorption along the light's
+			 * own path and the caustics of the waves, on every directional light (syncSeaLight()) [THREAD-SAFE].
+			 * @note On by default. Off, what lies under the sea level is lit as in the air: the comparison the look is
+			 * judged with.
+			 * @param enabled The state.
+			 */
+			void
+			enableSeaLight (bool enabled) noexcept
+			{
+				m_seaLightEnabled.store(enabled, std::memory_order_release);
+			}
+
+			/**
+			 * @brief Returns whether the scene's sea acts on the light that goes under it [THREAD-SAFE].
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			isSeaLightEnabled () const noexcept
+			{
+				return m_seaLightEnabled.load(std::memory_order_acquire);
 			}
 
 			/**
@@ -2869,6 +2903,37 @@ namespace EmEn::Scenes
 			void updateCloudShadows () const noexcept;
 
 			/**
+			 * @brief Makes every directional light carry how the sea lets it through [LOGIC THREAD].
+			 * @note What the render thread last noted (syncSeaLight()): the absorption along the light's own path under
+			 * the sea level, and the caustics of a sea whose surface moves. An unchanged value publishes nothing.
+			 */
+			void updateSeaLight () const noexcept EMEN_EXCLUDES(m_seaLightAccess);
+
+			/** @brief The textures of a sea's caustics: the three curvature cascades, the shelter map, the three
+			 * displacement cascades. */
+			using SeaLightTextures = std::array< std::shared_ptr< Vulkan::TextureInterface >, 7 >;
+
+			/** @brief One texture of the sea's caustics and the bindless 2D slot it is filed in. */
+			struct FiledSeaLightTexture final
+			{
+				std::shared_ptr< Vulkan::TextureInterface > texture;
+				uint32_t slot{SeaLight::NoTexture};
+			};
+
+			/**
+			 * @brief Takes the textures of the sea's caustics out of the bindless set, those that are filed [RENDER THREAD].
+			 */
+			void withdrawSeaLightTextures () noexcept;
+
+			/**
+			 * @brief Files the textures of m_seaLightTextures in the bindless set [RENDER THREAD].
+			 * @return bool False when one is missing, not created, or when the set is full: the caller withdraws the
+			 * ones that were filed.
+			 */
+			[[nodiscard]]
+			bool fileSeaLightTextures () noexcept;
+
+			/**
 			 * @brief Builds the scene octrees.
 			 * @param octreeOptions A reference to an octree options struct.
 			 * @return bool
@@ -3452,6 +3517,14 @@ namespace EmEn::Scenes
 			 * @note ⚠️ Declared AFTER the bindless set on purpose: a cloud frees its shape's bindless slot
 			 * when it dies, so the set must outlive every cloud this one may be the last owner of. */
 			CloudSet m_cloudSet;
+			/** @brief The textures of the sea's caustics and the bindless slots they are filed in (the three curvature
+			 * cascades, the shelter map, then the three displacement cascades), null for none. RENDER THREAD (syncSeaLight()).
+			 * @note Declared AFTER the bindless set, like the clouds: the set holds them too and outlives this. */
+			std::array< FiledSeaLightTexture, 7 > m_seaLightTextures;
+			/** @brief Guards m_seaLight: noted by the render thread, carried to the lights by the logic thread. */
+			mutable Base::Mutex m_seaLightAccess;
+			/** @brief How the sea lets a directional light through, as the render thread last found it. */
+			SeaLight m_seaLight EMEN_GUARDED_BY(m_seaLightAccess);
 			/** @brief Guards m_celestialClock: set from the entities' notifications, read by the render thread. */
 			mutable Base::Mutex m_celestialClockAccess;
 			/** @brief The scene's sky clock (the last one added), see skyStateForRendering(). */
@@ -3705,6 +3778,8 @@ namespace EmEn::Scenes
 			/** @brief Whether the punctual lights light the sea (setSeaLevelPunctualLighting()), applied when the scene
 			 * creates the sea's instance; set while building, read by registerSceneVisualComponents() (any thread). */
 			std::atomic_bool m_seaLevelPunctualLighting{true};
+			/** @brief Whether the sea acts on the light that goes under it (enableSeaLight()). */
+			std::atomic_bool m_seaLightEnabled{true};
 			/** @brief True when the sky drives the ambient (applyAmbient): the baked
 			 * irradiance is published and the scalar ambient pushed to the view UBOs is
 			 * zeroed (see refreshAmbientLightProperties / updateEnvironmentIBL). */

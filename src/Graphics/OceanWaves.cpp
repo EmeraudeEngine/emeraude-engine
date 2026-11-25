@@ -90,6 +90,10 @@ namespace EmEn::Graphics
 		/** @brief One cascade layer's extent, and the range of every cascade layer. */
 		constexpr VkExtent3D CascadeExtent{OceanWaves::Resolution, OceanWaves::Resolution, 1};
 		constexpr VkImageSubresourceRange AllCascades{VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, OceanWaves::CascadeCount};
+		/** @brief Every mip of every cascade layer of the curvature image. */
+		constexpr VkImageSubresourceRange AllCurvatureMips{VK_IMAGE_ASPECT_COLOR_BIT, 0, OceanWaves::CurvatureMipLevels, 0, OceanWaves::CascadeCount};
+
+		static_assert((1U << (OceanWaves::CurvatureMipLevels - 1U)) == OceanWaves::Resolution, "The curvature's mip chain must end on one texel.");
 
 		/* The block every shader declares (same layout as PushConstants). */
 		constexpr auto PushConstantBlock = R"GLSL(
@@ -259,6 +263,7 @@ layout(set = 0, binding = 2, rgba32f) uniform readonly image2DArray field1;
 layout(set = 0, binding = 3, rgba16f) uniform writeonly image2DArray displacement;
 layout(set = 0, binding = 4, rgba16f) uniform writeonly image2DArray slopes;
 layout(set = 0, binding = 5, FOAM_FORMAT) uniform image2DArray foam;
+layout(set = 0, binding = 6, rgba16f) uniform writeonly image2DArray curvature;
 
 void main ()
 {
@@ -271,6 +276,21 @@ void main ()
 
 	const vec4 f0 = imageLoad(field0, id);
 	const vec4 f1 = imageLoad(field1, id);
+
+	/* The Hessian of the height, in 1/m: central differences of the slopes (f0.w = dh/dx, f1.x = dh/dz) over the
+	 * tile, which wraps. What a light pass reads to know how the surface focuses the sun under it. */
+	{
+		const float perTexel = float(N) / pc.cascadeSizes[id.z];
+		const ivec3 right = ivec3((id.x + 1) % N, id.y, id.z);
+		const ivec3 left = ivec3((id.x + N - 1) % N, id.y, id.z);
+		const ivec3 front = ivec3(id.x, (id.y + 1) % N, id.z);
+		const ivec3 back = ivec3(id.x, (id.y + N - 1) % N, id.z);
+		const float hxx = (imageLoad(field0, right).w - imageLoad(field0, left).w) * 0.5 * perTexel;
+		const float hzz = (imageLoad(field1, front).x - imageLoad(field1, back).x) * 0.5 * perTexel;
+		const float hxz = (imageLoad(field0, front).w - imageLoad(field0, back).w) * 0.5 * perTexel;
+
+		imageStore(curvature, id, vec4(hxx, hzz, hxz, 0.0));
+	}
 
 	const vec4 displaced = vec4(pc.choppiness * f0.x, f0.y, pc.choppiness * f0.z, pc.choppiness * f1.w);
 	const vec4 slope = vec4(f0.w, f1.x, pc.choppiness * f1.y, pc.choppiness * f1.z);
@@ -522,10 +542,60 @@ void main ()
 			return false;
 		}
 
+		/* The curvature: one more output of the resolve pass, with the mip chain a light pass low-passes it by. RGBA16F
+		 * is a core format for a storage image, a linear filter and both sides of a blit. */
+		{
+			m_curvatureImage = std::make_shared< Vulkan::Image >(m_device, VK_IMAGE_TYPE_2D, VK_FORMAT_R16G16B16A16_SFLOAT, CascadeExtent, VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 0, CurvatureMipLevels, CascadeCount);
+			m_curvatureImage->setIdentifier(ClassId, "Curvature", "Image");
+
+			auto created = m_curvatureImage->createOnHardware();
+
+			if ( created )
+			{
+				/* What the resolve pass writes: the first mip of every layer. */
+				m_curvatureStorageView = std::make_shared< Vulkan::ImageView >(m_curvatureImage, VK_IMAGE_VIEW_TYPE_2D_ARRAY, AllCascades);
+				m_curvatureStorageView->setIdentifier(ClassId, "CurvatureStorage", "ImageView");
+
+				created = m_curvatureStorageView->createOnHardware();
+			}
+
+			/* One plain 2D view a layer: what a pass that reads a cascade through a table of 2D textures samples. */
+			const auto createLayerViews = [] (const std::shared_ptr< Vulkan::Image > & image, uint32_t mipLevels, const char * label, std::array< std::shared_ptr< Vulkan::ImageView >, CascadeCount > & views) {
+				uint32_t cascade = 0;
+
+				for ( auto & view : views )
+				{
+					view = std::make_shared< Vulkan::ImageView >(image, VK_IMAGE_VIEW_TYPE_2D, VkImageSubresourceRange{VK_IMAGE_ASPECT_COLOR_BIT, 0, mipLevels, cascade, 1});
+					view->setIdentifier(ClassId, label, "ImageView");
+
+					if ( !view->createOnHardware() )
+					{
+						return false;
+					}
+
+					++cascade;
+				}
+
+				return true;
+			};
+
+			/* The curvature with every mip; the displacement, where the surface stands over a point. */
+			created = created && createLayerViews(m_curvatureImage, CurvatureMipLevels, "Curvature", m_curvatureViews) && createLayerViews(m_displacementImage, 1, "DisplacementLayer", m_displacementLayerViews);
+
+			if ( !created )
+			{
+				Tracer::error(ClassId, "Unable to create the ocean curvature image !");
+
+				this->destroy();
+
+				return false;
+			}
+		}
+
 		/* One set for every pass: each shader declares the bindings it uses. */
 		m_descriptorSetLayout = std::make_shared< Vulkan::DescriptorSetLayout >(m_device, "OceanWavesDSLayout");
 
-		for ( uint32_t binding = 0; binding < 6; ++binding )
+		for ( uint32_t binding = 0; binding < 7; ++binding )
 		{
 			m_descriptorSetLayout->declare(VkDescriptorSetLayoutBinding{binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, nullptr});
 		}
@@ -586,7 +656,7 @@ void main ()
 		}
 
 		/* NOTE: FREE_DESCRIPTOR_SET_BIT is mandatory, Vulkan::DescriptorSet frees its set individually. */
-		m_descriptorPool = std::make_shared< Vulkan::DescriptorPool >(m_device, std::vector< VkDescriptorPoolSize >{{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 6}}, 1, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
+		m_descriptorPool = std::make_shared< Vulkan::DescriptorPool >(m_device, std::vector< VkDescriptorPoolSize >{{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 7}}, 1, VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT);
 
 		if ( !m_descriptorPool->createOnHardware() )
 		{
@@ -606,7 +676,8 @@ void main ()
 			!m_descriptorSet->writeStorageImage(2, *m_fieldViews[1]) ||
 			!m_descriptorSet->writeStorageImage(3, *m_displacementView) ||
 			!m_descriptorSet->writeStorageImage(4, *m_slopeView) ||
-			!m_descriptorSet->writeStorageImage(5, *m_foamView)
+			!m_descriptorSet->writeStorageImage(5, *m_foamView) ||
+			!m_descriptorSet->writeStorageImage(6, *m_curvatureStorageView)
 		)
 		{
 			Tracer::error(ClassId, "Unable to create the descriptor set !");
@@ -638,6 +709,17 @@ void main ()
 		m_evolvePipeline.reset();
 		m_pipelineLayout.reset();
 		m_descriptorSetLayout.reset();
+		for ( auto & view : m_curvatureViews )
+		{
+			view.reset();
+		}
+
+		for ( auto & view : m_displacementLayerViews )
+		{
+			view.reset();
+		}
+
+		m_curvatureStorageView.reset();
 		m_previousDisplacementView.reset();
 		m_foamView.reset();
 		m_slopeView.reset();
@@ -645,6 +727,7 @@ void main ()
 		m_fieldViews[1].reset();
 		m_fieldViews[0].reset();
 		m_spectrumView.reset();
+		m_curvatureImage.reset();
 		m_previousDisplacementImage.reset();
 		m_foamImage.reset();
 		m_slopeImage.reset();
@@ -749,6 +832,34 @@ void main ()
 			vkCmdPipelineBarrier(handle, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr, static_cast< uint32_t >(barriers.size()), barriers.data());
 		}
 
+		/* The curvature: every mip to GENERAL and cleared — a flat sea until the first update, never an undefined mip
+		 * under a light pass that samples it. */
+		{
+			VkImageMemoryBarrier barrier{};
+			barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+			barrier.srcAccessMask = 0;
+			barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+			barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+			barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+			barrier.image = m_curvatureImage->handle();
+			barrier.subresourceRange = AllCurvatureMips;
+
+			vkCmdPipelineBarrier(handle, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &barrier);
+
+			constexpr VkClearColorValue Flat{};
+
+			vkCmdClearColorImage(handle, m_curvatureImage->handle(), VK_IMAGE_LAYOUT_GENERAL, &Flat, 1, &AllCurvatureMips);
+
+			VkMemoryBarrier visible{};
+			visible.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+			visible.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+			visible.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+
+			vkCmdPipelineBarrier(handle, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &visible, 0, nullptr, 0, nullptr);
+		}
+
 		if ( !commandBuffer->end() )
 		{
 			return false;
@@ -761,7 +872,7 @@ void main ()
 			return false;
 		}
 
-		for ( const auto & image : {m_spectrumImage, m_fieldImages[0], m_fieldImages[1], m_displacementImage, m_slopeImage, m_foamImage, m_previousDisplacementImage} )
+		for ( const auto & image : {m_spectrumImage, m_fieldImages[0], m_fieldImages[1], m_displacementImage, m_slopeImage, m_foamImage, m_previousDisplacementImage, m_curvatureImage} )
 		{
 			image->setCurrentImageLayout(VK_IMAGE_LAYOUT_GENERAL);
 		}
@@ -873,14 +984,46 @@ void main ()
 			m_previousDisplacementValid = true;
 		}
 
+		/* 4. The curvature's mip chain: each level is the level above it, halved by a linear blit — the curvature of the
+		 * waves that level can still hold. The image stays in GENERAL (a blit reads and writes it there). */
+		{
+			VkMemoryBarrier written{};
+			written.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+			written.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+			written.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+
+			vkCmdPipelineBarrier(handle, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &written, 0, nullptr, 0, nullptr);
+
+			for ( uint32_t level = 1; level < CurvatureMipLevels; ++level )
+			{
+				const auto sourceSide = static_cast< int32_t >(Resolution >> (level - 1U));
+				const auto side = static_cast< int32_t >(Resolution >> level);
+
+				VkImageBlit region{};
+				region.srcSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = level - 1U, .baseArrayLayer = 0, .layerCount = CascadeCount};
+				region.srcOffsets[1] = {.x = sourceSide, .y = sourceSide, .z = 1};
+				region.dstSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = level, .baseArrayLayer = 0, .layerCount = CascadeCount};
+				region.dstOffsets[1] = {.x = side, .y = side, .z = 1};
+
+				vkCmdBlitImage(handle, m_curvatureImage->handle(), VK_IMAGE_LAYOUT_GENERAL, m_curvatureImage->handle(), VK_IMAGE_LAYOUT_GENERAL, 1, &region, VK_FILTER_LINEAR);
+
+				VkMemoryBarrier halved{};
+				halved.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+				halved.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+				halved.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+
+				vkCmdPipelineBarrier(handle, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &halved, 0, nullptr, 0, nullptr);
+			}
+		}
+
 		/* The outputs, visible to whoever samples or copies them. */
 		{
 			VkMemoryBarrier barrier{};
 			barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+			barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
 			barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_READ_BIT;
 
-			vkCmdPipelineBarrier(handle, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
+			vkCmdPipelineBarrier(handle, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_VERTEX_SHADER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 1, &barrier, 0, nullptr, 0, nullptr);
 		}
 	}
 

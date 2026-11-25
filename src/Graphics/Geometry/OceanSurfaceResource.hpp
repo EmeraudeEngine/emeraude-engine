@@ -45,6 +45,7 @@
 
 /* Local inclusions for usages. */
 #include "Graphics/OceanWaves.hpp"
+#include "Graphics/SeaCaustics.hpp"
 #include "Graphics/SeaSurfaceWaves.hpp"
 #include "Hash/FNV1a.hpp"
 #include "Math/Space3D/AACuboid.hpp"
@@ -106,6 +107,16 @@ namespace EmEn::Graphics::Geometry
 		 * to tune on screen. ⚠️ These three are the values at LOAD: a running surface reads
 		 * OceanSurfaceResource::shelterTuning(), which a console command changes. */
 		std::array< float, OceanWaves::CascadeCount > shelteredWaveShares{0.0F, 0.04F, 0.35F};
+		/** @brief The caustics the waves draw under the sea: how much of them is drawn, 0 (none) to 1 (engine item
+		 * underwater-caustics-and-depth-light). ⚠️ First values, like the two below: the look is the owner's to tune on
+		 * screen (his reference, 2026-11-25: a realistic lagoon — a sharp net in 1 to 3 m of water, gone by 15 to 20 m).
+		 * ⚠️ The three are the values at LOAD: a running surface reads OceanSurfaceResource::causticTuning(), which a
+		 * console command changes. */
+		float causticStrength{1.0F};
+		/** @brief The caustics' low-pass, in metres per metre of depth (Graphics::SeaCaustics::softening). */
+		float causticSoftening{0.15F};
+		/** @brief The depth the caustics fade over (to 1/e), in metres. */
+		float causticFadeDepth{8.0F};
 		/** @brief Quads per side of the shared patch. Even. */
 		uint32_t patchQuads{64};
 		/** @brief Levels of detail (quadtree depth). */
@@ -305,6 +316,33 @@ namespace EmEn::Graphics::Geometry
 			void setShelterTuning (const ShelterTuning & tuning) noexcept EMEN_EXCLUDES(m_shelterAccess);
 
 			/**
+			 * @brief What of the caustics is tuned while the surface is drawn (SeaCaustics::strength, softening, fadeDepth).
+			 * @note First the values of OceanSurfaceParameters (load()), then whatever setCausticTuning() gave.
+			 */
+			struct CausticTuning
+			{
+				float strength{0.0F};
+				float softening{0.0F};
+				float fadeDepth{1.0F};
+			};
+
+			/**
+			 * @brief Returns the caustics' tuning.
+			 * @note ANY THREAD.
+			 * @return CausticTuning
+			 */
+			[[nodiscard]]
+			CausticTuning causticTuning () const noexcept EMEN_EXCLUDES(m_shelterAccess);
+
+			/**
+			 * @brief Changes the caustics' tuning.
+			 * @note ANY THREAD. The values are the ones of the next surface update (bounded there: the strength to 0-1,
+			 * the softening to 0 or more, the fade depth to a centimetre or more; nothing for a value that is not a number).
+			 * @param tuning The new values.
+			 */
+			void setCausticTuning (const CausticTuning & tuning) noexcept EMEN_EXCLUDES(m_shelterAccess);
+
+			/**
 			 * @brief Gives the surface its shelter map: where the land shelters the water, the waves are weighed down
 			 * to their sheltered shares (OceanSurfaceParameters::shelteredWaveShares).
 			 * @note ANY THREAD: the map is taken by the render thread at the next surface update, which uploads it
@@ -326,6 +364,19 @@ namespace EmEn::Graphics::Geometry
 			surfaceWaves () const noexcept
 			{
 				return m_surfaceUpdated ? &m_surfaceWaves : nullptr;
+			}
+
+			/**
+			 * @brief Returns what a light needs to draw the caustics of this surface (SeaCaustics), or nullptr until
+			 * the surface has been updated once: its cascades hold nothing before.
+			 * @note ⚠️ RENDER THREAD, valid for the frame it is asked in.
+			 * @return const SeaCaustics *
+			 */
+			[[nodiscard]]
+			const SeaCaustics *
+			caustics () const noexcept
+			{
+				return m_surfaceUpdated ? &m_caustics : nullptr;
 			}
 
 		private:
@@ -395,6 +446,11 @@ namespace EmEn::Graphics::Geometry
 			double m_previousTime{-1.0};
 			/** @brief What the underwater view binds, filled with the surface's resources (createSurfaceResources()). */
 			SeaSurfaceWaves m_surfaceWaves{};
+			/** @brief What a light draws this surface's caustics with (createSurfaceResources(); the sheltered shares,
+			 * the map's rectangle and the tuning are each frame's, updateSurfaceVideoMemory()). Render thread. */
+			SeaCaustics m_caustics{};
+			/** @brief The sampler of the curvature cascades: repeat, trilinear. */
+			std::shared_ptr< Vulkan::Sampler > m_curvatureSampler;
 			std::shared_ptr< Vulkan::Image > m_shelterImage;
 			std::shared_ptr< Vulkan::ImageView > m_shelterView;
 			std::shared_ptr< Vulkan::Sampler > m_shelterSampler;
@@ -407,6 +463,8 @@ namespace EmEn::Graphics::Geometry
 			uint64_t m_shelterGeneration EMEN_GUARDED_BY(m_shelterAccess){1};
 			/** @brief The shelter's live tuning (setShelterTuning()); the parameters' values from load(). */
 			ShelterTuning m_shelterTuning EMEN_GUARDED_BY(m_shelterAccess);
+			/** @brief The caustics' live tuning (setCausticTuning()); the parameters' values from load(). */
+			CausticTuning m_causticTuning EMEN_GUARDED_BY(m_shelterAccess);
 			/** @brief The generation the image holds; 0 while it holds nothing (render thread). */
 			uint64_t m_uploadedShelterGeneration{0};
 			/** @brief The rectangle of the map the image holds, as the uniforms state it (render thread). */

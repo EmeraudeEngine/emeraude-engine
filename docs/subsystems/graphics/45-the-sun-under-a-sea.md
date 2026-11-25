@@ -1,0 +1,113 @@
+## 45. The sun under a sea — its light dimming with depth, and the caustics of the waves (Nov 2026)
+
+Until this lot a point under the sea level was lit as in the air: the underwater view (graphics doc 13-12 § 44)
+handles what lies between the EYE and what it sees, nothing of the LIGHT's own path. A deep seabed kept its sunlit
+sand colour, and no wave drew anything on it.
+
+Owner decisions:
+- 2026-11-23: the light's own path — the sun dimming and turning blue with depth on what it lights — is handled in
+  the LIGHTING, for both views (from above through the surface, from under it), with the caustics; not as a
+  screen-space factor of the underwater effect.
+- 2026-11-25 (AskUserQuestion): the caustics' pattern comes from the sea's OWN waves (not an animated texture); the
+  reference is a **realistic lagoon** — a sharp net in 1 to 3 m of water, softer below, gone by 15 to 20 m; the
+  lights CARRY what they need through the bindless table, as the sun carries the clouds' shadow; and the waves'
+  curvature is produced per cascade by the ocean's FFT pass (a window map around the camera was his first pick and was
+  dropped with him: at 1024² over 256 m its texel is 25 cm, the 8 m cascade's is 3 cm — the ripples that draw the
+  net of a shallow water would not be in it).
+
+### 1. What is computed (the PBR light pass of a directional light)
+
+`Saphir::LightGenerator`, `generatePBRFragmentShader()`, beside the clouds' shadow: `seaLight`, a factor of the
+light's radiance, for a point under the surface of the scene's sea.
+
+- **The surface crossed**: Schlick's transmission (F0 = 0.02) and the refraction (n = 1.33).
+- **The absorption along the light's own path**, per channel: `exp(-attenuation × depth / cos(refracted angle))`,
+  the attenuation being `WaterMedium::diffuseAttenuation(1)` — the absorption plus the backscattering, per metre of
+  path.
+- **The caustics**: a ray that crosses the surface at x lands at x' = x + path × (the refracted direction − k ∇h(x)),
+  k = 1 − 1/n = 0.248, so the irradiance is `1 / |det(I − k × path × H)|`, H the Hessian of the wave height. The
+  factor is bounded at 8 (|det| ≥ 0.125), weighed by the strength and by `exp(-depth / fadeDepth)`.
+- **The low-pass with depth**: each cascade's curvature is read at the mip whose texel is
+  `softening × depth × the cascade's weight` (and never finer than the pixel's footprint on the ground). The waves
+  shorter than that have crossed their focus above the receiver and their light is spread again: it is what turns
+  the sharp net of a shallow water into the soft dapple of a deep one. ⚠️ ONE branch of the refraction map is
+  evaluated: past the first fold the true irradiance is a sum over several surface points, and that low-pass is what
+  keeps the single branch honest.
+- **The shelter map**: a cascade weighs `mix(shelteredShare, 1, map)`, like the surface itself (graphics doc 44). A
+  sheltered water's waves are that much flatter, so they focus that much deeper: the weight NARROWS the low-pass too
+  (without it the calm basin of `water-world` showed no caustics at all — its ripples were averaged out).
+- **Where the surface really stands** (owner, 2026-11-25, on screen: "quand on est au dessus de l'eau, les
+  caustiques s'affichent alors que les vagues se retirent"): within the waves' reach of the level, the depth is
+  taken from the displacement cascades, read at the lattice point one round of x − D(x) lands on; a beach a wave has
+  just left is in the air and gets neither the caustics nor the absorption, a point under a crest above the level
+  gets both. Deeper than the reach, the level at rest is used (the rise fades between half the reach and the reach).
+
+The sea's OWN surface material is not under itself (`m_surfaceIsVolumeInterface`). Every directional light carries
+the sea (the moon's light is absorbed and focused like the sun's). References: J. Guardado, D. Sánchez-Crespo,
+"Rendering Water Caustics", GPU Gems, ch. 2, 2004; E. Wallace, "WebGL Water", 2011 (the irradiance as the area ratio
+of the refracted wavefront).
+
+### 2. Who carries what
+
+| Step | Where |
+|---|---|
+| The curvature of each cascade — (∂²h/∂x², ∂²h/∂z², ∂²h/∂x∂z) in 1/m, central differences of the slopes over the wrapping tile — written by the resolve pass into one more RGBA16F 2D array **with a mip chain rebuilt every update** (eight linear blits, GENERAL layout); one 2D view a cascade, and one a cascade over the displacement | `Graphics::OceanWaves` (`CurvatureMipLevels`, `curvatureView()`, `displacementLayerView()`) |
+| The seven textures a table can hold (three curvatures with a repeat / trilinear sampler, the shelter map, three displacements), the cascade sizes, the shares and the map's rectangle of the frame, the reach, the tuning | `Graphics::SeaCaustics`, answered by `Scenes::SeaLevelInterface::caustics()` — the ocean; a sea at rest answers none and gets the absorption alone |
+| A texture over objects that already exist (an image, one view, a sampler) | `Graphics::ImageViewTexture` (the imposter atlas' local copy of it was replaced by it) |
+| RENDER THREAD, every frame before the bindless sync: the textures filed in the scene's bindless set (re-filed when the sea or its GPU resources change), the sea's light noted | `Scenes::Scene::syncSeaLight()`, called by `Graphics::Renderer` |
+| LOGIC THREAD, every tick: every directional light takes it | `Scenes::Scene::updateSeaLight()` → `Component::DirectionalLight::updateSeaLight()` |
+| Seven vec4 at the END of both directional blocks (classic: floats 52-79, cascaded: 104-131; `MaxUniformBlockElementCount` 104 → 132) | `Scenes::SeaLight`, `Saphir::Keys::UniformBlock::Component::SeaWater` … `SeaSurface` |
+| The traced lanes (RTR, RTGI, the irradiance probes): the transmission and the absorption, WITHOUT the caustics (a traced hit takes their mean, 1) and from the level at rest; one more vec4 a traced light entry (nine → ten) | `Scenes::LightSet::GPULightData`, `emTracedLightThroughSea()` (`TracedLightGLSL.hpp`) |
+
+VRAM: the curvature array is 256² × 3 layers × RGBA16F with its mips, about 2.1 MiB. A lit pixel under the sea
+fetches the shelter map and three curvature mips; within the waves' reach of the level, the shelter map once more and
+six displacement texels.
+
+### 3. Tuned while the scene runs
+
+| Command (`Core.SceneManagerService.`) | Effect |
+|---|---|
+| `getSea()` | adds `lightThroughWater` (bool) and `caustics` — `strength`, `softening`, `fadeDepth` — `null` for a sea that draws none |
+| `setSeaCaustics(strength, softening, fadeDepth)` | the next frame. Refused unless the strength is 0-1, the softening 0 or more, the fade depth more than 0 |
+| `setSeaLight(enabled)` | the whole term on or off (the absorption and the caustics): off, what lies under the sea is lit as in the air — the comparison the look is judged with |
+
+`Scenes::SeaCausticSettings`, `SeaLevelInterface::causticSettings()` / `setCausticSettings()`;
+`Scene::enableSeaLight()`. Not saved: `OceanSurfaceParameters::causticStrength` / `causticSoftening` /
+`causticFadeDepth` are the values at LOAD (1, 0.15, 8 m).
+
+### 4. Verified (2026-11-25, Linux, RTX 3070 Ti, driver 620.70.10, `water-world`, ray-traced lane)
+
+Window-less test instances, the validation layer loaded and proven, **0 VUID**, no shader that fails to compile,
+exposure pinned at f/11 – 1/250 s – ISO 100; sheets of twelve captures (four poses × off / absorption alone / with
+the caustics):
+- the calm basin from under water (1 to 2.5 m of water): soft patches of light on the sand with the caustics, none
+  without; the sand dimmer and less red with the absorption;
+- the slope toward the open sea from under water (2 to 5 m): the pattern is there, discreet; 6 to 13 m: a faint
+  dapple;
+- from above the beach: the net shows through the surface near the shore, the submerged sand is darker and greener.
+- The beach a wave leaves: six captures 1.6 s apart show no pattern on the dry sand (judged on thumbnails).
+- The calm basin from under water on the final binary, one capture a state, the sand's half of the frame (rows
+  360-720, luma / 255): term off 109.5 (standard deviation 7.65); absorption alone 102.0 (6.91, 99th percentile 114);
+  with the caustics 103.0 (9.12, 99th percentile 125). The caustics move the contrast, not the mean (+1 %): the
+  bounded single branch keeps the energy there. The frame's mean red falls from 98.4 to 90.4 with the term, its
+  green from 105.2 to 103.0.
+- `setSeaCaustics(1, -1, 8)` and `setSeaCaustics(1, 0.15, 0)` are refused, the values unchanged.
+- `gate.py commit`: every step OK (the ledger's row of the lot).
+
+**The owner on screen the same day**: "ça marche bien", then, after the beach was fixed, "c'est parfait"; with the
+term switched off and on again in front of him (`setSeaLight`): "ça change tout ! C'est trop beau". The lagoon seen
+from above is darker over its deep sand than the look he approved on 2026-09-28 — seen by him in that comparison.
+
+### ⚠️ Limits
+
+- NOT run: macOS, Windows, AMD, the screen-space lane (the term is the same raster light pass there). The traced lanes' factor was compiled and run (0 VUID); its effect on the picture was
+  not measured.
+- The term is in the PBR light pass only, like the clouds' shadow: a non-PBR material under the sea is lit as in the
+  air.
+- The surface read near the level is the cascades' sum, not the drawn mesh's interpolation
+  (`Generator::ocSurfaceRiseAt()`), with ONE round of x − D(x) and without the mesh's fade of a cascade with the
+  distance: in a strong swell the edge of the caustics can stand off the drawn water's edge. Not measured.
+- The curvature is taken at the UNDISPLACED lattice point: the choppy displacement is ignored by the focusing.
+- The first values (strength 1, softening 0.15, fade 8 m) are KEPT by the owner (2026-11-25, on screen, the tuning
+  commands at hand: "c'est parfait").
+- The cost of the term a frame was not measured.

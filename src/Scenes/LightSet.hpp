@@ -124,13 +124,19 @@ namespace EmEn::Scenes
 				float dirX, dirY, dirZ, type;
 				/** castsShadow: 1 when the light casts a shadow in the raster passes. projectionKind: a ProjectionKind. */
 				float innerCosAngle, outerCosAngle, castsShadow, projectionKind;
-				/** projectionIndex: the bindless index of the projected texture, as uint bits. */
-				float projectionIndex, projectionBoost, unused0, unused1;
+				/** projectionIndex: the bindless index of the projected texture, as uint bits. throughSea: 1 when the light
+				 * goes through the scene's sea to reach what lies under its level (a directional light, the four floats
+				 * that end the entry). */
+				float projectionIndex, projectionBoost, throughSea, unused1;
 				/** The light's matrix, world → projection coordinates, column by column (a 2D projection only). */
 				std::array< float, 16 > projectionMatrix;
+				/** What the sea's water takes from the light per metre of its path, per channel (1/m), and the sea level
+				 * (m): the absorption along the light's own path, as the raster light pass applies it (Scenes::SeaLight).
+				 * The caustics are not carried: a traced hit takes their mean, 1. */
+				float seaAttenuationR, seaAttenuationG, seaAttenuationB, seaLevel;
 			};
 
-			static_assert(sizeof(GPULightData) == 144, "GPULightData is nine vec4 (144 bytes): EmTracedLightStride in TracedLightGLSL.hpp.");
+			static_assert(sizeof(GPULightData) == 160, "GPULightData is ten vec4 (160 bytes): EmTracedLightStride in TracedLightGLSL.hpp.");
 
 			/** @brief What GPULightData::projectionKind holds: how the traced shaders sample a light's colour projection. */
 			static constexpr float NoProjection{0.0F};

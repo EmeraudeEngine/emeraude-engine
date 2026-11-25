@@ -240,6 +240,7 @@ vec3 computeDirectIrradiance (vec3 hitPos, vec3 hitNormal)
 
 		/* The light's colour projection (a gobo), as the raster light pass applies it. */
 		lightColor *= emTracedLightProjection(base, hitPos, -L);
+		lightColor *= emTracedLightThroughSea(base, hitPos);
 
 		float visibility = 1.0;
 

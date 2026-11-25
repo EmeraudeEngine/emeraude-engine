@@ -210,6 +210,31 @@ namespace EmEn::Graphics::Renderable
 				return m_geometry != nullptr ? m_geometry->surfaceWaves() : nullptr;
 			}
 
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::caustics() const
+			 * @note The curvature of the FFT cascades, once the surface has been drawn.
+			 */
+			[[nodiscard]]
+			const SeaCaustics *
+			caustics () const noexcept override
+			{
+				return m_geometry != nullptr ? m_geometry->caustics() : nullptr;
+			}
+
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::causticSettings() const
+			 * @note Nothing before the ocean is loaded.
+			 */
+			[[nodiscard]]
+			std::optional< Scenes::SeaCausticSettings > causticSettings () const noexcept override;
+
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::setCausticSettings()
+			 * @note Refused before the ocean is loaded.
+			 */
+			[[nodiscard]]
+			bool setCausticSettings (const Scenes::SeaCausticSettings & settings) noexcept override;
+
 			/** @copydoc EmEn::Scenes::SeaLevelInterface::updateVisibility() */
 			void
 			updateVisibility (const Base::Math::Vector< 3, float > & /*worldPosition*/) noexcept override

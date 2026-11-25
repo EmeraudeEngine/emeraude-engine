@@ -2482,6 +2482,9 @@ namespace EmEn::Graphics
 		 * any pass samples it (RT effects), then record the deferred TLAS build (no CPU stall). */
 		if ( scenePtr != nullptr )
 		{
+			/* How the sea lets the light through, and its caustics' textures filed in the scene's set: before the sync. */
+			scenePtr->syncSeaLight();
+
 			m_bindlessTextureManager.syncTextureSet(m_currentFrameIndex, scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
 
 			scenePtr->recordTLASBuild(commandBuffer->handle(), m_rayTracing.skinnedGeometryProcessor());
@@ -2654,6 +2657,9 @@ namespace EmEn::Graphics
 		 * any pass samples it (RT effects), then record the deferred TLAS build (no CPU stall). */
 		if ( scenePtr != nullptr )
 		{
+			/* How the sea lets the light through, and its caustics' textures filed in the scene's set: before the sync. */
+			scenePtr->syncSeaLight();
+
 			m_bindlessTextureManager.syncTextureSet(m_currentFrameIndex, scenePtr->bindlessTextureSet(), scenePtr->lifetimeMS());
 
 			{

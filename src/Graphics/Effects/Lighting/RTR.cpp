@@ -582,6 +582,7 @@ vec3 computeDirectLighting (vec3 hitPos, vec3 hitNormal, vec3 V, vec3 albedo, fl
 		/* The light's colour projection (a gobo), as the raster light pass applies it: a reflected surface is lit
 		 * through the same pattern as the rendered one. */
 		lightColor *= emTracedLightProjection(base, hitPos, -L);
+		lightColor *= emTracedLightThroughSea(base, hitPos);
 
 		float visibility = 1.0;
 

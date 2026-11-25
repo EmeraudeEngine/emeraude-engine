@@ -31,6 +31,7 @@
 #include <cmath>
 #include <cstring>
 #include <iterator>
+#include <span>
 
 /* Local inclusions. */
 #include "Animations/AnimationInterface.hpp"
@@ -534,10 +535,22 @@ namespace EmEn::Scenes::Component
 	void
 	DirectionalLight::writeUniformBlock (float * destination) noexcept
 	{
+		/* The sea's light, as seven vec4 (Saphir::Keys::UniformBlock::Component::SeaWater and the six that follow). */
+		const std::array< float, SeaLightElementCount > seaLight{
+			m_seaLight.attenuation[0], m_seaLight.attenuation[1], m_seaLight.attenuation[2], m_seaLight.level,
+			m_seaLight.cascadeSizes[0], m_seaLight.cascadeSizes[1], m_seaLight.cascadeSizes[2], m_seaLight.strength,
+			m_seaLight.shelterRectangle[0], m_seaLight.shelterRectangle[1], m_seaLight.shelterRectangle[2], m_seaLight.shelterRectangle[3],
+			m_seaLight.shelteredShares[0], m_seaLight.shelteredShares[1], m_seaLight.shelteredShares[2], m_seaLight.softening,
+			std::bit_cast< float >(m_seaLight.curvatureSlots[0]), std::bit_cast< float >(m_seaLight.curvatureSlots[1]), std::bit_cast< float >(m_seaLight.curvatureSlots[2]), std::bit_cast< float >(m_seaLight.shelterSlot),
+			m_seaLight.fadeDepth, m_seaLight.enabled ? 1.0F : 0.0F, 0.0F, 0.0F,
+			std::bit_cast< float >(m_seaLight.displacementSlots[0]), std::bit_cast< float >(m_seaLight.displacementSlots[1]), std::bit_cast< float >(m_seaLight.displacementSlots[2]), m_seaLight.reach
+		};
+
 		if ( m_usesCSM )
 		{
 			std::copy_n(m_cloudShadowMatrix.data(), m_cloudShadowMatrix.size(), m_CSMBuffer.data() + CSM_CloudShadowMatrixOffset);
 			m_CSMBuffer[CSM_CloudShadowIndexOffset] = std::bit_cast< float >(m_cloudShadowIndex);
+			std::copy_n(seaLight.begin(), seaLight.size(), std::next(m_CSMBuffer.begin(), CSM_SeaLightOffset));
 
 			std::copy_n(m_CSMBuffer.data(), m_CSMBuffer.size(), destination);
 
@@ -549,8 +562,23 @@ namespace EmEn::Scenes::Component
 
 		std::copy_n(m_cloudShadowMatrix.data(), m_cloudShadowMatrix.size(), m_buffer.data() + CloudShadowMatrixOffset);
 		m_buffer[CloudShadowIndexOffset] = std::bit_cast< float >(m_cloudShadowIndex);
+		std::copy_n(seaLight.begin(), seaLight.size(), std::next(m_buffer.begin(), SeaLightOffset));
 
 		std::copy_n(m_buffer.data(), m_buffer.size(), destination);
+	}
+
+	void
+	DirectionalLight::updateSeaLight (const SeaLight & seaLight) noexcept
+	{
+		/* Nothing to publish when the sea is the one already in the block. */
+		if ( seaLight == m_seaLight )
+		{
+			return;
+		}
+
+		m_seaLight = seaLight;
+
+		this->requestVideoMemoryUpdate();
 	}
 
 	void
@@ -654,6 +682,23 @@ namespace EmEn::Scenes::Component
 		const auto & block = this->publishedBlock(readStateIndex);
 
 		return std::bit_cast< uint32_t >(block[m_usesCSM ? CSM_CloudShadowIndexOffset : CloudShadowIndexOffset]);
+	}
+
+	std::optional< std::array< float, 4 > >
+	DirectionalLight::publishedSeaWater (uint32_t readStateIndex) const noexcept
+	{
+		const auto & block = this->publishedBlock(readStateIndex);
+		const auto offset = m_usesCSM ? CSM_SeaLightOffset : SeaLightOffset;
+
+		const auto seaLight = std::span< const float >{block}.subspan(offset, SeaLightElementCount);
+
+		/* The sixth vec4 (the tuning) holds 1 in its second float when a sea is carried: writeUniformBlock(). */
+		if ( seaLight[21] < 0.5F )
+		{
+			return std::nullopt;
+		}
+
+		return std::array< float, 4 >{seaLight[0], seaLight[1], seaLight[2], seaLight[3]};
 	}
 
 	std::ostream &

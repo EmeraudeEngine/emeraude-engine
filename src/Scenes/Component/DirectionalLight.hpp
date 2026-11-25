@@ -36,6 +36,7 @@
 #include <cstring>
 #include <iterator>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 
@@ -48,6 +49,7 @@
 #include "Math/CartesianFrame.hpp"
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
+#include "Scenes/SeaLight.hpp"
 #include "Vulkan/DescriptorSet.hpp"
 
 /* Forward declarations. */
@@ -483,6 +485,33 @@ namespace EmEn::Scenes::Component
 			/** @brief The cloud shadow slot of a light that reads none. */
 			static constexpr uint32_t NoCloudShadow{0xFFFFFFFFU};
 
+			/**
+			 * @brief Returns what the sea's water takes from this light, as the frame was published with it: the
+			 * attenuation per metre of path per channel (1/m), then the sea level (m) [RENDER THREAD].
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return std::optional< std::array< float, 4 > > Nothing for a light that carries no sea.
+			 */
+			[[nodiscard]]
+			std::optional< std::array< float, 4 > > publishedSeaWater (uint32_t readStateIndex) const noexcept;
+
+			/**
+			 * @brief Makes this light carry how the scene's sea lets it through [LOGIC THREAD].
+			 * @note Called every tick by Scene::updateSeaLight(); an unchanged value publishes nothing.
+			 * @param seaLight The sea, as the light's block carries it. A disabled one is the light of a scene without a sea.
+			 */
+			void updateSeaLight (const SeaLight & seaLight) noexcept;
+
+			/**
+			 * @brief Returns how the scene's sea lets this light through [LOGIC THREAD].
+			 * @return const SeaLight &
+			 */
+			[[nodiscard]]
+			const SeaLight &
+			seaLight () const noexcept
+			{
+				return m_seaLight;
+			}
+
 			/** @brief The emission of a directional light as one render state slot published it. */
 			struct PublishedEmission
 			{
@@ -597,6 +626,9 @@ namespace EmEn::Scenes::Component
 			 *   mat4 CloudShadowMatrix: floats 32-47
 			 *   float CloudShadowIndex: float 48 (bit pattern)
 			 *   float padding: floats 49-51
+			 *
+			 * Layer 4 (the sea's light, Nov 2026):
+			 *   vec4[7] SeaWater .. SeaSurface: floats 52-79 (writeUniformBlock())
 			 */
 			/* Classic buffer layout offsets. */
 			static constexpr auto ColorOffset{0UL};
@@ -609,7 +641,9 @@ namespace EmEn::Scenes::Component
 			static constexpr auto ColorProjectionBoostOffset{10UL};
 			static constexpr auto CloudShadowMatrixOffset{32UL};
 			static constexpr auto CloudShadowIndexOffset{48UL};
-			static constexpr auto BufferSize{52UL};
+			static constexpr auto SeaLightOffset{52UL};
+			static constexpr auto SeaLightElementCount{28UL};
+			static constexpr auto BufferSize{80UL};
 
 			/* CSM buffer layout offsets (matches shader UBO):
 			 * mat4[4] cascadeViewProjectionMatrices: floats 0-63
@@ -623,7 +657,8 @@ namespace EmEn::Scenes::Component
 			 * vec3 padding: floats 81-83
 			 * mat4 cloudShadowMatrix: floats 84-99 (Sep 2026)
 			 * float cloudShadowIndex: float 100 (bit pattern)
-			 * vec3 padding: floats 101-103 */
+			 * vec3 padding: floats 101-103
+			 * vec4[7] the sea's light: floats 104-131 (Nov 2026) */
 			static constexpr auto CSM_CascadeMatricesOffset{0UL};
 			static constexpr auto CSM_SplitDistancesOffset{64UL};
 			static constexpr auto CSM_CascadeCountOffset{68UL};
@@ -633,7 +668,8 @@ namespace EmEn::Scenes::Component
 			static constexpr auto CSM_IntensityOffset{80UL};
 			static constexpr auto CSM_CloudShadowMatrixOffset{84UL};
 			static constexpr auto CSM_CloudShadowIndexOffset{100UL};
-			static constexpr auto CSM_BufferSize{104UL};
+			static constexpr auto CSM_SeaLightOffset{104UL};
+			static constexpr auto CSM_BufferSize{132UL};
 
 			static_assert(CSM_BufferSize == AbstractLightEmitter::MaxUniformBlockElementCount, "The CSM block is the largest light block: keep MaxUniformBlockElementCount on it.");
 
@@ -666,6 +702,7 @@ namespace EmEn::Scenes::Component
 				0.0F, 0.0F, 1.0F, 0.0F,
 				0.0F, 0.0F, 0.0F, 1.0F,
 				0.0F, 0.0F, 0.0F, 0.0F
+				/* The sea's light (none: the zeros that follow) — written by writeUniformBlock(). */
 			};
 			std::array< float, CSM_BufferSize > m_CSMBuffer{}; /**< CSM-specific buffer for cascade data. */
 			/** @brief The cloud shadow matrix, world -> (u, v, depth along the light), column-major. LOGIC THREAD. */
@@ -673,6 +710,8 @@ namespace EmEn::Scenes::Component
 			/** @brief The emission published per render state slot: written by publishStateForRendering() (logic thread),
 			 * read by publishedEmission() (render thread, the slot latched by the frame). */
 			std::array< PublishedEmission, RenderStateSlotCount > m_publishedEmissions{};
+			/** @brief How the scene's sea lets this light through. LOGIC THREAD. */
+			SeaLight m_seaLight{};
 			uint32_t m_cloudShadowIndex{NoCloudShadow};
 			bool m_useDirectionVector{false};
 			bool m_usesCSM{false};

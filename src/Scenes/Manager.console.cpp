@@ -1352,6 +1352,18 @@ namespace EmEn::Scenes
 						sea["shelter"] = shelter;
 					}
 
+					sea["lightThroughWater"] = activeScene->isSeaLightEnabled();
+					sea["caustics"] = Json::Value{Json::nullValue};
+
+					if ( const auto settings = seaLevel->causticSettings(); settings.has_value() )
+					{
+						Json::Value caustics{Json::objectValue};
+						caustics["strength"] = static_cast< double >(settings->strength);
+						caustics["softening"] = static_cast< double >(settings->softening);
+						caustics["fadeDepth"] = static_cast< double >(settings->fadeDepth);
+						sea["caustics"] = caustics;
+					}
+
 					return Console::CommandResult::json(FastJSON::stringify(sea));
 				});
 			}, Console::CommandHint::ReadOnly);
@@ -1407,6 +1419,49 @@ namespace EmEn::Scenes
 					}
 
 					return Console::CommandResult::success("Sea shelter set, its map rebuilt.");
+				});
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("setSeaCaustics", "Sets the caustics the sea's waves draw under it, applied to the next frame: how much of them is drawn, how fast they soften with the depth, and the depth they fade over.",
+			{
+				{"strength", "How much of the caustics is drawn: 0 none, 1 all of it."},
+				{"softening", "The low-pass of the waves, in metres per metre of depth (0 or more): higher = a softer net sooner."},
+				{"fadeDepth", "The depth the caustics fade over, in metres (more than 0)."}
+			},
+			[inActiveScene] (float strength, float softening, float fadeDepth) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					const auto seaLevel = activeScene->seaLevel();
+
+					if ( seaLevel == nullptr || !seaLevel->causticSettings().has_value() )
+					{
+						return Console::CommandResult::error("The active scene has no sea that draws caustics !");
+					}
+
+					const SeaCausticSettings settings{.strength = strength, .softening = softening, .fadeDepth = fadeDepth};
+
+					if ( !settings.isValid() || !seaLevel->setCausticSettings(settings) )
+					{
+						return Console::CommandResult::error("Refused: the strength must be a number from 0 to 1, the softening 0 or more, the fade depth more than 0 !");
+					}
+
+					return Console::CommandResult::success("Sea caustics set.");
+				});
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("setSeaLight", "Sets whether the sea of the active scene acts on the light that goes under it (the absorption along the light's own path, the caustics): off, what lies under the sea level is lit as in the air — the comparison the look is judged with.",
+			{
+				{"enabled", "true: the sea acts on the light (the default). false: it does not."}
+			},
+			[inActiveScene] (bool enabled) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					if ( activeScene->seaLevel() == nullptr )
+					{
+						return Console::CommandResult::error("The active scene has no sea !");
+					}
+
+					activeScene->enableSeaLight(enabled);
+
+					return Console::CommandResult::success(enabled ? "The sea acts on the light under it." : "The sea no longer acts on the light under it.");
 				});
 			}, Console::CommandHint::Idempotent);
 

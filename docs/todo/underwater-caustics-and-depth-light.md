@@ -1,11 +1,10 @@
 ---
 id: underwater-caustics-and-depth-light
 title: The sun under the sea level — caustics on what it lights, and its light dimming and turning blue with depth
-status: open
+status: in-progress
 priority: unranked
 scope: Scenes (lights, sea level), Saphir (light generators), Graphics (deferred resolve, traced lanes)
 opened: 2026-11-23
-blocked-by: [underwater-view]
 tags: [water, ocean, lighting, caustics]
 ---
 
@@ -20,17 +19,21 @@ a screen-space factor in the underwater effect.
 
 Until this is done, a deep seabed seen at close range under water keeps its sunlit sand colour.
 
+## Done (2026-11-25, Linux — graphics doc 45)
+
+The absorption along the light's own path and the caustics of the waves, on every directional light, in the PBR light
+pass; the traced lanes get the absorption; three console commands tune it on a running scene. The owner saw it on
+screen and kept the first values. Everything that must outlive this item is in
+`docs/subsystems/graphics/45-the-sun-under-a-sea.md`.
+
 ## What remains
 
-Everything. To decide with the owner before any code:
-- where the factor enters: every direct-light path shades a submerged point (the forward light generators, the
-  deferred resolve, the traced lanes that shade their hits) — one shared helper, read from the sea's `WaterMedium`;
-- the caustics' pattern: derived from the sea's own waves (the FFT slopes) or an animated texture; its fade with depth;
-- the existing light projections (the gobo of a light) as a carrier, and their open items
-  (`traced-lanes-miss-directional-and-animated-cubemap-projections`, the `deferred-resolve-projection-*` items).
-
-## ⚠️ Traps
-
-- The lagoon seen from above was approved by the owner (2026-09-28) with an absorption along the VIEW path only:
-  adding the light's path darkens and blues the deep sand. Judge it on screen with him, with a before / after pair.
-- The sea no longer casts shadows on its own seabed (`Scene.rendering.cpp`): a caustic is not a shadow map of the sea.
+- The peers: macOS, Windows (the compute blits of the curvature's mips and the seven bindless textures are new code
+  for MoltenVK and for MSVC). AMD.
+- The traced lanes' factor: its effect on the picture measured (a deep seabed in a reflection, the Reflections slot on
+  and off).
+- The cost of the term a frame, on the RTX 3070 Ti.
+- Non-PBR materials under the sea (the term is in the PBR light pass only, like the clouds' shadow): to decide with
+  the owner whether any demo needs it.
+- The edge of the caustics against the drawn water's edge in a strong swell (one round of x - D(x), the cascades' sum
+  instead of the mesh's interpolation): to look at with the owner if he sees it.

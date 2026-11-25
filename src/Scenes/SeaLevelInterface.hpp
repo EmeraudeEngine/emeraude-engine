@@ -39,6 +39,7 @@
 /* Forward declarations. */
 namespace EmEn::Graphics
 {
+	struct SeaCaustics;
 	struct SeaSurfaceWaves;
 }
 
@@ -83,6 +84,36 @@ namespace EmEn::Scenes
 			};
 
 			return distance(minimumPassage) && distance(fade) && share(swellShare) && share(waveShare) && share(rippleShare);
+		}
+	};
+
+	/**
+	 * @brief The caustics a sea whose surface moves draws under itself: how its waves focus the light (engine item
+	 * underwater-caustics-and-depth-light).
+	 * @note The values a sea answers (SeaLevelInterface::causticSettings()) and takes
+	 * (SeaLevelInterface::setCausticSettings()) while its scene runs — the owner tunes the look on screen.
+	 */
+	struct SeaCausticSettings
+	{
+		/** @brief How much of the caustics is drawn: 0 none, 1 all of it. */
+		float strength{0.0F};
+		/** @brief The low-pass of the waves' curvature, in metres per metre of depth: the waves shorter than this share of
+		 * the depth are averaged out (they crossed their focus above the receiver). Finite, 0 or more. */
+		float softening{0.0F};
+		/** @brief The depth the caustics fade over (to 1/e), in metres. Finite, more than 0. */
+		float fadeDepth{1.0F};
+
+		/**
+		 * @brief Tells whether every value is one a sea takes.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isValid () const noexcept
+		{
+			return std::isfinite(strength) && strength >= 0.0F && strength <= 1.0F &&
+				std::isfinite(softening) && softening >= 0.0F &&
+				std::isfinite(fadeDepth) && fadeDepth > 0.0F;
 		}
 	};
 
@@ -227,6 +258,33 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			virtual const Graphics::SeaSurfaceWaves * surfaceWaves () const noexcept = 0;
+
+			/**
+			 * @brief Returns what a light needs to draw the caustics of the MOVING surface (how its waves focus the
+			 * light on what lies under them), or nullptr when the surface is at rest — it then focuses nothing.
+			 * @note ⚠️ RENDER THREAD, valid for the frame it is asked in. Null too while a moving surface has not been
+			 * drawn yet: its waves hold nothing before its first update.
+			 * @return const Graphics::SeaCaustics *
+			 */
+			[[nodiscard]]
+			virtual const Graphics::SeaCaustics * caustics () const noexcept = 0;
+
+			/**
+			 * @brief Returns how this sea draws its caustics, or nothing for a sea that draws none (a surface at rest).
+			 * @note ANY THREAD.
+			 * @return std::optional< SeaCausticSettings >
+			 */
+			[[nodiscard]]
+			virtual std::optional< SeaCausticSettings > causticSettings () const noexcept = 0;
+
+			/**
+			 * @brief Changes how this sea draws its caustics.
+			 * @note ANY THREAD. Applied from the sea's next surface update on.
+			 * @param settings The new values. Refused when one is not valid (SeaCausticSettings::isValid()).
+			 * @return bool False when the values are refused, or when this sea draws no caustics: nothing changed.
+			 */
+			[[nodiscard]]
+			virtual bool setCausticSettings (const SeaCausticSettings & settings) noexcept = 0;
 
 			/**
 			 * @brief Updates the water surface visibility from the camera position.

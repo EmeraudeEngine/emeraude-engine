@@ -34,6 +34,7 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
+#include "Graphics/ImageViewTexture.hpp"
 #include "Graphics/Renderer.hpp"
 #include "PixelFactory/FileIO.hpp"
 #include "PixelFactory/Pixmap.hpp"
@@ -41,7 +42,6 @@
 #include "Vulkan/CommandBuffer.hpp"
 #include "Vulkan/Image.hpp"
 #include "Vulkan/ImageView.hpp"
-#include "Vulkan/Sampler.hpp"
 #include "Vulkan/Sync/ImageMemoryBarrier.hpp"
 #include "Vulkan/TextureInterface.hpp"
 #include "Vulkan/TransferManager.hpp"
@@ -58,84 +58,6 @@ namespace EmEn::Graphics
 
 	namespace
 	{
-		/**
-		 * @brief One texture of the atlas, as a material samples it.
-		 */
-		class AtlasTexture final : public TextureInterface
-		{
-			public:
-
-				AtlasTexture (std::shared_ptr< Image > image, std::shared_ptr< ImageView > imageView, std::shared_ptr< Sampler > sampler) noexcept
-					: m_image{std::move(image)},
-					m_imageView{std::move(imageView)},
-					m_sampler{std::move(sampler)}
-				{
-
-				}
-
-				[[nodiscard]]
-				bool
-				isCreated () const noexcept override
-				{
-					return m_image != nullptr && m_image->isCreated() && m_imageView != nullptr && m_imageView->isCreated() && m_sampler != nullptr && m_sampler->isCreated();
-				}
-
-				[[nodiscard]]
-				TextureType
-				type () const noexcept override
-				{
-					return TextureType::Texture2D;
-				}
-
-				[[nodiscard]]
-				uint32_t
-				dimensions () const noexcept override
-				{
-					return 2;
-				}
-
-				[[nodiscard]]
-				bool
-				isCubemapTexture () const noexcept override
-				{
-					return false;
-				}
-
-				[[nodiscard]]
-				std::shared_ptr< Image >
-				image () const noexcept override
-				{
-					return m_image;
-				}
-
-				[[nodiscard]]
-				std::shared_ptr< ImageView >
-				imageView () const noexcept override
-				{
-					return m_imageView;
-				}
-
-				[[nodiscard]]
-				std::shared_ptr< Sampler >
-				sampler () const noexcept override
-				{
-					return m_sampler;
-				}
-
-				[[nodiscard]]
-				bool
-				request3DTextureCoordinates () const noexcept override
-				{
-					return false;
-				}
-
-			private:
-
-				std::shared_ptr< Image > m_image;
-				std::shared_ptr< ImageView > m_imageView;
-				std::shared_ptr< Sampler > m_sampler;
-		};
-
 		/**
 		 * @brief Creates one cleared, mipmapped atlas image and its view.
 		 */
@@ -243,8 +165,8 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		m_albedoTexture = std::make_shared< AtlasTexture >(m_albedoImage, albedoView, sampler);
-		m_normalTexture = std::make_shared< AtlasTexture >(m_normalImage, normalView, sampler);
+		m_albedoTexture = std::make_shared< ImageViewTexture >(m_albedoImage, albedoView, sampler);
+		m_normalTexture = std::make_shared< ImageViewTexture >(m_normalImage, normalView, sampler);
 
 		return true;
 	}

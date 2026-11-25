@@ -605,6 +605,9 @@ namespace EmEn::Scenes
 		/* The clouds' shadow follows the camera too, on the sun that carries it. */
 		this->updateCloudShadows();
 
+		/* What the sea does to the light that goes under it, on every directional light. */
+		this->updateSeaLight();
+
 		/* Update audio ambience if active. */
 		if ( m_ambience != nullptr && m_ambience->isPlaying() )
 		{

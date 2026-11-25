@@ -234,6 +234,39 @@ namespace EmEn::Graphics::Renderable
 				return nullptr;
 			}
 
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::caustics() const
+			 * @note A surface at rest. A sea whose surface moves answers its own.
+			 */
+			[[nodiscard]]
+			const SeaCaustics *
+			caustics () const noexcept override
+			{
+				return nullptr;
+			}
+
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::causticSettings() const
+			 * @note A surface at rest draws none.
+			 */
+			[[nodiscard]]
+			std::optional< Scenes::SeaCausticSettings >
+			causticSettings () const noexcept override
+			{
+				return std::nullopt;
+			}
+
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::setCausticSettings()
+			 * @note A surface at rest draws none: refused.
+			 */
+			[[nodiscard]]
+			bool
+			setCausticSettings (const Scenes::SeaCausticSettings & /*settings*/) noexcept override
+			{
+				return false;
+			}
+
 		protected:
 
 			/**
