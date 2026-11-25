@@ -125,7 +125,10 @@ from above is darker over its deep sand than the look he approved on 2026-09-28 
   the anti-aliasing off gives 5.00; softening 0: 0 → 14.45, 0.3 → 16.35, 0.6 → 17.92, 1 → 18.22 (off: 18.82). `beams`,
   `water-world` and `default` run with it on the ray-traced lane, 0 VUID. **`temporalResponse` is 1**: the owner's value, chosen on
   screen the same day (a window on the ray-traced lane, the anti-aliasing on, 0 / 0.3 / 0.6 / 1 switched in front of
-  him). NOT run: macOS, Windows.
+  him). **macOS and Windows the same day (engine a2acc53b)**: builds without a warning, 0 VUID on `water-world`,
+  `beams` and `default` (the MAX blend on the reactive attachment runs on MoltenVK), the old three-argument command
+  and a response of 1.5 refused; softening 0.15, response 0 → 1: macOS 1.71 → 4.49, Windows 2.13 → 4.54 (Linux 2.20 →
+  4.59); softening 0, response 1: a sharp net on both (standard deviation 25.1 and 25.5, Linux 26.7).
 - The pixel's footprint (`dFdx` / `dFdy` of the world position) is taken BEFORE the term's branches since 2026-11-25:
   a derivative inside non-uniform control flow is undefined. It changed no number on Linux nor on macOS.
 - The traced lanes' factor was compiled and run (0 VUID); its effect on the picture was

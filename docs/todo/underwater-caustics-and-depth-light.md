@@ -31,9 +31,6 @@ screen and kept the first values. Everything that must outlive this item is in
 - AMD (macOS and Windows verified on 2026-11-25: graphics doc 45 § Limits).
 - The traced lanes' factor: its effect on the picture measured (a deep seabed in a reflection, the Reflections slot on
   and off).
-- **The caustics under temporal anti-aliasing**: answered by a graded reactive mask the sun's light pass writes
-  (owner decision 2026-11-25, graphics doc 45 § Limits), its level chosen by him on screen (1). Left: macOS and
-  Windows (the MAX blend on the reactive attachment is new for MoltenVK).
 - The cost of the curvature's upkeep (the resolve pass's extra store and the eight blits an update) and of the term
   at the window's real size, on the RTX 3070 Ti. The light pass's share at 1280×720 is measured (graphics doc 45
   § Limits: about 0.3 ms with the caustics, the absorption inside the noise).
