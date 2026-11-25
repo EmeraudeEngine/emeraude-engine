@@ -67,6 +67,9 @@ namespace EmEn::Scenes
 		float reach{0.0F};
 		/** @brief The depth the caustics fade over (to 1/e), in metres. */
 		float fadeDepth{1.0F};
+		/** @brief How far a temporal pass gives up its history where the caustics are drawn in full, 0 to 1
+		 * (Graphics::SeaCaustics::temporalResponse). */
+		float temporalResponse{0.0F};
 		/** @brief Whether a sea is carried at all. */
 		bool enabled{false};
 

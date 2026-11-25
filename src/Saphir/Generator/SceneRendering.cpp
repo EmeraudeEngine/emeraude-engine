@@ -765,9 +765,13 @@ namespace EmEn::Saphir::Generator
 		/* The reactive mask output, only for a material that writes one (Material::Interface::reactiveMaskExpression()):
 		 * every other pipeline masks the attachment (onGraphicsPipelineConfiguration()), which keeps its clear value. */
 		const auto reactiveMask = this->materialEnabled() ? this->getMaterialInterface()->reactiveMaskExpression() : std::string{};
-		const bool writesReactive = m_hasReactiveAttachment && !reactiveMask.empty();
+		/* A DIRECTIONAL light's pass writes it too, with a MAX blend: where its light moves over a still surface (the
+		 * sea's caustics, LightGenerator::SeaReactiveVariable), 0 otherwise. Every such pass declares the output — the
+		 * pipeline is configured from the pass type alone. */
+		const bool lightWritesReactive = m_hasReactiveAttachment && Graphics::renderPassIsDirectionalLightPass(m_renderPassType);
+		const bool writesReactive = m_hasReactiveAttachment && !reactiveMask.empty() && !lightWritesReactive;
 
-		if ( writesReactive )
+		if ( writesReactive || lightWritesReactive )
 		{
 			fragmentShader->declare(Declaration::OutputFragment{5, Keys::GLSL::Float, Keys::ShaderVariable::OutputReactive});
 		}
@@ -1157,6 +1161,10 @@ namespace EmEn::Saphir::Generator
 		{
 			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputReactive << " = clamp(" << reactiveMask << ", 0.0, 1.0);";
 		}
+		else if ( lightWritesReactive )
+		{
+			Code{*fragmentShader, Location::Output} << ShaderVariable::OutputReactive << " = " << (lightingRequested && m_lightGenerator.declaresSeaReactive(*this) ? LightGenerator::SeaReactiveVariable : "0.0") << ";";
+		}
 
 		return fragmentShader->generateSourceCode(*this);
 	}
@@ -1296,7 +1304,8 @@ namespace EmEn::Saphir::Generator
 				graphicsPipeline.appendColorBlendAttachment(gBufferState);
 			}
 
-			/* The reactive mask: REPLACED (red channel) by a material that declares one, outside a light pass; masked for
+			/* The reactive mask: REPLACED (red channel) by a material that declares one, outside a light pass; raised (MAX)
+			 * by a DIRECTIONAL light's pass, whose shader always writes it (the sea's caustics, 0 otherwise); masked for
 			 * every other pipeline, so the attachment keeps its clear value (0: trust the history). ⚠️ Independent of
 			 * writesGeometryBuffer(): the beam masks the whole G-buffer and still writes this. */
 			if ( m_hasReactiveAttachment )
@@ -1312,7 +1321,16 @@ namespace EmEn::Saphir::Generator
 
 				const bool writesReactive = !Graphics::renderPassIsLightPass(m_renderPassType) && material != nullptr && !material->reactiveMaskExpression().empty();
 
-				reactiveState.colorWriteMask = writesReactive ? static_cast< VkColorComponentFlags >(VK_COLOR_COMPONENT_R_BIT) : 0;
+				const bool lightWritesReactive = Graphics::renderPassIsDirectionalLightPass(m_renderPassType);
+
+				if ( lightWritesReactive )
+				{
+					reactiveState.blendEnable = VK_TRUE;
+					reactiveState.colorBlendOp = VK_BLEND_OP_MAX;
+					reactiveState.alphaBlendOp = VK_BLEND_OP_MAX;
+				}
+
+				reactiveState.colorWriteMask = (writesReactive || lightWritesReactive) ? static_cast< VkColorComponentFlags >(VK_COLOR_COMPONENT_R_BIT) : 0;
 
 				graphicsPipeline.appendColorBlendAttachment(reactiveState);
 			}

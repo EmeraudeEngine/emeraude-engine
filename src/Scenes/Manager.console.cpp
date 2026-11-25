@@ -1361,6 +1361,7 @@ namespace EmEn::Scenes
 						caustics["strength"] = static_cast< double >(settings->strength);
 						caustics["softening"] = static_cast< double >(settings->softening);
 						caustics["fadeDepth"] = static_cast< double >(settings->fadeDepth);
+						caustics["temporalResponse"] = static_cast< double >(settings->temporalResponse);
 						sea["caustics"] = caustics;
 					}
 
@@ -1422,13 +1423,14 @@ namespace EmEn::Scenes
 				});
 			}, Console::CommandHint::Idempotent);
 
-		this->bindCommand("setSeaCaustics", "Sets the caustics the sea's waves draw under it, applied to the next frame: how much of them is drawn, how fast they soften with the depth, and the depth they fade over.",
+		this->bindCommand("setSeaCaustics", "Sets the caustics the sea's waves draw under it, applied to the next frame: how much of them is drawn, how fast they soften with the depth, the depth they fade over, and how far the temporal passes give up their history under them.",
 			{
 				{"strength", "How much of the caustics is drawn: 0 none, 1 all of it."},
 				{"softening", "The low-pass of the waves, in metres per metre of depth (0 or more): higher = a softer net sooner."},
-				{"fadeDepth", "The depth the caustics fade over, in metres (more than 0)."}
+				{"fadeDepth", "The depth the caustics fade over, in metres (more than 0)."},
+				{"temporalResponse", "How far a temporal pass (anti-aliasing) gives up its history where the caustics are drawn in full: 0 not at all (it averages the moving pattern), 1 the most."}
 			},
-			[inActiveScene] (float strength, float softening, float fadeDepth) {
+			[inActiveScene] (float strength, float softening, float fadeDepth, float temporalResponse) {
 				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
 					const auto seaLevel = activeScene->seaLevel();
 
@@ -1437,11 +1439,11 @@ namespace EmEn::Scenes
 						return Console::CommandResult::error("The active scene has no sea that draws caustics !");
 					}
 
-					const SeaCausticSettings settings{.strength = strength, .softening = softening, .fadeDepth = fadeDepth};
+					const SeaCausticSettings settings{.strength = strength, .softening = softening, .fadeDepth = fadeDepth, .temporalResponse = temporalResponse};
 
 					if ( !settings.isValid() || !seaLevel->setCausticSettings(settings) )
 					{
-						return Console::CommandResult::error("Refused: the strength must be a number from 0 to 1, the softening 0 or more, the fade depth more than 0 !");
+						return Console::CommandResult::error("Refused: the strength must be a number from 0 to 1, the softening 0 or more, the fade depth more than 0, the temporal response from 0 to 1 !");
 					}
 
 					return Console::CommandResult::success("Sea caustics set.");

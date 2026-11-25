@@ -146,7 +146,7 @@ namespace EmEn::Graphics::Geometry
 		m_parameters = parameters;
 
 		this->setShelterTuning({.minimumPassage = parameters.shelterMinimumPassage, .fade = parameters.shelterFade, .waveShares = parameters.shelteredWaveShares});
-		this->setCausticTuning({.strength = parameters.causticStrength, .softening = parameters.causticSoftening, .fadeDepth = parameters.causticFadeDepth});
+		this->setCausticTuning({.strength = parameters.causticStrength, .softening = parameters.causticSoftening, .fadeDepth = parameters.causticFadeDepth, .temporalResponse = parameters.causticTemporalResponse});
 
 		/* The level ranges and the geomorph table, as the terrain's (CDLODTerrainResource::load()). */
 		const auto ratio = std::clamp(m_parameters.morphStartRatio, 0.0F, 0.95F);
@@ -912,6 +912,7 @@ namespace EmEn::Graphics::Geometry
 		m_caustics.strength = std::isfinite(causticTuning.strength) ? std::clamp(causticTuning.strength, 0.0F, 1.0F) : 0.0F;
 		m_caustics.softening = std::isfinite(causticTuning.softening) ? std::max(causticTuning.softening, 0.0F) : 0.0F;
 		m_caustics.fadeDepth = std::isfinite(causticTuning.fadeDepth) ? std::max(causticTuning.fadeDepth, 0.01F) : 0.01F;
+		m_caustics.temporalResponse = std::isfinite(causticTuning.temporalResponse) ? std::clamp(causticTuning.temporalResponse, 0.0F, 1.0F) : 0.0F;
 
 		const bool uploadShelter = shelterGeneration != m_uploadedShelterGeneration;
 

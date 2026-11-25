@@ -102,6 +102,9 @@ namespace EmEn::Scenes
 		float softening{0.0F};
 		/** @brief The depth the caustics fade over (to 1/e), in metres. Finite, more than 0. */
 		float fadeDepth{1.0F};
+		/** @brief How far a temporal pass gives up its history where the caustics are drawn in full: 0 not at all (the
+		 * history averages the moving pattern), 1 the most a graded reactive mask asks. Finite, from 0 to 1. */
+		float temporalResponse{0.0F};
 
 		/**
 		 * @brief Tells whether every value is one a sea takes.
@@ -113,7 +116,8 @@ namespace EmEn::Scenes
 		{
 			return std::isfinite(strength) && strength >= 0.0F && strength <= 1.0F &&
 				std::isfinite(softening) && softening >= 0.0F &&
-				std::isfinite(fadeDepth) && fadeDepth > 0.0F;
+				std::isfinite(fadeDepth) && fadeDepth > 0.0F &&
+				std::isfinite(temporalResponse) && temporalResponse >= 0.0F && temporalResponse <= 1.0F;
 		}
 	};
 

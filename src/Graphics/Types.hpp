@@ -260,6 +260,27 @@ namespace EmEn::Graphics
 		}
 	}
 
+	/**
+	 * @brief Returns whether the render pass type is the additive pass of a DIRECTIONAL light.
+	 * @note Such a pass writes the reactive mask (a sun that carries a sea tells the temporal passes where its
+	 * caustics move the light): its shaders and its pipelines both read this, so they agree by construction.
+	 * @param value The enumeration value.
+	 * @return bool
+	 */
+	[[nodiscard]]
+	constexpr
+	bool
+	renderPassIsDirectionalLightPass (RenderPassType value) noexcept
+	{
+		return
+			value == RenderPassType::DirectionalLightPass ||
+			value == RenderPassType::DirectionalLightPassShadowMap ||
+			value == RenderPassType::DirectionalLightPassCSM ||
+			value == RenderPassType::DirectionalLightPassColorMap ||
+			value == RenderPassType::DirectionalLightPassFull ||
+			value == RenderPassType::DirectionalLightPassFullCSM;
+	}
+
 	/** @brief Defines the model matrices buffer type in video memory. */
 	enum class EMEN_API ModelMatrixType : uint32_t
 	{

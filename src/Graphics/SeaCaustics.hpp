@@ -77,5 +77,10 @@ namespace EmEn::Graphics
 		float softening{0.15F};
 		/** @brief The depth the caustics fade over (to 1/e), in metres. */
 		float fadeDepth{8.0F};
+		/** @brief How far a temporal pass gives up its history where the caustics are drawn in full, 0 (not at all) to 1
+		 * (the most a GRADED reactive mask asks): the pattern moves over a still receiver, no motion vector follows it,
+		 * and an untold history averages it — temporal anti-aliasing halved its contrast (graphics doc 45). The sun's
+		 * light pass writes it into the reactive mask, weighted by how much of the caustics the pixel receives. */
+		float temporalResponse{1.0F};
 	};
 }

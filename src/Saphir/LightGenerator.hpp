@@ -152,6 +152,23 @@ namespace EmEn::Saphir
 
 			}
 
+			/** @brief The GLSL float the sea term leaves for the reactive mask: how far a temporal pass should give up its
+			 * history at this fragment, where the sea's caustics move the light (0 to 0.49: a GRADED value, under the mark
+			 * that throws a history away). Declared only by a pass that generates the sea term (declaresSeaReactive()). */
+			static constexpr auto SeaReactiveVariable{"seaReactive"};
+
+			/**
+			 * @brief Returns whether the fragment code of this pass declares SeaReactiveVariable: the pass of a
+			 * directional light, over a surface that is not a volume's interface, with the bindless textures the sea term
+			 * reads — the conditions generatePBRFragmentShader() generates the sea term under.
+			 * @note For the shader being generated, once the material declared its surface and when the lighting is
+			 * generated. A pipeline is configured from the pass type (Graphics::renderPassIsDirectionalLightPass()).
+			 * @param generator A reference to the generator.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool declaresSeaReactive (const Generator::Abstract & generator) const noexcept;
+
 			/**
 			 * @brief Returns whether this is generating the ambient pass.
 			 * @return bool

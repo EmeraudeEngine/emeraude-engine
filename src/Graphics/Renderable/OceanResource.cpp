@@ -247,7 +247,7 @@ namespace EmEn::Graphics::Renderable
 
 		const auto tuning = m_geometry->causticTuning();
 
-		return Scenes::SeaCausticSettings{.strength = tuning.strength, .softening = tuning.softening, .fadeDepth = tuning.fadeDepth};
+		return Scenes::SeaCausticSettings{.strength = tuning.strength, .softening = tuning.softening, .fadeDepth = tuning.fadeDepth, .temporalResponse = tuning.temporalResponse};
 	}
 
 	bool
@@ -258,7 +258,7 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
-		m_geometry->setCausticTuning({.strength = settings.strength, .softening = settings.softening, .fadeDepth = settings.fadeDepth});
+		m_geometry->setCausticTuning({.strength = settings.strength, .softening = settings.softening, .fadeDepth = settings.fadeDepth, .temporalResponse = settings.temporalResponse});
 
 		return true;
 	}

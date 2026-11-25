@@ -117,6 +117,10 @@ namespace EmEn::Graphics::Geometry
 		float causticSoftening{0.15F};
 		/** @brief The depth the caustics fade over (to 1/e), in metres. */
 		float causticFadeDepth{8.0F};
+		/** @brief How far a temporal pass gives up its history under the caustics, 0 to 1
+		 * (Graphics::SeaCaustics::temporalResponse). The owner's value (2026-11-25, on screen, the anti-aliasing on, against
+		 * 0, 0.3 and 0.6). */
+		float causticTemporalResponse{1.0F};
 		/** @brief Quads per side of the shared patch. Even. */
 		uint32_t patchQuads{64};
 		/** @brief Levels of detail (quadtree depth). */
@@ -316,7 +320,8 @@ namespace EmEn::Graphics::Geometry
 			void setShelterTuning (const ShelterTuning & tuning) noexcept EMEN_EXCLUDES(m_shelterAccess);
 
 			/**
-			 * @brief What of the caustics is tuned while the surface is drawn (SeaCaustics::strength, softening, fadeDepth).
+			 * @brief What of the caustics is tuned while the surface is drawn (SeaCaustics::strength, softening, fadeDepth,
+			 * temporalResponse).
 			 * @note First the values of OceanSurfaceParameters (load()), then whatever setCausticTuning() gave.
 			 */
 			struct CausticTuning
@@ -324,6 +329,7 @@ namespace EmEn::Graphics::Geometry
 				float strength{0.0F};
 				float softening{0.0F};
 				float fadeDepth{1.0F};
+				float temporalResponse{0.0F};
 			};
 
 			/**

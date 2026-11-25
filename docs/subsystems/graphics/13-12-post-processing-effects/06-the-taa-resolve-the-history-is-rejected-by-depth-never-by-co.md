@@ -220,3 +220,18 @@ declares a world box whose history is invalid this frame; `Renderer::markInvalid
 footprint to 1 in the reactive attachment at the end of the scene pass. The case: a path whose point count changed —
 its OLD shape sat inside the ±1 % depth acceptance (a ribbon a few centimetres above the ground) and stayed as a
 ghost for ~30 frames (2 565 pixels; 0 after). Graphics doc 35 § The point-count change.
+
+**A light can raise the mask, and the mask is GRADED (owner decision, 2026-11-25)**: the caustics of a sea move over a
+still seabed with no motion vector, and the history averaged them to less than half their contrast (graphics doc 45).
+Two bands of ONE value:
+- **up to 0.5 — a graded request**: `blendAlpha = mix(blendAlpha, 1, reactive)` keeps less of the history (0.49 → the
+  current frame weighs 0.54 instead of 0.1); nothing is tagged, nothing is thrown away, the anti-aliasing goes on over
+  fewer frames;
+- **above 0.5 — the mark** of the sections above (the beam): the current frame wins and the history is tagged.
+⚠️ `R8_UNORM` stores 0.5 as 128/255 = 0.502, ABOVE the mark: a graded writer stops at 0.49.
+Who writes: the pass of a DIRECTIONAL light (`Graphics::renderPassIsDirectionalLightPass()`), every one of them, with
+a **MAX** blend on the red channel — the value the sea term leaves (`LightGenerator::SeaReactiveVariable`,
+`0.49 × temporalResponse × the caustics' weight at the fragment`), 0 for a light that carries no sea or a surface the
+term skips. The shader declares the output and the pipeline unmasks it from the pass type alone, so a cached program
+and its pipeline agree by construction. A material's own mask (outside a light pass, REPLACE) is unchanged, and MAX
+keeps it. The other light types still mask the attachment.

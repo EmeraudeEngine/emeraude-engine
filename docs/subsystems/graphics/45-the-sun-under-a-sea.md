@@ -67,13 +67,13 @@ six displacement texels.
 
 | Command (`Core.SceneManagerService.`) | Effect |
 |---|---|
-| `getSea()` | adds `lightThroughWater` (bool) and `caustics` — `strength`, `softening`, `fadeDepth` — `null` for a sea that draws none |
-| `setSeaCaustics(strength, softening, fadeDepth)` | the next frame. Refused unless the strength is 0-1, the softening 0 or more, the fade depth more than 0 |
+| `getSea()` | adds `lightThroughWater` (bool) and `caustics` — `strength`, `softening`, `fadeDepth`, `temporalResponse` — `null` for a sea that draws none |
+| `setSeaCaustics(strength, softening, fadeDepth, temporalResponse)` | the next frame. Refused unless the strength is 0-1, the softening 0 or more, the fade depth more than 0, the temporal response 0-1 (FOUR arguments since 2026-11-25) |
 | `setSeaLight(enabled)` | the whole term on or off (the absorption and the caustics): off, what lies under the sea is lit as in the air — the comparison the look is judged with |
 
 `Scenes::SeaCausticSettings`, `SeaLevelInterface::causticSettings()` / `setCausticSettings()`;
 `Scene::enableSeaLight()`. Not saved: `OceanSurfaceParameters::causticStrength` / `causticSoftening` /
-`causticFadeDepth` are the values at LOAD (1, 0.15, 8 m).
+`causticFadeDepth` / `causticTemporalResponse` are the values at LOAD (1, 0.15, 8 m, 1).
 
 ### 4. Verified (2026-11-25, Linux, RTX 3070 Ti, driver 620.70.10, `water-world`, ray-traced lane)
 
@@ -115,8 +115,17 @@ from above is darker over its deep sand than the look he approved on 2026-09-28 
   2.21, against 18.82 / 14.30 / 5.00 without, and macOS 14.34 / 9.38 / 1.54, Windows 13.68 / 8.85 / 1.97 to 2.15
   (standard deviation at softening 0: 14.6, against 28.0 without; macOS 13.3, Windows 14.1). Ruled out by
   measurement on the way: the lane, the frame rate (capped at 30 a second: same numbers), the screen derivative
-  (below). ⚠️ The owner judged the look and kept the first values with the anti-aliasing OFF; what the caustics should
-  be under it is open (engine item underwater-caustics-and-depth-light).
+  (below). ⚠️ The owner judged the look and kept the first values with the anti-aliasing OFF.
+- **The answer (owner decision, 2026-11-25: a GRADED reactive mask)**: the sun's light pass writes, into the temporal
+  passes' reactive mask, `0.49 × temporalResponse × the caustics' weight` (their strength, their fade with the depth —
+  the weight, not the frame's gain: the dark gap a bright line has just left gives up its history too). The resolve
+  then keeps less of its history there, without throwing it away (graphics doc 13-12 § 06, the two bands of the
+  mask). Linux, the anti-aliasing on, screen-space lane, mean difference with the absorption alone (99th percentile)
+  against the response — softening 0.15: 0 → 2.20 (9.6), 0.3 → 4.17 (18.8), 0.6 → 4.40 (18.1), 1 → 4.59 (23.7), where
+  the anti-aliasing off gives 5.00; softening 0: 0 → 14.45, 0.3 → 16.35, 0.6 → 17.92, 1 → 18.22 (off: 18.82). `beams`,
+  `water-world` and `default` run with it on the ray-traced lane, 0 VUID. **`temporalResponse` is 1**: the owner's value, chosen on
+  screen the same day (a window on the ray-traced lane, the anti-aliasing on, 0 / 0.3 / 0.6 / 1 switched in front of
+  him). NOT run: macOS, Windows.
 - The pixel's footprint (`dFdx` / `dFdy` of the world position) is taken BEFORE the term's branches since 2026-11-25:
   a derivative inside non-uniform control flow is undefined. It changed no number on Linux nor on macOS.
 - The traced lanes' factor was compiled and run (0 VUID); its effect on the picture was

@@ -640,7 +640,8 @@ namespace EmEn::Graphics::Material
 			 * @note The reactive mask tells the temporal passes how far to distrust their history at a pixel: light the
 			 * velocity cannot explain (a beam re-striking its arc). 1 = ignore the history, and the TAA marks the pixel
 			 * so the next frame rejects a history that still holds that light (Effects/Resolve/TAA.cpp). FSR 2's
-			 * reactive mask, UE's responsive AA.
+			 * reactive mask, UE's responsive AA. Up to 0.5 the value is a GRADED request (less history, no mark): what a
+			 * directional light's pass writes for the caustics of a sea (graphics doc 13-12 § 06).
 			 * @return std::string
 			 */
 			[[nodiscard]]

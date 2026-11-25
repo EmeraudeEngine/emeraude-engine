@@ -377,6 +377,7 @@ namespace EmEn::Scenes
 			seaLight.curvatureSlots = {m_seaLightTextures[0].slot, m_seaLightTextures[1].slot, m_seaLightTextures[2].slot};
 			seaLight.shelterSlot = m_seaLightTextures[3].slot;
 			seaLight.fadeDepth = caustics->fadeDepth;
+			seaLight.temporalResponse = caustics->temporalResponse;
 			seaLight.displacementSlots = {m_seaLightTextures[4].slot, m_seaLightTextures[5].slot, m_seaLightTextures[6].slot};
 			seaLight.reach = caustics->reach;
 		}

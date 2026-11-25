@@ -542,7 +542,7 @@ namespace EmEn::Scenes::Component
 			m_seaLight.shelterRectangle[0], m_seaLight.shelterRectangle[1], m_seaLight.shelterRectangle[2], m_seaLight.shelterRectangle[3],
 			m_seaLight.shelteredShares[0], m_seaLight.shelteredShares[1], m_seaLight.shelteredShares[2], m_seaLight.softening,
 			std::bit_cast< float >(m_seaLight.curvatureSlots[0]), std::bit_cast< float >(m_seaLight.curvatureSlots[1]), std::bit_cast< float >(m_seaLight.curvatureSlots[2]), std::bit_cast< float >(m_seaLight.shelterSlot),
-			m_seaLight.fadeDepth, m_seaLight.enabled ? 1.0F : 0.0F, 0.0F, 0.0F,
+			m_seaLight.fadeDepth, m_seaLight.enabled ? 1.0F : 0.0F, m_seaLight.temporalResponse, 0.0F,
 			std::bit_cast< float >(m_seaLight.displacementSlots[0]), std::bit_cast< float >(m_seaLight.displacementSlots[1]), std::bit_cast< float >(m_seaLight.displacementSlots[2]), m_seaLight.reach
 		};
 

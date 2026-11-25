@@ -416,6 +416,12 @@ namespace EmEn::Saphir
 	}
 
 	bool
+	LightGenerator::declaresSeaReactive (const Generator::Abstract & generator) const noexcept
+	{
+		return Graphics::renderPassIsDirectionalLightPass(m_renderPassType) && generator.bindlessTexturesEnabled() && !m_surfaceIsVolumeInterface;
+	}
+
+	bool
 	LightGenerator::generatePBRFragmentShader (const Generator::Abstract & generator, FragmentShader & fragmentShader, LightType lightType, [[maybe_unused]] bool enableShadowMap, [[maybe_unused]] bool enableColorProjection) const noexcept
 	{
 		const auto lightSetIndex = generator.shaderProgram()->setIndex(SetType::PerLight);
@@ -1056,6 +1062,14 @@ namespace EmEn::Saphir
 
 		if ( enableCloudShadow && !m_surfaceIsVolumeInterface )
 		{
+			/* What the caustics ask of the temporal passes (the reactive mask, written by the scene generator): the
+			 * pattern moves over a still receiver, no motion vector follows it, and a history nobody warns averages it —
+			 * temporal anti-aliasing halved its contrast (graphics doc 45). The value is the caustics' WEIGHT at the
+			 * fragment (their strength, their fade with the depth), not the gain of this frame: the dark gap a bright line
+			 * has just left must give up its history as well. Bounded under 0.5: a GRADED request (the resolve keeps less
+			 * of its history), never the mark that throws a history away (owner decision, 2026-11-25). */
+			Code{fragmentShader} << "float " << SeaReactiveVariable << " = 0.0;" << Line::End;
+
 			const std::string textures{Bindless::Textures2D};
 			const std::string nonUniform{GLSL::Functions::NonUniformEXT};
 			const std::string position = std::string{ShaderVariable::PositionWorldSpace} + ".xyz";
@@ -1114,7 +1128,9 @@ namespace EmEn::Saphir
 				"		const float slFocus = 0.248 * slPath;" << Line::End <<
 				"		const float slArea = (1.0 - slFocus * slCurvature.x) * (1.0 - slFocus * slCurvature.y) - (slFocus * slCurvature.z) * (slFocus * slCurvature.z);" << Line::End <<
 				"		const float slCaustic = 1.0 / max(abs(slArea), 0.125);" << Line::End <<
-				"		seaLight *= mix(1.0, slCaustic, clamp(slCascades.w, 0.0, 1.0) * exp(-slDepth / max(" << LightUB(UniformBlock::Component::SeaTuning) << ".x, 0.01))); } } } }" << Line::End;
+				"		const float slDrawn = clamp(slCascades.w, 0.0, 1.0) * exp(-slDepth / max(" << LightUB(UniformBlock::Component::SeaTuning) << ".x, 0.01));" << Line::End <<
+				"		seaLight *= mix(1.0, slCaustic, slDrawn);" << Line::End <<
+				"		" << SeaReactiveVariable << " = 0.49 * clamp(" << LightUB(UniformBlock::Component::SeaTuning) << ".z, 0.0, 1.0) * slDrawn; } } } }" << Line::End;
 		}
 
 		/* Compute radiance and final output. */
