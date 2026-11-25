@@ -28,10 +28,12 @@
 
 /* STL inclusions. */
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <memory>
+#include <optional>
 #include <ratio>
 #include <span>
 #include <utility>
@@ -41,10 +43,12 @@
 #include "BlobTrait.hpp"
 #include "Graphics/Geometry/OceanSurface.hpp"
 #include "Graphics/Material/StandardResource.hpp"
+#include "Graphics/OceanWaves.hpp"
 #include "Graphics/SeaShelterMap.hpp"
 #include "Math/Vector.hpp"
 #include "Resources/Container.hpp"
 #include "Scenes/GroundLevelInterface.hpp"
+#include "Scenes/SeaLevelInterface.hpp"
 #include "Tracer.hpp"
 #include "VertexFactory/ShelterMap.hpp"
 
@@ -123,6 +127,8 @@ namespace EmEn::Graphics::Renderable
 		}
 
 		const auto & parameters = m_geometry->parameters();
+		/* The passage and the fade of NOW: the parameters' at load, then what a console command gave. */
+		const auto tuning = m_geometry->shelterTuning();
 		const auto side = static_cast< size_t >(parameters.shelterMapSide);
 
 		if ( !std::isfinite(boundary) || boundary <= 0.0F || side == 0 )
@@ -159,8 +165,8 @@ namespace EmEn::Graphics::Renderable
 
 		const VertexFactory::ShelterMapOptions options{
 			.waterLevel = parameters.seaLevel,
-			.minimumPassage = std::clamp(parameters.shelterMinimumPassage / cell, 0.0F, VertexFactory::MaxShelterMapReach),
-			.fade = std::clamp(parameters.shelterFade / cell, 0.0F, VertexFactory::MaxShelterMapReach)
+			.minimumPassage = std::clamp(tuning.minimumPassage / cell, 0.0F, VertexFactory::MaxShelterMapReach),
+			.fade = std::clamp(tuning.fade / cell, 0.0F, VertexFactory::MaxShelterMapReach)
 		};
 
 		if ( !VertexFactory::buildShelterMap({.heights = heights, .columns = side, .rows = side}, options, map->texels) )
@@ -192,9 +198,43 @@ namespace EmEn::Graphics::Renderable
 
 		TraceInfo{ClassId} <<
 			"Ocean '" << this->name() << "': the ground shelters " << (static_cast< float >(sheltered) * cellArea) << " m² of the " << (static_cast< float >(water) * cellArea) << " m² of water over the scene's " << (2.0F * boundary) << " m square "
-			"(" << side << " cells of " << cell << " m a side, passages under " << parameters.shelterMinimumPassage << " m closed; " << elapsed << " ms).";
+			"(" << side << " cells of " << cell << " m a side, passages under " << tuning.minimumPassage << " m closed; " << elapsed << " ms).";
 
 		m_geometry->setShelterMap(std::move(map));
+	}
+
+	std::optional< Scenes::SeaShelterSettings >
+	OceanResource::shelterSettings () const noexcept
+	{
+		if ( m_geometry == nullptr )
+		{
+			return std::nullopt;
+		}
+
+		static_assert(OceanWaves::CascadeCount == 3, "Scenes::SeaShelterSettings names three shares: the swell, the waves, the ripples.");
+
+		const auto tuning = m_geometry->shelterTuning();
+
+		return Scenes::SeaShelterSettings{
+			.minimumPassage = tuning.minimumPassage,
+			.fade = tuning.fade,
+			.swellShare = std::get< 0 >(tuning.waveShares),
+			.waveShare = std::get< 1 >(tuning.waveShares),
+			.rippleShare = std::get< 2 >(tuning.waveShares)
+		};
+	}
+
+	bool
+	OceanResource::setShelterSettings (const Scenes::SeaShelterSettings & settings) noexcept
+	{
+		if ( m_geometry == nullptr || !settings.isValid() )
+		{
+			return false;
+		}
+
+		m_geometry->setShelterTuning({.minimumPassage = settings.minimumPassage, .fade = settings.fade, .waveShares = {settings.swellShare, settings.waveShare, settings.rippleShare}});
+
+		return true;
 	}
 
 	bool

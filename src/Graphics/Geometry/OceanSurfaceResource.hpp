@@ -103,7 +103,8 @@ namespace EmEn::Graphics::Geometry
 		float shelterFade{25.0F};
 		/** @brief The share of each cascade's waves a sheltered water keeps, largest cascade first: the swell goes, the
 		 * smallest waves stay, much attenuated (owner decision 2026-11-24). ⚠️ First values: the look is the owner's
-		 * to tune on screen. */
+		 * to tune on screen. ⚠️ These three are the values at LOAD: a running surface reads
+		 * OceanSurfaceResource::shelterTuning(), which a console command changes. */
 		std::array< float, OceanWaves::CascadeCount > shelteredWaveShares{0.0F, 0.04F, 0.35F};
 		/** @brief Quads per side of the shared patch. Even. */
 		uint32_t patchQuads{64};
@@ -275,6 +276,35 @@ namespace EmEn::Graphics::Geometry
 			}
 
 			/**
+			 * @brief What of the shelter is tuned while the surface is drawn: the passage and the fade its map is
+			 * built with, and the share of each cascade a sheltered water keeps (largest cascade first).
+			 * @note First the values of OceanSurfaceParameters (load()), then whatever setShelterTuning() gave.
+			 */
+			struct ShelterTuning
+			{
+				float minimumPassage{0.0F};
+				float fade{0.0F};
+				std::array< float, OceanWaves::CascadeCount > waveShares{};
+			};
+
+			/**
+			 * @brief Returns the shelter's tuning.
+			 * @note ANY THREAD.
+			 * @return ShelterTuning
+			 */
+			[[nodiscard]]
+			ShelterTuning shelterTuning () const noexcept EMEN_EXCLUDES(m_shelterAccess);
+
+			/**
+			 * @brief Changes the shelter's tuning.
+			 * @note ANY THREAD. The shares are the ones of the next surface update (clamped to 0-1 there, nothing for
+			 * a value that is not a number). The passage and the fade are read by whoever builds the next map
+			 * (Renderable::OceanResource::adaptToGround()): the map in place is not rebuilt here.
+			 * @param tuning The new values.
+			 */
+			void setShelterTuning (const ShelterTuning & tuning) noexcept EMEN_EXCLUDES(m_shelterAccess);
+
+			/**
 			 * @brief Gives the surface its shelter map: where the land shelters the water, the waves are weighed down
 			 * to their sheltered shares (OceanSurfaceParameters::shelteredWaveShares).
 			 * @note ANY THREAD: the map is taken by the render thread at the next surface update, which uploads it
@@ -375,6 +405,8 @@ namespace EmEn::Graphics::Geometry
 			std::shared_ptr< const SeaShelterMap > m_shelterMap EMEN_GUARDED_BY(m_shelterAccess);
 			/** @brief Counts the maps given: the render thread uploads when it differs from the one it uploaded. */
 			uint64_t m_shelterGeneration EMEN_GUARDED_BY(m_shelterAccess){1};
+			/** @brief The shelter's live tuning (setShelterTuning()); the parameters' values from load(). */
+			ShelterTuning m_shelterTuning EMEN_GUARDED_BY(m_shelterAccess);
 			/** @brief The generation the image holds; 0 while it holds nothing (render thread). */
 			uint64_t m_uploadedShelterGeneration{0};
 			/** @brief The rectangle of the map the image holds, as the uniforms state it (render thread). */

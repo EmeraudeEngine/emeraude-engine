@@ -122,6 +122,7 @@
 #include "Scenes/PhysicsRecorder.hpp"
 #include "Scenes/Scene.hpp"
 #include "Scenes/SceneDataConsumer.hpp"
+#include "Scenes/SeaLevelInterface.hpp"
 #include "Scenes/StaticEntity.hpp"
 #include "String.hpp"
 #include "VertexFactory/CapUVMapping.hpp"
@@ -1325,6 +1326,89 @@ namespace EmEn::Scenes
 					return Console::CommandResult::success("Ground set with material '" + matName + "'.");
 				});
 			});
+
+		this->bindCommand("getSea", "Returns the sea of the active scene as JSON: its 'level' at rest (m) and 'shelter', how the land calms it — 'minimumPassage' and 'fade' (m), the 'swellShare', 'waveShare' and 'rippleShare' a sheltered water keeps — or null for a sea the land does not calm.",
+			[inActiveScene] () {
+				return inActiveScene([] (const std::shared_ptr< Scene > & activeScene) {
+					const auto seaLevel = activeScene->seaLevel();
+
+					if ( seaLevel == nullptr )
+					{
+						return Console::CommandResult::error("The active scene has no sea !");
+					}
+
+					Json::Value sea{Json::objectValue};
+					sea["level"] = static_cast< double >(seaLevel->getLevel());
+					sea["shelter"] = Json::Value{Json::nullValue};
+
+					if ( const auto settings = seaLevel->shelterSettings(); settings.has_value() )
+					{
+						Json::Value shelter{Json::objectValue};
+						shelter["minimumPassage"] = static_cast< double >(settings->minimumPassage);
+						shelter["fade"] = static_cast< double >(settings->fade);
+						shelter["swellShare"] = static_cast< double >(settings->swellShare);
+						shelter["waveShare"] = static_cast< double >(settings->waveShare);
+						shelter["rippleShare"] = static_cast< double >(settings->rippleShare);
+						sea["shelter"] = shelter;
+					}
+
+					return Console::CommandResult::json(FastJSON::stringify(sea));
+				});
+			}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("setSeaShelteredShares", "Sets what a water sheltered by the land keeps of the sea's waves, applied to the next frame: 0 nothing, 1 everything.",
+			{
+				{"swell", "The share of the swell (the largest waves), 0-1."},
+				{"waves", "The share of the middle waves, 0-1."},
+				{"ripples", "The share of the ripples (the smallest waves), 0-1."}
+			},
+			[inActiveScene] (float swell, float waves, float ripples) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					auto settings = activeScene->seaShelterSettings();
+
+					if ( !settings.has_value() )
+					{
+						return Console::CommandResult::error("The active scene has no sea the land calms !");
+					}
+
+					settings->swellShare = swell;
+					settings->waveShare = waves;
+					settings->rippleShare = ripples;
+
+					if ( !settings->isValid() || !activeScene->setSeaShelterSettings(*settings) )
+					{
+						return Console::CommandResult::error("Refused: each share must be a number from 0 to 1 !");
+					}
+
+					return Console::CommandResult::success("Sheltered shares set.");
+				});
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("setSeaShelter", "Sets which water the swell reaches and rebuilds the sea's shelter map at once (some tens of milliseconds): the narrowest passage the swell enters and the distance over which it calms down past it.",
+			{
+				{"minimumPassage", "The narrowest passage the swell enters, in metres (0 or more)."},
+				{"fade", "The distance over which the sea calms down, in metres (0 or more)."}
+			},
+			[inActiveScene] (float minimumPassage, float fade) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					auto settings = activeScene->seaShelterSettings();
+
+					if ( !settings.has_value() )
+					{
+						return Console::CommandResult::error("The active scene has no sea the land calms !");
+					}
+
+					settings->minimumPassage = minimumPassage;
+					settings->fade = fade;
+
+					if ( !settings->isValid() || !activeScene->setSeaShelterSettings(*settings) )
+					{
+						return Console::CommandResult::error("Refused: each distance must be a number, 0 or more !");
+					}
+
+					return Console::CommandResult::success("Sea shelter set, its map rebuilt.");
+				});
+			}, Console::CommandHint::Idempotent);
 
 		this->bindCommand("getGroundLevel", "Returns the ground height of the active scene at a world X/Z as JSON: 'position' from the bilinear height field (getLevelAt()), 'surface' the exact height of the rendered triangle there (what the physics collides; null outside the ground), and the ground normal.",
 			{

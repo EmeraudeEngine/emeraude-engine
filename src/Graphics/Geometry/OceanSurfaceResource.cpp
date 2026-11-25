@@ -143,6 +143,8 @@ namespace EmEn::Graphics::Geometry
 
 		m_parameters = parameters;
 
+		this->setShelterTuning({.minimumPassage = parameters.shelterMinimumPassage, .fade = parameters.shelterFade, .waveShares = parameters.shelteredWaveShares});
+
 		/* The level ranges and the geomorph table, as the terrain's (CDLODTerrainResource::load()). */
 		const auto ratio = std::clamp(m_parameters.morphStartRatio, 0.0F, 0.95F);
 
@@ -622,6 +624,22 @@ namespace EmEn::Graphics::Geometry
 		++m_shelterGeneration;
 	}
 
+	OceanSurfaceResource::ShelterTuning
+	OceanSurfaceResource::shelterTuning () const noexcept
+	{
+		const Base::MutexLock lock{m_shelterAccess};
+
+		return m_shelterTuning;
+	}
+
+	void
+	OceanSurfaceResource::setShelterTuning (const ShelterTuning & tuning) noexcept
+	{
+		const Base::MutexLock lock{m_shelterAccess};
+
+		m_shelterTuning = tuning;
+	}
+
 	bool
 	OceanSurfaceResource::stageShelterMap (uint32_t frameIndex, const SeaShelterMap * map) noexcept
 	{
@@ -795,12 +813,14 @@ namespace EmEn::Graphics::Geometry
 		 * staged now and uploaded ahead of the FFT, below. */
 		std::shared_ptr< const SeaShelterMap > shelterMap;
 		uint64_t shelterGeneration = 0;
+		std::array< float, OceanWaves::CascadeCount > shelteredWaveShares{};
 
 		{
 			const Base::MutexLock lock{m_shelterAccess};
 
 			shelterMap = m_shelterMap;
 			shelterGeneration = m_shelterGeneration;
+			shelteredWaveShares = m_shelterTuning.waveShares;
 		}
 
 		const bool uploadShelter = shelterGeneration != m_uploadedShelterGeneration;
@@ -823,7 +843,7 @@ namespace EmEn::Graphics::Geometry
 				return std::isfinite(value) ? std::clamp(value, 0.0F, 1.0F) : 0.0F;
 			};
 
-			uniforms.shelteredShares = {share(std::get< 0 >(m_parameters.shelteredWaveShares)), share(std::get< 1 >(m_parameters.shelteredWaveShares)), share(std::get< 2 >(m_parameters.shelteredWaveShares)), 0.0F};
+			uniforms.shelteredShares = {share(std::get< 0 >(shelteredWaveShares)), share(std::get< 1 >(shelteredWaveShares)), share(std::get< 2 >(shelteredWaveShares)), 0.0F};
 
 			for ( uint32_t level = 0; level < OceanSurface::MaxLevelsOfDetail; ++level )
 			{

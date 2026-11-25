@@ -29,6 +29,10 @@
 /* Project configuration. */
 #include "emeraude_export.hpp"
 
+/* STL inclusions. */
+#include <cmath>
+#include <optional>
+
 /* Local inclusions for usages. */
 #include "Math/Vector.hpp"
 
@@ -43,6 +47,44 @@ namespace EmEn::Scenes
 	/* Forward declarations. */
 	class GroundLevelInterface;
 	class WaterMedium;
+
+	/**
+	 * @brief How the land calms a sea whose surface moves: which water the swell reaches, and what a sheltered water
+	 * keeps of its waves (owner decisions 2026-11-24, engine item ocean-sheltered-water).
+	 * @note The values a sea answers (SeaLevelInterface::shelterSettings()) and takes
+	 * (SeaLevelInterface::setShelterSettings()) while its scene runs — the owner tunes the look on screen.
+	 */
+	struct SeaShelterSettings
+	{
+		/** @brief The narrowest passage the swell enters, in metres. Finite, 0 or more. */
+		float minimumPassage{0.0F};
+		/** @brief The distance, in metres, over which the sea calms down once it has gone as far as it can. Finite, 0 or more. */
+		float fade{0.0F};
+		/** @brief The share a sheltered water keeps of the swell (the sea's largest waves), 0 to 1. */
+		float swellShare{0.0F};
+		/** @brief The share a sheltered water keeps of the middle waves, 0 to 1. */
+		float waveShare{0.0F};
+		/** @brief The share a sheltered water keeps of the ripples (the sea's smallest waves), 0 to 1. */
+		float rippleShare{0.0F};
+
+		/**
+		 * @brief Tells whether every value is one a sea takes: finite, the distances 0 or more, the shares in 0 to 1.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isValid () const noexcept
+		{
+			const auto distance = [] (float value) noexcept {
+				return std::isfinite(value) && value >= 0.0F;
+			};
+			const auto share = [] (float value) noexcept {
+				return std::isfinite(value) && value >= 0.0F && value <= 1.0F;
+			};
+
+			return distance(minimumPassage) && distance(fade) && share(swellShare) && share(waveShare) && share(rippleShare);
+		}
+	};
 
 	/**
 	 * @brief Interface to define a visible and physical sea level in a scene.
@@ -156,6 +198,25 @@ namespace EmEn::Scenes
 			 * on X and Z.
 			 */
 			virtual void adaptToGround (const GroundLevelInterface & ground, float boundary) noexcept = 0;
+
+			/**
+			 * @brief Returns how the land calms this sea, or nothing for a sea the land does not calm (a surface at
+			 * rest).
+			 * @note ANY THREAD.
+			 * @return std::optional< SeaShelterSettings >
+			 */
+			[[nodiscard]]
+			virtual std::optional< SeaShelterSettings > shelterSettings () const noexcept = 0;
+
+			/**
+			 * @brief Changes how the land calms this sea.
+			 * @note ANY THREAD. The shares apply to the next frame. The passage and the fade apply when the ground is
+			 * presented again (adaptToGround()): through a scene, call Scene::setSeaShelterSettings(), which does it.
+			 * @param settings The new values. Refused when one is not valid (SeaShelterSettings::isValid()).
+			 * @return bool False when the values are refused, or when the land does not calm this sea: nothing changed.
+			 */
+			[[nodiscard]]
+			virtual bool setShelterSettings (const SeaShelterSettings & settings) noexcept = 0;
 
 			/**
 			 * @brief Returns what a pass binds to know where the MOVING surface stands (the displacement its mesh is

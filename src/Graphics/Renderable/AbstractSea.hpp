@@ -32,6 +32,7 @@
 /* STL inclusions. */
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -198,6 +199,28 @@ namespace EmEn::Graphics::Renderable
 			adaptToGround (const Scenes::GroundLevelInterface & /*ground*/, float /*boundary*/) noexcept override
 			{
 
+			}
+
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::shelterSettings() const
+			 * @note A surface at rest is calm everywhere: nothing. A sea whose surface moves answers its own.
+			 */
+			[[nodiscard]]
+			std::optional< Scenes::SeaShelterSettings >
+			shelterSettings () const noexcept override
+			{
+				return std::nullopt;
+			}
+
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::setShelterSettings()
+			 * @note A surface at rest takes none. A sea whose surface moves answers its own.
+			 */
+			[[nodiscard]]
+			bool
+			setShelterSettings (const Scenes::SeaShelterSettings & /*settings*/) noexcept override
+			{
+				return false;
 			}
 
 			/**

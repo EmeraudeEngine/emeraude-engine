@@ -1425,6 +1425,8 @@ python3 tools/remote-console.py "Core.RendererService.lsfunc()"  # List service 
 | | `setDynamicSkyGroundAlbedo(r, g, b)` | The physical sky's ground albedo (linear reflectances in [0, 1], refused otherwise): the planet's surface under the horizon, the sky's multiple scattering and the ambient from below; applied by the next frame (graphics doc 42 § "The live ground albedo") |
 | | `setDynamicSkyGrading(r, g, b, intensity)` | The physical sky's tint and intensity (artistic; white and 1 = physical). A known intensity is also the scale of the nits measurement on the direct path (doc 42) |
 | | `setDynamicSkySaturation(s)` / `setDynamicSkyStar(enabled, limbDarkening)` | The physical sky's saturation (0 grey, 1 physical); the star's disc on/off and its linear limb darkening (0-1, the Sun ≈ 0.6) |
+| | `getSea()` | The active scene's sea as JSON: its `level` at rest and `shelter` (`minimumPassage`, `fade`, `swellShare`, `waveShare`, `rippleShare`), `null` for a sea the land does not calm (graphics doc 44 § 2b) |
+| | `setSeaShelteredShares(swell, waves, ripples)` / `setSeaShelter(minimumPassage, fade)` | What a water sheltered by the land keeps of the sea's waves (0-1 each, next frame); which water the swell reaches (metres, the shelter map rebuilt at once). Refused outside those ranges; not saved |
 | | `addMesh(meshResource, entityName, x, y, z [, scale])` | Place a 3D mesh |
 | | `createNode(name [, x, y, z])` | Create node in active scene |
 | | `destroyNode(name)` | Remove node |

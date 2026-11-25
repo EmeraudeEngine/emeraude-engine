@@ -1733,6 +1733,49 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns how the land calms the scene's sea, or nothing without a sea the land calms.
+			 * @return std::optional< SeaShelterSettings >
+			 */
+			[[nodiscard]]
+			std::optional< SeaShelterSettings >
+			seaShelterSettings () const noexcept
+			{
+				return m_seaLevel != nullptr ? m_seaLevel->shelterSettings() : std::nullopt;
+			}
+
+			/**
+			 * @brief Changes how the land calms the scene's sea, and presents the ground to it again when the
+			 * passage or the fade changed (the sea builds its shelter map anew: a bounded computation, synchronous).
+			 * @note Under the scene's exclusive access, as setGroundLevel().
+			 * @param settings The new values.
+			 * @return bool False when the scene has no sea the land calms, or when the sea refuses the values.
+			 */
+			[[nodiscard]]
+			bool
+			setSeaShelterSettings (const SeaShelterSettings & settings) noexcept
+			{
+				if ( m_seaLevel == nullptr )
+				{
+					return false;
+				}
+
+				const auto previous = m_seaLevel->shelterSettings();
+
+				if ( !previous.has_value() || !m_seaLevel->setShelterSettings(settings) )
+				{
+					return false;
+				}
+
+				/* NOTE: An exact comparison on purpose: any change of either rebuilds the map. */
+				if ( previous->minimumPassage != settings.minimumPassage || previous->fade != settings.fade )
+				{
+					this->presentGroundToSea();
+				}
+
+				return true;
+			}
+
+			/**
 			 * @brief Returns the current water level renderable.
 			 *
 			 * @return Shared pointer to the water surface renderable, or nullptr if none set.

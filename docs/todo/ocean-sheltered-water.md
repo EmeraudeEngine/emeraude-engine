@@ -53,12 +53,7 @@ shafts unchanged; 0 VUID.
 
 ## What remains
 
-- **The look, with the owner on screen**: how much of the small waves a sheltered water keeps
-  (`OceanSurfaceParameters::shelteredWaveShares`, first values 0 / 0.04 / 0.35 for the 512 m, 64 m and 8 m cascades);
-  the 30 m passage and the 25 m fade. ⚠️ Seen from afar a sheltered water is a mirror: the cascade that keeps a
-  share is faded by the pixel's footprint like everywhere, its ripples show at close range only. No command changes
-  the shares on a running scene: one is to be proposed if the tuning needs it.
-- The shore foam still outlines a sheltered pond in white (it follows the water column): his to judge.
+- The peers on the commands and on the shore foam cut in a sheltered water (2026-11-25): macOS, Windows not run.
 - The map's cost in the ocean's own stages (one more fetch a read of the cascades): not measured.
 - AMD. **Verified on the three OS (2026-11-24, the peers, on base 7824170 / engine 94632582 / projet-alpha 7c172234).**
   macOS (Apple M6, MoltenVK, AppleClang 21; the screen-space lane alone) and Windows (RTX 3500 Ada, MSVC 14.44 /WX; both

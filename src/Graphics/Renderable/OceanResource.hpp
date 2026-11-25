@@ -185,6 +185,21 @@ namespace EmEn::Graphics::Renderable
 			void adaptToGround (const Scenes::GroundLevelInterface & ground, float boundary) noexcept override;
 
 			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::shelterSettings() const
+			 * @note The surface's live tuning (Geometry::OceanSurfaceResource::shelterTuning()); nothing before the
+			 * ocean is loaded.
+			 */
+			[[nodiscard]]
+			std::optional< Scenes::SeaShelterSettings > shelterSettings () const noexcept override;
+
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::setShelterSettings()
+			 * @note Refused before the ocean is loaded.
+			 */
+			[[nodiscard]]
+			bool setShelterSettings (const Scenes::SeaShelterSettings & settings) noexcept override;
+
+			/**
 			 * @copydoc EmEn::Scenes::SeaLevelInterface::surfaceWaves() const
 			 * @note The FFT cascades of the surface, once it has been drawn.
 			 */

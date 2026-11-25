@@ -5773,8 +5773,12 @@ namespace EmEn::Graphics::Material
 				"const vec2 wcCell = " << lattice << " * (3.0 * " << foamParameters << ".y);" << Line::End <<
 				"const float wcPattern = sfFoamPattern(wcCell, length(fwidth(wcCell)));" << Line::End <<
 				"const float wcCoverage = " << Geometry::OceanSurface::WhitecapFunction << "(" << lattice << ");" << Line::End <<
+				/* The shore band is the waves' work on a shore: none where the land calms the water (owner decision
+				 * 2026-11-25) — the band follows the shelter map like the waves do, so a real shoreline of the open sea
+				 * keeps it (a land cell of the map takes the openness of the water nearest to it). */
+				"const float wcShoreFoam = " << SurfaceShoreFoam << " * ocShelterAt(" << lattice << ");" << Line::End <<
 				/* The upper side only: from inside the volume the column is zero, the whole underside would be a shore. */
-				"const float " << SurfaceFoamCoverage << " = gl_FrontFacing ? max(" << SurfaceShoreFoam << ", clamp((wcCoverage - wcPattern) * 4.0, 0.0, 1.0)) : 0.0;";
+				"const float " << SurfaceFoamCoverage << " = gl_FrontFacing ? max(wcShoreFoam, clamp((wcCoverage - wcPattern) * 4.0, 0.0, 1.0)) : 0.0;";
 		}
 		else
 		{

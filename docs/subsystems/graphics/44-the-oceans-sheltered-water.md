@@ -50,10 +50,51 @@ being set again, is not followed. A ground that is not a heightfield is read thr
   the normal of a vertex and of a pixel, the whitecaps: one function, so nothing of the sea ignores the map. A
   cascade weighed by nothing is not fetched.
 
-⚠️ First values, the look is the owner's to tune on screen: `shelteredWaveShares` = (0, 0.04, 0.35) for the 512 m,
-64 m and 8 m cascades. With the default 0.5 m cell the 8 m cascade is not in the mesh at all (it feeds the per-pixel
+The values: `shelteredWaveShares` = (0, 0.04, 0.35) for the 512 m, 64 m and 8 m cascades, a 30 m passage, a 25 m
+fade — the first ones, KEPT by the owner on screen (2026-11-25, `water-world`, Linux, from the shore of a sheltered
+basin, the commands of § 2b at hand: "ça me paraît super"; nothing was changed). With the default 0.5 m cell the 8 m cascade is not in the mesh at all (it feeds the per-pixel
 normals, and a pixel far away fades it like everywhere): **seen from afar a sheltered water is a mirror, its ripples
 show at close range.**
+
+### 2b. Tuned while the scene runs (2026-11-25)
+
+The look is tuned on screen, so the values are changed on a running scene (owner decision 2026-11-25: the shares AND
+the passage / fade; the water's optics stay fixed at load):
+
+| Command (`Core.SceneManagerService.`) | What it does |
+|---|---|
+| `getSea()` | JSON: the `level` at rest and `shelter` — `minimumPassage`, `fade`, `swellShare`, `waveShare`, `rippleShare` — or `null` for a sea the land does not calm |
+| `setSeaShelteredShares(swell, waves, ripples)` | what a sheltered water keeps of each cascade, largest first; applied to the next frame |
+| `setSeaShelter(minimumPassage, fade)` | which water the swell reaches; the shelter map is rebuilt at once, under the scene's exclusive access |
+
+- The contract is the family's: `Scenes::SeaShelterSettings`, `SeaLevelInterface::shelterSettings()` /
+  `setShelterSettings()` (a surface at rest answers nothing and takes nothing), `Scene::seaShelterSettings()` /
+  `setSeaShelterSettings()` — the scene presents its ground again when the passage or the fade changed.
+- The ocean keeps the live values in its surface (`OceanSurfaceResource::ShelterTuning`, under the shelter map's
+  mutex): the uniforms of each frame read the shares there, `adaptToGround()` reads the passage and the fade there.
+  ⚠️ `OceanSurfaceParameters`' three shelter members are the values at LOAD.
+- Refused, nothing changed: a share outside 0 to 1, a negative distance (`SeaShelterSettings::isValid()`); `nan` and
+  `inf` are refused by the console's own argument parsing.
+- ⚠️ Nothing is saved: the values tuned are written back into the demo's `OceanSurfaceParameters` by hand.
+
+**The shore foam follows the map too** (owner decision 2026-11-25: "l'écume ne devrait pas se dessiner là où c'est
+calme"). On an ocean geometry the shore band is multiplied by `ocShelterAt()` at the pixel's lattice point
+(`StandardResource::generateShoreFoamFragmentShader()`): none in a sheltered basin, fading with the waves past a narrow
+passage, unchanged on a shore of the open sea — a land cell of the map takes the openness of the water nearest to it,
+so the filtered read does not eat the band at an open beach. The whitecaps already went through the map.
+
+Measured (2026-11-25, Linux, RTX 3070 Ti, `water-world`, window-less 1280 × 720, ray-traced lane, pinned exposure,
+validation layer loaded, 0 VUID, 0 `[Error]`, no shader that fails to compile; six captures 0.6 s apart a state):
+
+- The shares, the basin at (−401, −189) seen from 70 m above, standard deviation of a pixel over time (0-255) on the
+  basin: 0.17 at (0, 0.04, 0.35), **5.51 at (1, 1, 1)**, 0.01 at (0, 0, 0) — applied without a relaunch.
+- The passage: `setSeaShelter(0, 25)` rebuilds the map in 49 ms and the log's line gives 7 325 m² sheltered instead of
+  15 381 m²; `setSeaShelter(30, 25)` gives 15 381.2 m² again (46 ms).
+- The foam, near-white pixels of a capture against the binary of the day before at the same poses: the basin from
+  above 43 800-47 000 → 12 700-18 600 (what is left is the open pond beside it, which keeps its band), the second
+  basin 62 300-66 700 → 25 100-30 800, the basin from its shore 1 700-2 080 → 320-910; the open sea 1 460-2 490 →
+  2 190-3 540 (its whitecaps: another instant of the sea, not a change).
+- NOT run: macOS, Windows, AMD.
 
 ### 3. One source for where the surface stands
 
@@ -111,9 +152,8 @@ indices of `OceanSurfaceResource` (C++) and the walk of `ocSurfaceRiseAt()` (GLS
 - The map has the scene's square and `shelterMapSide` cells (1 to 4096 a side, an ocean with another count is
   refused when it loads): 2.5 m a cell for `water-world`. A pond of a few cells is
   not resolved; the passage's threshold is rounded to cells.
-- The shore foam still outlines a sheltered pond: it follows the water column, not the waves.
 - `getLevelAt()` answers the level at rest, as before: the CPU knows neither the waves nor the map.
-- The sheltered shares are stated when the ocean loads: no command changes them on a running scene.
+- The values tuned on a running scene (§ 2b) are not saved.
 - The cost of the map in the ocean's own stages is not measured: one more fetch a read of the cascades (a vertex, a
   pixel). The underwater view's moving variant, which sums the cascades through the shared function, costs 0.064 ms
   a frame at 720p on an RTX 3070 Ti (graphics doc 13-12 § 44, the measurements).
