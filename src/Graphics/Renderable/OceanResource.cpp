@@ -263,6 +263,32 @@ namespace EmEn::Graphics::Renderable
 		return true;
 	}
 
+	std::optional< Scenes::SeaShaftSettings >
+	OceanResource::shaftSettings () const noexcept
+	{
+		if ( m_geometry == nullptr )
+		{
+			return std::nullopt;
+		}
+
+		const auto tuning = m_geometry->shaftTuning();
+
+		return Scenes::SeaShaftSettings{.strength = tuning.strength, .anisotropy = tuning.anisotropy};
+	}
+
+	bool
+	OceanResource::setShaftSettings (const Scenes::SeaShaftSettings & settings) noexcept
+	{
+		if ( m_geometry == nullptr || !settings.isValid() )
+		{
+			return false;
+		}
+
+		m_geometry->setShaftTuning({.strength = settings.strength, .anisotropy = settings.anisotropy});
+
+		return true;
+	}
+
 	bool
 	OceanResource::onDependenciesLoaded (const std::stop_token & /*stopToken*/) noexcept
 	{

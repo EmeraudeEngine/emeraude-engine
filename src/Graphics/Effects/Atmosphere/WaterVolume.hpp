@@ -42,6 +42,7 @@
 #include "Graphics/EffectSlot.hpp"
 #include "Graphics/IntermediateRenderTarget.hpp"
 #include "Vulkan/DescriptorSet.hpp"
+#include "Vulkan/UniformBufferObject.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Graphics
@@ -86,8 +87,13 @@ namespace EmEn::Graphics::Effects::Atmosphere
 	 * @note A SCENE-DRIVEN effect (EffectSlot::WaterVolume): filed by PostProcessStack::syncSceneEffects() the first
 	 * frame the scene's sea declares its water, never added by an application. A frame whose near plane stands clear
 	 * of the water passes the chain colour through: above the sea the effect costs nothing.
-	 * @note NOT here: the light's own path through the water (the sun dimming and turning blue with depth on what it
-	 * lights — engine item underwater-caustics-and-depth-light), the beams (underwater-light-shafts). The fog response
+	 * @note The sun's SHAFTS (2026-11-25): where the sea draws them and the sun casts cascaded shadows, two more variants
+	 * take the sun's share out of the closed form and march it along the path — at each step the sun's shadow and the
+	 * caustics' gain the waves give the light on its way down (the light pass's own term,
+	 * Graphics/Effects/Shared/SeaCausticsGLSL.hpp), as a deviation from the closed form: a water nothing modulates
+	 * gives it back to the bit. Graphics doc 45 § 5.
+	 * @note NOT here: the light's own path through the water ONTO what it lights (the sun dimming and turning blue with
+	 * depth, the caustics on the seabed — the sun's light pass, graphics doc 45). The fog response
 	 * of a surface (the material properties' alpha) is not read: under water nothing is exempt from the water.
 	 * @note Reference: S. Premože, M. Ashikhmin, "Rendering Natural Waters", Computer Graphics Forum 20(4), 2001 — the
 	 * analytic single-scattering form along a view path under a downwelling light that decays with depth.
@@ -126,6 +132,34 @@ namespace EmEn::Graphics::Effects::Atmosphere
 				 * of path), w: the meniscus' half-width (pixels). */
 				std::array< float, 4 > source;
 			};
+
+			/** @brief How many steps the sun's shafts are marched with, along the part of a pixel's path in the water. */
+			static constexpr uint32_t ShaftSampleCount{24};
+
+			/**
+			 * @brief The uniform block of the variants that march the sun's shafts (std140, seven vec4).
+			 */
+			struct EMEN_API ShaftBlock
+			{
+				/* xyz: the SUN's scattering source just under the surface, PRE-EXPOSED, per metre of path (the sky's stays
+				 * in PushConstants::source), w: the number of march steps. */
+				std::array< float, 4 > sunSource;
+				/* xyz: the direction the sun's light TRAVELS in the water (refracted, unit, pointing down), w: the
+				 * anisotropy of its scattering toward the eye (Henyey-Greenstein g). */
+				std::array< float, 4 > sunDirection;
+				/* xyz: the camera's forward axis (the shadow cascades are selected on a view depth), w: the cascade count. */
+				std::array< float, 4 > cameraForward;
+				/* xyz: the tile side of each wave cascade (m), w: how much of the caustics is drawn (0-1). */
+				std::array< float, 4 > cascadeSizes;
+				/* The shelter map's rectangle: its first corner's world X and Z, 1 / its side on X, 1 / its side on Z. */
+				std::array< float, 4 > shelterRectangle;
+				/* xyz: what a sheltered water keeps of each cascade, w: the caustics' low-pass (m per metre of depth). */
+				std::array< float, 4 > shelteredShares;
+				/* x: the depth the caustics fade over (m), y: the shadow bias, z: how much of the shafts is drawn (0-1). */
+				std::array< float, 4 > tuning;
+			};
+
+			static_assert(sizeof(ShaftBlock) == 112, "The shafts' block is seven vec4.");
 
 			static_assert(sizeof(PushConstants) == 48, "The water volume push constants are three vec4.");
 			static_assert(sizeof(PushConstants) <= 128, "Over the 128-byte Vulkan minimum guarantee of maxPushConstantsSize.");
@@ -188,24 +222,50 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		private:
 
 			/**
-			 * @brief One variant of the pass (two pipeline variants rather than a branch in the shader): the surface AT
-			 * REST (the level), or the MOVING surface (the level and the waves' displacement).
+			 * @brief One variant of the pass (pipeline variants rather than branches in the shader): the surface AT
+			 * REST (the level) or the MOVING surface (the level and the waves' displacement), each with the sun's light
+			 * scattered evenly along the path (the closed form) or MARCHED — the sun's shafts.
 			 */
 			struct Variant
 			{
 				std::shared_ptr< Vulkan::GraphicsPipeline > pipeline;
 				std::shared_ptr< Vulkan::PipelineLayout > pipelineLayout;
 				std::vector< std::unique_ptr< Vulkan::DescriptorSet > > perFrame;
+				/* The marched variants' own blocks, one a frame in flight: the shadow cascades, the shafts. */
+				std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > cascadeBlocks;
+				std::vector< std::unique_ptr< Vulkan::UniformBufferObject > > shaftBlocks;
 			};
 
 			/**
 			 * @brief Creates one variant of the pass.
 			 * @param variant A reference to the variant to fill.
 			 * @param movingSurface Whether the variant stands a pixel against the ocean's mesh.
+			 * @param shafts Whether the variant marches the sun's shafts.
 			 * @return bool
 			 */
 			[[nodiscard]]
-			bool createVariant (Variant & variant, bool movingSurface) noexcept;
+			bool createVariant (Variant & variant, bool movingSurface, bool shafts) noexcept;
+
+			/**
+			 * @brief Fills and binds what a marched variant reads this frame: the sun's shadow cascades, the caustics'
+			 * curvature and shelter map, the shafts' block.
+			 * @param variant The marched variant.
+			 * @param movingSurface Whether it is the moving one (its bindings differ).
+			 * @param context The per-frame chain context.
+			 * @param sunSource The sun's pre-exposed scattering source per metre of path.
+			 * @return bool False when something is missing: the frame falls back on the closed form.
+			 */
+			[[nodiscard]]
+			bool bindShafts (const Variant & variant, bool movingSurface, const FrameContext & context, const std::array< float, 3 > & sunSource) const noexcept;
+
+			/**
+			 * @brief Tells whether this frame can march the sun's shafts: a sea that draws them, a sun that casts
+			 * cascaded shadows and is up.
+			 * @param context The per-frame chain context.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			static bool shaftsWanted (const FrameContext & context) noexcept;
 
 			/**
 			 * @brief Records the pass when a pixel of the frame can be under water.
@@ -220,5 +280,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			IntermediateRenderTarget m_outputTarget;
 			Variant m_atRest;
 			Variant m_moving;
+			Variant m_atRestShafts;
+			Variant m_movingShafts;
 	};
 }

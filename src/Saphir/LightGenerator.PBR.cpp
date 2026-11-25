@@ -40,6 +40,7 @@
 #include "Graphics/BindlessTextureManager.hpp"
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
+#include "Graphics/Effects/Shared/SeaCausticsGLSL.hpp"
 #include "Graphics/OceanWaves.hpp"
 #include "Graphics/Types.hpp"
 #include "Math/Base.hpp"
@@ -1070,6 +1071,25 @@ namespace EmEn::Saphir
 			 * of its history), never the mark that throws a history away (owner decision, 2026-11-25). */
 			Code{fragmentShader} << "float " << SeaReactiveVariable << " = 0.0;" << Line::End;
 
+			/* The caustics' gain: the ONE statement the water volume's shafts share (SeaCausticsGLSL.hpp). */
+			{
+				Declaration::Function level{"emSeaCurvatureLevel", GLSL::Float};
+				level.addInParameter(GLSL::Float, "blur");
+				level.addInParameter(GLSL::Float, "texels");
+				level.addInParameter(GLSL::Float, "cascadeSize");
+				level.addInstruction(Graphics::SeaCausticsGLSL::CurvatureLevelBody);
+
+				Declaration::Function gain{"emSeaCausticGain", GLSL::Float};
+				gain.addInParameter(GLSL::FloatVector3, "curvature");
+				gain.addInParameter(GLSL::Float, "path");
+				gain.addInstruction(Graphics::SeaCausticsGLSL::CausticGainBody);
+
+				if ( !fragmentShader.declare(level) || !fragmentShader.declare(gain) )
+				{
+					return false;
+				}
+			}
+
 			const std::string textures{Bindless::Textures2D};
 			const std::string nonUniform{GLSL::Functions::NonUniformEXT};
 			const std::string position = std::string{ShaderVariable::PositionWorldSpace} + ".xyz";
@@ -1123,11 +1143,9 @@ namespace EmEn::Saphir
 				"		{ const uint slSlot = floatBitsToUint(slTextures[slCascade]);" << Line::End <<
 				"		  if ( slSlot != 0xFFFFFFFFu )" << Line::End <<
 				"		  { const float slWeight = mix(slShares[slCascade], 1.0, slOpen);" << Line::End <<
-				"			const float slLevel = log2(max(max(slShares.w * slDepth * slWeight, slPixel) * " << curvatureTexels << " / slCascades[slCascade], 1.0));" << Line::End <<
+				"			const float slLevel = emSeaCurvatureLevel(max(slShares.w * slDepth * slWeight, slPixel), " << curvatureTexels << ", slCascades[slCascade]);" << Line::End <<
 				"			slCurvature += slWeight * textureLod(" << textures << "[" << nonUniform << "(slSlot)], slCrossing / slCascades[slCascade], slLevel).xyz; } }" << Line::End <<
-				"		const float slFocus = 0.248 * slPath;" << Line::End <<
-				"		const float slArea = (1.0 - slFocus * slCurvature.x) * (1.0 - slFocus * slCurvature.y) - (slFocus * slCurvature.z) * (slFocus * slCurvature.z);" << Line::End <<
-				"		const float slCaustic = 1.0 / max(abs(slArea), 0.125);" << Line::End <<
+				"		const float slCaustic = emSeaCausticGain(slCurvature, slPath);" << Line::End <<
 				"		const float slDrawn = clamp(slCascades.w, 0.0, 1.0) * exp(-slDepth / max(" << LightUB(UniformBlock::Component::SeaTuning) << ".x, 0.01));" << Line::End <<
 				"		seaLight *= mix(1.0, slCaustic, slDrawn);" << Line::End <<
 				"		" << SeaReactiveVariable << " = 0.49 * clamp(" << LightUB(UniformBlock::Component::SeaTuning) << ".z, 0.0, 1.0) * slDrawn; } } } }" << Line::End;

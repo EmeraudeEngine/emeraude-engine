@@ -82,5 +82,11 @@ namespace EmEn::Graphics
 		 * and an untold history averages it — temporal anti-aliasing halved its contrast (graphics doc 45). The sun's
 		 * light pass writes it into the reactive mask, weighted by how much of the caustics the pixel receives. */
 		float temporalResponse{1.0F};
+		/** @brief How much of the sun's shafts is drawn in the water, 0 (none: the water scatters the sun's light evenly)
+		 * to 1: the same caustics, met by the light on its way down, seen in the volume
+		 * (Effects::Atmosphere::WaterVolume). */
+		float shaftStrength{1.0F};
+		/** @brief The anisotropy of the scattering of the sun's light toward the eye (Henyey-Greenstein g), 0 to 0.95. */
+		float shaftAnisotropy{0.6F};
 	};
 }

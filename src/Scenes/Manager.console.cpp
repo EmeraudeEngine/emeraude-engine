@@ -1365,6 +1365,16 @@ namespace EmEn::Scenes
 						sea["caustics"] = caustics;
 					}
 
+					sea["shafts"] = Json::Value{Json::nullValue};
+
+					if ( const auto settings = seaLevel->shaftSettings(); settings.has_value() )
+					{
+						Json::Value shafts{Json::objectValue};
+						shafts["strength"] = static_cast< double >(settings->strength);
+						shafts["anisotropy"] = static_cast< double >(settings->anisotropy);
+						sea["shafts"] = shafts;
+					}
+
 					return Console::CommandResult::json(FastJSON::stringify(sea));
 				});
 			}, Console::CommandHint::ReadOnly);
@@ -1447,6 +1457,31 @@ namespace EmEn::Scenes
 					}
 
 					return Console::CommandResult::success("Sea caustics set.");
+				});
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("setSeaShafts", "Sets the sun's shafts the sea draws in its water (seen from under it), applied to the next frame: how much of them is drawn, and how forward the water scatters the sun's light.",
+			{
+				{"strength", "How much of the shafts is drawn: 0 none (the water scatters the sun's light evenly), 1 all of it."},
+				{"anisotropy", "The anisotropy of the scattering of the sun's light toward the eye, 0 to 0.95: 0 the same in every direction; higher, the shafts show looking toward the sun and the water darkens looking away from it."}
+			},
+			[inActiveScene] (float strength, float anisotropy) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					const auto seaLevel = activeScene->seaLevel();
+
+					if ( seaLevel == nullptr || !seaLevel->shaftSettings().has_value() )
+					{
+						return Console::CommandResult::error("The active scene has no sea that draws shafts !");
+					}
+
+					const SeaShaftSettings settings{.strength = strength, .anisotropy = anisotropy};
+
+					if ( !settings.isValid() || !seaLevel->setShaftSettings(settings) )
+					{
+						return Console::CommandResult::error("Refused: the strength must be a number from 0 to 1, the anisotropy from 0 to 0.95 !");
+					}
+
+					return Console::CommandResult::success("Sea shafts set.");
 				});
 			}, Console::CommandHint::Idempotent);
 

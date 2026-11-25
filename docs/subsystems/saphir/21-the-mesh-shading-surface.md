@@ -74,7 +74,9 @@ slope-scaled bias of −1 (`Vulkan::GraphicsPipeline`), which lands its fragment
 — so the surface AND the skirt both pass and their light adds up (0.43 then 0.875 in red). The 2026-09-28 lines were
 the same double lighting, not the UV derivatives. A skirt is now drawn by the ambient pass (and the shadow pass)
 only: it plugs its crack lit by the ambient alone. Verified at the pose (`setPosition(-401, -2.55, -189)`,
-`lookAt(-401, -3.4, -180)`, the sea's light off): the line is gone on the ray-traced and screen-space lanes, 0 VUID.
+`lookAt(-401, -3.4, -180)`, the sea's light off): the line is gone on the ray-traced and screen-space lanes, 0 VUID —
+Linux and Windows (RTX 3500 Ada: 46 to 54 bright pixels in the region before, 0 after, no dark line in its place;
+`relief` option 2, a flat mesh-shaded grid, runs with 0 VUID).
 ⚠️ Wrong leads on the way, not to retry: the CDLOD's border against the window, a base height misread at a lattice
 point, `invariant` clip positions. ⚠️ The general case stays: ANY geometry that puts two fragments within the light
 passes' depth margin on one pixel is lit twice (a stencil mark a light pass sets and tests would end it for every

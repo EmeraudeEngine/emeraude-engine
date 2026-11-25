@@ -267,6 +267,28 @@ namespace EmEn::Graphics::Renderable
 				return false;
 			}
 
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::shaftSettings() const
+			 * @note A surface at rest draws none.
+			 */
+			[[nodiscard]]
+			std::optional< Scenes::SeaShaftSettings >
+			shaftSettings () const noexcept override
+			{
+				return std::nullopt;
+			}
+
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::setShaftSettings()
+			 * @note A surface at rest draws none: refused.
+			 */
+			[[nodiscard]]
+			bool
+			setShaftSettings (const Scenes::SeaShaftSettings & /*settings*/) noexcept override
+			{
+				return false;
+			}
+
 		protected:
 
 			/**

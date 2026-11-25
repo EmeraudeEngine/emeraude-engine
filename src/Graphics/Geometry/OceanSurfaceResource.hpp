@@ -121,6 +121,13 @@ namespace EmEn::Graphics::Geometry
 		 * (Graphics::SeaCaustics::temporalResponse). The owner's value (2026-11-25, on screen, the anti-aliasing on, against
 		 * 0, 0.3 and 0.6). */
 		float causticTemporalResponse{1.0F};
+		/** @brief How much of the sun's shafts is drawn in the water, 0 to 1 (Graphics::SeaCaustics::shaftStrength). */
+		float shaftStrength{1.0F};
+		/** @brief The anisotropy of the scattering of the sun's light toward the eye, 0 to 0.95
+		 * (Graphics::SeaCaustics::shaftAnisotropy). The owner's value (2026-11-25, on screen, against 0 and 0.3): the
+		 * beams gather toward the sun and the water darkens looking away from it — his choice over the even brightness
+		 * he had approved before the shafts. */
+		float shaftAnisotropy{0.6F};
 		/** @brief Quads per side of the shared patch. Even. */
 		uint32_t patchQuads{64};
 		/** @brief Levels of detail (quadtree depth). */
@@ -349,6 +356,33 @@ namespace EmEn::Graphics::Geometry
 			void setCausticTuning (const CausticTuning & tuning) noexcept EMEN_EXCLUDES(m_shelterAccess);
 
 			/**
+			 * @brief What of the sun's shafts is tuned while the surface is drawn (SeaCaustics::shaftStrength,
+			 * shaftAnisotropy).
+			 * @note First the values of OceanSurfaceParameters (load()), then whatever setShaftTuning() gave.
+			 */
+			struct ShaftTuning
+			{
+				float strength{0.0F};
+				float anisotropy{0.0F};
+			};
+
+			/**
+			 * @brief Returns the shafts' tuning.
+			 * @note ANY THREAD.
+			 * @return ShaftTuning
+			 */
+			[[nodiscard]]
+			ShaftTuning shaftTuning () const noexcept EMEN_EXCLUDES(m_shelterAccess);
+
+			/**
+			 * @brief Changes the shafts' tuning.
+			 * @note ANY THREAD. The values are the ones of the next surface update (bounded there: the strength to 0-1,
+			 * the anisotropy to 0-0.95; nothing for a value that is not a number).
+			 * @param tuning The new values.
+			 */
+			void setShaftTuning (const ShaftTuning & tuning) noexcept EMEN_EXCLUDES(m_shelterAccess);
+
+			/**
 			 * @brief Gives the surface its shelter map: where the land shelters the water, the waves are weighed down
 			 * to their sheltered shares (OceanSurfaceParameters::shelteredWaveShares).
 			 * @note ANY THREAD: the map is taken by the render thread at the next surface update, which uploads it
@@ -471,6 +505,7 @@ namespace EmEn::Graphics::Geometry
 			ShelterTuning m_shelterTuning EMEN_GUARDED_BY(m_shelterAccess);
 			/** @brief The caustics' live tuning (setCausticTuning()); the parameters' values from load(). */
 			CausticTuning m_causticTuning EMEN_GUARDED_BY(m_shelterAccess);
+			ShaftTuning m_shaftTuning EMEN_GUARDED_BY(m_shelterAccess);
 			/** @brief The generation the image holds; 0 while it holds nothing (render thread). */
 			uint64_t m_uploadedShelterGeneration{0};
 			/** @brief The rectangle of the map the image holds, as the uniforms state it (render thread). */

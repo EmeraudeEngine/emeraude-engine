@@ -235,6 +235,20 @@ namespace EmEn::Graphics::Renderable
 			[[nodiscard]]
 			bool setCausticSettings (const Scenes::SeaCausticSettings & settings) noexcept override;
 
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::shaftSettings() const
+			 * @note Nothing before the ocean is loaded.
+			 */
+			[[nodiscard]]
+			std::optional< Scenes::SeaShaftSettings > shaftSettings () const noexcept override;
+
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::setShaftSettings()
+			 * @note Refused before the ocean is loaded.
+			 */
+			[[nodiscard]]
+			bool setShaftSettings (const Scenes::SeaShaftSettings & settings) noexcept override;
+
 			/** @copydoc EmEn::Scenes::SeaLevelInterface::updateVisibility() */
 			void
 			updateVisibility (const Base::Math::Vector< 3, float > & /*worldPosition*/) noexcept override

@@ -147,6 +147,7 @@ namespace EmEn::Graphics::Geometry
 
 		this->setShelterTuning({.minimumPassage = parameters.shelterMinimumPassage, .fade = parameters.shelterFade, .waveShares = parameters.shelteredWaveShares});
 		this->setCausticTuning({.strength = parameters.causticStrength, .softening = parameters.causticSoftening, .fadeDepth = parameters.causticFadeDepth, .temporalResponse = parameters.causticTemporalResponse});
+		this->setShaftTuning({.strength = parameters.shaftStrength, .anisotropy = parameters.shaftAnisotropy});
 
 		/* The level ranges and the geomorph table, as the terrain's (CDLODTerrainResource::load()). */
 		const auto ratio = std::clamp(m_parameters.morphStartRatio, 0.0F, 0.95F);
@@ -720,6 +721,22 @@ namespace EmEn::Graphics::Geometry
 		m_causticTuning = tuning;
 	}
 
+	OceanSurfaceResource::ShaftTuning
+	OceanSurfaceResource::shaftTuning () const noexcept
+	{
+		const Base::MutexLock lock{m_shelterAccess};
+
+		return m_shaftTuning;
+	}
+
+	void
+	OceanSurfaceResource::setShaftTuning (const ShaftTuning & tuning) noexcept
+	{
+		const Base::MutexLock lock{m_shelterAccess};
+
+		m_shaftTuning = tuning;
+	}
+
 	bool
 	OceanSurfaceResource::stageShelterMap (uint32_t frameIndex, const SeaShelterMap * map) noexcept
 	{
@@ -898,6 +915,7 @@ namespace EmEn::Graphics::Geometry
 		uint64_t shelterGeneration = 0;
 		std::array< float, OceanWaves::CascadeCount > shelteredWaveShares{};
 		CausticTuning causticTuning{};
+		ShaftTuning shaftTuning{};
 
 		{
 			const Base::MutexLock lock{m_shelterAccess};
@@ -906,6 +924,7 @@ namespace EmEn::Graphics::Geometry
 			shelterGeneration = m_shelterGeneration;
 			shelteredWaveShares = m_shelterTuning.waveShares;
 			causticTuning = m_causticTuning;
+			shaftTuning = m_shaftTuning;
 		}
 
 		/* The caustics' tuning of this frame, bounded: nothing for a value that is not a number. */
@@ -913,6 +932,8 @@ namespace EmEn::Graphics::Geometry
 		m_caustics.softening = std::isfinite(causticTuning.softening) ? std::max(causticTuning.softening, 0.0F) : 0.0F;
 		m_caustics.fadeDepth = std::isfinite(causticTuning.fadeDepth) ? std::max(causticTuning.fadeDepth, 0.01F) : 0.01F;
 		m_caustics.temporalResponse = std::isfinite(causticTuning.temporalResponse) ? std::clamp(causticTuning.temporalResponse, 0.0F, 1.0F) : 0.0F;
+		m_caustics.shaftStrength = std::isfinite(shaftTuning.strength) ? std::clamp(shaftTuning.strength, 0.0F, 1.0F) : 0.0F;
+		m_caustics.shaftAnisotropy = std::isfinite(shaftTuning.anisotropy) ? std::clamp(shaftTuning.anisotropy, 0.0F, 0.95F) : 0.0F;
 
 		const bool uploadShelter = shelterGeneration != m_uploadedShelterGeneration;
 

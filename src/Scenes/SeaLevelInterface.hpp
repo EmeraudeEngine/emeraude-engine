@@ -122,6 +122,33 @@ namespace EmEn::Scenes
 	};
 
 	/**
+	 * @brief How a sea draws the sun's shafts in its water: the light the water scatters toward the eye, broken by the
+	 * waves (the caustics, in the volume) and by what shadows the sea.
+	 * @note Read and changed while the sea is drawn (SeaLevelInterface::shaftSettings() / setShaftSettings()).
+	 */
+	struct SeaShaftSettings
+	{
+		/** @brief How much of the shafts is drawn: 0 none (the water scatters the sun's light evenly), 1 all of it. */
+		float strength{0.0F};
+		/** @brief The anisotropy of the scattering of the sun's light toward the eye (Henyey-Greenstein g): 0 the same
+		 * in every direction, toward 1 mostly forward — the shafts show looking toward the sun, the water darkens
+		 * looking away from it. Finite, from 0 to 0.95. */
+		float anisotropy{0.0F};
+
+		/**
+		 * @brief Tells whether every value is one a sea takes.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isValid () const noexcept
+		{
+			return std::isfinite(strength) && strength >= 0.0F && strength <= 1.0F &&
+				std::isfinite(anisotropy) && anisotropy >= 0.0F && anisotropy <= 0.95F;
+		}
+	};
+
+	/**
 	 * @brief Interface to define a visible and physical sea level in a scene.
 	 */
 	class EMEN_API SeaLevelInterface
@@ -289,6 +316,24 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			virtual bool setCausticSettings (const SeaCausticSettings & settings) noexcept = 0;
+
+			/**
+			 * @brief Returns how this sea draws the sun's shafts in its water, or nothing for a sea that draws none (a
+			 * surface at rest: its waves break no beam).
+			 * @note ANY THREAD.
+			 * @return std::optional< SeaShaftSettings >
+			 */
+			[[nodiscard]]
+			virtual std::optional< SeaShaftSettings > shaftSettings () const noexcept = 0;
+
+			/**
+			 * @brief Changes how this sea draws the sun's shafts in its water.
+			 * @note ANY THREAD. Applied from the sea's next surface update on.
+			 * @param settings The new values. Refused when one is not valid (SeaShaftSettings::isValid()).
+			 * @return bool False when the values are refused, or when this sea draws no shafts: nothing changed.
+			 */
+			[[nodiscard]]
+			virtual bool setShaftSettings (const SeaShaftSettings & settings) noexcept = 0;
 
 			/**
 			 * @brief Updates the water surface visibility from the camera position.

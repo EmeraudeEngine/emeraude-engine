@@ -148,3 +148,70 @@ from above is darker over its deep sand than the look he approved on 2026-09-28 
   is inside the noise; the caustics cost about 0.3 ms (3.5 %) at that pose, the ranges overlapping. ⚠️ NOT in that
   figure: the curvature written by the resolve pass and its eight blits an update, which `setSeaLight(false)` does not
   stop; no measurement at the window's real size (5K).
+
+### 5. The sun's shafts in the water (2026-11-25) — the same caustics, seen in the volume
+
+The caustics are what the waves make of the sun's light on the seabed; on its way down that light is already
+concentrated and spread, and the water scatters it toward the eye: the shafts. `Effects::Atmosphere::WaterVolume`
+draws them (graphics doc 13-12 § 44 holds the rest of that effect).
+
+Owner decisions (2026-11-25, AskUserQuestion): the reference is the **realistic lagoon** (discreet beams, seen
+mostly near the surface and toward the sun); what cuts them is **the waves and the shadows**; the march lives **in
+`WaterVolume`** (the one owner of the water between the eye and what it sees — neither a separate effect, nor a
+family with the air's march); the scattering starts **the same in every direction** (the brightness he approved),
+the forward share being his to raise on screen; a console command to compare (`setSeaShafts`). **On screen the same
+day** (a window, open water, the shafts off, then on with an anisotropy of 0, 0.3 and 0.6 switched in front of him):
+he keeps **strength 1, anisotropy 0.6** — the beams gathered toward the sun, the water darker looking away from it,
+knowingly over the even brightness approved before. What the air's
+`VolumetricLight` still draws under water (a glow around the sun through the surface) is judged on screen once the
+shafts exist — open.
+
+**What is computed.** The closed form of the water's own light assumes the same sun at every point of a depth. Two
+more pipeline variants (the surface at rest or moving × the sun's share in closed form or MARCHED) take the SUN's
+share out of it — the sky's stays in the closed form — and add what changes it along the pixel's path in the water:
+
+`L_sun = P(θ) · S_sun · e^(−Kd z₀) · [ ∫ e^(−r t) dt + strength · Σ (Mᵢ − 1) · ∫ᵢ e^(−r t) dt ]`
+
+- 24 steps (`WaterVolume::ShaftSampleCount`) over the path, at most six extinction lengths; each step weighs its EXACT
+  share of the integral, so a water nothing modulates gives the closed form to the bit, and the part of a long path
+  beyond the march keeps it. The origin is dithered by a fraction of a step (`MarchDitherGLSL.hpp`).
+- `M` at a point = the sun's cascaded shadow there (`CSMSamplingGLSL.hpp`) × the caustics' gain: the point's depth,
+  the place its light crossed the surface up-sun, the three curvature mips and the shelter map — the light pass's
+  own term, from ONE statement both shaders take (`Graphics/Effects/Shared/SeaCausticsGLSL.hpp`: the generated light
+  pass declares the two functions from its body macros, the effect splices them). The low-pass is never finer than a
+  pixel at that distance nor than half a step: what the march cannot resolve is averaged, not aliased.
+- `P(θ)` = Henyey-Greenstein over the isotropic 1/4π the source holds: 1 everywhere at `anisotropy` 0.
+- A marched variant is taken when the sea draws shafts (`SeaCaustics::shaftStrength` > 0, its curvature and shelter
+  textures there) and the sun is up, lit and casts cascaded shadows; else the closed form, with the sun in the one
+  source as before. A marched variant binds the cascades, three curvatures, the shelter map and two blocks more
+  (`WaterVolume::ShaftBlock`, seven vec4).
+
+| Command (`Core.SceneManagerService.`) | Effect |
+|---|---|
+| `getSea()` | adds `shafts` — `strength`, `anisotropy` — `null` for a sea that draws none |
+| `setSeaShafts(strength, anisotropy)` | the next frame. Refused unless the strength is 0-1 and the anisotropy 0-0.95. Strength 0 = the closed form (the before / after) |
+
+`Scenes::SeaShaftSettings`, `SeaLevelInterface::shaftSettings()` / `setShaftSettings()`. Not saved:
+`OceanSurfaceParameters::shaftStrength` / `shaftAnisotropy` are the values at LOAD (1, 0.6).
+
+**Verified (2026-11-25, Linux, RTX 3070 Ti, `water-world`, ray-traced lane, window-less 1280 × 720, exposure
+pinned)**: 0 VUID, no shader failure, with the surface at rest and moving; the refusal works.
+- Open water (the eye 6 m under the level at (900, 900), looking 20° up in four directions): soft beams come down
+  from the surface with the shafts on, none without; the frame's mean rises by 1 to 4 levels. With an anisotropy of
+  0.6 the beams gather into a bright glow toward the sun and the water darkens away from it (mean 93 → 51 looking
+  away): a look of its own, not the approved one.
+- The calm basin (1 to 2.5 m of water): no beam to see — a short path in a water that scatters little, under small
+  ripples.
+- Cost, the whole frame under water, GPU-bound (five alternated 8 s windows a state): 3.364 ms a frame without,
+  3.968 ms with — **0.60 ms at 1280 × 720**. ⚠️ It grows with the pixel count (24 steps × five fetches a pixel):
+  about 1.4 ms at 1920 × 1080 by the area, NOT measured; a march at half the resolution is the known answer if a
+  large window needs it. At the basin's pose the frame is not GPU-bound (8.09 ms either way): no reading there.
+
+The screen-space lane gives the same picture and numbers at the open-water pose (0 VUID), and the caustics' own numbers are unchanged by the shared functions (softening 0.15: 4.86; 0: 18.74).
+
+**⚠️ Limits.** NOT run: macOS, Windows, AMD. The owner judged the open water; a view near an island's shadow was
+not looked at. The shadow
+is read along the sun's direction in the AIR: the bend of the light at the surface is not in it. The depth of a
+point is taken from the level at rest (the caustics' gain is 1 at the surface anyway). A sea at rest draws no shaft,
+even from what shadows it, and a sun without cascaded shadows none either: both fall back on the closed form. No
+temporal accumulation of its own: without the anti-aliasing the dither is the grain one sees.

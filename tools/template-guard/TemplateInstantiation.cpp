@@ -168,6 +168,7 @@
 #include "Graphics/Effects/Shared/LightFalloffGLSL.hpp"
 #include "Graphics/Effects/Shared/LineLightGLSL.hpp"
 #include "Graphics/Effects/Shared/MarchDitherGLSL.hpp"
+#include "Graphics/Effects/Shared/SeaCausticsGLSL.hpp"
 #include "Graphics/Effects/Shared/RTAlphaTestGLSL.hpp"
 #include "Graphics/Effects/Shared/StarMaskGLSL.hpp"
 #include "Graphics/Effects/Shared/TracedLightGLSL.hpp"
