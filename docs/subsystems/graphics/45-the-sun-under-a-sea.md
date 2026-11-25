@@ -209,7 +209,15 @@ pinned)**: 0 VUID, no shader failure, with the surface at rest and moving; the r
 
 The screen-space lane gives the same picture and numbers at the open-water pose (0 VUID), and the caustics' own numbers are unchanged by the shared functions (softening 0.15: 4.86; 0: 18.74).
 
-**⚠️ Limits.** NOT run: macOS, Windows, AMD. The owner judged the open water; a view near an island's shadow was
+**macOS and Windows the same day (engine bb6f9d02)**: macOS (Apple M6, MoltenVK, screen-space lane) and Windows
+(RTX 3500 Ada, MSVC Release and Debug, ray-traced lane) build without a warning, compile every shader, run
+`water-world`, `beams` and `default` with 0 VUID, refuse an anisotropy of 2, and give Linux's picture and numbers at
+the open-water pose (off 91 to 95; anisotropy 0.6: 90 to 93 with a standard deviation of 46 toward the sun, 50 to 53
+with 20 away from it). The caustics on the seabed are unchanged on both. Cost with the layer on: Windows 3.79 →
+4.04 ms a frame; macOS about 15 % of the frame rate toward the sun, 7 to 8 % away from it.
+⚠️ One finding, macOS only: a faint dark line in the glow (engine item underwater-shafts-faint-dark-line-macos).
+
+**⚠️ Limits.** NOT run: AMD. The owner judged the open water; a view near an island's shadow was
 not looked at. The shadow
 is read along the sun's direction in the AIR: the bend of the light at the surface is not in it. The depth of a
 point is taken from the level at rest (the caustics' gain is 1 at the surface anyway). A sea at rest draws no shaft,

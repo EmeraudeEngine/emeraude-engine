@@ -42,7 +42,7 @@ commands, measurements and limits: `docs/subsystems/graphics/45-the-sun-under-a-
   underside. No demo shows it (`water-world` has no such surface); a per-pixel answer would end it.
 - **The cost at a large window**: 0.60 ms at 1280 × 720 with the whole frame under water, growing with the pixel
   count; a march at half the resolution if the owner's window needs it (measure first).
-- macOS, Windows, AMD.
+- AMD (macOS and Windows verified on 2026-11-25: graphics doc 45 § 5).
 - Not drawn: the shafts of a sea at rest (what shadows it would still cut beams), and under a sun without cascaded
   shadows. The shadow ignores the bend of the light at the surface.
 
