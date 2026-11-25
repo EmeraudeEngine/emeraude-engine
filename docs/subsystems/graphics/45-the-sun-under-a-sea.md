@@ -91,6 +91,10 @@ the caustics):
   with the caustics 103.0 (9.12, 99th percentile 125). The caustics move the contrast, not the mean (+1 %): the
   bounded single branch keeps the energy there. The frame's mean red falls from 98.4 to 90.4 with the term, its
   green from 105.2 to 103.0.
+- The screen-space lane, same pose and exposure (a settings copy, 0 VUID): off 104.58 (7.87), absorption alone 97.69
+  (7.31), with the caustics 98.85 (10.10); two captures of the absorption alone differ by 0.02 on average, the
+  absorption and the caustics by 4.99 (99th percentile 23.6). The pattern's contrast against the softening, mean
+  difference with the absorption alone: 0 → 18.82, 0.05 → 14.30, 0.15 → 5.00, 0.6 → 0.79, 2 → 0.30.
 - `setSeaCaustics(1, -1, 8)` and `setSeaCaustics(1, 0.15, 0)` are refused, the values unchanged.
 - `gate.py commit`: every step OK (the ledger's row of the lot).
 
@@ -100,7 +104,22 @@ from above is darker over its deep sand than the look he approved on 2026-09-28 
 
 ### ⚠️ Limits
 
-- NOT run: macOS, Windows, AMD, the screen-space lane (the term is the same raster light pass there). The traced lanes' factor was compiled and run (0 VUID); its effect on the picture was
+- **The three OS (2026-11-25)**: Linux (RTX 3070 Ti), macOS (Apple M6, MoltenVK, screen-space lane) and Windows
+  (RTX 3500 Ada, ray-traced lane, MSVC Release and Debug) build without a warning, run with 0 VUID and no shader
+  failure, answer the same `getSea()`, refuse the same values, and give the same means lane for lane (screen space:
+  off 104.4 to 104.6, absorption 97.5 to 97.7; ray-traced: off 108.7 to 109.5, absorption 102.0 to 102.1). NOT run: AMD.
+- ⚠️ **Temporal anti-aliasing halves the caustics' contrast**: the pattern moves over a still receiver, no motion
+  vector follows it, the history averages it. Found as "macOS and Windows draw soft patches where Linux draws a net":
+  the Linux owner settings have `TemporalAA/Enabled` false, the two others true. Linux with the key set (settings
+  copy, screen-space lane), mean difference with the absorption alone at softening 0 / 0.05 / 0.15: 13.99 / 9.18 /
+  2.21, against 18.82 / 14.30 / 5.00 without, and macOS 14.34 / 9.38 / 1.54, Windows 13.68 / 8.85 / 1.97 to 2.15
+  (standard deviation at softening 0: 14.6, against 28.0 without; macOS 13.3, Windows 14.1). Ruled out by
+  measurement on the way: the lane, the frame rate (capped at 30 a second: same numbers), the screen derivative
+  (below). ⚠️ The owner judged the look and kept the first values with the anti-aliasing OFF; what the caustics should
+  be under it is open (engine item underwater-caustics-and-depth-light).
+- The pixel's footprint (`dFdx` / `dFdy` of the world position) is taken BEFORE the term's branches since 2026-11-25:
+  a derivative inside non-uniform control flow is undefined. It changed no number on Linux nor on macOS.
+- The traced lanes' factor was compiled and run (0 VUID); its effect on the picture was
   not measured.
 - The term is in the PBR light pass only, like the clouds' shadow: a non-PBR material under the sea is lit as in the
   air.
@@ -110,4 +129,10 @@ from above is darker over its deep sand than the look he approved on 2026-09-28 
 - The curvature is taken at the UNDISPLACED lattice point: the choppy displacement is ignored by the focusing.
 - The first values (strength 1, softening 0.15, fade 8 m) are KEPT by the owner (2026-11-25, on screen, the tuning
   commands at hand: "c'est parfait").
-- The cost of the term a frame was not measured.
+- The cost of the term in the light pass (2026-11-25, RTX 3070 Ti, driver 620.70.10, `water-world` window-less
+  1280×720, ray-traced lane, no validation layer, the machine idle, the calm basin from under water — sand over half
+  the frame; five alternated 8 s windows a state, milliseconds a frame from `renderedFrame`): term off 8.805 median
+  (8.737 to 9.100), absorption alone 8.868 (8.841 to 9.161), with the caustics 9.118 (8.948 to 9.236). The absorption
+  is inside the noise; the caustics cost about 0.3 ms (3.5 %) at that pose, the ranges overlapping. ⚠️ NOT in that
+  figure: the curvature written by the resolve pass and its eight blits an update, which `setSeaLight(false)` does not
+  stop; no measurement at the window's real size (5K).

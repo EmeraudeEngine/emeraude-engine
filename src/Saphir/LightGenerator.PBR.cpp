@@ -1062,7 +1062,11 @@ namespace EmEn::Saphir
 			const auto curvatureTexels = std::to_string(Graphics::OceanWaves::Resolution) + ".0";
 
 			Code{fragmentShader} <<
-				"{ const vec4 slWater = " << LightUB(UniformBlock::Component::SeaWater) << ";" << Line::End <<
+				"{ /* The pixel's footprint on the receiver, taken BEFORE any branch: a derivative inside non-uniform control" << Line::End <<
+				"   * flow is undefined (Metal answered a coarser one: the caustics came out blurred on macOS, 2026-11-25). */" << Line::End <<
+				"  const vec2 slFootprint = max(abs(dFdx((" << position << ").xz)), abs(dFdy((" << position << ").xz)));" << Line::End <<
+				"  const float slPixel = max(slFootprint.x, slFootprint.y);" << Line::End <<
+				"  const vec4 slWater = " << LightUB(UniformBlock::Component::SeaWater) << ";" << Line::End <<
 				"  const vec4 slSurface = " << LightUB(UniformBlock::Component::SeaSurface) << ";" << Line::End <<
 				"  const float slRest = slWater.w - (" << position << ").y;" << Line::End <<
 				"  if ( " << LightUB(UniformBlock::Component::SeaTuning) << ".y > 0.5 && slRest > -slSurface.w )" << Line::End <<
@@ -1100,8 +1104,6 @@ namespace EmEn::Saphir
 				"		const vec2 slAxis = slHorizontal > 1.0e-5 ? slDown.xz / slHorizontal : vec2(0.0);" << Line::End <<
 				"		const vec2 slCrossing = (" << position << ").xz - slAxis * (slSinRefracted / slCosRefracted) * slDepth;" << Line::End <<
 				"		const float slOpen = textureLod(" << textures << "[" << nonUniform << "(slShelterSlot)], (slCrossing - slShelter.xy) * slShelter.zw, 0.0).r;" << Line::End <<
-				"		const vec2 slFootprint = max(abs(dFdx((" << position << ").xz)), abs(dFdy((" << position << ").xz)));" << Line::End <<
-				"		const float slPixel = max(slFootprint.x, slFootprint.y);" << Line::End <<
 				"		vec3 slCurvature = vec3(0.0);" << Line::End <<
 				"		for ( int slCascade = 0; slCascade < 3; ++slCascade )" << Line::End <<
 				"		{ const uint slSlot = floatBitsToUint(slTextures[slCascade]);" << Line::End <<

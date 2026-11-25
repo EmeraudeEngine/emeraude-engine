@@ -28,11 +28,16 @@ screen and kept the first values. Everything that must outlive this item is in
 
 ## What remains
 
-- The peers: macOS, Windows (the compute blits of the curvature's mips and the seven bindless textures are new code
-  for MoltenVK and for MSVC). AMD.
+- AMD (macOS and Windows verified on 2026-11-25: graphics doc 45 § Limits).
 - The traced lanes' factor: its effect on the picture measured (a deep seabed in a reflection, the Reflections slot on
   and off).
-- The cost of the term a frame, on the RTX 3070 Ti.
+- **The caustics under temporal anti-aliasing** (the engine's default; off in the owner's Linux settings, where he
+  judged the look): the history averages the moving pattern and halves its contrast (graphics doc 45 § Limits, the
+  three OS' numbers). To decide with the owner: leave it (and tune the softening under the anti-aliasing), or make the
+  anti-aliasing follow a light that moves over a still surface (a response of its history to the caustics).
+- The cost of the curvature's upkeep (the resolve pass's extra store and the eight blits an update) and of the term
+  at the window's real size, on the RTX 3070 Ti. The light pass's share at 1280×720 is measured (graphics doc 45
+  § Limits: about 0.3 ms with the caustics, the absorption inside the noise).
 - Non-PBR materials under the sea (the term is in the PBR light pass only, like the clouds' shadow): to decide with
   the owner whether any demo needs it.
 - The edge of the caustics against the drawn water's edge in a strong swell (one round of x - D(x), the cascades' sum
