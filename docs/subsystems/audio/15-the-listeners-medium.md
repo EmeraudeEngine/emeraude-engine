@@ -72,6 +72,9 @@ notifies since (scenes doc 11 § *Every displacement notifies*): `Component::Sou
   `listenerImmersion`.
 - `SoundEmitter.play(entity, component, sound, gain, loop)`: a sound of the Sounds store on an emitter (an unknown
   name is refused); `getState` gains `awaitingLoad`.
+  Proven on a sound never requested (2026-11-26, `psycho`, 224 s, loaded in 3.6 s): `play` answers `awaitingLoad`
+  true; `stop` 0.04 s later cancels the wait; two seconds after the journal says the sound is loaded the emitter is
+  not playing, has no source and still names the sound; `replay` then plays it.
 
 ### Measured (projet-alpha `water-world`, Linux, Release, window-less, 2026-11-26)
 
@@ -119,9 +122,12 @@ bands are not read.
   output device mixes the two instead: nothing is lost there. Consequences: the band RATIOS above compare
   launches that all carry the holes (their spread from a launch to the next, up to 2.5 dB, comes from there);
   an absolute level read on such a mix is too low, and a correlation must use the blocks that hold sound.
+  **A mix written WHOLE**: a settings copy with `Core/RushMaker/EnableAudio` false — the recorder is not started,
+  the game is mixed on the manager's device, one descriptor on the file. Proven the same day (`wind1`, 6.84 s of
+  play): no run of zeros, 0.02 % of zero samples. The measurements above were NOT taken that way.
 - One medium for every source: a source that is itself under water, heard from the air, is not muffled; a source in
   the air heard from under water is muffled like one beside the listener (owner decision 2026-11-26: the listener's
   state first).
-- ⚠️ `EffectSlot::enable()` writes fixed send numbers (0 without a filter, 1 with one) whatever channel
-  `Source::addEffect()` was given: with a filter it would overwrite the reverberation's send on a device with two
-  sends (engine item `effect-slot-ignores-its-send-channel`). No user in the cascade today.
+- A source's own effects (`Source::addEffect()`) keep to their channels, the sends before the last one (four sends
+  asked a source since 2026-11-26: `06-critical-points.md`, *A source's effect channel IS its auxiliary send*). They
+  are NOT muffled by the medium: a user's send carries the sound unfiltered. No user in the cascade today.

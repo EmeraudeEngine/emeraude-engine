@@ -105,8 +105,49 @@ namespace EmEn::Audio::OpenAL
 	inline LPALGETAUXILIARYEFFECTSLOTF alGetAuxiliaryEffectSlotf{nullptr};
 	inline LPALGETAUXILIARYEFFECTSLOTFV alGetAuxiliaryEffectSlotfv{nullptr};
 
+	/** @brief The auxiliary sends asked for each source when a context is created (OpenAL Soft gives two by
+	 * default, six at most): three for a source's own effects, the last one for the listener's medium. */
+	constexpr ALint RequestedAuxiliarySends{4};
+
+	/** @brief The auxiliary sends each source has on the device of the game's context (readAuxiliarySendCount()). */
 	inline ALint g_maxAuxiliarySends{0};
 	inline bool g_isEFXAvailable{false};
+
+	/**
+	 * @brief Reads how many auxiliary sends a source has on a device into g_maxAuxiliarySends.
+	 * @note The count is the device's, set when its context is created: it is read again from the device of the
+	 * game's context once that context is known (the recorder mixes the game on its own loopback device).
+	 * @param device A pointer to the audio device the game's context lives on. A null pointer changes nothing.
+	 * @return ALint The count read.
+	 */
+	inline
+	ALint
+	readAuxiliarySendCount (ALCdevice * device) noexcept
+	{
+		if ( device != nullptr )
+		{
+			ALint sends = 0;
+
+			alcGetIntegerv(device, ALC_MAX_AUXILIARY_SENDS, 1, &sends);
+
+			g_maxAuxiliarySends = sends > 0 ? sends : 0;
+		}
+
+		return g_maxAuxiliarySends;
+	}
+
+	/**
+	 * @brief Returns how many effect channels a source offers to its user: every auxiliary send but the last one,
+	 * which is the listener's medium's (Source::refreshListenerSend()).
+	 * @return ALint
+	 */
+	[[nodiscard]]
+	inline
+	ALint
+	userAuxiliarySendCount () noexcept
+	{
+		return g_maxAuxiliarySends > 1 ? g_maxAuxiliarySends - 1 : 0;
+	}
 
 	/**
 	 * @brief Installs the OpenAL (ALC) extension 'ALC_EXT_EFX'.
@@ -127,7 +168,7 @@ namespace EmEn::Audio::OpenAL
 		g_isEFXAvailable = true;
 
 		/* Checks max auxiliary sends. */
-		alcGetIntegerv(device, ALC_MAX_AUXILIARY_SENDS, 1, &g_maxAuxiliarySends);
+		readAuxiliarySendCount(device);
 
 		alGenEffects = reinterpret_cast< LPALGENEFFECTS >(alcGetProcAddress(device, "alGenEffects"));
 		alDeleteEffects = reinterpret_cast< LPALDELETEEFFECTS >(alcGetProcAddress(device, "alDeleteEffects"));

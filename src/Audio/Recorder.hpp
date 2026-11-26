@@ -30,21 +30,26 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <atomic>
+#include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <stop_token>
-#include <thread>
+
+/* Third-party inclusions. */
+#include "AL/alc.h"
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 
 /* Local inclusions for usages. */
-#include "Thread.hpp"
-#include "WaveFactory/Types.hpp"
-#include "OpenALExtensions.hpp"
+#include "ConditionVariable.hpp"
+#include "Mutex.hpp"
 #include "OpenALHandles.hpp"
+#include "Thread.hpp"
+#include "ThreadSafety.hpp"
+#include "WaveFactory/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn
@@ -70,9 +75,12 @@ namespace EmEn::Audio
 	 * 3. Samples are forwarded to a real playback device for speaker output and optionally accumulated for WAV recording
 	 *
 	 * The render thread uses a streaming source with buffered playback to ensure smooth audio output
-	 * while simultaneously capturing PCM samples. When recording is active, samples are accumulated
-	 * into a vector and written to a WAV file on stopRecording() using WaveFactory.
+	 * while simultaneously capturing PCM samples. When recording is active, each chunk is written to the WAV file,
+	 * whose header is completed when the recording stops.
 	 *
+	 * @note The render thread OWNS the recording file: it opens it, writes it, completes its header and closes it.
+	 * startRecording() and stopRecording() post a request (the recording state and the path, behind a mutex) and wait
+	 * for the thread's answer; no file object nor byte count is touched by two threads.
 	 * @note Requires OpenAL Soft extensions: ALC_SOFT_loopback and ALC_EXT_thread_local_context.
 	 * @see EmEn::ServiceInterface, EmEn::Audio::Manager
 	 * @version 0.8.51
@@ -136,25 +144,27 @@ namespace EmEn::Audio
 			/**
 			 * @brief Starts recording the audio output to a WAV file.
 			 *
-			 * Clears any previously accumulated samples and begins capturing PCM data from the render thread.
-			 * The render thread will accumulate stereo int16 samples into m_recordSamples while recording is active.
+			 * Posts the request to the render thread, which opens the file and writes its header, and waits for its
+			 * answer (RequestTimeout at most).
 			 *
 			 * @param outputPath The filesystem path for the output WAV file.
-			 * @return True if recording started successfully, false if pipeline is not active or already recording.
-			 * @pre Loopback pipeline must be active (isActive() returns true).
-			 * @post Recording flag is set, sample buffer is cleared, and render thread begins accumulating samples.
+			 * @return True when the render thread opened the file and records. False when the recorder is not
+			 * initialized, a recording is already in progress or being started / stopped, the file could not be opened,
+			 * or the thread did not answer in time (traced; a request the thread had not taken yet is withdrawn).
+			 * @note Any thread but the render thread itself.
 			 */
 			bool startRecording (const std::filesystem::path & outputPath) noexcept;
 
 			/**
-			 * @brief Stops audio recording and writes the accumulated samples to the WAV file.
+			 * @brief Stops the audio recording: the render thread completes the WAV header and closes the file.
 			 *
-			 * Signals the render thread to stop accumulating samples, moves the accumulated PCM data,
-			 * initializes a WaveFactory Wave object with stereo int16 format, and writes the final
-			 * WAV file to the output path specified in startRecording().
+			 * Posts the request and waits for the thread's answer (RequestTimeout at most): the file is complete when
+			 * this returns true.
 			 *
-			 * @return True if recording was active and WAV file written successfully, false if not recording or write failed.
-			 * @post Recording flag is cleared, sample buffer is empty, WAV file is written to disk.
+			 * @return True when a recording was active and its file was completed. False when nothing was recording,
+			 * the header could not be written, or the thread did not answer in time (traced: the thread still
+			 * completes the file, which it owns).
+			 * @note Any thread but the render thread itself.
 			 */
 			bool stopRecording () noexcept;
 
@@ -171,18 +181,42 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Returns whether audio recording is currently active.
-			 *
+			 * @brief Returns whether an audio recording is in progress, being started or being stopped.
+			 * @note Any thread.
 			 * @return True if recording, false otherwise.
 			 */
 			[[nodiscard]]
-			bool
-			isRecording () const noexcept
-			{
-				return m_recording;
-			}
+			bool isRecording () const noexcept;
 
 		private:
+
+			/** @brief The longest wait of startRecording() / stopRecording() for the render thread's answer. */
+			static constexpr std::chrono::seconds RequestTimeout{5};
+
+			/** @brief Where a recording stands. Written by the two sides in turn, always under m_recordingAccess. */
+			enum class RecordingState : uint8_t
+			{
+				/** No recording, no request. */
+				Idle,
+				/** startRecording() posted a path; the render thread has not taken it yet. */
+				StartRequested,
+				/** The render thread is opening the file. */
+				Starting,
+				/** The render thread writes every chunk to the file. */
+				Recording,
+				/** stopRecording() asked for the end; the render thread has not taken it yet. */
+				StopRequested,
+				/** The render thread is completing the header and closing the file. */
+				Stopping
+			};
+
+			/** @brief The recording file. A LOCAL of the render thread's function: no other thread ever sees it. */
+			struct RecordingFile final
+			{
+				std::ofstream stream; ///< The WAV file being written.
+				std::filesystem::path path; ///< Its path, for the traces.
+				uint32_t byteCount{0}; ///< The bytes written to the data chunk (a WAV size field is 32-bit).
+			};
 
 			/**
 			 * @brief Sets up the loopback device, game context, playback device/context, and render thread.
@@ -237,6 +271,52 @@ namespace EmEn::Audio
 			void renderThreadFunc (const std::stop_token & stopToken) noexcept;
 
 			/**
+			 * @brief Takes a pending request of startRecording() / stopRecording() and answers it.
+			 * @note Render thread only, once per loop turn. The file work is done WITHOUT the mutex: the lock is held
+			 * to read the request and to publish the answer only.
+			 * @param file A reference to the thread's recording file.
+			 */
+			void serveRecordingRequest (RecordingFile & file) noexcept;
+
+			/**
+			 * @brief Writes one rendered chunk to the recording file; a write failure or a full WAV (4 GiB) ends the
+			 * recording (the file is completed and closed, the state goes back to Idle).
+			 * @note Render thread only.
+			 * @param file A reference to the thread's recording file. Nothing is done when it is not open.
+			 * @param data A pointer to the chunk's bytes.
+			 * @param bytes The chunk's size in bytes.
+			 */
+			void writeRecordingChunk (RecordingFile & file, const char * data, size_t bytes) noexcept;
+
+			/**
+			 * @brief Opens the recording file and writes its placeholder header.
+			 * @note Render thread only.
+			 * @param file A reference to the thread's recording file, closed.
+			 * @param path A reference to the path of the file.
+			 * @return bool False when the file could not be opened or its header written (traced, the file is closed).
+			 */
+			[[nodiscard]]
+			bool openRecordingFile (RecordingFile & file, const std::filesystem::path & path) const noexcept;
+
+			/**
+			 * @brief Completes the two size fields of the WAV header and closes the recording file.
+			 * @note Render thread only.
+			 * @param file A reference to the thread's recording file. Closed at return, whatever happened.
+			 * @return bool False when the file was not open or the header could not be written (traced).
+			 */
+			[[nodiscard]]
+			static bool closeRecordingFile (RecordingFile & file) noexcept;
+
+			/**
+			 * @brief Publishes the state the render thread reached and wakes whoever waits for it.
+			 * @note Render thread only.
+			 * @param state The new state.
+			 * @param succeeded Whether the request just served succeeded.
+			 * @param savedBytes The data bytes of the file just closed (0 otherwise).
+			 */
+			void publishRecordingState (RecordingState state, bool succeeded, uint32_t savedBytes) noexcept;
+
+			/**
 			 * @brief Writes a placeholder or final WAV header to the output stream.
 			 *
 			 * @param stream The output stream to write to.
@@ -256,12 +336,14 @@ namespace EmEn::Audio
 			ALCcontext * m_previousGlobalContext{nullptr}; ///< NOT owned: the audio manager's context, made current again at the release.
 			Base::WaveFactory::Frequency m_playbackFrequency{Base::WaveFactory::Frequency::PCM48000Hz}; ///< Playback frequency (typically 48kHz).
 			uint16_t m_channelCount{2}; ///< Number of audio channels (2 = stereo, 6 = 5.1 surround).
-			std::atomic< bool > m_recording{false}; ///< True when actively recording audio to WAV.
-			std::filesystem::path m_outputPath; ///< Output path for the WAV file set in startRecording().
-
-			std::ofstream m_outputFileStream; ///< Output file stream for writing WAV data.
-			std::streampos m_dataSizePos; ///< Position in the file where the data chunk size is written.
-			uint32_t m_streamByteCount{0}; ///< Total bytes written to the data chunk.
+			/* NOTE: The whole of what the render thread shares with the callers of startRecording() / stopRecording():
+			 * the file itself is the thread's (RecordingFile, a local of renderThreadFunc()). */
+			mutable Base::Mutex m_recordingAccess; ///< Guards the four members below.
+			Base::ConditionVariable m_recordingChanged; ///< Notified by the render thread at each state it publishes.
+			std::filesystem::path m_requestedPath EMEN_GUARDED_BY(m_recordingAccess); ///< The path posted by startRecording().
+			uint32_t m_savedByteCount EMEN_GUARDED_BY(m_recordingAccess){0}; ///< The data bytes of the last file closed.
+			RecordingState m_recordingState EMEN_GUARDED_BY(m_recordingAccess){RecordingState::Idle}; ///< Where the recording stands.
+			bool m_requestSucceeded EMEN_GUARDED_BY(m_recordingAccess){false}; ///< The answer to the last request served.
 			/* NOTE: LAST on purpose (Ave Robustus II, member order): the render thread uses the members above, so it is
 			 * destroyed — joined — first. The destructor also stops it explicitly. */
 			Base::Thread m_renderThread; ///< Dedicated render thread that pulls loopback samples and forwards to speakers.

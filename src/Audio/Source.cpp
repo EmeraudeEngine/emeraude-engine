@@ -101,9 +101,13 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		if ( channel >= OpenAL::g_maxAuxiliarySends )
+		/* NOTE: The channel is the index of the auxiliary send. The last send of a source is the listener's medium's
+		 * (refreshListenerSend()): a user's effect there was overwritten at the next change of medium. */
+		if ( channel < 0 || channel >= OpenAL::userAuxiliarySendCount() )
 		{
-			TraceWarning{ClassId} << "There is only max " << OpenAL::g_maxAuxiliarySends << " effect slots per source !";
+			TraceError{ClassId} <<
+				"The effect channel #" << channel << " is refused: a source has " << OpenAL::userAuxiliarySendCount() <<
+				" effect channel(s) (" << OpenAL::g_maxAuxiliarySends << " auxiliary send(s), the last one is the listener's).";
 
 			return false;
 		}
@@ -512,7 +516,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		return effectSlot->enable(this);
+		return effectSlot->enable(this, channel);
 	}
 
 	bool
@@ -530,7 +534,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		return effectSlot->enable(this);
+		return effectSlot->enable(this, channel);
 	}
 
 	bool
@@ -553,7 +557,7 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		return effectSlot->enable(this);
+		return effectSlot->enable(this, channel);
 	}
 
 	void
@@ -568,7 +572,7 @@ namespace EmEn::Audio
 			return;
 		}
 
-		effectIt->second->enable(this);
+		effectIt->second->enable(this, channel);
 	}
 
 	void
@@ -583,7 +587,7 @@ namespace EmEn::Audio
 			return;
 		}
 
-		effectIt->second->disable(this);
+		EffectSlot::disable(this, channel);
 	}
 
 	bool
@@ -718,7 +722,7 @@ namespace EmEn::Audio
 
 		for ( const auto & [channel, effectSlot] : m_effectSlots )
 		{
-			effectSlot->disable(this);
+			EffectSlot::disable(this, channel);
 		}
 
 		m_effectSlots.clear();
@@ -784,6 +788,14 @@ namespace EmEn::Audio
 				Tracer::error(ClassId, "Trying to play a null pointer !");
 
 				return false;
+			}
+
+			/* NOTE: The buffers of the sound that leaves are detached before its resource is let go: the playback
+			 * below may be cancelled (a sound not loaded yet) and leave them attached to a source that no longer
+			 * holds the resource. */
+			if ( m_currentPlayableInterface != nullptr )
+			{
+				this->detachBuffers();
 			}
 
 			m_currentPlayableInterface = playableInterface;
@@ -962,7 +974,38 @@ namespace EmEn::Audio
 			this->clearStream();
 		}
 
+		/* NOTE: A static buffer stayed attached to the source here, while the resource holding it was let go: the
+		 * resource's deletion of that buffer was then refused by OpenAL and the buffer leaked. */
+		this->detachBuffers();
+
 		m_currentPlayableInterface.reset();
+	}
+
+	void
+	Source::detachBuffers () const noexcept
+	{
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() )
+		{
+			return;
+		}
+
+		const auto source = this->identifier();
+
+		/* NOTE: A source gives its buffers back in the initial or the stopped state only. */
+		switch ( this->getIntValue(AL_SOURCE_STATE, AL_INITIAL) )
+		{
+			case AL_PLAYING :
+			case AL_PAUSED :
+				alSourceStop(source);
+				break;
+
+			default:
+				break;
+		}
+
+		/* NOTE: The null buffer releases a static buffer and a whole queue alike (OpenAL 1.1 specification, the
+		 * AL_BUFFER source attribute). */
+		alSourcei(source, AL_BUFFER, 0);
 	}
 
 	void

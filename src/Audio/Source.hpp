@@ -579,7 +579,8 @@ namespace EmEn::Audio
 			 * @brief Adds an effect on the source.
 			 * @warning This method only works with the EFX extension.
 			 * @param effect A reference to an effect smart pointer.
-			 * @param channel The index of the slot. Default 0.
+			 * @param channel The effect channel, which is the index of the source's auxiliary send: in
+			 * [0, OpenAL::userAuxiliarySendCount()), refused beyond (the last send is the listener's medium's). Default 0.
 			 * @return bool
 			 */
 			bool addEffect (const std::shared_ptr< Effects::Abstract > & effect, int channel = 0) noexcept;
@@ -588,7 +589,8 @@ namespace EmEn::Audio
 			 * @brief Adds a filter on the source.
 			 * @warning This method only works with the EFX extension.
 			 * @param filter A reference to a filter smart pointer.
-			 * @param channel The index of the slot. Default 0.
+			 * @param channel The effect channel, which is the index of the source's auxiliary send: in
+			 * [0, OpenAL::userAuxiliarySendCount()), refused beyond (the last send is the listener's medium's). Default 0.
 			 * @return bool
 			 */
 			bool addEffect (const std::shared_ptr< Filters::Abstract > & filter, int channel = 0) noexcept;
@@ -598,7 +600,8 @@ namespace EmEn::Audio
 			 * @warning This method only works with the EFX extension.
 			 * @param effect A reference to an effect smart pointer.
 			 * @param filter A reference to a filter smart pointer.
-			 * @param channel The index of the slot. Default 0.
+			 * @param channel The effect channel, which is the index of the source's auxiliary send: in
+			 * [0, OpenAL::userAuxiliarySendCount()), refused beyond (the last send is the listener's medium's). Default 0.
 			 * @return bool
 			 */
 			bool addEffect (const std::shared_ptr< Effects::Abstract > & effect, const std::shared_ptr< Filters::Abstract > & filter, int channel = 0) noexcept;
@@ -690,6 +693,8 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Releases the playable interface.
+			 * @post The source is stopped and no buffer of that sound is attached to it any more (detachBuffers()): the
+			 * sound's resource may then delete its buffers.
 			 */
 			void removeSound () noexcept;
 
@@ -739,6 +744,14 @@ namespace EmEn::Audio
 			 * @brief Clears streaming queue.
 			 */
 			void clearStream () const noexcept;
+
+			/**
+			 * @brief Stops the source and detaches every buffer from it, a static one and a queue alike.
+			 * @note The source holds its sound's resource (m_currentPlayableInterface) as long as one of that sound's
+			 * buffers is attached: OpenAL refuses to delete an attached buffer (AL_INVALID_OPERATION, "deleting in-use
+			 * buffer"), which then stays allocated until the context dies. Called BEFORE the resource is let go.
+			 */
+			void detachBuffers () const noexcept;
 
 			/**
 			 * @brief Prepares the effect slot channel.

@@ -29,7 +29,9 @@
 /* STL inclusions. */
 #include <array>
 #include <chrono>
-#include <cstddef>
+#include <cstdint>
+#include <filesystem>
+#include <limits>
 #include <memory>
 #include <string>
 #include <thread>
@@ -38,6 +40,7 @@
 /* Third-party inclusions. */
 #include "AL/al.h"
 #include "AL/alext.h"
+#include "AL/efx.h"
 
 /* Local inclusions. */
 #include "Audio/OpenALExtensions.hpp"
@@ -131,6 +134,7 @@ namespace EmEn::Audio
 			ALC_FREQUENCY, static_cast< int >(m_playbackFrequency.hz()),
 			ALC_MONO_SOURCES, monoSources,
 			ALC_STEREO_SOURCES, stereoSources,
+			ALC_MAX_AUXILIARY_SENDS, static_cast< int >(OpenAL::RequestedAuxiliarySends),
 			0
 		};
 
@@ -226,11 +230,8 @@ namespace EmEn::Audio
 	bool
 	Recorder::onTerminate () noexcept
 	{
-		/* Stop any active recording. */
-		if ( m_recording )
-		{
-			this->stopRecording();
-		}
+		/* NOTE: No stopRecording() here: the render thread owns the file and completes it by itself when it is asked
+		 * to stop (the end of renderThreadFunc()). */
 
 		/* Stop the render thread (its stop token: Ave Robustus II, the std::jthread model). */
 		m_renderThread.requestStop();
@@ -301,8 +302,13 @@ namespace EmEn::Audio
 
 		alSourcePlay(source);
 
+		/* NOTE: The recording file lives here: opened, written, completed and closed by this thread alone. */
+		RecordingFile recordingFile{};
+
 		while ( !stopToken.stop_requested() )
 		{
+			this->serveRecordingRequest(recordingFile);
+
 			ALint processed = 0;
 			alGetSourcei(source, AL_BUFFERS_PROCESSED, &processed);
 
@@ -314,16 +320,8 @@ namespace EmEn::Audio
 				/* Render from the loopback device. */
 				OpenAL::alcRenderSamplesSOFT(m_loopbackDevice.get(), renderBuf.data(), ChunkSamples);
 
-				/* If recording, write samples to stream. */
-				if ( m_recording.load(std::memory_order_relaxed) )
-				{
-					if ( m_outputFileStream.is_open() )
-					{
-						const auto bytes = renderBuf.size() * sizeof(int16_t);
-						m_outputFileStream.write(reinterpret_cast< const char * >(renderBuf.data()), static_cast< std::streamsize >(bytes));
-						m_streamByteCount += static_cast< uint32_t >(bytes);
-					}
-				}
+				/* If recording, write samples to the file (this thread's own). */
+				this->writeRecordingChunk(recordingFile, reinterpret_cast< const char * >(renderBuf.data()), renderBuf.size() * sizeof(int16_t));
 
 				/* Re-fill the buffer and queue it back. */
 				alBufferData(buf, alFormat, renderBuf.data(),
@@ -344,6 +342,16 @@ namespace EmEn::Audio
 			}
 
 			std::this_thread::sleep_for(std::chrono::milliseconds{5});
+		}
+
+		/* NOTE: A recording still running is completed here, and a request not taken yet is answered (refused): nobody
+		 * waits on a thread that is gone. */
+		{
+			const auto wasOpen = recordingFile.stream.is_open();
+			const auto savedBytes = recordingFile.byteCount;
+			const auto closed = wasOpen && closeRecordingFile(recordingFile);
+
+			this->publishRecordingState(RecordingState::Idle, closed, closed ? savedBytes : 0);
 		}
 
 		/* Drain: stop the source and delete resources. */
@@ -378,39 +386,43 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		if ( m_recording )
+		Base::MutexLock lock{m_recordingAccess};
+
+		if ( m_recordingState != RecordingState::Idle )
 		{
 			Tracer::warning(ClassId, "Audio recording is already in progress !");
 
 			return false;
 		}
 
-		m_outputPath = outputPath;
-		m_outputFileStream.open(m_outputPath, std::ios::binary | std::ios::out | std::ios::trunc);
+		m_requestedPath = outputPath;
+		m_requestSucceeded = false;
+		m_recordingState = RecordingState::StartRequested;
 
-		if ( !m_outputFileStream.is_open() )
+		const auto answered = m_recordingChanged.waitFor(lock, RequestTimeout, [this] () EMEN_REQUIRES(m_recordingAccess) {
+			return m_recordingState == RecordingState::Recording || m_recordingState == RecordingState::Idle;
+		});
+
+		if ( !answered )
 		{
-			TraceError{ClassId} << "Unable to open output file " << m_outputPath << " for writing !";
+			/* NOTE: A request the render thread has not taken is withdrawn. One it is serving stays its own: it
+			 * publishes the state it reaches, and isRecording() says it. */
+			if ( m_recordingState == RecordingState::StartRequested )
+			{
+				m_recordingState = RecordingState::Idle;
+			}
+
+			TraceError{ClassId} << "The render thread did not answer the recording request for " << outputPath << " in time !";
 
 			return false;
 		}
 
-		/* Write placeholder WAV header. */
-		if ( !this->writeWAVHeader(m_outputFileStream, 0) )
+		if ( !m_requestSucceeded )
 		{
-			TraceError{ClassId} << "Unable to write WAV header to " << m_outputPath << " !";
-			m_outputFileStream.close();
-
 			return false;
 		}
 
-		/* Store the position of the data size field (Byte 40) for later patching. */
-		m_dataSizePos = 40;
-		m_streamByteCount = 0;
-
-		m_recording = true;
-
-		TraceSuccess{ClassId} << "Audio recording started -> " << m_outputPath;
+		TraceSuccess{ClassId} << "Audio recording started -> " << outputPath;
 
 		return true;
 	}
@@ -418,32 +430,222 @@ namespace EmEn::Audio
 	bool
 	Recorder::stopRecording () noexcept
 	{
-		if ( !m_recording )
+		Base::MutexLock lock{m_recordingAccess};
+
+		if ( m_recordingState != RecordingState::Recording )
 		{
 			return false;
 		}
 
-		m_recording = false;
+		m_requestSucceeded = false;
+		m_recordingState = RecordingState::StopRequested;
 
-		if ( !m_outputFileStream.is_open() )
+		const auto answered = m_recordingChanged.waitFor(lock, RequestTimeout, [this] () EMEN_REQUIRES(m_recordingAccess) {
+			return m_recordingState == RecordingState::Idle;
+		});
+
+		if ( !answered )
+		{
+			/* NOTE: Nothing is given up: the request stays posted and the render thread, which owns the file,
+			 * completes it. */
+			Tracer::error(ClassId, "The render thread did not complete the audio recording in time !");
+
+			return false;
+		}
+
+		if ( !m_requestSucceeded )
 		{
 			return false;
 		}
 
-		/* Patch the header sizes. */
-		const auto totalFileSize = m_streamByteCount + 36; /* RIFF chunk size = file size - 8. */
+		TraceSuccess{ClassId} << "Audio recording saved : " << m_savedByteCount / (m_channelCount * sizeof(int16_t)) << " samples.";
 
-		/* 1. Patch RIFF chunk size (Byte 4). */
-		m_outputFileStream.seekp(4, std::ios::beg);
-		m_outputFileStream.write(reinterpret_cast< const char * >(&totalFileSize), 4);
+		return true;
+	}
 
-		/* 2. Patch data chunk size (Byte 40). */
-		m_outputFileStream.seekp(m_dataSizePos, std::ios::beg);
-		m_outputFileStream.write(reinterpret_cast< const char * >(&m_streamByteCount), 4);
+	bool
+	Recorder::isRecording () const noexcept
+	{
+		const Base::MutexLock lock{m_recordingAccess};
 
-		m_outputFileStream.close();
+		return m_recordingState != RecordingState::Idle;
+	}
 
-		TraceSuccess{ClassId} << "Audio recording saved : " << m_streamByteCount / (m_channelCount * sizeof(int16_t)) << " samples -> " << m_outputPath;
+	void
+	Recorder::publishRecordingState (RecordingState state, bool succeeded, uint32_t savedBytes) noexcept
+	{
+		/* NOTE: Notified with the mutex held: a waiter cannot return, and its owner cannot go, between the state's
+		 * change and the notification. */
+		const Base::MutexLock lock{m_recordingAccess};
+
+		m_recordingState = state;
+		m_requestSucceeded = succeeded;
+		m_savedByteCount = savedBytes;
+
+		m_recordingChanged.notifyAll();
+	}
+
+	void
+	Recorder::serveRecordingRequest (RecordingFile & file) noexcept
+	{
+		auto request = RecordingState::Idle;
+		std::filesystem::path path{};
+
+		{
+			const Base::MutexLock lock{m_recordingAccess};
+
+			request = m_recordingState;
+
+			switch ( request )
+			{
+				case RecordingState::StartRequested :
+					path = m_requestedPath;
+					m_recordingState = RecordingState::Starting;
+					break;
+
+				case RecordingState::StopRequested :
+					m_recordingState = RecordingState::Stopping;
+					break;
+
+				case RecordingState::Idle :
+				case RecordingState::Starting :
+				case RecordingState::Recording :
+				case RecordingState::Stopping :
+					return;
+			}
+		}
+
+		/* NOTE: The file work, without the mutex. */
+		if ( request == RecordingState::StartRequested )
+		{
+			const auto opened = this->openRecordingFile(file, path);
+
+			this->publishRecordingState(opened ? RecordingState::Recording : RecordingState::Idle, opened, 0);
+
+			return;
+		}
+
+		const auto savedBytes = file.byteCount;
+		const auto closed = closeRecordingFile(file);
+
+		this->publishRecordingState(RecordingState::Idle, closed, closed ? savedBytes : 0);
+	}
+
+	void
+	Recorder::writeRecordingChunk (RecordingFile & file, const char * data, size_t bytes) noexcept
+	{
+		if ( !file.stream.is_open() )
+		{
+			return;
+		}
+
+		/* NOTE: The two size fields of a WAV header are 32-bit, and the first one counts 36 bytes of header more. */
+		constexpr uint64_t MaxDataBytes{std::numeric_limits< uint32_t >::max() - 36U};
+
+		const auto full = static_cast< uint64_t >(file.byteCount) + bytes > MaxDataBytes;
+
+		if ( !full )
+		{
+			file.stream.write(data, static_cast< std::streamsize >(bytes));
+
+			if ( file.stream.good() )
+			{
+				file.byteCount += static_cast< uint32_t >(bytes);
+
+				return;
+			}
+		}
+
+		TraceError{ClassId} <<
+			( full ? "The WAV file is full (4 GiB)" : "Unable to write the audio samples" ) <<
+			": the recording to " << file.path << " ends here !";
+
+		/* NOTE: What was written is kept: the header is completed with the bytes that reached the file. The state
+		 * goes back to Idle unless a stop request was posted meanwhile: that one finds the file closed at the next
+		 * turn and is answered as failed. */
+		const auto savedBytes = file.byteCount;
+		const auto closed = closeRecordingFile(file);
+
+		const Base::MutexLock lock{m_recordingAccess};
+
+		if ( m_recordingState == RecordingState::Recording )
+		{
+			m_recordingState = RecordingState::Idle;
+			m_requestSucceeded = false;
+			m_savedByteCount = closed ? savedBytes : 0;
+
+			m_recordingChanged.notifyAll();
+		}
+	}
+
+	bool
+	Recorder::openRecordingFile (RecordingFile & file, const std::filesystem::path & path) const noexcept
+	{
+		file.path = path;
+		file.byteCount = 0;
+		file.stream.clear();
+		file.stream.open(path, std::ios::binary | std::ios::out | std::ios::trunc);
+
+		if ( !file.stream.is_open() )
+		{
+			TraceError{ClassId} << "Unable to open output file " << path << " for writing !";
+
+			return false;
+		}
+
+		/* Write placeholder WAV header. */
+		if ( !this->writeWAVHeader(file.stream, 0) )
+		{
+			TraceError{ClassId} << "Unable to write WAV header to " << path << " !";
+
+			file.stream.close();
+
+			return false;
+		}
+
+		return true;
+	}
+
+	bool
+	Recorder::closeRecordingFile (RecordingFile & file) noexcept
+	{
+		if ( !file.stream.is_open() )
+		{
+			return false;
+		}
+
+		/* NOTE: A failed write left the stream in a failed state: cleared, so the header can still be completed. */
+		file.stream.clear();
+
+		/* Patch the header sizes: the RIFF chunk size (byte 4, the file size - 8) and the data chunk size (byte 40). */
+		const uint32_t riffSize = file.byteCount + 36U;
+
+		/* NOTE: A WAV size field is little-endian: written byte by byte, whatever the machine's order. */
+		const auto writeSize = [&file] (std::streamoff position, uint32_t value) {
+			const std::array< char, 4 > bytes{
+				static_cast< char >(value & 0xFFU),
+				static_cast< char >((value >> 8U) & 0xFFU),
+				static_cast< char >((value >> 16U) & 0xFFU),
+				static_cast< char >((value >> 24U) & 0xFFU)
+			};
+
+			file.stream.seekp(position, std::ios::beg);
+			file.stream.write(bytes.data(), static_cast< std::streamsize >(bytes.size()));
+		};
+
+		writeSize(4, riffSize);
+		writeSize(40, file.byteCount);
+
+		const auto written = file.stream.good();
+
+		file.stream.close();
+
+		if ( !written || file.stream.fail() )
+		{
+			TraceError{ClassId} << "Unable to complete the WAV header of " << file.path << " !";
+
+			return false;
+		}
 
 		return true;
 	}

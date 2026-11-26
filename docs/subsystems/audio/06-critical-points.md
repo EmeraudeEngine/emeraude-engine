@@ -23,6 +23,39 @@
   - `Buffer` and `Source` own their OpenAL name: neither copyable nor movable (a copy deleted the name twice).
   - So do `Effects::Abstract`, `Filters::Abstract` and `EffectSlot` (and every effect / filter): neither copyable nor
     movable since Ave Robustus II P5 (2026-10-16) — the defaulted move did not clear the name either.
+- **A source detaches its buffers BEFORE it lets its sound go** (2026-11-26). OpenAL refuses to delete a buffer still
+  attached to a source (`AL_INVALID_OPERATION`, OpenAL Soft: "Deleting in-use buffer"): the buffer then stays allocated
+  until the context dies. The invariant: a source holds its sound's resource (`m_currentPlayableInterface`) as long as
+  one of that sound's buffers is attached. `Source::detachBuffers()` (stops the source, then `AL_BUFFER` = 0, which
+  releases a static buffer and a queue alike) runs in `removeSound()` — so in `resetToDefaults()`, the return to the
+  pool — and in `play()` when another sound replaces the current one.
+  - Before: `removeSound()` unqueued a STREAMED sound's buffers only; a static sound's buffer stayed attached to the
+    pooled source while the resource was released. Seen with the recorder off (`Core/RushMaker/EnableAudio` false,
+    `ALSOFT_DRIVERS=null`), a console `SoundEmitter.play` of `wind1`, a `stop`, a shutdown: one "Deleting in-use buffer"
+    in OpenAL Soft's log (`ALSOFT_LOGLEVEL=2`, `ALSOFT_LOGFILE=<file>`) and `AL_INVALID_OPERATION` at
+    `GlobalReleaseFlush`. With the recorder on, the flush reads no error: the game context is already gone.
+  - After (Linux): play, replace by another sound, pause, stop, replay, shutdown — 0 error in OpenAL Soft's log, with
+    the recorder off and on; the music through play, three `next`, `previous`, `stop`, `play` with the crossfade on —
+    0 error, no "clearing streams" warning.
+- **A source's effect channel IS its auxiliary send** (2026-11-26). Both contexts — the manager's and the recorder's
+  loopback "game" context — ask for `OpenAL::RequestedAuxiliarySends` = 4 sends a source (OpenAL Soft: 2 by default,
+  6 at most); the count is read from the device the GAME is mixed on, after the recorder started
+  (`OpenAL::readAuxiliarySendCount()`, traced: "Auxiliary sends per source"). The LAST send is the listener's medium's
+  (doc 15); `Source::addEffect(…, channel)` takes a channel in `[0, OpenAL::userAuxiliarySendCount())` — 3 channels —
+  and refuses another one (traced). `EffectSlot::enable(source, send)` / `disable(source, send)` write that send, with
+  the slot's filter or without.
+  - Before: `enable()` wrote send 0 without a filter and send 1 with one, whatever the channel, and `disable()` cleared
+    send 0 only — two effects of one source replaced each other, and an effect with a filter took the listener's send
+    on a device with two sends. Read in the code; `addEffect()` has no caller in the cascade.
+  - Proven (Linux, a temporary probe on a played source, `wind1`, the mix written whole — recorder off — power from
+    1.0 to 3.5 s of play): no effect 1.019e-3 (twice, to the digit), an echo on channel 0 3.904e-3, a reverb on
+    channel 1 2.378e-3, both 5.450e-3 — the sum of the two additions predicts 5.263e-3 (+0.15 dB). Channel 2 accepted,
+    3 and −1 refused, 4 sends reported with the recorder on and off. Under water with both effects, the listener's
+    reverberation still adds its level (4.721e-3 without it, 5.200e-3 with it).
+  - ⚠️ Limits: a source's own effects are NOT muffled by the listener's medium — the medium filters the direct path
+    and feeds its own send; a user's send carries the sound unfiltered (under water, both effects: −23.3 dB against
+    −36.1 dB for the muffled sound alone). When a source is released its effect slots go with it: an effect's tail
+    is cut at the stop.
 - **Sample rates (2026-11-06, base `WaveFactory::Frequency` became a strong type)**: a sound or music file at any rate in
   [1 kHz, 384 kHz] loads (22 255 Hz, a classic Mac rate, was refused before) and is resampled ONCE to the playback rate
   by `SoundResource` / `MusicResource`. The settings `Core/Audio/PlaybackFrequency` and the capture frequency go through

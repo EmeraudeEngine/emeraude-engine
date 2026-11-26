@@ -232,6 +232,7 @@ namespace EmEn::Audio
 			ALC_MONO_SOURCES, settings.getOrSetDefaultInRange< int32_t >(OpenALMaxMonoSourceCountKey, DefaultOpenALMaxMonoSourceCount, MinOpenALMaxMonoSourceCount, MaxOpenALMaxMonoSourceCount),
 			ALC_STEREO_SOURCES, settings.getOrSetDefaultInRange< int32_t >(OpenALMaxStereoSourceCountKey, DefaultOpenALMaxStereoSourceCount, MinOpenALMaxStereoSourceCount, MaxOpenALMaxStereoSourceCount),
 			ALC_OUTPUT_MODE_SOFT, static_cast< int >(outputModeValue),
+			ALC_MAX_AUXILIARY_SENDS, static_cast< int >(OpenAL::RequestedAuxiliarySends),
 			0
 		};
 
@@ -315,6 +316,16 @@ namespace EmEn::Audio
 		else
 		{
 			TraceWarning{ClassId} << m_recorder.name() << " service failed or disabled at startup!";
+		}
+
+		/* NOTE: The sends of a source are those of the device the game is mixed on: the recorder's loopback device
+		 * when it is up, this manager's own otherwise. */
+		if ( OpenAL::isEFXAvailable() )
+		{
+			if ( auto * gameContext = alcGetCurrentContext(); gameContext != nullptr )
+			{
+				TraceInfo{ClassId} << "Auxiliary sends per source: " << OpenAL::readAuxiliarySendCount(alcGetContextsDevice(gameContext)) << " (" << OpenAL::RequestedAuxiliarySends << " asked).";
+			}
 		}
 
 		/* NOTE: Set up the audio configuration (after recorder, so listener state

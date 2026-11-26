@@ -115,19 +115,20 @@ namespace EmEn::Audio
 			bool setFilter (const std::shared_ptr< Filters::Abstract > & filter) noexcept;
 
 			/**
-			 * @brief ???
-			 * @FIXME Check this method and use smart pointer.
-			 * @param source A pointer to a source.
+			 * @brief Sends a source to this slot through one of its auxiliary sends, with the slot's filter if it has one.
+			 * @param source A pointer to a source. A null pointer is refused.
+			 * @param send The index of the source's auxiliary send. @pre In [0, OpenAL::g_maxAuxiliarySends): the
+			 * source checks it (Source::prepareEffectSlot()); OpenAL refuses another one (traced).
 			 * @return bool
 			 */
-			bool enable (const AbstractObject * source) const noexcept;
+			bool enable (const AbstractObject * source, int send) const noexcept;
 
 			/**
-			 * @brief ???
-			 * @FIXME Check this method and use smart pointer.
-			 * @param source A pointer to a source.
+			 * @brief Disconnects an auxiliary send of a source: no slot, no filter.
+			 * @param source A pointer to a source. A null pointer is ignored.
+			 * @param send The index of the source's auxiliary send, the one given to enable().
 			 */
-			void disable (const AbstractObject * source) const noexcept;
+			static void disable (const AbstractObject * source, int send) noexcept;
 
 			/**
 			 * @brief Sets the output level of the slot: how loud its effect is mixed.

@@ -157,30 +157,36 @@ namespace EmEn::Audio
 	}
 
 	bool
-	EffectSlot::enable (const AbstractObject * source) const noexcept
+	EffectSlot::enable (const AbstractObject * source, int send) const noexcept
 	{
+		if ( source == nullptr )
+		{
+			Tracer::error(ClassId, "The source is a null pointer !");
+
+			return false;
+		}
+
 		alFlushErrors();
 
+		/* NOTE: The send is the one asked for, with or without a filter. It was 0 without a filter and 1 with one,
+		 * whatever the caller's channel: two effects of one source landed on the same send. */
 		const auto slotName = static_cast< ALint >(this->identifier());
+		const auto filterName = m_filter != nullptr ? static_cast< ALint >(m_filter->identifier()) : AL_FILTER_NULL;
 
-		if ( m_filter == nullptr )
-		{
-			alSource3i(source->identifier(), AL_AUXILIARY_SEND_FILTER, slotName, 0, AL_FILTER_NULL);
-		}
-		else
-		{
-			const auto filterName = static_cast< ALint >(m_filter->identifier());
-
-			alSource3i(source->identifier(), AL_AUXILIARY_SEND_FILTER, slotName, 1, filterName);
-		}
+		alSource3i(source->identifier(), AL_AUXILIARY_SEND_FILTER, slotName, send, filterName);
 
 		return !alGetErrors("alSource3i()", __FILE__, __LINE__);
 	}
 
 	void
-	EffectSlot::disable (const AbstractObject * source) const noexcept
+	EffectSlot::disable (const AbstractObject * source, int send) noexcept
 	{
-		alSource3i(source->identifier(), AL_AUXILIARY_SEND_FILTER, 0, 0, AL_FILTER_NULL);
+		if ( source == nullptr )
+		{
+			return;
+		}
+
+		alSource3i(source->identifier(), AL_AUXILIARY_SEND_FILTER, AL_EFFECTSLOT_NULL, send, AL_FILTER_NULL);
 	}
 
 	void
