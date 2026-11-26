@@ -24,7 +24,7 @@ heard it on a running scene the same day and kept the first values.
 
 ## What remains
 
-- macOS and Windows (the peers); AMD.
+- AMD (macOS and Windows verified on 2026-11-26: audio doc 15 § Limits).
 - The waves: the sound follows the sea's level at rest until the sea answers its waves on the CPU
   (`ocean-fft-surface`, step 6) — nothing to change here then.
 - `water-world` plays no sound of its own: nothing is heard there without the console. A sea ambience is a content
@@ -34,10 +34,6 @@ heard it on a running scene the same day and kept the first values.
 
 ## ⚠️ Traps
 
-- A sound emitter follows its entity through `move()` only: after a displacement that notifies nobody
-  (`node-setlocalcoordinates-notifies-nobody`) its source stays behind and the distance attenuation looks like the
-  filter (−25 dB at 18 m in the first measurement). Turn the head (`Act.lookAt`) after an `Act.setPosition` before
-  measuring.
 - The test sounds of the store hold almost nothing above 3.5 kHz: read the bands that carry signal only.
 
 ## References

@@ -54,12 +54,12 @@ reverberation), not a film's.
 ### The microphone states the listener every cycle
 
 `Component::Microphone::processLogics()` now updates its outputs every cycle, like `Camera::processLogics()`. Before,
-only `move()` did, and `move()` is not called for every displacement: `setLocalCoordinates()` (a node's and a static
-entity's) writes the frame WITHOUT notifying the components nor the sub-nodes (engine item
-`node-setlocalcoordinates-notifies-nobody`). Measured: a player repositioned from y = 60 to y = −8 by projet-alpha's
-`Act.setPosition` kept its listener at 60 until the head turned. ⚠️ `Component::SoundEmitter` still follows through
-`move()` only: after such a displacement its source stays behind (18 m behind in the first measurement: −25 dB by
-distance alone, which looked like the filter).
+only `move()` did, and until 2026-11-26 `move()` was not called for every displacement: `setLocalCoordinates()` (a
+node's and a static entity's) wrote the frame WITHOUT notifying the components nor the sub-nodes. Measured then: a
+player repositioned from y = 60 to y = −8 by projet-alpha's `Act.setPosition` kept its listener at 60 until the head
+turned, and its sound emitter stayed 18 m behind (−25 dB by distance alone, which looked like the filter). The setter
+notifies since (scenes doc 11 § *Every displacement notifies*): `Component::SoundEmitter`, which follows through
+`move()` only, is at 0.4 dB of the same placement followed by a head turn.
 
 ### Console
 
@@ -89,7 +89,15 @@ bands are not read.
 
 ### Limits
 
-- Heard by the owner on Linux only; macOS and Windows not run; AMD untested.
+- Heard by the owner on Linux only. macOS verified on 2026-11-26 (Apple M6, MoltenVK, engine 04c5d417): the same
+  five launches, immersions 0 / 0 / 0.5 / 1 / 1, 0 VUID, the tail about 0.6 to 0.7 s; fully under without
+  reverberation −5.6 / −8.7 / −15.2 / −20.9 dB, mid-band −2.6 / −3.3 / −4.0 / −6.2, with reverberation
+  +2.4 / −5.4 / −15.2 / −15.7 (two air launches within 0.4 dB). Above 2 kHz within about 2 dB of Linux; under
+  1 kHz macOS attenuates 2 to 3 dB more, not explained. Windows verified the same day (RTX 3500 Ada, MSVC 14.44
+  Release and Debug 0 warning): the same immersions, 0 VUID, the tail about 0.6 s; fully under without reverberation
+  −5.0 / −7.7 / −14.6 / −21.8 dB, with it +3.6 / −3.3 / −14.4 / −17.1, mid-band −2.6 / −2.4 / −3.4 / −6.0. ⚠️ The
+  mid-band reading agrees between macOS and Windows and sits about 2 dB under Linux's in the three lower bands: the
+  Linux reading of that one condition is the odd one, not explained. AMD untested.
 - One medium for every source: a source that is itself under water, heard from the air, is not muffled; a source in
   the air heard from under water is muffled like one beside the listener (owner decision 2026-11-26: the listener's
   state first).

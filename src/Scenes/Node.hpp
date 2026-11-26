@@ -401,11 +401,16 @@ namespace EmEn::Scenes
 				this->onLocationDataUpdate();
 			}
 
-			/** @copydoc EmEn::Scenes::LocatableInterface::setLocalCoordinates(const Base::Math::CartesianFrame< float > &) */
+			/**
+			 * @copydoc EmEn::Scenes::LocatableInterface::setLocalCoordinates(const Base::Math::CartesianFrame< float > &)
+			 * @post Calls onLocationDataUpdate(), like every other mutator: the components and the sub-nodes follow.
+			 */
 			void
 			setLocalCoordinates (const Base::Math::CartesianFrame< float > & coordinates) noexcept override
 			{
 				m_logicStateCoordinates = coordinates;
+
+				this->onLocationDataUpdate();
 			}
 
 			/** @copydoc EmEn::Scenes::LocatableInterface::localCoordinates() const */

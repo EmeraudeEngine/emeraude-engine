@@ -219,7 +219,9 @@ namespace EmEn::Scenes
 			virtual void lookAt (const Base::Math::Vector< 3, float > & target, bool flipZAxis) noexcept = 0;
 
 			/**
-			 * @brief Sets the local coordinates of this entity.
+			 * @brief Sets the local coordinates of this entity: its whole frame (position, orientation, scale) at once.
+			 * @note An entity of a scene notifies its components (and a node its sub-nodes), as for every other
+			 * displacement: a frame written without it left the lights and the sounds where they were (2026-11-26).
 			 * @param coordinates A reference to a cartesian frame.
 			 */
 			virtual void setLocalCoordinates (const Base::Math::CartesianFrame< float > & coordinates) noexcept = 0;

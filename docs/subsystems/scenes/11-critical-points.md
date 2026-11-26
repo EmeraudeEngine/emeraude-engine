@@ -11,6 +11,27 @@
 - **Friend class**: `AbstractEntity` is friend of `Component::Abstract` to access protected hooks
 - **Auto collision models**: Visual components auto-generate collision models - disable for gizmos!
 
+### ⚠️ Every displacement notifies — `setLocalCoordinates()` included (2026-11-26)
+
+- **The contract**: every mutator of `LocatableInterface` on a `Node` or a `StaticEntity` ends with
+  `onLocationDataUpdate()`: `move()` on each component of the entity, then the same down every sub-node, then the
+  node's physics simulation is woken. A component that keeps a position of its own (the lights' buffers, a sound
+  emitter's source, the push modifiers, `MultipleVisuals`) follows through `move()` ONLY; the drawn objects read the
+  node's frame every frame, so a missing notification is invisible on the picture.
+- **The defect it had**: `setLocalCoordinates()` (the whole frame at once) wrote the frame and notified nobody.
+  Measured before the fix, projet-alpha `water-world`: after `Act.setPosition` (which uses it) the microphone kept
+  the listener at the old place, the head's sound emitter stayed 18 m behind (−25 dB), and the player's flashlight
+  (a spot light under the head) received no `move()` over two placements 400 m apart, until the head turned. After:
+  one `move()` per placement at the right position; the emitter within 0.4 dB of a placement followed by a head turn.
+- **Who calls it every cycle**: `NodeAnimation::evaluateAtTime()` (each node its clip drives) and
+  `Vehicle` (each wheel). Cost measured on the animation's write loop (Release, mean of 600 cycles, `asset-loader`
+  with ChronographWatch, one animated node): 60 to 180 ns a cycle before, 1.0 to 1.5 µs notifying; a logic cycle is
+  16.7 ms. ⚠️ Not measured: a clip driving many nodes of ONE hierarchy — each written node walks its whole subtree
+  (engine item `node-animation-notifies-per-written-node`).
+- Verified after the fix (Linux, validation layer loaded): `asset-loader` (the watch's clip), `city` (the cars) and
+  `water-world`, 0 VUID, no root-node warning, 0 frame reading a state being rewritten.
+- `Physics::Particle::setLocalCoordinates()` is not an entity: it has nobody to notify.
+
 ### ⚠️ The scene graph has a DEPTH CAP: `Node::MaxDepth` = 256 (triad, 2026-09-30)
 
 - **Why**: a child's notification climbs the tree HOP BY HOP (`Node::onUnhandledNotification()` → `notify()` → the
