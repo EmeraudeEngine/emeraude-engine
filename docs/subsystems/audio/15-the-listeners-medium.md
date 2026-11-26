@@ -17,6 +17,11 @@ reverberation), not a film's.
   emitters and their one-shot voices, the world sounds, the ambience. The track mixer's two sources (the music) and
   the manager's default source (interface sounds) are not pooled: untouched by construction. A medium equal to the
   last one costs a comparison; an invalid one is refused (traced). `listenerMedium()` reads it back.
+  **A direct call, on purpose** (owner decision 2026-11-26, the Observer pattern weighed): the manager owns its
+  sources and sets them itself. A notification the sources would listen to gives the same sound, costs a
+  notification per source and per cycle while the listener crosses the surface (the medium is a continuous state,
+  not an "entered / left" event), and must be emitted outside the pool's lock. It becomes the right choice the day
+  sources OUTSIDE the pool have to follow the medium.
 - **A source has ONE direct filter in OpenAL.** A user's own (`Source::enableDirectFilter()`: the ambience) and the
   medium's are multiplied: `Filters::Abstract::response()` answers a filter's three gains (whole, low shelf at
   250 Hz, high shelf at 5 kHz), the product goes into a band-pass the source owns (`Source::refreshDirectFilter()`).
