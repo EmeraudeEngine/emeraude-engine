@@ -35,7 +35,11 @@
   emitter placed without a head turn at −37.8 dB against −38.6 dB with one (Linux: −38.6 / −39.0).
 - Windows (engine 182fd2bb, RTX 3500 Ada, MSVC 14.44, 2026-11-26): Release and Debug without a warning, the same
   three demos with 0 VUID and 0 frame reading a state being rewritten; the emitter at −38.0 dB without a head turn
-  against −37.8 dB with one. AMD: not tested.
+  against −37.8 dB with one.
+- AMD (engine fab5e37c, Radeon integrated graphics, RADV RENOIR, Mesa 26.0.8, the device forced through
+  `Core/Video/VulkanDevice/ForceGPU` in a settings copy and proven by the log's device line, 2026-11-26): the build
+  without a warning (GCC 15.2), the same three demos with 0 VUID and 0 frame reading a state being rewritten; the
+  emitter at −38.5 dB without a head turn against −37.9 dB with one.
 - `Physics::Particle::setLocalCoordinates()` is not an entity: it has nobody to notify.
 
 ### ⚠️ The scene graph has a DEPTH CAP: `Node::MaxDepth` = 256 (triad, 2026-09-30)
