@@ -28,10 +28,17 @@
 
 /* STL inclusions. */
 #include <cmath>
+#include <string>
+
+/* Third-party inclusions. */
+#include "AL/al.h"
+#include "AL/efx.h"
 
 /* Local inclusions. */
+#include "Audio/Filters/Abstract.hpp"
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Utility.hpp"
+#include "BlobTrait.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio::Filters
@@ -63,6 +70,12 @@ namespace EmEn::Audio::Filters
 
 		OpenAL::alFilterf(this->identifier(), AL_HIGHPASS_GAIN, AL_HIGHPASS_DEFAULT_GAIN);
 		OpenAL::alFilterf(this->identifier(), AL_HIGHPASS_GAINLF, AL_HIGHPASS_DEFAULT_GAINLF);
+	}
+
+	Response
+	HighPass::response () const noexcept
+	{
+		return {.gain = this->gain(), .gainLF = this->gainLF(), .gainHF = 1.0F};
 	}
 
 	void

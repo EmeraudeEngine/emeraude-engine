@@ -38,19 +38,16 @@
 
 /* Local inclusions. */
 #include "Audio/SoundResource.hpp"
-#include "Console/CommandResult.hpp"
 #include "Console/ControllableTrait.hpp"
 #include "Console/Parameter.hpp"
 #include "Console/Types.hpp"
 #include "FastJSON.hpp"
+#include "Logging/Severity.hpp"
+#include "Resources/Container.hpp"
+#include "Resources/Manager.hpp"
 #include "Scenes/AbstractEntity.hpp"
+#include "Scenes/Manager.hpp"
 #include "SoundEmitter.hpp"
-
-/* Forward declarations. */
-namespace EmEn::Scenes
-{
-	class Manager;
-}
 
 namespace EmEn::Scenes::Component
 {
@@ -72,6 +69,7 @@ namespace EmEn::Scenes::Component
 			state["entity"] = emitter.parentEntity().name();
 			state["type"] = SoundEmitter::ClassId;
 			state["playing"] = emitter.isPlaying();
+			state["awaitingLoad"] = emitter.playAwaitsLoad();
 			state["hasSource"] = emitter.hasSource();
 			state["gain"] = static_cast< double >(emitter.gain());
 			state["velocityDistortion"] = emitter.velocityDistortionEnabled();
@@ -103,7 +101,7 @@ namespace EmEn::Scenes::Component
 			return changedState(std::move(message), stateOf(emitter));
 		}
 
-		/** @brief `Core.SceneManagerService.SoundEmitter.*` (drives the attached sound; loading one is not a console matter yet). */
+		/** @brief `Core.SceneManagerService.SoundEmitter.*` (drives the emitter's own sound: plays one of the Sounds store, and its transport). */
 		class SoundEmitterConsoleAdapter final : public ConsoleAdapter< SoundEmitter >
 		{
 			public:
@@ -190,6 +188,42 @@ namespace EmEn::Scenes::Component
 								return changed(emitter, std::string{"Sound emitter '"} + emitter.name() + ( enabled ? "' Doppler on." : "' Doppler off." ));
 							});
 						}, Console::CommandHint::Idempotent);
+
+					this->bindCommand("play", "Makes a sound emitter play a sound of the Sounds store, replacing what it plays. A sound still loading is awaited (awaitingLoad in the answer) and starts by itself; stop cancels it.",
+						{
+							entity,
+							component,
+							{"sound", "The resource name of the sound in the Sounds store. An unknown name is refused."},
+							{"gain", "The gain, 0 or more (1 = the sound as recorded)."},
+							{"loop", "1 (true) plays the sound in a loop, 0 (false) once."}
+						},
+						[this] (const std::string & entityName, const std::string & componentName, const std::string & soundName, float gain, bool loop) {
+							if ( !std::isfinite(gain) || gain < 0.0F )
+							{
+								return Console::CommandResult::error("The gain must be a finite number, 0 or more.");
+							}
+
+							/* NOTE: A trust boundary: the name is checked, never the default sound silently. */
+							auto * sounds = this->sceneManager().resourceManager().container< Audio::SoundResource >();
+
+							if ( sounds == nullptr || !sounds->isResourceExists(soundName) )
+							{
+								return Console::CommandResult::error("No sound named '" + soundName + "' in the Sounds store.");
+							}
+
+							const auto sound = sounds->getResource(soundName);
+
+							if ( sound == nullptr )
+							{
+								return Console::CommandResult::error("The sound '" + soundName + "' cannot be taken from the Sounds store.");
+							}
+
+							return this->act(entityName, componentName, [&sound, gain, loop] (SoundEmitter & emitter) {
+								emitter.play(sound, gain, loop, true);
+
+								return changed(emitter, "Sound emitter '" + emitter.name() + "' plays '" + sound->name() + "'.");
+							});
+						});
 
 					this->bindCommand("replay", "Plays the attached sound of a sound emitter from its start (rewinds it if it is playing).",
 						{entity, component},

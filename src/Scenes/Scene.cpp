@@ -37,6 +37,7 @@
 #include "AnyValue.hpp"
 #include "Audio/Ambience.hpp"
 #include "Audio/HardwareOutput.hpp"
+#include "Audio/ListenerMedium.hpp"
 #include "Audio/Manager.hpp"
 #include "Audio/SoundResource.hpp"
 #include "Audio/Types.hpp"
@@ -47,8 +48,10 @@
 #include "Graphics/Renderable/AbstractBackground.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Input/Manager.hpp"
+#include "Math/Base.hpp"
 #include "ObservableTrait.hpp"
 #include "Physics/MovableTrait.hpp"
+#include "Physics/Physics.hpp"
 #include "PrimaryServices.hpp"
 #include "Scenes/AbstractNodeController.hpp"
 #include "Scenes/AVConsole/AbstractVirtualDevice.hpp"
@@ -172,6 +175,9 @@ namespace EmEn::Scenes
 
 			/* NOTE: The world sounds go back to the audio pool. */
 			this->releaseWorldSounds(false);
+
+			/* NOTE: The listener goes back to the open air if this scene put it under its sea. */
+			this->releaseSeaSound();
 
 			/* NOTE: Other data are trivial. */
 		}
@@ -608,6 +614,9 @@ namespace EmEn::Scenes
 		/* What the sea does to the light that goes under it, on every directional light. */
 		this->updateSeaLight();
 
+		/* What the sea does to the sound around the listener. */
+		this->updateSeaSound();
+
 		/* Update audio ambience if active. */
 		if ( m_ambience != nullptr && m_ambience->isPlaying() )
 		{
@@ -943,6 +952,70 @@ namespace EmEn::Scenes
 				voice.reset();
 			}
 		}
+	}
+
+	void
+	Scene::updateSeaSound () noexcept
+	{
+		auto & audioManager = m_AVConsoleManager.audioManager();
+
+		/* The open air of this scene. */
+		Audio::ListenerMedium medium{};
+		medium.speedOfSound = m_environmentPhysicalProperties.speedOfSound();
+
+		auto immersion = 0.0F;
+
+		if ( m_seaLevel != nullptr )
+		{
+			if ( const auto listener = m_AVConsoleManager.getPrimaryAudioDevice(); listener != nullptr )
+			{
+				const auto settings = m_seaLevel->soundSettings();
+				const auto depth = m_seaLevel->getDepthAt(listener->getWorldCoordinates().position());
+
+				/* NOTE: A function of the depth alone, centred on the level: a listener bobbing at the surface hears a
+				 * continuous change, and the same place always sounds the same (owner decision 2026-11-26). */
+				if ( std::isfinite(depth) )
+				{
+					immersion = std::clamp((depth / settings.transitionDepth) + 0.5F, 0.0F, 1.0F);
+				}
+
+				if ( immersion > 0.0F )
+				{
+					/* NOTE: The gains are blended in decibels (geometrically), with a floor at -60 dB on the way: a
+					 * gain of zero would otherwise cut the sound at the first centimetre. Fully under, the sea's
+					 * values exactly. */
+					const auto blendGain = [immersion] (float underWater) {
+						constexpr auto GainFloor{0.001F};
+
+						return immersion >= 1.0F ? underWater : std::pow(std::max(underWater, GainFloor), immersion);
+					};
+
+					medium.gain = blendGain(settings.gain);
+					medium.gainHF = blendGain(settings.gainHF);
+					medium.reverbGain = settings.reverb * immersion;
+					medium.speedOfSound = Math::linearInterpolation(medium.speedOfSound, Physics::SpeedOfSound::Water< float >, immersion);
+				}
+			}
+		}
+
+		m_listenerImmersion.store(immersion, std::memory_order_relaxed);
+
+		/* NOTE: The manager skips a medium it already applied. */
+		audioManager.setListenerMedium(medium);
+	}
+
+	void
+	Scene::releaseSeaSound () noexcept
+	{
+		if ( m_listenerImmersion.exchange(0.0F, std::memory_order_relaxed) <= 0.0F )
+		{
+			return;
+		}
+
+		Audio::ListenerMedium medium{};
+		medium.speedOfSound = m_environmentPhysicalProperties.speedOfSound();
+
+		m_AVConsoleManager.audioManager().setListenerMedium(medium);
 	}
 
 	bool

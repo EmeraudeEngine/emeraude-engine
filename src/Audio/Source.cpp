@@ -27,11 +27,26 @@
 #include "Source.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <limits>
+#include <memory>
+#include <sstream>
+#include <utility>
 #include <vector>
 
 /* Local inclusions. */
+#include "Audio/Buffer.hpp"
+#include "Audio/EffectSlot.hpp"
+#include "Audio/Filters/Abstract.hpp"
+#include "Audio/Filters/BandPass.hpp"
+#include "Audio/ListenerMedium.hpp"
+#include "Audio/OpenALExtensions.hpp"
+#include "Audio/PlayableInterface.hpp"
+#include "Audio/Types.hpp"
+#include "BaseUtility.hpp"
+#include "BlobTrait.hpp"
 #include "Manager.hpp"
 #include "Tracer.hpp"
 #include "Utility.hpp"
@@ -586,9 +601,11 @@ namespace EmEn::Audio
 			return false;
 		}
 
+		const Base::MutexLock lock{m_filterAccess};
+
 		m_directFilter = filter;
 
-		alSourcei(this->identifier(), AL_DIRECT_FILTER, static_cast< ALint >(m_directFilter->identifier()));
+		this->refreshDirectFilter();
 
 		return true;
 	}
@@ -601,9 +618,91 @@ namespace EmEn::Audio
 			return;
 		}
 
-		alSourcei(this->identifier(), AL_DIRECT_FILTER, AL_FILTER_NULL);
+		const Base::MutexLock lock{m_filterAccess};
 
 		m_directFilter.reset();
+
+		this->refreshDirectFilter();
+	}
+
+	void
+	Source::setListenerMedium (const ListenerMedium & medium, ALuint reverbSlot) noexcept
+	{
+		if ( !Manager::isAudioSystemAvailable() || !OpenAL::isEFXAvailable() || !this->isCreated() )
+		{
+			return;
+		}
+
+		if ( !std::isfinite(medium.gain) || !std::isfinite(medium.gainHF) )
+		{
+			Tracer::error(ClassId, "The listener's medium has a non-finite gain: ignored.");
+
+			return;
+		}
+
+		const Base::MutexLock lock{m_filterAccess};
+
+		m_listenerGain = std::clamp(medium.gain, 0.0F, 1.0F);
+		m_listenerGainHF = std::clamp(medium.gainHF, 0.0F, 1.0F);
+
+		this->refreshDirectFilter();
+
+		if ( m_listenerReverbSlot != reverbSlot )
+		{
+			m_listenerReverbSlot = reverbSlot;
+
+			this->refreshListenerSend();
+		}
+	}
+
+	void
+	Source::refreshDirectFilter () noexcept
+	{
+		const auto source = this->identifier();
+		const auto listenerLeavesIt = m_listenerGain >= 1.0F && m_listenerGainHF >= 1.0F;
+
+		if ( listenerLeavesIt )
+		{
+			alSourcei(source, AL_DIRECT_FILTER, m_directFilter != nullptr ? static_cast< ALint >(m_directFilter->identifier()) : AL_FILTER_NULL);
+
+			return;
+		}
+
+		if ( m_composedFilter == nullptr )
+		{
+			m_composedFilter = std::make_unique< Filters::BandPass >();
+		}
+
+		if ( !m_composedFilter->isCreated() )
+		{
+			/* NOTE: The filter's own constructor traced the failure. The user's filter alone is the best left. */
+			alSourcei(source, AL_DIRECT_FILTER, m_directFilter != nullptr ? static_cast< ALint >(m_directFilter->identifier()) : AL_FILTER_NULL);
+
+			return;
+		}
+
+		/* NOTE: OpenAL copies a filter's values into the source when it is attached: the same filter object serves
+		 * every change, attached again each time. */
+		const auto response = m_directFilter != nullptr ? m_directFilter->response() : Filters::Response{};
+
+		m_composedFilter->setGain(std::clamp(response.gain * m_listenerGain, 0.0F, 1.0F));
+		m_composedFilter->setGainLF(std::clamp(response.gainLF, 0.0F, 1.0F));
+		m_composedFilter->setGainHF(std::clamp(response.gainHF * m_listenerGainHF, 0.0F, 1.0F));
+
+		alSourcei(source, AL_DIRECT_FILTER, static_cast< ALint >(m_composedFilter->identifier()));
+	}
+
+	void
+	Source::refreshListenerSend () const noexcept
+	{
+		/* NOTE: The last send is the listener's (Source.hpp, setListenerMedium()). A device without any send has no
+		 * reverberation. */
+		if ( OpenAL::g_maxAuxiliarySends < 1 )
+		{
+			return;
+		}
+
+		alSource3i(this->identifier(), AL_AUXILIARY_SEND_FILTER, static_cast< ALint >(m_listenerReverbSlot), OpenAL::g_maxAuxiliarySends - 1, AL_FILTER_NULL);
 	}
 
 	void
@@ -646,12 +745,18 @@ namespace EmEn::Audio
 
 		if ( OpenAL::isEFXAvailable() )
 		{
-			alSourcei(source, AL_DIRECT_FILTER, AL_FILTER_NULL);
 			alSourcei(source, AL_AIR_ABSORPTION_FACTOR, 0);
 			alSourcef(source, AL_CONE_OUTER_GAINHF, 1.0F);
-		}
 
-		m_directFilter.reset();
+			/* NOTE: The user's direct filter goes; what the listener's medium does stays, it is not a user's. Its
+			 * send is stated again: a user's effect slot may have been cleared on the same send just above. */
+			const Base::MutexLock lock{m_filterAccess};
+
+			m_directFilter.reset();
+
+			this->refreshDirectFilter();
+			this->refreshListenerSend();
+		}
 	}
 
 	bool

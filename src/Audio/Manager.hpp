@@ -30,11 +30,17 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
 #include <array>
+#include <cstddef>
+#include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <vector>
+
+/* Third-party inclusions. */
+#include "AL/al.h"
+#include "AL/alc.h"
 
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
@@ -42,26 +48,45 @@
 #include "Console/ControllableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Audio/EffectSlot.hpp"
 #include "Audio/ExternalInput.hpp"
+#include "Audio/ListenerMedium.hpp"
 #include "Audio/OpenALHandles.hpp"
 #include "Audio/Recorder.hpp"
 #include "Audio/TrackMixer.hpp"
+#include "Hash/FNV1a.hpp"
 #include "Mutex.hpp"
-#include "WaveFactory/Types.hpp"
-#include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "SettingKeys.hpp"
 #include "Source.hpp"
+#include "ThreadSafety.hpp"
 #include "Types.hpp"
+#include "WaveFactory/Types.hpp"
 
 /* Forward declarations. */
 namespace EmEn
 {
+	namespace Audio
+	{
+		namespace Effects
+		{
+			class Abstract;
+		}
+
+		class PlayableInterface;
+	}
+
+	namespace Physics
+	{
+		class EnvironmentPhysicalProperties;
+	}
+
 	namespace Resources
 	{
 		class Manager;
 	}
 
 	class PrimaryServices;
+	class Settings;
 }
 
 namespace EmEn::Audio
@@ -309,6 +334,28 @@ namespace EmEn::Audio
 			void setEnvironmentSoundProperties (const Physics::EnvironmentPhysicalProperties & properties) noexcept;
 
 			/**
+			 * @brief States what the medium around the listener does to every sound of the source pool: the gains of
+			 * the direct path, the reverberation, the speed of sound.
+			 * @note Whoever knows the listener's surroundings decides the values and states them again whenever they
+			 * change (Scenes::Scene, each logic cycle, from the listener's depth under its sea); the same medium stated
+			 * twice costs a comparison. The music and the default source are left alone (ListenerMedium).
+			 * @note The reverberation is the one medium the engine has so far: the water's (EFX's "underwater"
+			 * preset, Creative Labs' efx-presets.h shipped with OpenAL Soft).
+			 * @note ANY THREAD.
+			 * @param medium The medium. Refused (traced) when a value is not one the manager takes
+			 * (ListenerMedium::isValid()): nothing changes.
+			 */
+			void setListenerMedium (const ListenerMedium & medium) noexcept;
+
+			/**
+			 * @brief Returns the medium around the listener, as last stated (the open air by default).
+			 * @note ANY THREAD.
+			 * @return ListenerMedium
+			 */
+			[[nodiscard]]
+			ListenerMedium listenerMedium () const noexcept;
+
+			/**
 			 * @brief Sets the listener properties.
 			 * @param properties An array of parameters. The first 3 floats are for position,
 			 * the next 3 floats are for orientation, and the 3 last for velocity.
@@ -421,6 +468,13 @@ namespace EmEn::Audio
 			 * destroyed under its holder).
 			 */
 			void releaseSources () noexcept;
+
+			/**
+			 * @brief Creates the reverberation of the listener's medium and the effect slot the sources are sent to.
+			 * @note Called by onInitialize() once the source pool exists, on the same context. A failure is traced and
+			 * leaves the medium without reverberation: its gains still apply.
+			 */
+			void createListenerReverb () noexcept;
 
 			/**
 			 * @brief Deletes the OpenAL buffers of every sound and music resource (PlayableInterface::releaseBuffers()).
@@ -538,6 +592,11 @@ namespace EmEn::Audio
 			mutable Base::Mutex m_sourcePoolMutex;
 			std::vector< std::shared_ptr< Source > > m_allSources EMEN_GUARDED_BY(m_sourcePoolMutex);
 			std::vector< Source * > m_availableSources EMEN_GUARDED_BY(m_sourcePoolMutex);
+			/* NOTE: The listener's medium. Declared after the pool: the sources are sent to this slot, and an effect slot
+			 * is deleted once nothing is sent to it (releaseSources() releases them in that order). */
+			std::shared_ptr< Effects::Abstract > m_listenerReverb EMEN_GUARDED_BY(m_sourcePoolMutex);
+			std::unique_ptr< EffectSlot > m_listenerReverbSlot EMEN_GUARDED_BY(m_sourcePoolMutex);
+			ListenerMedium m_listenerMedium EMEN_GUARDED_BY(m_sourcePoolMutex);
 			bool m_showInformation{false};
 			bool m_usingAdvancedEnumeration{false};
 			bool m_prebuiltSoundsGenerated{false};

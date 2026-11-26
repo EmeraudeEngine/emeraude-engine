@@ -43,6 +43,7 @@
 /* Local inclusions for usages. */
 #include "Graphics/Types.hpp"
 #include "Math/Vector.hpp"
+#include "Mutex.hpp"
 
 /* Forward declarations. */
 namespace EmEn::Resources
@@ -289,6 +290,36 @@ namespace EmEn::Graphics::Renderable
 				return false;
 			}
 
+			/**
+			 * @copydoc EmEn::Scenes::SeaLevelInterface::soundSettings() const
+			 * @note The family's: every sea muffles the sound under its level.
+			 */
+			[[nodiscard]]
+			Scenes::SeaSoundSettings
+			soundSettings () const noexcept final
+			{
+				const Base::MutexLock lock{m_soundAccess};
+
+				return m_soundSettings;
+			}
+
+			/** @copydoc EmEn::Scenes::SeaLevelInterface::setSoundSettings() */
+			[[nodiscard]]
+			bool
+			setSoundSettings (const Scenes::SeaSoundSettings & settings) noexcept final
+			{
+				if ( !settings.isValid() )
+				{
+					return false;
+				}
+
+				const Base::MutexLock lock{m_soundAccess};
+
+				m_soundSettings = settings;
+
+				return true;
+			}
+
 		protected:
 
 			/**
@@ -327,6 +358,9 @@ namespace EmEn::Graphics::Renderable
 
 			std::shared_ptr< Material::Interface > m_material;
 			RasterizationOptions m_bothSides{PolygonMode::Fill, CullingMode::None};
+			/** @brief Guards the sound settings: read by the scene's logic, changed from the console. */
+			mutable Base::Mutex m_soundAccess;
+			Scenes::SeaSoundSettings m_soundSettings EMEN_GUARDED_BY(m_soundAccess);
 			float m_waterLevel{0.0F};
 	};
 }

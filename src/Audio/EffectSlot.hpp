@@ -35,9 +35,19 @@
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
-/* Local inclusions for usages. */
-#include "Effects/Abstract.hpp"
-#include "Filters/Abstract.hpp"
+/* Forward declarations. */
+namespace EmEn::Audio
+{
+	namespace Effects
+	{
+		class Abstract;
+	}
+
+	namespace Filters
+	{
+		class Abstract;
+	}
+}
 
 namespace EmEn::Audio
 {
@@ -118,6 +128,12 @@ namespace EmEn::Audio
 			 * @param source A pointer to a source.
 			 */
 			void disable (const AbstractObject * source) const noexcept;
+
+			/**
+			 * @brief Sets the output level of the slot: how loud its effect is mixed.
+			 * @param gain A value between 0 and 1, clamped. A non-finite value is ignored.
+			 */
+			void setGain (float gain) noexcept;
 
 			/** @brief Removes all effects from the source. */
 			void clearEffect () noexcept;

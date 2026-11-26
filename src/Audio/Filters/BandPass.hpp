@@ -53,6 +53,10 @@ namespace EmEn::Audio::Filters
 			/** @copydoc EmEn::Audio::Filters::Abstract::resetProperties() */
 			void resetProperties () noexcept override;
 
+			/** @copydoc EmEn::Audio::Filters::Abstract::response() */
+			[[nodiscard]]
+			Response response () const noexcept override;
+
 			/**
 			 * @brief Sets the gain.
 			 * @param value A value between 0 and 1.

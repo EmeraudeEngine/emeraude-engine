@@ -27,3 +27,4 @@ Context for developing the Emeraude Engine 3D spatial audio system.
 | ExternalInput (Microphone Capture) | [`docs/subsystems/audio/12-externalinput.md`](../../docs/subsystems/audio/12-externalinput.md) | 3 KB |
 | MusicResource MIDI/Soundfont Integration | [`docs/subsystems/audio/13-musicresource-midi-soundfont-integration.md`](../../docs/subsystems/audio/13-musicresource-midi-soundfont-integration.md) | 2 KB |
 | SoundEmitter one-shot voices, the clean source pool, Scene world sounds | [`docs/subsystems/audio/14-soundemitter-one-shot-voices.md`](../../docs/subsystems/audio/14-soundemitter-one-shot-voices.md) | 4 KB |
+| The listener's medium: the sound under a sea (muffled, reverberating), the microphone stated every cycle | [`docs/subsystems/audio/15-the-listeners-medium.md`](../../docs/subsystems/audio/15-the-listeners-medium.md) | 6 KB |

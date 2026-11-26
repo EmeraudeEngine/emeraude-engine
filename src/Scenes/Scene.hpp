@@ -1756,6 +1756,19 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns how far the listener is under the sea for the sound: 0 in the air, 1 fully under the level,
+			 * between the two across the sea's transition depth (SeaSoundSettings::transitionDepth).
+			 * @note ANY THREAD. The answer of the last logic cycle.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			listenerImmersion () const noexcept
+			{
+				return m_listenerImmersion.load(std::memory_order_relaxed);
+			}
+
+			/**
 			 * @brief Returns whether the scene's sea acts on the light that goes under it [THREAD-SAFE].
 			 * @return bool
 			 */
@@ -2909,6 +2922,22 @@ namespace EmEn::Scenes
 			 */
 			void updateSeaLight () const noexcept EMEN_EXCLUDES(m_seaLightAccess);
 
+			/**
+			 * @brief States to the audio manager what the sea does to the sound around the listener [LOGIC THREAD].
+			 * @note Each cycle: the depth of the scene's primary audio device under the sea level
+			 * (SeaLevelInterface::getDepthAt() — the level at rest until a sea answers its waves, engine item
+			 * ocean-fft-surface step 6), turned into an immersion from 0 to 1 over the sea's transition depth, centred
+			 * on the level; the sea's sound settings blended with the open air by that immersion (the gains
+			 * geometrically, in decibels) make the Audio::ListenerMedium. A scene without a sea states the open air.
+			 */
+			void updateSeaSound () noexcept;
+
+			/**
+			 * @brief Gives the listener back to the open air, when this scene put it under its sea.
+			 * @note At the scene's suspension and destruction: the next scene states its own medium at its first cycle.
+			 */
+			void releaseSeaSound () noexcept;
+
 			/** @brief The textures of a sea's caustics: the three curvature cascades, the shelter map, the three
 			 * displacement cascades. */
 			using SeaLightTextures = std::array< std::shared_ptr< Vulkan::TextureInterface >, 7 >;
@@ -3778,6 +3807,9 @@ namespace EmEn::Scenes
 			/** @brief Whether the punctual lights light the sea (setSeaLevelPunctualLighting()), applied when the scene
 			 * creates the sea's instance; set while building, read by registerSceneVisualComponents() (any thread). */
 			std::atomic_bool m_seaLevelPunctualLighting{true};
+			/** @brief How far the listener is under the sea for the sound, 0 (the air) to 1: updateSeaSound()'s last
+			 * answer, read by the console. */
+			std::atomic< float > m_listenerImmersion{0.0F};
 			/** @brief Whether the sea acts on the light that goes under it (enableSeaLight()). */
 			std::atomic_bool m_seaLightEnabled{true};
 			/** @brief True when the sky drives the ambient (applyAmbient): the baked

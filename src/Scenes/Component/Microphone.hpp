@@ -86,11 +86,17 @@ namespace EmEn::Scenes::Component
 				this->updateDeviceFromCoordinates(worldCoordinates, this->getWorldVelocity());
 			}
 
-			/** @copydoc EmEn::Scenes::Component::Abstract::processLogics(const Scene &) noexcept */
+			/**
+			 * @copydoc EmEn::Scenes::Component::Abstract::processLogics(const Scene &) noexcept
+			 * @note The listener is stated every cycle, like the camera's view (Camera::processLogics()): move() is
+			 * not called for every way an entity is displaced (a character moved by the physics, a parent node
+			 * repositioned), and the listener stayed where the last move() left it — measured 2026-11-26, a player
+			 * teleported from y = 60 to y = -8 kept its listener at 60 until the head itself turned.
+			 */
 			void
 			processLogics (const Scene & /*scene*/) noexcept override
 			{
-
+				this->updateDeviceFromCoordinates(this->getWorldCoordinates(), this->getWorldVelocity());
 			}
 
 			/** @copydoc EmEn::Scenes::Component::Abstract::shouldBeRemoved() const noexcept */

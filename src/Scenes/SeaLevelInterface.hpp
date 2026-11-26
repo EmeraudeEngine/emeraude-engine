@@ -149,6 +149,41 @@ namespace EmEn::Scenes
 	};
 
 	/**
+	 * @brief What a sea does to the sound, for a listener under its level: every sound of the world is muffled and
+	 * reverberates, the music is left alone (owner decisions 2026-11-26, engine item underwater-sound).
+	 * @note The values of a listener fully under water; the scene blends them with the open air over the transition
+	 * depth, centred on the level (Scene::updateSeaSound()), and states the result to the audio manager
+	 * (Audio::ListenerMedium).
+	 * @note ⚠️ First values, the owner's to tune by ear (setSeaSound in the console).
+	 */
+	struct SeaSoundSettings
+	{
+		/** @brief The gain of every sound heard from under the level, at every frequency: 0 to 1. */
+		float gain{0.6F};
+		/** @brief The gain of its high frequencies (OpenAL's low-pass, a shelf at 5 kHz): 0 to 1, 1 muffles nothing. */
+		float gainHF{0.02F};
+		/** @brief How much of the water's reverberation is heard: 0 none, to 1. */
+		float reverb{0.5F};
+		/** @brief The height over which the sound goes from the air's to the water's, centred on the sea level, in m:
+		 * a listener bobbing at the surface hears a continuous change, never a switch. From 0.01 to 10. */
+		float transitionDepth{0.25F};
+
+		/**
+		 * @brief Tells whether every value is one a sea takes.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isValid () const noexcept
+		{
+			return std::isfinite(gain) && gain >= 0.0F && gain <= 1.0F &&
+				std::isfinite(gainHF) && gainHF >= 0.0F && gainHF <= 1.0F &&
+				std::isfinite(reverb) && reverb >= 0.0F && reverb <= 1.0F &&
+				std::isfinite(transitionDepth) && transitionDepth >= 0.01F && transitionDepth <= 10.0F;
+		}
+	};
+
+	/**
 	 * @brief Interface to define a visible and physical sea level in a scene.
 	 */
 	class EMEN_API SeaLevelInterface
@@ -334,6 +369,23 @@ namespace EmEn::Scenes
 			 */
 			[[nodiscard]]
 			virtual bool setShaftSettings (const SeaShaftSettings & settings) noexcept = 0;
+
+			/**
+			 * @brief Returns what this sea does to the sound for a listener under its level.
+			 * @note ANY THREAD.
+			 * @return SeaSoundSettings
+			 */
+			[[nodiscard]]
+			virtual SeaSoundSettings soundSettings () const noexcept = 0;
+
+			/**
+			 * @brief Changes what this sea does to the sound for a listener under its level.
+			 * @note ANY THREAD. Heard from the scene's next logic cycle on.
+			 * @param settings The new values. Refused when one is not valid (SeaSoundSettings::isValid()).
+			 * @return bool False when the values are refused: nothing changed.
+			 */
+			[[nodiscard]]
+			virtual bool setSoundSettings (const SeaSoundSettings & settings) noexcept = 0;
 
 			/**
 			 * @brief Updates the water surface visibility from the camera position.

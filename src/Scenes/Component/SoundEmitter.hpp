@@ -259,6 +259,19 @@ namespace EmEn::Scenes::Component
 			}
 
 			/**
+			 * @brief Returns whether a play awaits the attached sound's load (play() or replay() on a sound still
+			 * loading): it starts by itself once the sound is loaded, unless stop() or clear() cancels it.
+			 * @note LOGIC thread, like the state it reads.
+			 * @return bool
+			 */
+			[[nodiscard]]
+			bool
+			playAwaitsLoad () const noexcept
+			{
+				return m_playAwaitsLoad;
+			}
+
+			/**
 			 * @brief Returns whether the attached sound plays in a loop.
 			 * @return bool
 			 */

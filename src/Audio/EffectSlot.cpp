@@ -26,8 +26,21 @@
 
 #include "EffectSlot.hpp"
 
+/* STL inclusions. */
+#include <algorithm>
+#include <cmath>
+#include <string>
+
+/* Third-party inclusions. */
+#include "AL/al.h"
+#include "AL/efx.h"
+
 /* Local inclusions. */
+#include "Audio/AbstractObject.hpp"
+#include "Audio/Effects/Abstract.hpp"
+#include "Audio/Filters/Abstract.hpp"
 #include "Manager.hpp"
+#include "NameableTrait.hpp"
 #include "OpenALExtensions.hpp"
 #include "Tracer.hpp"
 #include "Utility.hpp"
@@ -168,6 +181,17 @@ namespace EmEn::Audio
 	EffectSlot::disable (const AbstractObject * source) const noexcept
 	{
 		alSource3i(source->identifier(), AL_AUXILIARY_SEND_FILTER, 0, 0, AL_FILTER_NULL);
+	}
+
+	void
+	EffectSlot::setGain (float gain) noexcept
+	{
+		if ( !OpenAL::isEFXAvailable() || !Manager::isAudioSystemAvailable() || !std::isfinite(gain) )
+		{
+			return;
+		}
+
+		OpenAL::alAuxiliaryEffectSlotf(this->identifier(), AL_EFFECTSLOT_GAIN, std::clamp(gain, 0.0F, 1.0F));
 	}
 
 	void

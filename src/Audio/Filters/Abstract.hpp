@@ -35,6 +35,19 @@
 namespace EmEn::Audio::Filters
 {
 	/**
+	 * @brief What a filter does to the three bands OpenAL's filters know: the whole signal, its low frequencies
+	 * (a shelf at 250 Hz) and its high frequencies (a shelf at 5 kHz). 1 leaves a band as it is.
+	 * @note Two filters in a row multiply their responses: how a source combines its user's direct filter with the
+	 * listener's medium (Source::setListenerMedium()), OpenAL giving a source one direct filter only.
+	 */
+	struct Response final
+	{
+		float gain{1.0F};
+		float gainLF{1.0F};
+		float gainHF{1.0F};
+	};
+
+	/**
 	 * @brief The base class for all OpenAL filters.
 	 * @extends EmEn::Audio::AbstractObject This is a base OpenAL object.
 	 */
@@ -79,6 +92,13 @@ namespace EmEn::Audio::Filters
 			 * @brief Reset all properties to default value.
 			 */
 			virtual void resetProperties () noexcept = 0;
+
+			/**
+			 * @brief Returns what this filter does to each band.
+			 * @return Response
+			 */
+			[[nodiscard]]
+			virtual Response response () const noexcept = 0;
 
 		protected:
 

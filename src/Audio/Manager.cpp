@@ -30,23 +30,29 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <cmath>
 #include <cstdlib>
 #include <functional>
+#include <memory>
 #include <ranges>
 #include <sstream>
 #include <utility>
 
 /* Third-party inclusions. */
 #include "AL/alext.h"
+#include "AL/efx-presets.h"
 #include "AL/efx.h"
 
 /* Local inclusions. */
 #include "Arguments.hpp"
+#include "Audio/Effects/Abstract.hpp"
+#include "Audio/Effects/EAXReverb.hpp"
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/Types.hpp"
 #include "BlobTrait.hpp"
 #include "Logging/Severity.hpp"
 #include "Math/Base.hpp"
+#include "Math/Vector.hpp"
 #include "MusicResource.hpp"
 #include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "PrimaryServices.hpp"
@@ -363,6 +369,8 @@ namespace EmEn::Audio
 		}
 
 		s_audioEnabled = true;
+
+		this->createListenerReverb();
 
 		/* NOTE: Console registration is handled by Core via registerToObject(). */
 
@@ -835,10 +843,141 @@ namespace EmEn::Audio
 			{
 				m_availableSources.clear();
 				m_allSources.clear();
+
+				/* NOTE: After the sources: an effect slot is deleted once no source is sent to it. */
+				m_listenerReverbSlot.reset();
+				m_listenerReverb.reset();
 			}
 		}
 
 		m_defaultSource.reset();
+	}
+
+	void
+	Manager::createListenerReverb () noexcept
+	{
+		if ( !OpenAL::isEFXAvailable() || OpenAL::g_maxAuxiliarySends < 1 )
+		{
+			Tracer::info(ClassId, "No auxiliary send on this audio device: the listener's medium has no reverberation.");
+
+			return;
+		}
+
+		auto reverb = std::make_shared< Effects::EAXReverb >();
+
+		if ( !reverb->isCreated() )
+		{
+			Tracer::warning(ClassId, "Unable to create the reverberation of the listener's medium: it has none.");
+
+			return;
+		}
+
+		/* NOTE: The water's reverberation, the one medium the engine has so far: Creative Labs' "underwater" preset
+		 * (efx-presets.h, shipped with OpenAL Soft). An effect's values are copied into the slot when it is attached:
+		 * set before setEffect(). */
+		const EFXEAXREVERBPROPERTIES preset = EFX_REVERB_PRESET_UNDERWATER;
+
+		reverb->setDensity(preset.flDensity);
+		reverb->setDiffusion(preset.flDiffusion);
+		reverb->setGain(preset.flGain);
+		reverb->setGainHF(preset.flGainHF);
+		reverb->setGainLF(preset.flGainLF);
+		reverb->setDecayTime(preset.flDecayTime);
+		reverb->setDecayHFRatio(preset.flDecayHFRatio);
+		reverb->setDecayLFRatio(preset.flDecayLFRatio);
+		reverb->setReflectionsGain(preset.flReflectionsGain);
+		reverb->setReflectionsDelay(preset.flReflectionsDelay);
+		reverb->setReflectionsPan({preset.flReflectionsPan[0], preset.flReflectionsPan[1], preset.flReflectionsPan[2]});
+		reverb->setLateGain(preset.flLateReverbGain);
+		reverb->setLateDelay(preset.flLateReverbDelay);
+		reverb->setLatePan({preset.flLateReverbPan[0], preset.flLateReverbPan[1], preset.flLateReverbPan[2]});
+		reverb->setEchoTime(preset.flEchoTime);
+		reverb->setEchoDepth(preset.flEchoDepth);
+		reverb->setModulationTime(preset.flModulationTime);
+		reverb->setModulationDepth(preset.flModulationDepth);
+		reverb->setAirAbsorptionGainHF(preset.flAirAbsorptionGainHF);
+		reverb->setHFReference(preset.flHFReference);
+		reverb->setLFReference(preset.flLFReference);
+		reverb->setRoomRollOffFactor(preset.flRoomRolloffFactor);
+		reverb->setDecayHFLimit(preset.iDecayHFLimit != 0);
+
+		auto slot = std::make_unique< EffectSlot >();
+
+		if ( !slot->isCreated() || !slot->setEffect(reverb) )
+		{
+			Tracer::warning(ClassId, "Unable to create the effect slot of the listener's medium: it has no reverberation.");
+
+			return;
+		}
+
+		/* NOTE: Silent until a medium asks for it (setListenerMedium()). */
+		slot->setGain(0.0F);
+
+		const Base::MutexLock lock{m_sourcePoolMutex};
+
+		m_listenerReverb = std::move(reverb);
+		m_listenerReverbSlot = std::move(slot);
+	}
+
+	void
+	Manager::setListenerMedium (const ListenerMedium & medium) noexcept
+	{
+		if ( !s_audioSystemAvailable )
+		{
+			return;
+		}
+
+		if ( !medium.isValid() )
+		{
+			TraceError{ClassId} <<
+				"The listener's medium is refused (gain " << medium.gain << ", high-frequency gain " << medium.gainHF <<
+				", reverberation " << medium.reverbGain << ", speed of sound " << medium.speedOfSound << ").";
+
+			return;
+		}
+
+		const Base::MutexLock lock{m_sourcePoolMutex};
+
+		if ( medium == m_listenerMedium )
+		{
+			return;
+		}
+
+		m_listenerMedium = medium;
+
+		this->setSpeedOfSound(medium.speedOfSound);
+
+		if ( !OpenAL::isEFXAvailable() )
+		{
+			return;
+		}
+
+		/* NOTE: The sources are sent to the reverberation only while it is heard: a slot nothing is sent to costs
+		 * nothing in the mix. */
+		ALuint reverbSlot = 0;
+
+		if ( m_listenerReverbSlot != nullptr )
+		{
+			m_listenerReverbSlot->setGain(medium.reverbGain);
+
+			if ( medium.reverbGain > 0.0F )
+			{
+				reverbSlot = m_listenerReverbSlot->identifier();
+			}
+		}
+
+		for ( const auto & source : m_allSources )
+		{
+			source->setListenerMedium(medium, reverbSlot);
+		}
+	}
+
+	ListenerMedium
+	Manager::listenerMedium () const noexcept
+	{
+		const Base::MutexLock lock{m_sourcePoolMutex};
+
+		return m_listenerMedium;
 	}
 
 	void
@@ -933,8 +1072,20 @@ namespace EmEn::Audio
 		}
 
 		this->setDopplerFactor(properties.dopplerFactor());
-		this->setSpeedOfSound(properties.speedOfSound());
 		this->setDistanceModel(properties.distanceModel());
+
+		/* NOTE: The speed of sound belongs to the listener's medium, which whoever states it blends from this one
+		 * (Scenes::Scene): kept in step, so that the next medium is compared with what OpenAL really holds. */
+		const auto speedOfSound = properties.speedOfSound();
+
+		if ( std::isfinite(speedOfSound) && speedOfSound > 0.0F )
+		{
+			const Base::MutexLock lock{m_sourcePoolMutex};
+
+			m_listenerMedium.speedOfSound = speedOfSound;
+
+			this->setSpeedOfSound(speedOfSound);
+		}
 	}
 
 	void

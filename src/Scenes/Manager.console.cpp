@@ -1375,6 +1375,18 @@ namespace EmEn::Scenes
 						sea["shafts"] = shafts;
 					}
 
+					{
+						const auto settings = seaLevel->soundSettings();
+
+						Json::Value sound{Json::objectValue};
+						sound["gain"] = static_cast< double >(settings.gain);
+						sound["gainHF"] = static_cast< double >(settings.gainHF);
+						sound["reverb"] = static_cast< double >(settings.reverb);
+						sound["transitionDepth"] = static_cast< double >(settings.transitionDepth);
+						sound["listenerImmersion"] = static_cast< double >(activeScene->listenerImmersion());
+						sea["sound"] = sound;
+					}
+
 					return Console::CommandResult::json(FastJSON::stringify(sea));
 				});
 			}, Console::CommandHint::ReadOnly);
@@ -1482,6 +1494,33 @@ namespace EmEn::Scenes
 					}
 
 					return Console::CommandResult::success("Sea shafts set.");
+				});
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("setSeaSound", "Sets what the sea does to the sound for a listener under its level, heard from the next logic cycle: every sound of the world is muffled and reverberates (the music is left alone). getSea answers the values and the listener's immersion.",
+			{
+				{"gain", "The gain of every sound heard from under the level, 0 to 1."},
+				{"gainHF", "The gain of its high frequencies (a low-pass, a shelf at 5 kHz), 0 to 1: 1 muffles nothing, 0.02 leaves almost no treble."},
+				{"reverb", "How much of the water's reverberation is heard, 0 (none) to 1."},
+				{"transitionDepth", "The height over which the sound goes from the air's to the water's, centred on the sea level, in metres, 0.01 to 10."}
+			},
+			[inActiveScene] (float gain, float gainHF, float reverb, float transitionDepth) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					const auto seaLevel = activeScene->seaLevel();
+
+					if ( seaLevel == nullptr )
+					{
+						return Console::CommandResult::error("The active scene has no sea !");
+					}
+
+					const SeaSoundSettings settings{.gain = gain, .gainHF = gainHF, .reverb = reverb, .transitionDepth = transitionDepth};
+
+					if ( !seaLevel->setSoundSettings(settings) )
+					{
+						return Console::CommandResult::error("Refused: the gain, the high-frequency gain and the reverberation must be numbers from 0 to 1, the transition depth from 0.01 to 10 !");
+					}
+
+					return Console::CommandResult::success("Sea sound set.");
 				});
 			}, Console::CommandHint::Idempotent);
 

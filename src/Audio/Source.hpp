@@ -31,20 +31,45 @@
 
 /* STL inclusions. */
 #include <cstdint>
+#include <functional>
+#include <iosfwd>
 #include <map>
 #include <memory>
 #include <string>
+
+/* Third-party inclusions. */
+#include "AL/al.h"
+#include "AL/efx.h"
 
 /* Local inclusions for inheritances. */
 #include "AbstractObject.hpp"
 
 /* Local inclusions for usages. */
-#include "EffectSlot.hpp"
 #include "Math/Base.hpp"
 #include "Math/Vector.hpp"
+#include "Mutex.hpp"
 #include "OpenALExtensions.hpp"
-#include "PlayableInterface.hpp"
+#include "ThreadSafety.hpp"
 #include "Types.hpp"
+
+/* Forward declarations. */
+namespace EmEn::Audio
+{
+	namespace Effects
+	{
+		class Abstract;
+	}
+
+	namespace Filters
+	{
+		class Abstract;
+		class BandPass;
+	}
+
+	class EffectSlot;
+	class PlayableInterface;
+	struct ListenerMedium;
+}
 
 namespace EmEn::Audio
 {
@@ -607,6 +632,21 @@ namespace EmEn::Audio
 			void disableDirectFilter () noexcept;
 
 			/**
+			 * @brief Applies what the medium around the listener does to this source: its direct path's gains, and
+			 * the reverberation it is sent to.
+			 * @note The audio manager's call, on every source of its pool (Manager::setListenerMedium()). OpenAL gives a
+			 * source ONE direct filter: the medium's gains are multiplied with the response of the direct filter a user
+			 * enabled (enableDirectFilter()), in a filter this source owns. The reverberation takes the LAST auxiliary
+			 * send of the source. Both outlive resetToDefaults(): they are the listener's, not a user's.
+			 * @note ANY THREAD (the filter state has its own lock).
+			 * @warning This method only works with the EFX extension.
+			 * @param medium The medium: its two gains of the direct path are read here, clamped to [0, 1]; a non-finite
+			 * one is refused (traced).
+			 * @param reverbSlot The OpenAL name of the auxiliary effect slot the source is sent to, or 0 for none.
+			 */
+			void setListenerMedium (const ListenerMedium & medium, ALuint reverbSlot) noexcept;
+
+			/**
 			 * @brief Stops the source, removes its sound and puts every property back to its OpenAL default.
 			 * @note The source pool calls it when a source comes back (Manager::releaseSource()): a pooled source is
 			 * shared by every user in turn, and each one configures only what it relies on. Without it a source left
@@ -615,6 +655,7 @@ namespace EmEn::Audio
 			 * @post Pitch 1, gain 1 (gain bounds 0 / 1), position, velocity and direction 0, absolute (not relative),
 			 * reference distance 1, rolloff factor 1, maximum distance FLT_MAX (OpenAL's own default), cone 360° / 360° / outer gain 0, no direct
 			 * filter, no effect slot; with EFX, air absorption 0 and the cone's outer HF gain 1.
+			 * @note What the listener's medium does to the source stays (setListenerMedium()): it is not a user's.
 			 */
 			void resetToDefaults () noexcept;
 
@@ -751,8 +792,26 @@ namespace EmEn::Audio
 				}
 			}
 
+			/**
+			 * @brief Gives the source its direct filter: none, the user's, or the user's response multiplied by the
+			 * listener's medium.
+			 */
+			void refreshDirectFilter () noexcept EMEN_REQUIRES(m_filterAccess);
+
+			/**
+			 * @brief Connects the last auxiliary send of the source to the listener's reverberation, or frees it.
+			 */
+			void refreshListenerSend () const noexcept EMEN_REQUIRES(m_filterAccess);
+
 			std::map< int, std::shared_ptr< EffectSlot > > m_effectSlots;
-			std::shared_ptr< const Filters::Abstract > m_directFilter;
+			/** @brief Guards the direct filter's state: a user sets its filter while the manager applies the medium. */
+			mutable Base::Mutex m_filterAccess;
+			std::shared_ptr< const Filters::Abstract > m_directFilter EMEN_GUARDED_BY(m_filterAccess);
+			/** @brief The user's response multiplied by the listener's medium. Created the first time it is needed. */
+			std::unique_ptr< Filters::BandPass > m_composedFilter EMEN_GUARDED_BY(m_filterAccess);
+			float m_listenerGain EMEN_GUARDED_BY(m_filterAccess){1.0F};
+			float m_listenerGainHF EMEN_GUARDED_BY(m_filterAccess){1.0F};
+			ALuint m_listenerReverbSlot EMEN_GUARDED_BY(m_filterAccess){0};
 			std::shared_ptr< PlayableInterface > m_currentPlayableInterface;
 			float m_previousGain{1.0F};
 	};

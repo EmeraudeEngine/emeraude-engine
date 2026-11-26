@@ -628,8 +628,9 @@ the binary after).
   the same day.
   ⚠️ The binary BEFORE the change was not run under the sanitizer: this is the absence of a report after, not a
   before / after. The cancellation of an awaited play by `stop()` is verified by reading only: no console command
-  plays a sound on an emitter, so the window between `play()` and the end of the load cannot be driven from outside
-  (item `console-commands-to-play-a-sound-and-set-a-light-projection`).
+  played a sound on an emitter then, so the window between `play()` and the end of the load could not be driven from
+  outside. `SoundEmitter.play` exists since 2026-11-26 (audio doc 15); that proof is still to run
+  (item `console-command-to-set-a-light-projection`).
 - Peers' round 13 (2026-11-16, engine 5dfe292a + testbed 3411e7c7), window-less, the validation layer loaded, every
   launch exit 0, 0 VUID, 0 error line: macOS (Apple M6, MoltenVK 1.4.2, Apple clang with `-Wdocumentation -Werror`,
   Release and Debug 0 warning) meters `global-illumination` with the projection at 14.4, 14.4 and 14.7 nits over

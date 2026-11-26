@@ -80,6 +80,7 @@
 #include "Audio/Filters/LowPass.hpp"
 #include "Audio/HardwareOutput.hpp"
 #include "Audio/Listener.hpp"
+#include "Audio/ListenerMedium.hpp"
 #include "Audio/Manager.hpp"
 #include "Audio/MusicResource.hpp"
 #include "Audio/OpenALExtensions.hpp"

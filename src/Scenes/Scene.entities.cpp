@@ -414,6 +414,9 @@ namespace EmEn::Scenes
 		/* The world sounds are events of the moment: released, never resumed. */
 		this->releaseWorldSounds(false);
 
+		/* The listener goes back to the open air: the next active scene states its own medium. */
+		this->releaseSeaSound();
+
 		/* Suspend all static entities. */
 		{
 			const Base::MutexLock lock{m_staticEntitiesAccess};

@@ -545,6 +545,18 @@ namespace EmEn::Scenes
 			void toggleEditorMode () noexcept;
 
 			/**
+			 * @brief Returns the resource manager the scenes take their resources from.
+			 * @note What a console adapter resolves a resource name with (a sound emitter's sound).
+			 * @return Resources::Manager &
+			 */
+			[[nodiscard]]
+			Resources::Manager &
+			resourceManager () const noexcept
+			{
+				return m_resourceManager;
+			}
+
+			/**
 			 * @brief Returns the scene editor manager.
 			 * @return Editor::Manager &
 			 */
