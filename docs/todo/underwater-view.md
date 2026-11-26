@@ -29,7 +29,8 @@ default sea has Hs ≈ 2 m): near the surface, "is the eye under water" can only
 2. **This lot is the base**: the water volume (absorption, scattering, the water's own glow dimming with depth), the
    sea surface seen from below (Snell's window, total internal reflection around it) and the waterline decided per
    pixel when a wave crosses the lens. Caustics, underwater light shafts and the muffled sound are wanted and come
-   next, one item each: `underwater-caustics-and-depth-light`, `underwater-light-shafts`, `underwater-sound`.
+   next, one item each: `underwater-caustics-and-depth-light`, `underwater-light-shafts`; the sound is done
+   (`docs/subsystems/audio/15-the-listeners-medium.md`).
 3. **The sea level owns the water's optics**: the scene's sea declares its water once; the underwater effect AND the
    surface material read it, so above and below agree by construction. The effect is filed by the scene (a sea that
    declares its water is enough), as the clouds are.

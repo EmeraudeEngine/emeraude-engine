@@ -54,6 +54,7 @@
 #include "volk.h"
 
 /* Local inclusions. */
+#include "Audio/SoundResource.hpp"
 #include "Component/Camera.hpp" // IWYU pragma: keep (componentBuilder< Component::Camera > needs the complete type)
 #include "Component/CharacterController.hpp"
 #include "Component/ConsoleAdapter.hpp"
@@ -1383,7 +1384,11 @@ namespace EmEn::Scenes
 						sound["gainHF"] = static_cast< double >(settings.gainHF);
 						sound["reverb"] = static_cast< double >(settings.reverb);
 						sound["transitionDepth"] = static_cast< double >(settings.transitionDepth);
+						sound["crossingGain"] = static_cast< double >(settings.crossingGain);
+						sound["crossingGainHF"] = static_cast< double >(settings.crossingGainHF);
 						sound["listenerImmersion"] = static_cast< double >(activeScene->listenerImmersion());
+						sound["submergedSound"] = activeScene->submergedSoundName();
+						sound["submergedGain"] = static_cast< double >(activeScene->submergedSoundGain());
 						sea["sound"] = sound;
 					}
 
@@ -1513,7 +1518,12 @@ namespace EmEn::Scenes
 						return Console::CommandResult::error("The active scene has no sea !");
 					}
 
-					const SeaSoundSettings settings{.gain = gain, .gainHF = gainHF, .reverb = reverb, .transitionDepth = transitionDepth};
+					/* NOTE: The crossing gains are setSeaSoundCrossing's: kept. */
+					auto settings = seaLevel->soundSettings();
+					settings.gain = gain;
+					settings.gainHF = gainHF;
+					settings.reverb = reverb;
+					settings.transitionDepth = transitionDepth;
 
 					if ( !seaLevel->setSoundSettings(settings) )
 					{
@@ -1521,6 +1531,66 @@ namespace EmEn::Scenes
 					}
 
 					return Console::CommandResult::success("Sea sound set.");
+				});
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("setSeaSoundCrossing", "Sets what the sea's surface does to a sound whose source and listener are on opposite sides of it (a source under the sea heard from the air, and the reverse), heard from the next logic cycle, on top of what setSeaSound does to a listener under the level. getSea answers the values.",
+			{
+				{"gain", "The gain of a sound that crosses the surface, 0 to 1: 1 loses nothing."},
+				{"gainHF", "The gain of its high frequencies (a low-pass, a shelf at 5 kHz), 0 to 1: 1 muffles nothing."}
+			},
+			[inActiveScene] (float gain, float gainHF) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					const auto seaLevel = activeScene->seaLevel();
+
+					if ( seaLevel == nullptr )
+					{
+						return Console::CommandResult::error("The active scene has no sea !");
+					}
+
+					auto settings = seaLevel->soundSettings();
+					settings.crossingGain = gain;
+					settings.crossingGainHF = gainHF;
+
+					if ( !seaLevel->setSoundSettings(settings) )
+					{
+						return Console::CommandResult::error("Refused: the gain and the high-frequency gain must be numbers from 0 to 1 !");
+					}
+
+					return Console::CommandResult::success("Sea sound crossing set.");
+				});
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("setSubmergedSound", "Gives the active scene the sound heard only while the listener is under its sea: a loop of the Sounds store, not placed in the world, whose gain follows the listener's immersion. An empty name removes it. getSea answers the name and the gain.",
+			{
+				{"sound", "The resource name of a sound in the Sounds store; an empty name removes the submerged sound."},
+				{"gain", "The gain fully under the level, 0 to 1."}
+			},
+			[this, inActiveScene] (const std::string & sound, float gain) {
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					if ( !std::isfinite(gain) || gain < 0.0F || gain > 1.0F )
+					{
+						return Console::CommandResult::error("Refused: the gain must be a number from 0 to 1 !");
+					}
+
+					if ( sound.empty() )
+					{
+						activeScene->setSubmergedSound(nullptr, gain);
+
+						return Console::CommandResult::success("Submerged sound removed.");
+					}
+
+					auto * sounds = m_resourceManager.container< Audio::SoundResource >();
+
+					/* NOTE: A trust boundary: an unknown name is refused, never the default sound silently. */
+					if ( sounds == nullptr || !sounds->isResourceExists(sound) )
+					{
+						return Console::CommandResult::error("Refused: no sound named '" + sound + "' in the Sounds store !");
+					}
+
+					activeScene->setSubmergedSound(sounds->getResource(sound), gain);
+
+					return Console::CommandResult::success("Submerged sound set.");
 				});
 			}, Console::CommandHint::Idempotent);
 

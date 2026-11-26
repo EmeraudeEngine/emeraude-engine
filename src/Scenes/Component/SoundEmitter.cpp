@@ -49,6 +49,7 @@
 #include "Resources/ResourceTrait.hpp"
 #include "Resources/Types.hpp"
 #include "Scenes/AbstractEntity.hpp"
+#include "Scenes/Scene.hpp"
 #include "Tracer.hpp"
 #include "Variant.hpp"
 
@@ -85,31 +86,52 @@ namespace EmEn::Scenes::Component
 	}
 
 	void
-	SoundEmitter::processLogics (const Scene & /*scene*/) noexcept
+	SoundEmitter::processLogics (const Scene & scene) noexcept
 	{
 		/* The load of an attached sound ended (recorded by onNotification() on the loading thread, or by
 		 * awaitAttachedSound() for a load that ended while it subscribed): onResourceLoaded(). */
 		this->settleLoadedResource();
 
 		/* A one-shot voice whose sound ended goes back to the pool. */
+		auto hasVoice = false;
+
 		for ( auto & voice : m_oneShotVoices )
 		{
 			if ( voice != nullptr && voice->isFinished() )
 			{
 				voice.reset();
 			}
+
+			hasVoice = hasVoice || voice != nullptr;
 		}
 
-		if ( m_source == nullptr )
+		/* Autorelease unused sound source. */
+		if ( m_source != nullptr && !this->isFlagEnabled(KeepInactiveSourceAlive) && m_source->isStopped() )
+		{
+			m_source->removeSound();
+			m_source.reset();
+		}
+
+		if ( m_source == nullptr && !hasVoice )
 		{
 			return;
 		}
 
-		/* Autorelease unused sound source. */
-		if ( !this->isFlagEnabled(KeepInactiveSourceAlive) && m_source->isStopped() )
+		/* What lies between this emitter and the listener (the surface of the scene's sea), stated to every source
+		 * it holds: a source skips a path it already carries. */
+		const auto path = scene.soundPathAt(this->getWorldCoordinates().position());
+
+		if ( m_source != nullptr )
 		{
-			m_source->removeSound();
-			m_source.reset();
+			m_source->setSoundPath(path);
+		}
+
+		for ( const auto & voice : m_oneShotVoices )
+		{
+			if ( voice != nullptr )
+			{
+				voice->setSoundPath(path);
+			}
 		}
 	}
 

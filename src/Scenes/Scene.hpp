@@ -65,6 +65,7 @@
 
 /* Local inclusions for usages. */
 #include "AtmosphericMedium.hpp"
+#include "Audio/ListenerMedium.hpp"
 #include "Audio/Source.hpp"
 #include "BaseUtility.hpp"
 #include "BindlessTextureSet.hpp"
@@ -1769,6 +1770,21 @@ namespace EmEn::Scenes
 			}
 
 			/**
+			 * @brief Returns what lies between a sound source at a place and the listener, beyond the listener's own
+			 * medium: the scene's sea when its surface is between the two.
+			 * @note The source's immersion (the same function of the depth as the listener's, 0 in the air to 1 under
+			 * the level) against the listener's: fully on opposite sides, the sea's crossing gains
+			 * (SeaSoundSettings::crossingGain, crossingGainHF); on the same side, a clear path; between the two, the
+			 * gains blended geometrically (in decibels) by the difference of the two immersions — continuous when
+			 * either one crosses the surface. A scene without a sea answers a clear path.
+			 * @note LOGIC THREAD (the sea level, as updateSeaSound()). The listener's immersion is the last cycle's.
+			 * @param worldPosition A reference to the source's position. A non-finite one answers a clear path.
+			 * @return Audio::SoundPath
+			 */
+			[[nodiscard]]
+			Audio::SoundPath soundPathAt (const Base::Math::Vector< 3, float > & worldPosition) const noexcept;
+
+			/**
 			 * @brief Returns whether the scene's sea acts on the light that goes under it [THREAD-SAFE].
 			 * @return bool
 			 */
@@ -2701,6 +2717,36 @@ namespace EmEn::Scenes
 			[[nodiscard]]
 			size_t activeWorldSoundCount () const noexcept;
 
+			/**
+			 * @brief Gives the scene a sound heard only while the listener is under its sea: a loop, not placed in the
+			 * world, whose gain follows the listener's immersion (0 in the air, the gain given here fully under the
+			 * level, continuous across the sea's transition depth).
+			 * @note The loop is played by updateSeaSound() on the logic thread, on a source of the audio pool taken
+			 * when the listener goes under and given back when it comes out, at a suspension and with the scene. That
+			 * source is taken OUT of the listener's medium (Audio::Source::ignoreListenerMedium()): the sound already
+			 * is what being under water sounds like, it is neither muffled nor reverberated again (owner decision
+			 * 2026-11-26). A sound still loading starts once loaded.
+			 * @note Any thread (the world sounds' mutex guards it); heard from the next logic cycle.
+			 * @param sound A reference to a sound resource smart pointer. A null pointer removes the sound.
+			 * @param gain The gain fully under the level, 0 to 1. A non-finite one is refused (traced), another is
+			 * clamped.
+			 */
+			void setSubmergedSound (const std::shared_ptr< Audio::SoundResource > & sound, float gain = 1.0F) noexcept;
+
+			/**
+			 * @brief Returns the gain of the submerged sound fully under the level (setSubmergedSound()).
+			 * @return float
+			 */
+			[[nodiscard]]
+			float submergedSoundGain () const noexcept;
+
+			/**
+			 * @brief Returns the resource name of the submerged sound, empty without one (setSubmergedSound()).
+			 * @return std::string
+			 */
+			[[nodiscard]]
+			std::string submergedSoundName () const noexcept;
+
 			/* ============================================================
 			 * [CONCEPT: DEBUG DISPLAY]
 			 * Visual debugging helpers.
@@ -2929,6 +2975,10 @@ namespace EmEn::Scenes
 			 * ocean-fft-surface step 6), turned into an immersion from 0 to 1 over the sea's transition depth, centred
 			 * on the level; the sea's sound settings blended with the open air by that immersion (the gains
 			 * geometrically, in decibels) make the Audio::ListenerMedium. A scene without a sea states the open air.
+			 * @note The world sounds still playing are then given their path to the listener (soundPathAt()): the
+			 * listener may have crossed the surface since they started. A sound emitter states its own
+			 * (Component::SoundEmitter::processLogics()). The submerged sound (setSubmergedSound()) is started,
+			 * given its gain or released.
 			 */
 			void updateSeaSound () noexcept;
 
@@ -3661,6 +3711,12 @@ namespace EmEn::Scenes
 			std::unique_ptr< Audio::Ambience > m_ambience;
 			/** @brief Guards the world sounds (playSoundAt()): any caller thread, the logic thread releases them. */
 			mutable Base::Mutex m_worldSoundsAccess;
+			/** @brief The sound heard while the listener is under the sea (setSubmergedSound()), or null. */
+			std::shared_ptr< Audio::SoundResource > m_submergedSound EMEN_GUARDED_BY(m_worldSoundsAccess);
+			/** @brief Its voice: held only while the listener is under the level. */
+			Audio::SourceRequest m_submergedVoice EMEN_GUARDED_BY(m_worldSoundsAccess);
+			/** @brief Its gain fully under the level. */
+			float m_submergedGain EMEN_GUARDED_BY(m_worldSoundsAccess){1.0F};
 			/** @brief The world sounds' voices (playSoundAt()), a null slot is free. */
 			std::array< Audio::SourceRequest, MaxWorldSounds > m_worldSounds EMEN_GUARDED_BY(m_worldSoundsAccess){};
 			/** @brief The voice cut next when every world sound plays. */

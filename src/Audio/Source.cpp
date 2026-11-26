@@ -660,10 +660,63 @@ namespace EmEn::Audio
 	}
 
 	void
+	Source::ignoreListenerMedium (bool state) noexcept
+	{
+		if ( !Manager::isAudioSystemAvailable() || !OpenAL::isEFXAvailable() || !this->isCreated() )
+		{
+			return;
+		}
+
+		const Base::MutexLock lock{m_filterAccess};
+
+		if ( m_ignoresListenerMedium == state )
+		{
+			return;
+		}
+
+		m_ignoresListenerMedium = state;
+
+		this->refreshDirectFilter();
+		this->refreshListenerSend();
+	}
+
+	void
+	Source::setSoundPath (const SoundPath & path) noexcept
+	{
+		if ( !Manager::isAudioSystemAvailable() || !OpenAL::isEFXAvailable() || !this->isCreated() )
+		{
+			return;
+		}
+
+		if ( !path.isValid() )
+		{
+			TraceError{ClassId} << "The sound path is refused (gain " << path.gain << ", high-frequency gain " << path.gainHF << ").";
+
+			return;
+		}
+
+		const Base::MutexLock lock{m_filterAccess};
+
+		if ( path == SoundPath{.gain = m_pathGain, .gainHF = m_pathGainHF} )
+		{
+			return;
+		}
+
+		m_pathGain = path.gain;
+		m_pathGainHF = path.gainHF;
+
+		this->refreshDirectFilter();
+		this->refreshListenerSend();
+	}
+
+	void
 	Source::refreshDirectFilter () noexcept
 	{
 		const auto source = this->identifier();
-		const auto listenerLeavesIt = m_listenerGain >= 1.0F && m_listenerGainHF >= 1.0F;
+		/* NOTE: A source out of the listener's medium keeps its sound path alone. */
+		const auto gain = (m_ignoresListenerMedium ? 1.0F : m_listenerGain) * m_pathGain;
+		const auto gainHF = (m_ignoresListenerMedium ? 1.0F : m_listenerGainHF) * m_pathGainHF;
+		const auto listenerLeavesIt = gain >= 1.0F && gainHF >= 1.0F;
 
 		if ( listenerLeavesIt )
 		{
@@ -689,15 +742,15 @@ namespace EmEn::Audio
 		 * every change, attached again each time. */
 		const auto response = m_directFilter != nullptr ? m_directFilter->response() : Filters::Response{};
 
-		m_composedFilter->setGain(std::clamp(response.gain * m_listenerGain, 0.0F, 1.0F));
+		m_composedFilter->setGain(std::clamp(response.gain * gain, 0.0F, 1.0F));
 		m_composedFilter->setGainLF(std::clamp(response.gainLF, 0.0F, 1.0F));
-		m_composedFilter->setGainHF(std::clamp(response.gainHF * m_listenerGainHF, 0.0F, 1.0F));
+		m_composedFilter->setGainHF(std::clamp(response.gainHF * gainHF, 0.0F, 1.0F));
 
 		alSourcei(source, AL_DIRECT_FILTER, static_cast< ALint >(m_composedFilter->identifier()));
 	}
 
 	void
-	Source::refreshListenerSend () const noexcept
+	Source::refreshListenerSend () noexcept
 	{
 		/* NOTE: The last send is the listener's (Source.hpp, setListenerMedium()). A device without any send has no
 		 * reverberation. */
@@ -706,7 +759,31 @@ namespace EmEn::Audio
 			return;
 		}
 
-		alSource3i(this->identifier(), AL_AUXILIARY_SEND_FILTER, static_cast< ALint >(m_listenerReverbSlot), OpenAL::g_maxAuxiliarySends - 1, AL_FILTER_NULL);
+		/* NOTE: What the source sends to the reverberation went through the sound path too. OpenAL copies a
+		 * filter's values when it is attached: the same filter object is attached again at each change. */
+		/* NOTE: A source out of the listener's medium is not sent to its reverberation. */
+		const auto reverbSlot = m_ignoresListenerMedium ? ALuint{0} : m_listenerReverbSlot;
+		auto filterName = AL_FILTER_NULL;
+
+		if ( reverbSlot != 0 && (m_pathGain < 1.0F || m_pathGainHF < 1.0F) )
+		{
+			if ( m_pathFilter == nullptr )
+			{
+				m_pathFilter = std::make_unique< Filters::BandPass >();
+			}
+
+			/* NOTE: A filter that could not be created traced it: the send is then left unfiltered. */
+			if ( m_pathFilter->isCreated() )
+			{
+				m_pathFilter->setGain(std::clamp(m_pathGain, 0.0F, 1.0F));
+				m_pathFilter->setGainLF(1.0F);
+				m_pathFilter->setGainHF(std::clamp(m_pathGainHF, 0.0F, 1.0F));
+
+				filterName = static_cast< ALint >(m_pathFilter->identifier());
+			}
+		}
+
+		alSource3i(this->identifier(), AL_AUXILIARY_SEND_FILTER, static_cast< ALint >(reverbSlot), OpenAL::g_maxAuxiliarySends - 1, filterName);
 	}
 
 	void
@@ -757,6 +834,9 @@ namespace EmEn::Audio
 			const Base::MutexLock lock{m_filterAccess};
 
 			m_directFilter.reset();
+			m_pathGain = 1.0F;
+			m_pathGainHF = 1.0F;
+			m_ignoresListenerMedium = false;
 
 			this->refreshDirectFilter();
 			this->refreshListenerSend();

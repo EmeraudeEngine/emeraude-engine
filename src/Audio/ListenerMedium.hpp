@@ -39,7 +39,7 @@ namespace EmEn::Audio
 	 * open air: nothing changed.
 	 * @note Applied to the pooled sources only (the scene's emitters, its world sounds, its ambience). The music
 	 * (TrackMixer) and the manager's default source (interface sounds) are not of the world: untouched (owner
-	 * decision 2026-11-26, engine item underwater-sound).
+	 * decision 2026-11-26, engine audio doc 15).
 	 */
 	struct ListenerMedium final
 	{
@@ -80,5 +80,47 @@ namespace EmEn::Audio
 		/** @brief Member-wise comparison: the manager skips a medium it already applied. */
 		[[nodiscard]]
 		bool operator== (const ListenerMedium &) const noexcept = default;
+	};
+
+	/**
+	 * @brief What lies between ONE source and the listener, beyond the listener's own medium: the gains its sound
+	 * loses on the way (a sea's surface between the two, engine audio doc 15).
+	 * @note Stated per source by whoever places it (a scene's sound emitter, a scene's world sound:
+	 * Source::setSoundPath()), where the ListenerMedium is stated once for every source. The audio side applies the
+	 * values as they are, it knows no water. The default is a clear path: nothing changed.
+	 */
+	struct SoundPath final
+	{
+		/** @brief The gain of the path at every frequency, 0 to 1. */
+		float gain{1.0F};
+		/** @brief The gain of the path at high frequencies, 0 to 1: OpenAL's low-pass, a high shelf at 5 kHz. */
+		float gainHF{1.0F};
+
+		/**
+		 * @brief Tells whether both values are ones a source takes.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isValid () const noexcept
+		{
+			return std::isfinite(gain) && gain >= 0.0F && gain <= 1.0F &&
+				std::isfinite(gainHF) && gainHF >= 0.0F && gainHF <= 1.0F;
+		}
+
+		/**
+		 * @brief Tells whether the path changes nothing.
+		 * @return bool
+		 */
+		[[nodiscard]]
+		bool
+		isClear () const noexcept
+		{
+			return gain >= 1.0F && gainHF >= 1.0F;
+		}
+
+		/** @brief Member-wise comparison: a source skips a path it already carries. */
+		[[nodiscard]]
+		bool operator== (const SoundPath &) const noexcept = default;
 	};
 }

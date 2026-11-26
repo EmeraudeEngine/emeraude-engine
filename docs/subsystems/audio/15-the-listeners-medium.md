@@ -56,6 +56,38 @@ reverberation), not a film's.
 - ⚠️ `Audio::Manager::setEnvironmentSoundProperties()` no longer owns the speed of sound alone: it keeps the medium's
   in step, and the scene states it again each cycle.
 
+### The surface between a source and the listener — `Audio::SoundPath` (2026-11-26)
+
+- **The listener's medium is one statement for every source; the path is one per source.** A source that is on the
+  other side of the sea's surface loses, ON TOP of the listener's medium, the sea's crossing gains
+  (`SeaSoundSettings::crossingGain`, `crossingGainHF`): a source under the sea heard from the air is no longer heard
+  as if nothing were between the two, and a source in the air heard from under the level is muffled by the listener's
+  water AND by the crossing.
+- **The law — `Scene::soundPathAt(position)`** (logic thread): the source's immersion (the same function of the
+  depth as the listener's: `seaImmersion()`, 0 in the air to 1 under the level over the transition depth) against
+  the listener's; `crossing = |source − listener|`, 0 on the same side, 1 on opposite sides; the two gains blended
+  in decibels by it, like the medium's. Continuous when either one crosses the surface. No sea: a clear path.
+- **Who states it**: a `Component::SoundEmitter` each logic cycle, for its source and its one-shot voices, from its
+  own position; the scene for its world sounds (`playSoundAt()`: at the play, then each cycle from the source's
+  position, the listener may cross the surface while they play). `Source::setSoundPath()` skips a path it already
+  carries. The ambience's sources state none: they are around the listener.
+- **In the source**: the path's two gains multiply the direct filter (user's response × listener's medium × path)
+  and, on the send to the listener's reverberation, a filter of its own carrying the path alone
+  (`m_pathFilter`): what reverberates went through the surface too. The path is the USER's: `resetToDefaults()`
+  clears it, where the medium stays.
+- ⚠️ The crossing values (0.3 and 0.05) are PROVISIONAL: never heard by the owner (`setSeaSoundCrossing`).
+
+### Out of the medium, and the sound of being under water (2026-11-26)
+
+- **`Source::ignoreListenerMedium(true)`** takes a source out of the listener's medium: neither filtered by it nor
+  sent to its reverberation (the medium's values are still recorded: a source put back carries them at once). For a
+  sound that already IS what the medium sounds like (owner decision 2026-11-26: "an untreated channel for the sounds
+  that are already under water"). The user's: `resetToDefaults()` ends it.
+- **`Scene::setSubmergedSound(sound, gain)`**: a loop heard only while the listener is under the scene's sea, not
+  placed in the world (a relative source), out of the medium, its gain `gain × immersion`. `updateSeaSound()` takes a
+  source of the pool when the listener goes under, gives it back when it comes out (and `releaseSeaSound()` at a
+  suspension and with the scene). A sound still loading starts once loaded.
+
 ### The microphone states the listener every cycle
 
 `Component::Microphone::processLogics()` now updates its outputs every cycle, like `Camera::processLogics()`. Before,
@@ -70,6 +102,10 @@ notifies since (scenes doc 11 § *Every displacement notifies*): `Component::Sou
 
 - `setSeaSound(gain, gainHF, reverb, transitionDepth)` on the scene service; `getSea()` answers them as `sound`, with
   `listenerImmersion`.
+- `setSeaSoundCrossing(gain, gainHF)` on the scene service: what the surface does to a sound whose source and
+  listener are on opposite sides of it; `setSeaSound` keeps them. `setSubmergedSound(sound, gain)`: the loop heard
+  under the sea (an unknown name is refused, an empty one removes it). `getSea()` answers all four in `sound`
+  (`crossingGain`, `crossingGainHF`, `submergedSound`, `submergedGain`).
 - `SoundEmitter.play(entity, component, sound, gain, loop)`: a sound of the Sounds store on an emitter (an unknown
   name is refused); `getState` gains `awaitingLoad`.
   Proven on a sound never requested (2026-11-26, `psycho`, 224 s, loaded in 3.6 s): `play` answers `awaitingLoad`
@@ -94,6 +130,30 @@ bands are not read.
   the level goes −60, −70, −80, −82, −85, −91, −99 dB over 0.7 s — the tail.
 - `listenerImmersion`: 0 at y = +11.6 m, 0.5 at the level, 1 at −6.4 m. 0 `VUID-`; the only `[Error]` is the wave
   writer's own (no audio INPUT device in that mode).
+
+### Measured — the path, the exemption, the submerged sound (Linux, 2026-11-26)
+
+projet-alpha `water-world`, Release, window-less, the mix written WHOLE (the recorder off in a settings copy), `wind1`
+on the player's head emitter, power from 1.0 to 3.5 s of play. The emitter stays at the listener (no distance
+change): a temporary probe moved 30 m up or down the POSITION GIVEN TO `soundPathAt()` only. Bands 125-500 /
+500-2000 / 2000-5000 / 5000-12000 Hz.
+
+- Two identical launches: 0.0 dB in every band (a whole mix repeats to the digit).
+- Listener in the air, source under: −10.5 / −12.3 / −23.3 / −40.1 dB against the same source in the air
+  (`20·log10(0.3)` = −10.5 dB).
+- Listener under (no reverberation), source in the air: −22.2 / −32.5 / −36.4 / −36.5 dB against the same source
+  under water — more than the crossing gain alone in the low bands: the two high-frequency gains multiply
+  (0.02 × 0.05), and OpenAL's shelf then reaches far under its 5 kHz reference. To weigh when the values are tuned.
+- With the reverberation (0.5), source in the air against source under: −11.1 / −13.4 / −26.2 / −37.1 dB — what
+  reverberates is attenuated too.
+- The submerged sound alone (`underwater`, the sea loop off by a probe): silent in the air; fully under, −13.0 dB
+  against the sound's own file in all four bands (125-500 / 500-2000 / 2000-5000 / 5000-10000 Hz) — FLAT, the medium
+  does not touch it (the sea loop under the same water: −4.5 / −7.9 / −27.4 / −41.7 dB); at an immersion of 0.5,
+  6.0 dB lower in every band; the listener taken out of the water, the level falls to digital silence in the next
+  0.1 s — no reverberation of it.
+- 0 `VUID-` in every launch; the console refuses an unknown sound name.
+- ⚠️ NOT proven by a run: the path of a WORLD sound (`playSoundAt()`): no console command plays one (engine item
+  `console-commands-for-world-sounds-and-ambience`).
 
 ### Limits
 
@@ -125,9 +185,8 @@ bands are not read.
   **A mix written WHOLE**: a settings copy with `Core/RushMaker/EnableAudio` false — the recorder is not started,
   the game is mixed on the manager's device, one descriptor on the file. Proven the same day (`wind1`, 6.84 s of
   play): no run of zeros, 0.02 % of zero samples. The measurements above were NOT taken that way.
-- One medium for every source: a source that is itself under water, heard from the air, is not muffled; a source in
-  the air heard from under water is muffled like one beside the listener (owner decision 2026-11-26: the listener's
-  state first).
+- The path is the surface CROSSED or not: no account of how far under water the sound travels, nor of a source
+  half out of the water beyond the transition height. The ambience's sources have no path.
 - A source's own effects (`Source::addEffect()`) keep to their channels, the sends before the last one (four sends
   asked a source since 2026-11-26: `06-critical-points.md`, *A source's effect channel IS its auxiliary send*). They
   are NOT muffled by the medium: a user's send carries the sound unfiltered. No user in the cascade today.

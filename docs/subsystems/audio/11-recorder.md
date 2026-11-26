@@ -48,6 +48,8 @@ Path generation and coordinated start/stop of all recorders is owned by `Core::s
 - Proven (Linux, Release, recorder on, video off in a settings copy, `Core.toggleRecording()`): three recordings
   started and stopped, a fourth left running into the shutdown — four files whose RIFF size is the file's length − 8
   and whose data size is its length − 44, 2 channels, 48 kHz, the played sound in each.
+- macOS (engine 62d03c6e, Apple M6, 2026-11-26): the same four recordings, each header exact (the fourth completed
+  at the shutdown), 2 channels, 48 kHz, non-silent. Windows the same day (RTX 3500 Ada): the same.
 - ThreadSanitizer (Linux, Debug, the software device, window-less, `default`, the same scenario — three recordings
   and a fourth left running into the shutdown): 0 report naming `Audio::Recorder`, the four files complete. The run's
   seven reports are another fault's (engine item `sky-background-stars-read-while-it-loads`).

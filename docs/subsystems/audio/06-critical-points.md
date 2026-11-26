@@ -37,6 +37,10 @@
   - After (Linux): play, replace by another sound, pause, stop, replay, shutdown — 0 error in OpenAL Soft's log, with
     the recorder off and on; the music through play, three `next`, `previous`, `stop`, `play` with the crossfade on —
     0 error, no "clearing streams" warning.
+  - macOS (engine 62d03c6e, Apple M6, AppleClang with `-Wthread-safety -Wcovered-switch-default`, 2026-11-26): the
+    build without a warning, the same two launches (recorder on, recorder off) with 0 error in OpenAL Soft's log,
+    4 sends reported, 0 VUID. Windows the same day (RTX 3500 Ada, MSVC 19.44 `/W4 /WX`, Release and Debug without a
+    warning): the same two launches, 0 error, 4 sends, 0 VUID.
 - **A source's effect channel IS its auxiliary send** (2026-11-26). Both contexts — the manager's and the recorder's
   loopback "game" context — ask for `OpenAL::RequestedAuxiliarySends` = 4 sends a source (OpenAL Soft: 2 by default,
   6 at most); the count is read from the device the GAME is mixed on, after the recorder started

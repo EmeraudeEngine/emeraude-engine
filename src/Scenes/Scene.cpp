@@ -895,6 +895,7 @@ namespace EmEn::Scenes
 		source.setPosition(position);
 		source.setGain(std::abs(gain));
 		source.setPitch(pitch);
+		source.setSoundPath(this->soundPathAt(position));
 		static_cast< void >(source.play(sound, Audio::PlayMode::Once));
 	}
 
@@ -954,6 +955,25 @@ namespace EmEn::Scenes
 		}
 	}
 
+	namespace
+	{
+		/**
+		 * @brief Turns a depth under a sea into an immersion for the sound: 0 in the air, 1 under the level, the
+		 * change spread over the transition depth and centred on the level.
+		 * @note A function of the depth alone: a listener (or a source) bobbing at the surface hears a continuous
+		 * change, and the same place always sounds the same (owner decision 2026-11-26).
+		 * @param depth The depth under the sea in metres, positive under the level. A non-finite one answers 0.
+		 * @param transitionDepth The height of the transition in metres. @pre Above zero (SeaSoundSettings::isValid()).
+		 * @return float
+		 */
+		[[nodiscard]]
+		float
+		seaImmersion (float depth, float transitionDepth) noexcept
+		{
+			return std::isfinite(depth) ? std::clamp((depth / transitionDepth) + 0.5F, 0.0F, 1.0F) : 0.0F;
+		}
+	}
+
 	void
 	Scene::updateSeaSound () noexcept
 	{
@@ -972,12 +992,7 @@ namespace EmEn::Scenes
 				const auto settings = m_seaLevel->soundSettings();
 				const auto depth = m_seaLevel->getDepthAt(listener->getWorldCoordinates().position());
 
-				/* NOTE: A function of the depth alone, centred on the level: a listener bobbing at the surface hears a
-				 * continuous change, and the same place always sounds the same (owner decision 2026-11-26). */
-				if ( std::isfinite(depth) )
-				{
-					immersion = std::clamp((depth / settings.transitionDepth) + 0.5F, 0.0F, 1.0F);
-				}
+				immersion = seaImmersion(depth, settings.transitionDepth);
 
 				if ( immersion > 0.0F )
 				{
@@ -1002,11 +1017,133 @@ namespace EmEn::Scenes
 
 		/* NOTE: The manager skips a medium it already applied. */
 		audioManager.setListenerMedium(medium);
+
+		/* NOTE: A world sound still playing follows the listener across the surface (a source skips a path it
+		 * already carries). Only when a sea is there: without one every path is clear, and stays so. */
+		if ( m_seaLevel != nullptr )
+		{
+			const Base::MutexLock lock{m_worldSoundsAccess};
+
+			for ( const auto & voice : m_worldSounds )
+			{
+				if ( voice != nullptr && !voice->isFinished() )
+				{
+					voice->setSoundPath(this->soundPathAt(voice->position()));
+				}
+			}
+		}
+
+		/* NOTE: The sound of being under the sea: a voice taken when the listener goes under, its gain following
+		 * the immersion, given back when the listener comes out or the sound is removed. */
+		{
+			const Base::MutexLock lock{m_worldSoundsAccess};
+
+			if ( m_submergedSound == nullptr || immersion <= 0.0F )
+			{
+				m_submergedVoice.reset();
+			}
+			else if ( m_submergedSound->isLoaded() )
+			{
+				if ( m_submergedVoice == nullptr )
+				{
+					m_submergedVoice = audioManager.requestSource();
+
+					if ( m_submergedVoice != nullptr )
+					{
+						/* NOTE: Not placed in the world: it stays on the listener. And out of the listener's medium:
+						 * it already is the sound of being under water (owner decision 2026-11-26). */
+						m_submergedVoice->setRelativeState(true);
+						m_submergedVoice->ignoreListenerMedium(true);
+						m_submergedVoice->setGain(0.0F);
+						static_cast< void >(m_submergedVoice->play(m_submergedSound, Audio::PlayMode::Loop));
+					}
+				}
+
+				if ( m_submergedVoice != nullptr )
+				{
+					m_submergedVoice->setGain(m_submergedGain * immersion);
+				}
+			}
+		}
+	}
+
+	void
+	Scene::setSubmergedSound (const std::shared_ptr< Audio::SoundResource > & sound, float gain) noexcept
+	{
+		if ( !std::isfinite(gain) )
+		{
+			TraceError{ClassId} << "setSubmergedSound(), a non-finite gain is refused.";
+
+			return;
+		}
+
+		const Base::MutexLock lock{m_worldSoundsAccess};
+
+		/* NOTE: Another sound: the voice is given back, updateSeaSound() takes one for the new sound. */
+		if ( sound != m_submergedSound )
+		{
+			m_submergedVoice.reset();
+			m_submergedSound = sound;
+		}
+
+		m_submergedGain = std::clamp(gain, 0.0F, 1.0F);
+	}
+
+	float
+	Scene::submergedSoundGain () const noexcept
+	{
+		const Base::MutexLock lock{m_worldSoundsAccess};
+
+		return m_submergedGain;
+	}
+
+	std::string
+	Scene::submergedSoundName () const noexcept
+	{
+		const Base::MutexLock lock{m_worldSoundsAccess};
+
+		return m_submergedSound != nullptr ? m_submergedSound->name() : std::string{};
+	}
+
+	Audio::SoundPath
+	Scene::soundPathAt (const Vector< 3, float > & worldPosition) const noexcept
+	{
+		if ( m_seaLevel == nullptr )
+		{
+			return {};
+		}
+
+		const auto settings = m_seaLevel->soundSettings();
+		const auto sourceImmersion = seaImmersion(m_seaLevel->getDepthAt(worldPosition), settings.transitionDepth);
+
+		/* NOTE: How much of the surface lies between the two: 0 on the same side, 1 on opposite sides. */
+		const auto crossing = std::abs(sourceImmersion - m_listenerImmersion.load(std::memory_order_relaxed));
+
+		if ( crossing <= 0.0F )
+		{
+			return {};
+		}
+
+		/* NOTE: Blended in decibels with a floor at -60 dB on the way, like the listener's medium: fully across,
+		 * the sea's values exactly. */
+		const auto blendGain = [crossing] (float across) {
+			constexpr auto GainFloor{0.001F};
+
+			return crossing >= 1.0F ? across : std::pow(std::max(across, GainFloor), crossing);
+		};
+
+		return {.gain = blendGain(settings.crossingGain), .gainHF = blendGain(settings.crossingGainHF)};
 	}
 
 	void
 	Scene::releaseSeaSound () noexcept
 	{
+		{
+			const Base::MutexLock lock{m_worldSoundsAccess};
+
+			m_submergedVoice.reset();
+		}
+
 		if ( m_listenerImmersion.exchange(0.0F, std::memory_order_relaxed) <= 0.0F )
 		{
 			return;

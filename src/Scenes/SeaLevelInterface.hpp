@@ -150,7 +150,7 @@ namespace EmEn::Scenes
 
 	/**
 	 * @brief What a sea does to the sound, for a listener under its level: every sound of the world is muffled and
-	 * reverberates, the music is left alone (owner decisions 2026-11-26, engine item underwater-sound).
+	 * reverberates, the music is left alone (owner decisions 2026-11-26, engine audio doc 15).
 	 * @note The values of a listener fully under water; the scene blends them with the open air over the transition
 	 * depth, centred on the level (Scene::updateSeaSound()), and states the result to the audio manager
 	 * (Audio::ListenerMedium).
@@ -167,6 +167,12 @@ namespace EmEn::Scenes
 		/** @brief The height over which the sound goes from the air's to the water's, centred on the sea level, in m:
 		 * a listener bobbing at the surface hears a continuous change, never a switch. From 0.01 to 10. */
 		float transitionDepth{0.25F};
+		/** @brief The gain of a sound whose source and listener are on opposite sides of the surface, at every
+		 * frequency: 0 to 1, 1 loses nothing. On top of what the listener's own side does (Scene::soundPathAt()).
+		 * ⚠️ A provisional value, never heard by the owner (setSeaSoundCrossing in the console). */
+		float crossingGain{0.3F};
+		/** @brief The gain of that sound's high frequencies: 0 to 1, 1 muffles nothing. ⚠️ Provisional too. */
+		float crossingGainHF{0.05F};
 
 		/**
 		 * @brief Tells whether every value is one a sea takes.
@@ -179,7 +185,9 @@ namespace EmEn::Scenes
 			return std::isfinite(gain) && gain >= 0.0F && gain <= 1.0F &&
 				std::isfinite(gainHF) && gainHF >= 0.0F && gainHF <= 1.0F &&
 				std::isfinite(reverb) && reverb >= 0.0F && reverb <= 1.0F &&
-				std::isfinite(transitionDepth) && transitionDepth >= 0.01F && transitionDepth <= 10.0F;
+				std::isfinite(transitionDepth) && transitionDepth >= 0.01F && transitionDepth <= 10.0F &&
+				std::isfinite(crossingGain) && crossingGain >= 0.0F && crossingGain <= 1.0F &&
+				std::isfinite(crossingGainHF) && crossingGainHF >= 0.0F && crossingGainHF <= 1.0F;
 		}
 	};
 

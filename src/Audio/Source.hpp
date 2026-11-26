@@ -69,6 +69,7 @@ namespace EmEn::Audio
 	class EffectSlot;
 	class PlayableInterface;
 	struct ListenerMedium;
+	struct SoundPath;
 }
 
 namespace EmEn::Audio
@@ -650,6 +651,32 @@ namespace EmEn::Audio
 			void setListenerMedium (const ListenerMedium & medium, ALuint reverbSlot) noexcept;
 
 			/**
+			 * @brief Takes this source out of the listener's medium, or puts it back: an exempt source is neither
+			 * filtered by the medium nor sent to its reverberation.
+			 * @note For a sound that already IS what the medium sounds like (a recording made under water, played
+			 * while the listener is under a sea — owner decision 2026-11-26): treating it again would muffle it twice.
+			 * The medium's values are still recorded: a source put back carries the current medium at once. The sound
+			 * path (setSoundPath()) and a user's direct filter still apply.
+			 * @note ANY THREAD (the filter state has its own lock). The exemption is the user's: resetToDefaults() ends it.
+			 * @warning This method only works with the EFX extension.
+			 * @param state True to exempt the source.
+			 */
+			void ignoreListenerMedium (bool state) noexcept;
+
+			/**
+			 * @brief States what lies between this source and the listener beyond the listener's own medium: the gains
+			 * its sound loses on the way.
+			 * @note The call of whoever places the source, each time the path changes (a scene's sound emitter and a
+			 * scene's world sound, each logic cycle: the same path costs a comparison). The gains multiply the direct
+			 * filter (the user's response and the listener's medium, refreshDirectFilter()) and filter what the source
+			 * sends to the listener's reverberation. A user's own effect sends are left as they are.
+			 * @note ANY THREAD (the filter state has its own lock). The path is the user's: resetToDefaults() clears it.
+			 * @warning This method only works with the EFX extension.
+			 * @param path The path. An invalid one (SoundPath::isValid()) is refused (traced).
+			 */
+			void setSoundPath (const SoundPath & path) noexcept;
+
+			/**
 			 * @brief Stops the source, removes its sound and puts every property back to its OpenAL default.
 			 * @note The source pool calls it when a source comes back (Manager::releaseSource()): a pooled source is
 			 * shared by every user in turn, and each one configures only what it relies on. Without it a source left
@@ -658,7 +685,9 @@ namespace EmEn::Audio
 			 * @post Pitch 1, gain 1 (gain bounds 0 / 1), position, velocity and direction 0, absolute (not relative),
 			 * reference distance 1, rolloff factor 1, maximum distance FLT_MAX (OpenAL's own default), cone 360° / 360° / outer gain 0, no direct
 			 * filter, no effect slot; with EFX, air absorption 0 and the cone's outer HF gain 1.
-			 * @note What the listener's medium does to the source stays (setListenerMedium()): it is not a user's.
+			 * @note What the listener's medium does to the source stays (setListenerMedium()): it is not a user's. The
+			 * sound path (setSoundPath()) and the exemption from the medium (ignoreListenerMedium()) are a user's:
+			 * cleared.
 			 */
 			void resetToDefaults () noexcept;
 
@@ -807,14 +836,15 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Gives the source its direct filter: none, the user's, or the user's response multiplied by the
-			 * listener's medium.
+			 * listener's medium and by the sound path.
 			 */
 			void refreshDirectFilter () noexcept EMEN_REQUIRES(m_filterAccess);
 
 			/**
-			 * @brief Connects the last auxiliary send of the source to the listener's reverberation, or frees it.
+			 * @brief Connects the last auxiliary send of the source to the listener's reverberation — through a filter
+			 * carrying the sound path when it is not clear — or frees it.
 			 */
-			void refreshListenerSend () const noexcept EMEN_REQUIRES(m_filterAccess);
+			void refreshListenerSend () noexcept EMEN_REQUIRES(m_filterAccess);
 
 			std::map< int, std::shared_ptr< EffectSlot > > m_effectSlots;
 			/** @brief Guards the direct filter's state: a user sets its filter while the manager applies the medium. */
@@ -822,9 +852,15 @@ namespace EmEn::Audio
 			std::shared_ptr< const Filters::Abstract > m_directFilter EMEN_GUARDED_BY(m_filterAccess);
 			/** @brief The user's response multiplied by the listener's medium. Created the first time it is needed. */
 			std::unique_ptr< Filters::BandPass > m_composedFilter EMEN_GUARDED_BY(m_filterAccess);
+			/** @brief The sound path's gains on what goes to the listener's reverberation. Created the first time it is needed. */
+			std::unique_ptr< Filters::BandPass > m_pathFilter EMEN_GUARDED_BY(m_filterAccess);
 			float m_listenerGain EMEN_GUARDED_BY(m_filterAccess){1.0F};
 			float m_listenerGainHF EMEN_GUARDED_BY(m_filterAccess){1.0F};
+			float m_pathGain EMEN_GUARDED_BY(m_filterAccess){1.0F};
+			float m_pathGainHF EMEN_GUARDED_BY(m_filterAccess){1.0F};
 			ALuint m_listenerReverbSlot EMEN_GUARDED_BY(m_filterAccess){0};
+			/** @brief True while the source is out of the listener's medium (ignoreListenerMedium()). */
+			bool m_ignoresListenerMedium EMEN_GUARDED_BY(m_filterAccess){false};
 			std::shared_ptr< PlayableInterface > m_currentPlayableInterface;
 			float m_previousGain{1.0F};
 	};

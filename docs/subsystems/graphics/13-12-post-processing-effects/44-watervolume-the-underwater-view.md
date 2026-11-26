@@ -199,8 +199,8 @@ surface is taken for the sea's underside (same item).
 - **The window shows the sky straight through** (the grab pass, offset by the material's thickness): the hemisphere
   is not compressed into the 97° cone.
 - **The light's own path through the water** (the sun dimming and turning blue with depth on what it lights), the
-  caustics, the beams, the sound: their own items (`underwater-caustics-and-depth-light`, `underwater-light-shafts`,
-  `underwater-sound`). `VolumetricLight` still draws the air's shafts under water.
+  caustics, the beams: their own items (`underwater-caustics-and-depth-light`, `underwater-light-shafts`); the sound:
+  audio doc 15. `VolumetricLight` still draws the air's shafts under water.
 - The fog response of a surface (the material properties' alpha) is not read: under water nothing is exempt.
 - **The air's media under water**: the fog, the aerial perspective, the volumetric scattering and the clouds still
   treat the part of a view path that lies under water as air (item `air-media-under-water`, the owner's decision of
