@@ -103,14 +103,17 @@ bands are not read.
   +2.7 / −4.9 / −15.5 / −18.9, mid-band −2.7 / −1.8 / −2.9 / −7.5; the second air launch within 0.7 dB in the three
   lower bands and at −2.5 dB in the highest. The tail there falls 30 dB in about 0.45 s and then meets the file's
   floor: the 60 dB point is not reachable under water at this sound's level.
-- ⚠️ Not explained (2026-11-26): the mix written by the wave writer holds stretches of EXACT zero while the sound
-  plays. Seen on the AMD machine (11 to 20 blocks of 50 ms a file) and measured on Linux (RTX 3070 Ti, an air
-  launch, twice): 41 % of the samples of the 12.5 s of play, in runs of 1024, 2048 … 8192 samples that start on the
-  file's 1024-sample grid, while the sound's file holds 0.4 % of zero samples. The asset has quiet passages (a third
-  of its 21 ms blocks under 40 steps of 16 bits), but an alignment of the two envelopes did not succeed, so it is
-  NOT established whether those stretches are the asset's quiet passages falling to zero or sound that is lost.
-  The band ratios above compare launches that all carry them. Whether a real output device has them is not known;
-  the owner's listening noticed nothing.
+- ⚠️ **The mix written by the wave writer has holes — a trap of the method, not lost sound** (2026-11-26). The
+  engine opens TWO output devices on the selected output: the audio manager's own, and the recorder's passthrough
+  (`Audio::Recorder`: the game is mixed on a loopback device in 16 bits, a thread plays that mix on a second device).
+  With `ALSOFT_DRIVERS=wave` both are wave writers on the SAME file (two descriptors on it, read in `/proc`), each
+  writing at its own position: the manager's silent blocks overwrite a part of the passthrough's. Measured on Linux:
+  32 to 41 % of the samples of a played sound are exact zeros, in runs of 1024 to 9216 samples on the file's
+  1024-sample grid, for a continuous sound as well (`fx5`, `wind1`) while the emitter reports `playing`; the blocks
+  that remain sit at their exact time in the sound (`wind1`: correlation 1.00, offset 0.000 s all along). A real
+  output device mixes the two instead: nothing is lost there. Consequences: the band RATIOS above compare
+  launches that all carry the holes (their spread from a launch to the next, up to 2.5 dB, comes from there);
+  an absolute level read on such a mix is too low, and a correlation must use the blocks that hold sound.
 - One medium for every source: a source that is itself under water, heard from the air, is not muffled; a source in
   the air heard from under water is muffled like one beside the listener (owner decision 2026-11-26: the listener's
   state first).
