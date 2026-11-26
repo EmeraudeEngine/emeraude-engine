@@ -24,7 +24,6 @@ heard it on a running scene the same day and kept the first values.
 
 ## What remains
 
-- AMD (macOS and Windows verified on 2026-11-26: audio doc 15 § Limits).
 - The waves: the sound follows the sea's level at rest until the sea answers its waves on the CPU
   (`ocean-fft-surface`, step 6) — nothing to change here then.
 - `water-world` plays no sound of its own: nothing is heard there without the console. A sea ambience is a content

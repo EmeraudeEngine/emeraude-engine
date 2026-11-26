@@ -97,7 +97,20 @@ bands are not read.
   Release and Debug 0 warning): the same immersions, 0 VUID, the tail about 0.6 s; fully under without reverberation
   −5.0 / −7.7 / −14.6 / −21.8 dB, with it +3.6 / −3.3 / −14.4 / −17.1, mid-band −2.6 / −2.4 / −3.4 / −6.0. ⚠️ The
   mid-band reading agrees between macOS and Windows and sits about 2 dB under Linux's in the three lower bands: the
-  Linux reading of that one condition is the odd one, not explained. AMD untested.
+  Linux reading of that one condition is the odd one, not explained. AMD verified the same day (Radeon integrated
+  graphics, RADV RENOIR, Mesa 26.0.8, the device forced through `ForceGPU` in a settings copy, engine fab5e37c): the
+  same immersions, 0 VUID; fully under without reverberation −5.4 / −9.3 / −16.1 / −24.0 dB, with it
+  +2.7 / −4.9 / −15.5 / −18.9, mid-band −2.7 / −1.8 / −2.9 / −7.5; the second air launch within 0.7 dB in the three
+  lower bands and at −2.5 dB in the highest. The tail there falls 30 dB in about 0.45 s and then meets the file's
+  floor: the 60 dB point is not reachable under water at this sound's level.
+- ⚠️ Not explained (2026-11-26): the mix written by the wave writer holds stretches of EXACT zero while the sound
+  plays. Seen on the AMD machine (11 to 20 blocks of 50 ms a file) and measured on Linux (RTX 3070 Ti, an air
+  launch, twice): 41 % of the samples of the 12.5 s of play, in runs of 1024, 2048 … 8192 samples that start on the
+  file's 1024-sample grid, while the sound's file holds 0.4 % of zero samples. The asset has quiet passages (a third
+  of its 21 ms blocks under 40 steps of 16 bits), but an alignment of the two envelopes did not succeed, so it is
+  NOT established whether those stretches are the asset's quiet passages falling to zero or sound that is lost.
+  The band ratios above compare launches that all carry them. Whether a real output device has them is not known;
+  the owner's listening noticed nothing.
 - One medium for every source: a source that is itself under water, heard from the air, is not muffled; a source in
   the air heard from under water is muffled like one beside the listener (owner decision 2026-11-26: the listener's
   state first).
