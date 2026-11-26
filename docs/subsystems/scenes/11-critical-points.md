@@ -30,6 +30,12 @@
   (engine item `node-animation-notifies-per-written-node`).
 - Verified after the fix (Linux, validation layer loaded): `asset-loader` (the watch's clip), `city` (the cars) and
   `water-world`, 0 VUID, no root-node warning, 0 frame reading a state being rewritten.
+- macOS (engine 182fd2bb, Apple M6, MoltenVK, 2026-11-26): the build without a warning (AppleClang,
+  `-Wdocumentation -Werror`), the same three demos with 0 VUID and 0 frame reading a state being rewritten; the
+  emitter placed without a head turn at −37.8 dB against −38.6 dB with one (Linux: −38.6 / −39.0).
+- Windows (engine 182fd2bb, RTX 3500 Ada, MSVC 14.44, 2026-11-26): Release and Debug without a warning, the same
+  three demos with 0 VUID and 0 frame reading a state being rewritten; the emitter at −38.0 dB without a head turn
+  against −37.8 dB with one. AMD: not tested.
 - `Physics::Particle::setLocalCoordinates()` is not an entity: it has nobody to notify.
 
 ### ⚠️ The scene graph has a DEPTH CAP: `Node::MaxDepth` = 256 (triad, 2026-09-30)
