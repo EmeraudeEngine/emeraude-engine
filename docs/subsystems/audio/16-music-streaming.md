@@ -62,8 +62,22 @@ every buffer of the track on the source. With a playlist of 32 tracks loaded up 
   header.)
 - The gate's `commit` profile: GCC Release and clang builds without a warning, clang-tidy, cppcheck and
   include-what-you-use clean on the touched files.
-- ⚠️ Seen in that stress run and not looked into: 29 `[Error][WaveFactory::FileFormatMIDI] processIStream(), failed
-  to render audio !` lines for tracks of the playlist `Doom` (a scratch configuration, no soundfont set).
+- Seen in that stress run: 29 `[Error][WaveFactory::FileFormatMIDI] processIStream(), failed to render audio !`
+  lines. They are MIDI renderings CANCELLED by the shutdown, logged as errors (the testbed, the playlist `Doom`
+  loaded and the application shut down two seconds later: 31 lines; left to load for 60 s: none, and the tracks
+  play) — emeraude-base item `midi-rendering-cancelled-logs-an-error`, not this lot's.
+- macOS (engine 6a033c23, Apple M6, MoltenVK, Apple clang 21 with `-Werror -Wthread-safety`, 2026-11-27): Release
+  and Debug without a warning; the console scenario on `default` (play `AirWolf8`, `seek(40)`, the wrap in Loop
+  mode at 5.51 s, the next track in Once mode at 3.48 s, pause, a seek while paused, resume, cross-fade, `next` ×3,
+  `previous`, stop, play) — 0 underrun line, 0 `VUID-`, 0 error in OpenAL Soft's log. ThreadSanitizer, the mixer's
+  stress: 20 250 calls, 347 positions read on a streaming track, 0 report.
+- Windows (engine 6a033c23, RTX 3500 Ada, MSVC 19.44 `/W4 /WX`, the same day): Release and Debug without a
+  warning; the same scenario with the same answers — 0 underrun line, 0 `VUID-`, 0 error in OpenAL Soft's log; the
+  mix of 14 s of `AirWolf8`: no exact-zero stretch in any of the 22 windows of 0.5 s (the longest run of zeros:
+  0.00 ms). The correlation with the track was not measured there.
+- ⚠️ A position is counted from the END OF THE LOAD: `play()` of a track not loaded yet answers at once and the
+  track starts when it is decoded (1.0 s for `AirWolf8` on Linux, 1.8 s on Windows, resampled from 44.1 kHz) — 14 s
+  after the command the position reads 13.0 s on Linux, 13.3 s on macOS, 12.2 s on Windows.
 - ⚠️ NOT measured: the memory OpenAL gives back (no build of before was kept for an A/B); a starved event thread
   (no underrun was provoked).
 
