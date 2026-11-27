@@ -5727,6 +5727,9 @@ statement above still holds for every KTX2 texture that actually comes from disk
 
 ### A sound with no buffer used to kill the engine (fixed 2026-08-27)
 
+(The names of 2026-08: since 2026-11-27 the contract `PlayableInterface` is merged into `SoundResource`, the member is
+`m_currentSound`, and a source no longer has a streaming path — audio doc 16.)
+
 `Audio::Source::play()` called `m_currentPlayableInterface->buffer()->identifier()` — and
 `PlayableInterface::buffer()` returns **null while the sound resource is not loaded, or failed to
 load**. The first collision of a scene whose sound was not ready dereferenced a null pointer inside

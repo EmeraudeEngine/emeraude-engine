@@ -34,7 +34,6 @@
 #include <memory>
 #include <sstream>
 #include <utility>
-#include <vector>
 
 /* Local inclusions. */
 #include "Audio/Buffer.hpp"
@@ -43,7 +42,7 @@
 #include "Audio/Filters/BandPass.hpp"
 #include "Audio/ListenerMedium.hpp"
 #include "Audio/OpenALExtensions.hpp"
-#include "Audio/PlayableInterface.hpp"
+#include "Audio/SoundResource.hpp"
 #include "Audio/Types.hpp"
 #include "BaseUtility.hpp"
 #include "BlobTrait.hpp"
@@ -844,7 +843,7 @@ namespace EmEn::Audio
 	}
 
 	bool
-	Source::play (const std::shared_ptr< PlayableInterface > & playableInterface, PlayMode mode) noexcept
+	Source::play (const std::shared_ptr< SoundResource > & sound, PlayMode mode) noexcept
 	{
 		if ( !Manager::isAudioEnabled() )
 		{
@@ -861,105 +860,112 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		if ( playableInterface != m_currentPlayableInterface )
+		if ( sound != m_currentSound )
 		{
-			if ( playableInterface == nullptr )
+			if ( sound == nullptr )
 			{
 				Tracer::error(ClassId, "Trying to play a null pointer !");
 
 				return false;
 			}
 
-			/* NOTE: The buffers of the sound that leaves are detached before its resource is let go: the playback
-			 * below may be cancelled (a sound not loaded yet) and leave them attached to a source that no longer
+			/* NOTE: The buffer of the sound that leaves is detached before its resource is let go: the playback
+			 * below may be cancelled (a sound not loaded yet) and leave it attached to a source that no longer
 			 * holds the resource. */
-			if ( m_currentPlayableInterface != nullptr )
+			if ( m_currentSound != nullptr )
 			{
 				this->detachBuffers();
 			}
 
-			m_currentPlayableInterface = playableInterface;
+			m_currentSound = sound;
 		}
 
 		/* We stop the source if playing something already. */
-		ALint state = 0;
+		this->stop();
 
-		/* NOTE: Can be AL_INITIAL, AL_PLAYING, AL_PAUSED or AL_STOPPED */
-		alGetSourcei(this->identifier(), AL_SOURCE_STATE, &state);
+		/* Configuring the looping state. */
+		alSourcei(this->identifier(), AL_LOOPING, mode == PlayMode::Loop ? AL_TRUE : AL_FALSE);
 
-		switch ( state )
+		/* ⚠️ SoundResource::buffer() returns null while the sound resource is not loaded
+		 * (or failed to load): dereferencing it crashed the engine on the first collision of
+		 * a scene whose sound was not ready — a null `this` in AbstractObject::identifier().
+		 * A sound that cannot be played is not a reason to kill the application. */
+		const auto buffer = m_currentSound->buffer();
+
+		if ( buffer == nullptr )
 		{
-			case AL_PLAYING :
-			case AL_PAUSED :
-				this->stop();
-				[[fallthrough]];
+			TraceWarning{ClassId} << "The sound has no buffer yet, playback cancelled.";
 
-			case AL_STOPPED :
-				/* NOTE: Clear any previously queued buffers before playing a new track. */
-				if ( this->getSourceType() == SourceType::Streaming )
-				{
-					this->clearStream();
-				}
-				break;
-
-			default:
-				break;
+			return false;
 		}
 
-		/* 3. Playback. */
-		{
-			/* Configuring the looping state. */
-			alSourcei(this->identifier(), AL_LOOPING, mode == PlayMode::Loop ? AL_TRUE : AL_FALSE);
+		alSourcei(this->identifier(), AL_BUFFER, static_cast< ALint >(buffer->identifier()));
 
-			/* Checks if the sample is streamable or not. */
-			const auto bufferCount = m_currentPlayableInterface->streamable();
-
-			/* ⚠️ PlayableInterface::buffer() returns null while the sound resource is not loaded
-			 * (or failed to load): dereferencing it crashed the engine on the first collision of
-			 * a scene whose sound was not ready — a null `this` in AbstractObject::identifier().
-			 * A sound that cannot be played is not a reason to kill the application. */
-			if ( bufferCount > 0 )
-			{
-				std::vector< ALuint > identifiers{};
-
-				/* Packing identifier. */
-				identifiers.reserve(bufferCount);
-
-				for ( size_t index = 0; index < bufferCount; index++ )
-				{
-					const auto buffer = m_currentPlayableInterface->buffer(index);
-
-					if ( buffer == nullptr )
-					{
-						TraceWarning{ClassId} << "The playable interface has no buffer #" << index << " yet, playback cancelled.";
-
-						return false;
-					}
-
-					identifiers.push_back(buffer->identifier());
-				}
-
-				alSourceQueueBuffers(this->identifier(), static_cast< ALsizei >(bufferCount), identifiers.data());
-			}
-			else
-			{
-				const auto buffer = m_currentPlayableInterface->buffer();
-
-				if ( buffer == nullptr )
-				{
-					TraceWarning{ClassId} << "The playable interface has no buffer yet, playback cancelled.";
-
-					return false;
-				}
-
-				alSourcei(this->identifier(), AL_BUFFER, static_cast< ALint >(buffer->identifier()));
-			}
-
-			/* Let's play the source. */
-			alSourcePlay(this->identifier());
-		}
+		/* Let's play the source. */
+		alSourcePlay(this->identifier());
 
 		return !alGetErrors("Source::play()", static_cast< const char * >(__FILE__), __LINE__);
+	}
+
+	bool
+	Source::queueBuffers (std::span< const ALuint > buffers) noexcept
+	{
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() || buffers.empty() )
+		{
+			return false;
+		}
+
+		alFlushErrors();
+
+		/* NOTE: A looping source never marks a buffer as processed: its queue could not be refilled. */
+		alSourcei(this->identifier(), AL_LOOPING, AL_FALSE);
+		alSourceQueueBuffers(this->identifier(), static_cast< ALsizei >(buffers.size()), buffers.data());
+
+		return !alGetErrors("Source::queueBuffers()", static_cast< const char * >(__FILE__), __LINE__);
+	}
+
+	size_t
+	Source::unqueueProcessedBuffers (std::span< ALuint > buffers) noexcept
+	{
+		if ( !Manager::isAudioSystemAvailable() || !this->isCreated() || buffers.empty() )
+		{
+			return 0;
+		}
+
+		const auto processed = this->getIntValue(AL_BUFFERS_PROCESSED, 0);
+
+		if ( processed <= 0 )
+		{
+			return 0;
+		}
+
+		const auto count = std::min(static_cast< size_t >(processed), buffers.size());
+
+		alFlushErrors();
+
+		alSourceUnqueueBuffers(this->identifier(), static_cast< ALsizei >(count), buffers.data());
+
+		if ( alGetErrors("Source::unqueueProcessedBuffers()", static_cast< const char * >(__FILE__), __LINE__) )
+		{
+			return 0;
+		}
+
+		return count;
+	}
+
+	bool
+	Source::playQueue () noexcept
+	{
+		if ( !Manager::isAudioEnabled() || !this->isCreated() )
+		{
+			return false;
+		}
+
+		alFlushErrors();
+
+		alSourcePlay(this->identifier());
+
+		return !alGetErrors("Source::playQueue()", static_cast< const char * >(__FILE__), __LINE__);
 	}
 
 	void
@@ -1044,21 +1050,16 @@ namespace EmEn::Audio
 	void
 	Source::removeSound () noexcept
 	{
-		if ( m_currentPlayableInterface == nullptr )
+		if ( m_currentSound == nullptr )
 		{
 			return;
-		}
-
-		if ( m_currentPlayableInterface->streamable() > 0 )
-		{
-			this->clearStream();
 		}
 
 		/* NOTE: A static buffer stayed attached to the source here, while the resource holding it was let go: the
 		 * resource's deletion of that buffer was then refused by OpenAL and the buffer leaked. */
 		this->detachBuffers();
 
-		m_currentPlayableInterface.reset();
+		m_currentSound.reset();
 	}
 
 	void
@@ -1086,36 +1087,6 @@ namespace EmEn::Audio
 		/* NOTE: The null buffer releases a static buffer and a whole queue alike (OpenAL 1.1 specification, the
 		 * AL_BUFFER source attribute). */
 		alSourcei(source, AL_BUFFER, 0);
-	}
-
-	void
-	Source::clearStream () const noexcept
-	{
-		if ( !Manager::isAudioSystemAvailable() )
-		{
-			return;
-		}
-
-		alFlushErrors();
-
-		/* NOTE: Be sure the looping state is off when removing buffers. */
-		alSourcei(this->identifier(), AL_LOOPING, AL_FALSE);
-
-		/* Gets the amount of buffer currently queued in the source.
-		 * NOTE: No the processed, all of them. */
-		ALint bufferCount = 0;
-
-		alGetSourcei(this->identifier(), AL_BUFFERS_QUEUED, &bufferCount);
-
-		/* Removing buffers and store removed identifiers. */
-		std::vector< ALuint > removedIdentifiers(static_cast< size_t >(bufferCount));
-
-		alSourceUnqueueBuffers(this->identifier(), bufferCount, removedIdentifiers.data());
-
-		if ( alGetErrors("Source::clearStream()", __FILE__, __LINE__) )
-		{
-			Tracer::warning(ClassId, "Something goes wrong with OpenAL when clearing streams !");
-		}
 	}
 
 	void

@@ -21,12 +21,14 @@ See `TrackMixer.hpp:UserState`
 
 ### Thread safety — one lock, Clang-checked (2026-10-12)
 
-Every public method may be called from any thread. Four threads use the mixer: the caller's (main, logic, console),
-its own event thread (the next track when one ends, the cross-fade), OpenAL Soft's event thread (`eventCallback()`)
-and a resource loading thread (`onNotification()` when a MIDI track finishes rendering).
+Every public method may be called from any thread. Three threads use the mixer: the caller's (main, logic, console),
+its own event thread (the streams, the end of a track and the next one, the cross-fade) and a resource loading
+thread (`onNotification()` when a MIDI track finishes rendering). Until 2026-11-27 OpenAL Soft's event thread was a
+fourth one (`eventCallback()`, the end of a track): the mixer now streams its tracks and sees their end itself
+(doc 16).
 
 - **One mutex, `m_stateAccess` (`Base::Mutex`), guards every piece of state**: the playlist, the indices, the modes,
-  the gain, the flags and the two OpenAL sources (`EMEN_PT_GUARDED_BY`: the cross-fade on the event thread and `play()`
+  the gain, the flags, the two streams (`TrackStream`) and the two OpenAL sources (`EMEN_PT_GUARDED_BY`: the cross-fade on the event thread and `play()`
   on the caller's used to race on the gains). Clang's `-Wthread-safety` proves it (decision D12, base
   `docs/subsystems/source-tree/26-thread-safety-annotations.md`): removing one lock gives six compile errors.
 - **The observers are notified AFTER the lock is released**, on the calling thread (`pause()`, `resume()`, `stop()`
@@ -38,14 +40,12 @@ and a resource loading thread (`onNotification()` when a MIDI track finishes ren
   `LoadFinished` notification and `play()`'s own re-check after `observe()` (a load finished in between used to be
   lost) both go through `playPendingTrack()`, which takes the claim under the lock. `stop()` drops the claim: a
   stopped mixer no longer starts a track that finishes loading afterwards.
-- **The OpenAL event callback is unregistered** by `onTerminate()` and the destructor (`disableSourceEvents()`, never
-  under `m_stateAccess`: the callback takes it). It held a raw `this` for the whole process before.
-- A source stopped while no track plays (`stop()`, the old source of a switch) no longer counts as "the current track
-  ended" (the callback used to compare it with track B by default).
+- **No OpenAL callback any more** (2026-11-27, doc 16): the end of a track is seen by the event thread, under the
+  lock. The callback had to be unregistered by `onTerminate()` and the destructor, never under `m_stateAccess`.
 - A failed start leaves the state as it is (the old track when it was fading out, nothing otherwise).
 - **Proof**: the TSan stress `tools/stress/TrackMixerStress.cpp` (four threads calling every public method for 30 s,
   ~28 000 calls, plus the logic thread reading `status()`): 0 report on six Linux runs (lavapipe) and on macOS
-  (MoltenVK, 20 310 calls). Procedure: projet-alpha
+  (MoltenVK, 20 310 calls) — the mixer of 2026-10-12; the streaming mixer's runs are in doc 16. Procedure: projet-alpha
   `docs/unit-testing.md` § "ThreadSanitizer". On its way it found four other races, fixed with it: `Notifier::push()`,
   `Overlay::Surface` visibility, the overlay lock order, `MusicResource::duration()` during a load
   (`docs/caution-points.md`).
@@ -67,12 +67,12 @@ TrackMixer notifies observers on state changes:
 
 ### Code References
 - `TrackMixer.hpp:previous()` - Navigate to previous track
-- `TrackMixer.hpp:seek()` - Seek to position (uses `Source::setPlaybackPosition()`)
-- `TrackMixer.hpp:currentPosition()` - Get current position via `Source::playbackPosition()`
+- `TrackMixer.hpp:seek()` - Seek to position (the stream is opened again from there, doc 16)
+- `TrackMixer.hpp:currentPosition()` - Get current position (`streamPosition()`, doc 16)
 - `TrackMixer.hpp:currentDuration()` - Get duration via `MusicResource::duration()`
 - `TrackMixer.hpp:enableShuffle()` - Toggle shuffle mode
-- `Source.hpp:playbackPosition()` - OpenAL `AL_SEC_OFFSET` getter
-- `Source.hpp:setPlaybackPosition()` - OpenAL `AL_SEC_OFFSET` setter
+- `Source.hpp:playbackPosition()` / `setPlaybackPosition()` - OpenAL `AL_SEC_OFFSET`, for a SOUND (the mixer no
+  longer uses them)
 - `MusicResource.hpp:duration()` - Returns `Wave::seconds()`
 
 ### Console Commands (Remote Console, TCP 7777)

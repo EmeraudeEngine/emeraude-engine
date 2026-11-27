@@ -36,14 +36,11 @@
 #include <memory>
 #include <stop_token>
 #include <string>
-#include <vector>
 
 /* Local inclusions for inheritances. */
-#include "PlayableInterface.hpp"
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
-#include "Audio/Buffer.hpp"
 #include "Hash/FNV1a.hpp"
 #include "Resources/Types.hpp"
 #include "WaveFactory/Types.hpp"
@@ -65,11 +62,12 @@ namespace EmEn::Audio
 namespace EmEn::Audio
 {
 	/**
-	 * @brief The music resource class.
-	 * @extends EmEn::Audio::PlayableInterface
+	 * @brief The music resource class: the decoded samples of a track and its metadata.
+	 * @note It holds no OpenAL buffer and no source plays it: the track mixer streams its samples (localData())
+	 * through a ring of buffers of its own.
 	 * @extends EmEn::Resources::ResourceTrait This is a loadable resource.
 	 */
-	class EMEN_API MusicResource final : public PlayableInterface, public Resources::ResourceTrait
+	class EMEN_API MusicResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< MusicResource >;
 
@@ -118,42 +116,6 @@ namespace EmEn::Audio
 			is (size_t classUID) const noexcept override
 			{
 				return classUID == getClassUID();
-			}
-
-			/** @copydoc EmEn::Audio::PlayableInterface::streamable() */
-			[[nodiscard]]
-			size_t
-			streamable () const noexcept override
-			{
-				return m_buffers.size();
-			}
-
-			/** @copydoc EmEn::Audio::PlayableInterface::buffer() */
-			[[nodiscard]]
-			std::shared_ptr< const Buffer >
-			buffer (size_t bufferIndex = 0) const noexcept override
-			{
-				/* The interface contract is a null buffer when none is available: an unloaded music
-				 * has no chunk, and Source::play() asks for #0 when streamable() is 0. */
-				if ( bufferIndex >= m_buffers.size() )
-				{
-					return nullptr;
-				}
-
-				return m_buffers[bufferIndex];
-			}
-
-			/** @copydoc EmEn::Audio::PlayableInterface::releaseBuffers() */
-			void
-			releaseBuffers () noexcept override
-			{
-				for ( const auto & chunk : m_buffers )
-				{
-					if ( chunk != nullptr )
-					{
-						chunk->destroy();
-					}
-				}
 			}
 
 			/** @copydoc EmEn::Resources::ResourceTrait::classLabel() const */
@@ -272,12 +234,10 @@ namespace EmEn::Audio
 
 			static constexpr auto DefaultInfo{"Unknown"};
 
-			std::vector< std::shared_ptr< Buffer > > m_buffers;
 			Base::WaveFactory::Wave< int16_t > m_localData;
 			std::string m_title{DefaultInfo};
 			std::string m_artist{DefaultInfo};
 			Base::WaveFactory::Frequency m_frequency{Base::WaveFactory::Frequency::Invalid};
-			size_t m_chunkSize{0};
 			std::filesystem::path m_pendingMidiPath; ///< Path to MIDI file awaiting soundfont dependency.
 			std::shared_ptr< SoundfontResource > m_soundfontDependency; ///< Reference to the soundfont dependency.
 	};

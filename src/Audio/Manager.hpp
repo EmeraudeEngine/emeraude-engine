@@ -72,7 +72,7 @@ namespace EmEn
 			class Abstract;
 		}
 
-		class PlayableInterface;
+		class SoundResource;
 	}
 
 	namespace Physics
@@ -288,11 +288,11 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Plays a sound on the default source.
-			 * @param playable A reference to a playable interface smart pointer.
+			 * @param sound A reference to a sound resource smart pointer.
 			 * @param mode The mode. Default Once.
 			 * @param gain The gain of the channel to play the sound.
 			 */
-			void play (const std::shared_ptr< PlayableInterface > & playable, PlayMode mode = PlayMode::Once, float gain = 1.0F) const noexcept;
+			void play (const std::shared_ptr< SoundResource > & sound, PlayMode mode = PlayMode::Once, float gain = 1.0F) const noexcept;
 
 			/**
 			 * @brief Plays a sound on the default source.
@@ -477,7 +477,7 @@ namespace EmEn::Audio
 			void createListenerReverb () noexcept;
 
 			/**
-			 * @brief Deletes the OpenAL buffers of every sound and music resource (PlayableInterface::releaseBuffers()).
+			 * @brief Deletes the OpenAL buffer of every sound resource (SoundResource::releaseBuffers()).
 			 * @note Called by onTerminate() after the sources and every sub-service but the recorder, before the
 			 * recorder and the devices: the resource manager, which holds the resources, terminates after this service
 			 * (owner decision 2026-10-16). The resource jobs are stopped by then (Core), so no loader writes a buffer.

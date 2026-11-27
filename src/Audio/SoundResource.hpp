@@ -36,7 +36,6 @@
 #include <string>
 
 /* Local inclusions for inheritances. */
-#include "PlayableInterface.hpp"
 #include "Resources/ResourceTrait.hpp"
 
 /* Local inclusions for usages. */
@@ -54,7 +53,7 @@ namespace EmEn::Resources
 
 namespace EmEn::Audio
 {
-	class EMEN_API SoundResource final : public PlayableInterface, public Resources::ResourceTrait
+	class EMEN_API SoundResource final : public Resources::ResourceTrait
 	{
 		friend class Resources::Container< SoundResource >;
 
@@ -105,25 +104,25 @@ namespace EmEn::Audio
 				return classUID == getClassUID();
 			}
 
-			/** @copydoc EmEn::Audio::PlayableInterface::streamable() */
-			[[nodiscard]]
-			size_t
-			streamable () const noexcept override
-			{
-				return 0;
-			}
-
-			/** @copydoc EmEn::Audio::PlayableInterface::buffer() */
+			/**
+			 * @brief Returns the OpenAL buffer of the sound.
+			 * @return std::shared_ptr< const Buffer > A null pointer while the resource is not loaded.
+			 */
 			[[nodiscard]]
 			std::shared_ptr< const Buffer >
-			buffer (size_t /*bufferIndex*/) const noexcept override
+			buffer () const noexcept
 			{
 				return m_buffer;
 			}
 
-			/** @copydoc EmEn::Audio::PlayableInterface::releaseBuffers() */
+			/**
+			 * @brief Deletes the OpenAL buffer of this sound now (Buffer::destroy()); the sound stays, silent.
+			 * @note Called by the audio manager's termination only, its device still open (owner decision 2026-10-16):
+			 * the resource manager, which holds the sounds, terminates after it. The resource jobs are stopped by then
+			 * and no source uses a buffer any more.
+			 */
 			void
-			releaseBuffers () noexcept override
+			releaseBuffers () noexcept
 			{
 				if ( m_buffer != nullptr )
 				{

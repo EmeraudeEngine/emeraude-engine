@@ -85,7 +85,6 @@
 #include "Audio/MusicResource.hpp"
 #include "Audio/OpenALExtensions.hpp"
 #include "Audio/OpenALHandles.hpp"
-#include "Audio/PlayableInterface.hpp"
 #include "Audio/PlaylistResource.hpp"
 #include "Audio/Recorder.hpp"
 #include "Audio/SoundResource.hpp"

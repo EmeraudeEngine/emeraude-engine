@@ -37,6 +37,7 @@
 #include <thread>
 
 /* Local inclusions. */
+#include "Audio/PlaylistResource.hpp"
 #include "Audio/TrackMixer.hpp"
 #include "Core.hpp"
 #include "PlatformManager.hpp"
@@ -181,7 +182,9 @@ namespace
 				/* NOTE: The services are still up: the drivers stop and join before the mixer goes. */
 				this->stopDrivers();
 
-				TraceInfo{ClassId} << m_calls.load() << " calls by the drivers, " << m_logicReads.load() << " logic-thread reads.";
+				TraceInfo{ClassId} <<
+					m_calls.load() << " calls by the drivers, " << m_logicReads.load() << " logic-thread reads, " <<
+					m_playingReads.load() << " positions read on a streaming track.";
 
 				return true;
 			}
@@ -221,7 +224,20 @@ namespace
 						case 7 : mixer.enableShuffle((step & 2U) == 0U); break;
 						case 8 : static_cast< void >(mixer.status()); break;
 						case 9 : static_cast< void >(mixer.playlist()); break;
-						case 10 : mixer.seek(mixer.currentPosition() + 1.0F); break;
+						case 10 :
+						{
+							/* NOTE: A position past zero proves a track was really streaming when it was read: a
+							 * run whose tracks never finish loading exercises no stream at all. */
+							const auto position = mixer.currentPosition();
+
+							if ( position > 0.0F )
+							{
+								m_playingReads.fetch_add(1U);
+							}
+
+							mixer.seek(position + 1.0F);
+						}
+							break;
 						case 11 : static_cast< void >(mixer.currentDuration()); break;
 						case 12 : static_cast< void >(mixer.playIndex(step % 3U)); break;
 						case 13 : static_cast< void >(mixer.findPlaylistTrack("a")); break;
@@ -250,6 +266,7 @@ namespace
 			std::chrono::steady_clock::time_point m_start{};
 			std::atomic< uint64_t > m_calls{0};
 			std::atomic< uint64_t > m_logicReads{0};
+			std::atomic< uint64_t > m_playingReads{0};
 			std::stop_source m_stop;
 			bool m_stopping{false};
 			/* NOTE: LAST (Ave Robustus II, member order): the drivers use every member above. */

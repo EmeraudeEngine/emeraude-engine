@@ -30,11 +30,12 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
-#include <cstdint>
+#include <cstddef>
 #include <functional>
 #include <iosfwd>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
 
 /* Third-party inclusions. */
@@ -67,7 +68,7 @@ namespace EmEn::Audio
 	}
 
 	class EffectSlot;
-	class PlayableInterface;
+	class SoundResource;
 	struct ListenerMedium;
 	struct SoundPath;
 }
@@ -83,14 +84,6 @@ namespace EmEn::Audio
 	class EMEN_API Source final : public AbstractObject
 	{
 		public:
-
-			/** @brief The source type enumerations. */
-			enum class SourceType : uint8_t
-			{
-				Undetermined,
-				Static,
-				Streaming
-			};
 
 			static constexpr auto ClassId{"AudioSource"};
 
@@ -692,13 +685,84 @@ namespace EmEn::Audio
 			void resetToDefaults () noexcept;
 
 			/**
-			 * @brief Plays a sound or music (streamed) to the source.
+			 * @brief Plays a sound on the source.
 			 * @note If something is playing or paused. It will be stopped and/or removed.
-			 * @param playableInterface A reference to a playable interface smart pointer.
+			 * @param sound A reference to a sound resource smart pointer.
 			 * @param mode The playing mode. Default once.
 			 * @return bool
 			 */
-			bool play (const std::shared_ptr< PlayableInterface > & playableInterface, PlayMode mode = PlayMode::Once) noexcept;
+			bool play (const std::shared_ptr< SoundResource > & sound, PlayMode mode = PlayMode::Once) noexcept;
+
+			/**
+			 * @brief Adds buffers at the end of the source's queue: the source streams what its owner feeds it.
+			 * @note The streaming service of a source (the track mixer's music): the OWNER of the queue owns the
+			 * buffers, refills the processed ones and detaches them all (detachBuffers()) before it deletes them. A
+			 * source that plays a sound (play()) has no queue. OpenAL's own looping is switched off: a queue loops
+			 * through its feeder.
+			 * @param buffers The OpenAL names of filled buffers, all of one format.
+			 * @return bool False when OpenAL refused them (traced).
+			 */
+			[[nodiscard]]
+			bool queueBuffers (std::span< const ALuint > buffers) noexcept;
+
+			/**
+			 * @brief Takes the buffers the source has finished playing out of its queue.
+			 * @param buffers Where their OpenAL names are written, oldest first.
+			 * @return size_t The number of names written, at most buffers.size().
+			 */
+			[[nodiscard]]
+			size_t unqueueProcessedBuffers (std::span< ALuint > buffers) noexcept;
+
+			/**
+			 * @brief Starts (or restarts) the source on what is attached to it.
+			 * @return bool False when the audio is disabled or OpenAL refused (traced).
+			 */
+			bool playQueue () noexcept;
+
+			/**
+			 * @brief Returns the number of buffers in the source's queue, the processed ones included.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			queuedBufferCount () const noexcept
+			{
+				const auto count = this->getIntValue(AL_BUFFERS_QUEUED, 0);
+
+				return count > 0 ? static_cast< size_t >(count) : 0;
+			}
+
+			/**
+			 * @brief Returns the playback cursor in sample frames, counted from the first buffer still attached.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			sampleOffset () const noexcept
+			{
+				const auto offset = this->getIntValue(AL_SAMPLE_OFFSET, 0);
+
+				return offset > 0 ? static_cast< size_t >(offset) : 0;
+			}
+
+			/**
+			 * @brief Moves the playback cursor, in sample frames counted from the first buffer attached.
+			 * @param frames The offset; OpenAL refuses one beyond what is attached.
+			 */
+			void
+			setSampleOffset (size_t frames) noexcept
+			{
+				this->setIntValue(AL_SAMPLE_OFFSET, static_cast< ALint >(frames));
+			}
+
+			/**
+			 * @brief Stops the source and detaches every buffer from it, a static one and a queue alike.
+			 * @note The source holds its sound's resource (m_currentSound) as long as that sound's buffer is attached:
+			 * OpenAL refuses to delete an attached buffer (AL_INVALID_OPERATION, "deleting in-use buffer"), which then
+			 * stays allocated until the context dies. Called BEFORE the resource is let go; the owner of a queue calls
+			 * it before it refills or deletes its buffers.
+			 */
+			void detachBuffers () const noexcept;
 
 			/**
 			 * @brief Pauses the source only if it's playing.
@@ -721,7 +785,7 @@ namespace EmEn::Audio
 			void stop () noexcept;
 
 			/**
-			 * @brief Releases the playable interface.
+			 * @brief Releases the sound.
 			 * @post The source is stopped and no buffer of that sound is attached to it any more (detachBuffers()): the
 			 * sound's resource may then delete its buffers.
 			 */
@@ -770,69 +834,12 @@ namespace EmEn::Audio
 			ALint getIntValue (ALenum pName, ALint defaultValue = 0) const noexcept;
 
 			/**
-			 * @brief Clears streaming queue.
-			 */
-			void clearStream () const noexcept;
-
-			/**
-			 * @brief Stops the source and detaches every buffer from it, a static one and a queue alike.
-			 * @note The source holds its sound's resource (m_currentPlayableInterface) as long as one of that sound's
-			 * buffers is attached: OpenAL refuses to delete an attached buffer (AL_INVALID_OPERATION, "deleting in-use
-			 * buffer"), which then stays allocated until the context dies. Called BEFORE the resource is let go.
-			 */
-			void detachBuffers () const noexcept;
-
-			/**
 			 * @brief Prepares the effect slot channel.
 			 * @warning This method only works with the EFX extension.
 			 * @param channel The channel number.
 			 * @return bool
 			 */
 			bool prepareEffectSlot (int channel) noexcept;
-
-			/**
-			 * @brief Returns the amount of buffer queued to the audio source.
-			 * @return int
-			 */
-			[[nodiscard]]
-			int
-			getBuffersQueuedCount () const noexcept
-			{
-				return this->getIntValue(AL_BUFFERS_QUEUED, 0);
-			}
-
-			/**
-			 * @brief Returns the amount of buffer already played by the audio source.
-			 * @return int
-			 */
-			[[nodiscard]]
-			int
-			getBuffersProcessedCount () const noexcept
-			{
-				return this->getIntValue(AL_BUFFERS_PROCESSED, 0);
-			}
-
-			/**
-			 * @brief Returns the source type.
-			 * @return SourceType
-			 */
-			[[nodiscard]]
-			SourceType
-			getSourceType () const noexcept
-			{
-				switch ( this->getIntValue(AL_SOURCE_TYPE, 0) )
-				{
-					case AL_STATIC :
-						return SourceType::Static;
-
-					case AL_STREAMING :
-						return SourceType::Streaming;
-
-					case AL_UNDETERMINED :
-					default:
-						return SourceType::Undetermined;
-				}
-			}
 
 			/**
 			 * @brief Gives the source its direct filter: none, the user's, or the user's response multiplied by the
@@ -861,7 +868,7 @@ namespace EmEn::Audio
 			ALuint m_listenerReverbSlot EMEN_GUARDED_BY(m_filterAccess){0};
 			/** @brief True while the source is out of the listener's medium (ignoreListenerMedium()). */
 			bool m_ignoresListenerMedium EMEN_GUARDED_BY(m_filterAccess){false};
-			std::shared_ptr< PlayableInterface > m_currentPlayableInterface;
+			std::shared_ptr< SoundResource > m_currentSound;
 			float m_previousGain{1.0F};
 	};
 

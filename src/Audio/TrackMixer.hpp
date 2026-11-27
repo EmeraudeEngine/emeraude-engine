@@ -30,6 +30,8 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <array>
+#include <chrono>
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
@@ -39,15 +41,13 @@
 #include <string>
 #include <vector>
 
-/* Third-party inclusions. */
-#include "AL/al.h"
-
 /* Local inclusions for inheritances. */
 #include "ServiceInterface.hpp"
 #include "Console/ControllableTrait.hpp"
 #include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Buffer.hpp" // IWYU pragma: keep (the ring slots hold a std::unique_ptr< Buffer > the mixer destroys inline: the complete type is needed)
 #include "Hash/FNV1a.hpp"
 #include "MusicResource.hpp"
 #include "Mutex.hpp"
@@ -83,10 +83,13 @@ namespace EmEn::Audio
 	 * @extends EmEn::Console::ControllableTrait The console can control the track mixer.
 	 * @extends EmEn::Base::ObservableTrait This service is observable.
 	 * @extends EmEn::Base::ObserverTrait This service can observe resource loading.
-	 * @note [Thread-safe] Every public method may be called from any thread. Four threads use the mixer: the caller's
-	 * (main, logic, console), its own event thread (the next track, the cross-fade), OpenAL's event thread
-	 * (eventCallback()) and a resource loading thread (onNotification()). One mutex, m_stateAccess, guards every piece of
-	 * state, Clang-checked (EMEN_GUARDED_BY, decision D12). The observers are notified AFTER the lock is released, on the
+	 * @note A track is STREAMED: the mixer owns a ring of a few OpenAL buffers per source (TrackStream) and its event
+	 * thread refills them from the samples of the music resource, which holds no OpenAL buffer. The position, the
+	 * seek, the loop and the end of a track are therefore the mixer's, not OpenAL's.
+	 * @note [Thread-safe] Every public method may be called from any thread. Three threads use the mixer: the caller's
+	 * (main, logic, console), its own event thread (the streams, the end of a track and the next one, the cross-fade)
+	 * and a resource loading thread (onNotification()). One mutex, m_stateAccess, guards every piece of state,
+	 * Clang-checked (EMEN_GUARDED_BY, decision D12). The observers are notified AFTER the lock is released, on the
 	 * calling thread: an observer may call the mixer back.
 	 */
 	class EMEN_API TrackMixer final : public ServiceInterface, public Console::ControllableTrait, public Base::ObservableTrait, public Base::ObserverTrait
@@ -251,7 +254,8 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Sets the play mode (Once or Loop).
-			 * @note Also updates the currently playing source if any.
+			 * @note Applies to the track being played too: its stream wraps, or ends, according to the mode read when
+			 * it reaches the end of the samples.
 			 * @param mode The play mode.
 			 */
 			void setPlayMode (PlayMode mode) noexcept;
@@ -435,7 +439,8 @@ namespace EmEn::Audio
 			bool previous () noexcept;
 
 			/**
-			 * @brief Returns the current playback position in seconds.
+			 * @brief Returns the current playback position in seconds, within the track (a looping track starts again
+			 * from 0).
 			 * @return float
 			 */
 			[[nodiscard]]
@@ -451,10 +456,10 @@ namespace EmEn::Audio
 			float currentDuration () const noexcept;
 
 			/**
-			 * @brief Seeks to a position in the current track.
-			 * @param position The position in seconds.
+			 * @brief Seeks to a position in the current track: its stream is emptied and filled again from there.
+			 * @param position The position in seconds, clamped to the track; a value that is not finite is refused.
 			 */
-			void seek (float position) const noexcept;
+			void seek (float position) noexcept;
 
 			/**
 			 * @brief Enables or disables shuffle mode.
@@ -486,7 +491,8 @@ namespace EmEn::Audio
 			void resume () noexcept;
 
 			/**
-			 * @brief Stops the music. A track still loading will not start when it is loaded.
+			 * @brief Stops the music, a track fading out included. A track still loading will not start when it is
+			 * loaded.
 			 */
 			void stop () noexcept;
 
@@ -499,6 +505,48 @@ namespace EmEn::Audio
 				TrackA,
 				TrackB
 			};
+
+			/** @brief The number of OpenAL buffers a track streams through: with the default chunk (8192 samples, so
+			 * 4096 stereo frames) about 0.68 s of music ahead at 48 kHz, 256 KiB. */
+			static constexpr size_t StreamRingSize{8};
+
+			/**
+			 * @brief What one of the two sources streams: a ring of OpenAL buffers the mixer owns, and the cursor in
+			 * the music they are filled from.
+			 * @note OpenAL only knows the few buffers queued: the position within the music is firstFrame plus the
+			 * frames of the buffers already taken back plus the source's own offset in its queue.
+			 */
+			struct TrackStream final
+			{
+				/** @brief One buffer of the ring. */
+				struct Slot final
+				{
+					/** @brief The OpenAL buffer. Created by onInitialize(), deleted by onTerminate() (the device still open). */
+					std::unique_ptr< Buffer > buffer;
+					/** @brief The sample frames the buffer holds while it is queued. */
+					size_t frames{0};
+					/** @brief Whether the buffer is in the source's queue. */
+					bool queued{false};
+				};
+
+				/** @brief The ring. */
+				std::array< Slot, StreamRingSize > ring;
+				/** @brief The music being streamed; nullptr when the track streams nothing. */
+				std::shared_ptr< MusicResource > music;
+				/** @brief The chunk size in samples (frames × channels), a whole number of frames. */
+				size_t chunkSize{0};
+				/** @brief The next chunk of the music to queue. */
+				size_t nextChunk{0};
+				/** @brief The frame of the music the first buffer queued since the stream was opened started at. */
+				size_t firstFrame{0};
+				/** @brief The frames of the buffers taken back from the queue since the stream was opened. */
+				size_t consumedFrames{0};
+				/** @brief True once the last chunk was queued in Once mode: nothing more to feed. */
+				bool exhausted{false};
+			};
+
+			/** @brief The period of the event thread while a track is held or a fade runs. */
+			static constexpr auto EventPeriod{std::chrono::milliseconds{16}};
 
 			/** @copydoc EmEn::ServiceInterface::onInitialize() */
 			bool onInitialize () noexcept override;
@@ -514,22 +562,10 @@ namespace EmEn::Audio
 			void onRegisterToConsole () noexcept override;
 
 			/**
-			 * @brief Registers eventCallback() with OpenAL Soft for the source state changes.
-			 * @return bool
-			 */
-			bool enableSourceEvents () noexcept;
-
-			/**
-			 * @brief Unregisters eventCallback() from OpenAL Soft. Idempotent.
-			 * @note OpenAL Soft runs the callback under its own lock, which the unregistration takes: once this returns,
-			 * no callback runs or will run. Never called with m_stateAccess held (the callback takes it: a deadlock).
-			 */
-			void disableSourceEvents () noexcept EMEN_EXCLUDES(m_stateAccess);
-
-			/**
-			 * @brief The event thread: plays the next track when one ends, runs the cross-fade.
-			 * @param stopToken The thread's stop token (Base::Thread): a stop request wakes its wait and ends it, a fade
-			 * included (one fade step, 16 ms, at most).
+			 * @brief The event thread: refills the streams, plays the next track when one ends, runs the cross-fade.
+			 * @note It sleeps while no track is held and nothing fades; otherwise it turns every 16 ms (EventPeriod).
+			 * @param stopToken The thread's stop token (Base::Thread): a stop request wakes its wait and ends it, within
+			 * one turn at most.
 			 */
 			void eventLoop (const std::stop_token & stopToken) noexcept EMEN_EXCLUDES(m_stateAccess);
 
@@ -542,11 +578,79 @@ namespace EmEn::Audio
 			bool fadeIn (Source * track, float step) const noexcept EMEN_REQUIRES(m_stateAccess);
 
 			/**
-			 * @brief Fades out a track.
-			 * @param track A pointer to the track.
+			 * @brief Fades out a track; its stream is closed once silent.
+			 * @param which The track (A or B).
 			 * @param step The step of raising or lowering the volume.
 			 */
-			static void fadeOut (Source * track, float step) noexcept;
+			void fadeOut (PlayingTrack which, float step) noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief Returns the source of a track.
+			 * @pre The mixer is initialized (the sources exist) and which is TrackA or TrackB.
+			 * @param which The track; anything but TrackB gives the source A.
+			 * @return Source &
+			 */
+			[[nodiscard]]
+			Source & trackSource (PlayingTrack which) const noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief Returns the stream of a track.
+			 * @param which The track; anything but TrackB gives the stream A.
+			 * @return TrackStream &
+			 */
+			[[nodiscard]]
+			TrackStream & trackStream (PlayingTrack which) noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/** @copydoc trackStream(PlayingTrack) */
+			[[nodiscard]]
+			const TrackStream & trackStream (PlayingTrack which) const noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief Creates the OpenAL buffers of both rings.
+			 * @return bool False when OpenAL refused one of them.
+			 */
+			[[nodiscard]]
+			bool createStreamBuffers () noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief Starts streaming a loaded music on a track, from a position: whatever the track streamed is
+			 * closed first, the ring is filled and the source started.
+			 * @param which The track (A or B).
+			 * @param music A reference to a LOADED music resource.
+			 * @param startFrame The sample frame to start from, clamped to the music. Default the beginning.
+			 * @return bool False when the music has no sample or OpenAL refused; the stream is then closed.
+			 */
+			[[nodiscard]]
+			bool openStream (PlayingTrack which, const std::shared_ptr< MusicResource > & music, size_t startFrame = 0) noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief Stops a track's source, takes every buffer of the ring back and lets the music go. Idempotent.
+			 * @param which The track (A or B).
+			 */
+			void closeStream (PlayingTrack which) noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief Fills every free buffer of a ring with the next chunks of its music and queues them.
+			 * @note At the end of the samples the stream wraps in Loop mode, or is marked exhausted in Once mode.
+			 * @param which The track (A or B).
+			 */
+			void fillStream (PlayingTrack which) noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief One turn of a stream: takes the played buffers back, refills them, restarts a source that ran dry
+			 * (an underrun, traced) and ends the track when its last sample was played.
+			 * @note The end of the PLAYING track frees it (no track is held any more) and requests the next one.
+			 * @param which The track (A or B).
+			 */
+			void serviceStream (PlayingTrack which) noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief Returns the position of a stream within its music, in sample frames.
+			 * @param which The track (A or B).
+			 * @return size_t 0 when the track streams nothing.
+			 */
+			[[nodiscard]]
+			size_t streamPosition (PlayingTrack which) const noexcept EMEN_REQUIRES(m_stateAccess);
 
 			/**
 			 * @brief Starts a loaded track on the free source (or the only one), with the cross-fade if enabled.
@@ -591,17 +695,6 @@ namespace EmEn::Audio
 			bool stepTrack (bool forward) noexcept EMEN_EXCLUDES(m_stateAccess);
 
 			/**
-			 * @brief OpenAL source event callback.
-			 * @param eventType The OpenAL event type.
-			 * @param object The OpenAL object name the event is about.
-			 * @param param The event parameter.
-			 * @param length The length of the message.
-			 * @param message The event message.
-			 * @param userParam The user pointer given at registration.
-			 */
-			static void eventCallback (ALenum eventType, ALuint object, ALuint param, ALsizei length, const ALchar * message, void * userParam) noexcept;
-
-			/**
 			 * @brief Generates a shuffled order for the playlist (Base::PortableRandom::shuffle()).
 			 */
 			void generateShuffleOrder () noexcept EMEN_REQUIRES(m_stateAccess);
@@ -628,6 +721,8 @@ namespace EmEn::Audio
 			 * the lock only (the cross-fade on the event thread and play() on the caller's used to race on the gains). */
 			std::unique_ptr< Source > m_trackA EMEN_PT_GUARDED_BY(m_stateAccess);
 			std::unique_ptr< Source > m_trackB EMEN_PT_GUARDED_BY(m_stateAccess);
+			TrackStream m_streamA EMEN_GUARDED_BY(m_stateAccess);
+			TrackStream m_streamB EMEN_GUARDED_BY(m_stateAccess);
 			std::vector< std::shared_ptr< MusicResource > > m_playlist EMEN_GUARDED_BY(m_stateAccess);
 			std::shared_ptr< PlaylistResource > m_loadedPlaylist EMEN_GUARDED_BY(m_stateAccess);
 			std::shared_ptr< MusicResource > m_loadingTrack EMEN_GUARDED_BY(m_stateAccess);
@@ -646,8 +741,6 @@ namespace EmEn::Audio
 			bool m_crossFaderEnabled EMEN_GUARDED_BY(m_stateAccess){false};
 			bool m_isFading EMEN_GUARDED_BY(m_stateAccess){false};
 			bool m_shuffleEnabled EMEN_GUARDED_BY(m_stateAccess){false};
-			/* NOTE: Main thread only (onInitialize(), onTerminate(), the destructor). */
-			bool m_sourceEventsEnabled{false};
 			/* NOTE: LAST on purpose (Ave Robustus II, member order): the event thread uses every member above, so it is
 			 * destroyed — joined — first. The destructor also stops it explicitly before any member goes. */
 			Base::Thread m_eventThread;

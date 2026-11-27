@@ -15,7 +15,7 @@
 	ENTITIES (services, sub-services, threads), DEPS, EVENTS (the ordered run), STATIONS / SYNCS (the metro), FLOWS,
 	NOTES. A change to a start or terminate order, a loop, a stop path, a thread, a lock / queue / fence between
 	threads, a dependency, or a service's structure updates that data in the same session. Code references are
-	SYMBOLS (file + function), never line numbers. Written from the code on 2026-11-26 (engine develop + working tree).
+	SYMBOLS (file + function), never line numbers. Written from the code on 2026-11-27 (engine develop + working tree).
 	The update procedure, its checker (every id, reference, file and symbol) and its screenshots: the `lifecycle-map`
 	skill of projet-alpha (.claude/skills/lifecycle-map/).
 -->
@@ -251,7 +251,7 @@
 		<h1>Emeraude Lifecycle Map</h1>
 		<p class="muted">One run of the engine, every service and thread in it, who depends on whom, who waits for whom, and
 			what each service holds inside. Pick anything in one view: it stays selected in the others and its details open
-			beside it. Written from the code on 2026-11-26; references are symbols, search them.</p>
+			beside it. Written from the code on 2026-11-27; references are symbols, search them.</p>
 	</div>
 </header>
 <nav class="tabs gutter" aria-label="Views">
@@ -321,7 +321,7 @@ const ENTITIES = {
 	"physics": { l: "Physics::Manager", k: "secondary", fail: "warning", s: "Picks a compute device with transfer and layout sub-services and pools (\"physics acceleration\"). The simulation itself is scene-side, in Scene::processLogics() on the logic thread.", code: [["src/Physics/Manager.cpp", "Manager::onInitialize()"], ["src/Scenes/Scene.physics.cpp", "Scene"]], docs: ["physics-system.md", "physics-overhaul.md"],
 		inside: [["Manager", ["Compute device, TransferManager, LayoutManager, pools (no consumer found: see Open points)"]], ["Scene-side simulation", ["SoftStepSolver: soft-step contact solver", "NarrowPhase: contact manifolds", "Physics octree", "MovableTrait; body, surface and environment properties", "Collision models: Point, Sphere, Box, Capsule, TriangleMesh", "CharacterController, Vehicle (wheels), Particle"]]] },
 	"audio": { l: "Audio::Manager", k: "secondary", fail: "warning", owns: ["t-arec", "t-mixer", "t-ainput"], s: "OpenAL device and context, then Recorder, sources, ExternalInput, TrackMixer. No per-cycle call from Core.", code: [["src/Audio/Manager.cpp", "Manager::onInitialize()"], ["src/Audio/TrackMixer.cpp", "TrackMixer"]],
-		inside: [["Sub-services", ["TrackMixer: music, two tracks A / B, cross-fades, playlist (event thread)", "Recorder: loopback capture for rushes (render thread)", "ExternalInput: microphone (capture thread while recording)"]], ["Playback", ["Source pool: given out as SourceRequest; a default source", "Effects (12, e.g. EAXReverb, Echo, Chorus), Filters (LowPass, HighPass, BandPass), EffectSlot", "Scene side: Ambience; Listener and HardwareOutput as AVConsole devices"]]] },
+		inside: [["Sub-services", ["TrackMixer: music STREAMED on two tracks A / B (a ring of 8 OpenAL buffers each, refilled from the music's samples), cross-fades, playlist (event thread)", "Recorder: loopback capture for rushes (render thread)", "ExternalInput: microphone (capture thread while recording)"]], ["Playback", ["Source pool: given out as SourceRequest; a default source", "Effects (12, e.g. EAXReverb, Echo, Chorus), Filters (LowPass, HighPass, BandPass), EffectSlot", "Scene side: Ambience; Listener and HardwareOutput as AVConsole devices"]]] },
 	"sysnotif": { l: "SystemNotification", k: "secondary", fail: "warning", s: "OS-level notifications. No thread.", code: [["src/SystemNotification.cpp", "SystemNotification::onInitialize()"]] },
 	"overlay": { l: "Overlay::Manager", k: "secondary", fail: "fatal", s: "2D layer drawn by the rendering thread at the end of every frame: UI screens of surfaces, ImGui screens, input routing.", notifies: "RedrawRequested → requestRedraw() (deferred, never under a lock)", code: [["src/Overlay/Manager.cpp", "Manager::onInitialize()"]],
 		inside: [["Overlay", ["UIScreen: a group of Surfaces that also routes input", "Surface → Framebuffer (pixmap + GPU image)", "ImGUIScreen with its own descriptor pool (core screens: physical camera, editor panels)", "Input-exclusive screen, FramebufferProperties", "Overlay programs, shared surface geometry"]]] },
@@ -350,7 +350,7 @@ const ENTITIES = {
 	"t-sharing": { l: "Sharing server", k: "thread", th: "own", opt: true, s: "HTTP thread of the resource SharingServer, when resource sharing is enabled (off by default).", code: [["src/Resources/Manager.cpp", "Manager::startSharingServer()"]] },
 	"t-pcache": { l: "Pipeline-cache restore", k: "thread", th: "own", opt: true, s: "Restores the stored VkPipelineCache at startup (an uninterruptible driver call; synchronous if the thread is refused). Joined in Renderer::onTerminate() before the cache is saved.", code: [["src/Graphics/Renderer.cpp", "Renderer::loadPipelineCache()"]], docs: ["pipeline-caching-system.md"] },
 	"t-encoder": { l: "Video encoder (per rush)", k: "thread", th: "own", opt: true, s: "VP9 or hardware H.265 session; fed by the rendering thread through a queue; drains it, then finalizes.", code: [["src/Graphics/Recorder.cpp", "Recorder"]] },
-	"t-mixer": { l: "TrackMixer events", k: "thread", th: "own", s: "Next track and cross-fades (16 ms steps).", code: [["src/Audio/TrackMixer.cpp", "TrackMixer::eventLoop()"]] },
+	"t-mixer": { l: "TrackMixer events", k: "thread", th: "own", s: "Feeds the two music streams, sees the end of a track and plays the next one, runs the cross-fades — a 16 ms turn while a track is held, asleep otherwise.", code: [["src/Audio/TrackMixer.cpp", "TrackMixer::eventLoop()"], ["src/Audio/TrackMixer.cpp", "TrackMixer::serviceStream"]] },
 	"t-arec": { l: "Audio loopback render", k: "thread", th: "own", s: "Renders the game audio for rushes (5 ms pace); owns the rush's audio file: opens, writes, completes and closes it.", code: [["src/Audio/Recorder.cpp", "Recorder"]] },
 	"t-ainput": { l: "Audio capture", k: "thread", th: "own", opt: true, s: "Microphone voice-over, only while recording.", code: [["src/Audio/ExternalInput.cpp", "ExternalInput"]] },
 	"t-notifier": { l: "Notifier timer", k: "thread", th: "own", s: "Base::Time::TimedEvent (500 ms) expiring the on-screen notifications.", code: [["src/Notifier.cpp", "Notifier::onInitialize()"]] }
@@ -544,7 +544,7 @@ const STATIONS = [
 	["c-p5", "pool", 920, "Net transfers · API requests", ["threadpool", "netmanager", "apiclient"], "Completed events are queued for the main thread."],
 	["c-o1", "own", 420, "TCP / MCP network", ["t-remote", "t-mcp", "console"], "Receives commands and queues them for the main thread."],
 	["c-o1b", "own", 510, "audio loopback · rush file", ["t-arec", "audio"], "Renders the game's mix every 5 ms and plays it on the output device; serves a recording request, writes each chunk to the rush's WAV file."],
-	["c-o2", "own", 600, "TrackMixer events", ["t-mixer", "audio"], "Next track, cross-fades; notifies music events."],
+	["c-o2", "own", 600, "TrackMixer events", ["t-mixer", "audio"], "Refills the music streams (every 16 ms), next track at the end of one, cross-fades; notifies music events."],
 	["c-o3", "own", 780, "video encoder", ["t-encoder", "recorder"], "Encodes the frames the rendering thread queued."],
 	["c-o4", "own", 930, "TracerLogger", ["t-tracer"], "Writes the log entries pushed by every thread."],
 	["s-m1", "main", 1040, "proceedStop()", ["t-main"], "ExecutionStopping, rush stopped, m_loopsStop.request_stop(), loop flag lowered, ExecutionStopped."],

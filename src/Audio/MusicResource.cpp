@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <array>
 #include <mutex>
+#include <vector>
 
 /* Third-party inclusions. */
 #include "taglib/fileref.h"
@@ -38,7 +39,6 @@
 
 /* Local inclusions. */
 #include "BlobTrait.hpp"
-#include "Buffer.hpp"
 #include "IO/IO.hpp"
 #include "Logging/Severity.hpp"
 #include "Manager.hpp"
@@ -76,23 +76,8 @@ namespace EmEn::Audio
 			}
 		}
 
-		/* Create audio buffers from the loaded wave data. */
-		const auto chunkSize = m_chunkSize;
-		const auto chunkCount = m_localData.chunkCount(chunkSize);
-
-		m_buffers.resize(chunkCount);
-
-		for ( size_t chunkIndex = 0; chunkIndex < chunkCount; chunkIndex++ )
-		{
-			m_buffers[chunkIndex] = std::make_shared< Buffer >();
-
-			if ( !m_buffers[chunkIndex]->isCreated() || !m_buffers[chunkIndex]->feedData(m_localData, chunkIndex, chunkSize) )
-			{
-				Tracer::error(ClassId, "Unable to load buffer in audio memory !");
-
-				return false;
-			}
-		}
+		/* NOTE: No OpenAL buffer is made here: the track mixer streams the samples through a few buffers of its own
+		 * (TrackMixer::TrackStream). Every chunk of every loaded track used to be copied into OpenAL at this point. */
 
 		/* Clear temporary references now that loading is complete. */
 		m_pendingMidiPath.clear();
@@ -171,7 +156,6 @@ namespace EmEn::Audio
 		const auto & audioManager = this->serviceProvider().audioManager();
 
 		m_frequency = audioManager.frequencyPlayback();
-		m_chunkSize = audioManager.musicChunkSize();
 
 		if ( !this->beginLoading() )
 		{
@@ -358,7 +342,6 @@ namespace EmEn::Audio
 		const auto & audioManager = this->serviceProvider().audioManager();
 
 		m_frequency = audioManager.frequencyPlayback();
-		m_chunkSize = audioManager.musicChunkSize();
 
 		if ( !this->beginLoading() )
 		{
@@ -491,7 +474,6 @@ namespace EmEn::Audio
 		const auto & audioManager = this->serviceProvider().audioManager();
 
 		m_frequency = audioManager.frequencyPlayback();
-		m_chunkSize = audioManager.musicChunkSize();
 
 		if ( !this->beginLoading() )
 		{

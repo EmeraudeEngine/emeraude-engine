@@ -53,7 +53,6 @@
 #include "Logging/Severity.hpp"
 #include "Math/Base.hpp"
 #include "Math/Vector.hpp"
-#include "MusicResource.hpp"
 #include "Physics/EnvironmentPhysicalProperties.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Container.hpp"
@@ -67,12 +66,6 @@
 #include "Utility.hpp"
 #include "WaveFactory/Synthesizer.hpp"
 #include "WaveFactory/Wave.hpp"
-
-/* Forward declarations. */
-namespace EmEn::Audio
-{
-	class PlayableInterface;
-}
 
 namespace EmEn::Audio
 {
@@ -536,12 +529,12 @@ namespace EmEn::Audio
 	}
 
 	void
-	Manager::play (const std::shared_ptr< PlayableInterface > & playable, PlayMode mode, float gain) const noexcept
+	Manager::play (const std::shared_ptr< SoundResource > & sound, PlayMode mode, float gain) const noexcept
 	{
 		if ( Manager::isAudioEnabled() && m_defaultSource != nullptr )
 		{
 			m_defaultSource->setGain(gain);
-			m_defaultSource->play(playable, mode);
+			m_defaultSource->play(sound, mode);
 		}
 	}
 
@@ -994,26 +987,20 @@ namespace EmEn::Audio
 	void
 	Manager::releaseResourceBuffers () noexcept
 	{
-		size_t playables = 0;
+		/* NOTE: A music resource has no OpenAL buffer: the track mixer streams it through its own, released with it. */
+		size_t sounds = 0;
 
-		const auto release = [&playables] (const auto * container) {
-			if ( container == nullptr )
+		if ( const auto * container = m_resourceManager.container< SoundResource >(); container != nullptr )
+		{
+			for ( const auto & sound : container->resourcesSnapshot() )
 			{
-				return;
+				sound->releaseBuffers();
+
+				++sounds;
 			}
+		}
 
-			for ( const auto & playable : container->resourcesSnapshot() )
-			{
-				playable->releaseBuffers();
-
-				++playables;
-			}
-		};
-
-		release(m_resourceManager.container< SoundResource >());
-		release(m_resourceManager.container< MusicResource >());
-
-		TraceDebug{ClassId} << "The buffers of " << playables << " sound and music resource(s) released.";
+		TraceDebug{ClassId} << "The buffers of " << sounds << " sound resource(s) released.";
 	}
 
 	SourceRequest

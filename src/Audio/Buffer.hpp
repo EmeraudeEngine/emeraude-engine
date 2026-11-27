@@ -88,7 +88,7 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Deletes the OpenAL buffer now; the object stays, no longer created.
-			 * @note The audio manager's termination calls it (through PlayableInterface::releaseBuffers()) while the
+			 * @note The audio manager's termination calls it (through SoundResource::releaseBuffers(); the track mixer for its own) while the
 			 * device the buffer lives on is still open. No source may still use the buffer.
 			 */
 			void destroy () noexcept;

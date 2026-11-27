@@ -30,22 +30,28 @@
 #include "emeraude_config.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <array>
-#include <chrono>
+#include <cmath>
+#include <cstddef>
+#include <initializer_list>
 #include <limits>
+#include <memory>
 #include <numeric>
 #include <ranges>
 #include <set>
+#include <span>
 #include <sstream>
 #include <thread>
 #include <utility>
 
 /* Third-party inclusions. */
-#include "AL/alc.h"
-#include "AL/alext.h"
+#include "AL/al.h"
 
 /* Local inclusions. */
 #include "Any.hpp"
+#include "Audio/Buffer.hpp"
+#include "Audio/Manager.hpp"
 #include "Audio/MusicResource.hpp"
 #include "Audio/PlaylistResource.hpp"
 #include "Audio/Source.hpp"
@@ -53,7 +59,6 @@
 #include "BlobTrait.hpp"
 #include "Logging/Severity.hpp"
 #include "Math/Base.hpp"
-#include "OpenALExtensions.hpp"
 #include "PortableRandom.hpp"
 #include "PrimaryServices.hpp"
 #include "Resources/Container.hpp"
@@ -63,97 +68,298 @@
 #include "Settings.hpp"
 #include "String.hpp"
 #include "Tracer.hpp"
+#include "WaveFactory/Types.hpp"
+#include "WaveFactory/Wave.hpp"
 
 namespace EmEn::Audio
 {
 	using namespace Base;
 
-	namespace
+	Source &
+	TrackMixer::trackSource (PlayingTrack which) const noexcept
 	{
-		/* The OpenAL Soft events the mixer listens to. */
-		constexpr std::array< ALCenum, 1 > SourceEvents{
-			AL_EVENT_TYPE_SOURCE_STATE_CHANGED_SOFT
-		};
+		return which == PlayingTrack::TrackB ? *m_trackB : *m_trackA;
+	}
+
+	TrackMixer::TrackStream &
+	TrackMixer::trackStream (PlayingTrack which) noexcept
+	{
+		return which == PlayingTrack::TrackB ? m_streamB : m_streamA;
+	}
+
+	const TrackMixer::TrackStream &
+	TrackMixer::trackStream (PlayingTrack which) const noexcept
+	{
+		return which == PlayingTrack::TrackB ? m_streamB : m_streamA;
 	}
 
 	bool
-	TrackMixer::enableSourceEvents () noexcept
+	TrackMixer::createStreamBuffers () noexcept
 	{
-		if ( !OpenAL::isEventsAvailable() )
+		for ( auto * stream : {&m_streamA, &m_streamB} )
 		{
-			TraceWarning{ClassId} << "The OpenAL extension for source events is not available !";
+			for ( auto & slot : stream->ring )
+			{
+				slot.buffer = std::make_unique< Buffer >();
+
+				if ( !slot.buffer->isCreated() )
+				{
+					return false;
+				}
+			}
+		}
+
+		return true;
+	}
+
+	bool
+	TrackMixer::openStream (PlayingTrack which, const std::shared_ptr< MusicResource > & music, size_t startFrame) noexcept
+	{
+		this->closeStream(which);
+
+		if ( music == nullptr )
+		{
+			return false;
+		}
+
+		const auto & wave = music->localData();
+		const auto channels = static_cast< size_t >(wave.channels());
+		const auto frameCount = wave.sampleCount();
+
+		if ( channels == 0 || frameCount == 0 )
+		{
+			TraceWarning{ClassId} << "The track '" << music->name() << "' has no sample, playback cancelled.";
 
 			return false;
 		}
 
-		OpenAL::alEventCallbackSOFT(eventCallback, this);
-		OpenAL::alEventControlSOFT(static_cast< ALsizei >(SourceEvents.size()), SourceEvents.data(), AL_TRUE);
+		auto & stream = this->trackStream(which);
+		auto & source = this->trackSource(which);
 
-		m_sourceEventsEnabled = true;
+		/* NOTE: A chunk holds whole frames: a chunk size that is not a multiple of the channel count would split one
+		 * between two buffers. */
+		stream.chunkSize = std::max(channels, m_audioManager.musicChunkSize() / channels * channels);
+
+		const auto chunkFrames = stream.chunkSize / channels;
+		const auto frame = std::min(startFrame, frameCount - 1);
+
+		stream.music = music;
+		stream.nextChunk = frame / chunkFrames;
+		stream.firstFrame = stream.nextChunk * chunkFrames;
+		stream.consumedFrames = 0;
+		stream.exhausted = false;
+
+		this->fillStream(which);
+
+		if ( source.queuedBufferCount() == 0 )
+		{
+			TraceError{ClassId} << "Unable to queue the first buffers of the track '" << music->name() << "' !";
+
+			this->closeStream(which);
+
+			return false;
+		}
+
+		/* NOTE: The stream starts at a chunk boundary; the source's cursor does the rest. */
+		if ( frame > stream.firstFrame )
+		{
+			source.setSampleOffset(frame - stream.firstFrame);
+		}
+
+		if ( !source.playQueue() )
+		{
+			this->closeStream(which);
+
+			return false;
+		}
 
 		return true;
 	}
 
 	void
-	TrackMixer::disableSourceEvents () noexcept
+	TrackMixer::closeStream (PlayingTrack which) noexcept
 	{
-		if ( !m_sourceEventsEnabled )
+		auto & stream = this->trackStream(which);
+
+		/* NOTE: Stopped, then the null buffer: the whole queue comes back, played or not. */
+		this->trackSource(which).detachBuffers();
+
+		for ( auto & slot : stream.ring )
 		{
-			return;
+			slot.queued = false;
+			slot.frames = 0;
 		}
 
-		/* NOTE: The registration held a raw this: it must not outlive the mixer (Ave Robustus II, a registration is
-		 * released by its owner). It was never removed before 2026-10-12. */
-		OpenAL::alEventControlSOFT(static_cast< ALsizei >(SourceEvents.size()), SourceEvents.data(), AL_FALSE);
-		OpenAL::alEventCallbackSOFT(nullptr, nullptr);
-
-		m_sourceEventsEnabled = false;
+		stream.music.reset();
+		stream.nextChunk = 0;
+		stream.firstFrame = 0;
+		stream.consumedFrames = 0;
+		stream.exhausted = false;
 	}
 
 	void
-	TrackMixer::eventCallback (ALenum eventType, ALuint object, ALuint param, ALsizei /*length*/, const ALchar * message, void * userParam) noexcept
+	TrackMixer::fillStream (PlayingTrack which) noexcept
 	{
-		if ( eventType != AL_EVENT_TYPE_SOURCE_STATE_CHANGED_SOFT || param != AL_STOPPED )
+		auto & stream = this->trackStream(which);
+
+		if ( stream.music == nullptr || stream.chunkSize == 0 )
 		{
 			return;
 		}
 
-		auto * trackMixer = static_cast< TrackMixer * >(userParam);
+		const auto & wave = stream.music->localData();
+		const auto channels = static_cast< size_t >(wave.channels());
+		const auto sampleCount = wave.elementCount();
+		const auto chunkCount = wave.chunkCount(stream.chunkSize);
 
+		auto & source = this->trackSource(which);
+
+		for ( auto & slot : stream.ring )
 		{
-			const MutexLock lock{trackMixer->m_stateAccess};
+			if ( slot.queued )
+			{
+				continue;
+			}
 
-			/* NOTE: A source stopped while no track plays (stop(), the old source of a switch) is not the end of the
-			 * current track. The playing source used to default to track B here. */
-			if ( trackMixer->m_playingTrack == PlayingTrack::None )
+			if ( stream.nextChunk >= chunkCount )
+			{
+				/* NOTE: The mode is read here, when the end of the samples is reached: setPlayMode() applies to the
+				 * track being played. */
+				if ( m_playMode != PlayMode::Loop )
+				{
+					stream.exhausted = true;
+
+					return;
+				}
+
+				stream.nextChunk = 0;
+			}
+
+			stream.exhausted = false;
+
+			const auto offset = stream.nextChunk * stream.chunkSize;
+			const auto samples = std::min(stream.chunkSize, sampleCount - offset);
+
+			if ( slot.buffer == nullptr || !slot.buffer->feedData(wave, stream.nextChunk, stream.chunkSize) )
+			{
+				TraceError{ClassId} << "Unable to fill a stream buffer with the track '" << stream.music->name() << "' !";
+
+				return;
+			}
+
+			const std::array< ALuint, 1 > name{slot.buffer->identifier()};
+
+			if ( !source.queueBuffers(name) )
 			{
 				return;
 			}
 
-			const ALuint currentSourceId = trackMixer->m_playingTrack == PlayingTrack::TrackA ?
-				trackMixer->m_trackA->identifier() :
-				trackMixer->m_trackB->identifier();
+			slot.queued = true;
+			slot.frames = samples / channels;
 
-			if ( object != currentSourceId )
-			{
-				return;
-			}
+			++stream.nextChunk;
+		}
+	}
 
-			trackMixer->m_requestNextTrack = true;
+	void
+	TrackMixer::serviceStream (PlayingTrack which) noexcept
+	{
+		auto & stream = this->trackStream(which);
+
+		if ( stream.music == nullptr )
+		{
+			return;
 		}
 
-		trackMixer->m_fadeCv.notify_one();
+		auto & source = this->trackSource(which);
 
-		TraceDebug{ClassId} << message;
+		/* 1. The buffers the source has played come back to the ring. */
+		std::array< ALuint, StreamRingSize > played{};
+
+		const auto playedCount = source.unqueueProcessedBuffers(played);
+
+		for ( const auto name : std::span{played}.first(playedCount) )
+		{
+			for ( auto & slot : stream.ring )
+			{
+				if ( slot.queued && slot.buffer != nullptr && slot.buffer->identifier() == name )
+				{
+					stream.consumedFrames += slot.frames;
+					slot.queued = false;
+
+					break;
+				}
+			}
+		}
+
+		/* 2. They leave again with the next chunks. */
+		this->fillStream(which);
+
+		if ( !source.isStopped() )
+		{
+			return;
+		}
+
+		/* 3. The source stopped by itself: it played everything it had. */
+		if ( source.queuedBufferCount() > 0 )
+		{
+			/* NOTE: An underrun: this thread came back too late and the queue ran dry while samples remained. The
+			 * buffers just queued are played from the first one. */
+			TraceWarning{ClassId} << "The stream of the track '" << stream.music->name() << "' ran dry (underrun), restarted.";
+
+			source.playQueue();
+
+			return;
+		}
+
+		if ( !stream.exhausted )
+		{
+			/* NOTE: Nothing could be queued (OpenAL refused, traced by fillStream()): the next turn tries again. */
+			return;
+		}
+
+		/* 4. The end of the track. */
+		this->closeStream(which);
+
+		if ( which == m_playingTrack )
+		{
+			/* NOTE: No track is held any more: the next one starts on a free mixer, without a fade from silence. */
+			m_playingTrack = PlayingTrack::None;
+			m_playingMusic.reset();
+			m_isFading = false;
+			m_requestNextTrack = true;
+		}
+	}
+
+	size_t
+	TrackMixer::streamPosition (PlayingTrack which) const noexcept
+	{
+		const auto & stream = this->trackStream(which);
+
+		if ( stream.music == nullptr )
+		{
+			return 0;
+		}
+
+		const auto frameCount = stream.music->localData().sampleCount();
+
+		if ( frameCount == 0 )
+		{
+			return 0;
+		}
+
+		/* NOTE: A looping stream runs past the end of the music: the position is within the track. */
+		return (stream.firstFrame + stream.consumedFrames + this->trackSource(which).sampleOffset()) % frameCount;
 	}
 
 	bool
 	TrackMixer::onInitialize () noexcept
 	{
+		bool streamBuffersCreated = true;
+
 		{
 			const MutexLock lock{m_stateAccess};
 
-			/* NOTE: The sources exist BEFORE the OpenAL events are registered: the callback reads them. */
 			m_trackA = std::make_unique< Source >();
 			m_trackA->setRelativeState(true);
 			m_trackA->setRolloffFactor(0.0F);
@@ -163,15 +369,25 @@ namespace EmEn::Audio
 			m_trackB->setRelativeState(true);
 			m_trackB->setRolloffFactor(0.0F);
 			m_trackB->setGain(0.0F);
+
+			/* NOTE: The end of a track is seen by the mixer's own thread (serviceStream()): a playlist advances
+			 * whatever the OpenAL implementation. It used to rely on the source events of OpenAL Soft, and looped one
+			 * track without them. */
+			m_playMode = PlayMode::Once;
+
+			if ( !this->createStreamBuffers() )
+			{
+				Tracer::error(ClassId, "Unable to create the stream buffers: the track mixer is disabled !");
+
+				streamBuffersCreated = false;
+			}
 		}
 
-		if ( this->enableSourceEvents() )
+		if ( !streamBuffersCreated )
 		{
-			TraceSuccess{ClassId} << "Events for source are enabled !";
+			static_cast< void >(this->onTerminate());
 
-			const MutexLock lock{m_stateAccess};
-
-			m_playMode = PlayMode::Once;
+			return false;
 		}
 
 		/* Sets master volume. */
@@ -198,7 +414,6 @@ namespace EmEn::Audio
 
 	TrackMixer::~TrackMixer ()
 	{
-		this->disableSourceEvents();
 		this->stopEventThread();
 	}
 
@@ -218,26 +433,35 @@ namespace EmEn::Audio
 	bool
 	TrackMixer::onTerminate () noexcept
 	{
-		/* NOTE: The OpenAL callback first (it wakes the event thread), then the event thread, then the sources. */
-		this->disableSourceEvents();
+		/* NOTE: The event thread first (it feeds the streams), then the streams, then their buffers and the sources. */
 		this->stopEventThread();
 
 		const MutexLock lock{m_stateAccess};
 
 		if ( m_trackA != nullptr )
 		{
-			m_trackA->stop();
+			this->closeStream(PlayingTrack::TrackA);
 		}
 
 		if ( m_trackB != nullptr )
 		{
-			m_trackB->stop();
+			this->closeStream(PlayingTrack::TrackB);
 		}
 
 		m_playingTrack = PlayingTrack::None;
 		m_playingMusic.reset();
 		m_isFading = false;
+		m_requestNextTrack = false;
 		m_loadingTrack.reset();
+
+		/* NOTE: The buffers of the rings are deleted here, detached and their device still open, like the sources. */
+		for ( auto * stream : {&m_streamA, &m_streamB} )
+		{
+			for ( auto & slot : stream->ring )
+			{
+				slot.buffer.reset();
+			}
+		}
 
 		/* NOTE: The sources live on the audio manager's current context (the recorder's game context when it is up):
 		 * released here, while it still exists (Ave Robustus II). onInitialize() creates them again. */
@@ -293,22 +517,14 @@ namespace EmEn::Audio
 		{
 			case PlayingTrack::TrackA :
 				/* Stop track B if it's playing. */
-				if ( !m_trackB->isMuted() )
-				{
-					m_trackB->stop();
-					m_trackB->removeSound();
-				}
+				this->closeStream(PlayingTrack::TrackB);
 				/* Ensure track A is at full volume. */
 				m_trackA->setGain(m_gain);
 				break;
 
 			case PlayingTrack::TrackB :
 				/* Stop track A if it's playing. */
-				if ( !m_trackA->isMuted() )
-				{
-					m_trackA->stop();
-					m_trackA->removeSound();
-				}
+				this->closeStream(PlayingTrack::TrackA);
 				/* Ensure track B is at full volume. */
 				m_trackB->setGain(m_gain);
 				break;
@@ -323,29 +539,8 @@ namespace EmEn::Audio
 	{
 		const MutexLock lock{m_stateAccess};
 
+		/* NOTE: The stream of the track being played reads it when it reaches the end of the samples (fillStream()). */
 		m_playMode = mode;
-
-		/* NOTE: Also update the currently playing source if any. */
-		if ( !this->usable() )
-		{
-			return;
-		}
-
-		const bool looping = (mode == PlayMode::Loop);
-
-		switch ( m_playingTrack )
-		{
-			case PlayingTrack::TrackA :
-				m_trackA->setLooping(looping);
-				break;
-
-			case PlayingTrack::TrackB :
-				m_trackB->setLooping(looping);
-				break;
-
-			case PlayingTrack::None:
-				break;
-		}
 	}
 
 	void
@@ -542,8 +737,7 @@ namespace EmEn::Audio
 				else
 				{
 					/* NOTE: Stop the old track immediately when cross-fader is disabled. */
-					m_trackA->stop();
-					m_trackA->removeSound();
+					this->closeStream(PlayingTrack::TrackA);
 				}
 				break;
 
@@ -557,18 +751,16 @@ namespace EmEn::Audio
 				else
 				{
 					/* NOTE: Stop the old track immediately when cross-fader is disabled. */
-					m_trackB->stop();
-					m_trackB->removeSound();
+					this->closeStream(PlayingTrack::TrackB);
 				}
 				break;
 		}
 
 		const float initialGain = m_crossFaderEnabled && wasPlaying ? 0.0F : m_gain;
-		auto & source = m_playingTrack == PlayingTrack::TrackA ? *m_trackA : *m_trackB;
 
-		source.setGain(initialGain);
+		this->trackSource(m_playingTrack).setGain(initialGain);
 
-		if ( !source.play(track, m_playMode) )
+		if ( !this->openStream(m_playingTrack, track) )
 		{
 			/* NOTE: A failed start leaves the state as it really is: the old track still plays when it was fading out,
 			 * nothing plays when it was stopped above. */
@@ -585,10 +777,8 @@ namespace EmEn::Audio
 
 		m_playingMusic = track;
 
-		if ( m_isFading )
-		{
-			m_fadeCv.notify_one();
-		}
+		/* NOTE: The event thread sleeps while no track is held: it now has a stream to feed, and maybe a fade. */
+		m_fadeCv.notify_one();
 
 		return true;
 	}
@@ -763,19 +953,14 @@ namespace EmEn::Audio
 
 		const MutexLock lock{m_stateAccess};
 
-		switch ( m_playingTrack )
+		if ( m_playingTrack == PlayingTrack::None || m_playingMusic == nullptr )
 		{
-			case PlayingTrack::TrackA :
-				return m_trackA->playbackPosition();
-
-			case PlayingTrack::TrackB :
-				return m_trackB->playbackPosition();
-
-			case PlayingTrack::None :
-				return 0.0F;
+			return 0.0F;
 		}
 
-		return 0.0F;
+		const auto hertz = static_cast< float >(m_playingMusic->localData().frequency().hz());
+
+		return hertz > 0.0F ? static_cast< float >(this->streamPosition(m_playingTrack)) / hertz : 0.0F;
 	}
 
 	float
@@ -936,27 +1121,55 @@ namespace EmEn::Audio
 	}
 
 	void
-	TrackMixer::seek (float position) const noexcept
+	TrackMixer::seek (float position) noexcept
 	{
 		if ( !this->usable() )
 		{
 			return;
 		}
 
+		if ( !std::isfinite(position) )
+		{
+			Tracer::warning(ClassId, "The seek position is not a finite number, ignored.");
+
+			return;
+		}
+
 		const MutexLock lock{m_stateAccess};
 
-		switch ( m_playingTrack )
+		if ( m_playingTrack == PlayingTrack::None || m_playingMusic == nullptr )
 		{
-			case PlayingTrack::TrackA :
-				m_trackA->setPlaybackPosition(position);
-				break;
+			return;
+		}
 
-			case PlayingTrack::TrackB :
-				m_trackB->setPlaybackPosition(position);
-				break;
+		/* NOTE: A copy: openStream() closes the stream first, which lets its own reference go. */
+		const auto music = m_playingMusic;
+		const auto & wave = music->localData();
+		const auto hertz = static_cast< float >(wave.frequency().hz());
+		const auto frameCount = wave.sampleCount();
 
-			case PlayingTrack::None :
-				break;
+		if ( frameCount == 0 || hertz <= 0.0F )
+		{
+			return;
+		}
+
+		const auto seconds = std::clamp(position, 0.0F, static_cast< float >(frameCount - 1) / hertz);
+		const auto frame = std::min(static_cast< size_t >(seconds * hertz), frameCount - 1);
+		const auto wasPaused = this->trackSource(m_playingTrack).isPaused();
+
+		/* NOTE: OpenAL only holds the few buffers queued: a seek empties the ring and fills it again from there. */
+		if ( !this->openStream(m_playingTrack, music, frame) )
+		{
+			m_playingTrack = PlayingTrack::None;
+			m_playingMusic.reset();
+			m_isFading = false;
+
+			return;
+		}
+
+		if ( wasPaused )
+		{
+			this->trackSource(m_playingTrack).pause();
 		}
 	}
 
@@ -1096,23 +1309,20 @@ namespace EmEn::Audio
 			/* NOTE: A track still loading must not start once loaded: the user stopped the music. */
 			m_loadingTrack.reset();
 
-			switch ( m_playingTrack )
+			if ( m_playingTrack == PlayingTrack::None )
 			{
-				case PlayingTrack::None:
-					return;
-
-				case PlayingTrack::TrackA :
-					m_trackA->stop();
-					break;
-
-				case PlayingTrack::TrackB :
-					m_trackB->stop();
-					break;
+				return;
 			}
+
+			/* NOTE: Both streams: a track fading out when the music is stopped went on playing at the gain the fade
+			 * had left it. */
+			this->closeStream(PlayingTrack::TrackA);
+			this->closeStream(PlayingTrack::TrackB);
 
 			m_playingTrack = PlayingTrack::None;
 			m_playingMusic.reset();
 			m_isFading = false;
+			m_requestNextTrack = false;
 		}
 
 		/* NOTE: Notified after the lock: an observer may call the mixer back (it used to deadlock). */
@@ -1194,20 +1404,21 @@ namespace EmEn::Audio
 	}
 
 	void
-	TrackMixer::fadeOut (Source * track, float step) noexcept
+	TrackMixer::fadeOut (PlayingTrack which, float step) noexcept
 	{
-		auto currentGain = track->gain();
+		auto & source = this->trackSource(which);
 
-		currentGain -= step;
+		const auto currentGain = source.gain() - step;
 
 		if ( currentGain <= 0.0F )
 		{
-			track->stop();
-			track->removeSound();
+			source.setGain(0.0F);
+
+			this->closeStream(which);
 		}
 		else
 		{
-			track->setGain(currentGain);
+			source.setGain(currentGain);
 		}
 	}
 
@@ -1220,24 +1431,24 @@ namespace EmEn::Audio
 		{
 			/* NOTE: We are playing on the track A, so we fade out the track B. */
 			case PlayingTrack::TrackA :
-				if ( !m_trackB->isMuted() )
+				if ( m_streamB.music != nullptr )
 				{
-					TrackMixer::fadeOut(m_trackB.get(), stepValue);
+					this->fadeOut(PlayingTrack::TrackB, stepValue);
 				}
 
-				if ( this->fadeIn(m_trackA.get(), stepValue) )
+				if ( this->fadeIn(m_trackA.get(), stepValue) && m_streamB.music == nullptr )
 				{
 					m_isFading = false;
 				}
 				return;
 
 			case PlayingTrack::TrackB :
-				if ( !m_trackA->isMuted() )
+				if ( m_streamA.music != nullptr )
 				{
-					TrackMixer::fadeOut(m_trackA.get(), stepValue);
+					this->fadeOut(PlayingTrack::TrackA, stepValue);
 				}
 
-				if ( this->fadeIn(m_trackB.get(), stepValue) )
+				if ( this->fadeIn(m_trackB.get(), stepValue) && m_streamA.music == nullptr )
 				{
 					m_isFading = false;
 				}
@@ -1248,37 +1459,46 @@ namespace EmEn::Audio
 		}
 
 		/* NOTE: No playing track, or a value outside the enumeration: nothing to fade (the loop would otherwise spin
-		 * every 16 ms until the shutdown). */
+		 * every turn until the shutdown). */
 		m_isFading = false;
 	}
 
 	void
 	TrackMixer::eventLoop (const std::stop_token & stopToken) noexcept
 	{
-		using namespace std::chrono_literals;
-
-		/* NOTE: Every read and write of the shared state (the flags, the user state, the playing track) happens under
-		 * m_stateAccess; only the 16 ms sleep between two fade steps is outside it. */
+		/* NOTE: Every read and write of the shared state (the streams, the flags, the user state, the playing track)
+		 * happens under m_stateAccess; only the sleep between two turns is outside it. */
 		while ( true )
 		{
 			bool playNext = false;
+			bool busy = false;
 
 			{
 				MutexLock lock{m_stateAccess};
 
 				/* NOTE: Returns false when the stop is requested (the predicate still false). */
 				if ( !m_fadeCv.wait(lock, stopToken, [this] () EMEN_REQUIRES(m_stateAccess) {
-					return m_isFading || m_requestNextTrack;
+					return m_isFading || m_requestNextTrack || m_streamA.music != nullptr || m_streamB.music != nullptr;
 				}) )
 				{
 					return;
 				}
+
+				this->serviceStream(PlayingTrack::TrackA);
+				this->serviceStream(PlayingTrack::TrackB);
 
 				if ( m_requestNextTrack )
 				{
 					m_requestNextTrack = false;
 					playNext = m_userState != UserState::Stopped;
 				}
+
+				if ( m_isFading )
+				{
+					this->fadeStep();
+				}
+
+				busy = m_isFading || m_streamA.music != nullptr || m_streamB.music != nullptr;
 			}
 
 			/* NOTE: next() takes m_stateAccess itself, and notifies the observers from this thread. */
@@ -1287,20 +1507,14 @@ namespace EmEn::Audio
 				this->next();
 			}
 
-			while ( true )
+			if ( stopToken.stop_requested() )
 			{
-				{
-					const MutexLock lock{m_stateAccess};
+				return;
+			}
 
-					if ( !m_isFading || stopToken.stop_requested() )
-					{
-						break;
-					}
-
-					this->fadeStep();
-				}
-
-				std::this_thread::sleep_for(16ms);
+			if ( busy )
+			{
+				std::this_thread::sleep_for(EventPeriod);
 			}
 		}
 	}

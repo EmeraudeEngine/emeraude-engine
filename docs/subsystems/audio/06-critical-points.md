@@ -11,9 +11,9 @@
 - **Every OpenAL object is released while its context and device exist** (Ave Robustus II, 2026-10-16). An OpenAL
   source belongs to its context, a buffer to its device; the recorder's game context (on its loopback device) is the
   current one when the recorder is up. `Audio::Manager::onTerminate()` therefore releases, in order: the default source
-  and the source pool (`releaseSources()`), the other sub-services (the track mixer deletes its two sources), the
-  buffers of every sound and music resource (`releaseResourceBuffers()` → `PlayableInterface::releaseBuffers()` →
-  `Buffer::destroy()`: the resource manager, which holds them, terminates AFTER the audio manager), then the recorder,
+  and the source pool (`releaseSources()`), the other sub-services (the track mixer deletes the buffers of its two streams and
+  its two sources), the buffer of every sound resource (`releaseResourceBuffers()` → `SoundResource::releaseBuffers()`
+  → `Buffer::destroy()`; a music resource has no OpenAL buffer since 2026-11-27, doc 16: the resource manager, which holds them, terminates AFTER the audio manager), then the recorder,
   then its own context and device.
   - Before: `AL_INVALID_NAME` at `GlobalReleaseFlush` at every shutdown; with `ALSOFT_LOGLEVEL=3`
     `ALSOFT_LOGFILE=<file>`, OpenAL Soft reported "254 Sources not deleted" (the fault-injection tool) and "187 Buffers
@@ -25,8 +25,8 @@
     movable since Ave Robustus II P5 (2026-10-16) — the defaulted move did not clear the name either.
 - **A source detaches its buffers BEFORE it lets its sound go** (2026-11-26). OpenAL refuses to delete a buffer still
   attached to a source (`AL_INVALID_OPERATION`, OpenAL Soft: "Deleting in-use buffer"): the buffer then stays allocated
-  until the context dies. The invariant: a source holds its sound's resource (`m_currentPlayableInterface`) as long as
-  one of that sound's buffers is attached. `Source::detachBuffers()` (stops the source, then `AL_BUFFER` = 0, which
+  until the context dies. The invariant: a source holds its sound's resource (`m_currentSound`) as long as
+  that sound's buffer is attached. `Source::detachBuffers()` (stops the source, then `AL_BUFFER` = 0, which
   releases a static buffer and a queue alike) runs in `removeSound()` — so in `resetToDefaults()`, the return to the
   pool — and in `play()` when another sound replaces the current one.
   - Before: `removeSound()` unqueued a STREAMED sound's buffers only; a static sound's buffer stayed attached to the
