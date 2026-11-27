@@ -75,7 +75,12 @@ reverberation), not a film's.
   and, on the send to the listener's reverberation, a filter of its own carrying the path alone
   (`m_pathFilter`): what reverberates went through the surface too. The path is the USER's: `resetToDefaults()`
   clears it, where the medium stays.
-- ⚠️ The crossing values (0.3 and 0.05) are PROVISIONAL: never heard by the owner (`setSeaSoundCrossing`).
+- The crossing values (0.3 and 0.05) are the owner's (heard on 2026-11-27, Linux, `water-world`, the two loops
+  silenced, `playSoundAt()`): from under the level a source in the air — the medium's gains and the crossing's
+  together, the 22 dB of the measurement below — "credible"; from the air an explosion under the level against the
+  same explosion in the air — "perfect as it is". Both products are kept, nothing was changed.
+  ⚠️ Listen with a sound that MEANS something on the other side (an explosion): a long wind noise played under water
+  told the owner nothing.
 
 ### Out of the medium, and the sound of being under water (2026-11-26)
 
