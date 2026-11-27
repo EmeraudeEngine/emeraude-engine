@@ -1697,17 +1697,13 @@ namespace EmEn::Scenes::Loaders::WAD
 					 * indexes, or the baked lighting lands on the wrong corners. */
 					if ( swapWinding )
 					{
-						auto & shapeTriangle = triangles.emplace_back(baseVertex, baseVertex + 2, baseVertex + 1);
-						shapeTriangle.setVertexColorIndex(0, colorIndexes[0]);
-						shapeTriangle.setVertexColorIndex(1, colorIndexes[2]);
-						shapeTriangle.setVertexColorIndex(2, colorIndexes[1]);
+						triangles.emplace_back(baseVertex, baseVertex + 2, baseVertex + 1);
+						shape->setTriangleVertexColorIndexes(static_cast< uint32_t >(triangles.size() - 1), {colorIndexes[0], colorIndexes[2], colorIndexes[1]});
 					}
 					else
 					{
-						auto & shapeTriangle = triangles.emplace_back(baseVertex, baseVertex + 1, baseVertex + 2);
-						shapeTriangle.setVertexColorIndex(0, colorIndexes[0]);
-						shapeTriangle.setVertexColorIndex(1, colorIndexes[1]);
-						shapeTriangle.setVertexColorIndex(2, colorIndexes[2]);
+						triangles.emplace_back(baseVertex, baseVertex + 1, baseVertex + 2);
+						shape->setTriangleVertexColorIndexes(static_cast< uint32_t >(triangles.size() - 1), {colorIndexes[0], colorIndexes[1], colorIndexes[2]});
 					}
 				}
 

@@ -2104,12 +2104,15 @@ namespace EmEn::Scenes::Loaders::GLTF
 								if ( !readDracoAwareAttribute< fastgltf::math::u16vec4 >(asset, glTFPrimitive, "JOINTS_0", jointsAccessor, dracoCache, adapter, [&] (const fastgltf::math::u16vec4 & v) {
 									maxJoint = std::max({maxJoint, static_cast< size_t >(v.x()), static_cast< size_t >(v.y()), static_cast< size_t >(v.z()), static_cast< size_t >(v.w())});
 
-									vertices[globalVertexOffset + index].setInfluences(
+									/* The skinning is a table of the shape (2026-11-26); the weights come in their own pass. */
+									const auto vertexIndex = static_cast< uint32_t >(globalVertexOffset + index);
+
+									shape->setVertexSkinning(vertexIndex, {
 										static_cast< int32_t >(v.x()),
 										static_cast< int32_t >(v.y()),
 										static_cast< int32_t >(v.z()),
 										static_cast< int32_t >(v.w())
-									);
+									}, shape->vertexWeights(vertexIndex));
 
 									index++;
 								}) )
@@ -2127,7 +2130,9 @@ namespace EmEn::Scenes::Loaders::GLTF
 								size_t index = 0;
 
 								if ( !readDracoAwareAttribute< fastgltf::math::fvec4 >(asset, glTFPrimitive, "WEIGHTS_0", weightsAccessor, dracoCache, adapter, [&] (const fastgltf::math::fvec4 & v) {
-									vertices[globalVertexOffset + index].setWeights(v.x(), v.y(), v.z(), v.w());
+									const auto vertexIndex = static_cast< uint32_t >(globalVertexOffset + index);
+
+									shape->setVertexSkinning(vertexIndex, shape->vertexInfluences(vertexIndex), {v.x(), v.y(), v.z(), v.w()});
 									index++;
 								}) )
 								{
@@ -2173,18 +2178,16 @@ namespace EmEn::Scenes::Loaders::GLTF
 
 								if ( triangleSlot == 3 )
 								{
-									auto & triangle = triangles.emplace_back(triangleBuffer[0], triangleBuffer[1], triangleBuffer[2]);
+									triangles.emplace_back(triangleBuffer[0], triangleBuffer[1], triangleBuffer[2]);
 
-									/* ⚠️ `ShapeTriangle`'s vertex-COLOUR indexes are a SEPARATE list from
-									 * its vertex indexes (a face-varying attribute, as OBJ and FBX need)
-									 * and they default to {0, 0, 0}. Leaving them alone would paint every
-									 * triangle with colour 0. glTF's COLOR_0 shares POSITION's indexing,
-									 * so the two index sets are simply equal here. */
+									/* ⚠️ A triangle's vertex-COLOUR indexes are a SEPARATE list from its
+									 * vertex indexes (a face-varying attribute, as OBJ and FBX need; a table
+									 * of the shape since 2026-11-26) and they default to {0, 0, 0}. Leaving
+									 * them alone would paint every triangle with colour 0. glTF's COLOR_0
+									 * shares POSITION's indexing, so the two index sets are simply equal here. */
 									if ( anyPrimitiveHasVertexColors )
 									{
-										triangle.setVertexColorIndex(0, triangleBuffer[0]);
-										triangle.setVertexColorIndex(1, triangleBuffer[1]);
-										triangle.setVertexColorIndex(2, triangleBuffer[2]);
+										shape->setTriangleVertexColorIndexes(static_cast< uint32_t >(triangles.size() - 1), triangleBuffer);
 									}
 
 									triangleSlot = 0;
@@ -2212,13 +2215,11 @@ namespace EmEn::Scenes::Loaders::GLTF
 							for ( uint32_t triangleIndex = 0; triangleIndex < primTriangleCount; ++triangleIndex )
 							{
 								const auto first = globalVertexOffset + (triangleIndex * 3);
-								auto & triangle = triangles.emplace_back(first, first + 1, first + 2);
+								triangles.emplace_back(first, first + 1, first + 2);
 
 								if ( anyPrimitiveHasVertexColors )
 								{
-									triangle.setVertexColorIndex(0, first);
-									triangle.setVertexColorIndex(1, first + 1);
-									triangle.setVertexColorIndex(2, first + 2);
+									shape->setTriangleVertexColorIndexes(static_cast< uint32_t >(triangles.size() - 1), {first, first + 1, first + 2});
 								}
 							}
 

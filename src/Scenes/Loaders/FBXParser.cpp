@@ -686,8 +686,8 @@ namespace EmEn::Scenes::Loaders::FBX
 											weights[3] *= invSum;
 										}
 
-										vertices[globalVertexOffset + k].setInfluences(joints[0], joints[1], joints[2], joints[3]);
-										vertices[globalVertexOffset + k].setWeights(weights[0], weights[1], weights[2], weights[3]);
+										/* The skinning is a table of the shape (2026-11-26). */
+										shape->setVertexSkinning(static_cast< uint32_t >(globalVertexOffset + k), {joints[0], joints[1], joints[2], joints[3]}, {weights[0], weights[1], weights[2], weights[3]});
 									}
 								}
 

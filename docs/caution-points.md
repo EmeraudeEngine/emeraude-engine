@@ -2850,7 +2850,9 @@ finally matching the frame it was authored against.
   format had no users yet — owner decision). ⚠️⚠️ **A size change to `ShapeVertex` or
   `ShapeTriangle` with an unchanged format version is silent data corruption**: the reader's count
   validation can pass on a wrong stride. The size is pinned by a unit test so the failure is a red
-  test rather than a corrupt file.
+  test rather than a corrupt file. Since 2026-11-26 the skinning and the triangles' colour and edge
+  indexes are tables of the `Shape` (`ShapeVertex` 60 bytes, `ShapeTriangle` 40, `.ee3d` version 4;
+  versions 2 and 3 are still read): emeraude-base `docs/subsystems/vertexfactory/02-architecture.md` § Shape.
 
 ### `Shape::build()` CLEARS the shape, and its callback is not handed the vertex colours (Aug 2026)
 
@@ -2865,11 +2867,15 @@ Size and fill the colours from **inside** the callback, through the captured sha
 has run. The trap is that the callback's parameters look like the complete set of what a shape holds,
 and they are not: colours (and edges) live outside them.
 
-⚠️ Related, same subsystem: `ShapeTriangle`'s vertex-**colour** indexes are a list separate from its
+⚠️ Related, same subsystem: a triangle's vertex-**colour** indexes are a list separate from its
 vertex indexes — a face-varying attribute, which OBJ and FBX genuinely need — and they default to
-`{0, 0, 0}`. A loader that fills `m_vertexColors` but forgets `setVertexColorIndex()` paints every
-triangle with colour 0, which renders as a plausible flat tint rather than as an error. Formats whose
-colours share the position indexing (glTF) must still set them, to the same values.
+`{0, 0, 0}`. A loader that fills `m_vertexColors` but forgets `shape->setTriangleVertexColorIndexes()`
+(after the triangle's `emplace_back`, through the captured shape: since 2026-11-26 they are a table of
+the `Shape`, no longer a member of `ShapeTriangle`) paints every triangle with colour 0, which renders as
+a plausible flat tint rather than as an error. Formats whose colours share the position indexing (glTF)
+must still set them, to the same values. The skinning likewise: `shape->setVertexSkinning(vertex,
+influences, weights)` from inside the callback (glTF reads its joints and its weights in two passes, each
+keeping the other half through `vertexInfluences()` / `vertexWeights()`).
 
 ### Fixed: the near plane was a CONSTANT, in four copies, and wrong in both directions (Aug 2026)
 

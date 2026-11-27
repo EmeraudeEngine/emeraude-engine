@@ -1959,7 +1959,7 @@ namespace EmEn::Scenes::Loaders
 
 			uint32_t geometryFlags = EnableTangentSpace | EnablePrimaryTextureCoordinates;
 
-			if ( !shape->vertices().empty() && shape->vertices()[0].influences()[0] >= 0 )
+			if ( shape->isSkinningAvailable() )
 			{
 				geometryFlags |= EnableInfluence | EnableWeight;
 			}

@@ -234,7 +234,7 @@ created by the loaders:
 - `loadAnimations()` reads channels/samplers (glTF) or resamples `anim_stack` at 30 Hz (FBX), creates `AnimationClipResource` via resource manager
 - After loading: attaches skeletal data to renderables via `SkeletalDataTrait::setSkeletalData()`
 - Pipeline order: Images → Materials → Meshes → Skins → Animations → **Attach skeletal data** → Nodes
-- Bone influences detected from vertex data: `shape->vertices()[0].influences()[0] >= 0` sets `EnableInfluence | EnableWeight` geometry flags
+- Bone influences detected from the shape: `shape->isSkinningAvailable()` (the skinning table of the `Shape`, allocated by the first vertex given one, 2026-11-26; it read `shape->vertices()[0].influences()[0] >= 0` before) sets `EnableInfluence | EnableWeight` geometry flags
 
 **⚠️ glTF clips are rebased to t = 0 (2026-09-28, owner decision).** glTF keyframe times are absolute,
 and an exporter may lay EVERY clip on one shared timeline — Sketchfab does: `Dragon.glb`'s
