@@ -3,7 +3,7 @@
 Music playlist manager with full playback control. Observable for state change notifications.
 
 ### Key Features
-- Playlist management: `addToPlaylist()`, `clearPlaylist()`, `playlist()`
+- Playlist management: `addToPlaylist()`, `clearPlaylist()`, `playlist()` — a list of resource NAMES since 2026-11-27: the mixer holds the track it plays and the next one only (doc 16)
 - Playback control: `play()`, `pause()`, `resume()`, `stop()`
 - Navigation: `next()`, `previous()`
 - Seek: `seek(float position)` - Jump to position in seconds
@@ -125,7 +125,7 @@ when no source plays. Measured (Debian 13, Debug, `default`, the playlist `Retro
 
 - If `track` is present in `m_playlist` → `m_musicIndex` = that entry's index.
 - If `track` is not in the playlist (played ad-hoc) → `m_musicIndex = SIZE_MAX` as sentinel. Read paths guard via `m_musicIndex >= m_playlist.size()`.
-- Linear scan is intentional: `m_playlist` is typically small (< 100 entries) and shared_ptr equality is O(1) per compare.
+- Linear scan is intentional: `m_playlist` is typically small (< 100 entries); an entry is compared by its name (by its resource for a music outside the store).
 - Code reference: `TrackMixer.cpp:play(track)`.
 
 ### PlaylistResource & Playlist Swapping
@@ -145,7 +145,7 @@ The playlist name is derived from the filename stem (`Kyrandia2.json` → `Kyran
 
 **Engine API** (`TrackMixer::loadPlaylist(const std::shared_ptr<PlaylistResource> &)`):
 1. Captures persistent intent: `wasPlaying = (userState() == UserState::Playing)`. This is deliberately NOT `isPlaying()` — MIDI rendering is async, so a source may not yet be emitting when the swap is requested. `userState()` captures "the user wants music", which is the correct trigger for auto-resume.
-2. Resolves every track name against the `MusicResource` container BEFORE mutating state. Unknown entries are skipped with a warning.
+2. Checks every track name against the `MusicResource` container BEFORE mutating state (nothing is loaded: an entry is a name, doc 16). Unknown entries are skipped with a warning.
 3. If resolution yields zero tracks (manifest empty or all entries invalid), the call returns `false` and the previous playlist is left intact.
 4. Otherwise: `stop()` → the tracks and the manifest replace the old ones in ONE locked step (no reader sees the new
    tracks under the old manifest) → `PlaylistSwapped` → if `wasPlaying`, `playIndex(0)` on the new playlist.

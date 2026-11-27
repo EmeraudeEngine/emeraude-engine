@@ -81,9 +81,67 @@ every buffer of the track on the source. With a playlist of 32 tracks loaded up 
 - ⚠️ NOT measured: the memory OpenAL gives back (no build of before was kept for an A/B); a starved event thread
   (no underrun was provoked).
 
+### The playlist is a list of names — two tracks decoded, not the whole playlist (2026-11-27)
+
+Owner decision the same day (the alternative weighed: the music resource releasing and reloading its samples through
+the CPU-copy mechanism of `docs/subsystems/resources/11-cpu-copy-release.md`, the playlist's API unchanged).
+
+- **A playlist entry is a NAME** (`TrackMixer::PlaylistEntry`). `loadPlaylist()` only checks each name against the
+  music store (`isResourceExists()`): nothing is decoded. It used to ask the container for every track, which
+  started every load — 367 MiB for 32 tracks, whatever was played.
+- **The mixer holds a loaded music for three things only**: the track it plays (`m_playingMusic` and its stream),
+  the track fading out (its stream) and the NEXT entry (`m_preloadedTrack`, asked from the store by
+  `preloadNextTrack()` as soon as a track starts — `steppedIndex()` gives the entry `next()` would move to, the
+  shuffle order included — so it is decoded when its turn comes). Plus a track it waits for (`m_loadingTrack`).
+- **What nothing holds any more is forgotten by the container**: `closeStream()`, a change of the preloaded track,
+  `clearPlaylist()` and `loadPlaylist()` raise `m_releaseRequested`; the event thread then calls
+  `Container< MusicResource >::unloadUnusedResources()` OUTSIDE `m_stateAccess` (`releaseUnusedMusics()`). The
+  store is asked outside that lock too (`resolveTrack()`): it takes its own lock and may start a load.
+  ⚠️ It empties the container of EVERY music nothing holds, not only the mixer's: whoever wants a music kept decoded
+  holds its `shared_ptr`.
+- **A music the store does not hold** (a file dropped on the window: `Core` builds the resource itself) cannot be
+  asked again: its entry keeps the resource (`PlaylistEntry::held`), decoded, for as long as the entry lives.
+- API: `playlist()` and `Status::playlist` are the names (`std::vector< std::string >`); `Status::currentTrack` is
+  gone (nothing read it); `addToPlaylist()` still takes a resource and keeps its name when the store holds it;
+  `findPlaylistTrack()` asks the store for the entry found. `currentDuration()` is 0 while no source holds a track:
+  the duration of an entry is not known before it is loaded. The console and the testbed's UI only list names.
+- **A track asked for while the playing one ends is no longer lost.** `play(track)` of a track not loaded records it
+  (`m_loadingTrack`); if the playing track reached its end before the load finished, the playlist advanced and the
+  next entry superseded the request. The event thread now leaves the playlist where it is while a track is awaited.
+  Reproduced before the fix: `play("Kyrandia2/Ferry")`, `seek(10.4)` (0.3 s before its end), `play("AirWolf8")` —
+  five seconds later `nowPlaying` answered "Kyrandia2/Animated Scarecrow … Index: 1/32"; after: "Main Theme … 4 s /
+  60.4981 s … outside the playlist". If that awaited track fails to load, nothing plays (as when nothing played).
+
+Measured (Linux, Release, `default`, window-less, the playlist `Kyrandia2`, 32 MIDI tracks;
+`Core.ResourcesManagerService.memoryCensus()`, the `MusicResource` row):
+
+| Moment | Musics loaded | Bytes | Unused |
+|---|---|---|---|
+| Playlist loaded, stopped | none | — | — |
+| Playing track 1 | 2 | 14.9 MB | 0 |
+| After `next` | 2 | 15.1 MB | 0 |
+| After `next` ×3 in two seconds | 2 | 12.2 MB | 0 |
+| `playlistPlay(20)`, a far jump (the track starts about 1 s later) | 2 | 33.8 MB | 0 |
+| Shuffle on, after two `next` | 2 | 52.8 MB | 0 |
+| After a cross-faded `next` (the fade over) | 2 | 32.2 MB | 0 |
+| `play("AirWolf8")`, a store music outside the playlist | 2 | 14.7 MB | 0 |
+| Its natural end, back to the playlist | 2 | 14.9 MB | 0 |
+| `stop` | 1 (the preloaded one) | 11.8 MB | 0 |
+| `playlistClear` | none | — | — |
+
+0 underrun line, 0 error in OpenAL Soft's log, 0 `VUID-`, 0 MIDI error. Gate `commit` clean. ThreadSanitizer, the
+mixer's stress on this code: 29 335 calls, 0 report — ⚠️ only 9 positions read on a streaming track: with tracks
+loaded on demand and four drivers calling `next` / `stop` at once, a track rarely gets to play; the run exercises the
+loads, the preloads and the unloads far more than the streams (step 1's run: 781).
+⚠️ NOT proven by a run: a file dropped on the window (`PlaylistEntry::held`) — no console command drops a file.
+
 ### Limits
 
-- The decoded samples of every loaded track still stay in memory: the playlist loads every track up front (engine
-  item `decoded-music-stays-resident`, the second step).
+- Two or three tracks stay decoded in full (the longest of this playlist: 30 MB). Decoding on the fly from the file
+  would bring that down to the ring alone; it was weighed and NOT decided (incremental decoders in emeraude-base, file
+  reading off the mixer's thread, no answer for MIDI and script musics). No item is open for it.
+- A track is decoded again each time its turn comes (a MIDI is rendered again): the preload hides it in a normal
+  playback, a far jump waits for it.
+- A track that finishes loading after the mixer let it go stays in the container until the next release request.
 - A seek on a paused track starts the source and pauses it at once: a few milliseconds may be heard.
 - A music can no longer be played as a positioned sound by a scene source. Nothing did.

@@ -26,7 +26,8 @@ citadel 4.75 GB private bytes for a 467 MiB census, **terrain 8.1 GB for 497 MiB
 2. Then decide per contributor (owner): release, stream, shrink, or accept.
 
 Known contributors with their own items (counted INSIDE the census, so not the gap itself, but the same RAM budget):
-`decoded-music-stays-resident`, `movie-frames-stay-resident`.
+`movie-frames-stay-resident`. (The decoded music — 367 MiB for a playlist of 32 tracks — is down to two tracks
+since 2026-11-27: `docs/subsystems/audio/16-music-streaming.md`.)
 
 ## References
 

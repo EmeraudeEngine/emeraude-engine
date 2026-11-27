@@ -51,7 +51,7 @@ State of the art the design follows: Unity (`Mesh.UploadMeshData(markNoLongerRea
 
 - Linux RSS with the trim: citadel 5435 → 2508 MiB, terrain 8813 → 4085 MiB. Windows citadel private bytes 6414 →
   4752 MiB (7470 when the item opened). macOS phys_footprint citadel 7512 → 5588 MB, terrain 11 GB → 8.9-9.3 GB.
-- What stays: decoded music (367 MiB everywhere, item `decoded-music-stays-resident`), sponza's
+- What stays: decoded music (367 MiB everywhere THEN; two tracks since 2026-11-27, audio doc 16), sponza's
   `CompressedImageResource` (1792 MiB, not in this scope), movie frames the movies own (generated ones), generated
   images. (The model-embedded images — citadel 81, liminal 228 MiB — have a source since 2026-10-04.)
 - Where citadel's 1359 MiB of geometry went before (phase 0): vertices 542, the construction-time unpaired-edge index
@@ -82,7 +82,8 @@ State of the art the design follows: Unity (`Mesh.UploadMeshData(markNoLongerRea
 
 ## Follow-ups (items)
 
-`memory-outside-the-census` (terrain: 8.1 GB private for a 497 MiB census), `decoded-music-stays-resident`,
+`memory-outside-the-census` (terrain: 8.1 GB private for a 497 MiB census), `decoded-music-stays-resident` (closed
+2026-11-27: audio doc 16),
 `movie-frames-stay-resident` (the residency of decoded frames), `automatic-lod-buffers-destroyed-in-use`.
 The normal-map flip no longer interacts with a release: since 2026-10-12 it flips a copy for the upload, never the
 store image, so a released image reloaded from its file is what every texture expects (`docs/coordinate-system.md`).

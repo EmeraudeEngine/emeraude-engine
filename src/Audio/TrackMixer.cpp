@@ -190,7 +190,14 @@ namespace EmEn::Audio
 			slot.frames = 0;
 		}
 
-		stream.music.reset();
+		if ( stream.music != nullptr )
+		{
+			stream.music.reset();
+
+			/* NOTE: The event thread empties the music container of what nothing holds any more. */
+			m_releaseRequested = true;
+		}
+
 		stream.nextChunk = 0;
 		stream.firstFrame = 0;
 		stream.consumedFrames = 0;
@@ -452,7 +459,9 @@ namespace EmEn::Audio
 		m_playingMusic.reset();
 		m_isFading = false;
 		m_requestNextTrack = false;
+		m_releaseRequested = false;
 		m_loadingTrack.reset();
+		m_preloadedTrack.reset();
 
 		/* NOTE: The buffers of the rings are deleted here, detached and their device still open, like the sources. */
 		for ( auto * stream : {&m_streamA, &m_streamB} )
@@ -546,9 +555,21 @@ namespace EmEn::Audio
 	void
 	TrackMixer::addToPlaylist (const std::shared_ptr< MusicResource > & track) noexcept
 	{
+		if ( track == nullptr )
+		{
+			Tracer::error(ClassId, "The track is a null pointer !");
+
+			return;
+		}
+
+		/* NOTE: A music of the store is kept by its name and asked again when its turn comes; a music the store does
+		 * not hold (a file dropped on the window) could not be: the entry keeps the resource. */
+		const auto * musics = m_resourceManager.container< MusicResource >();
+		const auto inStore = musics != nullptr && musics->isResourceExists(track->name());
+
 		const MutexLock lock{m_stateAccess};
 
-		m_playlist.push_back(track);
+		m_playlist.push_back(PlaylistEntry{.name = track->name(), .held = inStore ? nullptr : track});
 		m_loadedPlaylist.reset();
 
 		this->playlistChanged();
@@ -561,8 +582,28 @@ namespace EmEn::Audio
 
 		m_playlist.clear();
 		m_loadedPlaylist.reset();
+		m_preloadedTrack.reset();
+		m_releaseRequested = true;
 
 		this->playlistChanged();
+
+		m_fadeCv.notify_one();
+	}
+
+	std::vector< std::string >
+	TrackMixer::playlist () const noexcept
+	{
+		const MutexLock lock{m_stateAccess};
+
+		std::vector< std::string > names;
+		names.reserve(m_playlist.size());
+
+		for ( const auto & entry : m_playlist )
+		{
+			names.emplace_back(entry.name);
+		}
+
+		return names;
 	}
 
 	TrackMixer::Status
@@ -571,8 +612,13 @@ namespace EmEn::Audio
 		const MutexLock lock{m_stateAccess};
 
 		Status status;
-		status.playlist = m_playlist;
-		status.currentTrack = m_musicIndex < m_playlist.size() ? m_playlist[m_musicIndex] : nullptr;
+		status.playlist.reserve(m_playlist.size());
+
+		for ( const auto & entry : m_playlist )
+		{
+			status.playlist.emplace_back(entry.name);
+		}
+
 		status.playingTrack = m_playingMusic;
 		status.loadedPlaylist = m_loadedPlaylist;
 		status.trackIndex = m_musicIndex;
@@ -586,6 +632,68 @@ namespace EmEn::Audio
 		return status;
 	}
 
+	std::shared_ptr< MusicResource >
+	TrackMixer::resolveTrack (const PlaylistEntry & entry) const noexcept
+	{
+		if ( entry.held != nullptr )
+		{
+			return entry.held;
+		}
+
+		auto * musics = m_resourceManager.container< MusicResource >();
+
+		/* NOTE: getResource() answers the "Default" resource for an unknown name: the existence is checked first. */
+		if ( musics == nullptr || !musics->isResourceExists(entry.name) )
+		{
+			TraceWarning{ClassId} << "The track '" << entry.name << "' is no longer in the music store !";
+
+			return nullptr;
+		}
+
+		return musics->getResource(entry.name);
+	}
+
+	void
+	TrackMixer::preloadNextTrack () noexcept
+	{
+		PlaylistEntry next;
+		bool found = false;
+
+		{
+			const MutexLock lock{m_stateAccess};
+
+			if ( m_playlist.size() > 1 )
+			{
+				size_t shuffleIndex = 0;
+
+				next = m_playlist[this->steppedIndex(true, shuffleIndex)];
+				found = true;
+			}
+		}
+
+		/* NOTE: The store is asked outside the lock (it may start a load, and takes its own lock). */
+		auto track = found ? this->resolveTrack(next) : nullptr;
+
+		{
+			const MutexLock lock{m_stateAccess};
+
+			/* NOTE: The track held before leaves through the swap, and dies after the lock. */
+			m_preloadedTrack.swap(track);
+			m_releaseRequested = true;
+		}
+
+		m_fadeCv.notify_one();
+	}
+
+	void
+	TrackMixer::releaseUnusedMusics () const noexcept
+	{
+		if ( auto * musics = m_resourceManager.container< MusicResource >(); musics != nullptr )
+		{
+			musics->unloadUnusedResources();
+		}
+	}
+
 	bool
 	TrackMixer::play () noexcept
 	{
@@ -595,7 +703,8 @@ namespace EmEn::Audio
 			return true;
 		}
 
-		std::shared_ptr< MusicResource > track;
+		PlaylistEntry entry;
+		bool empty = true;
 
 		{
 			const MutexLock lock{m_stateAccess};
@@ -608,14 +717,22 @@ namespace EmEn::Audio
 					m_musicIndex = 0;
 				}
 
-				track = m_playlist[m_musicIndex];
+				entry = m_playlist[m_musicIndex];
+				empty = false;
 			}
 		}
 
-		if ( track == nullptr )
+		if ( empty )
 		{
 			Tracer::warning(ClassId, "The playlist is empty !");
 
+			return false;
+		}
+
+		const auto track = this->resolveTrack(entry);
+
+		if ( track == nullptr )
+		{
 			return false;
 		}
 
@@ -653,7 +770,9 @@ namespace EmEn::Audio
 			 * Without this, direct play(track) calls (e.g. from the console) leave
 			 * m_musicIndex stale, so nowPlaying/status/currentPosition/currentDuration
 			 * all report the previous track. SIZE_MAX signals "out of playlist". */
-			const auto entry = std::ranges::find(m_playlist, track);
+			const auto entry = std::ranges::find_if(m_playlist, [&track] (const PlaylistEntry & candidate) {
+				return candidate.held != nullptr ? candidate.held == track : candidate.name == track->name();
+			});
 
 			m_musicIndex = entry != m_playlist.end() ? static_cast< size_t >(entry - m_playlist.begin()) : std::numeric_limits< size_t >::max();
 
@@ -687,11 +806,16 @@ namespace EmEn::Audio
 				this->playPendingTrack(track.get());
 			}
 
+			/* NOTE: The entry after this one is asked from the store now: it is decoded when its turn comes. */
+			this->preloadNextTrack();
+
 			return true;
 		}
 
 		if ( success )
 		{
+			this->preloadNextTrack();
+
 			this->notifyTrackStarted(*track, switching);
 		}
 
@@ -816,8 +940,9 @@ namespace EmEn::Audio
 	bool
 	TrackMixer::playIndex (size_t index) noexcept
 	{
-		std::shared_ptr< MusicResource > track;
+		PlaylistEntry entry;
 		bool empty = false;
+		bool found = false;
 
 		{
 			const MutexLock lock{m_stateAccess};
@@ -827,7 +952,8 @@ namespace EmEn::Audio
 			if ( index < m_playlist.size() )
 			{
 				m_musicIndex = index;
-				track = m_playlist[index];
+				entry = m_playlist[index];
+				found = true;
 			}
 		}
 
@@ -838,53 +964,63 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		if ( track == nullptr )
+		if ( !found )
 		{
 			Tracer::warning(ClassId, "Invalid playlist index !");
 
 			return false;
 		}
 
-		return this->play(track);
+		const auto track = this->resolveTrack(entry);
+
+		return track != nullptr && this->play(track);
 	}
 
-	void
-	TrackMixer::stepIndex (bool forward) noexcept
+	size_t
+	TrackMixer::steppedIndex (bool forward, size_t & shuffleIndex) const noexcept
 	{
+		shuffleIndex = m_shuffleIndex;
+
 		/* NOTE: Handle shuffle mode. playlistChanged() keeps the order the size of the playlist. */
 		if ( m_shuffleEnabled && m_shuffleOrder.size() == m_playlist.size() )
 		{
 			if ( forward )
 			{
-				m_shuffleIndex = m_shuffleIndex + 1 < m_shuffleOrder.size() ? m_shuffleIndex + 1 : 0;
+				shuffleIndex = m_shuffleIndex + 1 < m_shuffleOrder.size() ? m_shuffleIndex + 1 : 0;
 			}
 			else
 			{
-				m_shuffleIndex = m_shuffleIndex == 0 || m_shuffleIndex > m_shuffleOrder.size() ? m_shuffleOrder.size() - 1 : m_shuffleIndex - 1;
+				shuffleIndex = m_shuffleIndex == 0 || m_shuffleIndex > m_shuffleOrder.size() ? m_shuffleOrder.size() - 1 : m_shuffleIndex - 1;
 			}
 
-			m_musicIndex = m_shuffleOrder[m_shuffleIndex];
-
-			return;
+			return m_shuffleOrder[shuffleIndex];
 		}
 
 		/* NOTE: A track played outside the playlist leaves the index at SIZE_MAX: the next one is the first. */
 		if ( forward )
 		{
-			m_musicIndex = m_musicIndex + 1 < m_playlist.size() ? m_musicIndex + 1 : 0;
+			return m_musicIndex + 1 < m_playlist.size() ? m_musicIndex + 1 : 0;
 		}
-		else
-		{
-			m_musicIndex = m_musicIndex == 0 || m_musicIndex >= m_playlist.size() ? m_playlist.size() - 1 : m_musicIndex - 1;
-		}
+
+		return m_musicIndex == 0 || m_musicIndex >= m_playlist.size() ? m_playlist.size() - 1 : m_musicIndex - 1;
+	}
+
+	void
+	TrackMixer::stepIndex (bool forward) noexcept
+	{
+		size_t shuffleIndex = 0;
+
+		m_musicIndex = this->steppedIndex(forward, shuffleIndex);
+		m_shuffleIndex = shuffleIndex;
 	}
 
 	bool
 	TrackMixer::stepTrack (bool forward) noexcept
 	{
-		std::shared_ptr< MusicResource > track;
+		PlaylistEntry entry;
 		size_t index = 0;
 		bool stopped = false;
+		bool empty = true;
 
 		{
 			const MutexLock lock{m_stateAccess};
@@ -901,11 +1037,12 @@ namespace EmEn::Audio
 
 				index = m_musicIndex;
 				stopped = m_userState == UserState::Stopped;
-				track = m_playlist[index];
+				entry = m_playlist[index];
+				empty = false;
 			}
 		}
 
-		if ( track == nullptr )
+		if ( empty )
 		{
 			Tracer::warning(ClassId, "The playlist is empty !");
 
@@ -920,7 +1057,8 @@ namespace EmEn::Audio
 			return true;
 		}
 
-		const bool success = this->play(track);
+		const auto track = this->resolveTrack(entry);
+		const bool success = track != nullptr && this->play(track);
 
 		/* NOTE: Notify that the track index has changed (for UI update). */
 		if ( success )
@@ -971,16 +1109,16 @@ namespace EmEn::Audio
 		{
 			const MutexLock lock{m_stateAccess};
 
-			/* NOTE: The track the source holds first: a track played by name outside the playlist has no index
-			 * (SIZE_MAX), so its duration read as 0 s and the console refused every seek ("between 0 and 0 seconds").
-			 * With no source playing, the playlist entry at the index, as before. */
+			/* NOTE: The track the source holds: a track played by name outside the playlist has no index (SIZE_MAX).
+			 * With no source playing there is no duration to give: a playlist entry is a name, or the resource of a
+			 * music outside the store. */
 			if ( m_playingMusic != nullptr )
 			{
 				track = m_playingMusic;
 			}
 			else if ( m_musicIndex < m_playlist.size() )
 			{
-				track = m_playlist[m_musicIndex];
+				track = m_playlist[m_musicIndex].held;
 			}
 		}
 
@@ -1031,23 +1169,24 @@ namespace EmEn::Audio
 			return false;
 		}
 
-		/* Resolve each track name against the MusicResource container BEFORE touching the current playlist,
-		 * so that a failed resolution never destroys user state. */
-		auto * musics = m_resourceManager.container< MusicResource >();
+		/* Check each track name against the MusicResource container BEFORE touching the current playlist,
+		 * so that a failed resolution never destroys user state. NOTE: Nothing is loaded here: an entry is a name,
+		 * its music is asked from the store when its turn comes (every track used to be decoded at this point). */
+		const auto * musics = m_resourceManager.container< MusicResource >();
 
-		std::vector< std::shared_ptr< MusicResource > > resolved;
+		std::vector< PlaylistEntry > resolved;
 		resolved.reserve(playlist->trackCount());
 
 		for ( const auto & trackName : playlist->trackNames() )
 		{
-			if ( !musics->isResourceExists(trackName) )
+			if ( musics == nullptr || !musics->isResourceExists(trackName) )
 			{
 				TraceWarning{ClassId} << "Playlist manifest '" << playlist->name() << "' references unknown track '" << trackName << "'. Skipped.";
 
 				continue;
 			}
 
-			resolved.push_back(musics->getResource(trackName));
+			resolved.push_back(PlaylistEntry{.name = trackName, .held = nullptr});
 		}
 
 		if ( resolved.empty() )
@@ -1075,9 +1214,13 @@ namespace EmEn::Audio
 			m_playlist = std::move(resolved);
 			m_loadedPlaylist = playlist;
 			m_musicIndex = 0;
+			m_preloadedTrack.reset();
+			m_releaseRequested = true;
 
 			this->playlistChanged();
 		}
+
+		m_fadeCv.notify_one();
 
 		TraceSuccess{ClassId} << "Loaded playlist '" << playlist->name() << "' with " << trackCount << " track(s).";
 
@@ -1102,22 +1245,25 @@ namespace EmEn::Audio
 
 		const auto needle = String::toLower(partialName);
 
-		const MutexLock lock{m_stateAccess};
+		PlaylistEntry found;
+		bool matched = false;
 
-		for ( const auto & track : m_playlist )
 		{
-			if ( track == nullptr )
-			{
-				continue;
-			}
+			const MutexLock lock{m_stateAccess};
 
-			if ( String::toLower(track->name()).find(needle) != std::string::npos )
+			for ( const auto & entry : m_playlist )
 			{
-				return track;
+				if ( String::toLower(entry.name).find(needle) != std::string::npos )
+				{
+					found = entry;
+					matched = true;
+
+					break;
+				}
 			}
 		}
 
-		return nullptr;
+		return matched ? this->resolveTrack(found) : nullptr;
 	}
 
 	void
@@ -1471,6 +1617,7 @@ namespace EmEn::Audio
 		while ( true )
 		{
 			bool playNext = false;
+			bool release = false;
 			bool busy = false;
 
 			{
@@ -1478,7 +1625,7 @@ namespace EmEn::Audio
 
 				/* NOTE: Returns false when the stop is requested (the predicate still false). */
 				if ( !m_fadeCv.wait(lock, stopToken, [this] () EMEN_REQUIRES(m_stateAccess) {
-					return m_isFading || m_requestNextTrack || m_streamA.music != nullptr || m_streamB.music != nullptr;
+					return m_isFading || m_requestNextTrack || m_releaseRequested || m_streamA.music != nullptr || m_streamB.music != nullptr;
 				}) )
 				{
 					return;
@@ -1490,13 +1637,20 @@ namespace EmEn::Audio
 				if ( m_requestNextTrack )
 				{
 					m_requestNextTrack = false;
-					playNext = m_userState != UserState::Stopped;
+
+					/* NOTE: A track the user asked for and which is still loading starts by itself when it is loaded
+					 * (playPendingTrack()): the playlist does not advance over it. The next entry used to start here
+					 * and supersede the request, which was lost. */
+					playNext = m_userState != UserState::Stopped && m_loadingTrack == nullptr;
 				}
 
 				if ( m_isFading )
 				{
 					this->fadeStep();
 				}
+
+				release = m_releaseRequested;
+				m_releaseRequested = false;
 
 				busy = m_isFading || m_streamA.music != nullptr || m_streamB.music != nullptr;
 			}
@@ -1505,6 +1659,13 @@ namespace EmEn::Audio
 			if ( playNext )
 			{
 				this->next();
+			}
+
+			/* NOTE: After next(): the track it starts is held by then. Outside the lock: the container takes its own,
+			 * and the samples of the musics nothing holds are freed here. */
+			if ( release )
+			{
+				this->releaseUnusedMusics();
 			}
 
 			if ( stopToken.stop_requested() )

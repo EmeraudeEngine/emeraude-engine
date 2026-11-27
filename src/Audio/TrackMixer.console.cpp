@@ -586,7 +586,7 @@ namespace EmEn::Audio
 			{
 				const auto * const marker = (index == current.trackIndex) ? " > " : "   ";
 
-				list << marker << (index + 1) << ". " << track->name() << "\n";
+				list << marker << (index + 1) << ". " << track << "\n";
 
 				index++;
 			}

@@ -127,10 +127,8 @@ namespace EmEn::Audio
 			/** @brief A consistent copy of the mixer state, taken under one lock (status()). */
 			struct Status final
 			{
-				/** @brief The playlist. */
-				std::vector< std::shared_ptr< MusicResource > > playlist;
-				/** @brief The playlist entry at the current index, nullptr when the index is outside the playlist. */
-				std::shared_ptr< MusicResource > currentTrack;
+				/** @brief The playlist: the resource name of each entry (an entry holds no loaded music). */
+				std::vector< std::string > playlist;
 				/** @brief The track the playing source holds (playing or paused), a playlist entry or not; nullptr when
 				 * no source holds one. */
 				std::shared_ptr< MusicResource > playingTrack;
@@ -278,6 +276,9 @@ namespace EmEn::Audio
 			 * @note Ad-hoc addition severs the link to any previously loaded playlist manifest
 			 *	   (loadedPlaylist() will return nullptr after this call). Use loadPlaylist() to
 			 *	   rebuild a playlist that is still backed by a named manifest.
+			 * @note The playlist keeps the NAME of a music of the store, and asks the store for it again when its turn
+			 * comes; a music the store does not hold (a file dropped on the window) cannot be asked again: the playlist
+			 * keeps the resource itself, decoded, for as long as the entry lives.
 			 * @param track A reference to a music resource.
 			 */
 			void addToPlaylist (const std::shared_ptr< MusicResource > & track) noexcept;
@@ -286,7 +287,8 @@ namespace EmEn::Audio
 			 * @brief Replaces the current playlist with the content of a PlaylistResource manifest.
 			 * @note Semantics:
 			 *	   - Captures whether playback was active before any mutation.
-			 *	   - Resolves every track name via the MusicResource container; unknown entries are skipped with a warning.
+			 *	   - Checks every track name against the MusicResource container (nothing is loaded: an entry is a name);
+			 *		 unknown entries are skipped with a warning.
 			 *	   - If the manifest is null or resolves to zero valid tracks, the previous playlist is left intact and the call returns false.
 			 *	   - Otherwise: stops current playback, clears the playlist, refills it from the resolved tracks, and if playback was active
 			 *		 AND the new playlist is non-empty, starts from index 0 via playIndex(0).
@@ -329,18 +331,12 @@ namespace EmEn::Audio
 			}
 
 			/**
-			 * @brief Returns a copy of the playlist.
+			 * @brief Returns the playlist: the resource name of each entry.
 			 * @note A copy, never a reference: another thread may change the playlist while the caller reads it.
-			 * @return std::vector< std::shared_ptr< MusicResource > >
+			 * @return std::vector< std::string >
 			 */
 			[[nodiscard]]
-			std::vector< std::shared_ptr< MusicResource > >
-			playlist () const noexcept
-			{
-				const Base::MutexLock lock{m_stateAccess};
-
-				return m_playlist;
-			}
+			std::vector< std::string > playlist () const noexcept;
 
 			/**
 			 * @brief Returns the playlist size.
@@ -380,6 +376,7 @@ namespace EmEn::Audio
 			 * @note Intended for remote-console and AI-driven workflows where the caller provides an approximate
 			 *	   title, e.g. "Volcanian" resolves to "Kyrandia2/Volcanian Salesperson". Matching is restricted
 			 *	   to the currently loaded playlist — not the full MusicResource container.
+			 * @note The store is asked for the entry found: its load starts if it was not loaded.
 			 * @param partialName A partial or full track resource name. Empty input yields a nullptr result.
 			 * @return std::shared_ptr< MusicResource > The first matching track, or nullptr if no entry matches.
 			 */
@@ -448,8 +445,8 @@ namespace EmEn::Audio
 
 			/**
 			 * @brief Returns the duration of the current track in seconds.
-			 * @note The track the source holds (Status::playingTrack), in the playlist or not; with no source playing,
-			 * the playlist entry at the current index. 0 when there is neither.
+			 * @note The track the source holds (Status::playingTrack), in the playlist or not. 0 when no source holds
+			 * one: a playlist entry is a name, its duration is not known before it is loaded.
 			 * @return float
 			 */
 			[[nodiscard]]
@@ -543,6 +540,20 @@ namespace EmEn::Audio
 				size_t consumedFrames{0};
 				/** @brief True once the last chunk was queued in Once mode: nothing more to feed. */
 				bool exhausted{false};
+			};
+
+			/**
+			 * @brief One entry of the playlist: a music by its resource name.
+			 * @note The mixer holds a loaded music for the track it plays, the one it fades out and the next one only
+			 * (m_playingMusic, the streams, m_preloadedTrack): the others are asked from the store when their turn comes.
+			 */
+			struct PlaylistEntry final
+			{
+				/** @brief The resource name. */
+				std::string name;
+				/** @brief The resource itself, for a music the store does not hold (it could not be asked again);
+				 * nullptr for a music of the store. */
+				std::shared_ptr< MusicResource > held;
 			};
 
 			/** @brief The period of the event thread while a track is held or a fade runs. */
@@ -688,6 +699,39 @@ namespace EmEn::Audio
 			void stepIndex (bool forward) noexcept EMEN_REQUIRES(m_stateAccess);
 
 			/**
+			 * @brief Returns the index stepIndex() would move to, without moving.
+			 * @pre The playlist is not empty.
+			 * @param forward True for the next entry.
+			 * @param shuffleIndex Where the place in the shuffle order it would move to is written.
+			 * @return size_t The playlist index.
+			 */
+			[[nodiscard]]
+			size_t steppedIndex (bool forward, size_t & shuffleIndex) const noexcept EMEN_REQUIRES(m_stateAccess);
+
+			/**
+			 * @brief Returns the loaded (or loading) music of a playlist entry: the one the entry holds, or the store's.
+			 * @note It asks the resource container, which may start a load: never called with m_stateAccess held.
+			 * @param entry A reference to a COPY of the entry.
+			 * @return std::shared_ptr< MusicResource >
+			 */
+			[[nodiscard]]
+			std::shared_ptr< MusicResource > resolveTrack (const PlaylistEntry & entry) const noexcept EMEN_EXCLUDES(m_stateAccess);
+
+			/**
+			 * @brief Asks the store for the entry that follows the current one and holds it (m_preloadedTrack): it is
+			 * decoded when its turn comes. The track held before is let go.
+			 * @note Called after a track started. Never called with m_stateAccess held.
+			 */
+			void preloadNextTrack () noexcept EMEN_EXCLUDES(m_stateAccess);
+
+			/**
+			 * @brief Makes the music container forget every music nothing holds any more (their samples are freed).
+			 * @note The event thread calls it after a stream closed or the preloaded track changed
+			 * (m_releaseRequested). Never called with m_stateAccess held.
+			 */
+			void releaseUnusedMusics () const noexcept EMEN_EXCLUDES(m_stateAccess);
+
+			/**
 			 * @brief Plays the next or the previous entry (or only moves the index when stopped), then notifies.
 			 * @param forward True for the next entry.
 			 * @return bool
@@ -723,12 +767,14 @@ namespace EmEn::Audio
 			std::unique_ptr< Source > m_trackB EMEN_PT_GUARDED_BY(m_stateAccess);
 			TrackStream m_streamA EMEN_GUARDED_BY(m_stateAccess);
 			TrackStream m_streamB EMEN_GUARDED_BY(m_stateAccess);
-			std::vector< std::shared_ptr< MusicResource > > m_playlist EMEN_GUARDED_BY(m_stateAccess);
+			std::vector< PlaylistEntry > m_playlist EMEN_GUARDED_BY(m_stateAccess);
 			std::shared_ptr< PlaylistResource > m_loadedPlaylist EMEN_GUARDED_BY(m_stateAccess);
 			std::shared_ptr< MusicResource > m_loadingTrack EMEN_GUARDED_BY(m_stateAccess);
 			/** @brief The track the playing source holds (startTrack()), whatever the playlist index: a track played
 			 * outside the playlist has no index (SIZE_MAX). Empty whenever m_playingTrack is None. */
 			std::shared_ptr< MusicResource > m_playingMusic EMEN_GUARDED_BY(m_stateAccess);
+			/** @brief The entry that follows the current one, asked from the store ahead of its turn. */
+			std::shared_ptr< MusicResource > m_preloadedTrack EMEN_GUARDED_BY(m_stateAccess);
 			std::vector< size_t > m_shuffleOrder EMEN_GUARDED_BY(m_stateAccess);
 			std::mt19937 m_shuffleGenerator EMEN_GUARDED_BY(m_stateAccess){std::random_device{}()};
 			size_t m_musicIndex EMEN_GUARDED_BY(m_stateAccess){0};
@@ -738,6 +784,8 @@ namespace EmEn::Audio
 			PlayMode m_playMode EMEN_GUARDED_BY(m_stateAccess){PlayMode::Loop};
 			PlayingTrack m_playingTrack EMEN_GUARDED_BY(m_stateAccess){PlayingTrack::None};
 			bool m_requestNextTrack EMEN_GUARDED_BY(m_stateAccess){false};
+			/** @brief True when a music may have lost its last holder: the event thread then empties the container of them. */
+			bool m_releaseRequested EMEN_GUARDED_BY(m_stateAccess){false};
 			bool m_crossFaderEnabled EMEN_GUARDED_BY(m_stateAccess){false};
 			bool m_isFading EMEN_GUARDED_BY(m_stateAccess){false};
 			bool m_shuffleEnabled EMEN_GUARDED_BY(m_stateAccess){false};
