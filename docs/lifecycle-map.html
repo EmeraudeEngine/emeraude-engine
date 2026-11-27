@@ -645,9 +645,7 @@ const NOTES = [
 	["note", "Resources holds references to two later services", "Resources::Manager (primary, started at the base level) is constructed with references to Graphics::Renderer and Audio::Manager (secondary, started later, terminated earlier), and the Renderer holds one back to Resources. That is why terminate() stops the resource jobs first and unloads resources after every secondary service. The architecture graph draws these back-references in amber."],
 	["note", "Physics::Manager's compute context has no consumer found", "It sets up a compute device, transfer and layout sub-services, but the simulation is scene-side on the logic thread. Scaffolding for a GPU physics path, or dead weight: to confirm."],
 	["note", "Network commands wait for the main-loop timeout", "Nothing was found that wakes the main loop when a TCP or MCP command arrives (not certain): a command would wait up to one main-loop period."],
-	["note", "Stale document", "docs/subsystems/graphics/13-12-post-processing-effects/09-available-effects.md lists FogEnvironment, which no longer exists."],
 	["race", "Open race: renderer program and pipeline caches", "docs/todo/renderer-program-and-pipeline-caches-thread-audit.md: m_programs, m_graphicsPipelines and m_failedPrograms have no lock."],
-	["race", "Open race: per-light descriptor set at load time", "docs/todo/lighten-marbles-perlight-descriptor-race.md (high): a terrain drawn once before its PerLight set exists."],
 	["race", "Related open items", "docs/todo/wayland-surface-lost-protocol-error.md (in progress, S10), docs/todo/rt-device-lost-game-logic.md (likely covered by the upload frontier). Closed on 2026-11-16 as a limit of the software Vulkan driver, not an engine race: a ray-traced scene kills llvmpipe (docs/caution-points.md, the software device gives a ray-query hit the identity of another instance)."]
 ];
 

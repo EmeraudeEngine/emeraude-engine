@@ -48,7 +48,23 @@
 | **RTContactShadows** | `Effects/Lighting/RTContactShadows.hpp/cpp` | Multi-pass, HALF-res | Depth, Normals (READ since Sep 2026 — the ray origin's normal offset), MaterialProps, LightSet, RT (TLAS+SSBOs) |
 | **SSContactShadows** | `Effects/Lighting/SSContactShadows.hpp/cpp` | Multi-pass, FULL-res | Depth, Normals, MaterialProps (combine only), LightSet |
 | **LensFlare** | `Effects/Camera/LensFlare.hpp/cpp` | 2 passes, half res (source + ghosts) | Depth (the sun probe), HDR; the main directional light is OPTIONAL (it is the injected sun) |
-| **FogEnvironment** | `Effects/Atmosphere/FogEnvironment.hpp/cpp` | 1-pass | Depth |
+| **VolumetricScattering** | `Effects/Atmosphere/VolumetricScattering.hpp/cpp` | 1-pass (one output target): the world-space single scattering through the scene's participating medium, the physical sibling of AtmosphericFog | Depth, HDR, MaterialProps, LightSet |
+| **StarField** | `Effects/Atmosphere/StarField.hpp/cpp` | 1-pass: the stars of a physical sky's catalogue drawn as points on the sky pixels (graphics doc 42 § The stars) | Depth, HDR |
+| **LightGlints** | `Effects/Lighting/LightGlints.hpp/cpp` | 1-pass: the visible source of the point and spot lights that declare one (graphics doc 43) | Depth, HDR |
+| **TAA** | `Effects/Resolve/TAA.hpp/cpp` | 1-pass HDR resolve, before DepthOfField / ToneMapping (topic 06 of this directory) | HDR, Depth, Velocity, **projection jitter** |
+
+The table above lists the effects that own render targets (the multi-pass family). The DIRECT effects
+(`Graphics::DirectPostProcessEffect`) own none: each one generates GLSL injected into the FINAL post-process
+fragment shader — zero extra pass, zero target. The final pass runs after the chain above, so behind a
+`ToneMapping` they work on display-referred values (the `Resolve` ones are written for that):
+
+| Directory | Effects |
+|---|---|
+| `Effects/Resolve/` | `FXAA` (3.11 Quality 12), `Sharpen` (CAS-style), `FXAASharpen` (both in one) |
+| `Effects/Style/` | `BlackAndWhite`, `ChromaBleeding`, `ChromaticAberration`, `ColorGrading`, `CRTPhosphor`, `Dithering`, `DustAndHair`, `FilmGrain`, `Flicker`, `FrameMasking`, `PhosphorBloom`, `Pixelation`, `Retro`, `Scanlines`, `SignalGhosting`, `VerticalJitter`, `VHSAberration`, `Vignetting` |
+
+(`Effects/Shared/` holds GLSL fragments shared by the effects, not effects. `FogEnvironment`, listed here until
+2026-11-27, no longer exists: `AtmosphericFog` and `VolumetricScattering` are the fog of today.)
 
 The quality keys an effect reads with `getOrSetDefault()` are BOUNDED (triad 7f, owner ruling 2026-10-01): outside
 its range a value warns and takes the default (`Settings::getOrSetDefaultInRange()`, the ranges beside the

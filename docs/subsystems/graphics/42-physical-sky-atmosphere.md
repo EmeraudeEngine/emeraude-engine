@@ -119,6 +119,10 @@ accessors — read in the code, never reported.
   `getDynamicSky` answers the material and its planet, 0 `VUID-`.
   ⚠️ The binary BEFORE the change was not run again that day: the proof is the reports of 2026-11-16 and their absence
   after.
+- Windows (engine 84503fe7, RTX 3500 Ada, MSVC 19.44 `/W4 /WX`, 2026-11-27): Release and Debug without a warning;
+  `sky-lab` and `city` drawn (the day sky with its sun, the city at night), `getDynamicSky` answers the same JSON as
+  Linux, the material loaded before its sky and the sky before the clock follows its atmosphere, 0 `VUID-`. No
+  ThreadSanitizer there.
 
 ### The frame
 1. The renderer finds a `DynamicSkyResource` background, reads the scene's `SkyState` at the frame's read state
