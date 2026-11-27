@@ -30,15 +30,41 @@
 #include "emeraude_export.hpp"
 
 /* STL inclusions. */
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <filesystem>
 #include <memory>
 #include <vector>
 
+/* Local inclusions for inheritances. */
+#include "ObserverTrait.hpp"
+
 /* Local inclusions for usages. */
-#include "AmbienceChannel.hpp"
+#include "AmbienceChannel.hpp" // IWYU pragma: keep (the inline constructor needs the complete type of the std::vector< AmbienceChannel > member when a consumer builds with exceptions)
 #include "AmbienceSound.hpp"
-#include "Manager.hpp"
+#include "BaseUtility.hpp"
+
+/* Forward declarations. */
+namespace EmEn
+{
+	namespace Audio
+	{
+		namespace Filters
+		{
+			class Abstract;
+		}
+
+		class Manager;
+		class SoundResource;
+		class Source;
+	}
+
+	namespace Resources
+	{
+		class Manager;
+	}
+}
 
 namespace EmEn::Audio
 {
@@ -195,6 +221,55 @@ namespace EmEn::Audio
 			 * @return bool
 			 */
 			bool setLoopSound (const std::shared_ptr< SoundResource > & soundResource, float gain = DefaultGain) noexcept;
+
+			/**
+			 * @brief Removes the loop sound: an ambience started afterwards has no loop channel.
+			 * @note It does not touch a loop already playing: stop the ambience first (the console command does).
+			 */
+			void
+			removeLoopSound () noexcept
+			{
+				m_loopSound.reset();
+			}
+
+			/**
+			 * @brief Returns the loop sound.
+			 * @return const std::shared_ptr< SoundResource > & A null pointer when the ambience has no loop.
+			 */
+			[[nodiscard]]
+			const std::shared_ptr< SoundResource > &
+			loopSound () const noexcept
+			{
+				return m_loopSound;
+			}
+
+			/**
+			 * @brief Changes the gain of the loop channel, on the loop being played too: no cut, the gain to tune by ear.
+			 * @param gain The gain, clamped to [0, 1]; a value that is not finite is ignored.
+			 */
+			void setLoopGain (float gain) noexcept;
+
+			/**
+			 * @brief Returns the gain of the loop channel.
+			 * @return float
+			 */
+			[[nodiscard]]
+			float
+			loopGain () const noexcept
+			{
+				return m_loopedChannelGain;
+			}
+
+			/**
+			 * @brief Returns the number of sound effects of the ambience list.
+			 * @return size_t
+			 */
+			[[nodiscard]]
+			size_t
+			soundCount () const noexcept
+			{
+				return m_soundEffects.size();
+			}
 
 			/**
 			 * @brief Adds a sound effect to the ambience list.

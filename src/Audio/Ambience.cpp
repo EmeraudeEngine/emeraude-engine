@@ -26,15 +26,35 @@
 
 #include "Ambience.hpp"
 
+/* Project configuration. */
+#include "emeraude_config.hpp"
+
 /* STL inclusions. */
+#include <algorithm>
 #include <cmath>
-#include <ranges>
+#include <functional>
+#include <optional>
+#include <string>
+#include <utility>
+
+/* Third-party inclusions. */
+#include "json/json.h"
 
 /* Local inclusions. */
+#include "Audio/AmbienceChannel.hpp"
+#include "Audio/AmbienceSound.hpp"
 #include "Audio/Manager.hpp"
+#include "Audio/SoundResource.hpp"
+#include "Audio/Source.hpp"
+#include "Audio/Types.hpp"
+#include "BlobTrait.hpp"
 #include "Constants.hpp"
 #include "FastJSON.hpp"
+#include "Logging/Severity.hpp"
+#include "ObservableTrait.hpp"
+#include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
+#include "Resources/ResourceTrait.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio
@@ -156,6 +176,22 @@ namespace EmEn::Audio
 		m_loopedChannelGain = gain;
 
 		return true;
+	}
+
+	void
+	Ambience::setLoopGain (float gain) noexcept
+	{
+		if ( !std::isfinite(gain) )
+		{
+			return;
+		}
+
+		m_loopedChannelGain = std::clamp(gain, 0.0F, 1.0F);
+
+		if ( m_loopedSource != nullptr )
+		{
+			m_loopedSource->setGain(m_loopedChannelGain);
+		}
 	}
 
 	bool

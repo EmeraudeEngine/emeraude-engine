@@ -54,6 +54,7 @@
 #include "volk.h"
 
 /* Local inclusions. */
+#include "Audio/Ambience.hpp"
 #include "Audio/SoundResource.hpp"
 #include "Component/Camera.hpp" // IWYU pragma: keep (componentBuilder< Component::Camera > needs the complete type)
 #include "Component/CharacterController.hpp"
@@ -2051,6 +2052,192 @@ namespace EmEn::Scenes
 				return Console::CommandResult::info("World sounds playing: " + std::to_string(activeScene->activeWorldSoundCount()) + " / " + std::to_string(Scene::MaxWorldSounds) + ".");
 			}, Console::CommandResult::warning("No active scene !"));
 		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("playSoundAt", "Plays a sound of the Sounds store once at a world position of the active scene, as a world sound (Scene::playSoundAt(): one of the scene's 16 voices, placed in the world, with its path to the listener across a sea's surface). getWorldSoundCount tells how many still play.",
+			{
+				{"sound", "The resource name of a sound in the Sounds store."},
+				{"x", "The world X coordinate."},
+				{"y", "The world Y coordinate (up)."},
+				{"z", "The world Z coordinate."},
+				{"gain", "The gain, 0 to 1. Default 1."},
+				{"pitch", "The pitch, above 0 and up to 4. Default 1."}
+			},
+			[this, inActiveScene] (const std::string & sound, float positionX, float positionY, float positionZ, const std::optional< float > & gain, const std::optional< float > & pitch) {
+				const auto soundGain = gain.value_or(1.0F);
+				const auto soundPitch = pitch.value_or(1.0F);
+
+				if ( !std::isfinite(positionX) || !std::isfinite(positionY) || !std::isfinite(positionZ) )
+				{
+					return Console::CommandResult::error("Refused: the coordinates must be finite !");
+				}
+
+				if ( !std::isfinite(soundGain) || soundGain < 0.0F || soundGain > 1.0F )
+				{
+					return Console::CommandResult::error("Refused: the gain must be a number from 0 to 1 !");
+				}
+
+				if ( !std::isfinite(soundPitch) || soundPitch <= 0.0F || soundPitch > 4.0F )
+				{
+					return Console::CommandResult::error("Refused: the pitch must be a number above 0 and up to 4 !");
+				}
+
+				auto * sounds = m_resourceManager.container< Audio::SoundResource >();
+
+				/* NOTE: A trust boundary: an unknown name is refused, never the default sound silently. */
+				if ( sounds == nullptr || !sounds->isResourceExists(sound) )
+				{
+					return Console::CommandResult::error("Refused: no sound named '" + sound + "' in the Sounds store !");
+				}
+
+				/* NOTE: Loaded here, with no access to the scene held: a world sound is an event of now, the scene does
+				 * not play one that is still loading. */
+				const auto resource = sounds->getResource(sound, false);
+
+				if ( resource == nullptr || !resource->isLoaded() )
+				{
+					return Console::CommandResult::error("Unable to load the sound '" + sound + "' !");
+				}
+
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					const auto playingBefore = activeScene->activeWorldSoundCount();
+
+					activeScene->playSoundAt(Math::Vector< 3, float >{positionX, positionY, positionZ}, resource, soundGain, soundPitch);
+
+					if ( activeScene->activeWorldSoundCount() <= playingBefore )
+					{
+						return Console::CommandResult::warning("The sound '" + sound + "' was not played: no free world voice or no free audio source.");
+					}
+
+					return Console::CommandResult::success("World sound '" + sound + "' played.");
+				});
+			});
+
+		this->bindCommand("getAmbience", "Returns the ambience of the active scene as JSON: whether it 'exists', its 'state' (Stopped, Playing, Paused), its 'loop' (the sound's resource name, or null) and 'loopGain', its 'channelCount', 'soundCount' (the sound effects played at random) and 'radius' (m).", [inActiveScene] () {
+			return inActiveScene([] (const std::shared_ptr< Scene > & activeScene) {
+				Json::Value answer{Json::objectValue};
+				answer["exists"] = activeScene->hasAmbience();
+
+				if ( activeScene->hasAmbience() )
+				{
+					const auto & ambience = activeScene->ambience();
+
+					switch ( ambience.state() )
+					{
+						case Audio::Ambience::State::Stopped :
+							answer["state"] = "Stopped";
+							break;
+
+						case Audio::Ambience::State::Playing :
+							answer["state"] = "Playing";
+							break;
+
+						case Audio::Ambience::State::Paused :
+							answer["state"] = "Paused";
+							break;
+					}
+
+					answer["loop"] = ambience.loopSound() != nullptr ? Json::Value{ambience.loopSound()->name()} : Json::Value{Json::nullValue};
+					answer["loopGain"] = static_cast< double >(ambience.loopGain());
+					answer["channelCount"] = static_cast< Json::UInt64 >(ambience.channelCount());
+					answer["soundCount"] = static_cast< Json::UInt64 >(ambience.soundCount());
+					answer["radius"] = static_cast< double >(ambience.radius());
+				}
+
+				return Console::CommandResult::json(FastJSON::stringify(answer));
+			});
+		}, Console::CommandHint::ReadOnly);
+
+		this->bindCommand("setAmbienceLoop", "Gives the ambience of the active scene its loop: a sound of the Sounds store played in a loop, not placed in the world, and its gain. The same sound as the current loop only changes the gain, without a cut (the gain to tune by ear); another sound restarts a playing ambience; an empty name removes the loop. getAmbience answers both.",
+			{
+				{"sound", "The resource name of a sound in the Sounds store; an empty name removes the loop."},
+				{"gain", "The gain of the loop, 0 to 1."}
+			},
+			[this, inActiveScene] (const std::string & sound, float gain) {
+				if ( !std::isfinite(gain) || gain < 0.0F || gain > 1.0F )
+				{
+					return Console::CommandResult::error("Refused: the gain must be a number from 0 to 1 !");
+				}
+
+				std::shared_ptr< Audio::SoundResource > resource;
+
+				if ( !sound.empty() )
+				{
+					auto * sounds = m_resourceManager.container< Audio::SoundResource >();
+
+					/* NOTE: A trust boundary: an unknown name is refused, never the default sound silently. */
+					if ( sounds == nullptr || !sounds->isResourceExists(sound) )
+					{
+						return Console::CommandResult::error("Refused: no sound named '" + sound + "' in the Sounds store !");
+					}
+
+					resource = sounds->getResource(sound);
+				}
+
+				return inActiveScene([&] (const std::shared_ptr< Scene > & activeScene) {
+					auto & ambience = activeScene->ambience();
+
+					/* NOTE: The same loop: its gain alone, on the source that plays it. */
+					if ( resource != nullptr && resource == ambience.loopSound() )
+					{
+						ambience.setLoopGain(gain);
+
+						return Console::CommandResult::success("Ambience loop gain set.");
+					}
+
+					/* NOTE: Another loop, or none: the sources are given back and taken again around the change. A paused
+					 * ambience is left stopped. */
+					const auto restart = ambience.isPlaying();
+
+					ambience.stop();
+
+					if ( resource == nullptr )
+					{
+						ambience.removeLoopSound();
+					}
+					else if ( !ambience.setLoopSound(resource, gain) )
+					{
+						return Console::CommandResult::error("Unable to set the ambience loop !");
+					}
+
+					if ( restart )
+					{
+						ambience.start();
+					}
+
+					return Console::CommandResult::success(resource == nullptr ? "Ambience loop removed." : "Ambience loop set.");
+				});
+			}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("startAmbience", "Starts the ambience of the active scene (its loop and its random sound effects). Nothing happens when it already plays.", [inActiveScene] () {
+			return inActiveScene([] (const std::shared_ptr< Scene > & activeScene) {
+				if ( !activeScene->hasAmbience() )
+				{
+					return Console::CommandResult::error("The active scene has no ambience (setAmbienceLoop gives it one) !");
+				}
+
+				activeScene->startAmbience();
+
+				if ( !activeScene->ambience().isActive() )
+				{
+					return Console::CommandResult::warning("The ambience did not start: it has no loop and no sound effect, or no audio source was free.");
+				}
+
+				return Console::CommandResult::success("Ambience started.");
+			});
+		}, Console::CommandHint::Idempotent);
+
+		this->bindCommand("stopAmbience", "Stops the ambience of the active scene: every sound of it, its audio sources given back.", [inActiveScene] () {
+			return inActiveScene([] (const std::shared_ptr< Scene > & activeScene) {
+				if ( !activeScene->hasAmbience() )
+				{
+					return Console::CommandResult::error("The active scene has no ambience !");
+				}
+
+				activeScene->stopAmbience();
+
+				return Console::CommandResult::success("Ambience stopped.");
+			});
+		}, Console::CommandHint::Idempotent);
 
 		/* NOTE: The compass is a Core-level debug display, bound to F9 on the keyboard. The console
 		 * keeps its OWN entry point: it is the deterministic way to drive it (an injected keyPress()

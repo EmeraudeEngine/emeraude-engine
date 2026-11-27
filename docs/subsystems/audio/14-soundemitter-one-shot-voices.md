@@ -58,7 +58,31 @@ its smoke grenade lost its ignition hiss at once (the grenade, and its emitter, 
   destructor give them all back (never resumed: events of the moment).
 - `Audio::Source::isFinished()` (neither playing nor paused) is the release test of both the emitter's one-shots and
   the world sounds.
-- Console: `getWorldSoundCount()` (read-only).
+- Console: `getWorldSoundCount()` (read-only); `playSoundAt(sound, x, y, z [, gain, pitch])` (2026-11-27) plays a
+  sound of the Sounds store as a world sound — the name checked (an unknown one is refused, never the default
+  sound), the sound loaded BEFORE the scene is entered (the scene does not play a sound still loading), a gain
+  outside [0, 1], a pitch outside ]0, 4] or a coordinate that is not finite refused; it answers a warning when no
+  world voice or no audio source was free.
+
+### The scene's ambience from the console (2026-11-27)
+
+`Audio::Ambience` (a scene's loop and its random sound effects) had no command: its loop's gain could not be tuned
+while listening, and a measurement of another sound had to switch it off with a temporary probe.
+
+- `getAmbience()` (read-only): `exists`, `state` (Stopped / Playing / Paused), `loop` (the resource name, or null),
+  `loopGain`, `channelCount`, `soundCount`, `radius`.
+- `setAmbienceLoop(sound, gain)`: the SAME sound as the current loop changes its gain alone, on the source that plays
+  it (`Ambience::setLoopGain()`, new) — no cut; another sound stops the ambience, changes the loop and starts it
+  again when it was playing (a paused ambience is left stopped); an empty name removes the loop
+  (`Ambience::removeLoopSound()`, new). An unknown name and a gain outside [0, 1] are refused.
+- `startAmbience()` / `stopAmbience()`: `startAmbience` answers a warning when the ambience has nothing to play.
+- Every command runs under the scene's exclusive access (the logic thread updates the ambience).
+- Measured (Linux, `water-world`, the mix written whole): the loop `wind1` over ONE whole period of it (6.84 s, so
+  the phase does not matter) at the gains 1.0 / 0.5 / 0.25: −30.07 / −36.09 / −42.11 dBFS, −6.02 and −12.04 dB; the
+  longest run of exact zeros around each change 0.02 ms (one sample): no cut. The answers of `getAmbience` follow
+  every command; `tools/mcp-conformance.py`: 2140 checks passed, 0 failed.
+  ⚠️ A loop whose level moves (the surf of `water-world`: 2.3 dB between two 5 s windows) cannot prove a gain change
+  on two different stretches: measure whole periods, or the same stretch.
 
 Measured (projet-alpha, Linux Release, test ports, 2026-10-24): citadel, 5 rockets in 0.4 s → 5 world blasts, released
 as they end; 8 smoke grenades → their hisses (2-3 at once) now heard to the end; lighten-marbles, 14 marble explosions

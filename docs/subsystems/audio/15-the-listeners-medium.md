@@ -106,6 +106,7 @@ notifies since (scenes doc 11 § *Every displacement notifies*): `Component::Sou
   listener are on opposite sides of it; `setSeaSound` keeps them. `setSubmergedSound(sound, gain)`: the loop heard
   under the sea (an unknown name is refused, an empty one removes it). `getSea()` answers all four in `sound`
   (`crossingGain`, `crossingGainHF`, `submergedSound`, `submergedGain`).
+- `playSoundAt(sound, x, y, z [, gain, pitch])` on the scene service: a world sound at a position (doc 14).
 - `SoundEmitter.play(entity, component, sound, gain, loop)`: a sound of the Sounds store on an emitter (an unknown
   name is refused); `getState` gains `awaitingLoad`.
   Proven on a sound never requested (2026-11-26, `psycho`, 224 s, loaded in 3.6 s): `play` answers `awaitingLoad`
@@ -161,8 +162,15 @@ change): a temporary probe moved 30 m up or down the POSITION GIVEN TO `soundPat
   - With the reverberation at its default (0.5) the sea loop does NOT lose its low band under water: +3.5 dB at
     125-500 Hz on Linux, +2.6 dB at 60-250 Hz on Windows — the wet send adds what the direct path loses.
 - 0 `VUID-` in every launch; the console refuses an unknown sound name.
-- ⚠️ NOT proven by a run: the path of a WORLD sound (`playSoundAt()`): no console command plays one (engine item
-  `console-commands-for-world-sounds-and-ambience`).
+- The path of a WORLD sound (`playSoundAt()`), proven on 2026-11-27 with the console command of that day
+  (`playSoundAt("wind1", …)`, the ambience stopped and the submerged sound removed: the floor is digital silence;
+  the sound 1.5 m above then 1.5 m below the listener, itself 0.75 m from the surface; power from 1.0 to 3.5 s of
+  each play): listener in the air, source under against source in the air −10.5 / −12.3 / −23.3 / −40.1 dB; listener
+  under (no reverberation), source in the air against source under −22.3 / −32.4 / −36.5 / −36.5 dB — the figures of
+  the sound emitter above, to 0.1 dB.
+  ⚠️ `wind1` lasts 6.8 s: a second sound played 5 s after the first overlaps its tail, and the comparison then reads
+  about −4.5 dB flat in every band (measured twice before the cause was found). Let a sound END before the next one
+  (`getWorldSoundCount()` answers 0).
 - macOS (engine 6cd9fa04, Apple M6, MoltenVK, Apple clang 21 with `-Werror -Wthread-safety`, 2026-11-27): Release
   and Debug without a warning; `water-world` with the recorder off: `getSea()` reports the crossing gains and the
   submerged sound, `setSeaSoundCrossing(2, 0.2)` and an unknown sound name are refused, two dives and returns —

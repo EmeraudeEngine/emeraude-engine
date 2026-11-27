@@ -21,8 +21,8 @@ owner at his desk: the mechanism is measured, the values are not a decision.
 
 - The owner listens on a running scene, with a source on the other side of the surface, both ways (the listener in
   the air, then under the level): `setSeaSoundCrossing(gain, gainHF)`, `getSea()`. A world sound placed by the
-  console would do it (engine item `console-commands-for-world-sounds-and-ambience`); a sound emitter on an entity
-  under the sea does it today.
+  console does it: `playSoundAt(sound, x, y, z)` on the scene service, a position on the other side of the level
+  (`stopAmbience()` and `setSubmergedSound("", 0)` first to hear it alone).
 - ⚠️ To weigh while listening: under the level the two high-frequency gains MULTIPLY (the medium's 0.02 × the
   crossing's 0.05) and the shelf then takes 22 dB off the 125-500 Hz band, not 10.5 (measured, doc 15). Whether a
   source in the air heard from under water should take both, or the crossing alone, is the owner's call.
