@@ -2929,8 +2929,11 @@ namespace EmEn::Scenes
 		/* The environment cubemap can now be fetched from the visual component.
 		 * ⚠️ A background may have none (AbstractBackground::environmentCubemap() answers nullptr: a physical sky,
 		 * Renderable::DynamicSkyResource): the scene then keeps the one it has, as setBackground() does. Taken
-		 * unchecked, the null was dereferenced on the first frame (2026-10-24). */
-		if ( m_environmentCubemap != nullptr && m_sceneVisualComponents[0] != nullptr && renderableInstance == m_sceneVisualComponents[0]->getRenderableInstance() )
+		 * unchecked, the null was dereferenced on the first frame (2026-10-24).
+		 * NOTE: Only once the background published itself: this function is also reached for every instance when a
+		 * render target appears, the background still loading or not (see Scene::setBackground()). */
+		if ( m_environmentCubemap != nullptr && m_backgroundResource != nullptr && m_backgroundResource->isReadyForInstantiation()
+			&& m_sceneVisualComponents[0] != nullptr && renderableInstance == m_sceneVisualComponents[0]->getRenderableInstance() )
 		{
 			if ( auto cubemap = m_backgroundResource->environmentCubemap(); cubemap != nullptr )
 			{

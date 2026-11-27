@@ -327,8 +327,12 @@ namespace EmEn::Scenes
 		/* The sky IS scene content for a probe: on-demand render targets are re-baked. */
 		this->signalOnDemandRenderTargets();
 
-		/* Extract environment cubemap from background if available. */
-		if ( background != nullptr )
+		/* Extract environment cubemap from background if available.
+		 * NOTE: Only from a background which published itself (isReadyForInstantiation(), stored LAST by its load):
+		 * until then a pool thread is assigning the background's cubemap and creating its texture, and reading
+		 * either from here raced it (ThreadSanitizer, 2026-11-27). A background still loading is adopted later by
+		 * getRenderableInstanceReadyForRendering(), as before. */
+		if ( background != nullptr && background->isReadyForInstantiation() )
 		{
 			if ( const auto cubemap = background->environmentCubemap(); cubemap != nullptr )
 			{

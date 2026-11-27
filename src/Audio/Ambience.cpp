@@ -26,9 +26,6 @@
 
 #include "Ambience.hpp"
 
-/* Project configuration. */
-#include "emeraude_config.hpp"
-
 /* STL inclusions. */
 #include <algorithm>
 #include <cmath>
@@ -51,10 +48,9 @@
 #include "Constants.hpp"
 #include "FastJSON.hpp"
 #include "Logging/Severity.hpp"
-#include "ObservableTrait.hpp"
 #include "Resources/Container.hpp"
 #include "Resources/Manager.hpp"
-#include "Resources/ResourceTrait.hpp"
+#include "Resources/Types.hpp"
 #include "Tracer.hpp"
 
 namespace EmEn::Audio
@@ -131,6 +127,9 @@ namespace EmEn::Audio
 	void
 	Ambience::releaseSources () noexcept
 	{
+		/* NOTE: No source left to start an awaited loop on: stop() and suspend() cancel the wait here. */
+		m_loopAwaited = false;
+
 		if ( m_loopedSource != nullptr )
 		{
 			m_loopedSource->stop();
@@ -290,14 +289,14 @@ namespace EmEn::Audio
 		/* Launch the loop channel. */
 		if ( this->requestLoopChannel() )
 		{
-			/* NOTE: Delay the sound play if not loaded. */
+			/* NOTE: A sound still loading is awaited: update() starts it, on this same thread. */
 			if ( m_loopSound->isLoaded() )
 			{
 				m_loopedSource->play(m_loopSound, PlayMode::Loop);
 			}
 			else
 			{
-				this->observe(m_loopSound.get());
+				m_loopAwaited = true;
 			}
 		}
 
@@ -311,40 +310,6 @@ namespace EmEn::Audio
 		}
 
 		m_state = State::Playing;
-	}
-
-	bool
-	Ambience::onNotification (const ObservableTrait * observable, int notificationCode, const Base::Any & /*data*/) noexcept
-	{
-		if ( observable->is(SoundResource::getClassUID()) )
-		{
-			switch ( notificationCode )
-			{
-				case Resources::ResourceTrait::LoadFinished :
-					m_loopedSource->play(m_loopSound, PlayMode::Loop);
-					break;
-
-				case Resources::ResourceTrait::LoadFailed :
-					m_loopSound.reset();
-					break;
-
-				default:
-					if constexpr ( ObserverDebugEnabled )
-					{
-						TraceDebug{ClassId} << "Event #" << notificationCode << " from a sound resource ignored.";
-					}
-					break;
-			}
-
-			return false;
-		}
-
-		/* NOTE: Don't know what it is, goodbye! */
-		TraceDebug{ClassId} <<
-			"Received an unhandled notification (Code:" << notificationCode << ") from observable (UID:" << observable->classUID() << ")  ! "
-			"Forgetting it ...";
-
-		return false;
 	}
 
 	void
@@ -441,9 +406,16 @@ namespace EmEn::Audio
 		}
 
 		/* Restart the loop channel if we have a loop sound. */
-		if ( this->requestLoopChannel() && m_loopSound->isLoaded() )
+		if ( this->requestLoopChannel() )
 		{
-			m_loopedSource->play(m_loopSound, PlayMode::Loop);
+			if ( m_loopSound->isLoaded() )
+			{
+				m_loopedSource->play(m_loopSound, PlayMode::Loop);
+			}
+			else
+			{
+				m_loopAwaited = true;
+			}
 		}
 
 		/* Restart the sound effect channel timers. */
@@ -468,6 +440,11 @@ namespace EmEn::Audio
 			return;
 		}
 
+		if ( m_loopAwaited )
+		{
+			this->startAwaitedLoop();
+		}
+
 		for ( auto & channel : m_channels )
 		{
 			/* NOTE : Update the time. */
@@ -483,6 +460,40 @@ namespace EmEn::Audio
 
 			/* Preparing the next new time when the channel will play a sound. */
 			channel.setTimeBeforeNextPlay(this->getRandomDelay() + soundDuration);
+		}
+	}
+
+	void
+	Ambience::startAwaitedLoop () noexcept
+	{
+		if ( m_loopSound == nullptr || m_loopedSource == nullptr )
+		{
+			m_loopAwaited = false;
+
+			return;
+		}
+
+		switch ( m_loopSound->status() )
+		{
+			case Resources::Status::Loaded :
+				m_loopAwaited = false;
+
+				m_loopedSource->play(m_loopSound, PlayMode::Loop);
+				break;
+
+			case Resources::Status::Failed :
+				m_loopAwaited = false;
+
+				TraceWarning{ClassId} << "The loop sound '" << m_loopSound->name() << "' failed to load: the ambience has no loop.";
+
+				m_loopSound.reset();
+				break;
+
+			case Resources::Status::Unloaded :
+			case Resources::Status::Enqueuing :
+			case Resources::Status::ManualEnqueuing :
+			case Resources::Status::Loading :
+				break;
 		}
 	}
 

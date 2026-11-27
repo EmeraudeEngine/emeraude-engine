@@ -273,7 +273,17 @@ difference is the music: until 2026-11-27 the playlist decoded its 32 tracks on 
 the sky's load until the scene ran; with a playlist of names the pool is free and the load ends first. The fault
 was in the code either way (a vector written by one thread, walked by two others, no order between them); the fix
 is proven by the reading and by the absence of a report after. The two-core run of the binary before reported another
-member of the family instead: item `scene-reads-a-background-texture-while-it-is-created`.
+member of the family instead — the paragraph below.
+
+`Scene::setBackground()` read its background's environment cubemap (`SkyBoxResource::environmentCubemap()`, a member
+the sky box's load assigns) and that texture's creation state (`TextureCubemap::isCreated()`) while a pool thread was
+still loading the cubemap and creating the texture: 2 data races in one two-core run of three (ThreadSanitizer,
+2026-11-27, the console's `setBackground` in a burst). Since that day the scene reads the cubemap only from a
+background which PUBLISHED itself — `isReadyForInstantiation()`, stored last by the renderable's own load (rule 3) —
+in `setBackground()` and in the late adoption (`getRenderableInstanceReadyForRendering()`, also reached for every
+instance when a render target appears). ⚠️ Not `isLoaded()`: the status turns Loaded AFTER the flag, and the late
+adoption runs once, when the background's instance is prepared — tested on the status it could miss its only turn.
+After: 0 report in four two-core runs with the burst (one of three reported before: a rate, not a certainty).
 
 What this does NOT cover: the pool worker that finishes a resource's load — the next section. The members other
 scenes reported after the first six (an instance's animation time and flag word, the view's logic state read on the

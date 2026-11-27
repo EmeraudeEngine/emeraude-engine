@@ -38,7 +38,6 @@
 #include <vector>
 
 /* Local inclusions for inheritances. */
-#include "ObserverTrait.hpp"
 
 /* Local inclusions for usages. */
 #include "AmbienceChannel.hpp" // IWYU pragma: keep (the inline constructor needs the complete type of the std::vector< AmbienceChannel > member when a consumer builds with exceptions)
@@ -70,10 +69,9 @@ namespace EmEn::Audio
 {
 	/**
 	 * @brief The ambience class.
-	 * @note [OBS][STATIC-OBSERVER]
-	 * @extends EmEn::Base::ObserverTrait This component observes sound loading events.
+	 * @note It observes nothing: a loop whose sound is still loading is started by update() (startAwaitedLoop()).
 	 */
-	class EMEN_API Ambience final : public Base::ObserverTrait
+	class EMEN_API Ambience final
 	{
 		public:
 
@@ -128,7 +126,7 @@ namespace EmEn::Audio
 			/**
 			 * @brief Destructs the ambience.
 			 */
-			~Ambience () override;
+			~Ambience ();
 
 			/**
 			 * @brief Returns whether the ambience sound set is playing.
@@ -422,9 +420,13 @@ namespace EmEn::Audio
 
 		private:
 
-			/** @copydoc EmEn::Base::ObserverTrait::onNotification() */
-			[[nodiscard]]
-			bool onNotification (const Base::ObservableTrait * observable, int notificationCode, const Base::Any & data) noexcept override;
+			/**
+			 * @brief Starts the loop whose sound was still loading when the ambience started or woke up.
+			 * @note The thread of update() (the scene's logic cycle): it tests the resource's status, an atomic, and
+			 * touches the looped source there — never the loading thread (a LoadFinished handler ran on it and played
+			 * on a source stop() could have released). A sound that failed to load is dropped with a warning.
+			 */
+			void startAwaitedLoop () noexcept;
 
 			/**
 			 * @brief Returns a random delay.
@@ -513,5 +515,6 @@ namespace EmEn::Audio
 			uint32_t m_maxDelay{DefaultMaxDelay};
 			State m_state{State::Stopped};
 			bool m_suspended{false};
+			bool m_loopAwaited{false}; ///< The loop's sound is still loading: update() starts it. Cleared with the sources.
 	};
 }

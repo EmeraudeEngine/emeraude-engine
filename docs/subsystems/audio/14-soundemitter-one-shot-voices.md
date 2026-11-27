@@ -77,6 +77,17 @@ while listening, and a measurement of another sound had to switch it off with a 
   (`Ambience::removeLoopSound()`, new). An unknown name and a gain outside [0, 1] are refused.
 - `startAmbience()` / `stopAmbience()`: `startAmbience` answers a warning when the ambience has nothing to play.
 - Every command runs under the scene's exclusive access (the logic thread updates the ambience).
+- A loop whose sound is still loading when the ambience starts (or wakes up) is AWAITED: `Ambience::update()`, on
+  the logic thread, tests the resource's status each cycle and starts it (`startAwaitedLoop()`); `stop()` and
+  `suspend()` cancel the wait with the sources; a sound that failed to load is dropped with a warning. Until
+  2026-11-27 the ambience observed the sound and its `LoadFinished` handler played from the LOADING thread, on a
+  source `stop()` could have released (a null pointer) — read, never observed; and a loop still loading at a wake-up
+  was never started. The ambience observes nothing any more.
+  Proven (ThreadSanitizer, Linux, Debug, `default`, the process on two cores, a temporary trace in
+  `startAwaitedLoop()`): `setAmbienceLoop("bigroom", 0.5)` then `startAmbience()` — the loop starts on the cycle
+  after "bigroom is loaded"; a loop replaced or an ambience stopped before its sound ends loading starts nothing
+  (`foudre`, `fx1`, `fx2` loaded after the fact); 0 report in five runs, four of them with ten sky switches loading
+  at the same time.
 - Measured (Linux, `water-world`, the mix written whole): the loop `wind1` over ONE whole period of it (6.84 s, so
   the phase does not matter) at the gains 1.0 / 0.5 / 0.25: −30.07 / −36.09 / −42.11 dBFS, −6.02 and −12.04 dB; the
   longest run of exact zeros around each change 0.02 ms (one sample): no cut. The answers of `getAmbience` follow
