@@ -146,14 +146,40 @@ change): a temporary probe moved 30 m up or down the POSITION GIVEN TO `soundPat
   (0.02 × 0.05), and OpenAL's shelf then reaches far under its 5 kHz reference. To weigh when the values are tuned.
 - With the reverberation (0.5), source in the air against source under: −11.1 / −13.4 / −26.2 / −37.1 dB — what
   reverberates is attenuated too.
-- The submerged sound alone (`underwater`, the sea loop off by a probe): silent in the air; fully under, −13.0 dB
-  against the sound's own file in all four bands (125-500 / 500-2000 / 2000-5000 / 5000-10000 Hz) — FLAT, the medium
-  does not touch it (the sea loop under the same water: −4.5 / −7.9 / −27.4 / −41.7 dB); at an immersion of 0.5,
-  6.0 dB lower in every band; the listener taken out of the water, the level falls to digital silence in the next
-  0.1 s — no reverberation of it.
+- The submerged sound alone (`underwater`, the sea loop off by a probe): silent in the air; fully under, the same
+  level against the sound's own file in all four bands (125-500 / 500-2000 / 2000-5000 / 5000-10000 Hz) — FLAT, the
+  medium does not touch it (the sea loop under the same water, its reverberation OFF: −4.5 / −7.9 / −27.4 /
+  −41.7 dB, `20·log10(0.6)` = −4.4 dB); at an immersion of 0.5, 6.0 dB lower in every band; the listener taken out
+  of the water, the level falls to digital silence in the next 0.1 s — no reverberation of it.
+  - Its LEVEL, measured again on 2026-11-27 on a stated basis (two launches under water, with the loop and
+    without, the power difference over the same 7 s; RMS over all the samples of the stereo mix, the same to
+    0.1 dB on each channel and on the channel mean): −32.7 dBFS, the file being at −13.7 dBFS — **−19.0 dB against
+    its file** at the gain 0.25. Accounted for: the gain −12.0 dB, the settings' master volume 0.75 −2.5 dB, a
+    centred mono source on a stereo output −3.0 dB; 1.5 dB not explained (the file is 8 bits at 22 050 Hz,
+    resampled). ⚠️ This doc said "−13.0 dB" until then: a figure whose basis was not kept and which no measurement
+    reproduces; Windows measured −18.9 dB.
+  - With the reverberation at its default (0.5) the sea loop does NOT lose its low band under water: +3.5 dB at
+    125-500 Hz on Linux, +2.6 dB at 60-250 Hz on Windows — the wet send adds what the direct path loses.
 - 0 `VUID-` in every launch; the console refuses an unknown sound name.
 - ⚠️ NOT proven by a run: the path of a WORLD sound (`playSoundAt()`): no console command plays one (engine item
   `console-commands-for-world-sounds-and-ambience`).
+- macOS (engine 6cd9fa04, Apple M6, MoltenVK, Apple clang 21 with `-Werror -Wthread-safety`, 2026-11-27): Release
+  and Debug without a warning; `water-world` with the recorder off: `getSea()` reports the crossing gains and the
+  submerged sound, `setSeaSoundCrossing(2, 0.2)` and an unknown sound name are refused, two dives and returns —
+  0 `VUID-`, 0 error in OpenAL Soft's log, 4 sends. The whole mix over three 5 s windows (air, fully under, air;
+  both loops together, not separated; bands 20-250 / 250-1000 / 1000-4000 / 4000-20000 Hz): under against the
+  first air window +9.4 / +3.7 / −11.2 / −16.2 dB — the submerged loop adds its low frequencies while the sea loop
+  is muffled; the second air window against the first −0.2 / +2.8 / +3.9 / +0.2 dB (the sea loop's own variation),
+  and the level is back within a second of surfacing. The level of the submerged sound against its file was not
+  measured there.
+- Windows (engine 6cd9fa04, RTX 3500 Ada, MSVC 19.44 `/W4 /WX`, 2026-11-27): Release and Debug without a warning;
+  the same console answers and refusals, two dives and returns — 0 `VUID-`, 0 error in OpenAL Soft's log, 4 sends.
+  Three launches of the whole mix (the sequence; the same without the submerged sound; in the air throughout —
+  the first air window repeats within 0.1 dB across launches): the submerged loop is silent in the air (0.1 dB),
+  and alone under water sits at −18.9 dB against its file, −19.2 / −22.7 / −19.1 dB at 60-250 / 1000-4000 /
+  4000-12000 Hz — the medium's low-pass is not applied to it; the sea loop under water against the same stretch in
+  the air: +2.6 / +0.5 / −15.1 / −36.4 dB (60-250 / 250-1000 / 1000-4000 / 4000-12000 Hz), its reverberation on.
+  ⚠️ The surf loop's own level moves by 2.3 dB between two 5 s windows: compare the same stretch of it.
 
 ### Limits
 
