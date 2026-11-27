@@ -631,7 +631,11 @@ namespace EmEn::Scenes
 	{
 		Graphics::Compute::IBLBaker::StarMask mask;
 
-		if ( m_backgroundResource == nullptr )
+		/* NOTE: A background still loading has no star to read: its loading thread is filling the list (a vector
+		 * which reallocates) while the logic thread, each cycle, and the rendering thread, each frame, come here.
+		 * The list is complete and never written again once the resource reports itself loaded; the bake made
+		 * without a mask in between is redone, the mask being part of its identity (updateEnvironmentIBL()). */
+		if ( m_backgroundResource == nullptr || !m_backgroundResource->isLoaded() )
 		{
 			return mask;
 		}

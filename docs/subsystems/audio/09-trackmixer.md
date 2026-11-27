@@ -60,10 +60,13 @@ fourth one (`eventCallback()`, the end of a track): the mixer now streams its tr
 
 ### Observable Notifications
 TrackMixer notifies observers on state changes:
-- `MusicPlaying` - Playback started
-- `MusicPaused` - Playback paused
-- `MusicStopped` - Playback stopped
-- `MusicFinished` - Track ended (auto-advances if more in playlist)
+- `MusicPlaying` / `MusicSwitching` - A track started (directly / through a cross-fade)
+- `MusicPaused`, `MusicResumed`, `MusicStopped`
+- `TrackChanged` - The current index changed without playback
+- `PlaylistSwapped` - `loadPlaylist()` replaced the whole playlist (carries the manifest name)
+- `PlaylistChanged` (2026-11-27) - `addToPlaylist()` appended an entry or `clearPlaylist()` emptied the playlist;
+  emitted on the caller's thread once the mixer's lock is released, so an observer may read `status()` back.
+  `loadPlaylist()` does not emit it (it fills the list itself and emits `PlaylistSwapped`).
 
 ### Code References
 - `TrackMixer.hpp:previous()` - Navigate to previous track

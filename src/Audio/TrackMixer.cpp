@@ -567,27 +567,37 @@ namespace EmEn::Audio
 		const auto * musics = m_resourceManager.container< MusicResource >();
 		const auto inStore = musics != nullptr && musics->isResourceExists(track->name());
 
-		const MutexLock lock{m_stateAccess};
+		{
+			const MutexLock lock{m_stateAccess};
 
-		m_playlist.push_back(PlaylistEntry{.name = track->name(), .held = inStore ? nullptr : track});
-		m_loadedPlaylist.reset();
+			m_playlist.push_back(PlaylistEntry{.name = track->name(), .held = inStore ? nullptr : track});
+			m_loadedPlaylist.reset();
 
-		this->playlistChanged();
+			this->playlistChanged();
+		}
+
+		/* NOTE: Outside the lock: an observer reads the mixer back (status()). */
+		this->notify(PlaylistChanged);
 	}
 
 	void
 	TrackMixer::clearPlaylist () noexcept
 	{
-		const MutexLock lock{m_stateAccess};
+		{
+			const MutexLock lock{m_stateAccess};
 
-		m_playlist.clear();
-		m_loadedPlaylist.reset();
-		m_preloadedTrack.reset();
-		m_releaseRequested = true;
+			m_playlist.clear();
+			m_loadedPlaylist.reset();
+			m_preloadedTrack.reset();
+			m_releaseRequested = true;
 
-		this->playlistChanged();
+			this->playlistChanged();
 
-		m_fadeCv.notify_one();
+			m_fadeCv.notify_one();
+		}
+
+		/* NOTE: Outside the lock: an observer reads the mixer back (status()). */
+		this->notify(PlaylistChanged);
 	}
 
 	std::vector< std::string >

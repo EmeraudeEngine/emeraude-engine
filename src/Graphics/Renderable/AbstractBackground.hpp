@@ -33,6 +33,7 @@
 #include "Abstract.hpp"
 
 /* STL inclusions. */
+#include <atomic>
 #include <vector>
 
 /* Local inclusions for usages. */
@@ -121,22 +122,26 @@ namespace EmEn::Graphics::Renderable
 			void
 			setLuminance (float nits) noexcept
 			{
-				m_luminance = std::max(0.0F, nits);
+				const auto luminance = std::max(0.0F, nits);
+
+				m_luminance.store(luminance, std::memory_order_relaxed);
 
 				/* Both consumers follow ONE knob, at runtime too: the IBL scale reads luminance()
 				 * (Scene::refreshAmbientLightProperties()), the drawn background answers here. */
-				this->onLuminanceChanged(m_luminance);
+				this->onLuminanceChanged(luminance);
 			}
 
 			/**
 			 * @brief Returns the luminance of the background, in nits.
+			 * @note Any thread: the loading thread and the logic thread write it (setLuminance()), the logic and the
+			 * rendering threads read it. One word, an atomic.
 			 * @return float
 			 */
 			[[nodiscard]]
 			float
 			luminance () const noexcept
 			{
-				return m_luminance;
+				return m_luminance.load(std::memory_order_relaxed);
 			}
 
 			/**
@@ -173,11 +178,12 @@ namespace EmEn::Graphics::Renderable
 			float
 			ambientIlluminance () const noexcept
 			{
-				return m_ambientIlluminance < 0.0F ? m_luminance * m_ambientIlluminanceFactor : m_ambientIlluminance;
+				return m_ambientIlluminance < 0.0F ? this->luminance() * m_ambientIlluminanceFactor : m_ambientIlluminance;
 			}
 
 			/**
 			 * @brief Adds a celestial body (a sun, a moon, ...) to the background description.
+			 * @warning The LOADING thread only, before the resource reports itself loaded: the list has no lock.
 			 * @param celestialBody A reference to a celestial body.
 			 */
 			void
@@ -191,6 +197,8 @@ namespace EmEn::Graphics::Renderable
 			 * @note Can be empty: a background without an identifiable light point (overcast sky,
 			 * nebula, cave dome) only provides ambiance. The first one is meant to become the
 			 * scene main directional light.
+			 * @pre The resource is loaded (isLoaded()): its loading thread fills the list, which reallocates. A
+			 * reader on another thread tests isLoaded() first (Scene::environmentStarMask()).
 			 * @return const std::vector< CelestialBody > &
 			 */
 			[[nodiscard]]
@@ -308,7 +316,7 @@ namespace EmEn::Graphics::Renderable
 
 			std::vector< CelestialBody > m_stars;
 			Base::PixelFactory::Color< float > m_averageColor{10.0F / 256.0F, 24.0F / 256.0F, 43.0F / 256.0F, 1.0F};
-			float m_luminance{DefaultLuminance}; /**< Physical luminance of the background, in nits. */
+			std::atomic< float > m_luminance{DefaultLuminance}; /**< Physical luminance of the background, in nits. Read by the logic and the rendering threads while the loader or the logic thread writes it. */
 			float m_ambientIlluminance{-1.0F}; /**< Ambient illuminance, in lux. Negative means "derive from the luminance". */
 			float m_ambientIlluminanceFactor{Photometry::UniformDomeIlluminanceFactor}; /**< Derivation factor, measured by loaders. */
 	};

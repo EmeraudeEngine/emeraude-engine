@@ -132,6 +132,23 @@ Frames:` line); `writtenFrames` = frames in the file (the IVF header's count, "N
 lookahead (`g_lag_in_frames` 16) delays the packets, so the two differ during a session; counting the flush packets
 on top of the inputs reported 196 for a 181-frame file until then.
 
+### Who touches the output file (read and proven, 2026-11-27)
+
+The audio recorder shared its stream with its thread behind a flag (4 data races, fixed on 2026-11-26: audio doc 11);
+the same reading of the video side finds no such sharing.
+
+- Both sessions (`EncodingSession`, software VP9; `HardwareSession`, H.265) open the file and write its header on
+  the thread that starts the recording, BEFORE the encoding thread is started. From then on the encoding thread
+  alone writes it, patches it (`patchIVFFrameCount()`, called by `finalize()` at the end of the thread's function)
+  and closes it (`closeOutput()`). The other threads read `writeFailed` only (an atomic) and reach the session's
+  queue under `queueMutex`; a session's destructor asks its thread to stop and joins it before it touches anything.
+- ThreadSanitizer (Linux, Debug, the software device, window-less, `default`, `Core/RushMaker/EnableVideo` and
+  `ForceCPUEncoding` true in a settings copy; three recordings started and stopped, a fourth left running into the
+  shutdown): 0 report, four `.ivf` finalized (88 to 96 frames), the shutdown waited 0.14 s for the last one.
+  ⚠️ The software device has no hardware encoder: the hardware session is proven by the reading alone.
+  ⚠️ The ThreadSanitizer tree holds the application AND the engine library: build the whole tree, not the stress
+  target alone — an application older than its library stops at startup with no error line.
+
 ### Colorimetry (BT.709 — do not regress to BT.601)
 The BGRA→I420 conversion uses **BT.709 limited-range** coefficients — single source of truth:
 **`VideoColorConversion.hpp`** (`VideoColor::YCoef*/UCoef*/VCoef*`), consumed by the CPU

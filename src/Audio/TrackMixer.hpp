@@ -120,6 +120,7 @@ namespace EmEn::Audio
 				MusicStopped,
 				TrackChanged, /**< @brief Notifies that the current track index has changed (without playback). */
 				PlaylistSwapped, /**< @brief Notifies that the playlist has been fully replaced via loadPlaylist(). Observers may refresh their UI. */
+				PlaylistChanged, /**< @brief Notifies that the playlist gained an entry (addToPlaylist()) or was emptied (clearPlaylist()). Emitted on the caller's thread, the mixer's lock released. */
 				/* Enumeration boundary. */
 				MaxEnum
 			};

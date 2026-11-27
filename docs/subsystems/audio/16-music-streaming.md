@@ -134,7 +134,20 @@ Measured (Linux, Release, `default`, window-less, the playlist `Kyrandia2`, 32 M
 mixer's stress on this code: 29 335 calls, 0 report — ⚠️ only 9 positions read on a streaming track: with tracks
 loaded on demand and four drivers calling `next` / `stop` at once, a track rarely gets to play; the run exercises the
 loads, the preloads and the unloads far more than the streams (step 1's run: 781).
-⚠️ NOT proven by a run: a file dropped on the window (`PlaylistEntry::held`) — no console command drops a file.
+A music file given to the dropped-files pipeline (`Core.openFiles("<a copy of AirWolf8.ogg named DropTest.ogg>")`,
+2026-11-27, Linux, the playlist `Kyrandia2` loaded): "1 of 1 file(s) taken"; five seconds later `nowPlaying` answers
+"Main Theme … 5.0 s / 60.4981 s … Index: 33/33" (the entry `+DropTest`, held by the playlist); `next` plays 1/33;
+`playlistPlay(33)` plays the dropped music again (4.0 s) and its natural end goes back to 1/33. The census does not
+count it: the music container never held it (`MusicResource` loaded 1 — the preloaded entry).
+
+The testbed's music page (CEF, read through the browser's debug port in its content frame, the same run): 32 rows
+of names, the current one marked, "now playing" following `play`; after the drop 33 rows, `33.+DropTest` marked; after
+`next` the first row marked; after `playlistPlay(33)` the dropped entry again. A screenshot shows the page with the
+track playing, its position and its duration.
+`clearPlaylist()` and `addToPlaylist()` notified nobody: the page kept its 33 rows after a console `playlistClear()`.
+Since 2026-11-27 (owner decision) both emit `PlaylistChanged`, on the caller's thread, the mixer's lock released
+(doc 09 § Observable Notifications). Proven the same way: 32 rows, console `playlistClear()` → 0 rows and "No track
+selected", console `playlistAdd("AirWolf8")` → 1 row, `1.AirWolf8`; 0 `VUID-`.
 
 macOS (engine 9fdce41a, Apple M6, MoltenVK, Apple clang 21 with `-Werror -Wthread-safety`, 2026-11-27) and Windows
 (RTX 3500 Ada, MSVC 19.44 `/W4 /WX`, the same day): Release and Debug without a warning; the same scenario with the

@@ -83,6 +83,12 @@ while listening, and a measurement of another sound had to switch it off with a 
   every command; `tools/mcp-conformance.py`: 2140 checks passed, 0 failed.
   ⚠️ A loop whose level moves (the surf of `water-world`: 2.3 dB between two 5 s windows) cannot prove a gain change
   on two different stretches: measure whole periods, or the same stretch.
+- macOS (Apple M6, MoltenVK, Apple clang 21) and Windows (RTX 3500 Ada, MSVC `/W4 /WX`), engine f06619d7,
+  2026-11-27: Release and Debug without a warning, every answer and every refusal identical to Linux's,
+  `tools/mcp-conformance.py` 2140 checks passed and 0 failed on both, 0 `VUID-`. The world sound's path measured
+  there (doc 15 § the path of a world sound): listener in the air, source under against source in the air
+  −10.7 / −12.1 / −23.2 dB on macOS (125-500 Hz, 500-2k, 2k-8k) and −10.7 / −12.1 / −23.1 / −40.0 dB on Windows,
+  within 0.2 dB of Linux.
 
 Measured (projet-alpha, Linux Release, test ports, 2026-10-24): citadel, 5 rockets in 0.4 s → 5 world blasts, released
 as they end; 8 smoke grenades → their hisses (2-3 at once) now heard to the end; lighten-marbles, 14 marble explosions

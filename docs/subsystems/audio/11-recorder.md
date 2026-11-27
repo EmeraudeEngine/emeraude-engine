@@ -52,10 +52,11 @@ Path generation and coordinated start/stop of all recorders is owned by `Core::s
   at the shutdown), 2 channels, 48 kHz, non-silent. Windows the same day (RTX 3500 Ada): the same.
 - ThreadSanitizer (Linux, Debug, the software device, window-less, `default`, the same scenario — three recordings
   and a fourth left running into the shutdown): 0 report naming `Audio::Recorder`, the four files complete. The run's
-  seven reports are another fault's (engine item `sky-background-stars-read-while-it-loads`).
+  seven reports are another fault's (a background's stars read while it loads: scenes doc 12, fixed 2026-11-27).
 - `Audio::ExternalInput` (the microphone's capture) was read for the same fault and does not have it: its file is
   opened before its thread is started and completed after that thread is joined. `Graphics::Recorder` (its encoder
-  thread and its file) was NOT read: engine item `graphics-recorder-file-sharing-not-read`.
+  thread and its file) was read and run under ThreadSanitizer on 2026-11-27: no sharing either (graphics doc
+  11-10 § *Who touches the output file*).
 
 ### Required Extensions
 - `ALC_SOFT_loopback` — loopback device rendering
