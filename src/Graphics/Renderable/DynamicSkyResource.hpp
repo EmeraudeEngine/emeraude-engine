@@ -261,24 +261,27 @@ namespace EmEn::Graphics::Renderable
 
 			/**
 			 * @brief Returns the atmosphere drawn by this sky: the renderer records its sky-view pass.
+			 * @note Any thread. nullptr until the sky published itself (isReadyForInstantiation(), stored last by its
+			 * load): the loading threads write the member before that, the logic and the rendering threads read it here.
 			 * @return std::shared_ptr< SkyAtmosphere >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< SkyAtmosphere >
 			atmosphere () const noexcept
 			{
-				return m_atmosphere;
+				return this->isReadyForInstantiation() ? m_atmosphere : nullptr;
 			}
 
 			/**
 			 * @brief Returns the material drawing this sky: its artistic controls.
+			 * @note Any thread. nullptr until the sky published itself, like atmosphere().
 			 * @return std::shared_ptr< Material::SkyAtmosphereResource >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Material::SkyAtmosphereResource >
 			skyMaterial () const noexcept
 			{
-				return m_skyMaterial;
+				return this->isReadyForInstantiation() ? m_skyMaterial : nullptr;
 			}
 
 			/**

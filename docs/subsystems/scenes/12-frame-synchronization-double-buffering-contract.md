@@ -284,6 +284,10 @@ in `setBackground()` and in the late adoption (`getRenderableInstanceReadyForRen
 instance when a render target appears). ⚠️ Not `isLoaded()`: the status turns Loaded AFTER the flag, and the late
 adoption runs once, when the background's instance is prepared — tested on the status it could miss its only turn.
 After: 0 report in four two-core runs with the burst (one of three reported before: a rate, not a certainty).
+Windows (engine 4852441f, RTX 3500 Ada, MSVC 19.44 `/W4 /WX`, 2026-11-27): Release and Debug without a warning; the
+sky switches (two answered "deferred", the third `ambient: 19590.000000 lx, stars: 1`, each cubemap adopted), the
+ambience's awaited and cancelled loop on `water-world`, the playlist emptied and filled from the console with the
+music page following (32 rows, 0, 1) — the same answers as Linux, 0 `VUID-`. No ThreadSanitizer there.
 
 What this does NOT cover: the pool worker that finishes a resource's load — the next section. The members other
 scenes reported after the first six (an instance's animation time and flag word, the view's logic state read on the
@@ -358,8 +362,8 @@ console shutdown. Every scene starts and reaches a clean engine exit; 33 report 
 NOT in the table above:
 - `node-relation`, `collision-debug`, `beams`, `paths`, `city`, `citadel` — the CULLING reads an entity's logic state:
   fixed the same day (the extent row, its proof below).
-- `sky-lab`, `city` — a sky material's atmosphere read while its creation function sets it on a pool worker: item
-  `sky-material-atmosphere-read-while-its-creation-sets-it`.
+- `sky-lab`, `city` — a sky material's atmosphere read while its creation function sets it on a pool worker: fixed
+  2026-11-27 (graphics doc 42 § *The sky publishes its atmosphere at the end of its load*).
 - `city`, the testbed's own code — an image's average colour read while the image loads (the testbed's item
   `city-reads-an-image-average-colour-while-it-loads`).
 - `sponza` — the software device dies, no engine report before it: its alpha-tested foliage needs a third settings
@@ -390,8 +394,8 @@ the two list builders cull with is the same value, read from the frame's render 
 
 The sweep again, the final code, 39 scenes (`sponza` left out: the software device dies there): every scene reaches a
 clean engine exit, 36 report nothing, and NO report is left between the logic and the rendering threads. The three
-others are loading threads: `city` (the testbed's image), `sky-lab` (the sky material's atmosphere, item
-`sky-material-atmosphere-read-while-its-creation-sets-it`) and, once, `sprite` — a renderable's flag word written by its
+others are loading threads: `city` (the testbed's image), `sky-lab` (the sky material's atmosphere, fixed
+2026-11-27: graphics doc 42) and, once, `sprite` — a renderable's flag word written by its
 loader while a component built on it reads `isSprite()` (fixed 2026-11-17: the row "What a renderable IS" above).
 ⚠️ The sky report of `city` and the one of `sprite` each appeared in one sweep of two: a loading race shows when the
 threads meet, a clean run proves nothing about it.

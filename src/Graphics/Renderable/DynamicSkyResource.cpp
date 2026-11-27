@@ -353,9 +353,11 @@ namespace EmEn::Graphics::Renderable
 			return false;
 		}
 
+		/* NOTE: The material is NOT read here: its creation function may still be running on another thread of the pool
+		 * (getOrCreateResource() answers at once), and reading the atmosphere it sets raced it (ThreadSanitizer,
+		 * 2026-11-16). The sky takes the atmosphere its material draws — the one given above, or the one of a material
+		 * of the same name that already existed — once that material is loaded: onDependenciesLoaded(). */
 		m_skyMaterial = material;
-		/* A material of the same name that already existed draws ITS atmosphere: the sky follows it. */
-		m_atmosphere = material->atmosphere() != nullptr ? material->atmosphere() : std::move(atmosphere);
 
 		return true;
 	}
@@ -446,6 +448,21 @@ namespace EmEn::Graphics::Renderable
 
 				return false;
 			}
+		}
+
+		/* NOTE: The material is a dependency: loaded, and its atmosphere final (the one build() gave it, the one a
+		 * material of the same name already drew, or the Earth one its creation builds without any). Taken BEFORE the
+		 * publication: atmosphere() and skyMaterial() answer nothing until the flag below is stored. */
+		if ( m_skyMaterial != nullptr )
+		{
+			m_atmosphere = m_skyMaterial->atmosphere();
+		}
+
+		if ( m_atmosphere == nullptr )
+		{
+			TraceError{ClassId} << "The material of dynamic sky '" << this->name() << "' draws no atmosphere !";
+
+			return false;
 		}
 
 		this->setReadyForInstantiation(true);

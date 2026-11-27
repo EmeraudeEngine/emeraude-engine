@@ -96,6 +96,30 @@ it. `parameters().groundAlbedo` stays the value the sky was built with; the live
 | `Renderer::renderSkyAtmosphere()` | `Graphics/Renderer.cpp` | the per-frame sky-view submission, BEFORE the shadow maps and the render-to-textures (the probes draw the sky too) |
 | `SkyState` | `Scenes/SkyState.hpp` | the scene's sky for the render thread: the sun and moons (direction, illuminance above the atmosphere, unit-luminance LINEAR colour, angular diameter, phase) and the equatorial frame the stars are placed by, written by `CelestialClock::publishStateForRendering()`, read by `Scene::skyStateForRendering(readStateIndex)` |
 
+### The sky publishes its atmosphere at the end of its load (2026-11-27, owner decision)
+
+`DynamicSkyResource::build()` asks the material container for the sky's material with a creation function
+(`getOrCreateResource()` answers at once, the function runs later on a pool worker) and used to read
+`material->atmosphere()` a few lines below, to follow a material of the same name that already existed: a shared
+pointer copied by one loading thread while another assigns it (ThreadSanitizer, the sweep of 2026-11-16: `sky-lab`
+2 reports, `city` 4). And `build()` assigned the sky's own `m_atmosphere` and `m_skyMaterial` while the rendering
+thread (`Renderer`, the sky-view pass) and the logic thread (`Scene::updateDynamicSkyIBL()`) read them through the
+accessors — read in the code, never reported.
+
+- `build()` no longer reads the material. `onDependenciesLoaded()` — the material is a dependency, loaded by then —
+  takes `m_skyMaterial->atmosphere()` (the one `build()` gave, the one a material of that name already drew, or the
+  Earth one the material's creation builds without any), then stores the publication flag
+  (`setReadyForInstantiation(true)`, last).
+- `atmosphere()` and `skyMaterial()` answer nullptr until that flag is stored: every reader already took "no
+  atmosphere yet" (the renderer records nothing, the scene bakes nothing, the clock follows nothing).
+  ⚠️ While a sky loads, the console's `getDynamicSky` answers "no dynamic sky".
+- Proven (ThreadSanitizer, Linux, Debug, the software device, window-less): `sky-lab` and `city`, each at full core
+  count and with the process held on two cores — 0 report naming the sky or its material in the four runs (`city`
+  reports once the testbed's own image race, an item of the testbed). Release, validation on: both scenes drawn,
+  `getDynamicSky` answers the material and its planet, 0 `VUID-`.
+  ⚠️ The binary BEFORE the change was not run again that day: the proof is the reports of 2026-11-16 and their absence
+  after.
+
 ### The frame
 1. The renderer finds a `DynamicSkyResource` background, reads the scene's `SkyState` at the frame's read state
    (no clock: `SkyFrameInputs`' default afternoon sun) and the main camera's world Y (**Y = 0 is the planet's
