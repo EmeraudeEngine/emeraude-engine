@@ -753,6 +753,20 @@ namespace EmEn::Resources
 			}
 
 			/**
+			 * @brief Blocks the calling thread until the resource is SETTLED — Loaded or Failed — or the timeout expires.
+			 * @note For a thread that needs a resource's content at once while another request may still be loading it
+			 * (a synchronous Container::getResource() hands out a resource that already exists as it is, loading or
+			 * not): once this answers true, everything the load wrote is ordered before the caller's reads.
+			 * @pre The calling thread is NOT a worker of a thread pool: the load it waits for needs a worker, and on a
+			 * saturated pool the wait would never end. Refused there (false, an error traced), checked always.
+			 * @param timeout The longest wait.
+			 * @return bool True when the resource is Loaded. False when it failed, when the timeout expired first (a
+			 * resource nobody asked to load never settles) or when the call was refused.
+			 */
+			[[nodiscard]]
+			bool waitUntilLoaded (std::chrono::milliseconds timeout) const noexcept;
+
+			/**
 			 * @brief Sets a hint that this resource should be loaded synchronously.
 			 *
 			 * Direct loading mode indicates the resource should be loaded synchronously rather than
@@ -1481,6 +1495,13 @@ namespace EmEn::Resources
 					bool m_ran{false};
 			};
 
+			/**
+			 * @brief Stores a TERMINAL status (Loaded or Failed) and wakes the threads waiting for it (waitUntilLoaded()).
+			 * @note The only way a terminal status is written.
+			 * @param status Status::Loaded or Status::Failed.
+			 */
+			void settle (Status status) noexcept;
+
 			static constexpr uint32_t DirectLoading = 1U << 31;
 
 			AbstractServiceProvider & m_serviceProvider;
@@ -1488,6 +1509,10 @@ namespace EmEn::Resources
 			std::vector< std::shared_ptr< ResourceTrait > > m_dependenciesToWaitFor EMEN_GUARDED_BY(m_dependenciesAccess);
 			std::atomic< Status > m_status{Status::Unloaded};
 			mutable Base::Mutex m_dependenciesAccess;
+			/* NOTE: The terminal status (Loaded, Failed) is stored under this mutex and announced on this condition
+			 * (settle()), for waitUntilLoaded(). A leaf lock: taken last, nothing is called while it is held. */
+			mutable Base::Mutex m_settleAccess;
+			mutable Base::ConditionVariable m_settled;
 			mutable Base::Mutex m_localDataAccess;
 			Base::ConditionVariable m_localDataReloaded;
 			std::optional< BaseInformation > m_localDataSource EMEN_GUARDED_BY(m_localDataAccess);

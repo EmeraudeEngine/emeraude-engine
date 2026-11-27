@@ -134,6 +134,38 @@ namespace EmEn::Resources
 		}
 	}
 
+	void
+	ResourceTrait::settle (Status status) noexcept
+	{
+		const Base::MutexLock lock{m_settleAccess};
+
+		m_status = status;
+
+		/* NOTE: With the mutex held: a waiter cannot test the status between the store and this call and miss it. */
+		m_settled.notifyAll();
+	}
+
+	bool
+	ResourceTrait::waitUntilLoaded (std::chrono::milliseconds timeout) const noexcept
+	{
+		if ( Base::ThreadPool::isCurrentThreadWorker() )
+		{
+			TraceError{TracerTag} << "Refused: waiting for the resource '" << this->name() << "' (" << this->classLabel() << ") from a thread-pool worker would block the pool that loads it !";
+
+			return false;
+		}
+
+		Base::MutexLock lock{m_settleAccess};
+
+		static_cast< void >(m_settled.waitFor(lock, timeout, [this] () {
+			const auto status = m_status.load();
+
+			return status == Status::Loaded || status == Status::Failed;
+		}));
+
+		return m_status.load() == Status::Loaded;
+	}
+
 	bool
 	ResourceTrait::initializeEnqueuing (bool manual) noexcept
 	{
@@ -182,7 +214,7 @@ namespace EmEn::Resources
 			{
 				const Base::MutexLock lock{m_dependenciesAccess};
 
-				m_status = Status::Failed;
+				this->settle(Status::Failed);
 			}
 
 			/* NOTE: The dependencies already added and the parents are released (no link may cycle once failed). */
@@ -200,7 +232,7 @@ namespace EmEn::Resources
 			{
 				const Base::MutexLock lock{m_dependenciesAccess};
 
-				m_status = Status::Failed;
+				this->settle(Status::Failed);
 			}
 
 			this->releaseLinksAfterFailure(this->loadStopToken());
@@ -306,7 +338,7 @@ namespace EmEn::Resources
 					"Circular dependency detected ! Adding '" << dependency->name() << "' (" << dependency->classLabel() << ") "
 					"as a dependency of '" << this->name() << "' (" << this->classLabel() << ") would create a cycle !";
 
-				m_status = Status::Failed;
+				this->settle(Status::Failed);
 
 				failed = true;
 
@@ -418,7 +450,7 @@ namespace EmEn::Resources
 			TraceError{TracerTag} << "The resource '" << this->name() << "' (" << this->classLabel() << ") fails: its dependency '" << dependency.name() << "' (" << dependency.classLabel() << ") failed.";
 		}
 
-		m_status = Status::Failed;
+		this->settle(Status::Failed);
 
 		this->notify(LoadFailed, this->name());
 
@@ -566,7 +598,7 @@ namespace EmEn::Resources
 
 			if ( success )
 			{
-				m_status = Status::Loaded;
+				this->settle(Status::Loaded);
 
 				if ( s_showInformation )
 				{
@@ -582,7 +614,7 @@ namespace EmEn::Resources
 			}
 			else
 			{
-				m_status = Status::Failed;
+				this->settle(Status::Failed);
 
 				if ( s_showInformation && !this->loadAbandoned() )
 				{
@@ -662,7 +694,7 @@ namespace EmEn::Resources
 		}
 		else
 		{
-			m_status = Status::Failed;
+			this->settle(Status::Failed);
 
 			/* NOTE: A load the stop cut short is ABANDONED, not failed (owner decision 2026-10-15, as
 			 * finalizeDependencies() and abandonLoading()): no error line here, in the container nor in its parents.
@@ -722,7 +754,7 @@ namespace EmEn::Resources
 		/* NOTE: setLoadSuccess(false) without its error line (the load never ran: the application stopped). Set first:
 		 * the parents told below read it. */
 		m_loadAbandoned.store(true, std::memory_order_release);
-		m_status = Status::Failed;
+		this->settle(Status::Failed);
 
 		this->notify(LoadFailed, this->name());
 
@@ -755,7 +787,7 @@ namespace EmEn::Resources
 			TraceError{TracerTag} << "Unable to parse the resource file " << filepath << " !" "\n";
 
 			/* NOTE: Set status here. */
-			m_status = Status::Failed;
+			this->settle(Status::Failed);
 
 			this->notify(LoadFailed, this->name());
 
@@ -770,7 +802,7 @@ namespace EmEn::Resources
 		{
 			TraceError{TracerTag} << "The resource file " << filepath << " does not hold a JSON object !";
 
-			m_status = Status::Failed;
+			this->settle(Status::Failed);
 
 			this->notify(LoadFailed, this->name());
 

@@ -364,8 +364,8 @@ NOT in the table above:
   fixed the same day (the extent row, its proof below).
 - `sky-lab`, `city` — a sky material's atmosphere read while its creation function sets it on a pool worker: fixed
   2026-11-27 (graphics doc 42 § *The sky publishes its atmosphere at the end of its load*).
-- `city`, the testbed's own code — an image's average colour read while the image loads (the testbed's item
-  `city-reads-an-image-average-colour-while-it-loads`).
+- `city`, the testbed's own code — an image's average colour read while the image loads: fixed 2026-11-27, the demo
+  waits for the image (`ResourceTrait::waitUntilLoaded()`, resources doc 07).
 - `sponza` — the software device dies, no engine report before it: its alpha-tested foliage needs a third settings
   key (caution-points, the same section).
 
