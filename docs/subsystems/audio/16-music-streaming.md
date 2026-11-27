@@ -65,7 +65,8 @@ every buffer of the track on the source. With a playlist of 32 tracks loaded up 
 - Seen in that stress run: 29 `[Error][WaveFactory::FileFormatMIDI] processIStream(), failed to render audio !`
   lines. They are MIDI renderings CANCELLED by the shutdown, logged as errors (the testbed, the playlist `Doom`
   loaded and the application shut down two seconds later: 31 lines; left to load for 60 s: none, and the tracks
-  play) — emeraude-base item `midi-rendering-cancelled-logs-an-error`, not this lot's.
+  play) — a fault of emeraude-base, fixed there the same day (its wavefactory doc 07): the same shutdown then logs
+  none.
 - macOS (engine 6a033c23, Apple M6, MoltenVK, Apple clang 21 with `-Werror -Wthread-safety`, 2026-11-27): Release
   and Debug without a warning; the console scenario on `default` (play `AirWolf8`, `seek(40)`, the wrap in Loop
   mode at 5.51 s, the next track in Once mode at 3.48 s, pause, a seek while paused, resume, cross-fade, `next` ×3,
@@ -134,6 +135,14 @@ mixer's stress on this code: 29 335 calls, 0 report — ⚠️ only 9 positions 
 loaded on demand and four drivers calling `next` / `stop` at once, a track rarely gets to play; the run exercises the
 loads, the preloads and the unloads far more than the streams (step 1's run: 781).
 ⚠️ NOT proven by a run: a file dropped on the window (`PlaylistEntry::held`) — no console command drops a file.
+
+macOS (engine 9fdce41a, Apple M6, MoltenVK, Apple clang 21 with `-Werror -Wthread-safety`, 2026-11-27) and Windows
+(RTX 3500 Ada, MSVC 19.44 `/W4 /WX`, the same day): Release and Debug without a warning; the same scenario with the
+census at every step — 2 musics loaded while a track plays (the same byte counts as Linux for the same tracks, within
+208 bytes on Windows), 1 after `stop`, 0 after `playlistClear` and after `loadPlaylist`, never an unused byte; the
+lost request fixed ("Main Theme … outside the playlist"); 0 underrun line, 0 MIDI error, 0 `VUID-`, 0 error in
+OpenAL Soft's log. macOS, ThreadSanitizer, the mixer's stress: 22 460 calls, 17 positions read on a streaming track,
+0 report. (With no music loaded the census keeps a `MusicResource` row holding zeros.)
 
 ### Limits
 
