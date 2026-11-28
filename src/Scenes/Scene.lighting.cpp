@@ -303,15 +303,16 @@ namespace EmEn::Scenes
 			return;
 		}
 
-		const auto sun = m_lightSet.mainDirectionalLight();
+		/* The state THIS frame latched (beginRenderFrame()): the scene's own, never a copy kept by the renderer — the
+		 * sun included (which light it is, whether it is on). */
+		const auto & sun = m_lightSet.publishedMainLight(m_frameReadStateIndex);
 
-		if ( sun == nullptr || !sun->isEnabled() )
+		if ( sun.light == nullptr || !sun.enabled )
 		{
 			return;
 		}
 
-		/* The state THIS frame latched (beginRenderFrame()): the scene's own, never a copy kept by the renderer. */
-		m_cloudSet.recordShadowMap(commandBuffer, renderer, m_bindlessTextureSet, *sun, m_frameReadStateIndex);
+		m_cloudSet.recordShadowMap(commandBuffer, renderer, m_bindlessTextureSet, *sun.light, m_frameReadStateIndex);
 	}
 
 	void

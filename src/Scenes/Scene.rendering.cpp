@@ -1310,6 +1310,9 @@ namespace EmEn::Scenes
 			}
 		}
 
+		/* The main directional light of the slot, AFTER the entities: the record is that light's own publication. */
+		m_lightSet.publishStateForRendering(nextTarget);
+
 		/* Synchronize render targets. */
 		{
 			this->forEachRenderToShadowMap([&nextTarget] (const auto & renderTarget){

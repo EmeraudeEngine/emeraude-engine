@@ -358,19 +358,20 @@ void main ()
 		EnteringLight light;
 
 		/* The sun. A DISABLED main light lights nothing: a celestial clock leaves its last illuminance on the sun it
-		 * switched off. Its emission direction runs from the sun to the scene: its opposite's height is the sun's. */
-		const auto mainLight = context.lightSet != nullptr ? context.lightSet->mainDirectionalLight() : nullptr;
-		const auto sunCosine = mainLight != nullptr && mainLight->isEnabled() ? std::clamp(-mainLight->direction().normalized()[Y], 0.0F, 1.0F) : 0.0F;
+		 * switched off. Its emission direction runs from the sun to the scene: its opposite's height is the sun's.
+		 * NOTE: The frame's sun (Scenes::LightSet::publishedMainLight()), never the live light. */
+		const auto sun = context.lightSet != nullptr && context.frameView != nullptr ? context.lightSet->publishedMainLight(context.frameView->readStateIndex()) : Scenes::LightSet::PublishedMainLight{};
+		const auto sunCosine = sun.light != nullptr && sun.enabled ? std::clamp(-sun.direction.normalized()[Y], 0.0F, 1.0F) : 0.0F;
 
 		if ( sunCosine > 0.0F )
 		{
 			/* Schlick's reflectance at the sun's incidence; what is not reflected enters. */
 			const auto reflected = Scenes::WaterMedium::NormalReflectance + ((1.0F - Scenes::WaterMedium::NormalReflectance) * std::pow(1.0F - sunCosine, 5.0F));
-			const auto illuminance = mainLight->illuminance() * sunCosine * (1.0F - reflected);
+			const auto illuminance = sun.intensity * sunCosine * (1.0F - reflected);
 			/* Snell: the sun under the surface stands nearer to the vertical. */
 			const auto refractedSine = std::sqrt(1.0F - (sunCosine * sunCosine)) / Scenes::WaterMedium::RefractiveIndex;
 
-			light.sun = mainLight->emissionChromaticity() * illuminance;
+			light.sun = sun.chromaticity * illuminance;
 			light.downwellingCosine = std::max(WaterVolume::MinDownwellingCosine, std::sqrt(1.0F - (refractedSine * refractedSine)));
 		}
 
@@ -657,10 +658,17 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			}
 		}
 
-		/* The sun: up, lit, and casting the cascaded shadows the march reads. */
-		const auto mainLight = context.lightSet != nullptr ? context.lightSet->mainDirectionalLight() : nullptr;
+		/* The sun: up, lit, and casting the cascaded shadows the march reads.
+		 * NOTE: The frame's sun (Scenes::LightSet::publishedMainLight()), never the live light. */
+		if ( context.lightSet == nullptr || context.frameView == nullptr )
+		{
+			return false;
+		}
 
-		if ( mainLight == nullptr || !mainLight->isEnabled() || !mainLight->usesCSM() || !(mainLight->direction().normalized()[Y] < 0.0F) )
+		const auto & sun = context.lightSet->publishedMainLight(context.frameView->readStateIndex());
+		const auto & mainLight = sun.light;
+
+		if ( mainLight == nullptr || !sun.enabled || !mainLight->usesCSM() || !(sun.direction.normalized()[Y] < 0.0F) )
 		{
 			return false;
 		}
@@ -682,7 +690,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 		const auto & bindings = movingSurface ? ShaftsMoving : ShaftsAtRest;
 		const auto & caustics = *context.sea->caustics();
-		const auto mainLight = context.lightSet->mainDirectionalLight();
+		/* NOTE: The frame's sun, the one the shafts were admitted on (the test above this call). */
+		const auto & sun = context.lightSet->publishedMainLight(context.frameView->readStateIndex());
+		const auto & mainLight = sun.light;
 		const auto shadowMap = mainLight->shadowMap();
 		const auto cascadeCount = std::min(mainLight->cascadeCount(), 4U);
 
@@ -717,7 +727,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 		/* The direction the sun's light travels in the water: Snell at a level surface, the horizontal part divided
 		 * by the water's index. The forward axis of the frame's view: the negated third row of its matrix. */
-		const auto inAir = mainLight->direction().normalized();
+		const auto inAir = sun.direction.normalized();
 		const auto refractedX = inAir[X] / Scenes::WaterMedium::RefractiveIndex;
 		const auto refractedZ = inAir[Z] / Scenes::WaterMedium::RefractiveIndex;
 		const auto refractedY = -std::sqrt(std::max(1.0F - ((refractedX * refractedX) + (refractedZ * refractedZ)), 0.0F));

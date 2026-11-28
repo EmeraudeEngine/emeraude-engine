@@ -3188,6 +3188,9 @@ The rule: a value that depends on a resource's CONTENT is computed by a resource
 that has just obtained the pointer. The other readers of `subGeometryCount()` were read that day and are after
 the load: `MultiLayerMeshResource::onDependenciesLoaded()`, the instances' ray-tracing refit inputs, the scene's
 ray-tracing metadata (ready renderables only).
+Windows (engine f34cae89, RTX 3500 Ada, MSVC 19.44 `/W4 /WX`, 2026-11-28): Release and Debug without a warning;
+`city`, `light-and-shadow-debug` and `citadel` with the validation layer: 0 `VUID-`, no mesh refused, the scenes
+drawn whole.
 
 ⚠️ And when overriding `onDependenciesLoaded()`, **chain to the implementation you override** —
 `MultiLayerMeshResource`'s already did real work (sub-geometry / layer coherence, LOD generation),

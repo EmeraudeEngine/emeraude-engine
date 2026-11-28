@@ -65,7 +65,6 @@
 #include "Renderer.hpp"
 #include "Scenes/CloudSet.hpp"
 #include "Scenes/Component/Camera.hpp"
-#include "Scenes/LightSet.hpp"
 #include "SettingKeys.hpp"
 #include "Settings.hpp"
 #include "Tracer.hpp"
@@ -596,7 +595,7 @@ namespace EmEn::Graphics
 			return false;
 		}
 
-		if ( effect.requiresLightSet() && (capabilities.lightSet == nullptr || capabilities.lightSet->mainDirectionalLight() == nullptr) )
+		if ( effect.requiresLightSet() && (capabilities.lightSet == nullptr || !capabilities.mainLight) )
 		{
 			return false;
 		}

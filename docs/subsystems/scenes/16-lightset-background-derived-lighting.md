@@ -59,10 +59,40 @@ render thread the moment a barrel exploded):
   thread switched the sun off on the very next frame, while the sky, its IBL and the temporal-discontinuity epoch
   followed with the next slot — one UNMARKED frame of a day sky over a sunless land (Linux `city`: land 238 against
   251), which TAA blended at its stationary rate (graphics doc 13-12 § 43). Still live on the render thread, known: the
-  shadow map's suspension (`syncShadowMapRendering()`: at worst one frame shows its last content), and the main
-  directional light's state as read by VolumetricClouds, VolumetricLight, VolumetricScattering, AtmosphericFog and
-  LensFlare (`mainDirectionalLight()` — enabled, direction and illuminance live; engine item
-  `effects-read-the-live-main-light`).
+  shadow map's suspension (`syncShadowMapRendering()`: at worst one frame shows its last content), and the sun's
+  cascade matrices as three effects read them (engine item `effects-read-the-live-shadow-cascades`).
+- **The MAIN directional light is published per render state slot** (2026-11-28, owner decision: a record of the
+  light set, not the light's own accessors). `LightSet::publishStateForRendering(writeStateIndex)` — called by
+  `Scene::publishStateForRendering()` AFTER the entities, on the logic thread — writes a
+  `LightSet::PublishedMainLight`: the light itself (a `shared_ptr< const DirectionalLight >`, held so a frame
+  outlives its removal; for what does not change with the frame: its shadow map, its cascade count), `enabled`,
+  `direction`, `chromaticity`, `intensity` (lux), taken from the light's OWN publication of that slot
+  (`publishedEmission()`, `publishedEnabled()`). The render thread reads `publishedMainLight(readStateIndex)`.
+  - **Every effect that needs "the sun" reads that record**, with `frameView.readStateIndex()`: VolumetricClouds,
+    VolumetricLight, VolumetricScattering, AtmosphericFog, LensFlare, WaterVolume (the entering light, the shafts'
+    admission and their binding), SSContactShadows, RTContactShadows, and `Scene::recordCloudShadowMap()`. The
+    chain's gate reads the same record: `PostProcessStack::FrameCapabilities::mainLight`, filled by the renderer
+    (the selection) and by the post-processor (the recording) — an effect admitted for a frame finds its light in
+    that frame.
+  - `LightSet::mainDirectionalLight()` is the LIVE light, for the logic thread only (it takes the set's lock now;
+    `m_mainDirectionalLight` is guarded by it). Never call it while recording a frame.
+  - **Why:** until then those nine sites asked the live light. Which light was the main one, whether it was on, its
+    direction and its illuminance could land one frame before the rest of the frame, and the reads raced the logic
+    thread: ThreadSanitizer, macOS, `city`, 2026-11-27 — the render thread in `DirectionalLight::direction()` from
+    `SSContactShadows::recordPreDenoisePasses()`, the logic thread in `DirectionalLight::setDirection()` from
+    `DirectionalLight::move()` (the celestial clock's pivot), 2 reports in one launch of two.
+  - **Verified** (Linux, RTX 3070 Ti, Release, the validation layer loaded, 2026-11-28): every one of the eight
+    effects running — `water-world`, `city`, `light-and-shadow-debug`, `citadel`, `sky-lab`, `forest` on the
+    ray-traced lane, `city` and `light-and-shadow-debug` on the screen-space lane, `light-and-shadow-debug` with
+    `select("Fog", "AtmosphericFogEffect")` — 0 `VUID-`, the pictures as before (looked at). `water-world` with its
+    dynamic sky, TAA off, `temporalCapture(40, 5, "…setTimeOfDay(…, 0.95)")` from noon, three jumps: the sky and
+    the sea flat (116-117 / 51 of 255) up to the last day frame, then the night with its mark on the same frame
+    (#8, #8, #6) — no frame between the two. ThreadSanitizer (Debug, lavapipe): `city` twice and
+    `light-and-shadow-debug` once, 0 report.
+    ⚠️ The binary of before was not measured for the jump (Linux has no pending frame to show a leading one), and
+    the race was never reported on Linux: the proof of its absence is macOS's.
+  - ⚠️ `shadowBias()`, `usesCSM()`, `cascadeCount()` and the shadow map pointer are still asked of the light
+    object held by the record: settings made at construction or from the main thread, not frame state.
 - **A traced light entry carries the light's COLOUR PROJECTION** (2026-11-22, owner decision: "the pattern in the traced
   effects"). `LightSet::GPULightData` is nine vec4 (144 bytes, asserted): the four of before, then the projection —
   its kind (`NoProjection`, `PictureProjection`, `CubemapProjection`, in the fourth vec4's last slot), the bindless

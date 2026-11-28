@@ -69,6 +69,7 @@
 #include "Saphir/Program.hpp"
 #include "SceneRenderTarget.hpp"
 #include "Scenes/Component/Camera.hpp"
+#include "Scenes/LightSet.hpp"
 #include "Scenes/SeaLevelInterface.hpp"
 #include "SeaImmersion.hpp"
 #include "SettingKeys.hpp"
@@ -2244,7 +2245,8 @@ namespace EmEn::Graphics
 		const PostProcessStack::FrameCapabilities capabilities{
 			.lightSet = lightSet,
 			.clouds = clouds,
-			.rayTracing = context.rayTracing != nullptr
+			.rayTracing = context.rayTracing != nullptr,
+			.mainLight = lightSet != nullptr && lightSet->publishedMainLight(frameView.readStateIndex()).light != nullptr
 		};
 
 		/* Execute each enabled effect in the chain: each one receives the output of the previous one (ChainRun). */

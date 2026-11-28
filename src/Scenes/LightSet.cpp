@@ -746,6 +746,43 @@ namespace EmEn::Scenes
 		m_lightPercentToAmbient = DefaultLightPercentToAmbient;
 	}
 
+	void
+	LightSet::publishStateForRendering (uint32_t writeStateIndex) noexcept
+	{
+		if ( writeStateIndex >= m_publishedMainLights.size() )
+		{
+			Tracer::error(ClassId, "Render state slot overflow !");
+
+			return;
+		}
+
+		std::shared_ptr< const Component::DirectionalLight > main;
+
+		{
+			const Base::MutexLock lock{m_lightsAccess};
+
+			main = m_mainDirectionalLight.lock();
+		}
+
+		auto & published = *std::next(m_publishedMainLights.begin(), writeStateIndex);
+
+		if ( main == nullptr )
+		{
+			published = PublishedMainLight{};
+
+			return;
+		}
+
+		/* NOTE: The light's OWN publication of this slot (its entity published before the set). */
+		const auto & emission = main->publishedEmission(writeStateIndex);
+
+		published.chromaticity = emission.chromaticity;
+		published.direction = emission.direction;
+		published.intensity = emission.intensity;
+		published.enabled = main->publishedEnabled(writeStateIndex);
+		published.light = std::move(main);
+	}
+
 	bool
 	LightSet::hasVisibleSource (uint32_t readStateIndex) const noexcept
 	{

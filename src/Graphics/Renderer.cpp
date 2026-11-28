@@ -2223,7 +2223,8 @@ namespace EmEn::Graphics
 			const PostProcessStack::FrameCapabilities capabilities{
 				.lightSet = &scene->lightSet(),
 				.clouds = sceneCloudSet(scene.get()),
-				.rayTracing = m_rayTracing.usable() && scene->hasAccelerationStructure()
+				.rayTracing = m_rayTracing.usable() && scene->hasAccelerationStructure(),
+				.mainLight = scene->lightSet().publishedMainLight(scene->frameReadStateIndex()).light != nullptr
 			};
 
 			if ( stack != nullptr )

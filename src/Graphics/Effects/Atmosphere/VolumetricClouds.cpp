@@ -1000,16 +1000,18 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		block.cameraPosition = {cameraPosition[X], cameraPosition[Y], cameraPosition[Z], static_cast< float >(cloudCount)};
 
 		/* ---- The sun and the sky. A scene without a sun still has lit clouds: the sky lights them. ---- */
-		const auto mainLight = context.lightSet != nullptr ? context.lightSet->mainDirectionalLight() : nullptr;
+		/* NOTE: The frame's sun (Scenes::LightSet::publishedMainLight()), never the live light. */
+		const auto sun = context.lightSet != nullptr ? context.lightSet->publishedMainLight(frameView.readStateIndex()) : Scenes::LightSet::PublishedMainLight{};
+		const auto & mainLight = sun.light;
 		auto withCascades = false;
 
 		block.sunDirection = {0.0F, -1.0F, 0.0F, static_cast< float >(m_parameters.lightStepCount)};
 
-		if ( mainLight != nullptr && mainLight->isEnabled() )
+		if ( mainLight != nullptr && sun.enabled )
 		{
-			const auto direction = mainLight->direction().normalized();
-			const auto illuminance = mainLight->illuminance();
-			const auto & color = mainLight->emissionChromaticity();
+			const auto direction = sun.direction.normalized();
+			const auto illuminance = sun.intensity;
+			const auto & color = sun.chromaticity;
 
 			block.sunDirection = {direction[X], direction[Y], direction[Z], static_cast< float >(m_parameters.lightStepCount)};
 			/* PRE-EXPOSURE (step 6, D8): the sun and the sky enter × E_pre, the scale of the scene colour the

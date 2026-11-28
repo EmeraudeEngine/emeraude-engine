@@ -36,7 +36,6 @@
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "Saphir/Types.hpp"
-#include "Scenes/Component/DirectionalLight.hpp"
 #include "Settings.hpp"
 #include "StaticVector.hpp"
 
@@ -428,7 +427,8 @@ namespace EmEn::Graphics::Effects::Lighting
 		shadowData.invViewCol0 = {inv[0], inv[1], inv[2], cameraPosition.x()};
 		shadowData.invViewCol1 = {inv[4], inv[5], inv[6], cameraPosition.y()};
 		shadowData.invViewCol2 = {inv[8], inv[9], inv[10], cameraPosition.z()};
-		const auto lightDirection = lightSet->mainDirectionalLight()->direction();
+		/* NOTE: The frame's sun (Scenes::LightSet::publishedMainLight()), never the live light. */
+		const auto lightDirection = lightSet->publishedMainLight(frameView.readStateIndex()).direction;
 		shadowData.lightParameters = {lightDirection.x(), lightDirection.y(), lightDirection.z(), m_parameters.maxDistance};
 		shadowData.shadowParameters = {m_parameters.normalBias, 0.0F, 0.0F, 0.0F};
 

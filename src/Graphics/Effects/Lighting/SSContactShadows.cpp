@@ -35,7 +35,6 @@
 #include "Math/Matrix.hpp"
 #include "Math/Vector.hpp"
 #include "Saphir/Types.hpp"
-#include "Scenes/Component/DirectionalLight.hpp"
 #include "Settings.hpp"
 #include "StaticVector.hpp"
 
@@ -391,7 +390,7 @@ namespace EmEn::Graphics::Effects::Lighting
 		const auto * inputNormals = context.normals;
 		const auto * lightSet = context.lightSet;
 
-		if ( lightSet == nullptr || lightSet->mainDirectionalLight() == nullptr )
+		if ( lightSet == nullptr || context.frameView == nullptr || lightSet->publishedMainLight(context.frameView->readStateIndex()).light == nullptr )
 		{
 			return;
 		}
@@ -425,7 +424,8 @@ namespace EmEn::Graphics::Effects::Lighting
 		 * direction has no position — so the view matrix's three rotation columns are applied by
 		 * hand rather than multiplying a vec4 the translation would pollute. Column-major
 		 * storage: columns are elements {0,1,2}, {4,5,6}, {8,9,10}. */
-		const auto lightDirection = lightSet->mainDirectionalLight()->direction();
+		/* NOTE: The frame's sun (Scenes::LightSet::publishedMainLight()), never the live light. */
+		const auto lightDirection = lightSet->publishedMainLight(frameView.readStateIndex()).direction;
 		const auto * view = viewMat.data();
 		const auto viewLightX = (view[0] * lightDirection.x()) + (view[4] * lightDirection.y()) + (view[8] * lightDirection.z());
 		const auto viewLightY = (view[1] * lightDirection.x()) + (view[5] * lightDirection.y()) + (view[9] * lightDirection.z());

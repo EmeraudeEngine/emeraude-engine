@@ -390,7 +390,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		 * honest answer rather than a fallback. Its entire reason to exist over its slot sibling
 		 * AtmosphericFog is the shadow lookup inside the volume; an unshadowed march is a more
 		 * expensive way to compute what the closed-form fog already gives. */
-		const auto mainLight = lightSet != nullptr ? lightSet->mainDirectionalLight() : nullptr;
+		/* NOTE: The frame's sun (Scenes::LightSet::publishedMainLight()), never the live light. */
+		const auto sun = lightSet != nullptr && context.frameView != nullptr ? lightSet->publishedMainLight(context.frameView->readStateIndex()) : Scenes::LightSet::PublishedMainLight{};
+		const auto & mainLight = sun.light;
 
 		if ( mainLight == nullptr || !mainLight->usesCSM() || mainLight->shadowMap() == nullptr )
 		{
@@ -421,7 +423,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		const auto fY = -viewMat(2, 1);
 		const auto fZ = -viewMat(2, 2);
 
-		const auto lightDir = mainLight->direction().normalized();
+		const auto lightDir = sun.direction.normalized();
 
 		/* ⚠️⚠️ The source term takes the sun's ILLUMINANCE, in lux — NOT
 		 * AtmosphericMedium::resolveLuminance(). That accessor is the contract of an effect that
@@ -439,8 +441,8 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		 * so a frozen map is multiplied by zero, never read as the current one (2026-10-05). The medium still
 		 * extinguishes. */
 		/* PRE-EXPOSURE (step 6, D8): × E_pre, the scale of the scene colour the inscatter is added to. */
-		const auto lightIlluminance = mainLight->isEnabled() ? mainLight->illuminance() * context.preExposure : 0.0F;
-		const auto & lightColor = mainLight->emissionChromaticity();
+		const auto lightIlluminance = sun.enabled ? sun.intensity * context.preExposure : 0.0F;
+		const auto & lightColor = sun.chromaticity;
 
 		/* ---- Upload the cascade block. The four matrices are 256 bytes on their own, well past
 		 * the 128-byte push-constant floor, so they travel in a per-frame UBO. ---- */

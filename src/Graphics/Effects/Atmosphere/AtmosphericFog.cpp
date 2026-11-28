@@ -35,12 +35,12 @@
 /* Local inclusions. */
 #include "BlobTrait.hpp"
 #include "Graphics/Effects/Shared/ViewReconstructionGLSL.hpp"
+#include "Graphics/FrameView.hpp"
 #include "Graphics/Renderer.hpp"
 #include "Math/Vector.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Saphir/Types.hpp"
 #include "Scenes/AtmosphericMedium.hpp"
-#include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/LightSet.hpp"
 #include "StaticVector.hpp"
 #include "Tracer.hpp"
@@ -283,9 +283,10 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		const auto frameIndex = this->renderer().currentFrameIndex();
 
 		/* Read light direction and inscatter color from LightSet. */
-		const auto mainLight = lightSet != nullptr ? lightSet->mainDirectionalLight() : nullptr;
+		/* NOTE: The frame's sun (Scenes::LightSet::publishedMainLight()), never the live light. */
+		const auto sun = lightSet != nullptr && context.frameView != nullptr ? lightSet->publishedMainLight(context.frameView->readStateIndex()) : Scenes::LightSet::PublishedMainLight{};
 
-		if ( mainLight == nullptr )
+		if ( sun.light == nullptr )
 		{
 			/* No directional light: the fog has nothing lighting it and no direction to scatter
 			 * along. Passing the chain colour through untouched is the only honest answer —
@@ -311,9 +312,9 @@ namespace EmEn::Graphics::Effects::Atmosphere
 			return inputColor;
 		}
 
-		const auto lightDir = mainLight->direction().normalized();
+		const auto lightDir = sun.direction.normalized();
 		/* The emitted chromaticity (unit luminance): the override is normalised the same way. */
-		const auto inscatterColor = m_inscatterColorOverride.has_value() ? m_inscatterColorOverride->unitLuminanceChromaticity() : mainLight->emissionChromaticity();
+		const auto inscatterColor = m_inscatterColorOverride.has_value() ? m_inscatterColorOverride->unitLuminanceChromaticity() : sun.chromaticity;
 
 		/* PHOTOMETRIC SCALE. 'fogColor' and the light colour are CHROMATICITIES; the buffer this
 		 * effect composites into holds ABSOLUTE LUMINANCE in nits. Multiplying the chromaticity in
@@ -328,7 +329,7 @@ namespace EmEn::Graphics::Effects::Atmosphere
 		 * ⚠️ A DISABLED main light lights nothing (graphics doc 13-12 § 03): a celestial clock switches its sun off
 		 * at sunset and leaves its last illuminance and colour on it, and read as is the fog kept that inscatter all
 		 * night. Its luminance is zero then; the extinction still applies (a sunless fog only attenuates). */
-		const auto fogLuminance = mainLight->isEnabled() ? medium->resolveLuminance(mainLight->illuminance()) * context.preExposure : 0.0F;
+		const auto fogLuminance = sun.enabled ? medium->resolveLuminance(sun.intensity) * context.preExposure : 0.0F;
 
 		/* Update per-frame descriptor with scene color, depth, and material properties. */
 		static_cast< void >(m_fogPerFrame[frameIndex]->writeCombinedImageSampler(0, inputColor));

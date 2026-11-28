@@ -446,6 +446,9 @@ namespace EmEn::Graphics
 				const Scenes::CloudSet * clouds{nullptr};
 				/** @brief Whether a ray-traced effect can run. */
 				bool rayTracing{false};
+				/** @brief Whether the frame's render state slot holds a main directional light
+				 * (Scenes::LightSet::publishedMainLight()): the same answer the effects read while recording. */
+				bool mainLight{false};
 			};
 
 			/**

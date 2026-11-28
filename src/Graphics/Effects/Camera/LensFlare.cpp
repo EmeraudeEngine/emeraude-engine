@@ -43,7 +43,6 @@
 #include "Math/Vector.hpp"
 #include "Saphir/ShaderManager.hpp"
 #include "Saphir/Types.hpp"
-#include "Scenes/Component/DirectionalLight.hpp"
 #include "Scenes/LightSet.hpp"
 #include "StaticVector.hpp"
 #include "Tracer.hpp"
@@ -434,7 +433,8 @@ namespace EmEn::Graphics::Effects::Camera
 
 		/* ---- The analytic sun: the main directional light, projected. Without one, the bright pixels
 		 * of the image alone make the ghosts (a lamp at night). ---- */
-		if ( const auto mainLight = context.lightSet != nullptr ? context.lightSet->mainDirectionalLight() : nullptr; mainLight != nullptr && mainLight->isEnabled() )
+		/* NOTE: The frame's sun (Scenes::LightSet::publishedMainLight()), never the live light. */
+		if ( const auto sun = context.lightSet != nullptr && context.frameView != nullptr ? context.lightSet->publishedMainLight(context.frameView->readStateIndex()) : Scenes::LightSet::PublishedMainLight{}; sun.light != nullptr && sun.enabled )
 		{
 			/* The frame's view: the view matrices that produced the depth buffer. */
 			const auto & frameView = *context.frameView;
@@ -443,7 +443,7 @@ namespace EmEn::Graphics::Effects::Camera
 			const auto & cameraPosition = frameView.position();
 
 			/* A far point toward the light (opposite of its propagation). */
-			const auto toLight = (-mainLight->direction()).normalized();
+			const auto toLight = (-sun.direction).normalized();
 			const Math::Vector< 4, float > farPoint{cameraPosition[0] + (toLight[0] * 10000.0F), cameraPosition[1] + (toLight[1] * 10000.0F), cameraPosition[2] + (toLight[2] * 10000.0F), 1.0F};
 			const auto clipPosition = projectionMatrix * (viewMatrix * farPoint);
 
@@ -469,10 +469,10 @@ namespace EmEn::Graphics::Effects::Camera
 					 * channel exceeds 1 (1.65 in red for a 2000 K sun, 13.85 in blue for a pure blue) and a ceiling on
 					 * the scalar alone let it reach 82 000 at 2000 K, past the 65 504 of a half float — and the hue is
 					 * kept. */
-					const auto & color = mainLight->emissionChromaticity();
+					const auto & color = sun.chromaticity;
 					const auto peakChannel = std::max({color[Base::Math::X], color[Base::Math::Y], color[Base::Math::Z], 1.0F});
 					/* ⚠️ A radiance built from NITS (the light's illuminance): the ABSOLUTE exposure, the residual × E_pre. */
-					const auto luminance = std::min(mainLight->illuminance() / std::max(solidAngle, 1.0e-12F) * sourcePC.exposure * context.preExposure * onScreen, MaxSunDisplayLuminance / peakChannel);
+					const auto luminance = std::min(sun.intensity / std::max(solidAngle, 1.0e-12F) * sourcePC.exposure * context.preExposure * onScreen, MaxSunDisplayLuminance / peakChannel);
 
 					sourcePC.lightScreenX = screenX;
 					sourcePC.lightScreenY = screenY;

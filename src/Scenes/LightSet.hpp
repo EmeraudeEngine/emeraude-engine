@@ -47,6 +47,7 @@
 #include "ObservableTrait.hpp"
 
 /* Local inclusions for usages. */
+#include "Constants.hpp"
 #include "Hash/FNV1a.hpp"
 #include "Math/Base.hpp"
 #include "Math/Vector.hpp"
@@ -603,6 +604,46 @@ namespace EmEn::Scenes
 				return !(shadowMapsEnabled && light.isShadowCastingEnabled() && light.hasShadowDescriptorSet());
 			}
 
+			/** @brief The scene's main directional light as one render state slot published it. */
+			struct PublishedMainLight final
+			{
+				/** @brief The light, nullptr when the scene had no main directional light: for what does not change
+				 * with the frame (its shadow map, its cascade count). Held, so a frame outlives its removal. */
+				std::shared_ptr< const Component::DirectionalLight > light;
+				/** @brief The emitted chromaticity (unit luminance). */
+				Base::Math::Vector< 3, float > chromaticity;
+				/** @brief The direction the light rays travel, as the light carries it (not normalized here). */
+				Base::Math::Vector< 3, float > direction;
+				/** @brief The intensity: the illuminance of a directional light, in lux. */
+				float intensity{0.0F};
+				/** @brief Whether the light was enabled. A disabled main light lights nothing (it keeps its last
+				 * intensity and colour: a celestial clock switches its sun off at sunset). */
+				bool enabled{false};
+			};
+
+			/**
+			 * @brief Publishes the main directional light into a render state slot [LOGIC THREAD].
+			 * @note Called by Scene::publishStateForRendering() AFTER the entities published theirs: the record is the
+			 * light's own published emission and enabled state of that slot. Takes the set's lock.
+			 * @param writeStateIndex The slot the logic thread writes.
+			 */
+			void publishStateForRendering (uint32_t writeStateIndex) noexcept;
+
+			/**
+			 * @brief Returns the main directional light the frame was published with [RENDER THREAD].
+			 * @note THE source of every effect that needs "the sun": which light it is, whether it is on, its
+			 * direction, colour and intensity all belong to the frame's slot, like the rest of the frame.
+			 * @pre readStateIndex < RenderStateSlotCount.
+			 * @param readStateIndex The render state slot latched by the frame.
+			 * @return const PublishedMainLight &
+			 */
+			[[nodiscard]]
+			const PublishedMainLight &
+			publishedMainLight (uint32_t readStateIndex) const noexcept
+			{
+				return *std::next(m_publishedMainLights.begin(), readStateIndex);
+			}
+
 			/**
 			 * @brief Returns whether a point or spot light of the set declares a visible source
 			 * (AbstractLightEmitter::setVisibleSourceArea()): the scene then needs the light glints
@@ -626,14 +667,18 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Returns the main directional light of the scene to compute specific effects.
+			 * @brief Returns the main directional light of the scene, as it is NOW [LOGIC THREAD].
 			 * @warning Can be nullptr.
+			 * @warning ⚠️ Never from the render thread: which light is the main one, and everything it answers, is the
+			 * live state the logic thread is changing. A frame reads publishedMainLight().
 			 * @return std::shared_ptr< Component::DirectionalLight >
 			 */
 			[[nodiscard]]
 			std::shared_ptr< Component::DirectionalLight >
 			mainDirectionalLight () const noexcept
 			{
+				const Base::MutexLock lock{m_lightsAccess};
+
 				return m_mainDirectionalLight.lock();
 			}
 
@@ -843,7 +888,10 @@ namespace EmEn::Scenes
 			std::set< std::shared_ptr< Component::PointLight > > m_pointLights EMEN_GUARDED_BY(m_lightsAccess);
 			std::set< std::shared_ptr< Component::SpotLight > > m_spotLights EMEN_GUARDED_BY(m_lightsAccess);
 			std::set< std::shared_ptr< Component::LineLight > > m_lineLights EMEN_GUARDED_BY(m_lightsAccess);
-			std::weak_ptr< Component::DirectionalLight > m_mainDirectionalLight;
+			std::weak_ptr< Component::DirectionalLight > m_mainDirectionalLight EMEN_GUARDED_BY(m_lightsAccess);
+			/** @brief The main directional light per render state slot: written by publishStateForRendering() (logic
+			 * thread, the slot it owns), read by publishedMainLight() (render thread, the slot the frame latched). */
+			std::array< PublishedMainLight, RenderStateSlotCount > m_publishedMainLights{};
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_directionalLightUBO;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_pointLightUBO;
 			std::shared_ptr< Graphics::SharedUniformBuffer > m_spotLightUBO;
