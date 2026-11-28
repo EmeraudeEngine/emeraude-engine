@@ -29,7 +29,9 @@
 /* STL inclusions. */
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstring>
+#include <iterator>
 #include <string>
 
 /* Third-party inclusions. */
@@ -454,11 +456,11 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 			for ( uint32_t cascade = 0; cascade < cascadeCount; ++cascade )
 			{
-				const auto & matrix = cascadedView.cascadeViewProjectionMatrix(cascade);
+				const auto & matrix = cascadedView.cascadeViewProjectionMatrix(frameView.readStateIndex(), cascade);
 
 				std::memcpy(&cascadeBlock.matrices[static_cast< size_t >(cascade) * 16], matrix.data(), 16 * sizeof(float));
 
-				cascadeBlock.splitDistances[cascade] = cascadedView.splitDistance(cascade);
+				*std::next(cascadeBlock.splitDistances.begin(), static_cast< std::ptrdiff_t >(cascade)) = cascadedView.splitDistance(frameView.readStateIndex(), cascade);
 			}
 
 			if ( !updateUniformBufferData(*m_cascadeUBOs[frameIndex], &cascadeBlock, sizeof(cascadeBlock)) )

@@ -436,6 +436,26 @@ namespace EmEn::Graphics
 		return m_logicState.cascadeViewProjections[cascadeIndex];
 	}
 
+	const Matrix< 4, float > &
+	ViewMatricesCascadedUBO::cascadeViewProjectionMatrix (uint32_t readStateIndex, size_t cascadeIndex) const noexcept
+	{
+		if ( cascadeIndex >= m_cascadeCount )
+		{
+			Tracer::error(ClassId, "Cascade index overflow !");
+
+			cascadeIndex = 0;
+		}
+
+		if ( readStateIndex >= m_renderState.size() )
+		{
+			Tracer::error(ClassId, "Index overflow !");
+
+			return *std::next(m_logicState.cascadeViewProjections.cbegin(), static_cast< std::ptrdiff_t >(cascadeIndex));
+		}
+
+		return *std::next(std::next(m_renderState.cbegin(), static_cast< std::ptrdiff_t >(readStateIndex))->cascadeViewProjections.cbegin(), static_cast< std::ptrdiff_t >(cascadeIndex));
+	}
+
 	void
 	ViewMatricesCascadedUBO::computeSplitDistances (float nearPlane, float farPlane) noexcept
 	{

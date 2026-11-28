@@ -31,9 +31,11 @@
 #include <array>
 #include <bit>
 #include <cmath>
+#include <cstddef>
 #include <cstring>
 #include <functional>
 #include <initializer_list>
+#include <iterator>
 #include <span>
 #include <string>
 #include <utility>
@@ -1033,11 +1035,11 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 				for ( uint32_t cascade = 0; cascade < cascadeCount; ++cascade )
 				{
-					const auto & matrix = cascadedView.cascadeViewProjectionMatrix(cascade);
+					const auto & matrix = cascadedView.cascadeViewProjectionMatrix(frameView.readStateIndex(), cascade);
 
 					std::memcpy(&cascadeBlock.matrices[static_cast< size_t >(cascade) * 16], matrix.data(), 16 * sizeof(float));
 
-					cascadeBlock.splitDistances[cascade] = cascadedView.splitDistance(cascade);
+					*std::next(cascadeBlock.splitDistances.begin(), static_cast< std::ptrdiff_t >(cascade)) = cascadedView.splitDistance(frameView.readStateIndex(), cascade);
 				}
 
 				block.ambient[2] = static_cast< float >(cascadeCount);

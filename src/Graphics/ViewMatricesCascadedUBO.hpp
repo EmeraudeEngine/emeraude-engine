@@ -303,7 +303,8 @@ namespace EmEn::Graphics
 			}
 
 			/**
-			 * @brief Returns the split distance for a specific cascade.
+			 * @brief Returns the split distance for a specific cascade, from the LOGIC state.
+			 * @warning Logic thread only. A frame being recorded reads splitDistance(uint32_t, size_t).
 			 * @param cascadeIndex The cascade index (0 to cascadeCount-1).
 			 * @return float
 			 */
@@ -331,12 +332,24 @@ namespace EmEn::Graphics
 			const Base::Math::Vector< 3, float > & lightDirection (uint32_t readStateIndex) const noexcept;
 
 			/**
-			 * @brief Returns the view-projection matrix for a specific cascade.
+			 * @brief Returns the view-projection matrix for a specific cascade, from the LOGIC state.
+			 * @warning Logic thread only (the thread that refits the cascades, updateFromMainCameraFrustum()). A frame
+			 * being recorded reads cascadeViewProjectionMatrix(uint32_t, size_t).
 			 * @param cascadeIndex The cascade index (0 to cascadeCount-1).
 			 * @return const Base::Math::Matrix< 4, float > &
 			 */
 			[[nodiscard]]
 			const Base::Math::Matrix< 4, float > & cascadeViewProjectionMatrix (size_t cascadeIndex) const noexcept;
+
+			/**
+			 * @brief Returns the view-projection matrix for a specific cascade, from the PUBLISHED render state —
+			 * the matrix the frame's shadow map was rendered with and its lit shaders sample with. Render thread.
+			 * @param readStateIndex The render state slot the frame latched.
+			 * @param cascadeIndex The cascade index (0 to cascadeCount-1).
+			 * @return const Base::Math::Matrix< 4, float > &
+			 */
+			[[nodiscard]]
+			const Base::Math::Matrix< 4, float > & cascadeViewProjectionMatrix (uint32_t readStateIndex, size_t cascadeIndex) const noexcept;
 
 			/**
 			 * @brief Updates the view matrices from the main camera frustum.

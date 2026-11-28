@@ -711,11 +711,11 @@ namespace EmEn::Graphics::Effects::Atmosphere
 
 			for ( uint32_t cascade = 0; cascade < cascadeCount; ++cascade )
 			{
-				const auto & matrix = cascadedView->cascadeViewProjectionMatrix(cascade);
+				const auto & matrix = cascadedView->cascadeViewProjectionMatrix(context.frameView->readStateIndex(), cascade);
 
 				std::memcpy(std::next(cascadeBlock.matrices.data(), static_cast< std::ptrdiff_t >(cascade) * 16), matrix.data(), 16 * sizeof(float));
 
-				*splitDistance = cascadedView->splitDistance(cascade);
+				*splitDistance = cascadedView->splitDistance(context.frameView->readStateIndex(), cascade);
 				splitDistance = std::next(splitDistance);
 			}
 

@@ -59,8 +59,8 @@ render thread the moment a barrel exploded):
   thread switched the sun off on the very next frame, while the sky, its IBL and the temporal-discontinuity epoch
   followed with the next slot — one UNMARKED frame of a day sky over a sunless land (Linux `city`: land 238 against
   251), which TAA blended at its stationary rate (graphics doc 13-12 § 43). Still live on the render thread, known: the
-  shadow map's suspension (`syncShadowMapRendering()`: at worst one frame shows its last content), and the sun's
-  cascade matrices as three effects read them (engine item `effects-read-the-live-shadow-cascades`).
+  shadow map's suspension (`syncShadowMapRendering()`: at worst one frame shows its last content). The sun's
+  cascade matrices as three effects read them were fixed on 2026-11-28 (below, § the cascades an effect marches).
 - **The MAIN directional light is published per render state slot** (2026-11-28, owner decision: a record of the
   light set, not the light's own accessors). `LightSet::publishStateForRendering(writeStateIndex)` — called by
   `Scene::publishStateForRendering()` AFTER the entities, on the logic thread — writes a
@@ -89,10 +89,48 @@ render thread the moment a barrel exploded):
     the sea flat (116-117 / 51 of 255) up to the last day frame, then the night with its mark on the same frame
     (#8, #8, #6) — no frame between the two. ThreadSanitizer (Debug, lavapipe): `city` twice and
     `light-and-shadow-debug` once, 0 report.
+    The sun IN VIEW (the default poses do not show it — Windows-PA's remark): `water-world` with its dynamic sky at
+    noon, the camera turned to the clock's sun direction (`CelestialClock.getState`, `sun.direction`): the disc, its
+    glow, the lens flare's ring centred on it and the glitter on the sea under it, 0 `VUID-`.
+    Windows (engine e3cd8386, RTX 3500 Ada, MSVC 19.44 `/W4 /WX`, 2026-11-28): Release and Debug without a warning
+    (the designated initializers, the ternary between the record and an empty one); `city`, `light-and-shadow-debug`,
+    `citadel`, `water-world`, `forest` and the fog selected from the console: 0 `VUID-`, the scenes as before; no
+    pose with the sun in view there.
+    macOS (engine e3cd8386, Apple M6, MoltenVK, Apple clang 21, 2026-11-28): Release, Debug and the ThreadSanitizer
+    tree without a warning (`LightSet.cpp` under `-Wthread-safety`); `city`, `light-and-shadow-debug`, `citadel`,
+    `water-world`, `forest`: 0 `VUID-`; the day → night jump: sky / sea 114.1 / 41.1 flat up to frame #5, the night
+    WITH its mark at #6, no frame between. ThreadSanitizer: `city` twice, 0 report — the binary of before
+    (f34cae89) gave 3 + 3 there, all `DirectionalLight::direction()` read by `SSContactShadows` against
+    `setDirection()`; `light-and-shadow-debug`: 0 report naming the main light, 1 naming the cascades (next entry).
     ⚠️ The binary of before was not measured for the jump (Linux has no pending frame to show a leading one), and
     the race was never reported on Linux: the proof of its absence is macOS's.
   - ⚠️ `shadowBias()`, `usesCSM()`, `cascadeCount()` and the shadow map pointer are still asked of the light
     object held by the record: settings made at construction or from the main thread, not frame state.
+- **The cascades an effect marches are the FRAME's** (2026-11-28). `VolumetricClouds`, `VolumetricScattering` and
+  `WaterVolume` (the shafts) copy the sun's cascade matrices and split distances into their own block while a frame
+  is recorded; they asked `ViewMatricesCascadedUBO::cascadeViewProjectionMatrix(cascade)` and
+  `splitDistance(cascade)`, which answer the LOGIC state the logic thread refits every tick
+  (`DirectionalLight::updateCascades()`). They now ask `cascadeViewProjectionMatrix(readStateIndex, cascade)` (new)
+  and `splitDistance(readStateIndex, cascade)` with `frameView.readStateIndex()`: the matrices the frame's shadow
+  map was rendered with and its lit shaders sample with (the light's own block was already published per slot,
+  `AbstractLightEmitter::m_publishedBlocks`). The two accessors without a slot are LOGIC THREAD only (their one
+  caller left: `DirectionalLight::updateCascades()`).
+  - Proof of the defect (Linux, Release, RTX 3070 Ti, `light-and-shadow-debug`, a temporary counter in the
+    scattering comparing the live matrix of cascade 0 with the published one of the frame): the camera at rest
+    0 of 3000 frames; the camera on an orbit (1216 `setPosition` in 25 s) 215 of about 4500 frames marched with
+    cascades that were not the frame's. ThreadSanitizer on macOS (engine e3cd8386, before the fix): the write in
+    `computeSplitDistances()` (logic thread) against the read in `splitDistance()` from
+    `VolumetricScattering::execute()` (render thread). ⚠️ Linux's ThreadSanitizer run (lavapipe, a few dozen frames
+    in 45 s) never reported it on the binary of before, although a trace proved the block was executed: a zero
+    there is not a proof of absence.
+  - After the fix (Linux, 2026-11-28): `light-and-shadow-debug` on an orbit, `forest` (the clouds), `water-world`
+    with the camera under the sea (the shafts) and above it: 0 `VUID-`, the pictures as before. ThreadSanitizer
+    (lavapipe): `light-and-shadow-debug` and `forest`, 0 report.
+  - ⚠️ No difference was measured on a PICTURE: the cascades are fitted to the camera, one tick apart they differ
+    by one tick of camera motion.
+  - ⚠️ `light-and-shadow-debug` is the only builtin demo of the downstream testbed that runs the scattering;
+    `forest` runs the clouds over cascades; the water shafts need the camera under the sea of `water-world`
+    (its archipelago: cascades).
 - **A traced light entry carries the light's COLOUR PROJECTION** (2026-11-22, owner decision: "the pattern in the traced
   effects"). `LightSet::GPULightData` is nine vec4 (144 bytes, asserted): the four of before, then the projection —
   its kind (`NoProjection`, `PictureProjection`, `CubemapProjection`, in the fourth vec4's last slot), the bindless
