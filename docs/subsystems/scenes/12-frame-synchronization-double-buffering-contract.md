@@ -288,6 +288,10 @@ Windows (engine 4852441f, RTX 3500 Ada, MSVC 19.44 `/W4 /WX`, 2026-11-27): Relea
 sky switches (two answered "deferred", the third `ambient: 19590.000000 lx, stars: 1`, each cubemap adopted), the
 ambience's awaited and cancelled loop on `water-world`, the playlist emptied and filled from the console with the
 music page following (32 rows, 0, 1) — the same answers as Linux, 0 `VUID-`. No ThreadSanitizer there.
+macOS (engine 214b247a, Apple M6, MoltenVK, Apple clang 21, 2026-11-27): Release, Debug and the ThreadSanitizer tree
+without a warning; the same answers from the console (the music page not driven), 0 `VUID-`; ThreadSanitizer on
+`default` — three sky switches in a burst 1 s after the console opens, the ambience sequence, the playlist emptied
+and filled: 0 report, on each of the three lots.
 
 What this does NOT cover: the pool worker that finishes a resource's load — the next section. The members other
 scenes reported after the first six (an instance's animation time and flag word, the view's logic state read on the

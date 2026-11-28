@@ -1,20 +1,20 @@
 ---
 id: effects-read-the-live-main-light
-title: Five post-process effects read the main directional light live, not from the frame's render state
+title: Six post-process effects read the main directional light live, not from the frame's render state
 status: open
-priority: medium
-scope: Graphics/Effects (Atmosphere, Camera), Scenes/LightSet
+priority: high
+scope: Graphics/Effects (Atmosphere, Camera, Lighting), Scenes/LightSet
 opened: 2026-11-03
-tags: [render-state, threading, lighting]
+tags: [defect, render-state, threading, lighting, threadsanitizer]
 ---
 
-# Five post-process effects read the main directional light live, not from the frame's render state
+# Six post-process effects read the main directional light live, not from the frame's render state
 
 ## Why
 
 The render thread must read the frame's PUBLISHED state (the latched render state slot), never the live state the
 logic or main thread is changing (scenes doc 16). `LightSet::mainDirectionalLight()` hands the live light object, and
-five effects read its enabled flag, direction and illuminance from it while recording a frame:
+six effects read its enabled flag, direction and illuminance from it while recording a frame:
 
 | Effect | Read |
 |---|---|
@@ -23,11 +23,18 @@ five effects read its enabled flag, direction and illuminance from it while reco
 | `Effects/Atmosphere/VolumetricScattering.cpp` (~443) | `isEnabled()`, `illuminance()` |
 | `Effects/Atmosphere/AtmosphericFog.cpp` (~331) | `isEnabled()`, `illuminance()` |
 | `Effects/Camera/LensFlare.cpp` (~438) | `isEnabled()` (and the light's direction) |
+| `Effects/Lighting/SSContactShadows.cpp` (`recordPreDenoisePasses()`) | `direction()` |
 
 A time-of-day jump (`CelestialClock::apply()` on the main thread) or any switch can therefore land in these effects one
 frame before the rest of the frame — the defect fixed for the light lists on 2026-11-03
 (`AbstractLightEmitter::publishedEnabled()`, graphics doc 13-12 § 43, where it fed TAA an unmarked frame of day sky
 over a sunless land). Found while inventorying the live reads; not measured in a scene that runs these effects.
+
+The sixth, `SSContactShadows`, was not in the inventory: ThreadSanitizer reported it on 2026-11-27 (macOS, `city`, one
+launch of two, 2 reports) — the render thread in `DirectionalLight::direction()` from
+`SSContactShadows::recordPreDenoisePasses()`, the logic thread in `DirectionalLight::setDirection()` from
+`DirectionalLight::move()` (the celestial clock's pivot moving), which holds two mutexes the reader does not take.
+A data race, so a defect, on top of the frame that leads.
 
 ## What remains
 
@@ -35,7 +42,7 @@ over a sunless land). Found while inventorying the live reads; not measured in a
   direction, intensity, whatever its block layout — the RT light SSBO reads it since 2026-11-11, scenes doc 16) plus
   `publishedEnabled()`, or a published main-light record of the LightSet itself (which light is "main" may change
   too).
-- Convert the five effects, then a `temporalCapture(N, triggerFrame, command)` jump in a scene with fog and volumetric
+- Convert the six effects, then a `temporalCapture(N, triggerFrame, command)` jump in a scene with fog and volumetric
   light (TAA off) to prove no frame leads.
 
 ## References

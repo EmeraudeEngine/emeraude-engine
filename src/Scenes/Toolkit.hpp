@@ -970,7 +970,9 @@ namespace EmEn::Scenes
 			}
 
 			/**
-			 * @brief Generates a simple mesh instance in the scene from a geometry resource and a material resource.
+			 * @brief Generates a mesh instance in the scene from a geometry resource and ONE material resource.
+			 * @note The material is given to every sub-geometry of the geometry (a MultiLayerMeshResource named
+			 * "Mesh(<geometry>,<material>)"). The geometry may still be loading: nothing is read from it here.
 			 * @tparam entity_t The type of entity, a scene node or a static entity. Default, 'StaticEntity'.
 			 * @param entityName A reference to a string.
 			 * @param geometryResource A geometry smart pointer. Default geometry resource.
@@ -997,28 +999,18 @@ namespace EmEn::Scenes
 					materialResource = m_resourceManager.container< Material::StandardResource >()->getDefaultResource();
 				}
 
+				/* NOTE: One renderable class whatever the geometry is made of: the mesh gives the material to every
+				 * sub-geometry once the geometry is loaded (MultiLayerMeshResource::onDependenciesLoaded()). Nothing is
+				 * asked of the geometry here: it may still be loading on a pool worker, and until 2026-11-28 its
+				 * sub-geometry count, read at this point to choose between two classes, was a race and, read too
+				 * early, a wrong answer. */
 				std::stringstream resourceName;
-				std::shared_ptr< Abstract > renderable;
+				resourceName << "Mesh(" << geometryResource->name() << ',' << materialResource->name() << ')';
 
-				/* NOTE: Check for sub-geometry count to check to from Mesh to SimpleMesh resource. */
-				if ( geometryResource->subGeometryCount() > 1 )
-				{
-					resourceName << "Mesh(" << geometryResource->name() << ',' << materialResource->name() << ')';
-
-					renderable = m_resourceManager.container< MultiLayerMeshResource >()
-						->getOrCreateResource(resourceName.str(), [geometryResource, materialResource] (auto & meshResource) {
-							return meshResource.load(geometryResource, materialResource);
-						});
-				}
-				else
-				{
-					resourceName << "SimpleMesh(" << geometryResource->name() << ',' << materialResource->name() << ')';
-
-					renderable = m_resourceManager.container< MeshResource >()
-						->getOrCreateResource(resourceName.str(), [geometryResource, materialResource] (auto & meshResource) {
-							return meshResource.load(geometryResource, materialResource);
-						});
-				}
+				const std::shared_ptr< Abstract > renderable = m_resourceManager.container< MultiLayerMeshResource >()
+					->getOrCreateResource(resourceName.str(), [geometryResource, materialResource] (auto & meshResource) {
+						return meshResource.load(geometryResource, materialResource);
+					});
 
 				return this->generateRenderableInstance< entity_t >(entityName, renderable, physicalProperties, enableLighting);
 			}

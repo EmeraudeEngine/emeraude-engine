@@ -3165,6 +3165,30 @@ depends on how busy the pool is looks exactly like a random defect.
 every dependency in the `Loaded` state. What `load()` may legitimately check is what it holds
 itself: null pointers, list sizes, ceilings.
 
+⚠️ **The same trap OUTSIDE `load()`: whoever has just asked for a resource holds one that is still loading**
+(2026-11-28). `Scenes::Toolkit::generateRenderableInstance(geometry, material)` chose between `MeshResource` and
+`MultiLayerMeshResource` on `geometryResource->subGeometryCount() > 1`, the geometry coming straight from
+`ResourceGenerator::shape()` — a pool worker was filling its sub-geometries at that moment (ThreadSanitizer, macOS,
+`city`: 3 and 4 reports in two launches, reader `IndexedVertexResource::subGeometryCount()`, writer
+`Interface::buildSubGeometries()`). And the answer decided what was drawn. A two-group shape given ONE material,
+three launches of the binary of before (Linux, Release, a temporary object in `light-and-shadow-debug`): twice the
+count was read right, the mesh got one layer for two sub-geometries and was REFUSED ("structure ill-formed! There
+is 2 sub-geometries and 1 rendering layers!" — the object absent from the image); once it was read too early, 1,
+and the object was drawn whole (a one-layer renderable draws the whole geometry,
+`RenderableInstance::Abstract`). The correct picture came from losing the race.
+**Fix**: the Toolkit reads nothing from the geometry and always builds a `MultiLayerMeshResource`
+("Mesh(<geometry>,<material>)"); `MultiLayerMeshResource::load(geometry, material)` means ONE material for the
+whole geometry, and `onDependenciesLoaded()` — the geometry loaded — repeats the layer for every sub-geometry.
+After, same object: "sub-geometries 2 layers 2" (temporary trace), both groups drawn, 0 `VUID-`. Cost on `city`
+(Linux, RTX 3070 Ti, Release, window-less, three alternated pairs, frames over 8 s): 102.9 fps before
+(103.6 / 102.7 / 102.3), 102.2 after (102.8 / 101.6 / 102.2) — inside the spread between launches; resident
+memory 1586-1774 MiB on both sides, no order.
+The rule: a value that depends on a resource's CONTENT is computed by a resource that DEPENDS on it, in its
+`onDependenciesLoaded()` — or after `ResourceTrait::waitUntilLoaded()` on a building thread — never by the code
+that has just obtained the pointer. The other readers of `subGeometryCount()` were read that day and are after
+the load: `MultiLayerMeshResource::onDependenciesLoaded()`, the instances' ray-tracing refit inputs, the scene's
+ray-tracing metadata (ready renderables only).
+
 ⚠️ And when overriding `onDependenciesLoaded()`, **chain to the implementation you override** —
 `MultiLayerMeshResource`'s already did real work (sub-geometry / layer coherence, LOD generation),
 so a fresh override that forgot to call it would have silently disabled all of it.

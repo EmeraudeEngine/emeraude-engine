@@ -123,6 +123,10 @@ accessors — read in the code, never reported.
   `sky-lab` and `city` drawn (the day sky with its sun, the city at night), `getDynamicSky` answers the same JSON as
   Linux, the material loaded before its sky and the sky before the clock follows its atmosphere, 0 `VUID-`. No
   ThreadSanitizer there.
+- macOS (engine 214b247a, Apple M6, MoltenVK, Apple clang 21, 2026-11-27): Release, Debug and the ThreadSanitizer
+  tree without a warning; `sky-lab` and `city` drawn, `getDynamicSky` the same JSON as Linux, 0 `VUID-`.
+  ThreadSanitizer, `sky-lab`: 0 report; `getDynamicSky` asked 1 s after the console opens answers "The active scene
+  has no dynamic sky !" and the JSON 19 s later — the sky hidden until it is ready for instantiation, seen.
 
 ### The frame
 1. The renderer finds a `DynamicSkyResource` background, reads the scene's `SkyState` at the frame's read state

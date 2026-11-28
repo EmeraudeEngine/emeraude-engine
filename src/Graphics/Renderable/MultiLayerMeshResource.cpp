@@ -467,6 +467,9 @@ namespace EmEn::Graphics::Renderable
 
 		this->setMaterial(material, rasterizationOptions, 0);
 
+		/* NOTE: How many layers this makes is the geometry's answer, and it is still loading: onDependenciesLoaded(). */
+		m_oneMaterialForAll = true;
+
 		return this->setLoadSuccess(true);
 	}
 
@@ -648,6 +651,30 @@ namespace EmEn::Graphics::Renderable
 						" sub-geometries where the finest one exposes " << m_geometry[0]->subGeometryCount() << "!";
 
 					return false;
+				}
+			}
+		}
+
+		/* NOTE: ONE material was given for the whole geometry (load(geometry, material)): every sub-geometry is a
+		 * layer drawn with it. The count is read HERE, the geometry being loaded — the caller could not know it when it
+		 * asked (2026-11-28: Scenes::Toolkit read it from a geometry still loading, a race and a wrong answer). The
+		 * material is already a dependency, and loaded. */
+		if ( m_oneMaterialForAll && m_layers.size() == 1 )
+		{
+			const auto groupCount = this->subGeometryCount();
+
+			if ( groupCount > 1 )
+			{
+				/* NOTE: Copies, the vector grows under them. */
+				const auto material = m_layers[0].material();
+				const auto options = m_layers[0].rasterizationOptions();
+				const auto flags = m_layers[0].flags();
+
+				m_layers.reserve(groupCount);
+
+				for ( uint32_t layerIndex = 1; layerIndex < groupCount; ++layerIndex )
+				{
+					m_layers.emplace_back((std::stringstream{} << "MeshLayer" << layerIndex).str(), material, options, flags);
 				}
 			}
 		}

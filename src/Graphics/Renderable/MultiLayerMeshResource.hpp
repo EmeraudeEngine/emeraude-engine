@@ -281,7 +281,10 @@ namespace EmEn::Graphics::Renderable
 			}
 
 			/**
-			 * @brief Loads a mesh resource from a geometry and a material. This will produce a single layer mesh.
+			 * @brief Loads a mesh resource from a geometry and ONE material for the whole of it.
+			 * @note A geometry made of several sub-geometries gets one layer per sub-geometry, all with this material
+			 * and these options: the layers are completed in onDependenciesLoaded(), where the geometry is loaded and
+			 * its count can be read (never in load(): the geometry is still loading there).
 			 * @param geometry A reference to a geometry resource smart pointer.
 			 * @param material A reference to a material resource smart pointer.
 			 * @param rasterizationOptions A reference to rasterization options. Defaults.
@@ -420,6 +423,10 @@ namespace EmEn::Graphics::Renderable
 			std::vector< MeshLayer > m_layers;
 			mutable Base::Mutex m_geometryMutex;
 			std::atomic< uint32_t > m_publishedLevelCount{0};
+			/* Set by load(geometry, material): the single layer stands for every sub-geometry of the geometry, and
+			 * onDependenciesLoaded() repeats it once the count is known. Written by the load, read by the same load's
+			 * completion. */
+			bool m_oneMaterialForAll{false};
 			/* ⚠️ LAST (Ave Robustus II): the automatic LOD job reads every member above through `this`. Destroyed
 			 * first, its handle stops the job and waits for it (the decimation stops within milliseconds; a level
 			 * already decimated finishes its upload): the job never outlives the mesh, and nothing else (Core, the
